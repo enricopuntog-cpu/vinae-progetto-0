@@ -101,7 +101,10 @@ class MongoPaymentRepository:
 
     async def update_unless_paid(self, session_id: str, values: dict[str, Any]) -> None:
         await self._collection.update_one(
-            {"session_id": session_id, "payment_status": {"$nin": ["paid", "refunded"]}},
+            {
+                "session_id": session_id,
+                "payment_status": {"$nin": ["paid", "partially_refunded", "refunded"]},
+            },
             {"$set": values},
         )
 
@@ -251,7 +254,7 @@ class InMemoryPaymentRepository:
 
     async def update_unless_paid(self, session_id: str, values: dict[str, Any]) -> None:
         record = self.records.get(session_id)
-        if record and record.get("payment_status") not in {"paid", "refunded"}:
+        if record and record.get("payment_status") not in {"paid", "partially_refunded", "refunded"}:
             record.update(values)
 
     async def record_refund(

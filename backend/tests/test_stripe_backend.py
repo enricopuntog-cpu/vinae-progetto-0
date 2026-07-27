@@ -329,6 +329,51 @@ def test_refund_webhooks_distinguish_partial_and_full_refunds(make_harness):
     assert record["amount_refunded"] == 12_500
 
 
+def test_late_checkout_event_cannot_overwrite_partial_refund(make_harness):
+    harness = make_harness()
+    session_id = _checkout(harness).json()["session_id"]
+    headers = {"Stripe-Signature": "valid"}
+
+    harness.stripe.event = {
+        "id": "evt_paid_before_late_event",
+        "type": "checkout.session.completed",
+        "data": {
+            "object": {
+                "id": session_id,
+                "payment_status": "paid",
+                "payment_intent": "pi_late_event",
+            }
+        },
+    }
+    assert harness.client.post("/api/stripe/webhook", content=b"payload", headers=headers).status_code == 200
+
+    harness.stripe.event = {
+        "id": "evt_partial_before_late_event",
+        "type": "charge.refunded",
+        "data": {
+            "object": {
+                "payment_intent": "pi_late_event",
+                "amount": 12_500,
+                "amount_refunded": 5_000,
+                "refunded": False,
+            }
+        },
+    }
+    assert harness.client.post("/api/stripe/webhook", content=b"payload", headers=headers).status_code == 200
+
+    harness.stripe.event = {
+        "id": "evt_expired_after_partial_refund",
+        "type": "checkout.session.expired",
+        "data": {"object": {"id": session_id}},
+    }
+    assert harness.client.post("/api/stripe/webhook", content=b"payload", headers=headers).status_code == 200
+
+    record = harness.services.repositories.payments.records[session_id]
+    assert record["status"] == "partially_refunded"
+    assert record["payment_status"] == "partially_refunded"
+    assert record["amount_refunded"] == 5_000
+
+
 def test_production_configuration_requires_security_secrets(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "https://app.vinea.test")
