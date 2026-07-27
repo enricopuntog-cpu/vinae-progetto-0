@@ -69,10 +69,10 @@ Il dettaglio di ogni ticket è in
 
 | Fase | Contenuto | Tocca dati reali? |
 | --- | --- | --- |
-| 1 (questa) | Piano, ADR, pulizia backlog | No — solo documentazione |
+| 1 | Piano, ADR, pulizia backlog | No — solo documentazione |
 | 2 | Scaffold Next.js 15 App Router + copia invariata di UI/dati/config | No |
-| 3 | Porting pagine statiche con mock esistenti | No |
-| 4 | Store (8 slice già pronte) montato come client provider Next.js | No — dati ancora mock |
+| 3 | Porting pagine statiche con mock esistenti **+** store (8 slice) montato come client provider Next.js — fasi fuse, vedi nota sotto | No — dati ancora mock |
+| ~~4~~ | *(assorbita in Fase 3, vedi sotto — numerazione 5+ invariata)* | — |
 | 5 | `AuthService` reale su Supabase (email + magic link) | Sì — primo dominio reale |
 | 6 | `ListingService` + `WineCatalogService` su Supabase (RLS) | Sì |
 | 7 | `OrderService` + `ProposalService` + `PaymentService` (Stripe) | Sì |
@@ -81,7 +81,7 @@ Il dettaglio di ogni ticket è in
 | 10 | `AiService` reale via Edge Function | Sì |
 | 11 | Cutover finale: dismissione `frontend/` + `backend/` | — |
 
-## Correzioni apportate in questa fase
+## Correzioni apportate in Fase 1
 
 - `frontend/docs/TODO.md`: rimossi due riferimenti ormai falsi ("nessun
   test automatico", "store monolitico da ~750 righe") e corretta la voce
@@ -90,6 +90,52 @@ Il dettaglio di ogni ticket è in
 - `frontend/docs/STATE_MACHINES.md`: il riferimento a "tutte le
   transizioni vivono in `vinea-store.tsx`" è stato aggiornato per
   riflettere la suddivisione in 8 slice + 4 hook di Sprint 1.
+
+## Correzione apportata in Fase 3: fusione con la ex Fase 4
+
+Il piano originale assumeva che le pagine assegnate a Fase 3 (home,
+community, dettaglio annuncio) e i componenti condivisi da adattare al
+routing Next.js (`WineCard`, `FoodPairing`, `Layout`, `States`) fossero
+"router-only" — dipendenti cioè solo dall'API di routing, non dallo
+store applicativo — rimandando il montaggio dello store a una Fase 4
+separata.
+
+Durante l'esecuzione di Fase 3, l'ispezione diretta del codice sorgente
+ha mostrato che questa assunzione era falsa: `WineCard`, `FoodPairing` e
+`Layout` (3 dei 4 componenti "router-only" previsti) chiamano `useVinea()`
+per funzionalità reali (preferiti, follow, notifiche, stato annunci), e
+tutte le pagine candidate a Fase 3 chiamano `useVinea()` direttamente per
+funzionalità interattive già esistenti in `frontend/` (preferiti,
+proposte d'acquisto, follow community, apertura bottiglie, ecc.). Non
+esisteva quindi una versione "solo mock, zero store" di queste pagine che
+non richiedesse o disabilitare funzionalità già esistenti, o forzare un
+collegamento provvisorio non richiesto — entrambe le opzioni vietate dai
+vincoli della traccia.
+
+Individuato il blocco, l'esecuzione si è fermata prima di improvvisare
+una soluzione (come da regola esplicita della traccia) e la decisione è
+stata riportata alla zona organizzativa con le tre opzioni possibili
+(montare lo store subito, restringere Fase 3 alle sole pagine
+realmente statiche, oppure portare le pagine con le funzionalità
+store-dipendenti visibilmente disattivate). La zona organizzativa ha
+scelto di montare lo store ora, assorbendo di fatto la ex Fase 4
+dentro Fase 3, con questi vincoli confermati fermi:
+
+- zero servizi reali collegati (nessun Supabase, nessuno Stripe, nessuna
+  AI reale);
+- tutti i dati restano mock (`src/data/**`, invariati);
+- nessuna funzionalità nuova rispetto a quelle già esistenti in
+  `frontend/`;
+- nessun cambiamento di design o di comportamento visibile rispetto a
+  `frontend/` (l'unica eccezione nota e documentata è l'assistente
+  Sommelier, escluso perché dipende dal layer servizi reale — vedi
+  rapporto di Fase 3).
+
+Questa è una correzione di pianificazione dichiarata, non una deviazione
+silenziosa: la numerazione delle fasi successive (5 in poi) resta
+invariata, e la Fase 4 originale non esiste più come fase separata — il
+suo contenuto (`vinea-store.tsx` montato come client provider) è stato
+consegnato dentro la Pull Request di Fase 3.
 
 ## Cosa NON è ancora deciso
 

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Providers } from "./providers";
+import { VineaLayout } from "@/components/vinea/Layout";
 
 export const metadata: Metadata = {
   title: "Vinea Wine Club",
@@ -21,7 +23,11 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap"
         />
       </head>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <Providers>
+          <VineaLayout>{children}</VineaLayout>
+        </Providers>
+      </body>
     </html>
   );
 }
