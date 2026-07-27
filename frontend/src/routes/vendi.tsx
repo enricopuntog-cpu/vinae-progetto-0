@@ -32,8 +32,7 @@ import { useVinea, formatEUR } from "@/lib/vinea-store";
 import { wineImages } from "@/lib/wine-images";
 import { toast } from "sonner";
 import { z } from "zod";
-import { apiJson, jsonRequest } from "@/services/api-client";
-import { listingSuggestionSchema, type ListingSuggestion } from "@/services/api-contracts";
+import { useSellWizard, type Modalita } from "@/hooks/useSellWizard";
 
 const searchSchema = z.object({
   mode: z.enum(["catalog", "sell"]).optional(),
@@ -58,69 +57,38 @@ export const Route = createFileRoute("/vendi")({
   component: Vendi,
 });
 
-type Modalita = "privata" | "pubblica" | "vendita";
-
 function Vendi() {
   const nav = useNavigate();
   const search = Route.useSearch();
   const { ruolo, sellerStatus, identityStatus } = useVinea();
   const initialMode: Modalita = search.mode === "sell" ? "vendita" : "privata";
-  const [modalita, setModalita] = useState<Modalita>(initialMode);
-  const [step, setStep] = useState(0);
-  const [d, setD] = useState({
-    produttore: "",
-    nome: "",
-    annata: "",
-    regione: "",
-    tipo: "Rosso",
-    condizione: "Perfetto",
-    conservazione: "",
-    storia: "",
-    prezzo: "",
-    disponibili: "1",
+  const {
+    modalita,
+    setModalita,
+    step,
+    steps,
+    progress,
+    next,
+    prev,
+    isVendita,
+    bloccatoVendita,
+    d,
+    set,
+    suggerito,
+    aiHint,
+    setAiHint,
+    aiSug,
+    aiLoading,
+    aiError,
+    askListingAI,
+    applyAiSuggestion,
+    pubblica,
+    salvaBozza,
+  } = useSellWizard({
+    initialMode,
+    sellerStatus,
+    onNavigate: (path) => nav({ to: path }),
   });
-  const set = (k: keyof typeof d) => (v: string) => setD((s) => ({ ...s, [k]: v }));
-
-  // AI listing suggestion
-  const [aiHint, setAiHint] = useState("");
-  const [aiSug, setAiSug] = useState<ListingSuggestion | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-
-  async function askListingAI() {
-    if (!aiHint.trim()) return;
-    setAiLoading(true);
-    setAiError(null);
-    try {
-      setAiSug(
-        await apiJson(
-          "/api/ai/listing-suggestion",
-          listingSuggestionSchema,
-          jsonRequest({ hint: aiHint.trim() }, { method: "POST" }),
-        ),
-      );
-    } catch (e: unknown) {
-      setAiError(e instanceof Error ? e.message : "Errore AI");
-      setAiSug(null);
-    } finally {
-      setAiLoading(false);
-    }
-  }
-
-  function applyAiSuggestion() {
-    if (!aiSug) return;
-    setD((s) => ({
-      ...s,
-      produttore: aiSug.produttore || s.produttore,
-      nome: aiSug.nome || s.nome,
-      annata: aiSug.annata ? String(aiSug.annata) : s.annata,
-      regione: aiSug.regione || s.regione,
-      tipo: aiSug.tipologia || s.tipo,
-      storia: aiSug.note_degustazione || s.storia,
-      conservazione: aiSug.condizioni_suggerite || s.conservazione,
-    }));
-    toast.success("Suggerimenti AI applicati");
-  }
 
   // Guest: invita a registrarsi
   if (ruolo === "guest") {
@@ -139,55 +107,6 @@ function Vendi() {
       </div>
     );
   }
-
-  // Steps depend on modalità
-  const isVendita = modalita === "vendita";
-  const bloccatoVendita = isVendita && sellerStatus !== "abilitato";
-  const steps = isVendita
-    ? [
-        "Modalità",
-        "Foto",
-        "Identificazione",
-        "Condizioni",
-        "Provenienza",
-        "Prezzo",
-        "Consegna",
-        "Anteprima",
-      ]
-    : ["Modalità", "Foto", "Identificazione", "Condizioni", "Provenienza", "Anteprima"];
-
-  const progress = ((step + 1) / steps.length) * 100;
-  const next = () => setStep((s) => Math.min(steps.length - 1, s + 1));
-  const prev = () => setStep((s) => Math.max(0, s - 1));
-
-  const pubblica = () => {
-    if (isVendita) {
-      if (bloccatoVendita) {
-        toast.error("Devi completare la verifica venditore prima di pubblicare");
-        nav({ to: "/verifica-venditore" });
-        return;
-      }
-      toast.success("Annuncio pubblicato! (demo)");
-      nav({ to: "/cantina" });
-    } else if (modalita === "pubblica") {
-      toast.success("Bottiglia aggiunta alla cantina pubblica (demo)");
-      nav({ to: "/cantina" });
-    } else {
-      toast.success("Bottiglia aggiunta alla tua cantina privata (demo)");
-      nav({ to: "/cantina" });
-    }
-  };
-
-  const salvaBozza = () => {
-    toast.success("Bozza salvata nella cantina (demo)");
-    nav({ to: "/cantina" });
-  };
-
-  const suggerito = d.produttore.toLowerCase().includes("sassicaia")
-    ? 260
-    : d.produttore.toLowerCase().includes("barolo")
-      ? 300
-      : 120;
 
   return (
     <div className="relative mx-auto max-w-2xl space-y-6">
