@@ -18,24 +18,31 @@ nuova, separata da `frontend/` (nome esatto da confermare in fase, es.
 Nessun dato reale, nessuna route ancora collegata a logica applicativa.
 `frontend/` esistente non viene toccato né disattivato.
 
-## Fase 3 — Porting pagine statiche con mock
+## Fase 3 — Porting pagine con mock esistenti + store come client provider
 
 **Branch**: `migration/phase-3-static-pages`
 
-Portare le pagine senza stato server (home, esplora, dettaglio annuncio,
-community) su Next.js con gli stessi dati mock già in `src/data/**`.
-Mapping route secondo la tabella in `frontend/docs/MIGRATION_TO_NEXTJS.md`.
-Nessun montaggio dello store ancora: le pagine leggono i mock
-direttamente.
+> **Nota di correzione** (vedi [`ROADMAP_V1.md`](ROADMAP_V1.md#correzione-apportata-in-fase-3-fusione-con-la-ex-fase-4)
+> per il dettaglio completo): questo ticket assorbe la ex "Fase 4 — Store
+> come client provider" perché, in fase di esecuzione, è emerso che i
+> componenti condivisi (`WineCard`, `FoodPairing`, `Layout`) e tutte le
+> pagine di questa fase dipendono già da `useVinea()` per funzionalità
+> reali esistenti in `frontend/`, rendendo impossibile un porting
+> "solo mock, zero store" senza disabilitare funzionalità o forzare un
+> collegamento provvisorio. Decisione approvata dalla zona organizzativa:
+> montare lo store ora. La numerazione delle fasi successive (5+) non
+> cambia; la Fase 4 originale non è più una fase a sé stante.
 
-## Fase 4 — Store come client provider
-
-**Branch**: `migration/phase-4-store-provider`
-
-Montare `vinea-store.tsx` (le 8 slice di Sprint 1, invariate) come client
-provider in `app/providers.tsx`, importato da `app/layout.tsx`. Demo
-iso-funzionale su Next.js: stesse interazioni di oggi, dati ancora mock.
-Nessuna interfaccia reale collegata.
+Portare le pagine senza stato server reale (home, home utente, dettaglio
+annuncio, community index e dettaglio) su Next.js con gli stessi dati
+mock già in `src/data/**`, mapping route secondo la tabella in
+`frontend/docs/MIGRATION_TO_NEXTJS.md`. Montare `vinea-store.tsx` (le 8
+slice di Sprint 1, invariate) come client provider in `app/providers.tsx`,
+importato da `app/layout.tsx`. Demo iso-funzionale su Next.js: stesse
+interazioni di oggi, dati ancora mock, zero servizi reali collegati
+(nessun Supabase, nessuno Stripe, nessuna AI reale). Componenti/pagine
+che dipendono dal layer servizi reale (l'assistente Sommelier) restano
+fuori scope e sono documentati come tali nel rapporto di fase.
 
 ## Fase 5 — AuthService reale (Supabase)
 
