@@ -1,0 +1,1095 @@
+import { ClientOnly, createFileRoute, Link } from "@tanstack/react-router";
+import { lazy, Suspense, useMemo, useState } from "react";
+import {
+  LayoutGrid,
+  List,
+  TrendingUp,
+  PlusCircle,
+  Tag,
+  Palette,
+  Eye,
+  EyeOff,
+  Pencil,
+  Info,
+  Wine as WineIcon,
+  CalendarClock,
+  Clock,
+  Sparkles,
+  Search,
+  Box,
+  Layers,
+  Ruler,
+} from "lucide-react";
+import { wines } from "@/data/wines";
+import { WineCard } from "@/components/vinea/WineCard";
+import { Kpi } from "@/components/vinea/Layout";
+import { formatEUR, useVinea, type SfondoCantina } from "@/lib/vinea-store";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { wineImages } from "@/lib/wine-images";
+import {
+  computeDrinkPhase,
+  getWineMeta,
+  phaseShort,
+  phaseColor,
+  slotsWithBottles,
+  SHAPE_LABELS,
+  THEME_LABELS,
+  type EnvShape,
+  type EnvTheme,
+  type StorageEnvironment,
+  type StorageModule,
+  type StorageSlot,
+} from "@/data/cellar";
+import { FindWineFromCellar } from "@/components/vinea/FoodPairing";
+import { mergeMeta } from "@/components/vinea/DrinkWindow";
+import { toast } from "sonner";
+
+export const Route = createFileRoute("/cantina")({
+  head: () => ({
+    meta: [
+      { title: "La mia cantina — Vinea" },
+      { name: "description", content: "Le tue bottiglie, il tuo patrimonio enologico." },
+      { property: "og:title", content: "La mia cantina — Vinea" },
+      {
+        property: "og:description",
+        content: "Gestisci la tua collezione personale con dashboard, vista 3D e abbinamenti.",
+      },
+    ],
+  }),
+  component: Cantina,
+});
+
+// Il chunk Three.js viene escluso dal bundle SSR e richiesto solo nel browser,
+// dopo che l'utente seleziona esplicitamente la vista 3D.
+const LazyCellar3D = import.meta.env.SSR ? null : lazy(() => import("@/components/vinea/Cellar3D"));
+
+const SFONDI: { key: SfondoCantina; nome: string; url: string }[] = [
+  { key: "moderna", nome: "Moderna", url: wineImages.cellar },
+  { key: "rustica", nome: "Rustica", url: wineImages.vineyard },
+  { key: "pietra", nome: "Pietra", url: wineImages.bottle2 },
+  { key: "premium", nome: "Premium", url: wineImages.champagne },
+  { key: "casse", nome: "Parete di casse", url: wineImages.crate },
+];
+
+const ANDAMENTO = [8200, 8450, 8700, 8600, 8900, 9250, 9400, 9350, 9600, 9800, 10150, 10420];
+const MESI = ["Ago", "Set", "Ott", "Nov", "Dic", "Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug"];
+
+function Cantina() {
+  const {
+    sfondoCantina,
+    setSfondoCantina,
+    regionePref,
+    tipologiaPref,
+    setPreferenze,
+    inVendita,
+    toggleInVendita,
+    prezzoNascosto,
+    togglePrezzoNascosto,
+    bottiglieCantina,
+    ambienti,
+    moduli,
+    drinkWindowOverrides,
+    reduceMotion,
+    setReduceMotion,
+  } = useVinea();
+
+  const mie = useMemo(() => {
+    const ids = new Set(bottiglieCantina.map((b) => b.wineVintageId));
+    return wines.filter((w) => ids.has(w.id));
+  }, [bottiglieCantina]);
+  const [view, setView] = useState<"grid" | "list" | "3d">("grid");
+  const [threeDRequested, setThreeDRequested] = useState(false);
+
+  const selectView = (nextView: "grid" | "list" | "3d") => {
+    if (nextView === "3d") setThreeDRequested(true);
+    setView(nextView);
+  };
+
+  const totBottiglie = bottiglieCantina.reduce((s, b) => s + b.quantita, 0);
+  const valore = bottiglieCantina.reduce((s, b) => {
+    const w = wines.find((x) => x.id === b.wineVintageId);
+    return s + (w ? w.prezzo * b.quantita : 0);
+  }, 0);
+  const variazione = ((ANDAMENTO[ANDAMENTO.length - 1] - ANDAMENTO[0]) / ANDAMENTO[0]) * 100;
+  const sfondoUrl = SFONDI.find((s) => s.key === sfondoCantina)!.url;
+
+  // Dashboard drink dati
+  const withPhase = useMemo(() => {
+    return mie.map((w) => {
+      const meta = mergeMeta(getWineMeta(w.id), drinkWindowOverrides[w.id]);
+      return { wine: w, phase: computeDrinkPhase(meta), meta };
+    });
+  }, [mie, drinkWindowOverrides]);
+
+  const idealiOra = withPhase.filter((x) => x.phase === "ideale" || x.phase === "pronto");
+  const daBerePresto = withPhase.filter((x) => x.phase === "presto" || x.phase === "oltre");
+  const daAttendere = withPhase.filter((x) => x.phase === "attesa" || x.phase === "quasi");
+  const aperture = bottiglieCantina.filter((b) => b.plannedOpenDate);
+
+  // Capacità
+  const totSlot = ambienti.reduce((s, e) => {
+    const mods = moduli.filter((m) => m.environmentId === e.id);
+    return s + mods.reduce((a, m) => a + m.rows * m.columns, 0);
+  }, 0);
+  const occSlot = bottiglieCantina.filter((b) => b.storageLocationId).length;
+  const nonCollocate = bottiglieCantina.filter((b) => !b.storageLocationId);
+  const usoPct = totSlot ? Math.round((occSlot / totSlot) * 100) : 0;
+
+  return (
+    <div className="space-y-8">
+      {/* Header con sfondo */}
+      <section className="relative overflow-hidden rounded-3xl border border-border hero-glow">
+        <img
+          src={sfondoUrl}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover animate-ken-burns"
+          fetchPriority="high"
+          decoding="async"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-antracite/85 via-antracite/60 to-antracite/30" />
+        <div className="hero-grain" aria-hidden />
+        <div className="relative flex flex-col gap-4 p-6 text-crema md:flex-row md:items-end md:justify-between md:p-8">
+          <div className="animate-fade-up">
+            <p className="text-xs uppercase tracking-[0.3em] text-oro">Vinea Wine Club</p>
+            <h1 className="mt-1 font-serif text-3xl md:text-4xl">
+              La <span className="gold-shimmer">mia cantina</span>
+            </h1>
+            <p className="text-crema/85">
+              Il tuo patrimonio in bottiglia, sempre a portata di mano.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 animate-fade-up" style={{ animationDelay: "120ms" }}>
+            <Button asChild className="bg-oro text-antracite hover:bg-oro/90">
+              <Link to="/vendi" search={{ mode: "catalog" }}>
+                <PlusCircle className="h-4 w-4" /> Aggiungi bottiglia
+              </Link>
+            </Button>
+            <Button asChild className="bg-bordeaux hover:bg-bordeaux/90">
+              <Link to="/vendi" search={{ mode: "sell" }}>
+                <Tag className="h-4 w-4" /> Metti in vendita
+              </Link>
+            </Button>
+            <FindWineFromCellar />
+            <SfondoDialog attivo={sfondoCantina} setAttivo={setSfondoCantina} />
+          </div>
+        </div>
+      </section>
+
+      {/* KPI + capacità */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Kpi label="Bottiglie" value={String(totBottiglie)} />
+        <Kpi label="Valore stimato" value={formatEUR(valore)} hint="Prezzi di mercato" />
+        <Kpi
+          label="Capacità utilizzata"
+          value={`${usoPct}%`}
+          hint={`${occSlot}/${totSlot} posti`}
+        />
+        <Kpi
+          label="Salute cantina"
+          value={saluteCantina(usoPct, nonCollocate.length)}
+          hint="Indicatore demo"
+        />
+      </div>
+
+      {/* Preferenze */}
+      <PreferenzeCantina regione={regionePref} tipologia={tipologiaPref} onSave={setPreferenze} />
+
+      {/* Bottiglie: 3 viste */}
+      <Tabs defaultValue="tutte">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <TabsList className="bg-secondary">
+            <TabsTrigger value="tutte">Tutte</TabsTrigger>
+            <TabsTrigger value="pronte">Pronte da bere</TabsTrigger>
+            <TabsTrigger value="vendita">In vendita</TabsTrigger>
+            <TabsTrigger value="attesa">Da attendere</TabsTrigger>
+          </TabsList>
+          <div className="flex items-center gap-2">
+            <ConfiguratorDialog />
+            <div
+              role="tablist"
+              aria-label="Vista bottiglie"
+              className="flex rounded-full border border-border bg-card p-1"
+            >
+              <ViewBtn active={view === "grid"} onClick={() => selectView("grid")} label="Griglia">
+                <LayoutGrid className="h-4 w-4" />
+              </ViewBtn>
+              <ViewBtn active={view === "list"} onClick={() => selectView("list")} label="Elenco">
+                <List className="h-4 w-4" />
+              </ViewBtn>
+              <ViewBtn active={view === "3d"} onClick={() => selectView("3d")} label="3D">
+                <Box className="h-4 w-4" />
+              </ViewBtn>
+            </div>
+          </div>
+        </div>
+
+        <TabsContent value="tutte" className="mt-4">
+          {view === "3d" && threeDRequested ? (
+            <View3D />
+          ) : (
+            <BottiglieView
+              wines={mie}
+              view={view === "3d" ? "grid" : view}
+              inVendita={inVendita}
+              prezzoNascosto={prezzoNascosto}
+              toggleVendita={toggleInVendita}
+              togglePrezzo={togglePrezzoNascosto}
+            />
+          )}
+        </TabsContent>
+        <TabsContent value="pronte" className="mt-4">
+          <BottiglieView
+            wines={idealiOra.map((x) => x.wine)}
+            view={view === "3d" ? "grid" : view}
+            inVendita={inVendita}
+            prezzoNascosto={prezzoNascosto}
+            toggleVendita={toggleInVendita}
+            togglePrezzo={togglePrezzoNascosto}
+          />
+        </TabsContent>
+        <TabsContent value="vendita" className="mt-4">
+          <BottiglieView
+            wines={mie.filter((w) => inVendita.has(w.id))}
+            view={view === "3d" ? "grid" : view}
+            inVendita={inVendita}
+            prezzoNascosto={prezzoNascosto}
+            toggleVendita={toggleInVendita}
+            togglePrezzo={togglePrezzoNascosto}
+          />
+        </TabsContent>
+        <TabsContent value="attesa" className="mt-4">
+          <BottiglieView
+            wines={daAttendere.map((x) => x.wine)}
+            view={view === "3d" ? "grid" : view}
+            inVendita={inVendita}
+            prezzoNascosto={prezzoNascosto}
+            toggleVendita={toggleInVendita}
+            togglePrezzo={togglePrezzoNascosto}
+          />
+        </TabsContent>
+      </Tabs>
+
+      {/* Andamento valore — sotto alle bottiglie in vendita */}
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              Andamento del valore della cantina
+            </p>
+            <p className="mt-1 font-serif text-3xl font-semibold text-bordeaux">
+              {formatEUR(ANDAMENTO[ANDAMENTO.length - 1])}
+            </p>
+            <p className="mt-0.5 flex items-center gap-1 text-sm text-salvia">
+              <TrendingUp className="h-4 w-4" /> +{variazione.toFixed(1)}% negli ultimi 12 mesi
+            </p>
+          </div>
+          <span className="flex max-w-[220px] items-start gap-1 text-[10px] text-muted-foreground">
+            <Info className="mt-0.5 h-3 w-3 shrink-0" />
+            Stima indicativa basata sulle bottiglie catalogate; non è una valutazione garantita.
+          </span>
+        </div>
+        <Sparkline values={ANDAMENTO} labels={MESI} />
+      </section>
+
+      {/* Dashboard drink-window (icone) */}
+      <section className="grid gap-3 md:grid-cols-4">
+        <DashCard
+          title="Cosa bere adesso"
+          count={idealiOra.length}
+          icon={Sparkles}
+          tone="bordeaux"
+          hint="Bottiglie pronte oggi"
+        />
+        <DashCard
+          title="Da bere presto"
+          count={daBerePresto.length}
+          icon={Clock}
+          tone="oro"
+          hint="Entro pochi anni"
+        />
+        <DashCard
+          title="Da attendere"
+          count={daAttendere.length}
+          icon={CalendarClock}
+          tone="salvia"
+          hint="Ancora in evoluzione"
+        />
+        <DashCard
+          title="Aperture programmate"
+          count={aperture.length}
+          icon={CalendarClock}
+          tone="antracite"
+          hint="Data pianificata"
+        />
+      </section>
+
+      {/* Cosa bere adesso — carosello in fondo */}
+      {idealiOra.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-end justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Selezione della cantina
+              </p>
+              <h2 className="font-serif text-2xl">Cosa bere adesso</h2>
+            </div>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-4 md:overflow-visible">
+            {idealiOra.slice(0, 6).map(({ wine }) => (
+              <div key={wine.id} className="w-52 shrink-0 md:w-auto">
+                <WineCard wine={wine} showSaleBadge hidePriceIfPrivate />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={reduceMotion}
+          onChange={(e) => setReduceMotion(e.target.checked)}
+        />
+        Riduci animazioni (disattiva l'auto-rotazione della vista 3D)
+      </label>
+    </div>
+  );
+}
+
+function saluteCantina(usoPct: number, noLoc: number): string {
+  if (noLoc > 3) return "Attenzione";
+  if (usoPct > 85) return "Piena";
+  if (usoPct > 40) return "Ottima";
+  return "Spaziosa";
+}
+
+function DashCard({
+  title,
+  count,
+  icon: Icon,
+  tone,
+  hint,
+}: {
+  title: string;
+  count: number;
+  icon: typeof Sparkles;
+  tone: "bordeaux" | "oro" | "salvia" | "antracite";
+  hint: string;
+}) {
+  const toneClass = {
+    bordeaux: "bg-bordeaux text-crema",
+    oro: "bg-oro/20 text-antracite",
+    salvia: "bg-salvia/20 text-antracite",
+    antracite: "bg-antracite text-crema",
+  }[tone];
+  return (
+    <div className={`rounded-2xl p-4 ${toneClass}`}>
+      <div className="flex items-center gap-2 text-xs uppercase tracking-wide opacity-80">
+        <Icon className="h-3.5 w-3.5" /> {title}
+      </div>
+      <p className="mt-1 font-serif text-3xl font-semibold">{count}</p>
+      <p className="text-xs opacity-75">{hint}</p>
+    </div>
+  );
+}
+
+function ViewBtn({
+  active,
+  onClick,
+  label,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={`Vista ${label}`}
+      aria-pressed={active}
+      data-testid={`cantina-view-${label.toLowerCase()}`}
+      className={`grid h-8 w-8 place-items-center rounded-full transition ${active ? "bg-bordeaux text-crema" : ""}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function View3D() {
+  const { ambienti, moduli, bottiglieCantina, reduceMotion, moveBottle } = useVinea();
+  const [envId, setEnvId] = useState(ambienti[0]?.id ?? "");
+  const [selected, setSelected] = useState<StorageSlot | null>(null);
+  const [highlight, setHighlight] = useState<string | undefined>();
+  const [q, setQ] = useState("");
+  const slots = useMemo(() => slotsWithBottles(bottiglieCantina), [bottiglieCantina]);
+
+  const risultati = useMemo(() => {
+    if (!q.trim()) return [];
+    const norm = q.toLowerCase();
+    return bottiglieCantina
+      .map((b) => {
+        const w = wines.find((x) => x.id === b.wineVintageId);
+        if (!w) return null;
+        const match =
+          w.nome.toLowerCase().includes(norm) ||
+          w.produttore.toLowerCase().includes(norm) ||
+          w.regione.toLowerCase().includes(norm) ||
+          w.denominazione.toLowerCase().includes(norm) ||
+          String(w.annata).includes(norm);
+        if (!match) return null;
+        return { wine: w, bottle: b };
+      })
+      .filter(
+        (x): x is { wine: (typeof wines)[number]; bottle: (typeof bottiglieCantina)[number] } =>
+          !!x,
+      )
+      .slice(0, 5);
+  }, [q, bottiglieCantina]);
+
+  const selWine = selected?.bottleId
+    ? (() => {
+        const b = bottiglieCantina.find((x) => x.bottleId === selected.bottleId);
+        return b ? wines.find((w) => w.id === b.wineVintageId) : undefined;
+      })()
+    : undefined;
+
+  const localizza = (b: (typeof bottiglieCantina)[number]) => {
+    if (!b.storageLocationId) return;
+    const slot = slots.find((s) => s.id === b.storageLocationId);
+    if (!slot) return;
+    const mod = moduli.find((m) => m.id === slot.moduleId);
+    if (mod && mod.environmentId !== envId) setEnvId(mod.environmentId);
+    setHighlight(slot.id);
+    setSelected(slot);
+    setQ("");
+  };
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+      <div className="relative aspect-square overflow-hidden rounded-2xl border border-border bg-antracite md:aspect-video">
+        <ClientOnly
+          fallback={
+            <div className="grid h-full place-items-center text-crema/70">Carico la vista 3D…</div>
+          }
+        >
+          <Suspense
+            fallback={
+              <div className="grid h-full place-items-center text-crema/70">
+                Carico la vista 3D…
+              </div>
+            }
+          >
+            {ambienti.length === 0 || !LazyCellar3D ? (
+              <div className="grid h-full place-items-center p-6 text-center text-sm text-crema/80">
+                La vista 3D non è disponibile su questo dispositivo. Puoi continuare a gestire la
+                cantina dalla vista griglia o elenco.
+              </div>
+            ) : (
+              <LazyCellar3D
+                environments={ambienti}
+                modules={moduli}
+                slots={slots}
+                bottiglie={bottiglieCantina}
+                wines={wines}
+                activeEnvId={envId}
+                onSelectSlot={(s) => {
+                  setSelected(s);
+                  if (s) setHighlight(s.id);
+                }}
+                highlightedSlotId={highlight}
+                reduceMotion={reduceMotion}
+              />
+            )}
+          </Suspense>
+        </ClientOnly>
+        {ambienti.length > 1 && (
+          <div className="absolute left-3 top-3 rounded-full bg-antracite/70 p-1 text-xs text-crema">
+            {ambienti.map((e) => (
+              <button
+                key={e.id}
+                onClick={() => setEnvId(e.id)}
+                className={`rounded-full px-3 py-1 ${envId === e.id ? "bg-bordeaux text-crema" : "text-crema/80"}`}
+              >
+                {e.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <aside className="space-y-4">
+        <div>
+          <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+            Cerca una bottiglia nella cantina
+          </Label>
+          <div className="relative mt-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Produttore, vino, annata…"
+              className="pl-10"
+            />
+          </div>
+          {risultati.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {risultati.map((r) => (
+                <li key={r.bottle.bottleId}>
+                  <button
+                    onClick={() => localizza(r.bottle)}
+                    className="flex w-full items-center gap-2 rounded-lg border border-border bg-card p-2 text-left text-xs hover:bg-secondary/40"
+                  >
+                    <img
+                      src={r.wine.immagini[0]}
+                      alt=""
+                      className="h-10 w-8 rounded object-cover"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold">
+                        {r.wine.nome} {r.wine.annata}
+                      </p>
+                      <p className="text-muted-foreground">{r.wine.produttore}</p>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-3 text-xs">
+          <p className="font-semibold">Filtri rapidi</p>
+          <div className="mt-2 flex flex-wrap gap-1 text-[11px] text-muted-foreground">
+            <span className="rounded-full bg-salvia/20 px-2 py-0.5">Pronte da bere</span>
+            <span className="rounded-full bg-bordeaux/15 px-2 py-0.5 text-bordeaux">
+              In vendita
+            </span>
+            <span className="rounded-full bg-antracite/10 px-2 py-0.5">Prezzo riservato</span>
+            <span className="rounded-full bg-oro/25 px-2 py-0.5">Bere presto</span>
+          </div>
+        </div>
+
+        {selected && selWine ? (
+          <div className="rounded-xl border border-border bg-card p-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Bottiglia selezionata
+            </p>
+            <p className="font-serif text-lg">
+              {selWine.nome} {selWine.annata}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {selWine.produttore} · {selWine.regione}
+            </p>
+            <p className="mt-2 text-xs">
+              Posizione: modulo <b>{selected.moduleId}</b> · riga {selected.row + 1}, colonna{" "}
+              {selected.column + 1}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button asChild size="sm" className="bg-bordeaux hover:bg-bordeaux/90">
+                <Link to="/annuncio/$id" params={{ id: selWine.id }}>
+                  Apri scheda
+                </Link>
+              </Button>
+              <MoveBottleButton
+                bottleId={selected.bottleId!}
+                slots={slots}
+                onMove={(nuovo) => {
+                  moveBottle(selected.bottleId!, nuovo);
+                  setHighlight(nuovo);
+                }}
+              />
+            </div>
+          </div>
+        ) : selected ? (
+          <div className="rounded-xl border border-dashed border-border bg-card p-3 text-xs text-muted-foreground">
+            Slot libero — modulo {selected.moduleId}, riga {selected.row + 1}, colonna{" "}
+            {selected.column + 1}.
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-border bg-card p-3 text-xs text-muted-foreground">
+            Clicca su una bottiglia nella scena 3D per vederne i dettagli.
+          </div>
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function MoveBottleButton({
+  bottleId,
+  slots,
+  onMove,
+}: {
+  bottleId: string;
+  slots: StorageSlot[];
+  onMove: (slotId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [target, setTarget] = useState<string>("");
+  const liberi = slots.filter((s) => !s.bottleId);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          Sposta
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="font-serif text-xl">Sposta bottiglia</DialogTitle>
+        </DialogHeader>
+        <Label>Nuova posizione</Label>
+        <Select value={target} onValueChange={setTarget}>
+          <SelectTrigger>
+            <SelectValue placeholder="Seleziona uno slot libero" />
+          </SelectTrigger>
+          <SelectContent>
+            {liberi.slice(0, 30).map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                {s.moduleId} · r{s.row + 1} c{s.column + 1}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            Annulla
+          </Button>
+          <Button
+            disabled={!target}
+            className="bg-bordeaux hover:bg-bordeaux/90"
+            onClick={() => {
+              onMove(target);
+              setOpen(false);
+            }}
+          >
+            Conferma
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function BottiglieView({
+  wines: list,
+  view,
+  inVendita,
+  prezzoNascosto,
+  toggleVendita,
+  togglePrezzo,
+}: {
+  wines: typeof wines;
+  view: "grid" | "list";
+  inVendita: Set<string>;
+  prezzoNascosto: Set<string>;
+  toggleVendita: (id: string) => void;
+  togglePrezzo: (id: string) => void;
+}) {
+  if (list.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center text-sm text-muted-foreground">
+        Nessuna bottiglia in questo filtro.
+      </div>
+    );
+  }
+  return (
+    <div
+      className={
+        view === "grid"
+          ? "grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4"
+          : "grid gap-3 md:grid-cols-2"
+      }
+    >
+      {list.map((w) => (
+        <div key={w.id} className="space-y-2">
+          <WineCard
+            wine={w}
+            variant={view === "list" ? "list" : "grid"}
+            showSaleBadge
+            hidePriceIfPrivate
+          />
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => toggleVendita(w.id)}
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
+                inVendita.has(w.id)
+                  ? "border-bordeaux bg-bordeaux text-crema"
+                  : "border-border bg-card"
+              }`}
+            >
+              <Tag className="h-3 w-3" /> {inVendita.has(w.id) ? "In vendita" : "Metti in vendita"}
+            </button>
+            <button
+              onClick={() => togglePrezzo(w.id)}
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
+                prezzoNascosto.has(w.id)
+                  ? "border-antracite bg-antracite text-crema"
+                  : "border-border bg-card"
+              }`}
+            >
+              {prezzoNascosto.has(w.id) ? (
+                <EyeOff className="h-3 w-3" />
+              ) : (
+                <Eye className="h-3 w-3" />
+              )}
+              {prezzoNascosto.has(w.id) ? "Prezzo riservato" : "Prezzo visibile"}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PreferenzeCantina({
+  regione,
+  tipologia,
+  onSave,
+}: {
+  regione: string;
+  tipologia: string;
+  onSave: (r: string, t: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [r, setR] = useState(regione);
+  const [t, setT] = useState(tipologia);
+  const regioni = ["Toscana", "Piemonte", "Veneto", "Sicilia", "Lombardia", "Champagne"];
+  const tipi = [
+    "Rossi strutturati",
+    "Rossi eleganti",
+    "Bianchi minerali",
+    "Champagne",
+    "Bollicine italiane",
+    "Dolci",
+  ];
+  return (
+    <section className="rounded-2xl border border-border bg-card p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">Le tue preferenze</p>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" variant="outline">
+              <Pencil className="h-3.5 w-3.5" /> Modifica preferenze
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="font-serif text-2xl">Preferenze cantina</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label className="mb-1 block text-xs uppercase tracking-wide">
+                  Regione preferita
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {regioni.map((x) => (
+                    <button
+                      key={x}
+                      onClick={() => setR(x)}
+                      className={`rounded-full border px-3 py-1 text-xs ${r === x ? "border-bordeaux bg-bordeaux text-crema" : "border-border bg-card"}`}
+                    >
+                      {x}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Label className="mb-1 block text-xs uppercase tracking-wide">
+                  Tipologia preferita
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {tipi.map((x) => (
+                    <button
+                      key={x}
+                      onClick={() => setT(x)}
+                      className={`rounded-full border px-3 py-1 text-xs ${t === x ? "border-bordeaux bg-bordeaux text-crema" : "border-border bg-card"}`}
+                    >
+                      {x}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOpen(false)}>
+                Annulla
+              </Button>
+              <Button
+                className="bg-bordeaux hover:bg-bordeaux/90"
+                onClick={() => {
+                  onSave(r, t);
+                  setOpen(false);
+                }}
+              >
+                Salva
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-xl border border-border bg-secondary/40 p-4">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Regione preferita
+          </p>
+          <p className="mt-1 font-serif text-2xl">{regione}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-secondary/40 p-4">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Tipologia preferita
+          </p>
+          <p className="mt-1 font-serif text-2xl">{tipologia}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SfondoDialog({
+  attivo,
+  setAttivo,
+}: {
+  attivo: SfondoCantina;
+  setAttivo: (s: SfondoCantina) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="outline"
+          className="border-crema/40 bg-transparent text-crema hover:bg-crema/10"
+        >
+          <Palette className="h-4 w-4" /> Personalizza
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-2xl">Sfondo della cantina</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+          {SFONDI.map((s) => (
+            <button
+              key={s.key}
+              onClick={() => {
+                setAttivo(s.key);
+                setOpen(false);
+              }}
+              className={`group relative aspect-[4/3] overflow-hidden rounded-xl border-2 ${attivo === s.key ? "border-bordeaux" : "border-transparent"}`}
+            >
+              <img src={s.url} alt={s.nome} className="h-full w-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-antracite/80 to-transparent" />
+              <p className="absolute bottom-2 left-2 font-serif text-sm text-crema">{s.nome}</p>
+            </button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ConfiguratorDialog() {
+  const { addEnvironment } = useVinea();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("Nuovo ambiente");
+  const [shape, setShape] = useState<EnvShape>("scaffalatura_modulare");
+  const [theme, setTheme] = useState<EnvTheme>("moderna");
+  const [rows, setRows] = useState(4);
+  const [cols, setCols] = useState(5);
+
+  const salva = () => {
+    const id = `env-${Date.now()}`;
+    const env: StorageEnvironment = {
+      id,
+      name,
+      shape,
+      theme,
+      material: "rovere",
+      lighting: "neutra",
+      dimensions: { width: cols * 0.3 + 0.5, height: rows * 0.35 + 0.5, depth: 0.4 },
+    };
+    const mod: StorageModule = {
+      id: `${id}-mod`,
+      environmentId: id,
+      label: `${name} — modulo principale`,
+      position: [0, 0, 0],
+      rows,
+      columns: cols,
+    };
+    addEnvironment(env, [mod]);
+    setOpen(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Layers className="h-3.5 w-3.5" /> Configura cantina
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-2xl">Configura la cantina</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label>Nome ambiente</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div>
+            <Label className="mb-1 block">Forma</Label>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+              {(Object.keys(SHAPE_LABELS) as EnvShape[]).map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setShape(k)}
+                  className={`rounded-xl border p-3 text-left text-xs ${shape === k ? "border-bordeaux bg-bordeaux/5" : "border-border"}`}
+                >
+                  <p className="font-semibold">{SHAPE_LABELS[k]}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="flex items-center gap-1">
+                <Ruler className="h-3 w-3" /> Ripiani
+              </Label>
+              <Input
+                type="number"
+                value={rows}
+                onChange={(e) => setRows(Math.max(1, Number(e.target.value)))}
+              />
+            </div>
+            <div>
+              <Label className="flex items-center gap-1">
+                <Ruler className="h-3 w-3" /> Colonne
+              </Label>
+              <Input
+                type="number"
+                value={cols}
+                onChange={(e) => setCols(Math.max(1, Number(e.target.value)))}
+              />
+            </div>
+          </div>
+          <div>
+            <Label className="mb-1 block">Preset estetico</Label>
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(THEME_LABELS) as EnvTheme[]).map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setTheme(k)}
+                  className={`rounded-full border px-3 py-1 text-xs ${theme === k ? "border-bordeaux bg-bordeaux text-crema" : "border-border"}`}
+                >
+                  {THEME_LABELS[k]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="rounded-lg bg-secondary/50 p-2 text-[11px] text-muted-foreground">
+            Capacità stimata: <b>{rows * cols}</b> posti. Le posizioni delle bottiglie esistenti non
+            vengono modificate.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            Annulla
+          </Button>
+          <Button className="bg-bordeaux hover:bg-bordeaux/90" onClick={salva}>
+            Crea ambiente
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Sparkline({ values, labels }: { values: number[]; labels: string[] }) {
+  const W = 800,
+    H = 140,
+    P = 20;
+  const min = Math.min(...values),
+    max = Math.max(...values);
+  const range = max - min || 1;
+  const stepX = (W - P * 2) / (values.length - 1);
+  const points = values.map(
+    (v, i) => [P + i * stepX, H - P - ((v - min) / range) * (H - P * 2)] as const,
+  );
+  const path = points
+    .map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`)
+    .join(" ");
+  const area = `${path} L${points[points.length - 1][0]},${H - P} L${points[0][0]},${H - P} Z`;
+  const cur = values[values.length - 1];
+  const descr = `Valore stimato: minimo ${formatEUR(min)}, massimo ${formatEUR(max)}, valore attuale ${formatEUR(cur)} su ${values.length} mesi.`;
+
+  return (
+    <div className="w-full">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="h-32 w-full md:h-40"
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`Andamento del valore della cantina. ${descr}`}
+      >
+        <title>Andamento del valore della cantina</title>
+        <desc>{descr}</desc>
+        <defs>
+          <linearGradient id="cantina-grad" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="hsl(345 55% 27%)" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="hsl(345 55% 27%)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={area} fill="url(#cantina-grad)" />
+        <path
+          d={path}
+          fill="none"
+          stroke="hsl(345 55% 27%)"
+          strokeWidth="2.5"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        {points.map(([x, y], i) => (
+          <circle
+            key={i}
+            cx={x}
+            cy={y}
+            r={i === points.length - 1 ? 4 : 2.5}
+            fill="hsl(345 55% 27%)"
+          />
+        ))}
+      </svg>
+      <p className="sr-only">{descr}</p>
+      <div
+        className="mt-1 flex justify-between px-4 text-[10px] text-muted-foreground"
+        aria-hidden="true"
+      >
+        {labels.map((m, i) => (
+          <span key={i} className={i % 2 === 0 ? "" : "hidden md:inline"}>
+            {m}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
