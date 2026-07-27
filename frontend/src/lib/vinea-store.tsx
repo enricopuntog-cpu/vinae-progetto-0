@@ -40,6 +40,7 @@ import { useOrderDomain } from "@/lib/store/order-domain";
 import { useCellarDomain, type DrinkOverride, type SfondoCantina } from "@/lib/store/cellar-domain";
 import { useClubsDomain } from "@/lib/store/clubs-domain";
 import { useMessagingDomain } from "@/lib/store/messaging-domain";
+import { useListingsDomain } from "@/lib/store/listings-domain";
 
 export type { DrinkOverride, SfondoCantina } from "@/lib/store/cellar-domain";
 
@@ -196,51 +197,12 @@ type StoreState = {
 const Ctx = createContext<StoreState | null>(null);
 
 export function VineaProvider({ children }: { children: ReactNode }) {
-  const [favorites, setFavorites] = useState<Set<string>>(new Set(["sassicaia-2018"]));
-  const [follows, setFollows] = useState<Set<string>>(new Set(["Marco B."]));
-  const [proposte, setProposte] = useState<Record<string, number>>({});
   const [ruolo, setRuolo] = useState<DemoRuolo>("user");
   const cellarDomain = useCellarDomain();
   const clubsDomain = useClubsDomain();
   const messagingDomain = useMessagingDomain();
   const { pushNotifica } = messagingDomain;
-
-  const toggleFavorite = useCallback((id: string) => {
-    setFavorites((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-        toast("Rimosso dai preferiti");
-      } else {
-        next.add(id);
-        toast.success("Aggiunto ai preferiti");
-      }
-      return next;
-    });
-  }, []);
-
-  const toggleFollow = useCallback((nome: string) => {
-    setFollows((prev) => {
-      const next = new Set(prev);
-      if (next.has(nome)) {
-        next.delete(nome);
-        toast(`Non segui più ${nome}`);
-      } else {
-        next.add(nome);
-        toast.success(`Ora segui ${nome}`);
-      }
-      return next;
-    });
-  }, []);
-
-  const proponi = useCallback((wineId: string, prezzo: number) => {
-    setProposte((p) => ({ ...p, [wineId]: prezzo }));
-    toast.success(`Proposta inviata: € ${prezzo.toLocaleString("it-IT")}`);
-  }, []);
-
-  const recordProposalPrice = useCallback((wineId: string, price: number) => {
-    setProposte((current) => ({ ...current, [wineId]: price }));
-  }, []);
+  const { recordProposalPrice, ...listingsDomain } = useListingsDomain();
 
   const orderDomain = useOrderDomain({ pushNotifica, recordProposalPrice });
 
@@ -598,12 +560,7 @@ export function VineaProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider
       value={{
-        favorites,
-        follows,
-        proposte,
-        toggleFavorite,
-        toggleFollow,
-        proponi,
+        ...listingsDomain,
         ruolo,
         setRuolo: setRuoloWithReset,
         ...messagingDomain,
