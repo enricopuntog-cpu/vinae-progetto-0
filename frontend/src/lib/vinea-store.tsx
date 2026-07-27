@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from "react";
 import { toast } from "sonner";
 import { notificheComplete, type Notifica } from "@/data/extra";
-import { communitySeguiteIniziali } from "@/data/communities";
 import { type CellarBottle, type StorageEnvironment, type StorageModule } from "@/data/cellar";
 import {
   type Order,
@@ -39,6 +38,7 @@ import {
 } from "@/data/moderation";
 import { useOrderDomain } from "@/lib/store/order-domain";
 import { useCellarDomain, type DrinkOverride, type SfondoCantina } from "@/lib/store/cellar-domain";
+import { useClubsDomain } from "@/lib/store/clubs-domain";
 
 export type { DrinkOverride, SfondoCantina } from "@/lib/store/cellar-domain";
 
@@ -200,10 +200,8 @@ export function VineaProvider({ children }: { children: ReactNode }) {
   const [proposte, setProposte] = useState<Record<string, number>>({});
   const [ruolo, setRuolo] = useState<DemoRuolo>("user");
   const [notifiche, setNotifiche] = useState<Notifica[]>(notificheComplete);
-  const [communityFollows, setCommunityFollows] = useState<Set<string>>(
-    new Set(communitySeguiteIniziali),
-  );
   const cellarDomain = useCellarDomain();
+  const clubsDomain = useClubsDomain();
 
   const toggleFavorite = useCallback((id: string) => {
     setFavorites((prev) => {
@@ -244,20 +242,6 @@ export function VineaProvider({ children }: { children: ReactNode }) {
   const segnaTutteLette = useCallback(() => {
     setNotifiche((prev) => prev.map((n) => ({ ...n, letta: true })));
     toast.success("Tutte le notifiche sono state lette");
-  }, []);
-
-  const toggleCommunityFollow = useCallback((slug: string) => {
-    setCommunityFollows((prev) => {
-      const n = new Set(prev);
-      if (n.has(slug)) {
-        n.delete(slug);
-        toast("Non segui più il club");
-      } else {
-        n.add(slug);
-        toast.success("Segui il club");
-      }
-      return n;
-    });
   }, []);
 
   const pushNotifica = useCallback((n: Omit<Notifica, "id" | "letta">) => {
@@ -641,8 +625,7 @@ export function VineaProvider({ children }: { children: ReactNode }) {
         nonLette,
         segnaLetta,
         segnaTutteLette,
-        communityFollows,
-        toggleCommunityFollow,
+        ...clubsDomain,
         ...cellarDomain,
         ...orderDomain,
         pushNotifica,
