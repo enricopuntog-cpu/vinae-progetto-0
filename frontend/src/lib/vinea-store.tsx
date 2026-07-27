@@ -40,10 +40,10 @@ import { useClubsDomain } from "@/lib/store/clubs-domain";
 import { useMessagingDomain } from "@/lib/store/messaging-domain";
 import { useListingsDomain } from "@/lib/store/listings-domain";
 import { useProfileDomain } from "@/lib/store/profile-domain";
+import { useAuthDomain, type DemoRuolo } from "@/lib/store/auth-domain";
 
 export type { DrinkOverride, SfondoCantina } from "@/lib/store/cellar-domain";
-
-export type DemoRuolo = "guest" | "user" | "admin";
+export type { DemoRuolo } from "@/lib/store/auth-domain";
 
 type StoreState = {
   favorites: Set<string>;
@@ -196,7 +196,6 @@ type StoreState = {
 const Ctx = createContext<StoreState | null>(null);
 
 export function VineaProvider({ children }: { children: ReactNode }) {
-  const [ruolo, setRuolo] = useState<DemoRuolo>("user");
   const cellarDomain = useCellarDomain();
   const clubsDomain = useClubsDomain();
   const messagingDomain = useMessagingDomain();
@@ -205,17 +204,7 @@ export function VineaProvider({ children }: { children: ReactNode }) {
 
   const orderDomain = useOrderDomain({ pushNotifica, recordProposalPrice });
   const { resetForGuest, ...profileDomain } = useProfileDomain({ pushNotifica });
-
-  // Se l'utente entra come "guest", azzeriamo l'onboarding
-  const setRuoloWithReset = useCallback(
-    (r: DemoRuolo) => {
-      setRuolo(r);
-      if (r === "guest") {
-        resetForGuest();
-      }
-    },
-    [resetForGuest],
-  );
+  const authDomain = useAuthDomain({ onGuestSwitch: resetForGuest });
 
   // ============== Moderation ==============
   const [reports, setReports] = useState<Report[]>(reportsSeed);
@@ -405,8 +394,7 @@ export function VineaProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider
       value={{
         ...listingsDomain,
-        ruolo,
-        setRuolo: setRuoloWithReset,
+        ...authDomain,
         ...messagingDomain,
         ...clubsDomain,
         ...cellarDomain,
