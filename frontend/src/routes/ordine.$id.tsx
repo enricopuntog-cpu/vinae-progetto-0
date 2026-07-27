@@ -26,7 +26,6 @@ import {
   type TrackingEvent,
 } from "@/data/orders";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
-import { wineImg } from "@/lib/wine-images";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -49,6 +48,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import {
+  useSellerPrepActions,
+  useBuyerConfirmActions,
+  useDisputeResolutionActions,
+  useReviewActions,
+} from "@/hooks/useOrderActions";
 
 export const Route = createFileRoute("/ordine/$id")({
   head: ({ params }) => ({
@@ -324,43 +329,23 @@ function iconFor(t: TrackingEvent["tipo"]) {
 /* ============ Seller: prepara spedizione ============ */
 
 function SellerPrepPanel({ orderId }: { orderId: string }) {
-  const { getOrder, updateSellerOrder, markShipped } = useVinea();
-  const order = getOrder(orderId)!;
-  type Packaging = "scatola_singola" | "scatola_polistirolo" | "cassa_legno";
-  const [imballaggio, setImballaggio] = useState<Packaging>("scatola_polistirolo");
-  const [checks, setChecks] = useState<Record<string, boolean>>({
-    foto_frontale: false,
-    foto_capsula: false,
-    foto_livello: false,
-    foto_imballaggio: false,
-  });
-  const [tracking, setTracking] = useState("");
-  const [courier, setCourier] = useState("Corriere Vinea");
-  const [labelGenerated, setLabelGenerated] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const allDone = Object.values(checks).every(Boolean);
-  const canShip = allDone && tracking.trim().length >= 4 && labelGenerated;
-
-  function generaLabel() {
-    setLoading(true);
-    setTimeout(() => {
-      const t = `VNA-${Math.floor(1000 + Math.random() * 8999)}-${Math.floor(100 + Math.random() * 899)}`;
-      setTracking(t);
-      setLabelGenerated(true);
-      setLoading(false);
-      updateSellerOrder(orderId, { sellerStatus: "da_spedire", buyerStatus: "in_preparazione" });
-      toast.success("Etichetta di spedizione simulata generata");
-    }, 900);
-  }
-
-  function conferma() {
-    setLoading(true);
-    setTimeout(() => {
-      markShipped(orderId, tracking, courier);
-      setLoading(false);
-    }, 700);
-  }
+  const { updateSellerOrder, markShipped } = useVinea();
+  const {
+    imballaggio,
+    setImballaggio,
+    checks,
+    setChecks,
+    tracking,
+    setTracking,
+    courier,
+    setCourier,
+    labelGenerated,
+    loading,
+    allDone,
+    canShip,
+    generaLabel,
+    conferma,
+  } = useSellerPrepActions({ orderId, updateSellerOrder, markShipped });
 
   return (
     <section className="rounded-2xl border border-border bg-card p-4">
@@ -493,15 +478,23 @@ function SellerPrepPanel({ orderId }: { orderId: string }) {
 function BuyerConfirmPanel({ orderId }: { orderId: string }) {
   const { confirmOk, openDispute } = useVinea();
   const [openDispDlg, setOpenDispDlg] = useState(false);
-  const [motivo, setMotivo] = useState("Bottiglia non conforme");
-  const [descr, setDescr] = useState("");
-  const [foto, setFoto] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingConfirm, setLoadingConfirm] = useState(false);
-
-  function simulaCarica() {
-    setFoto((prev) => [...prev, wineImg(`disp-${prev.length}-${Date.now()}`)]);
-  }
+  const {
+    motivo,
+    setMotivo,
+    descr,
+    setDescr,
+    foto,
+    simulaCarica,
+    loading,
+    loadingConfirm,
+    confirmDelivery,
+    submitDispute,
+  } = useBuyerConfirmActions({
+    orderId,
+    confirmOk,
+    openDispute,
+    onDisputeSubmitted: () => setOpenDispDlg(false),
+  });
 
   return (
     <section className="rounded-2xl border border-salvia/40 bg-salvia/5 p-4">
@@ -513,13 +506,7 @@ function BuyerConfirmPanel({ orderId }: { orderId: string }) {
         <Button
           className="bg-bordeaux hover:bg-bordeaux/90"
           disabled={loadingConfirm}
-          onClick={() => {
-            setLoadingConfirm(true);
-            setTimeout(() => {
-              confirmOk(orderId);
-              setLoadingConfirm(false);
-            }, 700);
-          }}
+          onClick={confirmDelivery}
         >
           <CheckCircle2 className="h-4 w-4" />{" "}
           {loadingConfirm ? "Conferma in corso…" : "Conferma che è tutto corretto"}
@@ -589,14 +576,7 @@ function BuyerConfirmPanel({ orderId }: { orderId: string }) {
               <Button
                 className="bg-bordeaux hover:bg-bordeaux/90"
                 disabled={!descr.trim() || loading}
-                onClick={() => {
-                  setLoading(true);
-                  setTimeout(() => {
-                    openDispute(orderId, { motivo, descrizione: descr, foto });
-                    setLoading(false);
-                    setOpenDispDlg(false);
-                  }, 800);
-                }}
+                onClick={submitDispute}
               >
                 {loading ? "Invio…" : "Apri contestazione"}
               </Button>
@@ -614,7 +594,7 @@ function DisputePanel({ orderId, isSeller }: { orderId: string; isSeller: boolea
   const { getOrder, resolveDispute } = useVinea();
   const order = getOrder(orderId)!;
   const d = order.dispute!;
-  const [loading, setLoading] = useState(false);
+  const { loading, resolve } = useDisputeResolutionActions({ orderId, resolveDispute });
   const statoLabel = {
     aperta: "Aperta",
     in_valutazione: "In valutazione",
@@ -654,13 +634,7 @@ function DisputePanel({ orderId, isSeller }: { orderId: string; isSeller: boolea
               size="sm"
               variant="outline"
               disabled={loading}
-              onClick={() => {
-                setLoading(true);
-                setTimeout(() => {
-                  resolveDispute(orderId, "rimborsata", "Rimborso completo emesso");
-                  setLoading(false);
-                }, 700);
-              }}
+              onClick={() => resolve("rimborsata", "Rimborso completo emesso")}
             >
               Rimborsa acquirente
             </Button>
@@ -668,13 +642,7 @@ function DisputePanel({ orderId, isSeller }: { orderId: string; isSeller: boolea
               size="sm"
               variant="outline"
               disabled={loading}
-              onClick={() => {
-                setLoading(true);
-                setTimeout(() => {
-                  resolveDispute(orderId, "risolta", "Accordo tra le parti");
-                  setLoading(false);
-                }, 700);
-              }}
+              onClick={() => resolve("risolta", "Accordo tra le parti")}
             >
               Risolta con accordo
             </Button>
@@ -683,13 +651,7 @@ function DisputePanel({ orderId, isSeller }: { orderId: string; isSeller: boolea
                 size="sm"
                 variant="ghost"
                 disabled={loading}
-                onClick={() => {
-                  setLoading(true);
-                  setTimeout(() => {
-                    resolveDispute(orderId, "respinta", "Nessuna irregolarità riscontrata");
-                    setLoading(false);
-                  }, 700);
-                }}
+                onClick={() => resolve("respinta", "Nessuna irregolarità riscontrata")}
               >
                 <XCircle className="h-3.5 w-3.5" /> Respingi
               </Button>
@@ -705,13 +667,21 @@ function DisputePanel({ orderId, isSeller }: { orderId: string; isSeller: boolea
 
 function ReviewPanel({ orderId, existing }: { orderId: string; existing?: OrderReview }) {
   const { submitReview } = useVinea();
-  const [voto, setVoto] = useState(existing?.voto ?? 5);
-  const [conf, setConf] = useState(existing?.conformita ?? 5);
-  const [imb, setImb] = useState(existing?.imballaggio ?? 5);
-  const [com, setCom] = useState(existing?.comunicazione ?? 5);
-  const [testo, setTesto] = useState(existing?.testo ?? "");
-  const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(!!existing);
+  const {
+    voto,
+    setVoto,
+    conf,
+    setConf,
+    imb,
+    setImb,
+    com,
+    setCom,
+    testo,
+    setTesto,
+    loading,
+    sent,
+    submit,
+  } = useReviewActions({ orderId, existing, submitReview });
 
   if (sent) {
     return (
@@ -747,25 +717,7 @@ function ReviewPanel({ orderId, existing }: { orderId: string; existing?: OrderR
         onChange={(e) => setTesto(e.target.value)}
         placeholder="Un commento (facoltativo)…"
       />
-      <Button
-        className="mt-3 bg-bordeaux hover:bg-bordeaux/90"
-        disabled={loading}
-        onClick={() => {
-          setLoading(true);
-          setTimeout(() => {
-            submitReview(orderId, {
-              voto,
-              conformita: conf,
-              imballaggio: imb,
-              comunicazione: com,
-              testo,
-              ts: new Date().toISOString(),
-            });
-            setLoading(false);
-            setSent(true);
-          }, 700);
-        }}
-      >
+      <Button className="mt-3 bg-bordeaux hover:bg-bordeaux/90" disabled={loading} onClick={submit}>
         {loading ? "Invio…" : "Pubblica recensione"}
       </Button>
     </section>

@@ -45,8 +45,6 @@ import {
 } from "@/components/ui/select";
 import { wineImages } from "@/lib/wine-images";
 import {
-  computeDrinkPhase,
-  getWineMeta,
   phaseShort,
   phaseColor,
   slotsWithBottles,
@@ -54,13 +52,11 @@ import {
   THEME_LABELS,
   type EnvShape,
   type EnvTheme,
-  type StorageEnvironment,
-  type StorageModule,
   type StorageSlot,
 } from "@/data/cellar";
 import { FindWineFromCellar } from "@/components/vinea/FoodPairing";
-import { mergeMeta } from "@/components/vinea/DrinkWindow";
 import { toast } from "sonner";
+import { useCellarOverview, useEnvironmentConfigurator } from "@/hooks/useCellar";
 
 export const Route = createFileRoute("/cantina")({
   head: () => ({
@@ -111,10 +107,20 @@ function Cantina() {
     setReduceMotion,
   } = useVinea();
 
-  const mie = useMemo(() => {
-    const ids = new Set(bottiglieCantina.map((b) => b.wineVintageId));
-    return wines.filter((w) => ids.has(w.id));
-  }, [bottiglieCantina]);
+  const {
+    mie,
+    idealiOra,
+    daBerePresto,
+    daAttendere,
+    aperture,
+    totBottiglie,
+    valore,
+    totSlot,
+    occSlot,
+    nonCollocate,
+    usoPct,
+  } = useCellarOverview({ bottiglieCantina, ambienti, moduli, drinkWindowOverrides });
+
   const [view, setView] = useState<"grid" | "list" | "3d">("grid");
   const [threeDRequested, setThreeDRequested] = useState(false);
 
@@ -123,35 +129,8 @@ function Cantina() {
     setView(nextView);
   };
 
-  const totBottiglie = bottiglieCantina.reduce((s, b) => s + b.quantita, 0);
-  const valore = bottiglieCantina.reduce((s, b) => {
-    const w = wines.find((x) => x.id === b.wineVintageId);
-    return s + (w ? w.prezzo * b.quantita : 0);
-  }, 0);
   const variazione = ((ANDAMENTO[ANDAMENTO.length - 1] - ANDAMENTO[0]) / ANDAMENTO[0]) * 100;
   const sfondoUrl = SFONDI.find((s) => s.key === sfondoCantina)!.url;
-
-  // Dashboard drink dati
-  const withPhase = useMemo(() => {
-    return mie.map((w) => {
-      const meta = mergeMeta(getWineMeta(w.id), drinkWindowOverrides[w.id]);
-      return { wine: w, phase: computeDrinkPhase(meta), meta };
-    });
-  }, [mie, drinkWindowOverrides]);
-
-  const idealiOra = withPhase.filter((x) => x.phase === "ideale" || x.phase === "pronto");
-  const daBerePresto = withPhase.filter((x) => x.phase === "presto" || x.phase === "oltre");
-  const daAttendere = withPhase.filter((x) => x.phase === "attesa" || x.phase === "quasi");
-  const aperture = bottiglieCantina.filter((b) => b.plannedOpenDate);
-
-  // Capacità
-  const totSlot = ambienti.reduce((s, e) => {
-    const mods = moduli.filter((m) => m.environmentId === e.id);
-    return s + mods.reduce((a, m) => a + m.rows * m.columns, 0);
-  }, 0);
-  const occSlot = bottiglieCantina.filter((b) => b.storageLocationId).length;
-  const nonCollocate = bottiglieCantina.filter((b) => !b.storageLocationId);
-  const usoPct = totSlot ? Math.round((occSlot / totSlot) * 100) : 0;
 
   return (
     <div className="space-y-8">
@@ -912,32 +891,23 @@ function SfondoDialog({
 function ConfiguratorDialog() {
   const { addEnvironment } = useVinea();
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("Nuovo ambiente");
-  const [shape, setShape] = useState<EnvShape>("scaffalatura_modulare");
-  const [theme, setTheme] = useState<EnvTheme>("moderna");
-  const [rows, setRows] = useState(4);
-  const [cols, setCols] = useState(5);
+  const {
+    name,
+    setName,
+    shape,
+    setShape,
+    theme,
+    setTheme,
+    rows,
+    setRows,
+    cols,
+    setCols,
+    capacitaStimata,
+    salva,
+  } = useEnvironmentConfigurator({ addEnvironment });
 
-  const salva = () => {
-    const id = `env-${Date.now()}`;
-    const env: StorageEnvironment = {
-      id,
-      name,
-      shape,
-      theme,
-      material: "rovere",
-      lighting: "neutra",
-      dimensions: { width: cols * 0.3 + 0.5, height: rows * 0.35 + 0.5, depth: 0.4 },
-    };
-    const mod: StorageModule = {
-      id: `${id}-mod`,
-      environmentId: id,
-      label: `${name} — modulo principale`,
-      position: [0, 0, 0],
-      rows,
-      columns: cols,
-    };
-    addEnvironment(env, [mod]);
+  const salvaEChiudi = () => {
+    salva();
     setOpen(false);
   };
 
@@ -1008,15 +978,15 @@ function ConfiguratorDialog() {
             </div>
           </div>
           <p className="rounded-lg bg-secondary/50 p-2 text-[11px] text-muted-foreground">
-            Capacità stimata: <b>{rows * cols}</b> posti. Le posizioni delle bottiglie esistenti non
-            vengono modificate.
+            Capacità stimata: <b>{capacitaStimata}</b> posti. Le posizioni delle bottiglie esistenti
+            non vengono modificate.
           </p>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>
             Annulla
           </Button>
-          <Button className="bg-bordeaux hover:bg-bordeaux/90" onClick={salva}>
+          <Button className="bg-bordeaux hover:bg-bordeaux/90" onClick={salvaEChiudi}>
             Crea ambiente
           </Button>
         </DialogFooter>
