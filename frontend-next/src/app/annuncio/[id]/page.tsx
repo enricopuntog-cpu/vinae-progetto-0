@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { wines } from "@/data/wines";
-import { formatEUR } from "@/lib/vinea-store";
+import { formatEUR } from "@/lib/format";
 import AnnuncioDetailPageClient from "./page-client";
 
 export async function generateMetadata({
