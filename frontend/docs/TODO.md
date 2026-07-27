@@ -12,7 +12,9 @@ follow-up, aggiungerlo qui con contesto.
 - [ ] Storage bucket `listings/*` con upload firmato.
 - [ ] `OrderService` + `ProposalService` server-side (transizioni atomiche).
 - [ ] Integrazione Stripe (`payments-checkout` + webhook firmato).
-- [ ] Sostituire `Cellar3D` static import con `dynamic({ ssr:false })`.
+- [ ] Portare il lazy-loading browser-only di `Cellar3D` (già presente in
+      TanStack Start via `lazy()` + `ClientOnly`) all'equivalente Next.js
+      `dynamic(..., { ssr: false })`.
 - [ ] Verificare `Route.head()` → `generateMetadata` per ogni page e og:image
       leaf-only.
 
@@ -39,10 +41,14 @@ follow-up, aggiungerlo qui con contesto.
 
 ## Debiti tecnici della demo (non trasferire senza rivedere)
 
-- Lo store è un unico Context da ~750 righe: in Next.js valutare split per
-  slice (auth, orders, listings, moderation) usando Zustand o React Server
-  State + Server Actions.
+- Store già suddiviso in 8 slice di dominio (Sprint 1): auth, profile,
+  cellar, listings, order, messaging, moderation, clubs — più 4 hook di
+  pagina (`useSellWizard`, `useCellar`, `useOrderActions`,
+  `useModerationActions`). In Next.js questi hook si montano come client
+  provider così come sono; non serve un secondo refactor dello stato
+  (vedi `docs/adr/001-target-architecture.md` nella root del repo).
 - Le simulazioni di scadenza proposta usano `setTimeout` in-memory: in prod
   devono diventare job schedulati (pg_cron).
-- Nessun test automatico: aggiungere Playwright per i flussi critici
+- Test automatici unitari esistono (73 frontend, 36 backend) ma non c'è
+  ancora copertura end-to-end: aggiungere Playwright per i flussi critici
   (checkout, dispute, wizard vendita) prima della beta.
