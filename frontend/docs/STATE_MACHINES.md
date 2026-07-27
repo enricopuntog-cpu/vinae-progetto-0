@@ -1,8 +1,12 @@
 # Macchine a stati
 
-Tutte le transizioni vivono in `src/lib/vinea-store.tsx`. I tipi canonici
-in `src/data/{orders,moderation,onboarding}.ts`. Le etichette IT in
-`src/config/labels.ts`.
+Le transizioni sono suddivise per dominio in `src/lib/store/*.ts` (8
+slice: `auth`, `profile`, `cellar`, `listings`, `order`, `messaging`,
+`moderation`, `clubs`) e in `src/hooks/*.ts` per la logica di pagina
+(`useSellWizard`, `useCellar`, `useOrderActions`, `useModerationActions`).
+`src/lib/vinea-store.tsx` è ora solo il composition root che assembla le
+8 slice. I tipi canonici in `src/data/{orders,moderation,onboarding}.ts`.
+Le etichette IT in `src/config/labels.ts`.
 
 ## Annuncio (`ListingStatus`)
 
