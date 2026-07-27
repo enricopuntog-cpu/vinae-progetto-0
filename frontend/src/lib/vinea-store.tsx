@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from "react";
 import { toast } from "sonner";
-import { notificheComplete, type Notifica } from "@/data/extra";
+import { type Notifica } from "@/data/extra";
 import { type CellarBottle, type StorageEnvironment, type StorageModule } from "@/data/cellar";
 import {
   type Order,
@@ -39,6 +39,7 @@ import {
 import { useOrderDomain } from "@/lib/store/order-domain";
 import { useCellarDomain, type DrinkOverride, type SfondoCantina } from "@/lib/store/cellar-domain";
 import { useClubsDomain } from "@/lib/store/clubs-domain";
+import { useMessagingDomain } from "@/lib/store/messaging-domain";
 
 export type { DrinkOverride, SfondoCantina } from "@/lib/store/cellar-domain";
 
@@ -199,9 +200,10 @@ export function VineaProvider({ children }: { children: ReactNode }) {
   const [follows, setFollows] = useState<Set<string>>(new Set(["Marco B."]));
   const [proposte, setProposte] = useState<Record<string, number>>({});
   const [ruolo, setRuolo] = useState<DemoRuolo>("user");
-  const [notifiche, setNotifiche] = useState<Notifica[]>(notificheComplete);
   const cellarDomain = useCellarDomain();
   const clubsDomain = useClubsDomain();
+  const messagingDomain = useMessagingDomain();
+  const { pushNotifica } = messagingDomain;
 
   const toggleFavorite = useCallback((id: string) => {
     setFavorites((prev) => {
@@ -236,28 +238,11 @@ export function VineaProvider({ children }: { children: ReactNode }) {
     toast.success(`Proposta inviata: € ${prezzo.toLocaleString("it-IT")}`);
   }, []);
 
-  const segnaLetta = useCallback((id: string) => {
-    setNotifiche((prev) => prev.map((n) => (n.id === id ? { ...n, letta: true } : n)));
-  }, []);
-  const segnaTutteLette = useCallback(() => {
-    setNotifiche((prev) => prev.map((n) => ({ ...n, letta: true })));
-    toast.success("Tutte le notifiche sono state lette");
-  }, []);
-
-  const pushNotifica = useCallback((n: Omit<Notifica, "id" | "letta">) => {
-    setNotifiche((prev) => [
-      { id: `n-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, letta: false, ...n },
-      ...prev,
-    ]);
-  }, []);
-
   const recordProposalPrice = useCallback((wineId: string, price: number) => {
     setProposte((current) => ({ ...current, [wineId]: price }));
   }, []);
 
   const orderDomain = useOrderDomain({ pushNotifica, recordProposalPrice });
-
-  const nonLette = useMemo(() => notifiche.filter((n) => !n.letta).length, [notifiche]);
 
   // ============== Onboarding & verifica ==============
   const [registrato, setRegistrato] = useState(true); // demo: user già registrato
@@ -621,14 +606,10 @@ export function VineaProvider({ children }: { children: ReactNode }) {
         proponi,
         ruolo,
         setRuolo: setRuoloWithReset,
-        notifiche,
-        nonLette,
-        segnaLetta,
-        segnaTutteLette,
+        ...messagingDomain,
         ...clubsDomain,
         ...cellarDomain,
         ...orderDomain,
-        pushNotifica,
         registrato,
         emailStatus,
         ageStatus,
