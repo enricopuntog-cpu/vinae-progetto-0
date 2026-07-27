@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Shield,
   Flag,
@@ -50,11 +50,11 @@ import {
   modActionLabel,
   modActionTone,
   type Report,
-  type ReportStatus,
   type Priorita,
   type ModAction,
 } from "@/data/moderation";
 import { colorBuyerStatus, labelBuyerStatus } from "@/data/orders";
+import { useReportQueue, useModAction, useScopedAuditLog } from "@/hooks/useModerationActions";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -191,20 +191,11 @@ function Admin() {
 
 function CodaSegnalazioni() {
   const { reports, modScope } = useVinea();
-  const clubSlug = typeof modScope === "object" ? modScope.club : undefined;
-  const isClub = clubSlug !== undefined;
-
-  const [priorita, setPriorita] = useState<"tutte" | Priorita>("tutte");
-  const [stato, setStato] = useState<"tutti" | ReportStatus>("tutti");
+  const { priorita, setPriorita, stato, setStato, filtrate } = useReportQueue({
+    reports,
+    modScope,
+  });
   const [sel, setSel] = useState<Report | null>(null);
-
-  const filtrate = useMemo(() => {
-    let list = reports;
-    if (isClub) list = list.filter((r) => r.clubSlug === clubSlug);
-    if (priorita !== "tutte") list = list.filter((r) => r.priorita === priorita);
-    if (stato !== "tutti") list = list.filter((r) => r.stato === stato);
-    return list;
-  }, [reports, isClub, clubSlug, priorita, stato]);
 
   return (
     <div className="space-y-3">
@@ -323,39 +314,15 @@ function PrioBadge({ p }: { p: Priorita }) {
 function ReportDetail({ report, onClose }: { report: Report | null; onClose: () => void }) {
   const { applyModAction, addReportNote, assignReport, modScope } = useVinea();
   const isClub = typeof modScope === "object";
-  const [motivazione, setMotivazione] = useState("");
-  const [durata, setDurata] = useState("7 giorni");
+  const { motivazione, setMotivazione, durata, setDurata, actionsFor, eseguiAzione } = useModAction(
+    { modScope, applyModAction },
+  );
   const [nota, setNota] = useState("");
 
   if (!report) return null;
 
-  // azioni disponibili in base allo stato
   const closed = report.stato === "risolta" || report.stato === "respinta";
-  const actions: ModAction[] = closed
-    ? ["ripristino"]
-    : [
-        "richiesta_modifiche",
-        "info_richieste",
-        "ammonizione",
-        "sospensione",
-        "rimozione",
-        "chiusura",
-      ];
-
-  function eseguiAzione(a: ModAction) {
-    if (!motivazione.trim()) return;
-    applyModAction({
-      action: a,
-      target: report!.targetLabel,
-      motivazione,
-      durata: a === "sospensione" ? durata : undefined,
-      scope: isClub ? "club" : "piattaforma",
-      clubSlug: isClub ? (modScope as { club: string }).club : report!.clubSlug,
-      reportId: report!.id,
-    });
-    setMotivazione("");
-    onClose();
-  }
+  const actions = actionsFor(report);
 
   return (
     <Dialog open={!!report} onOpenChange={(v) => !v && onClose()}>
@@ -520,7 +487,7 @@ function ReportDetail({ report, onClose }: { report: Report | null; onClose: () 
               key={a}
               action={a}
               disabled={!motivazione.trim() && a !== "ripristino"}
-              onConfirm={() => eseguiAzione(a)}
+              onConfirm={() => eseguiAzione(report, a, onClose)}
             />
           ))}
           <Button variant="ghost" onClick={onClose}>
@@ -691,12 +658,7 @@ function Controversie() {
 
 function AuditLog() {
   const { auditLog, modScope } = useVinea();
-  const isClub = typeof modScope === "object";
-  const list = isClub
-    ? auditLog.filter(
-        (e) => e.scope === "club" && e.clubSlug === (modScope as { club: string }).club,
-      )
-    : auditLog;
+  const list = useScopedAuditLog({ auditLog, modScope });
 
   if (list.length === 0) {
     return (
