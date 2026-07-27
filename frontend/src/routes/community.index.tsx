@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { SectionTitle } from "@/components/vinea/Layout";
 import { useVinea } from "@/lib/vinea-store";
 import { wineImages } from "@/lib/wine-images";
+import { formatInteger } from "@/lib/format";
 
 export const Route = createFileRoute("/community/")({
   head: () => ({
@@ -253,7 +254,7 @@ function CommunityCard({
         <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{c.descrizione}</p>
         <div className="mt-3 flex items-center justify-between">
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Users className="h-3.5 w-3.5" /> {c.membri.toLocaleString("it-IT")} •{" "}
+            <Users className="h-3.5 w-3.5" /> {formatInteger(c.membri)} •{" "}
             <TrendingUp className="h-3.5 w-3.5" /> {c.attivi} attivi
           </p>
           <Button

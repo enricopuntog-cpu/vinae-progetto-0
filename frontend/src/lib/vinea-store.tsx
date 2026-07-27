@@ -697,9 +697,4 @@ export function useVinea() {
   return ctx;
 }
 
-export const formatEUR = (n: number) =>
-  new Intl.NumberFormat("it-IT", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0,
-  }).format(n);
+export { formatEUR } from "@/lib/format";

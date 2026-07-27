@@ -8,6 +8,7 @@ import { Kpi } from "@/components/vinea/Layout";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useVinea } from "@/lib/vinea-store";
 import { ReportDialog } from "@/components/vinea/ReportDialog";
+import { formatInteger } from "@/lib/format";
 
 export const Route = createFileRoute("/venditore/$username")({
   loader: ({ params }) => {
@@ -171,9 +172,7 @@ function VenditorePublic() {
                 <img src={c.cover} alt="" className="h-16 w-24 rounded-lg object-cover" />
                 <div className="min-w-0 flex-1">
                   <p className="font-serif font-semibold">{c.nome}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {c.membri.toLocaleString("it-IT")} membri
-                  </p>
+                  <p className="text-xs text-muted-foreground">{formatInteger(c.membri)} membri</p>
                 </div>
               </Link>
             ))

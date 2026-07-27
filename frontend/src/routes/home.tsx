@@ -16,6 +16,7 @@ import { SectionTitle, Kpi } from "@/components/vinea/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
+import { formatInteger } from "@/lib/format";
 
 export const Route = createFileRoute("/home")({
   head: () => ({
@@ -277,7 +278,7 @@ function HomeUtente() {
                 <div className="absolute inset-0 bg-gradient-to-t from-antracite/80 to-transparent" />
                 <div className="absolute bottom-3 left-3 right-3 text-crema">
                   <p className="font-serif text-lg font-semibold">{c.nome}</p>
-                  <p className="text-xs opacity-80">{c.membri.toLocaleString("it-IT")} membri</p>
+                  <p className="text-xs opacity-80">{formatInteger(c.membri)} membri</p>
                 </div>
               </Link>
             ))}

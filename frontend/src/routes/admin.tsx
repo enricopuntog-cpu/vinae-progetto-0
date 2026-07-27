@@ -20,6 +20,7 @@ import {
 import { adminKpi } from "@/data/extra";
 import { communities } from "@/data/communities";
 import { wines } from "@/data/wines";
+import { formatInteger } from "@/lib/format";
 import { Kpi } from "@/components/vinea/Layout";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -143,8 +144,8 @@ function Admin() {
 
       {!isClub && (
         <section className="grid grid-cols-2 gap-3 md:grid-cols-5">
-          <Kpi label="Utenti" value={adminKpi.utenti.toLocaleString("it-IT")} hint="totali" />
-          <Kpi label="Annunci attivi" value={adminKpi.annunciAttivi.toLocaleString("it-IT")} />
+          <Kpi label="Utenti" value={formatInteger(adminKpi.utenti)} hint="totali" />
+          <Kpi label="Annunci attivi" value={formatInteger(adminKpi.annunciAttivi)} />
           <Kpi label="Segnalazioni" value={String(adminKpi.segnalazioniAperte)} hint="aperte" />
           <Kpi label="In revisione" value={String(adminKpi.inRevisione)} />
           <Kpi label="Club" value={String(adminKpi.communityAttive)} hint="attivi" />

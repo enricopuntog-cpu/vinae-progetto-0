@@ -16,6 +16,7 @@ import { WineCard } from "@/components/vinea/WineCard";
 import { useVinea } from "@/lib/vinea-store";
 import { ReportDialog } from "@/components/vinea/ReportDialog";
 import { toast } from "sonner";
+import { formatInteger } from "@/lib/format";
 
 export const Route = createFileRoute("/community/$slug")({
   loader: ({ params }) => {
@@ -92,7 +93,7 @@ function CommunityDetail() {
           <p className="max-w-2xl text-crema/85">{c.descrizione}</p>
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <span className="flex items-center gap-1">
-              <Users className="h-4 w-4" /> {c.membri.toLocaleString("it-IT")} membri
+              <Users className="h-4 w-4" /> {formatInteger(c.membri)} membri
             </span>
             <span>•</span>
             <span>{c.attivi} attivi oggi</span>
