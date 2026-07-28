@@ -7,7 +7,8 @@ import { Check, Mail, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { ConsentCheckbox } from "@/components/vinea/ConsentCheckbox";
+import { SocialAuthButtons } from "@/components/vinea/SocialAuthButtons";
 import { useVinea } from "@/lib/vinea-store";
 import { isMaggiorenne } from "@/lib/age";
 
@@ -187,25 +188,17 @@ export default function RegistratiPageClient() {
             </div>
           </div>
 
-          <label className="flex items-start gap-2 text-sm">
-            <Checkbox
-              checked={terms}
-              onCheckedChange={(v) => setTerms(v === true)}
-              className="mt-0.5"
-            />
-            <span>Accetto i Termini e la Privacy di Vinea.</span>
-          </label>
-          <label className="flex items-start gap-2 text-sm">
-            <Checkbox
-              checked={maggiorenne}
-              onCheckedChange={(v) => setMaggiorenne(v === true)}
-              className="mt-0.5"
-            />
-            <span className="flex items-center gap-1">
-              <ShieldAlert className="h-3.5 w-3.5 text-bordeaux" /> Confermo di essere maggiorenne.
-              Vinea è vietato ai minori di 18 anni.
-            </span>
-          </label>
+          <ConsentCheckbox checked={terms} onCheckedChange={setTerms} testId="consenso-termini">
+            Accetto i Termini e la Privacy di Vinea.
+          </ConsentCheckbox>
+          <ConsentCheckbox
+            checked={maggiorenne}
+            onCheckedChange={setMaggiorenne}
+            icon={<ShieldAlert className="h-3.5 w-3.5 text-bordeaux" />}
+            testId="consenso-eta"
+          >
+            Confermo di avere più di 18 anni. Vinea è vietato ai minori di 18 anni.
+          </ConsentCheckbox>
 
           {/*
             Dichiarazione auto-riferita, non verifica documentale: nessun documento
@@ -238,6 +231,8 @@ export default function RegistratiPageClient() {
               </>
             )}
           </Button>
+
+          <SocialAuthButtons etichetta="oppure registrati con" />
 
           <p className="text-sm text-muted-foreground">
             Hai già un account?{" "}

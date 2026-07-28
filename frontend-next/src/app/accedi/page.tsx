@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import AccediPageClient from "./page-client";
 
 export const metadata: Metadata = {
@@ -11,5 +12,20 @@ export const metadata: Metadata = {
 };
 
 export default function Page() {
-  return <AccediPageClient />;
+  // Suspense richiesto perché la pagina legge `?errore=` con useSearchParams
+  // (lo riporta /auth/callback quando il flusso OAuth non si completa): senza
+  // boundary il prerender statico di questa route fallisce.
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-md">
+          <div className="rounded-3xl border border-border bg-card p-5 md:p-8">
+            <p className="text-sm text-muted-foreground">Caricamento…</p>
+          </div>
+        </div>
+      }
+    >
+      <AccediPageClient />
+    </Suspense>
+  );
 }

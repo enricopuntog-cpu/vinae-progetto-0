@@ -42,8 +42,10 @@ import type { Notifica } from "@/data/extra";
 export type Result<T, E = string> = { ok: true; data: T } | { ok: false; error: E };
 
 // ---- Auth --------------------------------------------------------------
-// Google/Apple non in questa fase (Fase 5b, quando saranno disponibili le
-// credenziali OAuth): nessun metodo di social login qui.
+// Google e Facebook aggiunti in Fase 5b. Client ID/Secret vivono solo nella
+// dashboard Supabase: qui si nomina soltanto il provider.
+export type OAuthProvider = "google" | "facebook";
+
 export interface AuthService {
   /**
    * Una registrazione riuscita ha tre esiti distinti, non due:
@@ -67,8 +69,23 @@ export interface AuthService {
   verificaEmail(tokenHash: string): Promise<Result<void>>;
   login(email: string, password: string): Promise<Result<{ userId: string }>>;
   inviaMagicLink(email: string): Promise<Result<void>>;
+  /**
+   * Avvia il flusso OAuth. Non ritorna una sessione: il browser viene
+   * reindirizzato al provider e rientra su /auth/callback, che completa lo
+   * scambio del code. Un esito `ok` significa solo "redirect avviato".
+   */
+  accediConOAuth(provider: OAuthProvider): Promise<Result<void>>;
+  signInWithGoogle(): Promise<Result<void>>;
+  signInWithFacebook(): Promise<Result<void>>;
   logout(): Promise<void>;
   utenteCorrente(): Promise<{ userId: string; email: string | null } | null>;
+  /**
+   * Data di nascita dichiarata sul profilo, o null se non ancora fornita —
+   * il caso di chi entra via Google/Facebook, che salta il form email e
+   * quindi anche il banner di dichiarazione età.
+   */
+  dataNascitaProfilo(userId: string): Promise<Result<string | null>>;
+  salvaDataNascita(userId: string, dataNascita: string): Promise<Result<void>>;
 }
 
 // ---- Profili ---------------------------------------------------------------

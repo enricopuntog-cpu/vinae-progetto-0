@@ -3,9 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { supabaseAuthService } from "@/services/auth-service";
-import type { Result } from "@/services/types";
+import type { OAuthProvider, Result } from "@/services/types";
 
 export type AuthUser = { userId: string; email: string | null };
+
+/**
+ * Stato della dichiarazione di età sul profilo. Vale per qualunque metodo di
+ * accesso: email, magic link, Google o Facebook non fanno differenza.
+ * - `sconosciuto`: nessuna sessione, lettura non ancora completata, oppure
+ *   lettura fallita — in nessuno di questi casi si blocca l'utente.
+ * - `da_completare`: sessione attiva ma `profiles.dob` vuoto.
+ * - `completo`: data di nascita dichiarata.
+ */
+export type StatoEta = "sconosciuto" | "da_completare" | "completo";
 
 /**
  * Sessione reale Supabase (Fase 5a), separata dal demo-switcher `ruolo` di
@@ -21,6 +31,10 @@ export function useRealAuthDomain() {
   // false. Evita una setState sincrona nel corpo dell'effect sotto.
   const [authLoading, setAuthLoading] = useState(() => getSupabaseClient() !== null);
   const [authError, setAuthError] = useState<string | null>(null);
+  // Data di nascita letta dal profilo, memorizzata insieme all'utente a cui
+  // appartiene: così `statoEta` sotto è interamente derivato e non serve
+  // resettarlo con una setState sincrona quando la sessione cambia.
+  const [dobLetta, setDobLetta] = useState<{ userId: string; dob: string | null } | null>(null);
 
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -50,6 +64,36 @@ export function useRealAuthDomain() {
       subscription.subscription.unsubscribe();
     };
   }, []);
+
+  // Legge la data di nascita dichiarata ogni volta che cambia l'utente,
+  // qualunque sia il metodo di accesso: un profilo senza `dob` va completato
+  // prima di poter usare il resto del sito (vedi AgeGate).
+  useEffect(() => {
+    if (!authUser) return;
+
+    let active = true;
+    const userId = authUser.userId;
+    supabaseAuthService.dataNascitaProfilo(userId).then((esito) => {
+      if (!active) return;
+      // In caso di errore di lettura non registriamo nulla: `statoEta` resta
+      // "sconosciuto" e la guardia non blocca l'utente su un dato che non
+      // abbiamo potuto verificare.
+      if (esito.ok) setDobLetta({ userId, dob: esito.data });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [authUser]);
+
+  // Interamente derivato: nessuna sessione, oppure lettura non ancora
+  // disponibile per *questo* utente, significano "sconosciuto".
+  const statoEta: StatoEta =
+    !authUser || dobLetta?.userId !== authUser.userId
+      ? "sconosciuto"
+      : dobLetta.dob
+        ? "completo"
+        : "da_completare";
 
   const authClearError = useCallback(() => setAuthError(null), []);
 
@@ -82,9 +126,32 @@ export function useRealAuthDomain() {
     [],
   );
 
+  const authAccediConOAuth = useCallback(async (provider: OAuthProvider) => {
+    setAuthError(null);
+    const result = await supabaseAuthService.accediConOAuth(provider);
+    if (!result.ok) setAuthError(result.error);
+    return result;
+  }, []);
+
+  const authSalvaDataNascita = useCallback(
+    async (dataNascita: string): Promise<Result<void>> => {
+      if (!authUser) return { ok: false, error: "Nessuna sessione attiva." };
+      setAuthError(null);
+      const result = await supabaseAuthService.salvaDataNascita(authUser.userId, dataNascita);
+      if (!result.ok) {
+        setAuthError(result.error);
+        return result;
+      }
+      setDobLetta({ userId: authUser.userId, dob: dataNascita });
+      return result;
+    },
+    [authUser],
+  );
+
   const authLogout = useCallback(async () => {
     await supabaseAuthService.logout();
     setAuthUser(null);
+    setDobLetta(null);
   }, []);
 
   return {
@@ -96,6 +163,9 @@ export function useRealAuthDomain() {
     authLogin,
     authInviaMagicLink,
     authVerificaEmail,
+    authAccediConOAuth,
+    authStatoEta: statoEta,
+    authSalvaDataNascita,
     authLogout,
   };
 }

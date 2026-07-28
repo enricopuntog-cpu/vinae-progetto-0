@@ -37,8 +37,12 @@ import { useListingsDomain } from "@/lib/store/listings-domain";
 import { useProfileDomain } from "@/lib/store/profile-domain";
 import { useAuthDomain, type DemoRuolo } from "@/lib/store/auth-domain";
 import { useModerationDomain } from "@/lib/store/moderation-domain";
-import { useRealAuthDomain, type AuthUser } from "@/lib/store/real-auth-domain";
-import type { Result } from "@/services/types";
+import {
+  useRealAuthDomain,
+  type AuthUser,
+  type StatoEta,
+} from "@/lib/store/real-auth-domain";
+import type { OAuthProvider, Result } from "@/services/types";
 
 export type { DrinkOverride, SfondoCantina } from "@/lib/store/cellar-domain";
 export type { DemoRuolo } from "@/lib/store/auth-domain";
@@ -68,6 +72,9 @@ type StoreState = {
   authLogin: (email: string, password: string) => Promise<Result<{ userId: string }>>;
   authInviaMagicLink: (email: string) => Promise<Result<void>>;
   authVerificaEmail: (tokenHash: string) => Promise<Result<void>>;
+  authAccediConOAuth: (provider: OAuthProvider) => Promise<Result<void>>;
+  authStatoEta: StatoEta;
+  authSalvaDataNascita: (dataNascita: string) => Promise<Result<void>>;
   authLogout: () => Promise<void>;
 
   notifiche: Notifica[];

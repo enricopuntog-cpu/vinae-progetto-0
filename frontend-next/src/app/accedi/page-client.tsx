@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { LogIn, Mail, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SocialAuthButtons } from "@/components/vinea/SocialAuthButtons";
 import { useVinea } from "@/lib/vinea-store";
 
 export default function AccediPageClient() {
@@ -18,6 +19,11 @@ export default function AccediPageClient() {
   const [password, setPassword] = useState("");
   const [inCorso, setInCorso] = useState(false);
   const [magicLinkInviato, setMagicLinkInviato] = useState(false);
+
+  // Errore riportato da /auth/callback quando il flusso OAuth non si completa
+  // (provider che rifiuta, code exchange fallito, callback senza code).
+  const erroreCallback = useSearchParams().get("errore");
+  const erroreDaMostrare = authError ?? erroreCallback;
 
   const emailValida = email.includes("@");
   const passwordValida = password.length >= 6;
@@ -131,9 +137,9 @@ export default function AccediPageClient() {
             />
           </div>
 
-          {authError && (
+          {erroreDaMostrare && (
             <p className="rounded-xl border border-bordeaux/30 bg-bordeaux/5 p-3 text-sm text-bordeaux">
-              {authError}
+              {erroreDaMostrare}
             </p>
           )}
 
@@ -165,6 +171,8 @@ export default function AccediPageClient() {
           >
             <Wand2 className="h-4 w-4" /> Inviami un link di accesso
           </Button>
+
+          <SocialAuthButtons etichetta="oppure accedi con" />
 
           <p className="text-sm text-muted-foreground">
             Non hai un account?{" "}
