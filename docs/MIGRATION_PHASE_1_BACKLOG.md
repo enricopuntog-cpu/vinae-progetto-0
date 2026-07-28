@@ -55,14 +55,43 @@ middleware. Le altre interfacce di `src/services/types.ts` restano mock.
 Primo dominio a scrivere su dati reali: da qui in poi FastAPI smette di
 essere fonte di verità per l'identità.
 
-## Fase 6 — ListingService + WineCatalogService
+## Fase 6a — Schema annunci e marketplace in lettura
 
-**Branch**: `migration/phase-6-listing-service`
+**Branch**: `migration/phase-6a-listings-catalog`
 
-Migrare catalogo vini e annunci su Supabase: tabelle `wines`, `listings`
-con RLS (`SELECT` pubblica solo per `stato = 'attivo'`; scritture solo al
-seller proprietario con `has_role('seller_enabled')`). Letture pubbliche
-prima, scritture dopo.
+Tabelle `wines` (catalogo condiviso), `bottle_units` (unità fisica, senza
+UI) e `listings`, con RLS: `SELECT` pubblica solo per `stato = 'attivo'`,
+`stato` mai scrivibile dal client (escluso dai `GRANT` di colonna), vincolo
+`UNIQUE` parziale che impedisce due annunci attivi sulla stessa bottiglia.
+Vista `public_listings` per esporre il venditore senza allargare la RLS di
+`profiles`. Porting di `/esplora` da `frontend/`, e collegamento di
+`/esplora`, `/annuncio/[id]`, `/` e `/home` ai dati reali in sola lettura.
+
+Divergenza dichiarata dal contratto: `has_role('seller_enabled')` **non**
+viene applicato. Nessuna interfaccia assegna quel ruolo (`user_roles` è
+scrivibile solo da `service_role`) e la verifica venditore non è un dominio
+migrato; applicarlo renderebbe impossibile creare annunci anche in 6b.
+Da riprendere quando esisterà la verifica venditore.
+
+## Fase 6b — Scritture annunci e wizard /vendi
+
+**Branch**: `migration/phase-6b-listing-write`
+
+Porting di `/vendi` da `frontend/`, metodi di scrittura di
+`ListingService`, funzioni di transizione `SECURITY DEFINER`
+(`bozza → attivo`, `attivo → sospeso`, `attivo → scaduto`; le transizioni
+di moderazione e vendita restano alle Fasi 9 e 7). Caricamento foto:
+bucket dedicato, upload firmato, limiti MIME e dimensione — necessario da
+qui in poi, perché fino alla 6a le immagini sono asset statici locali.
+
+## Fase 6c — Cantina
+
+**Branch**: `migration/phase-6c-cellar`
+
+UI sulla `bottle_units` creata in 6a: ambienti, moduli, slot, posizione
+fisica, finestra di bevuta con override, visualizzazione 3D (`Cellar3D`).
+Tabelle `cellar_environments`, `cellar_modules`. Da qui `listings.quantita`
+smette di essere fissa a 1 e diventa un conteggio di unità collegate.
 
 ## Fase 7 — OrderService + ProposalService + PaymentService
 

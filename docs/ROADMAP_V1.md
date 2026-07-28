@@ -74,7 +74,9 @@ Il dettaglio di ogni ticket è in
 | 3 | Porting pagine statiche con mock esistenti **+** store (8 slice) montato come client provider Next.js — fasi fuse, vedi nota sotto | No — dati ancora mock |
 | ~~4~~ | *(assorbita in Fase 3, vedi sotto — numerazione 5+ invariata)* | — |
 | 5 | `AuthService` reale su Supabase (email + magic link) | Sì — primo dominio reale |
-| 6 | `ListingService` + `WineCatalogService` su Supabase (RLS) | Sì |
+| 6a | Schema `wines`/`bottle_units`/`listings` + RLS, `/esplora` portata, marketplace in **sola lettura** su Supabase | Sì |
+| 6b | Wizard `/vendi`, scritture di `ListingService`, transizioni di stato, upload foto | Sì |
+| 6c | **Cantina**: UI su `bottle_units`, ambienti/moduli/slot, visualizzazione 3D | Sì |
 | 7 | `OrderService` + `ProposalService` + `PaymentService` (Stripe) | Sì |
 | 8 | `MessagingService` + `NotificationService` (Realtime) | Sì |
 | 9 | `ModerationService` + audit persistente | Sì |
@@ -136,6 +138,60 @@ silenziosa: la numerazione delle fasi successive (5 in poi) resta
 invariata, e la Fase 4 originale non esiste più come fase separata — il
 suo contenuto (`vinea-store.tsx` montato come client provider) è stato
 consegnato dentro la Pull Request di Fase 3.
+
+## Correzioni apportate in Fase 6a
+
+### La Fase 6 si divide in tre
+
+Il piano originale trattava la Fase 6 come un blocco unico
+(`ListingService` + `WineCatalogService`). L'esecuzione ha mostrato che
+conteneva tre lavori distinti, con rischi diversi.
+
+Il primo problema è che **le pagine da collegare non esistevano tutte**.
+La traccia assumeva di trovare in `frontend-next/` le pagine Annunci e
+Catalogo già portate; in realtà la Fase 3 aveva portato solo
+`/annuncio/[id]`, mentre `/esplora` (ricerca, 17,6 KB) e `/vendi`
+(wizard di creazione, 24,4 KB) non erano mai state migrate — e `/home`
+già puntava a entrambe con link che rispondevano 404. Collegare la
+scrittura a un wizard inesistente significava portare in Fase 6 un lavoro
+di porting di dimensioni paragonabili alla Fase 3.
+
+Il secondo è che **lettura e scrittura hanno superfici di rischio
+diverse**: la lettura pubblica si verifica guardando una pagina, la
+scrittura richiede transizioni di stato, upload di immagini e una prova
+RLS incrociata fra account. Il backlog di Fase 1 lo aveva già intuito
+("Letture pubbliche prima, scritture dopo") senza però separarne le fasi.
+
+Divisione adottata, approvata prima dell'esecuzione:
+
+- **6a** — schema (`wines`, `bottle_units`, `listings`), RLS, vista
+  pubblica, porting di `/esplora`, marketplace in sola lettura su dati
+  reali. Nessuna via di scrittura esposta.
+- **6b** — wizard `/vendi`, metodi di scrittura di `ListingService`,
+  funzioni di transizione (`bozza → attivo`, `attivo → sospeso`,
+  `attivo → scaduto`) e caricamento foto.
+- **6c** — Cantina.
+
+### La Cantina non era nella sequenza, e serviva
+
+`bottle_units` nasce in 6a per una ragione precisa: un annuncio deve
+vendere una bottiglia identificabile, non un vino generico, altrimenti il
+vincolo "una bottiglia, un solo annuncio attivo" non è applicabile dal
+database. Ma la Cantina — posizione fisica, ambienti, moduli, slot,
+visualizzazione 3D (`Cellar3D`) — **non compariva in nessuna fase** di
+questo documento, pur essendo una funzionalità già presente e visibile in
+`frontend/src/routes/cantina.tsx`. Senza una fase dedicata sarebbe rimasta
+l'unico dominio migrabile mai pianificato.
+
+Diventa quindi la **Fase 6c**, subito dopo il marketplace e prima degli
+ordini: dipende da `bottle_units` (creata in 6a) e la Fase 7 ha bisogno di
+sapere quale unità fisica cambia proprietario quando un ordine si chiude.
+
+Conseguenza dichiarata sullo schema: `listings.quantita` resta fissa a 1
+per tutta la 6a/6b. La colonna esiste perché l'interfaccia mostra
+"N bottiglie disponibili", ma diventerà un conteggio reale solo quando la
+6c permetterà di collegare più unità allo stesso annuncio. Il commento SQL
+sulla colonna lo dice, così non sembra un residuo dimenticato.
 
 ## Cosa NON è ancora deciso
 
