@@ -5,12 +5,21 @@
 --   bottle_units unità fisica posseduta da un utente (nessuna UI in questa fase)
 --   listings     annuncio: un venditore mette in vendita una bottle_unit
 --
--- COSA NON C'È QUI, E PERCHÉ. Nessuna logica di ordini, proposte o pagamento
--- (Fase 7), nessuna coda di moderazione né audit_log (Fase 9), nessuna
--- gestione cantina: posizione fisica, ambienti, moduli e preset 3D restano
--- fuori (vedi "Fase 6c — Cantina" in docs/ROADMAP_V1.md). L'enum degli stati
--- annuncio è però definito completo fin da ora, così le fasi successive
--- aggiungono transizioni senza dover migrare il tipo.
+-- COSA NON C'È QUI, E PERCHÉ. La Fase 6a collega alla UI la sola lettura del
+-- marketplace, quindi qui non c'è nessuna via di scrittura dello stato: le
+-- funzioni di transizione (bozza → attivo, attivo → sospeso, attivo →
+-- scaduto) arrivano in Fase 6b insieme al wizard /vendi e ai metodi di
+-- scrittura di ListingService. Fuori anche ordini, proposte e pagamenti
+-- (Fase 7), coda di moderazione e audit_log (Fase 9), e tutta la gestione
+-- cantina: posizione fisica, ambienti, moduli e preset 3D (vedi "Fase 6c —
+-- Cantina" in docs/ROADMAP_V1.md).
+--
+-- L'enum degli stati è comunque definito completo fin da ora: aggiungere un
+-- valore a un enum già in uso richiede una migrazione, definirlo in anticipo
+-- no. Finché non esistono le funzioni di transizione, l'unico modo di portare
+-- un annuncio ad 'attivo' è un UPDATE eseguito con privilegi di servizio
+-- (SQL Editor della dashboard): dal client è impossibile per costruzione,
+-- perché `stato` non compare tra i GRANT di colonna più sotto.
 
 -- ---------------------------------------------------------------------------
 -- Estensioni
@@ -214,9 +223,11 @@ create type public.listing_stato as enum (
 
 comment on type public.listing_stato is
   'Nove stati, identici a ListingStatus in frontend-next/src/data/moderation.ts. '
-  'Definiti tutti ora anche se la Fase 6a ne raggiunge solo quattro '
-  '(bozza, attivo, sospeso, scaduto): aggiungere un valore a un enum in uso '
-  'richiede una migrazione, definirli in anticipo no.';
+  'Definiti tutti in Fase 6a benché nessuna transizione sia ancora esposta: '
+  'aggiungere un valore a un enum già in uso richiede una migrazione, '
+  'definirlo in anticipo no. Le transizioni arrivano in 6b (pubblicazione, '
+  'sospensione, scadenza), Fase 7 (riservato, venduto) e Fase 9 '
+  '(in_revisione, modifiche_richieste, rifiutato).';
 
 create table public.listings (
   id uuid primary key default gen_random_uuid(),
@@ -272,7 +283,9 @@ create table public.listings (
 comment on table public.listings is
   'Annunci del marketplace. Un annuncio vende una singola bottle_unit. Lo '
   'stato non è mai scrivibile dal client: le colonne concesse in UPDATE '
-  'escludono `stato`, che cambia solo attraverso le funzioni di transizione.';
+  'escludono `stato`. In Fase 6a nessuna transizione è esposta, quindi solo '
+  'un ruolo di servizio può cambiarlo; dalla Fase 6b lo faranno le funzioni '
+  'di transizione SECURITY DEFINER.';
 comment on column public.listings.prezzo_cents is
   'Prezzo in centesimi di euro. Intero, mai float.';
 
@@ -289,9 +302,11 @@ create index listings_bottle_unit_idx on public.listings (bottle_unit_id);
 create index listings_stato_idx on public.listings (stato);
 create index listings_prezzo_idx on public.listings (prezzo_cents);
 -- Indice del feed pubblico: /esplora ordina per "più recenti" di default e
--- guarda soltanto gli annunci attivi.
+-- guarda soltanto gli annunci attivi. L'espressione è la stessa esposta dalla
+-- vista come `pubblicato_at` — indicizzare la sola published_at servirebbe a
+-- poco, visto che resta nulla finché non esistono le transizioni.
 create index listings_pubblici_recenti_idx
-  on public.listings (published_at desc nulls last)
+  on public.listings ((coalesce(published_at, created_at)) desc)
   where stato = 'attivo';
 
 create trigger listings_set_updated_at
@@ -309,6 +324,8 @@ grant select on public.listings to anon, authenticated;
 -- nella lista, quindi un UPDATE che le tocchi viene rifiutato da PostgreSQL
 -- prima ancora di arrivare alla RLS. Nessun booleano di sospensione
 -- scrivibile dal client, e nessun trigger da mantenere per difenderlo.
+-- In Fase 6b le funzioni di transizione SECURITY DEFINER diventeranno l'unica
+-- porta d'accesso a quelle colonne: questa lista non dovrà cambiare.
 grant insert (
   slug, bottle_unit_id, prezzo_cents, prezzo_mercato_cents,
   condizione, conservazione, storia, degustazione, immagini, tag
@@ -433,6 +450,11 @@ select
   l.tag,
   l.published_at,
   l.created_at,
+  -- Chiave di ordinamento unica per "più recenti". Finché le transizioni non
+  -- esistono (Fase 6b) published_at resta nullo sulle righe create da SQL
+  -- Editor: ordinare direttamente su quella colonna metterebbe tutto il
+  -- catalogo in coda a se stesso.
+  coalesce(l.published_at, l.created_at) as pubblicato_at,
   w.id            as wine_id,
   w.slug          as wine_slug,
   w.produttore,
@@ -466,215 +488,3 @@ comment on view public.public_listings is
 
 revoke all on public.public_listings from anon, authenticated;
 grant select on public.public_listings to anon, authenticated;
-
--- ---------------------------------------------------------------------------
--- Transizioni di stato
--- ---------------------------------------------------------------------------
--- Tutte SECURITY DEFINER: sono l'unico modo di cambiare `stato`, dato che il
--- privilegio di UPDATE su quella colonna non è concesso a nessun ruolo client.
---
--- Implementate in Fase 6a:   bozza → attivo, attivo → sospeso, attivo → scaduto
--- NON implementate:          in_revisione, modifiche_richieste, rifiutato
---                            (moderazione, Fase 9)
---                            riservato, venduto (ordini e pagamenti, Fase 7)
--- Gli stati esistono nell'enum ma nessuna funzione li raggiunge: chiamarli
--- richiederà una nuova funzione, non un UPDATE improvvisato dal client.
---
--- Ogni funzione apre con un controllo esplicito su auth.uid() IS NULL. Non è
--- ridondante: dentro una SECURITY DEFINER un confronto come
--- `seller_id <> auth.uid()` con uid nullo vale NULL, non TRUE, quindi un IF
--- costruito su quel confronto non scatterebbe e un chiamante anonimo
--- proseguirebbe fino all'UPDATE. Per la stessa ragione i confronti usano
--- IS DISTINCT FROM.
-
--- bozza → attivo
-create or replace function public.listing_pubblica(p_listing_id uuid)
-returns public.listing_stato
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_listing public.listings;
-  v_uid uuid := auth.uid();
-begin
-  if v_uid is null then
-    raise exception 'Autenticazione richiesta'
-      using errcode = 'insufficient_privilege';
-  end if;
-
-  select * into v_listing
-  from public.listings
-  where id = p_listing_id;
-
-  if not found then
-    raise exception 'Annuncio inesistente' using errcode = 'no_data_found';
-  end if;
-
-  if v_listing.seller_id is distinct from v_uid then
-    raise exception 'Solo il venditore può pubblicare questo annuncio'
-      using errcode = 'insufficient_privilege';
-  end if;
-
-  if v_listing.stato <> 'bozza' then
-    raise exception 'Transizione non ammessa: % → attivo', v_listing.stato
-      using errcode = 'check_violation';
-  end if;
-
-  -- Il vincolo UNIQUE parziale bloccherebbe comunque l'operazione, ma con un
-  -- messaggio di violazione d'indice illeggibile per chi lo riceve.
-  if exists (
-    select 1 from public.listings
-    where bottle_unit_id = v_listing.bottle_unit_id
-      and stato in ('attivo', 'riservato')
-      and id <> v_listing.id
-  ) then
-    raise exception 'Questa bottiglia ha già un annuncio attivo'
-      using errcode = 'unique_violation';
-  end if;
-
-  update public.listings
-  set stato = 'attivo',
-      published_at = now(),
-      expires_at = now() + interval '60 days',
-      stato_motivo = null,
-      stato_aggiornato_da = v_uid,
-      stato_aggiornato_at = now()
-  where id = p_listing_id;
-
-  return 'attivo';
-end;
-$$;
-
-comment on function public.listing_pubblica(uuid) is
-  'bozza → attivo. Solo il venditore. Rifiuta se la stessa bottle_unit ha già '
-  'un annuncio attivo o riservato.';
-
--- attivo → sospeso
-create or replace function public.listing_sospendi(p_listing_id uuid, p_motivo text default null)
-returns public.listing_stato
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_listing public.listings;
-  v_uid uuid := auth.uid();
-  v_staff boolean;
-begin
-  if v_uid is null then
-    raise exception 'Autenticazione richiesta'
-      using errcode = 'insufficient_privilege';
-  end if;
-
-  select * into v_listing
-  from public.listings
-  where id = p_listing_id;
-
-  if not found then
-    raise exception 'Annuncio inesistente' using errcode = 'no_data_found';
-  end if;
-
-  v_staff := public.has_role(v_uid, 'admin') or public.has_role(v_uid, 'moderator');
-
-  -- Due situazioni diverse dietro la stessa transizione: il venditore che
-  -- ritira il proprio annuncio, e il moderatore che lo sospende. Nel secondo
-  -- caso il motivo è obbligatorio: una sospensione senza motivo è una
-  -- decisione che l'utente non può contestare.
-  if not v_staff and v_listing.seller_id is distinct from v_uid then
-    raise exception 'Solo il venditore o un moderatore può sospendere questo annuncio'
-      using errcode = 'insufficient_privilege';
-  end if;
-
-  if v_staff and v_listing.seller_id is distinct from v_uid
-     and coalesce(trim(p_motivo), '') = '' then
-    raise exception 'Una sospensione da moderatore richiede un motivo'
-      using errcode = 'check_violation';
-  end if;
-
-  if v_listing.stato <> 'attivo' then
-    raise exception 'Transizione non ammessa: % → sospeso', v_listing.stato
-      using errcode = 'check_violation';
-  end if;
-
-  update public.listings
-  set stato = 'sospeso',
-      stato_motivo = nullif(trim(coalesce(p_motivo, '')), ''),
-      stato_aggiornato_da = v_uid,
-      stato_aggiornato_at = now()
-  where id = p_listing_id;
-
-  return 'sospeso';
-end;
-$$;
-
-comment on function public.listing_sospendi(uuid, text) is
-  'attivo → sospeso. Il venditore ritira il proprio annuncio; un moderatore '
-  '(has_role admin/moderator) può sospendere quello altrui, ma solo indicando '
-  'un motivo.';
-
--- attivo → scaduto
-create or replace function public.listing_scadi(p_listing_id uuid)
-returns public.listing_stato
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_listing public.listings;
-  v_uid uuid := auth.uid();
-  v_staff boolean;
-begin
-  if v_uid is null then
-    raise exception 'Autenticazione richiesta'
-      using errcode = 'insufficient_privilege';
-  end if;
-
-  select * into v_listing
-  from public.listings
-  where id = p_listing_id;
-
-  if not found then
-    raise exception 'Annuncio inesistente' using errcode = 'no_data_found';
-  end if;
-
-  v_staff := public.has_role(v_uid, 'admin') or public.has_role(v_uid, 'moderator');
-
-  if not v_staff and v_listing.seller_id is distinct from v_uid then
-    raise exception 'Solo il venditore o un moderatore può far scadere questo annuncio'
-      using errcode = 'insufficient_privilege';
-  end if;
-
-  if v_listing.stato <> 'attivo' then
-    raise exception 'Transizione non ammessa: % → scaduto', v_listing.stato
-      using errcode = 'check_violation';
-  end if;
-
-  -- La scadenza è un fatto, non una preferenza: per il venditore vale solo se
-  -- il termine è davvero passato. Lo staff può forzarla (correzione di dati).
-  if not v_staff and (v_listing.expires_at is null or v_listing.expires_at > now()) then
-    raise exception 'Annuncio non ancora scaduto'
-      using errcode = 'check_violation';
-  end if;
-
-  update public.listings
-  set stato = 'scaduto',
-      stato_aggiornato_da = v_uid,
-      stato_aggiornato_at = now()
-  where id = p_listing_id;
-
-  return 'scaduto';
-end;
-$$;
-
-comment on function public.listing_scadi(uuid) is
-  'attivo → scaduto. Il venditore può chiamarla solo dopo expires_at; '
-  'admin/moderator possono forzarla.';
-
-revoke execute on function public.listing_pubblica(uuid) from public;
-revoke execute on function public.listing_sospendi(uuid, text) from public;
-revoke execute on function public.listing_scadi(uuid) from public;
-
-grant execute on function public.listing_pubblica(uuid) to authenticated;
-grant execute on function public.listing_sospendi(uuid, text) to authenticated;
-grant execute on function public.listing_scadi(uuid) to authenticated;
