@@ -13,7 +13,7 @@ import { isMaggiorenne } from "@/lib/age";
 
 export default function RegistratiPageClient() {
   const router = useRouter();
-  const { authUser, authLoading, authError, authRegistra, authLogout } = useVinea();
+  const { authUser, authLoading, authError, authRegistra, authLogin, authLogout } = useVinea();
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -57,13 +57,26 @@ export default function RegistratiPageClient() {
       dataNascita: dob,
       username: username.trim(),
     });
-    setInCorso(false);
-    if (!esito.ok) return;
+    if (!esito.ok) {
+      setInCorso(false);
+      return;
+    }
     if (esito.data.sessioneAttiva) {
+      setInCorso(false);
       router.push("/home");
       return;
     }
-    setConfermaEmail(true);
+    if (esito.data.confermaEmailRichiesta) {
+      setInCorso(false);
+      setConfermaEmail(true);
+      return;
+    }
+    // Email già confermata ma nessuna sessione restituita dalla sign up:
+    // l'account è utilizzabile subito, quindi completiamo l'accesso con le
+    // credenziali appena inserite invece di mostrare un'attesa inesistente.
+    const accesso = await authLogin(email.trim(), password);
+    setInCorso(false);
+    router.push(accesso.ok ? "/home" : "/accedi");
   };
 
   if (authLoading) {

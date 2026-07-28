@@ -64,7 +64,7 @@ type StoreState = {
     password: string;
     dataNascita: string;
     username: string;
-  }) => Promise<Result<{ userId: string; sessioneAttiva: boolean }>>;
+  }) => Promise<Result<{ userId: string; sessioneAttiva: boolean; confermaEmailRichiesta: boolean }>>;
   authLogin: (email: string, password: string) => Promise<Result<{ userId: string }>>;
   authInviaMagicLink: (email: string) => Promise<Result<void>>;
   authVerificaEmail: (tokenHash: string) => Promise<Result<void>>;

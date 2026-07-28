@@ -46,17 +46,24 @@ export type Result<T, E = string> = { ok: true; data: T } | { ok: false; error: 
 // credenziali OAuth): nessun metodo di social login qui.
 export interface AuthService {
   /**
-   * `sessioneAttiva` distingue i due esiti possibili di una registrazione
-   * riuscita: sessione già aperta (conferma email disattivata nel progetto
-   * Supabase) oppure utente creato ma non ancora autenticato, in attesa che
-   * clicchi il link di conferma ricevuto per email.
+   * Una registrazione riuscita ha tre esiti distinti, non due:
+   *
+   * - `sessioneAttiva: true` — sessione già aperta, l'utente è dentro.
+   * - `sessioneAttiva: false` + `confermaEmailRichiesta: true` — utente creato
+   *   ma inattivo finché non clicca il link di conferma ricevuto per email.
+   * - `sessioneAttiva: false` + `confermaEmailRichiesta: false` — email già
+   *   confermata d'ufficio (auto-conferma attiva sul progetto) ma signUp non
+   *   ha restituito una sessione. Caso realmente osservato sul progetto in
+   *   uso: l'account è immediatamente utilizzabile, quindi mostrare
+   *   "controlla la posta" sarebbe fuorviante e bloccherebbe l'utente su uno
+   *   schermo che aspetta un'email che non arriverà mai.
    */
   registra(input: {
     email: string;
     password: string;
     dataNascita: string;
     username: string;
-  }): Promise<Result<{ userId: string; sessioneAttiva: boolean }>>;
+  }): Promise<Result<{ userId: string; sessioneAttiva: boolean; confermaEmailRichiesta: boolean }>>;
   verificaEmail(tokenHash: string): Promise<Result<void>>;
   login(email: string, password: string): Promise<Result<{ userId: string }>>;
   inviaMagicLink(email: string): Promise<Result<void>>;

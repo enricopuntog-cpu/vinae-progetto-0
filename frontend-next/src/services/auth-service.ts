@@ -34,7 +34,14 @@ export const supabaseAuthService: AuthService = {
     if (!data.user) return { ok: false, error: "Registrazione non riuscita." };
     return {
       ok: true,
-      data: { userId: data.user.id, sessioneAttiva: data.session !== null },
+      data: {
+        userId: data.user.id,
+        sessioneAttiva: data.session !== null,
+        // Serve attendere una conferma solo se l'email non risulta già
+        // confermata: con l'auto-conferma attiva `email_confirmed_at` è
+        // valorizzato subito e non arriverà nessuna email da cliccare.
+        confermaEmailRichiesta: data.session === null && !data.user.email_confirmed_at,
+      },
     };
   },
 
