@@ -169,6 +169,30 @@ approvazione esplicita separata: dismissione di `frontend/` (TanStack
 Start) e `backend/` (FastAPI/MongoDB). Non è una conseguenza automatica
 del completamento delle fasi 2–10.
 
+## Debito tecnico noto
+
+Difetti reali, individuati durante la migrazione, che **non** appartengono a
+nessuna fase della traccia: toccarli significherebbe cambiare il
+comportamento di `frontend/` e `frontend-next/` insieme, cioè fare un
+cambiamento di prodotto dentro una migrazione di dati.
+
+### `formatEUR` tronca i centesimi (emerso in Fase 6b)
+
+`src/lib/format.ts` — identico nei due frontend — formatta i prezzi con
+`formatInteger`, quindi stampa euro interi: un annuncio da `145,90 €` viene
+mostrato come `146 €`. Il dato è corretto e integro nel database
+(`listings.prezzo_cents = 14590`); sbagliata è solo la resa.
+
+Il difetto è preesistente, ma fino alla 6a era invisibile: tutti i prezzi
+mock e le righe di prova erano cifre tonde. Diventa visibile dalla 6b, da
+quando il wizard `/vendi` permette di digitare i centesimi.
+
+Non si corregge in una fase di migrazione: cambiare `formatEUR` cambierebbe
+la resa di ogni prezzo in entrambi i frontend — schede annuncio, carrello,
+ordini, proposte, checkout — cioè un cambiamento di design trasversale, che
+va deciso e verificato per conto suo. Esplicitamente **fuori scope dalla
+Fase 6c** e da qualunque fase successiva della traccia.
+
 ---
 
 Ogni ticket sopra è indicativo nella granularità di branch/nome; la fase
