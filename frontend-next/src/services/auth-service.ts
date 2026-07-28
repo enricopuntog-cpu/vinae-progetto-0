@@ -28,6 +28,15 @@ export const supabaseAuthService: AuthService = {
       password,
       options: {
         data: { username, dob: dataNascita },
+        // Riporta la conferma all'origine da cui è partita la registrazione,
+        // invece di affidarsi al Site URL fisso del progetto. Senza questo, il
+        // link di conferma rimanda sempre a http://localhost:3000: aprendolo da
+        // un altro dispositivo (es. telefono sulla stessa rete) `localhost`
+        // punta al dispositivo stesso e il ritorno all'app fallisce con
+        // ERR_CONNECTION_FAILED, pur essendo la verifica del token già andata a
+        // buon fine lato server. Coerente con quanto fa già inviaMagicLink().
+        // L'origine usata deve essere fra i Redirect URLs consentiti su Supabase.
+        emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
       },
     });
     if (error) return { ok: false, error: error.message };
