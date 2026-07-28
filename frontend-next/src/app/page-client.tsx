@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, Sparkles, ShieldCheck, Grape, Heart, Bell } from "lucide-react";
-import { wines, communityPosts } from "@/data/wines";
+import { communityPosts, type Wine } from "@/data/wines";
 import { WineCard } from "@/components/vinea/WineCard";
 import { SectionTitle } from "@/components/vinea/Layout";
 import { Button } from "@/components/ui/button";
@@ -28,10 +28,12 @@ const REGIONI = [
   { r: "Lazio", n: 41, img: wineImages.cellar },
 ];
 
-export default function HomePageClient() {
+export default function HomePageClient({ annunci }: { annunci: Wine[] }) {
   const { favorites, follows, ruolo } = useVinea();
-  const scelti = wines.slice(0, 4);
-  const preferiti = wines.filter((w) => favorites.has(w.id)).slice(0, 4);
+  // Vetrina e preferiti sono marketplace: annunci reali da Supabase. Il resto
+  // della pagina (post community, conteggi per regione) resta mock.
+  const scelti = annunci.slice(0, 4);
+  const preferiti = annunci.filter((w) => favorites.has(w.id)).slice(0, 4);
   const isGuest = ruolo === "guest";
 
   return (

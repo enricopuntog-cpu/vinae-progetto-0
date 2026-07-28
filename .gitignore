@@ -108,6 +108,12 @@ credentials.json
 playwright-report/
 test-results/
 
+# Configurazione locale del tooling agentico (launch.json, settings.local.json):
+# è specifica della macchina dello sviluppatore, non del progetto. Già
+# untrackata nel commit 144d9a4; qui si impedisce che rientri per sbaglio.
+# CLAUDE.md resta invece versionato: sono istruzioni di progetto, non locali.
+.claude/
+
 # Historical platform artifacts (kept only in the original prerelease archive)
 memory/
 test_reports/
