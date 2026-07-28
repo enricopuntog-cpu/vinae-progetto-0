@@ -142,7 +142,7 @@ export default function AnnuncioDetailPageClient({
             )}
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            {wine.disponibili} bottiglie disponibili • Formato {wine.formato}
+            {wine.disponibili} {wine.disponibili === 1 ? "bottiglia disponibile" : "bottiglie disponibili"} • Formato {wine.formato}
           </p>
 
           {azioniBloccate && (
