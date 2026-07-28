@@ -1,15 +1,27 @@
 "use client";
 
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 let client: SupabaseClient | null | undefined;
 
 /**
- * Client Supabase lato browser, solo anon key (mai service_role qui).
+ * Client Supabase lato browser, solo anon/publishable key (mai service_role).
+ *
+ * Usa `createBrowserClient` di @supabase/ssr e non `createClient` di
+ * supabase-js: la differenza è dove vive la sessione. `createBrowserClient`
+ * la salva nei cookie invece che in localStorage, ed è ciò che permette alla
+ * route handler server-side /auth/callback di leggere il code verifier PKCE
+ * e completare lo scambio del code per una sessione. Con la sessione in
+ * localStorage il server non vedrebbe nulla e il login OAuth non potrebbe
+ * concludersi lato server.
+ *
+ * Conseguenza sui flussi email/password e magic link introdotti in Fase 5a:
+ * continuano a funzionare identici, ma la loro sessione è ora su cookie.
+ *
  * Ritorna null — invece di lanciare — quando NEXT_PUBLIC_SUPABASE_URL /
- * NEXT_PUBLIC_SUPABASE_ANON_KEY non sono configurate: build, typecheck e le
- * pagine già portate (home, community, annuncio) non devono rompersi solo
- * perché l'autenticazione reale non è ancora collegata in questo ambiente.
+ * NEXT_PUBLIC_SUPABASE_ANON_KEY non sono configurate, così build, typecheck
+ * e le pagine che non richiedono autenticazione restano funzionanti.
  */
 export function getSupabaseClient(): SupabaseClient | null {
   if (client !== undefined) return client;
@@ -22,12 +34,6 @@ export function getSupabaseClient(): SupabaseClient | null {
     return client;
   }
 
-  client = createClient(url, anonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-    },
-  });
+  client = createBrowserClient(url, anonKey);
   return client;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { getSupabaseClient } from "@/lib/supabase/client";
-import type { AuthService, Result } from "./types";
+import type { AuthService, OAuthProvider, Result } from "./types";
 
 const NOT_CONFIGURED_ERROR =
   "Supabase non configurato: imposta NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY in frontend-next/.env.local.";
@@ -89,6 +89,40 @@ export const supabaseAuthService: AuthService = {
     return { ok: true, data: undefined };
   },
 
+  async accediConOAuth(provider: OAuthProvider) {
+    const supabase = getSupabaseClient();
+    if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };
+    if (typeof window === "undefined") {
+      return { ok: false, error: "Il login social si avvia solo dal browser." };
+    }
+
+    // origin dinamico e non un valore fisso, per la stessa ragione del bug
+    // mobile risolto in Fase 5a: un URL cablato su localhost non è
+    // raggiungibile da un altro dispositivo. L'origin usato deve comunque
+    // essere fra i Redirect URLs consentiti nel progetto Supabase.
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (error) return { ok: false, error: error.message };
+
+    // supabase-js normalmente reindirizza da sé; se per qualche motivo
+    // restituisce solo l'URL senza navigare, lo seguiamo esplicitamente
+    // invece di lasciare l'utente su una pagina che sembra non reagire.
+    if (data?.url && window.location.href !== data.url) {
+      window.location.assign(data.url);
+    }
+    return { ok: true, data: undefined };
+  },
+
+  async signInWithGoogle() {
+    return supabaseAuthService.accediConOAuth("google");
+  },
+
+  async signInWithFacebook() {
+    return supabaseAuthService.accediConOAuth("facebook");
+  },
+
   async logout() {
     const supabase = getSupabaseClient();
     if (!supabase) return;
@@ -102,6 +136,34 @@ export const supabaseAuthService: AuthService = {
     const { data } = await supabase.auth.getSession();
     if (!data.session) return null;
     return { userId: data.session.user.id, email: data.session.user.email ?? null };
+  },
+
+  async dataNascitaProfilo(userId) {
+    const supabase = getSupabaseClient();
+    if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("dob")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, data: (data?.dob as string | null) ?? null };
+  },
+
+  async salvaDataNascita(userId, dataNascita) {
+    const supabase = getSupabaseClient();
+    if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };
+
+    // La policy RLS profiles_update_own consente l'UPDATE solo sulla propria
+    // riga; il CHECK 18+ su profiles.dob resta la barriera autoritativa e
+    // respinge comunque una data che indichi un'età inferiore.
+    const { error } = await supabase
+      .from("profiles")
+      .update({ dob: dataNascita })
+      .eq("id", userId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, data: undefined };
   },
 } satisfies AuthService;
 

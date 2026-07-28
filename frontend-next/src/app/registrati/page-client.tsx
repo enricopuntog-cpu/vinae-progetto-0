@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { SocialAuthButtons } from "@/components/vinea/SocialAuthButtons";
 import { useVinea } from "@/lib/vinea-store";
 import { isMaggiorenne } from "@/lib/age";
 
@@ -238,6 +239,8 @@ export default function RegistratiPageClient() {
               </>
             )}
           </Button>
+
+          <SocialAuthButtons etichetta="oppure registrati con" />
 
           <p className="text-sm text-muted-foreground">
             Hai già un account?{" "}
