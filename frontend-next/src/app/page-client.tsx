@@ -88,8 +88,8 @@ export default function HomePageClient() {
                   className="bg-oro text-antracite hover:bg-oro/90"
                   data-testid="hero-cta-register"
                 >
-                  <Link href="/onboarding">
-                    Registrati (demo) <ArrowRight className="ml-1 h-4 w-4" />
+                  <Link href="/registrati">
+                    Registrati <ArrowRight className="ml-1 h-4 w-4" />
                   </Link>
                 </Button>
                 <Button
