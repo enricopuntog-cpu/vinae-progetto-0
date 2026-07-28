@@ -13,16 +13,6 @@
 -- era già stata scritta per non dover cambiare, ed è questa la prova.
 
 -- ---------------------------------------------------------------------------
--- Estensioni
--- ---------------------------------------------------------------------------
-
--- Gli slug nascono da testo digitato dall'utente ("Château d'Yquem"), che
--- contiene accenti e apostrofi. Senza unaccent, "Château" diventerebbe
--- "ch-teau": leggibile a fatica e diverso da quello che chiunque scriverebbe
--- a mano.
-create extension if not exists unaccent with schema extensions;
-
--- ---------------------------------------------------------------------------
 -- slugifica — da testo libero a identificatore d'URL
 -- ---------------------------------------------------------------------------
 -- Deve produrre qualcosa che soddisfi il CHECK '^[a-z0-9]+(-[a-z0-9]+)*$' di
@@ -30,25 +20,34 @@ create extension if not exists unaccent with schema extensions;
 -- il caso limite di un testo che dopo la normalizzazione non lascia nessun
 -- carattere utile (per esempio solo ideogrammi o solo punteggiatura): meglio
 -- uno slug generico che una violazione di CHECK in faccia all'utente.
-
--- Nota sulla forma a due argomenti di unaccent(). La versione a un argomento
--- cerca un dizionario chiamato "unaccent" nel search_path corrente: con
--- search_path fissato a `public` non lo troverebbe, perché l'estensione vive
--- nello schema `extensions`. Passare il dizionario esplicitamente come
--- regdictionary toglie di mezzo la dipendenza dal search_path invece di
--- allargarlo.
+--
+-- PERCHÉ translate() E NON L'ESTENSIONE unaccent. Gli accenti vanno tolti —
+-- senza, "Château d'Yquem" diventerebbe "ch-teau-d-yquem". La strada ovvia
+-- sarebbe unaccent, ma la sua forma a un argomento cerca un dizionario nel
+-- search_path corrente, e `create extension if not exists ... with schema
+-- extensions` non sposta un'estensione già installata altrove: su un progetto
+-- dove unaccent esiste già in un altro schema, il riferimento al dizionario
+-- non risolverebbe e la migrazione fallirebbe al primo tentativo. translate()
+-- è nel core, non dipende da nessuno schema e copre le lettere che compaiono
+-- davvero in produttori e nomi di vino.
+-- Le due sostituzioni fuori dalla mappa (ß, æ) ci sono perché translate()
+-- lavora carattere per carattere e non può espandere una lettera in due.
 
 create or replace function public.slugifica(p_testo text)
 returns text
 language sql
-stable
+immutable
 set search_path = public
 as $$
   select coalesce(
     nullif(
       trim(both '-' from
         regexp_replace(
-          lower(extensions.unaccent('extensions.unaccent'::regdictionary, coalesce(p_testo, ''))),
+          translate(
+            lower(replace(replace(coalesce(p_testo, ''), 'ß', 'ss'), 'æ', 'ae')),
+            'àáâãäåèéêëìíîïòóôõöøùúûüçñýÿ',
+            'aaaaaaeeeeiiiioooooouuuucnyy'
+          ),
           '[^a-z0-9]+', '-', 'g'
         )
       ),
