@@ -10,7 +10,7 @@ import {
   Wine as WineIcon,
   Sparkles,
 } from "lucide-react";
-import { wines } from "@/data/wines";
+import { wines, type Wine } from "@/data/wines";
 import { communities, discussions } from "@/data/communities";
 import { WineCard } from "@/components/vinea/WineCard";
 import { SectionTitle, Kpi } from "@/components/vinea/Layout";
@@ -19,14 +19,24 @@ import { Input } from "@/components/ui/input";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
 import { formatInteger } from "@/lib/format";
 
-export default function HomeUtentePageClient() {
+/**
+ * Pagina a due sorgenti, e la divisione non è arbitraria.
+ *
+ * Consigliati, novità dai venditori seguiti e ribassi sono marketplace:
+ * arrivano da `annunci`, cioè da Supabase (Fase 6a). Valore della cantina e
+ * sezione "La tua cantina" restano sui dati mock perché la Cantina non è
+ * ancora un dominio migrato — vedi "Fase 6c" in docs/ROADMAP_V1.md. Preferiti,
+ * seguiti, notifiche e club restano nello store mock per lo stesso motivo.
+ */
+export default function HomeUtentePageClient({ annunci }: { annunci: Wine[] }) {
   const { favorites, follows, notifiche, nonLette, communityFollows } = useVinea();
-  const consigliati = wines.slice(0, 4);
-  const nuoviSeguiti = wines.filter((w) => follows.has(w.venditore.nome)).slice(0, 3);
-  const ribassi = wines
+  const consigliati = annunci.slice(0, 4);
+  const nuoviSeguiti = annunci.filter((w) => follows.has(w.venditore.nome)).slice(0, 3);
+  const ribassi = annunci
     .filter((w) => favorites.has(w.id) && w.prezzoMercato && w.prezzoMercato > w.prezzo)
     .slice(0, 3);
   const attivita = discussions.slice(0, 4);
+  // Cantina: ancora mock.
   const cantinaValore = wines.slice(0, 6).reduce((s, w) => s + w.prezzo, 0);
   const myCommunities = communities.filter((c) => communityFollows.has(c.slug));
 

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { createListingService } from "@/services/listing-service";
 import HomeUtentePageClient from "./page-client";
 
 export const metadata: Metadata = {
@@ -11,6 +13,9 @@ export const metadata: Metadata = {
   },
 };
 
-export default function Page() {
-  return <HomeUtentePageClient />;
+export default async function Page() {
+  const client = await getSupabaseServerClient();
+  const annunci = await createListingService(client).elenco();
+
+  return <HomeUtentePageClient annunci={annunci} />;
 }

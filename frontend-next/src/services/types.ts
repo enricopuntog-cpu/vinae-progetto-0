@@ -38,6 +38,7 @@ import type {
 } from "@/data/onboarding";
 import type { CellarBottle, StorageEnvironment, StorageModule } from "@/data/cellar";
 import type { Notifica } from "@/data/extra";
+import type { Wine } from "@/data/wines";
 
 export type Result<T, E = string> = { ok: true; data: T } | { ok: false; error: E };
 
@@ -118,11 +119,30 @@ export interface CellarService {
 }
 
 // ---- Annunci ---------------------------------------------------------------
-export interface ListingService {
+/**
+ * La parte in sola lettura del dominio annunci, separata dal resto perché è
+ * l'unica che la Fase 6a implementa davvero (src/services/listing-service.ts,
+ * su Supabase). Tenerla distinta evita l'alternativa peggiore: una classe che
+ * dichiara `implements ListingService` e riempie di `throw new Error("non
+ * implementato")` i metodi di scrittura, facendo sembrare disponibile ciò che
+ * non lo è.
+ *
+ * `elenco()` restituisce `Wine[]` e non `unknown[]` come la bozza originale:
+ * i componenti esistenti sono tipizzati su `Wine`, e l'adattatore ricompone
+ * quella forma partendo dallo schema normalizzato. `dettaglio()` non era
+ * previsto nella bozza — la pagina /annuncio/[id] ha bisogno di caricare un
+ * singolo annuncio per slug senza scaricare l'intero elenco.
+ */
+export interface ListingReadService {
+  elenco(): Promise<Wine[]>;
+  dettaglio(slug: string): Promise<Wine | null>;
+}
+
+/** Lettura più scrittura. Le scritture arrivano in Fase 6b, con /vendi. */
+export interface ListingService extends ListingReadService {
   crea(input: unknown): Promise<{ id: string; stato: ListingStatus }>;
   aggiornaStato(id: string, stato: ListingStatus, motivo?: string): Promise<void>;
   richiediFoto(listingId: string, message: string): Promise<void>;
-  elenco(filtri?: Record<string, unknown>): Promise<unknown[]>;
 }
 
 // ---- Proposte & Ordini -----------------------------------------------------

@@ -93,7 +93,10 @@ export function WineCard({
         </span>
       )}
       <div className="absolute left-3 top-12 z-10">
-        <DrinkBadge wineId={wine.id} />
+        {/* I metadati della finestra di bevuta sono indicizzati per vino, non
+            per annuncio: su dati reali `id` è lo slug dell'annuncio e
+            servirebbe a nulla. Vedi il commento su Wine.wineSlug. */}
+        <DrinkBadge wineId={wine.wineSlug ?? wine.id} />
       </div>
       <button
         onClick={(e) => {

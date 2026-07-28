@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { notFound } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -13,7 +12,9 @@ import {
   MessageCircle,
   Share2,
   Truck,
-  Wine,
+  // Alias per non collidere con il tipo di dominio Wine, come già in
+  // app/home/page-client.tsx.
+  Wine as WineIcon,
   ThermometerSun,
   WineOff,
   Clock,
@@ -21,7 +22,7 @@ import {
   Flag,
   type LucideIcon,
 } from "lucide-react";
-import { wines } from "@/data/wines";
+import type { Wine } from "@/data/wines";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,10 +43,13 @@ import { TrustBadge, TrustLegend } from "@/components/vinea/TrustBadge";
 import { ReportDialog } from "@/components/vinea/ReportDialog";
 import { listingStatusLabel, listingStatusTone } from "@/data/moderation";
 
-export default function AnnuncioDetailPageClient({ wineId }: { wineId: string }) {
-  const wine = wines.find((w) => w.id === wineId);
-  if (!wine) notFound();
-
+export default function AnnuncioDetailPageClient({
+  wine,
+  correlati,
+}: {
+  wine: Wine;
+  correlati: Wine[];
+}) {
   const router = useRouter();
   const {
     favorites,
@@ -313,14 +317,15 @@ export default function AnnuncioDetailPageClient({ wineId }: { wineId: string })
             <TrustLegend />
           </div>
 
-          <MyBottleActions wineId={wine.id} />
+          <MyBottleActions wineId={wine.wineSlug ?? wine.id} />
         </div>
       </div>
 
-      {/* Quando berlo + abbinamenti */}
+      {/* Quando berlo + abbinamenti. Indicizzati per vino, non per annuncio:
+          su dati reali `id` è lo slug dell'annuncio e non troverebbe nulla. */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <DrinkWindowSection wineId={wine.id} />
-        <FoodPairingSection wineId={wine.id} />
+        <DrinkWindowSection wineId={wine.wineSlug ?? wine.id} />
+        <FoodPairingSection wineId={wine.wineSlug ?? wine.id} />
       </div>
 
       {/* Servizio, storia, degustazione */}
@@ -343,7 +348,7 @@ export default function AnnuncioDetailPageClient({ wineId }: { wineId: string })
           value="dettagli"
           className="mt-4 grid gap-3 rounded-2xl border border-border bg-card p-6 md:grid-cols-2"
         >
-          <Info icon={Wine} label="Tipologia" value={wine.tipo} />
+          <Info icon={WineIcon} label="Tipologia" value={wine.tipo} />
           <Info icon={MapPin} label="Regione" value={wine.regione} />
           <Info icon={ThermometerSun} label="Conservazione" value={wine.conservazione} />
           <Info icon={Truck} label="Condizione" value={wine.condizione} />
@@ -351,13 +356,11 @@ export default function AnnuncioDetailPageClient({ wineId }: { wineId: string })
       </Tabs>
 
       {/* Suggeriti */}
-      <section>
-        <h2 className="mb-4 font-serif text-2xl">Potrebbero interessarti</h2>
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {wines
-            .filter((w) => w.id !== wine.id)
-            .slice(0, 4)
-            .map((w) => (
+      {correlati.length > 0 && (
+        <section>
+          <h2 className="mb-4 font-serif text-2xl">Potrebbero interessarti</h2>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            {correlati.map((w) => (
               <Link
                 key={w.id}
                 href={`/annuncio/${w.id}`}
@@ -376,8 +379,9 @@ export default function AnnuncioDetailPageClient({ wineId }: { wineId: string })
                 </div>
               </Link>
             ))}
-        </div>
-      </section>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

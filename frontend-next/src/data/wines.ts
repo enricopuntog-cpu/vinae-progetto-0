@@ -1,5 +1,20 @@
 export type Wine = {
   id: string;
+  /**
+   * Slug del vino di catalogo, distinto da `id`.
+   *
+   * Divergenza dichiarata rispetto a frontend/src/data/wines.ts, introdotta in
+   * Fase 6a. Nei dati mock un oggetto `Wine` è insieme il vino e il suo
+   * annuncio, quindi un solo id basta. Sullo schema reale sono due tabelle:
+   * `id` identifica l'annuncio (ed è ciò che finisce in /annuncio/<id>),
+   * mentre questo campo identifica il vino — la chiave con cui DrinkWindow e
+   * FoodPairing ritrovano i propri metadati in src/data/cellar.ts. Due annunci
+   * dello stesso vino hanno `id` diversi e lo stesso `wineSlug`.
+   *
+   * Assente sui dati mock, dove `id` fa entrambi i lavori: chi legge deve
+   * usare `wineSlug ?? id`.
+   */
+  wineSlug?: string;
   produttore: string;
   nome: string;
   annata: number;

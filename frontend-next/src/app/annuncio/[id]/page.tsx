@@ -1,16 +1,24 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { wines } from "@/data/wines";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { createListingService } from "@/services/listing-service";
 import { formatEUR } from "@/lib/format";
 import AnnuncioDetailPageClient from "./page-client";
 
+/**
+ * Il segmento [id] contiene lo slug dell'annuncio, non un UUID: è la stessa
+ * forma di URL di prima della migrazione (/annuncio/monfortino-2015). Il nome
+ * del segmento resta `id` per non spostare il file e rompere i link esistenti.
+ */
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const wine = wines.find((w) => w.id === id);
+  const client = await getSupabaseServerClient();
+  const wine = await createListingService(client).dettaglio(id);
+
   if (!wine) {
     return { title: "Annuncio non trovato — Vinea" };
   }
@@ -36,8 +44,16 @@ export default async function Page({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const wine = wines.find((w) => w.id === id);
+  const client = await getSupabaseServerClient();
+  const service = createListingService(client);
+
+  // In parallelo: la richiesta dei correlati non dipende dall'esito del
+  // dettaglio, quindi non c'è motivo di metterla in coda.
+  const [wine, tutti] = await Promise.all([service.dettaglio(id), service.elenco()]);
+
   if (!wine) notFound();
 
-  return <AnnuncioDetailPageClient wineId={id} />;
+  const correlati = tutti.filter((w) => w.id !== wine.id).slice(0, 4);
+
+  return <AnnuncioDetailPageClient wine={wine} correlati={correlati} />;
 }
