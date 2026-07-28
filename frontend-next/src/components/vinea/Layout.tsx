@@ -109,8 +109,14 @@ export function VineaLayout({ children }: { children: ReactNode }) {
 
           <div className="ml-auto flex items-center gap-2">
             {ruolo === "guest" && (
+              // Punta a /registrati e non a /onboarding: il wizard di
+              // onboarding non è portato (i suoi passi obiettivi/preferenze/
+              // profilo appartengono a ProfileService, fase successiva),
+              // mentre /registrati è la registrazione reale introdotta in
+              // Fase 5a. Conseguenza diretta della scelta di scope minimale
+              // già approvata, non una deviazione a sé.
               <Link
-                href="/onboarding"
+                href="/registrati"
                 data-testid="cta-register"
                 className="hidden rounded-full bg-bordeaux px-3 py-1.5 text-xs font-semibold text-crema hover:bg-bordeaux/90 sm:inline-flex"
               >
