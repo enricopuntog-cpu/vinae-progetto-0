@@ -75,7 +75,7 @@ Da riprendere quando esisterà la verifica venditore.
 
 ## Fase 6b — Scritture annunci e wizard /vendi
 
-**Branch**: `migration/phase-6b-listing-write`
+**Branch**: `migration/phase-6b-listings-write`
 
 Porting di `/vendi` da `frontend/`, metodi di scrittura di
 `ListingService`, funzioni di transizione `SECURITY DEFINER`
@@ -83,6 +83,40 @@ Porting di `/vendi` da `frontend/`, metodi di scrittura di
 di moderazione e vendita restano alle Fasi 9 e 7). Caricamento foto:
 bucket dedicato, upload firmato, limiti MIME e dimensione — necessario da
 qui in poi, perché fino alla 6a le immagini sono asset statici locali.
+
+`listing_crea` è una funzione e non un `INSERT` dal client perché la
+creazione attraversa `wines`, che la 6a rende scrivibile solo da
+admin/moderator: il wizard parte da testo digitato, non da un vino già in
+catalogo. La modifica dei campi di contenuto resta invece un `UPDATE`
+diretto, coperto dai `GRANT` di colonna e dalla policy
+`listings_update_own` già definiti in 6a — quella lista non cambia.
+
+Divergenze dichiarate rispetto a `frontend/`:
+
+- **Nessun comando di modifica o sospensione nell'interfaccia.** In
+  `frontend/` non esiste: `/vendi` crea soltanto, `/vendite` sono gli
+  ordini, `toggleInVendita` in `/cantina` è un flag mock, `setListingStatus`
+  è usata solo da `/admin` (moderazione, Fase 9) e `listingActionsFor()` in
+  `data/moderation.ts` non è chiamata da nessuna parte. Le funzioni SQL e i
+  metodi di `ListingService` esistono e sono provati a livello di database;
+  aggiungere i comandi sarebbe una funzionalità nuova.
+- **Gate di verifica venditore non portato**: `has_role('seller_enabled')`
+  non è applicato (decisione di 6a) e `/verifica-venditore` non è migrata,
+  quindi il blocco non avrebbe né una verifica da controllare né una
+  destinazione dove mandare l'utente.
+- **Pannello "Assistente AI"** del passo Identificazione non portato:
+  chiama `/api/ai/listing-suggestion` sul backend FastAPI, dominio AI è
+  Fase 10. Il pannello "Migliora lo sfondo con IA" è invece portato perché
+  in `frontend/` è già interamente simulato e non chiama nessun servizio.
+- **Accesso deciso dalla sessione Supabase reale** e non dal demo-switcher
+  `ruolo`: il venditore di un annuncio è sempre `auth.uid()`.
+- **Bucket `annunci` pubblico in lettura.** Le fotografie di un annuncio
+  attivo sono visibili a chiunque, anche anonimo: è il prodotto. Conseguenza
+  accettata: anche le foto di una bozza sono leggibili da chi ne indovina
+  l'URL, che contiene due UUID.
+- **Nessuna scadenza automatica.** `listing_scadi` materializza una scadenza
+  già avvenuta e rifiuta se `expires_at` è nel futuro; la spazzata periodica
+  su tutti i venditori richiede uno scheduler ed è lavoro di esercizio.
 
 ## Fase 6c — Cantina
 
@@ -134,6 +168,30 @@ Solo dopo parità funzionale verificata su tutti i domini precedenti e
 approvazione esplicita separata: dismissione di `frontend/` (TanStack
 Start) e `backend/` (FastAPI/MongoDB). Non è una conseguenza automatica
 del completamento delle fasi 2–10.
+
+## Debito tecnico noto
+
+Difetti reali, individuati durante la migrazione, che **non** appartengono a
+nessuna fase della traccia: toccarli significherebbe cambiare il
+comportamento di `frontend/` e `frontend-next/` insieme, cioè fare un
+cambiamento di prodotto dentro una migrazione di dati.
+
+### `formatEUR` tronca i centesimi (emerso in Fase 6b)
+
+`src/lib/format.ts` — identico nei due frontend — formatta i prezzi con
+`formatInteger`, quindi stampa euro interi: un annuncio da `145,90 €` viene
+mostrato come `146 €`. Il dato è corretto e integro nel database
+(`listings.prezzo_cents = 14590`); sbagliata è solo la resa.
+
+Il difetto è preesistente, ma fino alla 6a era invisibile: tutti i prezzi
+mock e le righe di prova erano cifre tonde. Diventa visibile dalla 6b, da
+quando il wizard `/vendi` permette di digitare i centesimi.
+
+Non si corregge in una fase di migrazione: cambiare `formatEUR` cambierebbe
+la resa di ogni prezzo in entrambi i frontend — schede annuncio, carrello,
+ordini, proposte, checkout — cioè un cambiamento di design trasversale, che
+va deciso e verificato per conto suo. Esplicitamente **fuori scope dalla
+Fase 6c** e da qualunque fase successiva della traccia.
 
 ---
 

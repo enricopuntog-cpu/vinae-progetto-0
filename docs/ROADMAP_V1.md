@@ -193,6 +193,38 @@ per tutta la 6a/6b. La colonna esiste perché l'interfaccia mostra
 6c permetterà di collegare più unità allo stesso annuncio. Il commento SQL
 sulla colonna lo dice, così non sembra un residuo dimenticato.
 
+## Correzione apportata in Fase 6b: la gestione annunci non esisteva
+
+Il perimetro della 6b prevedeva le scritture "creazione, modifica,
+sospensione". L'esecuzione ha mostrato che **in `frontend/` esiste solo la
+creazione**: non c'è nessuna interfaccia con cui un venditore modifichi o
+sospenda un proprio annuncio. `/vendi` crea e basta, `/vendite` elenca gli
+ordini ricevuti, `toggleInVendita` in `/cantina` è un flag mock sulla
+cantina e non un annuncio, `setListingStatus` è usata soltanto da `/admin`
+(moderazione, Fase 9). La funzione `listingActionsFor()` in
+`data/moderation.ts` elenca "Modifica, Metti in pausa, Ritira" ma non è
+chiamata da nessuna parte: sono dati di riferimento per la galleria degli
+stati, non comandi.
+
+Costruire quei comandi sarebbe stata una funzionalità nuova, che questa
+traccia vieta. La 6b si è quindi fermata dove finisce la parità:
+
+- le funzioni SQL di transizione e i metodi di `ListingService` esistono e
+  sono verificati a livello di database (griglia RLS di fase);
+- nessun comando nuovo compare nell'interfaccia.
+
+Decisione confermata dalla zona organizzativa prima della chiusura di fase.
+Quando la gestione annunci diventerà un requisito di prodotto sarà una fase
+sua, non un'aggiunta silenziosa dentro una migrazione.
+
+Conseguenza collaterale sul vincolo "una bottiglia, un solo annuncio
+attivo": **non è raggiungibile dal wizard**, perché ogni creazione conia una
+`bottle_unit` nuova — `/vendi` non ha nessun selettore di cantina, si
+descrive una bottiglia e non se ne sceglie una. Il messaggio leggibile vive
+in `listing_pubblica`, che è dove il vincolo scatta (l'indice è parziale e
+non copre le bozze), e diventerà raggiungibile dall'interfaccia con la 6c,
+quando "metti in vendita questa bottiglia" partirà da un'unità già esistente.
+
 ## Cosa NON è ancora deciso
 
 - Hosting di produzione per il frontend Next.js (Vercel o altro).
