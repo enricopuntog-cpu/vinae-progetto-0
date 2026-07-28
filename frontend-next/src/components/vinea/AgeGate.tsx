@@ -5,16 +5,20 @@ import { useEffect } from "react";
 import { useVinea } from "@/lib/vinea-store";
 
 /**
- * Guardia di dichiarazione età (Fase 5b, punto 4).
+ * Guardia di dichiarazione età.
  *
- * Chi entra via Google/Facebook salta il form di registrazione email e con
- * esso il banner età: il profilo esiste senza `dob`. Qui, appena la sessione
- * è nota e il profilo risulta incompleto, si viene rimandati a
- * /completa-profilo prima di poter usare il resto del sito.
+ * REGOLA UNIVERSALE, non specifica di un metodo di accesso: qualunque
+ * sessione autenticata il cui profilo non ha una data di nascita salvata
+ * viene rimandata a /completa-profilo prima di poter usare il resto del
+ * sito. Non si guarda mai come l'utente è entrato — email, magic link,
+ * Google o Facebook sono trattati allo stesso modo. L'accesso social è
+ * semplicemente il caso in cui la cosa capita più spesso, perché salta il
+ * form email e con esso il banner età, ma non è l'unico contemplato: dopo
+ * che `profiles.dob` è diventata annullabile, un profilo email privo di
+ * data ricade nella stessa guardia.
  *
  * Volutamente NON blocca gli utenti anonimi: la navigazione da ospite resta
- * quella di sempre, come nelle fasi precedenti. Interviene solo su una
- * sessione autenticata il cui profilo è privo di data di nascita.
+ * quella di sempre, come nelle fasi precedenti.
  */
 
 // Percorsi raggiungibili anche con il profilo incompleto: la schermata di

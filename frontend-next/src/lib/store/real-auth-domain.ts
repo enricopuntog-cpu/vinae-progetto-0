@@ -8,10 +8,11 @@ import type { OAuthProvider, Result } from "@/services/types";
 export type AuthUser = { userId: string; email: string | null };
 
 /**
- * Stato della dichiarazione di età sul profilo.
- * - `sconosciuto`: nessuna sessione, oppure lettura non ancora completata.
- * - `da_completare`: sessione attiva ma `profiles.dob` vuoto — il caso di chi
- *   entra via Google/Facebook e quindi salta il form email e il suo banner età.
+ * Stato della dichiarazione di età sul profilo. Vale per qualunque metodo di
+ * accesso: email, magic link, Google o Facebook non fanno differenza.
+ * - `sconosciuto`: nessuna sessione, lettura non ancora completata, oppure
+ *   lettura fallita — in nessuno di questi casi si blocca l'utente.
+ * - `da_completare`: sessione attiva ma `profiles.dob` vuoto.
  * - `completo`: data di nascita dichiarata.
  */
 export type StatoEta = "sconosciuto" | "da_completare" | "completo";
@@ -64,10 +65,9 @@ export function useRealAuthDomain() {
     };
   }, []);
 
-  // Legge la data di nascita dichiarata ogni volta che cambia l'utente.
-  // Serve al punto 4 di Fase 5b: chi entra via OAuth non passa dal form
-  // email, quindi il profilo può esistere senza `dob` e va completato prima
-  // di poter usare il resto del sito.
+  // Legge la data di nascita dichiarata ogni volta che cambia l'utente,
+  // qualunque sia il metodo di accesso: un profilo senza `dob` va completato
+  // prima di poter usare il resto del sito (vedi AgeGate).
   useEffect(() => {
     if (!authUser) return;
 

@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(claude plugin *)",
+      "PowerShell(claude plugin install superpowers@claude-plugins-official)",
+      "PowerShell(npm install -g @anthropic-ai/claude-code)",
+      "PowerShell(Get-Command node -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command npm -ErrorAction SilentlyContinue)",
+      "PowerShell(node --version 2>$null)",
+      "PowerShell(npm --version 2>$null)",
+      "PowerShell(winget install -e --id OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements)",
+      "Bash(git --version)",
+      "Bash(gh --version)",
+      "Bash(gh auth *)",
+      "PowerShell(gh --version)",
+      "PowerShell(gh auth status 2>&1)"
+    ]
+  }
+}

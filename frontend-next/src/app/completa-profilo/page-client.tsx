@@ -7,7 +7,7 @@ import { Check, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { ConsentCheckbox } from "@/components/vinea/ConsentCheckbox";
 import { useVinea } from "@/lib/vinea-store";
 import { isMaggiorenne } from "@/lib/age";
 
@@ -114,17 +114,14 @@ export default function CompletaProfiloPageClient() {
             {dobError && <p className="mt-1 text-xs text-bordeaux">{dobError}</p>}
           </div>
 
-          <label className="flex items-start gap-2 text-sm">
-            <Checkbox
-              checked={maggiorenne}
-              onCheckedChange={(v) => setMaggiorenne(v === true)}
-              className="mt-0.5"
-            />
-            <span className="flex items-center gap-1">
-              <ShieldAlert className="h-3.5 w-3.5 text-bordeaux" /> Confermo di essere maggiorenne.
-              Vinea è vietato ai minori di 18 anni.
-            </span>
-          </label>
+          <ConsentCheckbox
+            checked={maggiorenne}
+            onCheckedChange={setMaggiorenne}
+            icon={<ShieldAlert className="h-3.5 w-3.5 text-bordeaux" />}
+            testId="consenso-eta"
+          >
+            Confermo di avere più di 18 anni. Vinea è vietato ai minori di 18 anni.
+          </ConsentCheckbox>
 
           <p className="rounded-xl border border-oro/30 bg-oro/5 p-3 text-xs text-antracite/80">
             L&apos;età viene <b>dichiarata da te</b>: non chiediamo né verifichiamo documenti in
