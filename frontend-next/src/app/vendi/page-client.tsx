@@ -1,0 +1,604 @@
+"use client";
+
+import { useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  Check,
+  ArrowRight,
+  ArrowLeft,
+  Camera,
+  Loader2,
+  Sparkles,
+  WandSparkles,
+  Wine as WineIcon,
+  Archive,
+  Eye,
+  Tag,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
+import { useVinea, formatEUR } from "@/lib/vinea-store";
+import { wineImages } from "@/lib/wine-images";
+import { useSellWizard, MAX_FOTO, type Modalita } from "@/hooks/useSellWizard";
+
+/**
+ * /vendi portata da frontend/src/routes/vendi.tsx.
+ *
+ * Le differenze rispetto all'originale sono tutte dichiarate nel rapporto di
+ * fase; le tre visibili qui:
+ *
+ * - il pannello "Assistente AI" del passo Identificazione non è portato,
+ *   perché chiama il backend FastAPI (dominio AI, Fase 10);
+ * - il passo Foto carica davvero su Supabase Storage invece di mostrare un
+ *   toast di demo;
+ * - il campo "Bottiglie disponibili" è visibile ma disabilitato: un annuncio
+ *   vende una singola bottle_unit finché la Cantina (Fase 6c) non permetterà
+ *   di collegarne più d'una.
+ *
+ * L'accesso non è più deciso dal demo-switcher `ruolo` ma dalla sessione reale
+ * Supabase: da questa fase il wizard scrive, e scrivere richiede un utente
+ * vero, non un ruolo scelto da un menu.
+ */
+export default function VendiPageClient() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { authUser, authLoading } = useVinea();
+  const initialMode: Modalita = searchParams.get("mode") === "sell" ? "vendita" : "privata";
+
+  const {
+    modalita,
+    setModalita,
+    step,
+    steps,
+    progress,
+    next,
+    prev,
+    isVendita,
+    d,
+    set,
+    suggerito,
+    foto,
+    fotoInCorso,
+    caricaFoto,
+    rimuoviFoto,
+    inviando,
+    pubblica,
+    salvaBozza,
+  } = useSellWizard({ initialMode, onNavigate: (path) => router.push(path) });
+
+  if (authLoading) {
+    return (
+      <div className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
+        <Loader2 className="mx-auto h-6 w-6 animate-spin text-bordeaux" />
+        <p className="mt-3">Caricamento…</p>
+      </div>
+    );
+  }
+
+  // Senza sessione reale non c'è niente da catalogare né da vendere: il
+  // venditore di un annuncio è sempre auth.uid(), mai un ruolo di demo.
+  if (!authUser) {
+    return (
+      <div className="mx-auto max-w-lg space-y-4 rounded-3xl border border-border bg-card p-6 text-center md:p-10">
+        <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-bordeaux/10">
+          <Tag className="h-8 w-8 text-bordeaux" />
+        </div>
+        <h1 className="font-serif text-2xl md:text-3xl">Accedi per catalogare o vendere</h1>
+        <p className="text-sm text-muted-foreground">
+          Serve un account per usare il wizard di vendita e la tua cantina.
+        </p>
+        <Button asChild className="bg-bordeaux hover:bg-bordeaux/90">
+          <Link href="/registrati">Crea un account</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative mx-auto max-w-2xl space-y-6">
+      {/* Fondale decorativo */}
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={wineImages.crate}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover opacity-20"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-background via-background/95 to-background" />
+      </div>
+
+      <div>
+        <h1 className="font-serif text-3xl md:text-4xl">
+          {isVendita ? "Vendi la tua bottiglia" : "Aggiungi una bottiglia"}
+        </h1>
+        <p className="text-muted-foreground">
+          {isVendita
+            ? `Percorso guidato in ${steps.length} passi per pubblicare nel marketplace.`
+            : `Catalogazione guidata: ${steps.length} passi, nessun obbligo di prezzo.`}
+        </p>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>
+            Passo {step + 1} di {steps.length}
+          </span>
+          <span>{steps[step]}</span>
+        </div>
+        <Progress value={progress} className="mt-2 h-2" />
+      </div>
+
+      <div className="rounded-2xl border border-border bg-card/95 p-6 backdrop-blur">
+        {step === 0 && (
+          <div className="space-y-4">
+            <h2 className="font-serif text-2xl">Come vuoi usare questa bottiglia?</h2>
+            <p className="text-sm text-muted-foreground">
+              Puoi cambiare idea in qualsiasi momento.
+            </p>
+            <div className="grid gap-3">
+              <ModeCard
+                active={modalita === "privata"}
+                onClick={() => setModalita("privata")}
+                icon={Archive}
+                titolo="Aggiungi alla cantina privata"
+                sottotitolo="Solo tu la vedi. Nessun prezzo obbligatorio."
+              />
+              <ModeCard
+                active={modalita === "pubblica"}
+                onClick={() => setModalita("pubblica")}
+                icon={Eye}
+                titolo="Mostra nella cantina pubblica"
+                sottotitolo="Appare sul tuo profilo, senza essere in vendita."
+              />
+              <ModeCard
+                active={modalita === "vendita"}
+                onClick={() => setModalita("vendita")}
+                icon={Tag}
+                titolo="Pubblica in vendita"
+                sottotitolo="Attivi prezzo, spedizione e proposte."
+              />
+            </div>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div className="space-y-5">
+            <h2 className="font-serif text-2xl">Fotografie</h2>
+            <p className="text-sm text-muted-foreground">
+              Consigliate: fronte, retro, capsula, livello, fondo, confezione ed eventuali difetti.
+            </p>
+            <FotoGriglia
+              foto={foto}
+              inCorso={fotoInCorso}
+              onCarica={caricaFoto}
+              onRimuovi={rimuoviFoto}
+            />
+            <SfondoIAPanel />
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-4">
+            <h2 className="font-serif text-2xl">Identificazione</h2>
+            <p className="text-sm text-muted-foreground">
+              Compila i campi che descrivono la bottiglia.
+            </p>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="Produttore">
+                <Input
+                  value={d.produttore}
+                  onChange={(e) => set("produttore")(e.target.value)}
+                  placeholder="Es. Antinori"
+                />
+              </Field>
+              <Field label="Nome / Etichetta">
+                <Input
+                  value={d.nome}
+                  onChange={(e) => set("nome")(e.target.value)}
+                  placeholder="Es. Tignanello"
+                />
+              </Field>
+              <Field label="Annata">
+                <Input
+                  type="number"
+                  value={d.annata}
+                  onChange={(e) => set("annata")(e.target.value)}
+                  placeholder="Es. 2019"
+                />
+              </Field>
+              <Field label="Regione">
+                <Input
+                  value={d.regione}
+                  onChange={(e) => set("regione")(e.target.value)}
+                  placeholder="Es. Toscana"
+                />
+              </Field>
+              <Field label="Tipologia">
+                <Select value={d.tipo} onValueChange={set("tipo")}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["Rosso", "Bianco", "Bollicine", "Rosato", "Dolce"].map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="space-y-4">
+            <h2 className="font-serif text-2xl">Condizioni</h2>
+            <div className="grid grid-cols-3 gap-2">
+              {["Perfetto", "Ottimo", "Buono"].map((c) => (
+                <button
+                  key={c}
+                  onClick={() => set("condizione")(c)}
+                  className={`rounded-xl border p-3 text-sm ${d.condizione === c ? "border-bordeaux bg-bordeaux/5" : "border-border"}`}
+                >
+                  <p className="font-serif text-base">{c}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {step === 4 && (
+          <div className="space-y-4">
+            <h2 className="font-serif text-2xl">Provenienza e conservazione</h2>
+            <Field label="Come è stata conservata">
+              <Textarea
+                value={d.conservazione}
+                onChange={(e) => set("conservazione")(e.target.value)}
+                placeholder="Cantina climatizzata a 14°C, umidità 70%, bottiglia sdraiata…"
+              />
+            </Field>
+            <Field label="Racconta la sua storia (opzionale)">
+              <Textarea
+                value={d.storia}
+                onChange={(e) => set("storia")(e.target.value)}
+                placeholder="Regalata da mio nonno, dalla verticale di famiglia…"
+              />
+            </Field>
+          </div>
+        )}
+
+        {isVendita && step === 5 && (
+          <div className="space-y-4">
+            <h2 className="font-serif text-2xl">Prezzo</h2>
+            <div className="rounded-xl border border-oro/40 bg-oro/10 p-4">
+              <p className="flex items-center gap-2 text-sm">
+                <Sparkles className="h-4 w-4 text-oro" /> Prezzo suggerito dall'IA in base al
+                mercato: <b>{formatEUR(suggerito)}</b>
+              </p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="Prezzo (€)">
+                <Input
+                  type="number"
+                  value={d.prezzo}
+                  onChange={(e) => set("prezzo")(e.target.value)}
+                  placeholder={String(suggerito)}
+                />
+              </Field>
+              <Field label="Bottiglie disponibili">
+                <Input type="number" value={d.disponibili} disabled readOnly />
+                <p className="text-[11px] text-muted-foreground">
+                  Un annuncio vende una bottiglia identificata. Più unità sullo stesso annuncio
+                  arriveranno con la cantina.
+                </p>
+              </Field>
+            </div>
+          </div>
+        )}
+
+        {isVendita && step === 6 && (
+          <div className="space-y-4">
+            <h2 className="font-serif text-2xl">Consegna</h2>
+            <div className="grid gap-3 md:grid-cols-2">
+              {["Corriere assicurato", "Ritiro a mano", "Punto Vinea"].map((c) => (
+                <button
+                  key={c}
+                  onClick={() => toast(c + " selezionato (demo)")}
+                  className="rounded-xl border border-border p-3 text-left hover:border-bordeaux"
+                >
+                  <p className="font-serif text-base">{c}</p>
+                  <p className="text-xs text-muted-foreground">Simulato in demo</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {step === steps.length - 1 && (
+          <div className="space-y-4">
+            <h2 className="font-serif text-2xl">Anteprima</h2>
+            <div className="space-y-2 rounded-xl bg-secondary p-4 text-sm">
+              <p>
+                <b>{d.produttore || "—"}</b> {d.nome} {d.annata}
+              </p>
+              <p>
+                {d.regione || "—"} • {d.tipo} • {d.condizione}
+              </p>
+              {isVendita ? (
+                <>
+                  <p className="font-serif text-2xl text-bordeaux">
+                    {d.prezzo ? formatEUR(Number(d.prezzo)) : "—"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">1 bottiglia</p>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Modalità: {modalita === "privata" ? "cantina privata" : "cantina pubblica"} —
+                  nessun prezzo pubblicato.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap justify-between gap-2">
+        <Button variant="outline" onClick={prev} disabled={step === 0 || inviando}>
+          <ArrowLeft className="h-4 w-4" /> Indietro
+        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="ghost" onClick={salvaBozza} disabled={inviando}>
+            Salva bozza
+          </Button>
+          {step < steps.length - 1 ? (
+            <Button className="bg-bordeaux hover:bg-bordeaux/90" onClick={next}>
+              Continua <ArrowRight className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              className="bg-bordeaux hover:bg-bordeaux/90"
+              onClick={pubblica}
+              disabled={inviando}
+            >
+              {inviando && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isVendita
+                ? "Pubblica annuncio"
+                : modalita === "pubblica"
+                  ? "Aggiungi alla cantina pubblica"
+                  : "Aggiungi alla cantina privata"}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Le sei caselle del passo Foto. In frontend/ ognuna apre un toast di demo;
+ * qui apre il selettore di file e carica davvero.
+ */
+function FotoGriglia({
+  foto,
+  inCorso,
+  onCarica,
+  onRimuovi,
+}: {
+  foto: { percorso: string; anteprima: string }[];
+  inCorso: boolean;
+  onCarica: (file: File) => void;
+  onRimuovi: (indice: number) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+
+  return (
+    <>
+      <input
+        ref={input}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/avif"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onCarica(file);
+          // Azzerato per poter riselezionare lo stesso file dopo averlo tolto.
+          e.target.value = "";
+        }}
+      />
+      <div className="grid grid-cols-3 gap-3">
+        {foto.map((f, i) => (
+          <div key={f.percorso} className="relative aspect-square overflow-hidden rounded-xl border border-border">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={f.anteprima} alt="" className="h-full w-full object-cover" />
+            <button
+              onClick={() => onRimuovi(i)}
+              aria-label="Rimuovi fotografia"
+              className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-antracite/70 text-crema hover:bg-antracite"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+        {Array.from({ length: Math.max(0, MAX_FOTO - foto.length) }).map((_, i) => (
+          <button
+            key={`vuota-${i}`}
+            onClick={() => input.current?.click()}
+            disabled={inCorso}
+            className="grid aspect-square place-items-center rounded-xl border-2 border-dashed border-border bg-secondary/50 text-muted-foreground hover:border-bordeaux hover:text-bordeaux disabled:opacity-50"
+          >
+            {inCorso && i === 0 ? (
+              <Loader2 className="h-6 w-6 animate-spin" />
+            ) : (
+              <Camera className="h-6 w-6" />
+            )}
+          </button>
+        ))}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        JPEG, PNG, WebP o AVIF, fino a 5 MB per fotografia.
+      </p>
+    </>
+  );
+}
+
+function ModeCard({
+  active,
+  onClick,
+  icon: Icon,
+  titolo,
+  sottotitolo,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: LucideIcon;
+  titolo: string;
+  sottotitolo: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-3 rounded-xl border p-4 text-left transition ${active ? "border-bordeaux bg-bordeaux/5" : "border-border hover:bg-secondary"}`}
+    >
+      <span
+        className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${active ? "bg-bordeaux text-crema" : "bg-secondary text-bordeaux"}`}
+      >
+        <Icon className="h-5 w-5" />
+      </span>
+      <div className="min-w-0">
+        <p className="font-serif text-lg font-semibold">{titolo}</p>
+        <p className="text-xs text-muted-foreground">{sottotitolo}</p>
+      </div>
+      {active && <Check className="ml-auto h-5 w-5 text-bordeaux" />}
+    </button>
+  );
+}
+
+const stili = [
+  { key: "casse", nome: "Casse italiane", img: wineImages.crate },
+  { key: "moderna", nome: "Cantina moderna", img: wineImages.cellar },
+  { key: "rustica", nome: "Cantina rustica", img: wineImages.vineyard },
+  { key: "premium", nome: "Esposizione premium", img: wineImages.champagne },
+];
+
+/**
+ * Portato invariato: in frontend/ è già interamente simulato con un setTimeout
+ * e non chiama nessun servizio. Nessuna delle sue scelte finisce nell'annuncio.
+ */
+function SfondoIAPanel() {
+  const [stile, setStile] = useState<string>("casse");
+  const [stato, setStato] = useState<"idle" | "loading" | "done">("idle");
+  const applica = () => {
+    setStato("loading");
+    setTimeout(() => {
+      setStato("done");
+      toast.success("Sfondo applicato (demo)");
+    }, 1100);
+  };
+  const scelto = stili.find((s) => s.key === stile)!;
+  return (
+    <section className="rounded-2xl border border-oro/40 bg-oro/5 p-4">
+      <div className="mb-2 flex items-start gap-2">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-oro/25 text-antracite">
+          <WandSparkles className="h-4 w-4" />
+        </span>
+        <div>
+          <p className="font-serif text-lg font-semibold">Migliora lo sfondo con IA</p>
+          <p className="text-xs text-muted-foreground">
+            Opzione facoltativa: la bottiglia non viene modificata; vengono adattati solo sfondo e
+            illuminazione.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div>
+          <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Prima</p>
+          <div className="aspect-square overflow-hidden rounded-lg border border-border bg-secondary">
+            <div className="grid h-full w-full place-items-center">
+              <WineIcon className="h-14 w-14 text-bordeaux/70" />
+            </div>
+          </div>
+        </div>
+        <div>
+          <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Dopo</p>
+          <div className="relative aspect-square overflow-hidden rounded-lg border border-oro">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={scelto.img} alt="" className="h-full w-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-antracite/40 to-transparent" />
+            <div className="absolute inset-0 grid place-items-center">
+              <WineIcon className="h-14 w-14 text-crema drop-shadow" />
+            </div>
+            {stato === "loading" && (
+              <div className="absolute inset-0 grid place-items-center bg-antracite/50 text-crema text-xs">
+                Elaborazione IA…
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+          Scegli stile
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {stili.map((s) => (
+            <button
+              key={s.key}
+              onClick={() => setStile(s.key)}
+              className={`rounded-full border px-3 py-1 text-xs ${stile === s.key ? "border-bordeaux bg-bordeaux text-crema" : "border-border bg-card"}`}
+            >
+              {s.nome}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            setStato("idle");
+            toast("Foto originale mantenuta");
+          }}
+        >
+          Mantieni foto originale
+        </Button>
+        <Button
+          size="sm"
+          className="bg-oro text-antracite hover:bg-oro/90"
+          onClick={applica}
+          disabled={stato === "loading"}
+        >
+          <Sparkles className="h-3.5 w-3.5" /> Applica sfondo suggerito
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs uppercase tracking-wide text-muted-foreground">{label}</Label>
+      {children}
+    </div>
+  );
+}
