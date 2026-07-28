@@ -37,6 +37,8 @@ import { useListingsDomain } from "@/lib/store/listings-domain";
 import { useProfileDomain } from "@/lib/store/profile-domain";
 import { useAuthDomain, type DemoRuolo } from "@/lib/store/auth-domain";
 import { useModerationDomain } from "@/lib/store/moderation-domain";
+import { useRealAuthDomain, type AuthUser } from "@/lib/store/real-auth-domain";
+import type { Result } from "@/services/types";
 
 export type { DrinkOverride, SfondoCantina } from "@/lib/store/cellar-domain";
 export type { DemoRuolo } from "@/lib/store/auth-domain";
@@ -51,6 +53,22 @@ type StoreState = {
 
   ruolo: DemoRuolo;
   setRuolo: (r: DemoRuolo) => void;
+
+  // Autenticazione reale (Supabase, Fase 5a) — separata dal demo-switcher `ruolo` sopra.
+  authUser: AuthUser | null;
+  authLoading: boolean;
+  authError: string | null;
+  authClearError: () => void;
+  authRegistra: (input: {
+    email: string;
+    password: string;
+    dataNascita: string;
+    username: string;
+  }) => Promise<Result<{ userId: string }>>;
+  authLogin: (email: string, password: string) => Promise<Result<{ userId: string }>>;
+  authInviaMagicLink: (email: string) => Promise<Result<void>>;
+  authVerificaEmail: (tokenHash: string) => Promise<Result<void>>;
+  authLogout: () => Promise<void>;
 
   notifiche: Notifica[];
   nonLette: number;
@@ -202,6 +220,7 @@ export function VineaProvider({ children }: { children: ReactNode }) {
   const { resetForGuest, ...profileDomain } = useProfileDomain({ pushNotifica });
   const authDomain = useAuthDomain({ onGuestSwitch: resetForGuest });
   const moderationDomain = useModerationDomain({ pushNotifica });
+  const realAuthDomain = useRealAuthDomain();
 
   return (
     <Ctx.Provider
@@ -214,6 +233,7 @@ export function VineaProvider({ children }: { children: ReactNode }) {
         ...orderDomain,
         ...profileDomain,
         ...moderationDomain,
+        ...realAuthDomain,
       }}
     >
       {children}
