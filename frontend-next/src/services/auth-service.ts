@@ -32,7 +32,10 @@ export const supabaseAuthService: AuthService = {
     });
     if (error) return { ok: false, error: error.message };
     if (!data.user) return { ok: false, error: "Registrazione non riuscita." };
-    return { ok: true, data: { userId: data.user.id } };
+    return {
+      ok: true,
+      data: { userId: data.user.id, sessioneAttiva: data.session !== null },
+    };
   },
 
   async verificaEmail(tokenHash) {

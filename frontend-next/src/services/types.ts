@@ -45,12 +45,18 @@ export type Result<T, E = string> = { ok: true; data: T } | { ok: false; error: 
 // Google/Apple non in questa fase (Fase 5b, quando saranno disponibili le
 // credenziali OAuth): nessun metodo di social login qui.
 export interface AuthService {
+  /**
+   * `sessioneAttiva` distingue i due esiti possibili di una registrazione
+   * riuscita: sessione già aperta (conferma email disattivata nel progetto
+   * Supabase) oppure utente creato ma non ancora autenticato, in attesa che
+   * clicchi il link di conferma ricevuto per email.
+   */
   registra(input: {
     email: string;
     password: string;
     dataNascita: string;
     username: string;
-  }): Promise<Result<{ userId: string }>>;
+  }): Promise<Result<{ userId: string; sessioneAttiva: boolean }>>;
   verificaEmail(tokenHash: string): Promise<Result<void>>;
   login(email: string, password: string): Promise<Result<{ userId: string }>>;
   inviaMagicLink(email: string): Promise<Result<void>>;
