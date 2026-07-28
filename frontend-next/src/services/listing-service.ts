@@ -1,5 +1,5 @@
 /**
- * ListingService reale su Supabase — Fase 6a (sola lettura).
+ * ListingService reale su Supabase — lettura (Fase 6a) e scrittura (Fase 6b).
  *
  * Legge dalla vista `public_listings`, che unisce annuncio + vino + venditore
  * e filtra `stato = 'attivo'` dentro il database. Il client non può allargare
@@ -12,13 +12,21 @@
  * esclude. L'adattatore ricompone quindi la stessa forma partendo dallo schema
  * normalizzato.
  *
- * Le scritture (creazione, modifica, transizioni di stato) arrivano in Fase 6b
- * insieme al wizard /vendi.
+ * Le scritture non toccano mai `stato` direttamente: quelle colonne non sono
+ * nei GRANT concessi al client, quindi ogni transizione passa da una funzione
+ * SECURITY DEFINER che verifica proprietà e stato di partenza. Vale anche per
+ * la creazione, che deve attraversare `wines` — catalogo condiviso scrivibile
+ * solo dallo staff.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Wine } from "@/data/wines";
-import type { ListingReadService } from "@/services/types";
+import type {
+  DatiModificaAnnuncio,
+  DatiNuovoAnnuncio,
+  ListingService,
+  Result,
+} from "@/services/types";
 
 /** Riga della vista public_listings, così come arriva da PostgREST. */
 type PublicListingRow = {
@@ -86,8 +94,34 @@ const COLONNE = [
 /** Immagine mostrata quando un annuncio non ne ha nessuna. */
 const IMMAGINE_ASSENTE = "/images/vinea-bottle-1.jpg";
 
+/** Bucket delle fotografie caricate dai venditori (Fase 6b). */
+export const BUCKET_ANNUNCI = "annunci";
+
 function centesimiInEuro(cents: number): number {
   return cents / 100;
+}
+
+/**
+ * `listings.immagini` contiene due specie diverse di stringa, e si distinguono
+ * dalla prima lettera:
+ *
+ * - `/images/…` è un asset statico servito da frontend-next/public — sono le
+ *   illustrazioni usate dai dati di prova della 6a, e restano dove sono;
+ * - `<uid>/<uuid>.jpg` è un oggetto dentro il bucket `annunci`, caricato da un
+ *   venditore in Fase 6b.
+ *
+ * Nel database si salva il percorso e non l'URL completo: l'URL contiene
+ * l'indirizzo del progetto Supabase, e inciderlo in ogni riga legherebbe i
+ * dati a un progetto specifico. L'URL si ricompone qui, dove l'indirizzo è
+ * già una variabile d'ambiente.
+ */
+function urlImmagine(percorso: string): string {
+  if (percorso.startsWith("/") || percorso.startsWith("http")) return percorso;
+
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return IMMAGINE_ASSENTE;
+
+  return `${base}/storage/v1/object/public/${BUCKET_ANNUNCI}/${percorso}`;
 }
 
 /**
@@ -104,7 +138,9 @@ function centesimiInEuro(cents: number): number {
  */
 export function rigaAWine(riga: PublicListingRow): Wine {
   const immagini =
-    riga.immagini && riga.immagini.length > 0 ? riga.immagini : [IMMAGINE_ASSENTE];
+    riga.immagini && riga.immagini.length > 0
+      ? riga.immagini.map(urlImmagine)
+      : [IMMAGINE_ASSENTE];
 
   return {
     // L'identità pubblica dell'annuncio, quella che finisce in /annuncio/<id>.
@@ -153,7 +189,57 @@ function segnalaErrore(operazione: string, errore: unknown): void {
   console.error(`[ListingService] ${operazione} fallita:`, errore);
 }
 
-export function createListingService(client: SupabaseClient | null): ListingReadService {
+/**
+ * Errori di scrittura: qui, al contrario delle letture, un messaggio deve
+ * arrivare all'utente — altrimenti il wizard direbbe soltanto "non ha
+ * funzionato".
+ *
+ * Si mostrano solo i messaggi che abbiamo scritto noi nelle funzioni SQL,
+ * riconoscibili dal loro SQLSTATE: `P0001` è il codice di un `raise exception`
+ * applicativo, `42501` quello di un permesso negato. Tutto il resto (violazioni
+ * di vincoli, errori di connessione, difetti di programmazione) resta nei log
+ * del server e all'utente arriva una frase generica: un messaggio di
+ * PostgreSQL contiene nomi di tabelle, colonne e indici, cioè la mappa dello
+ * schema.
+ *
+ * È questo che trasforma il 23505 dell'indice
+ * `listings_una_sola_attiva_per_bottiglia` nella frase leggibile che
+ * listing_pubblica() solleva al posto suo.
+ */
+const CODICI_LEGGIBILI = new Set(["P0001", "42501"]);
+const ERRORE_GENERICO = "Non è stato possibile completare l'operazione. Riprova.";
+
+type ErrorePostgrest = { code?: string; message?: string };
+
+function messaggioPerUtente(operazione: string, errore: ErrorePostgrest): string {
+  segnalaErrore(operazione, errore);
+
+  if (errore.code && CODICI_LEGGIBILI.has(errore.code) && errore.message) {
+    return errore.message;
+  }
+  return ERRORE_GENERICO;
+}
+
+const NESSUN_CLIENT: Result<never> = {
+  ok: false,
+  error: "Connessione a Supabase non configurata.",
+};
+
+/**
+ * Corpo di una scrittura: chiama, e traduce l'esito in `Result`. Tenerlo in un
+ * punto solo evita che una delle cinque scritture dimentichi la traduzione e
+ * lasci sfuggire un messaggio di PostgreSQL.
+ */
+async function scrittura(
+  operazione: string,
+  esegui: () => Promise<{ error: ErrorePostgrest | null }>,
+): Promise<Result<void>> {
+  const { error } = await esegui();
+  if (error) return { ok: false, error: messaggioPerUtente(operazione, error) };
+  return { ok: true, data: undefined };
+}
+
+export function createListingService(client: SupabaseClient | null): ListingService {
   return {
     async elenco(): Promise<Wine[]> {
       if (!client) return [];
@@ -187,6 +273,90 @@ export function createListingService(client: SupabaseClient | null): ListingRead
       if (!data) return null;
 
       return rigaAWine(data as unknown as PublicListingRow);
+    },
+
+    // -- Scritture (Fase 6b) --------------------------------------------------
+
+    /**
+     * Creazione. Una sola chiamata: `listing_crea` crea vino (se manca), unità
+     * fisica e annuncio in bozza dentro la stessa transazione. Il venditore
+     * non è un parametro — la funzione usa `auth.uid()` e ignora qualunque
+     * cosa il client dica di essere.
+     */
+    async crea(dati: DatiNuovoAnnuncio): Promise<Result<{ id: string; slug: string }>> {
+      if (!client) return NESSUN_CLIENT;
+
+      const { data, error } = await client.rpc("listing_crea", {
+        p_produttore: dati.produttore,
+        p_nome: dati.nome,
+        p_annata: dati.annata,
+        p_regione: dati.regione,
+        p_tipo: dati.tipo,
+        p_prezzo_cents: dati.prezzoCents,
+        p_condizione: dati.condizione,
+        p_conservazione: dati.conservazione,
+        p_storia: dati.storia,
+        p_immagini: dati.immagini,
+      });
+
+      if (error) return { ok: false, error: messaggioPerUtente("crea", error) };
+
+      // La funzione è `returns table`, quindi PostgREST consegna un elenco di
+      // una riga sola.
+      const riga = (data as { annuncio_id: string; annuncio_slug: string }[] | null)?.[0];
+      if (!riga) {
+        segnalaErrore("crea", "listing_crea non ha restituito nessuna riga");
+        return { ok: false, error: ERRORE_GENERICO };
+      }
+
+      return { ok: true, data: { id: riga.annuncio_id, slug: riga.annuncio_slug } };
+    },
+
+    /**
+     * Modifica dei campi di contenuto. È un UPDATE diretto e non una funzione:
+     * la Fase 6a aveva già concesso queste colonne in scrittura ad
+     * `authenticated`, e la policy `listings_update_own` limita da sola le
+     * righe raggiungibili — quelle del venditore, e solo se in bozza o con
+     * modifiche richieste. Un annuncio già pubblico non si modifica sotto gli
+     * occhi di chi lo sta guardando: qui arriverebbero zero righe modificate.
+     */
+    async aggiorna(id: string, dati: Partial<DatiModificaAnnuncio>): Promise<Result<void>> {
+      if (!client) return NESSUN_CLIENT;
+
+      const patch: Record<string, unknown> = {};
+      if (dati.prezzoCents !== undefined) patch.prezzo_cents = dati.prezzoCents;
+      if (dati.condizione !== undefined) patch.condizione = dati.condizione;
+      if (dati.conservazione !== undefined) patch.conservazione = dati.conservazione;
+      if (dati.storia !== undefined) patch.storia = dati.storia;
+      if (dati.immagini !== undefined) patch.immagini = dati.immagini;
+
+      if (Object.keys(patch).length === 0) return { ok: true, data: undefined };
+
+      return scrittura("aggiorna", async () =>
+        client.from("listings").update(patch).eq("id", id),
+      );
+    },
+
+    /** bozza | modifiche_richieste → attivo. */
+    async pubblica(id: string): Promise<Result<void>> {
+      if (!client) return NESSUN_CLIENT;
+      return scrittura("pubblica", async () =>
+        client.rpc("listing_pubblica", { p_listing_id: id }),
+      );
+    },
+
+    /** attivo → sospeso, deciso dal venditore. */
+    async sospendi(id: string, motivo?: string): Promise<Result<void>> {
+      if (!client) return NESSUN_CLIENT;
+      return scrittura("sospendi", async () =>
+        client.rpc("listing_sospendi", { p_listing_id: id, p_motivo: motivo ?? null }),
+      );
+    },
+
+    /** attivo → scaduto, solo se la scadenza è già passata. */
+    async scadi(id: string): Promise<Result<void>> {
+      if (!client) return NESSUN_CLIENT;
+      return scrittura("scadi", async () => client.rpc("listing_scadi", { p_listing_id: id }));
     },
   };
 }

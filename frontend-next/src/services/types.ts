@@ -24,7 +24,6 @@ import type {
   Report,
   ReportStatus,
   ReportTargetType,
-  ListingStatus,
   ModAction,
   AuditEntry,
 } from "@/data/moderation";
@@ -138,11 +137,61 @@ export interface ListingReadService {
   dettaglio(slug: string): Promise<Wine | null>;
 }
 
-/** Lettura più scrittura. Le scritture arrivano in Fase 6b, con /vendi. */
+/** Dati che il wizard /vendi raccoglie per creare un annuncio. */
+export interface DatiNuovoAnnuncio {
+  produttore: string;
+  nome: string;
+  annata: number;
+  regione: string;
+  tipo: Wine["tipo"];
+  condizione: Wine["condizione"];
+  conservazione: string;
+  storia: string;
+  /** In centesimi interi: mai un prezzo in euro come float. */
+  prezzoCents: number;
+  /** Percorsi dentro il bucket `annunci`, nella forma `<uid>/<uuid>.<est>`. */
+  immagini: string[];
+}
+
+/**
+ * I campi modificabili dopo la creazione.
+ *
+ * Produttore, nome, annata, regione e tipologia non ci sono: descrivono il
+ * vino, che vive in `wines` ed è un catalogo condiviso scrivibile solo dallo
+ * staff. Correggere "Antinori" in "Antinory" su un annuncio cambierebbe il
+ * vino per tutti gli annunci che lo citano. Un annuncio sbagliato sul vino si
+ * ricrea; il catalogo lo corregge chi ha il ruolo per farlo.
+ */
+export type DatiModificaAnnuncio = Pick<
+  DatiNuovoAnnuncio,
+  "prezzoCents" | "condizione" | "conservazione" | "storia" | "immagini"
+>;
+
+/**
+ * Lettura più scrittura.
+ *
+ * Le firme divergono dalla bozza di Fase 3 (`crea(input: unknown)`,
+ * `aggiornaStato(id, stato)`, `richiediFoto`) per tre ragioni emerse
+ * scrivendo la 6b:
+ *
+ * - `input: unknown` non è un contratto: il wizard raccoglie campi precisi e
+ *   il database li valida uno per uno. `DatiNuovoAnnuncio` li nomina.
+ * - `aggiornaStato(id, stato)` suggerisce che il chiamante scelga lo stato di
+ *   arrivo. Non è così: ogni transizione ha precondizioni diverse e vive in
+ *   una funzione SQL dedicata. Un metodo per transizione rende impossibile
+ *   chiedere un passaggio che non esiste.
+ * - `richiediFoto` è un'azione di moderazione (Fase 9), non del venditore, e
+ *   resta fuori da qui finché quel dominio non arriva.
+ *
+ * Ogni scrittura ritorna `Result` e non lancia: il messaggio d'errore del
+ * database è già in italiano e leggibile, ed è quello che il wizard mostra.
+ */
 export interface ListingService extends ListingReadService {
-  crea(input: unknown): Promise<{ id: string; stato: ListingStatus }>;
-  aggiornaStato(id: string, stato: ListingStatus, motivo?: string): Promise<void>;
-  richiediFoto(listingId: string, message: string): Promise<void>;
+  crea(dati: DatiNuovoAnnuncio): Promise<Result<{ id: string; slug: string }>>;
+  aggiorna(id: string, dati: Partial<DatiModificaAnnuncio>): Promise<Result<void>>;
+  pubblica(id: string): Promise<Result<void>>;
+  sospendi(id: string, motivo?: string): Promise<Result<void>>;
+  scadi(id: string): Promise<Result<void>>;
 }
 
 // ---- Proposte & Ordini -----------------------------------------------------
