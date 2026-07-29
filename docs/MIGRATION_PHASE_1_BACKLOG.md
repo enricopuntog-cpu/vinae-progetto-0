@@ -213,8 +213,16 @@ messaggio leggibile di `listing_pubblica` e non il 23505.
 **Branch**: `hardening/phase-6d-1-security-invariants`
 
 Non una migrazione di dati: le fonti restano quelle di 6a/6b/6c. Cambiano policy,
-privilegi e percorsi di scrittura. Una migrazione sola
-(`20260729230000_security_invariants.sql`), nessuna modifica retroattiva.
+privilegi e percorsi di scrittura. Tre migrazioni additive, nessuna modifica
+retroattiva a un file già applicato:
+
+- `20260729230000_security_invariants.sql`;
+- `20260729234500_security_invariants_followup.sql`;
+- `20260729235500_security_helper_invoker.sql`.
+
+La verifica sul database reale, i problemi corretti e le eccezioni deliberate
+degli advisor Supabase sono in
+[`PHASE_6D1_SUPABASE_REVIEW.md`](PHASE_6D1_SUPABASE_REVIEW.md).
 
 Sette confini chiusi: privacy di `bottle_units` e di `listings` (viste a elenco
 chiuso di colonne al posto dei `GRANT` di tabella), `user_roles` non più
@@ -235,12 +243,14 @@ Le tre regole permanenti che ne derivano sono in `CLAUDE.md`, sezione
   che lo scrivesse chi conclude la vendita — ma quella funzione è Fase 7 e non
   esiste. Il trigger `listings_marca_bottiglia_ceduta` intercetta l'ingresso in
   `'venduto'` da qualunque origine, oggi `service_role` e domani la RPC di Fase 7.
-- **L'invariante fra tabelle è un trigger e non un indice.** Il perimetro di fase
+- **L'invariante fra tabelle usa due trigger e non un indice.** Il perimetro di fase
   chiedeva che `ceduta_at` fosse «considerato dall'indice»: un indice unico vive
   su una tabella sola e non può leggere l'altra. Al suo posto
   `listings_bottiglia_idonea`, che rifiuta ogni annuncio non terminale su una
   bottiglia aperta, consumata, cancellata o ceduta — e vale anche per
-  `service_role`, cosa che un controllo dentro le RPC non otterrebbe.
+  `service_role`, cosa che un controllo dentro le RPC non otterrebbe. Il
+  follow-up aggiunge `bottle_units_preserva_annuncio_non_terminale`, così lo
+  stesso vincolo vale anche quando cambia direttamente la bottiglia.
 - **Le colonne di tracciamento moderazione escono anche per il proprietario.**
   `stato_motivo`, `stato_aggiornato_da` e `stato_aggiornato_at` non sono nel
   `GRANT` di colonna di `listings` per nessun ruolo client. Il perimetro chiedeva
@@ -252,11 +262,10 @@ Le tre regole permanenti che ne derivano sono in `CLAUDE.md`, sezione
   una bottiglia dalla cantina, né in `frontend/` né in `frontend-next/`, e questa
   fase non lo aggiunge. La funzione nasce perché `deleted_at` esce dai `GRANT` di
   colonna insieme a `stato`: senza, quella colonna resterebbe senza porta.
-- **`ceduta_at` non toglie la bottiglia dai totali di cantina.** Una bottiglia
-  venduta continua a comparire in `/cantina` con l'etichetta «venduta», come
-  prima. Escluderla è parte del trasferimento di proprietà, cioè del debito qui
-  sotto, non di questa fase: cambierebbe il totale in cantina e il valore stimato,
-  che è un cambiamento di comportamento visibile.
+- **`ceduta_at` toglie la bottiglia dalla cantina del venditore.** Il follow-up
+  esclude le unità cedute dalla policy del proprietario e libera l'eventuale
+  `cellar_slot`. Il trasferimento al compratore resta una responsabilità della
+  Fase 7: questa fase rappresenta soltanto l'uscita dal possesso del venditore.
 
 ## Fase 7 — OrderService + ProposalService + PaymentService
 
