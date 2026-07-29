@@ -208,6 +208,56 @@ messaggio leggibile di `listing_pubblica` e non il 23505.
   con la cantina mock, compariva a chiunque — anche a chi non aveva mai fatto
   accesso.
 
+## Fase 6d-1 — Invarianti di sicurezza fra bottiglie e annunci
+
+**Branch**: `hardening/phase-6d-1-security-invariants`
+
+Non una migrazione di dati: le fonti restano quelle di 6a/6b/6c. Cambiano policy,
+privilegi e percorsi di scrittura. Una migrazione sola
+(`20260729230000_security_invariants.sql`), nessuna modifica retroattiva.
+
+Sette confini chiusi: privacy di `bottle_units` e di `listings` (viste a elenco
+chiuso di colonne al posto dei `GRANT` di tabella), `user_roles` non più
+enumerabile e `has_role` non più anonima, controllo dell'età autoritativo in
+database su `listing_crea` e `listing_pubblica`, invarianti bottiglia–annuncio
+con lock di riga, annunci scaduti esclusi dalla proiezione pubblica, e la regola
+«un annuncio, una bottiglia, un solo annuncio non terminale».
+
+Le tre regole permanenti che ne derivano sono in `CLAUDE.md`, sezione
+*Postgres exposure rules*.
+
+### Scelte e divergenze emerse eseguendola
+
+- **`ceduta_at` la valorizza un trigger, non la funzione di transizione.** Il
+  buco era che l'indice della 6a copriva `('attivo','riservato')`: portando un
+  annuncio a `'venduto'` la bottiglia tornava libera e si poteva ripubblicare una
+  bottiglia già venduta. Serviva un marcatore di uscita dal possesso, e serviva
+  che lo scrivesse chi conclude la vendita — ma quella funzione è Fase 7 e non
+  esiste. Il trigger `listings_marca_bottiglia_ceduta` intercetta l'ingresso in
+  `'venduto'` da qualunque origine, oggi `service_role` e domani la RPC di Fase 7.
+- **L'invariante fra tabelle è un trigger e non un indice.** Il perimetro di fase
+  chiedeva che `ceduta_at` fosse «considerato dall'indice»: un indice unico vive
+  su una tabella sola e non può leggere l'altra. Al suo posto
+  `listings_bottiglia_idonea`, che rifiuta ogni annuncio non terminale su una
+  bottiglia aperta, consumata, cancellata o ceduta — e vale anche per
+  `service_role`, cosa che un controllo dentro le RPC non otterrebbe.
+- **Le colonne di tracciamento moderazione escono anche per il proprietario.**
+  `stato_motivo`, `stato_aggiornato_da` e `stato_aggiornato_at` non sono nel
+  `GRANT` di colonna di `listings` per nessun ruolo client. Il perimetro chiedeva
+  insieme che il venditore leggesse «integralmente» i propri annunci e che quelle
+  colonne non fossero leggibili dai non proprietari: un privilegio di colonna non
+  distingue le righe, e le due cose non stanno insieme. Oggi non costa nulla di
+  visibile — la moderazione è Fase 9 e nessuna interfaccia le mostra.
+- **`bottiglia_cancella` esiste senza avere un chiamante.** Nessun comando toglie
+  una bottiglia dalla cantina, né in `frontend/` né in `frontend-next/`, e questa
+  fase non lo aggiunge. La funzione nasce perché `deleted_at` esce dai `GRANT` di
+  colonna insieme a `stato`: senza, quella colonna resterebbe senza porta.
+- **`ceduta_at` non toglie la bottiglia dai totali di cantina.** Una bottiglia
+  venduta continua a comparire in `/cantina` con l'etichetta «venduta», come
+  prima. Escluderla è parte del trasferimento di proprietà, cioè del debito qui
+  sotto, non di questa fase: cambierebbe il totale in cantina e il valore stimato,
+  che è un cambiamento di comportamento visibile.
+
 ## Fase 7 — OrderService + ProposalService + PaymentService
 
 **Branch**: `migration/phase-7-order-payment-service`
@@ -249,6 +299,69 @@ Solo dopo parità funzionale verificata su tutti i domini precedenti e
 approvazione esplicita separata: dismissione di `frontend/` (TanStack
 Start) e `backend/` (FastAPI/MongoDB). Non è una conseguenza automatica
 del completamento delle fasi 2–10.
+
+## Debito dichiarato dalla Fase 6d-1
+
+Lavoro che la 6d-1 ha reso necessario o ha lasciato scoperto, con un posto già
+assegnato. Diverso dal "debito tecnico noto" più sotto, che invece non appartiene
+a nessuna fase.
+
+### Trasferimento di proprietà della bottiglia al compratore — Fase 7
+
+`bottle_units.ceduta_at` dice che un'unità è uscita dal possesso di chi la
+possedeva. Non dice a chi è andata: `owner_id` non si muove e il compratore non è
+registrato da nessuna parte. Il trasferimento vero non si è implementato perché
+**non esiste in `frontend/`** e sarebbe funzionalità nuova dentro una migrazione;
+il campo però è già pronto ad accoglierlo.
+
+**La Fase 7 deve sapere due cose.** La prima: il trigger
+`listings_marca_bottiglia_ceduta` esiste già e valorizza `ceduta_at` all'ingresso
+in `'venduto'` — la RPC che chiuderà una vendita **non deve** scriverla per conto
+suo, o le due si sovrascriveranno a vicenda. La seconda: quando il passaggio di
+proprietà sarà reale andranno riviste le viste di cantina, che oggi continuano a
+contare una bottiglia ceduta fra quelle del venditore.
+
+### Scheduler di scadenza degli annunci — lavoro schedulato
+
+Dalla 6d-1 un annuncio oltre `expires_at` è escluso da `public_listings`, quindi
+non è più né visibile né acquistabile. Lo **stato materializzato resta però
+`'attivo'`** finché qualcuno non chiama `listing_scadi`, e nessuno la chiama: la
+spazzata periodica su tutti i venditori richiede `pg_cron` o una Edge Function.
+Fino ad allora il numero di righe in quella condizione cresce, ed è la prima
+colonna della sezione [8] di `supabase/tests/6d-1_verifica.sql`.
+
+La futura RPC di prenotazione (Fase 7) **deve ricontrollare la scadenza** dentro
+la propria transazione: la difesa attuale è in lettura, e non impedisce a nessuno
+di agire su un id già noto.
+
+### CI che esegua le prove SQL — 6d-2 o successiva
+
+`supabase/tests/*.sql` si eseguono a mano nel SQL Editor perché nell'ambiente in
+cui la 6d-1 è stata scritta mancano CLI Supabase e Docker, quindi non c'è modo di
+far ripartire un Postgres locale e ricostruire le migrazioni da zero. Serve un
+job che avvii Supabase in locale, applichi le migrazioni in ordine ed esegua le
+prove, possibilmente riscritte in pgTAP come previsto da ADR 002. Registrato,
+non improvvisato.
+
+### Infrastruttura di prova di `frontend-next/` — 6d-2
+
+`frontend-next/` non ha uno script `test`: la CI vi esegue solo lint, typecheck e
+build, mentre `frontend/` ha 73 test. Ogni fase da qui in avanti verifica il
+proprio lavoro sul frontend a mano. Non è un difetto introdotto dalla 6d-1, ma è
+la fase che lo rende evidente, perché sposta comportamento dal client al database
+senza avere dove scrivere una prova del client.
+
+### Rate limiting senza equivalente su Supabase
+
+`backend/` limita checkout, stato pagamenti e AI con chiavi che combinano
+identità autenticata e indirizzo client normalizzato (vedi `docs/SECURITY.md`).
+Su Supabase **non esiste niente di equivalente**: PostgREST espone le RPC senza
+alcun limite di frequenza, e le funzioni della 6d-1 — `listing_crea`,
+`bottiglia_apri` — sono chiamabili in raffica da qualunque sessione autenticata.
+Nessun invariante di dati ne viene violato, ma il costo e il rumore sì.
+
+Va risolto prima che la Fase 7 esponga i pagamenti, ed è lavoro di infrastruttura
+(Edge Function con storage condiviso, o limiti al bordo), non di questa traccia.
 
 ## Debito tecnico noto
 

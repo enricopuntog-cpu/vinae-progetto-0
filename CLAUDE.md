@@ -143,6 +143,28 @@ These hold for `backend/` today and must hold for any Supabase/Edge Function rep
   (`TokenVerifier`, `AIProvider`) so providers are swappable and tests can inject fakes without
   network or real credentials.
 
+### Postgres exposure rules (binding since Phase 6d-1)
+
+RLS filters rows, never columns. These three rules are what keeps that gap closed — breaking
+one of them is how a private column ends up readable by strangers:
+
+- **No whole-table read grant to a role that can reach rows it does not own.** If a policy lets
+  `anon` or a non-owner `authenticated` see a row, that table gets a column-scoped `GRANT SELECT`
+  or none at all. A table whose RLS restricts every client role to its own rows may keep the
+  table-level grant (`bottle_units` does) — the deciding question is which rows the role reaches,
+  not which table it is.
+- **Public reads go through a `security_invoker = off` view with a closed column list**, never
+  through a policy on the base table. `public_listings` and `public_bottle_units` are the
+  pattern: the filter is written inside the view where no client can widen it, and a column
+  added to the base table later stays private until someone deliberately lists it.
+- **A column with a domain rule behind it is not writable by the client.** It leaves the
+  column-level `GRANT` and gets a `SECURITY DEFINER` function as its only door — `listings.stato`
+  (6a), `bottle_units.stato` and `deleted_at` (6d-1). Cross-table invariants that an index or
+  `CHECK` cannot express get a trigger as well, so `service_role` is bound by them too.
+
+Versioned SQL/RLS proofs live in `supabase/tests/` and are run by hand in the Supabase SQL
+Editor — see that directory's README. They are not migrations and CI does not run them yet.
+
 Full detail: `docs/SECURITY.md`, `docs/ARCHITECTURE.md`, `docs/ENVIRONMENT.md`.
 
 ## Environment variables

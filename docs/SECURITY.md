@@ -26,6 +26,46 @@ professionale prima di transazioni reali o trattamento di documenti d’identit�
 L’adapter di autenticazione è sostituibile: collegare un nuovo provider non deve
 modificare le regole di dominio.
 
+## Supabase — confini di lettura e scrittura
+
+Valgono per lo stack di destinazione (`frontend-next/` + `supabase/`). Sono
+descritti qui perché la RLS filtra le righe e non le colonne: senza queste tre
+regole una colonna privata diventa leggibile da estranei senza che nessuna policy
+sembri sbagliata. Sono vincolanti dalla Fase 6d-1 e ripetute in `CLAUDE.md`.
+
+- **Nessun privilegio di lettura su tabella intera** verso un ruolo che può
+  raggiungere righe non proprie. Dove una policy espone righe a `anon` o a un
+  `authenticated` non proprietario, il `GRANT SELECT` è per colonna o non c'è.
+- **Le letture pubbliche passano da viste `security_invoker = off` a elenco chiuso
+  di colonne** (`public_listings`, `public_bottle_units`), mai da una policy sulla
+  tabella. Il filtro è scritto dentro la vista e nessun client può allargarlo; una
+  colonna aggiunta in seguito resta privata finché qualcuno non la elenca.
+- **Le colonne con una regola di dominio dietro non sono scrivibili dal client.**
+  Escono dal `GRANT` di colonna e ricevono una funzione `SECURITY DEFINER` come
+  unica porta: `listings.stato`, `bottle_units.stato`, `bottle_units.deleted_at`.
+  Gli invarianti fra tabelle, che un indice o un `CHECK` non sanno esprimere,
+  hanno anche un trigger, così vincolano pure `service_role`.
+
+Confini specifici già applicati:
+
+- Un anonimo non raggiunge `listings` né `bottle_units`: legge solo le due viste.
+- Note personali, date di apertura pianificata, override della finestra di bevuta
+  e visibilità del prezzo sono leggibili dal solo proprietario.
+- La traccia dell'ultima transizione di moderazione (`stato_motivo`,
+  `stato_aggiornato_da`, `stato_aggiornato_at`) non è leggibile da nessun ruolo
+  client, proprietario compreso.
+- `user_roles` espone a ciascuno solo i propri ruoli; nessun ruolo si autoassegna;
+  `has_role()` non è eseguibile da un anonimo.
+- L'età si verifica in database su ogni scrittura che rende pubblica una vendita,
+  fail-closed quando la data di nascita manca. Resta una **dichiarazione
+  auto-riferita**: non è verifica documentale, e abilitazione venditore e
+  onboarding del conto di pagamento vanno richiesti prima di qualunque payout.
+- Una bottiglia aperta, consumata, tolta dalla cantina o già ceduta non può
+  essere messa in vendita; una bottiglia con annuncio attivo o riservato non può
+  essere aperta né tolta. Le transizioni prendono un lock di riga sull'unità.
+
+Le prove versionate di questi confini sono in `supabase/tests/`.
+
 ## Stripe
 
 - Verificare la firma del webhook sul corpo raw.
@@ -56,6 +96,13 @@ orizzontale deve usare uno storage condiviso e atomico, per esempio Redis.
 Il bucket applicativo del webhook viene consumato soltanto dopo la verifica
 della firma; traffico non firmato e volumetrico deve essere filtrato al bordo
 tramite WAF o reverse proxy attendibile.
+
+**Sullo stack Supabase non esiste niente di equivalente.** PostgREST espone le
+funzioni RPC senza alcun limite di frequenza: `listing_crea`, `bottiglia_apri` e
+le altre sono chiamabili in raffica da qualunque sessione autenticata. Nessun
+invariante di dati ne viene violato — sono tutti applicati in database — ma il
+costo e il rumore sì. Va colmato prima che i pagamenti passino di lì; è
+registrato come debito dichiarato in `docs/MIGRATION_PHASE_1_BACKLOG.md`.
 
 ## AI
 
