@@ -35,7 +35,12 @@ import type {
   IdentityStatus,
   SellerStatus,
 } from "@/data/onboarding";
-import type { CellarBottle, StorageEnvironment, StorageModule } from "@/data/cellar";
+import type {
+  CellarBottle,
+  StorageEnvironment,
+  StorageModule,
+  WineVintageMeta,
+} from "@/data/cellar";
 import type { Notifica } from "@/data/extra";
 import type { Wine } from "@/data/wines";
 
@@ -109,12 +114,83 @@ export interface WineCatalogService {
 }
 
 // ---- Cantina ---------------------------------------------------------------
+
+/** Override personale della finestra di bevuta, come lo scrive DrinkWindow. */
+export type OverrideFinestra = NonNullable<CellarBottle["override"]>;
+
+/** Ciò che il configuratore raccoglie per creare un ambiente e il suo modulo. */
+export interface DatiNuovoAmbiente {
+  nome: string;
+  forma: StorageEnvironment["shape"];
+  tema: StorageEnvironment["theme"];
+  righe: number;
+  colonne: number;
+}
+
+/**
+ * Tutto ciò che `/cantina` legge, in una struttura sola.
+ *
+ * `vini` ha una voce per vino distinto e non per bottiglia: le viste a griglia
+ * e a elenco mostrano schede per vino, esattamente come in `frontend/`. Il
+ * prezzo di ogni scheda viene dall'annuncio della bottiglia che la rappresenta
+ * — nel catalogo `wines` un prezzo non esiste, perché appartiene all'annuncio.
+ */
+export interface DatiCantina {
+  bottiglie: CellarBottle[];
+  vini: Wine[];
+  /** Metadati di bevuta indicizzati per slug del vino. */
+  metaPerVino: Record<string, WineVintageMeta>;
+  ambienti: StorageEnvironment[];
+  moduli: StorageModule[];
+}
+
+/**
+ * Le firme divergono dalla bozza di Fase 3
+ * (`bottiglie(userId)`, `spostaBottiglia(bottleId, slotId)`, `apri(): void`)
+ * per quattro ragioni emerse scrivendo la 6c-2:
+ *
+ * - **`userId` non è un parametro.** La RLS filtra già su `auth.uid()`:
+ *   passarlo suggerisce di poter leggere la cantina di qualcun altro, cosa che
+ *   il database rifiuta. Stessa correzione già fatta a `ListingService` in 6b.
+ * - **`slotId` non esiste più.** Dalla 6c-1 una posizione libera non ha riga in
+ *   `cellar_slots` e quindi non ha id: una posizione si nomina con
+ *   (modulo, riga, colonna), che è la firma di `cellar_posiziona`. Serve anche
+ *   il verso opposto, che nella bozza mancava.
+ * - **Le letture stanno insieme.** `bottiglie`, `ambienti` e `moduli` vengono
+ *   sempre usate nello stesso momento dalla stessa pagina; tre metodi separati
+ *   diventerebbero tre andate e ritorni, e la pagina mostrerebbe gli scaffali
+ *   prima delle bottiglie.
+ * - **Le scritture ritornano `Result`.** `apri(): Promise<void>` non può
+ *   fallire visibilmente; i messaggi delle funzioni SQL sono già in italiano ed
+ *   è quello che l'interfaccia deve mostrare, come per `ListingService`.
+ *
+ * Le scritture che l'interfaccia esprime **per vino** (visibilità del prezzo,
+ * override della finestra) prendono un elenco di bottiglie e non un vino: nella
+ * 6c-1 quelle colonne stanno sull'unità, perché sono scelte personali. La
+ * chiamante passa tutte le proprie unità di quel vino, così il comportamento
+ * visibile resta quello di `frontend/`, dove l'indice è il vino.
+ */
 export interface CellarService {
-  bottiglie(userId: string): Promise<CellarBottle[]>;
-  ambienti(userId: string): Promise<StorageEnvironment[]>;
-  moduli(userId: string): Promise<StorageModule[]>;
-  apri(bottleId: string, nota?: string): Promise<void>;
-  spostaBottiglia(bottleId: string, slotId: string): Promise<void>;
+  carica(): Promise<DatiCantina>;
+
+  apri(bottleUnitId: string, nota?: string): Promise<Result<void>>;
+  pianificaApertura(bottleUnitId: string, data: string): Promise<Result<void>>;
+  colloca(
+    bottleUnitId: string,
+    moduleId: string,
+    riga: number,
+    colonna: number,
+  ): Promise<Result<void>>;
+  togliDallaPosizione(bottleUnitId: string): Promise<Result<void>>;
+  impostaVisibilitaPrezzo(
+    bottleUnitIds: string[],
+    visibilita: CellarBottle["priceVisibility"],
+  ): Promise<Result<void>>;
+  impostaOverrideFinestra(
+    bottleUnitIds: string[],
+    override: OverrideFinestra,
+  ): Promise<Result<void>>;
+  creaAmbiente(dati: DatiNuovoAmbiente): Promise<Result<void>>;
 }
 
 // ---- Annunci ---------------------------------------------------------------
@@ -168,6 +244,17 @@ export type DatiModificaAnnuncio = Pick<
 >;
 
 /**
+ * Mettere in vendita una bottiglia che è già in cantina (Fase 6c-2).
+ *
+ * Non ha produttore, nome, annata, regione né tipologia: descrivono il vino,
+ * che per un'unità esistente è già deciso e vive in `wines`. Il database li
+ * legge dall'unità, e chiederli qui darebbe l'impressione che passandoli
+ * diversi si possa rinominare un vino di catalogo — la stessa ragione per cui
+ * `DatiModificaAnnuncio` non li contiene.
+ */
+export type DatiVenditaDaCantina = DatiModificaAnnuncio & { bottleUnitId: string };
+
+/**
  * Lettura più scrittura.
  *
  * Le firme divergono dalla bozza di Fase 3 (`crea(input: unknown)`,
@@ -187,7 +274,13 @@ export type DatiModificaAnnuncio = Pick<
  * database è già in italiano e leggibile, ed è quello che il wizard mostra.
  */
 export interface ListingService extends ListingReadService {
-  crea(dati: DatiNuovoAnnuncio): Promise<Result<{ id: string; slug: string }>>;
+  /**
+   * Crea un annuncio in bozza. Due vie, una funzione sola: da testo digitato
+   * (`DatiNuovoAnnuncio`, il wizard che descrive una bottiglia nuova) o da
+   * un'unità già in cantina (`DatiVenditaDaCantina`). È il database a
+   * distinguerle, tramite `p_bottle_unit_id`.
+   */
+  crea(dati: DatiNuovoAnnuncio | DatiVenditaDaCantina): Promise<Result<{ id: string; slug: string }>>;
   aggiorna(id: string, dati: Partial<DatiModificaAnnuncio>): Promise<Result<void>>;
   pubblica(id: string): Promise<Result<void>>;
   sospendi(id: string, motivo?: string): Promise<Result<void>>;

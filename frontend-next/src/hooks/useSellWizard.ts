@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { firmaUploadFoto } from "@/app/vendi/actions";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { BUCKET_ANNUNCI, createListingService } from "@/services/listing-service";
+import type { DatiNuovoAnnuncio, DatiVenditaDaCantina } from "@/services/types";
 import type { Wine } from "@/data/wines";
 
 export type Modalita = "privata" | "pubblica" | "vendita";
@@ -19,6 +20,23 @@ export type FotoCaricata = { percorso: string; anteprima: string };
 type SellWizardOptions = {
   initialMode: Modalita;
   onNavigate: (path: string) => void;
+  /**
+   * Unità già in cantina che si sta mettendo in vendita (Fase 6c-2), presa da
+   * `?bottiglia=` e passata dal pulsante "Metti in vendita" della cantina.
+   * Quando c'è, il wizard non descrive più un vino: lo ha già.
+   */
+  bottleUnitId?: string | null;
+  /**
+   * Da chiamare quando il wizard ha cambiato la cantina, cioè quando ha coniato
+   * una bottiglia nuova o cambiato lo stato di un annuncio.
+   *
+   * Serve perché il wizard scrive attraverso `ListingService` mentre la cantina
+   * la tiene lo store: senza avviso, chi crea una bottiglia e viene riportato in
+   * cantina non la troverebbe fino al ricaricamento della pagina. In `frontend/`
+   * il problema non esiste perché lì la pubblicazione è un toast che non scrive
+   * nulla e la cantina non cambia mai.
+   */
+  onCantinaCambiata?: () => void | Promise<void>;
 };
 
 const VENDITA_STEPS = [
@@ -66,9 +84,23 @@ export const MAX_FOTO = 6;
  * resta in memoria e la pubblicazione riusa quello. Vale anche quando la
  * pubblicazione fallisce e l'utente riprova.
  */
-export function useSellWizard({ initialMode, onNavigate }: SellWizardOptions) {
-  const [modalita, setModalita] = useState<Modalita>(initialMode);
-  const [step, setStep] = useState(0);
+export function useSellWizard({
+  initialMode,
+  onNavigate,
+  bottleUnitId,
+  onCantinaCambiata,
+}: SellWizardOptions) {
+  const daCantina = Boolean(bottleUnitId);
+  // Una bottiglia già in cantina è per definizione da vendere: "cantina
+  // privata" e "cantina pubblica" sono scelte che si fanno catalogandola, e
+  // rifarle qui vorrebbe dire poterla togliere dalla vendita da un passo che
+  // in frontend/ non fa quel lavoro.
+  const [modalita, setModalita] = useState<Modalita>(daCantina ? "vendita" : initialMode);
+  // Con la bottiglia già scelta il passo "Modalità" non ha nulla da chiedere e
+  // si parte dal secondo. Gli indici dei passi restano quelli di prima: cambia
+  // il punto di partenza, non la numerazione interna.
+  const primoPasso = daCantina ? 1 : 0;
+  const [step, setStep] = useState(primoPasso);
   const [d, setD] = useState({
     produttore: "",
     nome: "",
@@ -93,9 +125,12 @@ export function useSellWizard({ initialMode, onNavigate }: SellWizardOptions) {
 
   const isVendita = modalita === "vendita";
   const steps = isVendita ? VENDITA_STEPS : CATALOGAZIONE_STEPS;
-  const progress = ((step + 1) / steps.length) * 100;
+  /** Quanti passi vede davvero l'utente, e a quale è arrivato. */
+  const passiVisibili = steps.length - primoPasso;
+  const numeroPasso = step - primoPasso + 1;
+  const progress = (numeroPasso / passiVisibili) * 100;
   const next = useCallback(() => setStep((s) => Math.min(steps.length - 1, s + 1)), [steps.length]);
-  const prev = useCallback(() => setStep((s) => Math.max(0, s - 1)), []);
+  const prev = useCallback(() => setStep((s) => Math.max(primoPasso, s - 1)), [primoPasso]);
 
   const caricaFoto = useCallback(async (file: File) => {
     const client = getSupabaseClient();
@@ -142,13 +177,8 @@ export function useSellWizard({ initialMode, onNavigate }: SellWizardOptions) {
   }, []);
 
   /** Dati del wizard nella forma che il servizio (e il database) si aspettano. */
-  const datiAnnuncio = useCallback(
-    () => ({
-      produttore: d.produttore.trim(),
-      nome: d.nome.trim(),
-      annata: Number(d.annata),
-      regione: d.regione.trim(),
-      tipo: d.tipo as Wine["tipo"],
+  const datiAnnuncio = useCallback((): DatiNuovoAnnuncio | DatiVenditaDaCantina => {
+    const comuni = {
       condizione: d.condizione as Wine["condizione"],
       conservazione: d.conservazione.trim(),
       storia: d.storia.trim(),
@@ -156,9 +186,21 @@ export function useSellWizard({ initialMode, onNavigate }: SellWizardOptions) {
       // diventi 2498.9999999999995 e poi 2498 per troncamento.
       prezzoCents: Math.round(Number(d.prezzo) * 100),
       immagini: foto.map((f) => f.percorso),
-    }),
-    [d, foto],
-  );
+    };
+
+    // I cinque campi che descrivono il vino restano fuori quando la bottiglia
+    // esiste già: li legge il database dall'unità.
+    if (bottleUnitId) return { ...comuni, bottleUnitId };
+
+    return {
+      ...comuni,
+      produttore: d.produttore.trim(),
+      nome: d.nome.trim(),
+      annata: Number(d.annata),
+      regione: d.regione.trim(),
+      tipo: d.tipo as Wine["tipo"],
+    };
+  }, [d, foto, bottleUnitId]);
 
   /** Crea la bozza se non esiste ancora, e ne restituisce id e slug. */
   const assicuraBozza = useCallback(async () => {
@@ -170,8 +212,11 @@ export function useSellWizard({ initialMode, onNavigate }: SellWizardOptions) {
       return null;
     }
     setBozzaId(esito.data.id);
+    // La cantina è appena cambiata: o è nata una bottiglia, o una che c'era ha
+    // ora un annuncio.
+    await onCantinaCambiata?.();
     return { id: esito.data.id, slug: esito.data.slug as string | null };
-  }, [bozzaId, datiAnnuncio, service]);
+  }, [bozzaId, datiAnnuncio, service, onCantinaCambiata]);
 
   const pubblica = useCallback(async () => {
     if (!isVendita) {
@@ -182,7 +227,7 @@ export function useSellWizard({ initialMode, onNavigate }: SellWizardOptions) {
           ? "Bottiglia aggiunta alla cantina pubblica (demo)"
           : "Bottiglia aggiunta alla tua cantina privata (demo)",
       );
-      onNavigate("/home");
+      onNavigate("/cantina");
       return;
     }
 
@@ -198,19 +243,22 @@ export function useSellWizard({ initialMode, onNavigate }: SellWizardOptions) {
       }
 
       toast.success("Annuncio pubblicato");
-      // In frontend/ si torna in cantina, che qui non esiste ancora: si va
-      // all'annuncio appena creato, che è la prova che la pubblicazione è
-      // andata a buon fine.
-      onNavigate(bozza.slug ? `/annuncio/${bozza.slug}` : "/esplora");
+      // La bottiglia passa a "in vendita": lo stato che la cantina mostra è
+      // derivato dagli annunci, quindi va riletto.
+      await onCantinaCambiata?.();
+      // Ritorno in cantina, come in frontend/. In 6b si andava all'annuncio
+      // appena creato perché /cantina non era ancora stata portata: quella
+      // divergenza, dichiarata allora, si chiude qui.
+      onNavigate("/cantina");
     } finally {
       setInviando(false);
     }
-  }, [assicuraBozza, isVendita, modalita, onNavigate, service]);
+  }, [assicuraBozza, isVendita, modalita, onNavigate, service, onCantinaCambiata]);
 
   const salvaBozza = useCallback(async () => {
     if (!isVendita) {
       toast.success("Bozza salvata nella cantina (demo)");
-      onNavigate("/home");
+      onNavigate("/cantina");
       return;
     }
 
@@ -218,9 +266,11 @@ export function useSellWizard({ initialMode, onNavigate }: SellWizardOptions) {
     try {
       const bozza = await assicuraBozza();
       if (!bozza) return;
-      // Si resta nel wizard: una bozza non compare da nessuna parte finché non
-      // viene pubblicata, quindi non c'è nessuna pagina dove mandare l'utente.
       toast.success("Bozza salvata");
+      // Anche una bozza è visibile in cantina: la bottiglia esiste, e compare
+      // fra le proprie senza il distintivo "In vendita" finché non si pubblica.
+      // In 6b non c'era una pagina dove mandare l'utente e si restava qui.
+      onNavigate("/cantina");
     } finally {
       setInviando(false);
     }
@@ -237,6 +287,10 @@ export function useSellWizard({ initialMode, onNavigate }: SellWizardOptions) {
     setModalita,
     step,
     steps,
+    primoPasso,
+    passiVisibili,
+    numeroPasso,
+    daCantina,
     progress,
     next,
     prev,

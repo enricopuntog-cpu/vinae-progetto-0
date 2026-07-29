@@ -167,6 +167,47 @@ esistente, ed è il momento in cui il vincolo "una bottiglia, un solo annuncio
 attivo" diventa raggiungibile dall'interfaccia: va verificato che arrivi il
 messaggio leggibile di `listing_pubblica` e non il 23505.
 
+### Scelte e divergenze emerse eseguendola
+
+- **Una `bottle_unit` è una bottiglia; `quantita` è derivata dallo stato**
+  (1 se chiusa, 0 se aperta o consumata). Nel mock una `CellarBottle` porta un
+  campo `quantita` (2, 4, 3…) e un solo `storageLocationId`: una pila di
+  quattro sta in un foro solo. Nessun percorso di codice ha mai creato una
+  pila — `listing_crea` conia un'unità per volta — quindi il raggruppamento
+  non è stato introdotto. La mappatura preserva tutti i comportamenti che
+  dipendevano da quel numero: totale in cantina, valore stimato, decremento
+  all'apertura, penalità nella ricerca per abbinamento.
+- **Il prezzo di una bottiglia viene dal suo annuncio.** In `wines` un prezzo
+  non esiste: appartiene a `listings`. Ogni bottiglia in cantina ne ha uno,
+  perché `listing_crea` è l'unico scrittore di `bottle_units` e crea i due
+  insieme.
+- **`DEFAULT_META` resta come ripiego lato client.** `getWineMeta` non
+  restituisce "niente" per un vino sconosciuto ma un profilo generico completo.
+  Senza ripiego la scheda del vino creato in 6b avrebbe perso quattro
+  abbinamenti e tre statistiche su quattro.
+- **La cantina si carica dal browser**, non dal server: è privata, non c'è
+  nulla da prerenderizzare, e le stesse bottiglie servono anche a
+  `MyBottleActions` e alla ricerca per abbinamento. Stesso schema di
+  `real-auth-domain.ts`.
+- **Preferenze, sfondo e riduzione animazioni restano in memoria**: non
+  persistono nemmeno in `frontend/`, e dar loro una tabella sarebbe un
+  cambiamento di comportamento.
+- **Elenco "Da collocare" nella vista 3D.** Unica deviazione: non è un comando
+  nuovo ma lo stesso "Sposta" reso raggiungibile. Nei dati mock ogni bottiglia
+  nasce collocata; su dati veri nessuna lo è, e senza quell'elenco
+  `cellar_posiziona` resterebbe una funzione senza porta.
+- **`p_bottle_unit_id` come parametro di `listing_crea`**, non una funzione
+  gemella: le due vie condividono validazione, slug, inserimento della bozza e
+  gestione della corsa sullo slug. Serve `DROP` e non `CREATE OR REPLACE`
+  perché aggiungere un parametro crea una seconda firma, ambigua per PostgREST.
+- **Ritorno in cantina dopo il wizard**, come in `frontend/`. La 6b mandava
+  all'annuncio o restava nel wizard solo perché `/cantina` non esisteva:
+  divergenza dichiarata allora, chiusa qui.
+- **Il pannello "Nella tua cantina" sulla scheda annuncio** ora compare solo a
+  chi possiede la bottiglia, e conta le proprie unità ancora chiuse. Prima,
+  con la cantina mock, compariva a chiunque — anche a chi non aveva mai fatto
+  accesso.
+
 ## Fase 7 — OrderService + ProposalService + PaymentService
 
 **Branch**: `migration/phase-7-order-payment-service`

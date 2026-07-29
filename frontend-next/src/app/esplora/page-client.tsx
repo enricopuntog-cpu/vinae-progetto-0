@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Search, SlidersHorizontal, LayoutGrid, List, PackageOpen, UtensilsCrossed } from "lucide-react";
 import type { Wine } from "@/data/wines";
-import { getWineMeta } from "@/data/cellar";
+import { useCercaMeta } from "@/lib/wine-meta-context";
 import { WineCard } from "@/components/vinea/WineCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -57,6 +57,7 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
   const [prezzo, setPrezzo] = useState<[number, number]>([0, 1500]);
   const [sort, setSort] = useState("recenti");
   const [view, setView] = useState<"grid" | "list">("grid");
+  const cercaMeta = useCercaMeta();
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -70,7 +71,7 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
         } else {
           // I metadati di abbinamento sono indicizzati per vino, non per
           // annuncio: su dati reali `id` è lo slug dell'annuncio.
-          const meta = getWineMeta(w.wineSlug ?? w.id);
+          const meta = cercaMeta(w.wineSlug ?? w.id);
           const ok = meta.foodPairings.some(
             (p) =>
               p.piatto.toLowerCase().includes(term) ||
@@ -86,7 +87,7 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
     if (sort === "prezzo-desc") r = [...r].sort((a, b) => b.prezzo - a.prezzo);
     if (sort === "annata") r = [...r].sort((a, b) => a.annata - b.annata);
     return r;
-  }, [annunci, q, mode, regione, tipo, prezzo, sort]);
+  }, [annunci, q, mode, regione, tipo, prezzo, sort, cercaMeta]);
 
   const reset = () => {
     setQ("");

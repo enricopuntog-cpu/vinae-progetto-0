@@ -9,10 +9,10 @@ import {
   phaseColor,
   sourceLabel,
   DRINK_WINDOW_DISCLAIMER,
-  getWineMeta,
   type DrinkPhase,
   type WineVintageMeta,
 } from "@/data/cellar";
+import { useWineMeta } from "@/lib/wine-meta-context";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,7 +32,7 @@ const PHASES: DrinkPhase[] = ["attesa", "quasi", "pronto", "ideale", "presto"];
 
 export function DrinkBadge({ wineId, className = "" }: { wineId: string; className?: string }) {
   const { drinkWindowOverrides } = useVinea();
-  const base = getWineMeta(wineId);
+  const base = useWineMeta(wineId);
   const meta = mergeMeta(base, drinkWindowOverrides[wineId]);
   const phase = computeDrinkPhase(meta);
   if (phase === "none") return null;
@@ -47,7 +47,7 @@ export function DrinkBadge({ wineId, className = "" }: { wineId: string; classNa
 
 export function DrinkWindowSection({ wineId }: { wineId: string }) {
   const { drinkWindowOverrides } = useVinea();
-  const base = getWineMeta(wineId);
+  const base = useWineMeta(wineId);
   const meta = mergeMeta(base, drinkWindowOverrides[wineId]);
   const phase = computeDrinkPhase(meta);
   const year = new Date().getFullYear();
@@ -160,8 +160,12 @@ function PersonalizeDialog({ wineId, meta }: { wineId: string; meta: WineVintage
   const [pref, setPref] = useState<"giovane" | "equilibrato" | "evoluto">("equilibrato");
   const [nota, setNota] = useState("");
 
-  const salva = () => {
-    setDrinkWindowOverride(wineId, {
+  // La conferma la dà lo store, che è l'unico a sapere se il database ha
+  // accettato: dalla 6c-2 l'override è una scrittura vera e può fallire. La
+  // finestra resta aperta quando fallisce, così i valori digitati non si
+  // perdono.
+  const salva = async () => {
+    const esito = await setDrinkWindowOverride(wineId, {
       drinkWindowStart: s ? Number(s) : undefined,
       drinkWindowEnd: e ? Number(e) : undefined,
       peakStart: ps ? Number(ps) : undefined,
@@ -169,8 +173,7 @@ function PersonalizeDialog({ wineId, meta }: { wineId: string; meta: WineVintage
       preferenza: pref,
       nota: nota || undefined,
     });
-    toast.success("Finestra personalizzata salvata");
-    setOpen(false);
+    if (esito.ok) setOpen(false);
   };
 
   return (
@@ -268,8 +271,9 @@ export function mergeMeta(
 
 export function useWinePhase(wineId: string) {
   const { drinkWindowOverrides } = useVinea();
+  const base = useWineMeta(wineId);
   return useMemo(() => {
-    const meta = mergeMeta(getWineMeta(wineId), drinkWindowOverrides[wineId]);
+    const meta = mergeMeta(base, drinkWindowOverrides[wineId]);
     return { meta, phase: computeDrinkPhase(meta) };
-  }, [wineId, drinkWindowOverrides]);
+  }, [base, wineId, drinkWindowOverrides]);
 }

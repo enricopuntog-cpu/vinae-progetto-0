@@ -56,14 +56,28 @@ import { useSellWizard, MAX_FOTO, type Modalita } from "@/hooks/useSellWizard";
 export default function VendiPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { authUser, authLoading } = useVinea();
+  const { authUser, authLoading, bottiglieCantina, viniCantina, cantinaLoading, ricaricaCantina } =
+    useVinea();
   const initialMode: Modalita = searchParams.get("mode") === "sell" ? "vendita" : "privata";
+  // Bottiglia già in cantina, scelta dal pulsante "Metti in vendita" (6c-2).
+  const bottleUnitId = searchParams.get("bottiglia");
+
+  const bottiglia = bottleUnitId
+    ? bottiglieCantina.find((b) => b.bottleId === bottleUnitId)
+    : undefined;
+  const vinoBottiglia = bottiglia
+    ? viniCantina.find((w) => (w.wineSlug ?? w.id) === bottiglia.wineVintageId)
+    : undefined;
 
   const {
     modalita,
     setModalita,
     step,
     steps,
+    primoPasso,
+    passiVisibili,
+    numeroPasso,
+    daCantina,
     progress,
     next,
     prev,
@@ -78,7 +92,12 @@ export default function VendiPageClient() {
     inviando,
     pubblica,
     salvaBozza,
-  } = useSellWizard({ initialMode, onNavigate: (path) => router.push(path) });
+  } = useSellWizard({
+    initialMode,
+    onNavigate: (path) => router.push(path),
+    bottleUnitId,
+    onCantinaCambiata: ricaricaCantina,
+  });
 
   if (authLoading) {
     return (
@@ -108,6 +127,43 @@ export default function VendiPageClient() {
     );
   }
 
+  // Bottiglia richiesta ma cantina non ancora letta: si aspetta invece di
+  // mostrare "non è tua" a chi la possiede davvero.
+  if (daCantina && cantinaLoading) {
+    return (
+      <div className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
+        <Loader2 className="mx-auto h-6 w-6 animate-spin text-bordeaux" />
+        <p className="mt-3">Carico la bottiglia…</p>
+      </div>
+    );
+  }
+
+  // Id inventato, bottiglia di un altro, o unità cancellata. Il database la
+  // rifiuterebbe comunque (`listing_crea` verifica la proprietà), ma dirlo qui
+  // evita di far compilare sei passi per poi negare alla fine.
+  if (daCantina && !bottiglia) {
+    return (
+      <div className="mx-auto max-w-lg space-y-4 rounded-3xl border border-border bg-card p-6 text-center md:p-10">
+        <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-bordeaux/10">
+          <Archive className="h-8 w-8 text-bordeaux" />
+        </div>
+        <h1 className="font-serif text-2xl md:text-3xl">Bottiglia non trovata</h1>
+        <p className="text-sm text-muted-foreground">
+          Questa bottiglia non è nella tua cantina. Scegline una dalla tua cantina, oppure
+          descrivine una nuova.
+        </p>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button asChild className="bg-bordeaux hover:bg-bordeaux/90">
+            <Link href="/cantina">Vai alla cantina</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/vendi?mode=sell">Descrivi una bottiglia nuova</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative mx-auto max-w-2xl space-y-6">
       {/* Fondale decorativo */}
@@ -127,15 +183,15 @@ export default function VendiPageClient() {
         </h1>
         <p className="text-muted-foreground">
           {isVendita
-            ? `Percorso guidato in ${steps.length} passi per pubblicare nel marketplace.`
-            : `Catalogazione guidata: ${steps.length} passi, nessun obbligo di prezzo.`}
+            ? `Percorso guidato in ${passiVisibili} passi per pubblicare nel marketplace.`
+            : `Catalogazione guidata: ${passiVisibili} passi, nessun obbligo di prezzo.`}
         </p>
       </div>
 
       <div>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>
-            Passo {step + 1} di {steps.length}
+            Passo {numeroPasso} di {passiVisibili}
           </span>
           <span>{steps[step]}</span>
         </div>
@@ -191,7 +247,56 @@ export default function VendiPageClient() {
           </div>
         )}
 
-        {step === 2 && (
+        {/*
+          Identificazione, versione "bottiglia già in cantina".
+
+          I cinque campi liberi spariscono e restano in sola lettura: descrivono
+          il vino, che per un'unità esistente è già deciso e vive in `wines`,
+          catalogo condiviso scrivibile solo dallo staff. Renderli modificabili
+          suggerirebbe di poter correggere il vino da qui — la stessa ragione
+          per cui in 6b `aggiorna` non li contiene.
+        */}
+        {step === 2 && daCantina && (
+          <div className="space-y-4">
+            <h2 className="font-serif text-2xl">Identificazione</h2>
+            <p className="text-sm text-muted-foreground">
+              Questa bottiglia è già nella tua cantina: il vino lo conosciamo.
+            </p>
+
+            <div className="flex items-start gap-4 rounded-2xl border border-oro/40 bg-oro/10 p-4">
+              {vinoBottiglia && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={vinoBottiglia.immagini[0]}
+                  alt=""
+                  className="h-24 w-20 shrink-0 rounded-lg object-cover"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-xs uppercase tracking-wide text-salvia">
+                  {vinoBottiglia?.produttore}
+                </p>
+                <p className="font-serif text-xl font-semibold">
+                  {vinoBottiglia?.nome} {vinoBottiglia?.annata}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {[vinoBottiglia?.regione, vinoBottiglia?.denominazione, vinoBottiglia?.tipo]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Il vino non si modifica da qui: appartiene al catalogo condiviso.
+                </p>
+              </div>
+            </div>
+
+            <Button asChild variant="outline" size="sm">
+              <Link href="/cantina">Cambia bottiglia</Link>
+            </Button>
+          </div>
+        )}
+
+        {step === 2 && !daCantina && (
           <div className="space-y-4">
             <h2 className="font-serif text-2xl">Identificazione</h2>
             <p className="text-sm text-muted-foreground">
@@ -334,11 +439,17 @@ export default function VendiPageClient() {
           <div className="space-y-4">
             <h2 className="font-serif text-2xl">Anteprima</h2>
             <div className="space-y-2 rounded-xl bg-secondary p-4 text-sm">
+              {/* Con una bottiglia già in cantina i campi liberi restano vuoti:
+                  l'anteprima legge il vino dell'unità, che è ciò che finirà
+                  davvero sull'annuncio. */}
               <p>
-                <b>{d.produttore || "—"}</b> {d.nome} {d.annata}
+                <b>{(daCantina ? vinoBottiglia?.produttore : d.produttore) || "—"}</b>{" "}
+                {daCantina ? vinoBottiglia?.nome : d.nome}{" "}
+                {daCantina ? vinoBottiglia?.annata : d.annata}
               </p>
               <p>
-                {d.regione || "—"} • {d.tipo} • {d.condizione}
+                {(daCantina ? vinoBottiglia?.regione : d.regione) || "—"} •{" "}
+                {daCantina ? vinoBottiglia?.tipo : d.tipo} • {d.condizione}
               </p>
               {isVendita ? (
                 <>
@@ -359,7 +470,7 @@ export default function VendiPageClient() {
       </div>
 
       <div className="flex flex-wrap justify-between gap-2">
-        <Button variant="outline" onClick={prev} disabled={step === 0 || inviando}>
+        <Button variant="outline" onClick={prev} disabled={step === primoPasso || inviando}>
           <ArrowLeft className="h-4 w-4" /> Indietro
         </Button>
         <div className="flex flex-wrap gap-2">

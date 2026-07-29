@@ -2,7 +2,13 @@
 
 import { createContext, useContext, type ReactNode } from "react";
 import { type Notifica } from "@/data/extra";
-import { type CellarBottle, type StorageEnvironment, type StorageModule } from "@/data/cellar";
+import {
+  type CellarBottle,
+  type StorageEnvironment,
+  type StorageModule,
+  type WineVintageMeta,
+} from "@/data/cellar";
+import { type Wine } from "@/data/wines";
 import {
   type Order,
   type Proposal,
@@ -42,7 +48,7 @@ import {
   type AuthUser,
   type StatoEta,
 } from "@/lib/store/real-auth-domain";
-import type { OAuthProvider, Result } from "@/services/types";
+import type { DatiNuovoAmbiente, OAuthProvider, Result } from "@/services/types";
 
 export type { DrinkOverride, SfondoCantina } from "@/lib/store/cellar-domain";
 export type { DemoRuolo } from "@/lib/store/auth-domain";
@@ -90,21 +96,30 @@ type StoreState = {
   setPreferenze: (r: string, t: string) => void;
   sfondoCantina: SfondoCantina;
   setSfondoCantina: (s: SfondoCantina) => void;
+  /**
+   * Derivato dai dati reali (Fase 6c-2): "in vendita" è un annuncio attivo, non
+   * un flag. Il comando che lo cambia non vive più qui — mettere in vendita una
+   * bottiglia passa dal wizard /vendi, come in `frontend/`.
+   */
   inVendita: Set<string>;
-  toggleInVendita: (id: string) => void;
   prezzoNascosto: Set<string>;
-  togglePrezzoNascosto: (id: string) => void;
+  togglePrezzoNascosto: (id: string) => Promise<Result<void>>;
 
-  // Cellar 3D
+  // Cantina (dati reali su Supabase dalla Fase 6c-2)
   bottiglieCantina: CellarBottle[];
+  /** Un vino per scheda: le viste a griglia ed elenco mostrano vini, non unità. */
+  viniCantina: Wine[];
+  metaPerVino: Record<string, WineVintageMeta>;
+  cantinaLoading: boolean;
+  ricaricaCantina: () => Promise<void>;
   ambienti: StorageEnvironment[];
   moduli: StorageModule[];
   drinkWindowOverrides: Record<string, DrinkOverride>;
-  setDrinkWindowOverride: (wineId: string, o: DrinkOverride) => void;
-  openBottle: (bottleId: string, nota?: string) => void;
-  scheduleOpen: (bottleId: string, date: string) => void;
-  moveBottle: (bottleId: string, newSlotId: string) => void;
-  addEnvironment: (env: StorageEnvironment, mods: StorageModule[]) => void;
+  setDrinkWindowOverride: (wineId: string, o: DrinkOverride) => Promise<Result<void>>;
+  openBottle: (bottleId: string, nota?: string) => Promise<Result<void>>;
+  scheduleOpen: (bottleId: string, date: string) => Promise<Result<void>>;
+  moveBottle: (bottleId: string, newSlotId: string) => Promise<Result<void>>;
+  creaAmbiente: (dati: DatiNuovoAmbiente) => Promise<Result<void>>;
   reduceMotion: boolean;
   setReduceMotion: (b: boolean) => void;
 

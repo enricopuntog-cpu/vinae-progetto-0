@@ -24,6 +24,7 @@ import type { Wine } from "@/data/wines";
 import type {
   DatiModificaAnnuncio,
   DatiNuovoAnnuncio,
+  DatiVenditaDaCantina,
   ListingService,
   Result,
 } from "@/services/types";
@@ -115,7 +116,7 @@ function centesimiInEuro(cents: number): number {
  * dati a un progetto specifico. L'URL si ricompone qui, dove l'indirizzo è
  * già una variabile d'ambiente.
  */
-function urlImmagine(percorso: string): string {
+export function urlImmagine(percorso: string): string {
   if (percorso.startsWith("/") || percorso.startsWith("http")) return percorso;
 
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -282,22 +283,38 @@ export function createListingService(client: SupabaseClient | null): ListingServ
      * fisica e annuncio in bozza dentro la stessa transazione. Il venditore
      * non è un parametro — la funzione usa `auth.uid()` e ignora qualunque
      * cosa il client dica di essere.
+     *
+     * Dalla Fase 6c-2 la stessa funzione serve anche la via che parte da una
+     * bottiglia già in cantina: si passa `p_bottle_unit_id` e i cinque campi
+     * che descrivono il vino restano fuori, perché il database li legge
+     * dall'unità. La proprietà dell'unità la verifica la funzione, non qui.
      */
-    async crea(dati: DatiNuovoAnnuncio): Promise<Result<{ id: string; slug: string }>> {
+    async crea(
+      dati: DatiNuovoAnnuncio | DatiVenditaDaCantina,
+    ): Promise<Result<{ id: string; slug: string }>> {
       if (!client) return NESSUN_CLIENT;
 
-      const { data, error } = await client.rpc("listing_crea", {
-        p_produttore: dati.produttore,
-        p_nome: dati.nome,
-        p_annata: dati.annata,
-        p_regione: dati.regione,
-        p_tipo: dati.tipo,
+      const comuni = {
         p_prezzo_cents: dati.prezzoCents,
         p_condizione: dati.condizione,
         p_conservazione: dati.conservazione,
         p_storia: dati.storia,
         p_immagini: dati.immagini,
-      });
+      };
+
+      const parametri =
+        "bottleUnitId" in dati
+          ? { ...comuni, p_bottle_unit_id: dati.bottleUnitId }
+          : {
+              ...comuni,
+              p_produttore: dati.produttore,
+              p_nome: dati.nome,
+              p_annata: dati.annata,
+              p_regione: dati.regione,
+              p_tipo: dati.tipo,
+            };
+
+      const { data, error } = await client.rpc("listing_crea", parametri);
 
       if (error) return { ok: false, error: messaggioPerUtente("crea", error) };
 
