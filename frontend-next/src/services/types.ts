@@ -244,6 +244,17 @@ export type DatiModificaAnnuncio = Pick<
 >;
 
 /**
+ * Mettere in vendita una bottiglia che è già in cantina (Fase 6c-2).
+ *
+ * Non ha produttore, nome, annata, regione né tipologia: descrivono il vino,
+ * che per un'unità esistente è già deciso e vive in `wines`. Il database li
+ * legge dall'unità, e chiederli qui darebbe l'impressione che passandoli
+ * diversi si possa rinominare un vino di catalogo — la stessa ragione per cui
+ * `DatiModificaAnnuncio` non li contiene.
+ */
+export type DatiVenditaDaCantina = DatiModificaAnnuncio & { bottleUnitId: string };
+
+/**
  * Lettura più scrittura.
  *
  * Le firme divergono dalla bozza di Fase 3 (`crea(input: unknown)`,
@@ -263,7 +274,13 @@ export type DatiModificaAnnuncio = Pick<
  * database è già in italiano e leggibile, ed è quello che il wizard mostra.
  */
 export interface ListingService extends ListingReadService {
-  crea(dati: DatiNuovoAnnuncio): Promise<Result<{ id: string; slug: string }>>;
+  /**
+   * Crea un annuncio in bozza. Due vie, una funzione sola: da testo digitato
+   * (`DatiNuovoAnnuncio`, il wizard che descrive una bottiglia nuova) o da
+   * un'unità già in cantina (`DatiVenditaDaCantina`). È il database a
+   * distinguerle, tramite `p_bottle_unit_id`.
+   */
+  crea(dati: DatiNuovoAnnuncio | DatiVenditaDaCantina): Promise<Result<{ id: string; slug: string }>>;
   aggiorna(id: string, dati: Partial<DatiModificaAnnuncio>): Promise<Result<void>>;
   pubblica(id: string): Promise<Result<void>>;
   sospendi(id: string, motivo?: string): Promise<Result<void>>;
