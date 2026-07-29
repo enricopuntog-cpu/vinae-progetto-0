@@ -118,14 +118,54 @@ Divergenze dichiarate rispetto a `frontend/`:
   già avvenuta e rifiuta se `expires_at` è nel futuro; la spazzata periodica
   su tutti i venditori richiede uno scheduler ed è lavoro di esercizio.
 
-## Fase 6c — Cantina
+## Fase 6c-1 — Schema Cantina, RLS e posizionamento
 
-**Branch**: `migration/phase-6c-cellar`
+**Branch**: `migration/phase-6c-cellar-schema`
 
-UI sulla `bottle_units` creata in 6a: ambienti, moduli, slot, posizione
-fisica, finestra di bevuta con override, visualizzazione 3D (`Cellar3D`).
-Tabelle `cellar_environments`, `cellar_modules`. Da qui `listings.quantita`
-smette di essere fissa a 1 e diventa un conteggio di unità collegate.
+Tabelle `cellar_environments`, `cellar_modules`, `cellar_slots`. Metadati di
+bevuta e abbinamenti spostati da `data/cellar.ts` a colonne su `wines`
+(catalogo condiviso: restano scrivibili solo dallo staff, con la policy della
+6a). Su `bottle_units` arriva ciò che è personale della singola unità:
+apertura pianificata, note, visibilità del prezzo, override della finestra.
+Funzioni `cellar_posiziona` e `cellar_togli_posizione`. Nessuna interfaccia.
+
+Scelte di schema che divergono dalla forma dei dati mock:
+
+- **`cellar_slots` contiene solo posizioni occupate.** Nel mock `makeSlots()`
+  materializza righe × colonne voci con `status: "libero"`, ma quelle righe
+  sono derivabili dalla geometria del modulo: materializzarle significherebbe
+  tenerle allineate a ogni modifica di `righe`/`colonne` e avere due fonti di
+  verità sulla stessa geometria. `bottle_unit_id` è `NOT NULL` apposta, e il
+  campo `status` non esiste per lo stesso motivo.
+- **`cellar_slots` non è scrivibile dal client**: riga e colonna vanno
+  verificate contro la geometria del modulo e la bottiglia contro il suo
+  proprietario, cose che un `CHECK` non può fare. La scrittura passa dalle due
+  funzioni.
+- **`listings.quantita` sparisce come colonna** e diventa un conteggio dentro
+  `public_listings`, attraverso la vista intermedia `listing_bottle_units`.
+  Finché il legame annuncio → unità è uno a uno il conteggio vale 1, identico
+  a prima; quando diventerà uno-a-molti cambierà solo quella vista.
+- **Ambienti e moduli restano privati** anche quando contengono una bottiglia
+  dichiarata `cantina_pubblica`: si rende pubblica la bottiglia, non i mobili.
+  Se la 6c-2 mostrerà la cantina altrui in 3D servirà una policy in più.
+- **Gli abbinamenti perdono la condivisione per stile.** Nel mock quattro
+  elenchi sono riusati fra gli otto vini; come colonna su `wines` ogni vino
+  porta la propria copia.
+
+## Fase 6c-2 — Interfaccia Cantina
+
+**Branch**: `migration/phase-6c-cellar-ui`
+
+Porting di `/cantina` da `frontend/` (1065 righe): ambienti, moduli, viste
+(mie / pronte / in vendita / 3D), finestra di bevuta con override,
+preferenze, `Cellar3D`. Wizard di collegamento `bottle_unit` → slot.
+`Cellar3D.tsx` e `DrinkWindow.tsx` sono già in `frontend-next/` dalla Fase 2:
+vanno diffati contro la versione `frontend/`, non riscritti.
+
+Da qui "metti in vendita questa bottiglia" parte da una `bottle_unit`
+esistente, ed è il momento in cui il vincolo "una bottiglia, un solo annuncio
+attivo" diventa raggiungibile dall'interfaccia: va verificato che arrivi il
+messaggio leggibile di `listing_pubblica` e non il 23505.
 
 ## Fase 7 — OrderService + ProposalService + PaymentService
 
