@@ -321,6 +321,30 @@ suo, o le due si sovrascriveranno a vicenda. La seconda: quando il passaggio di
 proprietà sarà reale andranno riviste le viste di cantina, che oggi continuano a
 contare una bottiglia ceduta fra quelle del venditore.
 
+### Il catalogo condiviso è scrivibile dagli utenti — domanda bloccante della 6d-2a
+
+`wines` è dichiarato catalogo condiviso e la policy `wines_write_staff` (6a) lo
+riserva a chi ha ruolo `admin` o `moderator`. **`listing_crea` lo scavalca**: è
+`SECURITY DEFINER`, quindi gira con i privilegi del proprietario, e inserisce una
+riga in `wines` ogni volta che un venditore descrive un vino non ancora in
+catalogo. Chiunque sappia usare il wizard `/vendi` scrive nel catalogo condiviso.
+
+Non è un difetto introdotto dalla 6d-1 ed è **fuori dal suo perimetro**: nasce
+con la 6b, dove era una conseguenza voluta e dichiarata — il wizard parte da
+testo digitato, non da un vino già catalogato, e senza quel varco non si potrebbe
+creare nessun annuncio. Ciò che mancava era la conseguenza scritta da qualche
+parte.
+
+La conseguenza è che oggi non esiste differenza fra un vino curato dallo staff e
+uno digitato da un utente: stessa tabella, stesso stato, stessa autorità
+apparente. Servirà **distinguere il vino di catalogo dal vino inserito da
+utente** — una colonna di provenienza, o due tabelle — e decidere che cosa
+comporta la differenza per la ricerca, per la moderazione e per i metadati di
+bevuta, che oggi solo lo staff può compilare.
+
+È la domanda bloccante della 6d-2a e ha già risposta: la distinzione va
+introdotta, non aggirata.
+
 ### Scheduler di scadenza degli annunci — lavoro schedulato
 
 Dalla 6d-1 un annuncio oltre `expires_at` è escluso da `public_listings`, quindi
@@ -350,6 +374,44 @@ build, mentre `frontend/` ha 73 test. Ogni fase da qui in avanti verifica il
 proprio lavoro sul frontend a mano. Non è un difetto introdotto dalla 6d-1, ma è
 la fase che lo rende evidente, perché sposta comportamento dal client al database
 senza avere dove scrivere una prova del client.
+
+### `public_bottle_units` non ha consumatori — da rimuovere se resta inutile
+
+La vista conserva, in forma sicura, la capacità che le due policy pubbliche su
+`bottle_units` davano prima della 6d-1: leggere le unità in un annuncio attivo e
+quelle dichiarate `cantina_pubblica`. **Nessuna interfaccia la legge**, né oggi
+né in `frontend/`: `cantina_pubblica` compare solo come etichetta derivata dai
+dati del proprietario.
+
+Toglierla nella 6d-1 avrebbe significato rimuovere in silenzio una capacità
+mentre si chiudeva un buco — due decisioni diverse dentro lo stesso commit.
+Tenerla è però superficie esposta senza chiamanti, che è esattamente il genere di
+cosa che fra un anno nessuno osa più toccare.
+
+**Da decidere entro la Fase 9**: se la 8 (messaggistica) o la 9 (moderazione) non
+la usano, va rimossa insieme al concetto di cantina pubblica per singola
+bottiglia, o va costruita l'interfaccia che lo rende visibile. Non un terzo anno
+così.
+
+### La nota di degustazione sovrascrive la nota personale
+
+Il dialogo «Registra apertura» ha un campo etichettato *Nota di degustazione
+(facoltativa)* che scrive dentro `note_personali` — due cose diverse nello stesso
+posto. In `frontend/` (`cellar-domain.ts`, `personalNotes: nota ?? bottle.personalNotes`)
+la nota di degustazione sostituisce la nota personale, e siccome il dialogo passa
+sempre una stringa — vuota se non si scrive niente — **aprire una bottiglia senza
+digitare nulla cancella la nota personale che c'era**.
+
+`frontend-next` diverge già dalla 6c-2, a favore dei dati: una nota vuota non
+tocca niente. La 6d-1 ha portato quella protezione dentro `bottiglia_apri`
+insieme al resto della funzione. Resta però il caso in cui si scrive davvero
+qualcosa: «Regalo di mio padre» diventa «Tannini setosi», e la prima frase non
+torna più.
+
+Stessa natura di `formatEUR`: difetto preesistente, visibile in entrambi gli
+stack, la cui correzione — due campi separati, o una nota additiva — è un
+cambiamento di comportamento che va deciso e verificato per conto suo. **Fuori
+scope dalla 6d-1 e da qualunque fase di migrazione.**
 
 ### Rate limiting senza equivalente su Supabase
 

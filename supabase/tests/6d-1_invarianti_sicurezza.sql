@@ -464,6 +464,10 @@ begin
     'anon', null,
     format('select count(*) from public.public_listings where id = %L', v_l_attivo), 1);
 
+  -- `quantita` è letta qui NEL RUOLO anon di proposito: nasce da una sottoquery
+  -- su listing_bottle_units, che legge bottle_units, su cui anon non ha più
+  -- alcun privilegio. Se quella vista fosse security_invoker = on, /esplora
+  -- direbbe «0 bottiglie disponibili» a ogni visitatore, in silenzio.
   perform pg_temp.att_numero(30,
     'REGRESSIONE — la vista pubblica conserva vino, venditore e quantità',
     'anon', null,

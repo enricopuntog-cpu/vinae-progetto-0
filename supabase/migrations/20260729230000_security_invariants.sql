@@ -19,6 +19,21 @@
 -- una statement e l'altra, una finestra in cui /esplora e /cantina non hanno da
 -- dove leggere.
 --
+-- ATOMICITÀ. Il file non contiene BEGIN/COMMIT espliciti, ed è deliberato:
+-- `supabase db push` avvolge già ogni migrazione in una transazione propria, e
+-- un COMMIT qui dentro la chiuderebbe prima che la CLI registri la migrazione
+-- come applicata. Incollato nel SQL Editor, l'intero contenuto viaggia come un
+-- unico messaggio di simple query, che PostgreSQL avvolge in una transazione
+-- implicita: se una statement fallisce, tutte tornano indietro. In entrambe le
+-- vie l'applicazione è tutto-o-niente.
+--
+-- RI-ESEGUIBILITÀ. Ogni statement è idempotente — `if not exists` su colonna e
+-- indici, `drop … if exists` prima di trigger e policy, `create or replace` su
+-- funzioni e viste. Serve perché la garanzia di cui sopra riguarda il database,
+-- non l'operatore: un'applicazione interrotta a metà, o rilanciata per scrupolo,
+-- non deve lasciare il file bloccato su un «relation already exists» che
+-- costringa a modificarlo a mano.
+--
 -- COSA RESTA FUORI, E PERCHÉ:
 --   * Il trasferimento di proprietà della bottiglia al compratore. Non esiste
 --     in frontend/ e sarebbe funzionalità nuova. `ceduta_at` nasce qui pronta
@@ -87,7 +102,7 @@ $$;
 -- impedire che venga rivenduta. Il trasferimento vero è debito dichiarato.
 
 alter table public.bottle_units
-  add column ceduta_at timestamptz;
+  add column if not exists ceduta_at timestamptz;
 
 comment on column public.bottle_units.ceduta_at is
   'Data in cui l''unità è uscita dal possesso del proprietario, valorizzata dal '
@@ -98,7 +113,7 @@ comment on column public.bottle_units.ceduta_at is
 
 -- L'indice serve al trigger di idoneità e alle letture della cantina, che
 -- filtrano sempre insieme "non cancellata" e "non ceduta".
-create index bottle_units_in_possesso_idx
+create index if not exists bottle_units_in_possesso_idx
   on public.bottle_units (owner_id)
   where deleted_at is null and ceduta_at is null;
 
@@ -191,6 +206,8 @@ comment on function public.listings_marca_bottiglia_ceduta() is
   'qualunque origine arrivi l''UPDATE. La Fase 7 deve conoscerne l''esistenza e '
   'non duplicarne l''effetto.';
 
+drop trigger if exists listings_marca_bottiglia_ceduta on public.listings;
+
 create trigger listings_marca_bottiglia_ceduta
   after insert or update of stato on public.listings
   for each row
@@ -270,6 +287,8 @@ comment on function public.listings_bottiglia_idonea() is
   'consumata, cancellata o già ceduta. Vale anche per service_role: è qui che '
   'l''invariante è garantito, le RPC servono al messaggio leggibile.';
 
+drop trigger if exists listings_bottiglia_idonea on public.listings;
+
 create trigger listings_bottiglia_idonea
   before insert or update on public.listings
   for each row
@@ -295,7 +314,7 @@ create trigger listings_bottiglia_idonea
 
 drop index if exists public.listings_una_sola_attiva_per_bottiglia;
 
-create unique index listings_un_solo_annuncio_non_terminale
+create unique index if not exists listings_un_solo_annuncio_non_terminale
   on public.listings (bottle_unit_id)
   where stato in ('bozza', 'in_revisione', 'modifiche_richieste', 'attivo', 'riservato');
 
@@ -368,6 +387,24 @@ begin
       using errcode = 'P0001';
   end if;
 
+  -- PERCHÉ LA NOTA SOSTITUISCE INVECE DI AGGIUNGERSI, e perché non si corregge
+  -- qui. Il dialogo che chiama questa funzione ha un campo etichettato «Nota di
+  -- degustazione (facoltativa)» che scrive dentro `note_personali`: due cose
+  -- diverse nello stesso posto. In frontend/ (cellar-domain.ts, `personalNotes:
+  -- nota ?? bottle.personalNotes`) la nota di degustazione sovrascrive la nota
+  -- personale, e siccome il dialogo passa sempre una stringa — vuota se non si
+  -- scrive niente — aprire una bottiglia senza digitare nulla CANCELLA la nota
+  -- personale che c'era.
+  --
+  -- Il `case` qui sotto è la stessa protezione che la 6c-2 aveva già messo nel
+  -- servizio (`if (nota !== undefined && nota !== "")`): una nota vuota non
+  -- tocca niente. È l'unico punto in cui frontend-next diverge da frontend/, ed
+  -- è una divergenza a favore dei dati.
+  --
+  -- Far diventare la nota additiva sarebbe invece un cambiamento di
+  -- comportamento visibile in entrambi gli stack, cioè un cambiamento di
+  -- prodotto dentro una fase di sicurezza. La confusione fra le due note è
+  -- registrata come debito dichiarato, insieme a formatEUR.
   update public.bottle_units
   set stato = 'aperta',
       note_personali = case
@@ -889,7 +926,7 @@ comment on view public.public_listings is
 -- proprietario. La vista conserva la capacità che le due policy davano, nella
 -- forma sicura, invece di toglierla in silenzio.
 
-create view public.public_bottle_units
+create or replace view public.public_bottle_units
 with (security_invoker = off)
 as
 select
@@ -1038,6 +1075,8 @@ drop policy if exists "listings_select_pubblici" on public.listings;
 
 -- L'enumerazione dei ruoli altrui.
 drop policy if exists "user_roles_select_authenticated" on public.user_roles;
+
+drop policy if exists "user_roles_select_own" on public.user_roles;
 
 create policy "user_roles_select_own"
   on public.user_roles for select

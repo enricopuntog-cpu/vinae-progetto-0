@@ -202,7 +202,55 @@ order by c.relname;
 
 
 -- ---------------------------------------------------------------------------
--- [8] Fotografia dei dati reali toccati dagli invarianti
+-- [8] La catena delle viste, letta da un anonimo
+-- ---------------------------------------------------------------------------
+-- PERCHÉ ESISTE UNA QUERY SOLO PER QUESTO. `public_listings` calcola `quantita`
+-- con una sottoquery su `listing_bottle_units`, che a sua volta legge
+-- `bottle_units` — tabella su cui, dalla 6d-1, `anon` non ha più alcun
+-- privilegio. Se una delle due viste fosse `security_invoker = on`, la
+-- sottoquery verrebbe valutata con i privilegi del chiamante e /esplora
+-- mostrerebbe «0 bottiglie disponibili» a ogni visitatore anonimo — senza
+-- errori, senza log, senza niente in rosso da nessuna parte.
+--
+-- Entrambe sono dichiarate `off` (6c-1 riga 529 per listing_bottle_units), e la
+-- query [7] lo conferma leggendo `reloptions`. Questa lo prova invece dove
+-- conta: nel ruolo che ha il problema, sul numero che si vedrebbe sbagliato.
+--
+-- Atteso: `security_invoker` a `off` per entrambe le viste; e nella seconda
+-- query `quantita = 1` su ogni riga, `quantita_zero = 0`, con un numero di righe
+-- pari a `visibili_al_pubblico` della sezione [9].
+
+select
+  c.relname                                            as vista,
+  coalesce(
+    (select o from unnest(c.reloptions) o where o like 'security_invoker=%'),
+    'security_invoker=off (predefinito)'
+  )                                                    as opzione
+from pg_class c
+  join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and c.relkind = 'v'
+  and c.relname in ('public_listings', 'listing_bottle_units', 'public_bottle_units')
+order by c.relname;
+
+-- Il ruolo si cambia davvero: leggere da `postgres` non proverebbe niente,
+-- perché il proprietario attraversa la catena in ogni caso.
+set local role anon;
+
+select
+  count(*)                                    as righe_viste_da_anon,
+  count(*) filter (where quantita = 1)        as quantita_uno,
+  count(*) filter (where quantita = 0)        as quantita_zero,
+  count(*) filter (where quantita is null)    as quantita_nulla,
+  min(quantita)                               as quantita_minima,
+  max(quantita)                               as quantita_massima
+from public.public_listings;
+
+reset role;
+
+
+-- ---------------------------------------------------------------------------
+-- [9] Fotografia dei dati reali toccati dagli invarianti
 -- ---------------------------------------------------------------------------
 -- Non è un controllo: è il contesto in cui gli invarianti stanno lavorando.
 -- `annunci_scaduti_ancora_attivi` è il numero che lo scheduler mancante
