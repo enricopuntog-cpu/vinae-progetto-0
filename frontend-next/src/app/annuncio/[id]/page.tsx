@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createListingService } from "@/services/listing-service";
+import { caricaMetaPerVino } from "@/services/wine-meta";
+import { WineMetaProvider } from "@/lib/wine-meta-context";
 import { formatEUR } from "@/lib/format";
 import AnnuncioDetailPageClient from "./page-client";
 
@@ -55,5 +57,16 @@ export default async function Page({
 
   const correlati = tutti.filter((w) => w.id !== wine.id).slice(0, 4);
 
-  return <AnnuncioDetailPageClient wine={wine} correlati={correlati} />;
+  // Il vino della scheda più quelli dei correlati: "Quando berlo", gli
+  // abbinamenti e i distintivi delle schede correlate leggono tutti da qui.
+  const metaPerVino = await caricaMetaPerVino(client, [
+    wine.wineSlug ?? wine.id,
+    ...correlati.map((c) => c.wineSlug ?? c.id),
+  ]);
+
+  return (
+    <WineMetaProvider metaPerVino={metaPerVino}>
+      <AnnuncioDetailPageClient wine={wine} correlati={correlati} />
+    </WineMetaProvider>
+  );
 }

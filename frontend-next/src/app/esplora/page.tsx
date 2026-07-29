@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createListingService } from "@/services/listing-service";
+import { caricaMetaPerVino } from "@/services/wine-meta";
+import { WineMetaProvider } from "@/lib/wine-meta-context";
 import EsploraPageClient from "./page-client";
 
 export const metadata: Metadata = {
@@ -28,5 +30,18 @@ export default async function Page() {
   const client = await getSupabaseServerClient();
   const annunci = await createListingService(client).elenco();
 
-  return <EsploraPageClient annunci={annunci} />;
+  // Finestra di bevuta e abbinamenti stanno su `wines` dalla Fase 6c-1. Si
+  // caricano qui e non nei componenti: `DrinkBadge` compare su ogni scheda, e
+  // una lettura per scheda significherebbe una cascata di richieste e un
+  // distintivo che appare a pagina già disegnata.
+  const metaPerVino = await caricaMetaPerVino(
+    client,
+    annunci.map((a) => a.wineSlug ?? a.id),
+  );
+
+  return (
+    <WineMetaProvider metaPerVino={metaPerVino}>
+      <EsploraPageClient annunci={annunci} />
+    </WineMetaProvider>
+  );
 }

@@ -400,18 +400,41 @@ function Info({ icon: Icon, label, value }: { icon: LucideIcon; label: string; v
   );
 }
 
+/**
+ * Il pannello "Nella tua cantina", ora su bottiglie reali (Fase 6c-2).
+ *
+ * DUE CAMBIAMENTI VISIBILI, entrambi conseguenza dei dati veri e non di una
+ * scelta di design:
+ *
+ * - Prima compariva a chiunque, anche a chi non aveva mai fatto accesso: le
+ *   bottiglie erano un elenco costante uguale per tutti. Ora compare solo a chi
+ *   possiede davvero quella bottiglia.
+ * - Il conteggio non è più la `quantita` di una pila ma il numero delle proprie
+ *   unità ancora chiuse di quel vino. Stessa domanda, stessa risposta: nel mock
+ *   una riga rappresentava N bottiglie, qui N righe rappresentano N bottiglie.
+ *
+ * L'apertura agisce sulla prima unità ancora chiusa, che è l'equivalente esatto
+ * del decremento di una pila.
+ */
 function MyBottleActions({ wineId }: { wineId: string }) {
   const { bottiglieCantina, openBottle, scheduleOpen } = useVinea();
-  const bottle = bottiglieCantina.find((b) => b.wineVintageId === wineId);
+  const mie = bottiglieCantina.filter((b) => b.wineVintageId === wineId);
   const [when, setWhen] = useState("");
   const [nota, setNota] = useState("");
-  if (!bottle) return null;
+  if (mie.length === 0) return null;
+
+  const chiuse = mie.filter((b) => b.quantita > 0);
+  // Quella su cui agiscono i comandi: la prima ancora chiusa, o comunque una.
+  const bottle = chiuse[0] ?? mie[0];
+  const disponibili = chiuse.length;
+  const pianificata = mie.find((b) => b.plannedOpenDate)?.plannedOpenDate;
+
   return (
     <div className="mt-4 rounded-2xl border border-oro/40 bg-oro/10 p-4">
       <p className="text-xs uppercase tracking-wide text-oro">Nella tua cantina</p>
       <p className="mt-1 text-sm">
-        {bottle.quantita} {bottle.quantita === 1 ? "bottiglia" : "bottiglie"} disponibili
-        {bottle.plannedOpenDate ? ` · apertura pianificata ${bottle.plannedOpenDate}` : ""}
+        {disponibili} {disponibili === 1 ? "bottiglia" : "bottiglie"} disponibili
+        {pianificata ? ` · apertura pianificata ${pianificata}` : ""}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Dialog>
@@ -419,7 +442,7 @@ function MyBottleActions({ wineId }: { wineId: string }) {
             <Button
               size="sm"
               className="bg-bordeaux hover:bg-bordeaux/90"
-              disabled={bottle.quantita === 0}
+              disabled={disponibili === 0}
             >
               <WineOff className="h-4 w-4" /> Apri questa bottiglia
             </Button>

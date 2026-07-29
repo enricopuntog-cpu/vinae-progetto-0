@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { UtensilsCrossed, ThermometerSun, Wine as WineIcon, Timer, Search } from "lucide-react";
-import { getWineMeta, type PairingLevel, computeDrinkPhase } from "@/data/cellar";
-import { wines } from "@/data/wines";
+import { type PairingLevel, computeDrinkPhase } from "@/data/cellar";
+import { useCercaMeta, useWineMeta } from "@/lib/wine-meta-context";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,7 +24,7 @@ const LEVEL: Record<PairingLevel, string> = {
 };
 
 export function FoodPairingSection({ wineId }: { wineId: string }) {
-  const meta = getWineMeta(wineId);
+  const meta = useWineMeta(wineId);
 
   return (
     <section className="rounded-2xl border border-border bg-card p-5">
@@ -89,7 +89,7 @@ function Stat({ icon: Icon, label, value }: { icon: typeof Search; label: string
 function CookingQueryDialog({ wineId }: { wineId: string }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const meta = getWineMeta(wineId);
+  const meta = useWineMeta(wineId);
   const risultato = useMemo(() => {
     if (!q.trim()) return null;
     const norm = q.toLowerCase();
@@ -148,16 +148,19 @@ function CookingQueryDialog({ wineId }: { wineId: string }) {
 export function FindWineFromCellar() {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const { bottiglieCantina, prezzoNascosto } = useVinea();
+  const { bottiglieCantina, viniCantina, prezzoNascosto } = useVinea();
+  const cercaMeta = useCercaMeta();
 
   const risultati = useMemo(() => {
     if (!q.trim()) return [];
     const norm = q.toLowerCase();
     return bottiglieCantina
       .map((b) => {
-        const wine = wines.find((w) => w.id === b.wineVintageId);
+        // I vini della cantina arrivano dal database insieme alle bottiglie
+        // (Fase 6c-2), non più dal catalogo mock: l'indice è lo slug del vino.
+        const wine = viniCantina.find((w) => (w.wineSlug ?? w.id) === b.wineVintageId);
         if (!wine) return null;
-        const meta = getWineMeta(wine.id);
+        const meta = cercaMeta(b.wineVintageId);
         const phase = computeDrinkPhase(meta);
         const match = meta.foodPairings.find(
           (p) => p.keywords.some((k) => norm.includes(k)) || p.piatto.toLowerCase().includes(norm),
@@ -182,7 +185,7 @@ export function FindWineFromCellar() {
       .filter((x): x is NonNullable<typeof x> => !!x)
       .sort((a, b) => b.priority - a.priority)
       .slice(0, 5);
-  }, [q, bottiglieCantina, prezzoNascosto]);
+  }, [q, bottiglieCantina, viniCantina, prezzoNascosto, cercaMeta]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
