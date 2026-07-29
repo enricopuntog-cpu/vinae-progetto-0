@@ -327,8 +327,9 @@ il campo però è già pronto ad accoglierlo.
 `listings_marca_bottiglia_ceduta` esiste già e valorizza `ceduta_at` all'ingresso
 in `'venduto'` — la RPC che chiuderà una vendita **non deve** scriverla per conto
 suo, o le due si sovrascriveranno a vicenda. La seconda: quando il passaggio di
-proprietà sarà reale andranno riviste le viste di cantina, che oggi continuano a
-contare una bottiglia ceduta fra quelle del venditore.
+proprietà sarà reale dovrà creare o trasferire l'unità del compratore senza
+reintrodurre quella ceduta nella cantina del venditore. Le policy attuali la
+escludono già e il trigger libera il suo slot.
 
 ### Il catalogo condiviso è scrivibile dagli utenti — domanda bloccante della 6d-2a
 
