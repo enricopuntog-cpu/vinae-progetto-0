@@ -220,6 +220,11 @@ begin
   from public.listings
   where id = v_l_vendita;
 
+  -- L'interfaccia crea gli ambienti tramite il proprio strato server. Qui la
+  -- fixture usa postgres: lo scopo del test è la transizione della bottiglia,
+  -- non il contratto di scrittura delle tabelle della cantina.
+  perform set_config('role', 'postgres', true);
+
   insert into public.cellar_environments (
     owner_id,
     nome,
@@ -254,6 +259,7 @@ begin
   values (v_ambiente, 'Modulo test', 2, 2, 1)
   returning id into v_modulo;
 
+  perform pg_temp.impersona_6d1f('authenticated', v_venditore);
   perform public.cellar_posiziona(v_b_vendita, v_modulo, 0, 0);
   perform set_config('role', 'postgres', true);
 
