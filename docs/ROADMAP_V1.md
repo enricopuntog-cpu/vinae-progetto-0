@@ -76,7 +76,8 @@ Il dettaglio di ogni ticket è in
 | 5 | `AuthService` reale su Supabase (email + magic link) | Sì — primo dominio reale |
 | 6a | Schema `wines`/`bottle_units`/`listings` + RLS, `/esplora` portata, marketplace in **sola lettura** su Supabase | Sì |
 | 6b | Wizard `/vendi`, scritture di `ListingService`, transizioni di stato, upload foto | Sì |
-| 6c | **Cantina**: UI su `bottle_units`, ambienti/moduli/slot, visualizzazione 3D | Sì |
+| 6c-1 | **Cantina**, schema: ambienti/moduli/slot, metadati di bevuta su `wines`, funzioni di posizionamento. Nessuna interfaccia | Sì |
+| 6c-2 | **Cantina**, interfaccia: `/cantina` portata, viste, visualizzazione 3D, collegamento bottiglia → posizione | Sì |
 | 7 | `OrderService` + `ProposalService` + `PaymentService` (Stripe) | Sì |
 | 8 | `MessagingService` + `NotificationService` (Realtime) | Sì |
 | 9 | `ModerationService` + audit persistente | Sì |
