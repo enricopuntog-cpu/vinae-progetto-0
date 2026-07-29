@@ -115,7 +115,7 @@ function centesimiInEuro(cents: number): number {
  * dati a un progetto specifico. L'URL si ricompone qui, dove l'indirizzo è
  * già una variabile d'ambiente.
  */
-function urlImmagine(percorso: string): string {
+export function urlImmagine(percorso: string): string {
   if (percorso.startsWith("/") || percorso.startsWith("http")) return percorso;
 
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
