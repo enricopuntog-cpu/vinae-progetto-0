@@ -95,7 +95,7 @@ order by table_name, column_name, grantee;
 --   listings     → 3 policy (select_own, insert_own, update_own).
 --                  SPARITA: select_pubblici
 --   user_roles   → 1 policy: user_roles_select_own
---   wines        → 2 policy, invariate dalla 6a
+--   wines        → 4 policy: select pubblica + insert/update/delete staff.
 
 select
   tablename,
@@ -115,7 +115,6 @@ order by tablename, policyname;
 -- [5] Chi può eseguire cosa
 -- ---------------------------------------------------------------------------
 -- Atteso:
---   has_role                          → authenticated. MAI anon, MAI PUBLIC
 --   utente_maggiorenne                → nessun ruolo client
 --   slugifica                         → nessun ruolo client
 --   listing_crea, listing_pubblica,
@@ -123,8 +122,12 @@ order by tablename, policyname;
 --   bottiglia_apri, bottiglia_cancella,
 --   cellar_posiziona,
 --   cellar_togli_posizione            → authenticated
+--   has_role, cellar_ambiente_e_mio,
+--   cellar_modulo_e_mio               → authenticated, SECURITY INVOKER
 --   listings_bottiglia_idonea,
+--   bottle_units_preserva_annuncio_non_terminale,
 --   listings_marca_bottiglia_ceduta   → nessun ruolo client (sono trigger)
+--   bottle_unit_in_annuncio_pubblico  → assente
 
 select
   p.proname                                       as funzione,
@@ -147,7 +150,8 @@ where n.nspname = 'public'
     'bottiglia_apri', 'bottiglia_cancella',
     'cellar_posiziona', 'cellar_togli_posizione',
     'bottle_unit_in_annuncio_pubblico', 'cellar_ambiente_e_mio', 'cellar_modulo_e_mio',
-    'listings_bottiglia_idonea', 'listings_marca_bottiglia_ceduta', 'handle_new_user'
+    'listings_bottiglia_idonea', 'bottle_units_preserva_annuncio_non_terminale',
+    'listings_marca_bottiglia_ceduta', 'handle_new_user'
   )
 order by p.proname;
 
@@ -216,16 +220,21 @@ order by c.relname;
 -- query [7] lo conferma leggendo `reloptions`. Questa lo prova invece dove
 -- conta: nel ruolo che ha il problema, sul numero che si vedrebbe sbagliato.
 --
--- Atteso: `security_invoker` a `off` per entrambe le viste; e nella seconda
--- query `quantita = 1` su ogni riga, `quantita_zero = 0`, con un numero di righe
--- pari a `visibili_al_pubblico` della sezione [9].
+-- Atteso: `security_invoker` a `off` per tutte e tre; `security_barrier=on`
+-- sulle due viste esposte; nella seconda query `quantita = 1` su ogni riga,
+-- `quantita_zero = 0`, con un numero di righe pari a
+-- `visibili_al_pubblico` della sezione [9].
 
 select
   c.relname                                            as vista,
   coalesce(
     (select o from unnest(c.reloptions) o where o like 'security_invoker=%'),
     'security_invoker=off (predefinito)'
-  )                                                    as opzione
+  )                                                    as security_invoker,
+  coalesce(
+    (select o from unnest(c.reloptions) o where o like 'security_barrier=%'),
+    'security_barrier=off (predefinito)'
+  )                                                    as security_barrier
 from pg_class c
   join pg_namespace n on n.oid = c.relnamespace
 where n.nspname = 'public'

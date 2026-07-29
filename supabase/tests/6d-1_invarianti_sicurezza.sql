@@ -397,12 +397,12 @@ begin
   perform pg_temp.att_messaggio(20,
     'Non si apre una bottiglia con annuncio attivo, e il messaggio dice cosa fare',
     'authenticated', v_venditore,
-    format('select public.bottiglia_apri(%L)', v_b_attiva), 'sospendi il suo annuncio');
+    format('select public.bottiglia_apri(%L)', v_b_attiva), 'annuncio in corso');
 
   perform pg_temp.att_messaggio(21,
     'Non si toglie dalla cantina una bottiglia con annuncio attivo',
     'authenticated', v_venditore,
-    format('select public.bottiglia_cancella(%L)', v_b_attiva), 'sospendi il suo annuncio');
+    format('select public.bottiglia_cancella(%L)', v_b_attiva), 'annuncio in corso');
 
   perform pg_temp.att_sqlstate(22,
     'Lo stato fisico non è più scrivibile con un UPDATE diretto',
@@ -476,13 +476,13 @@ begin
                 and seller_username = ''vinea_test_venditore'' and quantita = 1',
            v_l_attivo), 1);
 
-  -- Alfa, Beta, Delta, Epsilon: Gamma è stata tolta dalla cantina e la policy
-  -- del proprietario esclude le unità cancellate.
+  -- Alfa, Beta e Delta: Gamma è stata tolta dalla cantina; Epsilon è stata
+  -- ceduta. La policy del proprietario esclude entrambe le condizioni.
   perform pg_temp.att_numero(31,
     'REGRESSIONE — la cantina del proprietario legge le proprie unità',
     'authenticated', v_venditore,
     format('select count(*) from public.bottle_units where owner_id = %L and deleted_at is null',
-           v_venditore), 4);
+           v_venditore), 3);
 
   -- L'innesto che alimenta prezzo, foto e stato di vendita in /cantina: è
   -- quello che si romperebbe se il grant di colonna su listings fosse sbagliato.
@@ -493,7 +493,7 @@ begin
               join public.listings l on l.bottle_unit_id = bu.id
               where bu.owner_id = %L
                 and l.prezzo_cents > 0 and l.stato is not null and l.immagini is not null',
-           v_venditore), 4);
+           v_venditore), 3);
 
   -- Alfa ed Epsilon sono gli unici pubblicati, quindi gli unici con scadenza.
   perform pg_temp.att_numero(33,
