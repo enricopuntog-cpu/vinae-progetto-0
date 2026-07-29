@@ -115,6 +115,7 @@ type RigaBottiglia = {
   override_apice_fine: number | null;
   override_preferenza: "giovane" | "equilibrato" | "evoluto" | null;
   override_nota: string;
+  ceduta_at: string | null;
   created_at: string;
   wines: RigaVinoCantina | RigaVinoCantina[] | null;
   cellar_slots: RigaSlot | RigaSlot[] | null;
@@ -135,7 +136,7 @@ const COLONNE_BOTTIGLIE = `
   id, stato, visibilita, apertura_pianificata, note_personali, prezzo_visibilita,
   override_finestra_inizio, override_finestra_fine,
   override_apice_inizio, override_apice_fine,
-  override_preferenza, override_nota, created_at,
+  override_preferenza, override_nota, ceduta_at, created_at,
   wines!inner (
     slug, produttore, nome, annata, regione, denominazione, tipo, formato,
     finestra_inizio, finestra_fine, apice_inizio, apice_fine,
@@ -174,11 +175,23 @@ function annuncioRappresentativo(annunci: RigaAnnuncio[]): RigaAnnuncio | null {
 /**
  * `SaleStatus` resta derivato, come deciso in 6a: `in_vendita` e `venduta` non
  * sono colonne di `bottle_units`, sono fatti che vivono in `listings`.
+ *
+ * L'eccezione arriva con la 6d-1: `ceduta_at` dice che l'unità è uscita dal
+ * possesso del proprietario, ed è il fatto autoritativo — un annuncio riscritto
+ * o ritirato non la riporta indietro. Viene prima di tutto il resto.
+ *
+ * Ciò che si vede non cambia: `ceduta_at` la valorizza un trigger all'ingresso
+ * dell'annuncio in `venduto`, cioè esattamente il caso che già restituiva
+ * "venduta". Togliere le bottiglie cedute dai totali di cantina è un'altra cosa,
+ * e appartiene al trasferimento di proprietà al compratore — debito dichiarato,
+ * non lavoro di questa fase.
  */
 function statoDiVendita(
   annunci: RigaAnnuncio[],
   visibilita: RigaBottiglia["visibilita"],
+  cedutaAt: string | null,
 ): CellarBottle["saleStatus"] {
+  if (cedutaAt !== null) return "venduta";
   if (annunci.some((a) => a.stato === "attivo" || a.stato === "riservato")) return "in_vendita";
   if (annunci.some((a) => a.stato === "venduto")) return "venduta";
   return visibilita === "cantina_pubblica" ? "cantina_pubblica" : "privata";
@@ -224,7 +237,7 @@ function rigaABottiglia(riga: RigaBottiglia, slugVino: string): CellarBottle {
     quantita: riga.stato === "chiusa" ? 1 : 0,
     plannedOpenDate: riga.apertura_pianificata ?? undefined,
     override: haOverride ? override : undefined,
-    saleStatus: statoDiVendita(annunci, riga.visibilita),
+    saleStatus: statoDiVendita(annunci, riga.visibilita, riga.ceduta_at),
     priceVisibility: riga.prezzo_visibilita,
     storageLocationId: slot ? idPosizione(slot.module_id, slot.riga, slot.colonna) : undefined,
     personalNotes: riga.note_personali || undefined,
@@ -470,19 +483,27 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
     },
 
     /**
-     * Aprire una bottiglia è un UPDATE diretto e non una funzione: `stato` e
-     * `note_personali` sono già fra le colonne concesse in scrittura dalla 6a e
-     * dalla 6c-1, e `bottle_units_update_own` limita da sola le righe
-     * raggiungibili. Non c'è nessuna regola che un CHECK non sappia esprimere.
+     * Dalla 6d-1 aprire una bottiglia è una RPC e non più un UPDATE diretto.
+     * La 6c-2 poteva permetterselo perché `stato` non aveva regole dietro; ora
+     * ne ha una che un CHECK non sa esprimere — «non si apre una bottiglia con
+     * un annuncio attivo o riservato» guarda un'altra tabella — e la verifica
+     * deve avvenire sotto lock di riga, o due sessioni concorrenti la
+     * aggirerebbero. `stato` è quindi uscito dai GRANT di colonna: questo
+     * `UPDATE` oggi verrebbe rifiutato da PostgreSQL prima ancora della RLS.
+     *
+     * Il messaggio di rifiuto arriva all'utente già scritto in italiano dalla
+     * funzione SQL: `P0001` è fra i `CODICI_LEGGIBILI`, quindi «questa bottiglia
+     * è in vendita: sospendi il suo annuncio prima di aprirla» passa da
+     * `messaggioPerUtente` senza altro lavoro qui.
      */
     async apri(bottleUnitId: string, nota?: string): Promise<Result<void>> {
       if (!client) return NESSUN_CLIENT;
 
-      const patch: Record<string, unknown> = { stato: "aperta" };
-      if (nota !== undefined && nota !== "") patch.note_personali = nota;
-
       return scrittura("apri", async () =>
-        client.from("bottle_units").update(patch).eq("id", bottleUnitId),
+        client.rpc("bottiglia_apri", {
+          p_bottle_unit_id: bottleUnitId,
+          p_nota: nota ?? null,
+        }),
       );
     },
 
