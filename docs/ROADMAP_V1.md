@@ -226,6 +226,37 @@ in `listing_pubblica`, che è dove il vincolo scatta (l'indice è parziale e
 non copre le bozze), e diventerà raggiungibile dall'interfaccia con la 6c,
 quando "metti in vendita questa bottiglia" partirà da un'unità già esistente.
 
+## Correzioni apportate in Fase 6c-2
+
+### Due difetti che solo i dati veri potevano mostrare
+
+Il primo: **il comando "Sposta" era irraggiungibile**. In `frontend/` si apre
+solo cliccando una bottiglia già presente nella scena 3D, e nei dati mock ogni
+bottiglia nasce con uno `storageLocationId`. Su dati veri nessuna bottiglia
+nasce collocata — `listing_crea` non assegna posizioni — quindi la scena parte
+vuota e `cellar_posiziona` sarebbe rimasta una funzione senza porta. Risolto
+aggiungendo un elenco "Da collocare" da cui si apre **lo stesso** dialogo: un
+punto d'ingresso in più, non un comando nuovo.
+
+Il secondo: **una bottiglia creata dal wizard non compariva in cantina** fino
+al ricaricamento della pagina. Il wizard scrive tramite `ListingService`
+mentre la cantina la tiene lo store, e nulla avvisava il secondo. In
+`frontend/` il difetto non può esistere, perché lì la pubblicazione è un toast
+che non scrive nulla e la cantina non cambia mai.
+
+Nessuno dei due è emerso da lettura del codice: entrambi sono comparsi durante
+la prova end-to-end su account reale.
+
+### Divergenze chiuse
+
+`/cantina` esiste, quindi si chiude la divergenza dichiarata in 6b: dopo
+pubblicazione, catalogazione e salvataggio bozza il wizard torna in cantina,
+come in `frontend/`, invece di mandare all'annuncio o restare fermo.
+
+Si chiude anche la conseguenza collaterale registrata in 6b: il vincolo "una
+bottiglia, un solo annuncio attivo" è ora **raggiungibile dall'interfaccia**,
+e il messaggio leggibile di `listing_pubblica` arriva al posto del 23505.
+
 ## Cosa NON è ancora deciso
 
 - Hosting di produzione per il frontend Next.js (Vercel o altro).
