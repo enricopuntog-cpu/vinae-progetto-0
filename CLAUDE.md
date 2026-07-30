@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Handoff Bridge
+
+At session start, read `CHANGES.log` after this file. At the end of every work
+session or before handing off/context reset, update it obligatorily: keep its
+four headings exact, `NEXT STEPS` at exactly 3 atomic items, facts only, no
+pleasantries, no secrets. Verify Git state before writing and preserve
+unresolved blockers.
+
 ## What this is
 
 Vinea is an Italian wine-club web app (personal cellar catalog, wine discovery, themed clubs,
