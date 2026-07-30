@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Handoff Bridge
+
+At session start, read `CHANGES.log` after this file. At the end of every work
+session or before handing off/context reset, update it obligatorily: keep its
+four headings exact, `NEXT STEPS` at exactly 3 atomic items, facts only, no
+pleasantries, no secrets. Verify Git state before writing and preserve
+unresolved blockers.
+
 ## What this is
 
 Vinea is an Italian wine-club web app (personal cellar catalog, wine discovery, themed clubs,
@@ -142,6 +150,28 @@ These hold for `backend/` today and must hold for any Supabase/Edge Function rep
 - Auth/AI/payment provider credentials are abstracted behind an interface
   (`TokenVerifier`, `AIProvider`) so providers are swappable and tests can inject fakes without
   network or real credentials.
+
+### Postgres exposure rules (binding since Phase 6d-1)
+
+RLS filters rows, never columns. These three rules are what keeps that gap closed — breaking
+one of them is how a private column ends up readable by strangers:
+
+- **No whole-table read grant to a role that can reach rows it does not own.** If a policy lets
+  `anon` or a non-owner `authenticated` see a row, that table gets a column-scoped `GRANT SELECT`
+  or none at all. A table whose RLS restricts every client role to its own rows may keep the
+  table-level grant (`bottle_units` does) — the deciding question is which rows the role reaches,
+  not which table it is.
+- **Public reads go through a `security_invoker = off` view with a closed column list**, never
+  through a policy on the base table. `public_listings` and `public_bottle_units` are the
+  pattern: the filter is written inside the view where no client can widen it, and a column
+  added to the base table later stays private until someone deliberately lists it.
+- **A column with a domain rule behind it is not writable by the client.** It leaves the
+  column-level `GRANT` and gets a `SECURITY DEFINER` function as its only door — `listings.stato`
+  (6a), `bottle_units.stato` and `deleted_at` (6d-1). Cross-table invariants that an index or
+  `CHECK` cannot express get a trigger as well, so `service_role` is bound by them too.
+
+Versioned SQL/RLS proofs live in `supabase/tests/` and are run by hand in the Supabase SQL
+Editor — see that directory's README. They are not migrations and CI does not run them yet.
 
 Full detail: `docs/SECURITY.md`, `docs/ARCHITECTURE.md`, `docs/ENVIRONMENT.md`.
 

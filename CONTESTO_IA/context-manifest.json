@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-07-30",
+  "language": "it",
+  "project": {
+    "name": "Vinea",
+    "repository": "enricopuntog-cpu/vinae-progetto-0",
+    "repository_url": "https://github.com/enricopuntog-cpu/vinae-progetto-0"
+  },
+  "verified_git_snapshot": {
+    "branch": "hardening/phase-6d-1-security-invariants",
+    "head": "bebdf79",
+    "origin_main": "a857f3b",
+    "ahead_of_origin_main": 20,
+    "behind_origin_main": 0,
+    "ahead_of_origin_branch": 0,
+    "behind_origin_branch": 0
+  },
+  "runtime_truth": {
+    "served_frontend": "frontend/",
+    "served_backend": "backend/",
+    "target_frontend": "frontend-next/",
+    "target_backend": "supabase/",
+    "frontend_next_is_production": false
+  },
+  "phase_status": {
+    "sprint_0": "merged",
+    "sprint_1": "merged",
+    "phase_1": "merged",
+    "phase_2": "merged",
+    "phase_3": "merged",
+    "phase_4": "absorbed_into_phase_3",
+    "phase_5a": "merged",
+    "phase_5b": "merged",
+    "phase_6a": "merged",
+    "phase_6b": "merged",
+    "phase_6c_1": "merged",
+    "phase_6c_2": "merged",
+    "phase_6d_1": "repair_deployed_read_only_verified_fixture_retest_pending_not_in_main",
+    "phase_7": "not_started",
+    "phase_8": "not_started",
+    "phase_9": "not_started",
+    "phase_10": "not_started",
+    "phase_11": "not_started"
+  },
+  "concurrent_work_detected": true,
+  "concurrent_commits_detected": [
+    "012fdef",
+    "fc62781",
+    "82ae7fc"
+  ],
+  "outside_context_modified_at_snapshot": [
+    "AGENTS.md"
+  ],
+  "mandatory_read_order": [
+    "AGENTS.md",
+    "CONTESTO_IA/README.md",
+    "CONTESTO_IA/01_STATO_ATTUALE.md",
+    "CONTESTO_IA/02_STORIA_FASI.md",
+    "CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md",
+    "CONTESTO_IA/04_HANDOFF_NUOVA_IA.md",
+    "CONTESTO_IA/05_INDICE_PR_E_FONTI.md",
+    "docs/ROADMAP_V1.md",
+    "docs/MIGRATION_PHASE_1_BACKLOG.md"
+  ],
+  "next_gate": "Approve and run the two remote fixture grids, finalize the Phase 6d-1 draft PR, then and only then consider Phase 7.",
+  "remote_sql_rule": "Show exact SQL and obtain explicit in-session approval before applying any migration to the real Supabase project."
+}

@@ -78,6 +78,7 @@ Il dettaglio di ogni ticket è in
 | 6b | Wizard `/vendi`, scritture di `ListingService`, transizioni di stato, upload foto | Sì |
 | 6c-1 | **Cantina**, schema: ambienti/moduli/slot, metadati di bevuta su `wines`, funzioni di posizionamento. Nessuna interfaccia | Sì |
 | 6c-2 | **Cantina**, interfaccia: `/cantina` portata, viste, visualizzazione 3D, collegamento bottiglia → posizione | Sì |
+| 6d-1 | **Invarianti di sicurezza**: confini di autorizzazione fra bottiglie, annunci e ruoli; controllo età server-side; invarianti bottiglia–annuncio. Nessuna nuova fonte di dati | Sì |
 | 7 | `OrderService` + `ProposalService` + `PaymentService` (Stripe) | Sì |
 | 8 | `MessagingService` + `NotificationService` (Realtime) | Sì |
 | 9 | `ModerationService` + audit persistente | Sì |
@@ -225,6 +226,102 @@ descrive una bottiglia e non se ne sceglie una. Il messaggio leggibile vive
 in `listing_pubblica`, che è dove il vincolo scatta (l'indice è parziale e
 non copre le bozze), e diventerà raggiungibile dall'interfaccia con la 6c,
 quando "metti in vendita questa bottiglia" partirà da un'unità già esistente.
+
+## Correzioni apportate in Fase 6c-2
+
+### Due difetti che solo i dati veri potevano mostrare
+
+Il primo: **il comando "Sposta" era irraggiungibile**. In `frontend/` si apre
+solo cliccando una bottiglia già presente nella scena 3D, e nei dati mock ogni
+bottiglia nasce con uno `storageLocationId`. Su dati veri nessuna bottiglia
+nasce collocata — `listing_crea` non assegna posizioni — quindi la scena parte
+vuota e `cellar_posiziona` sarebbe rimasta una funzione senza porta. Risolto
+aggiungendo un elenco "Da collocare" da cui si apre **lo stesso** dialogo: un
+punto d'ingresso in più, non un comando nuovo.
+
+Il secondo: **una bottiglia creata dal wizard non compariva in cantina** fino
+al ricaricamento della pagina. Il wizard scrive tramite `ListingService`
+mentre la cantina la tiene lo store, e nulla avvisava il secondo. In
+`frontend/` il difetto non può esistere, perché lì la pubblicazione è un toast
+che non scrive nulla e la cantina non cambia mai.
+
+Nessuno dei due è emerso da lettura del codice: entrambi sono comparsi durante
+la prova end-to-end su account reale.
+
+### Divergenze chiuse
+
+`/cantina` esiste, quindi si chiude la divergenza dichiarata in 6b: dopo
+pubblicazione, catalogazione e salvataggio bozza il wizard torna in cantina,
+come in `frontend/`, invece di mandare all'annuncio o restare fermo.
+
+Si chiude anche la conseguenza collaterale registrata in 6b: il vincolo "una
+bottiglia, un solo annuncio attivo" è ora **raggiungibile dall'interfaccia**,
+e il messaggio leggibile di `listing_pubblica` arriva al posto del 23505.
+
+## Fase 6d-1 — una sotto-fase fra la Cantina e gli ordini
+
+### Perché sta qui e non dentro la Fase 7
+
+La 6a, la 6b e la 6c hanno costruito, una alla volta, le tre tabelle su cui una
+vendita si appoggia. Ognuna ha lasciato dietro di sé un confine ragionevole per
+ciò che esisteva allora e insufficiente per ciò che è arrivato dopo: il `GRANT`
+di tabella su `bottle_units` era innocuo finché l'unità aveva quattro colonne, e
+lo ha smesso di essere quando la 6c-1 vi ha aggiunto note personali, date di
+apertura pianificata e override della finestra di bevuta.
+
+Metterci mano dentro la Fase 7 avrebbe significato aprire ordini e pagamenti
+sopra fondamenta di cui si sapeva già che perdevano. La 6d-1 le chiude prima, e
+non tocca né ordini né proposte né pagamenti.
+
+### La decisione chiusa: un annuncio, una bottiglia, un solo annuncio non terminale
+
+**Un annuncio vende una sola bottiglia fisica, e una bottiglia può avere un solo
+annuncio non terminale.** Non terminali sono `bozza`, `in_revisione`,
+`modifiche_richieste`, `attivo`, `riservato`; i quattro terminali (`sospeso`,
+`scaduto`, `venduto`, `rifiutato`) restano come storico, in numero qualunque.
+
+La 6a aveva applicato solo la metà pubblica della regola — l'indice copriva
+`('attivo','riservato')` — e la 6b lo aveva dichiarato di proposito: «una bozza in
+più non fa danno». Con la Cantina il danno è comparso: dalla 6c-2 «metti in
+vendita questa bottiglia» parte da un'unità esistente, quindi due clic
+producevano due schede della stessa bottiglia, e chi ne pubblicava una scopriva
+solo al momento di pubblicare la seconda che non poteva.
+
+Alla regola si aggiunge il caso che l'indice non poteva vedere: **una bottiglia
+venduta non torna in vendita.** Prima della 6d-1 il passaggio a `'venduto'` faceva
+uscire l'annuncio dall'indice e liberava la bottiglia — comportamento voluto per
+un annuncio scaduto o ritirato, dove la bottiglia è ancora del venditore, ma non
+per una vendita conclusa, dove non lo è più. Lo chiude `bottle_units.ceduta_at`.
+
+Decisione chiusa: non è più una scelta aperta per le fasi successive.
+
+### Cosa è cambiato di proposito, ed è visibile
+
+Il design non è stato toccato. Cambia però ciò che il database accetta, e in tre
+punti un utente può incontrare un errore dove prima non c'era:
+
+- aprire o togliere dalla cantina una bottiglia con un annuncio attivo o
+  riservato viene rifiutato, con un messaggio che dice di sospendere l'annuncio;
+- creare un secondo annuncio su una bottiglia che ne ha già uno in corso viene
+  rifiutato;
+- mettere in vendita richiede una data di nascita dichiarata e la maggiore età.
+  La navigazione pubblica resta disponibile senza.
+
+Tutti e tre erano già impossibili *nell'intenzione*; solo che il database li
+permetteva.
+
+### Cosa NON contiene, e va detto
+
+Nessuno Stripe Connect e nessun KYC. Il controllo dell'età è una dichiarazione
+auto-riferita verificata lato server, non un accertamento d'identità:
+**l'abilitazione venditore e l'onboarding del conto di pagamento andranno
+richiesti prima di qualunque payout reale.** Resta valida la voce «verifica
+legale su vendita di alcolici, età, privacy, marketplace» qui sotto.
+
+Il trasferimento di proprietà della bottiglia al compratore non è implementato —
+non esiste in `frontend/` e sarebbe funzionalità nuova. È debito dichiarato in
+[`MIGRATION_PHASE_1_BACKLOG.md`](MIGRATION_PHASE_1_BACKLOG.md), con il campo già
+pronto ad accoglierlo.
 
 ## Cosa NON è ancora deciso
 
