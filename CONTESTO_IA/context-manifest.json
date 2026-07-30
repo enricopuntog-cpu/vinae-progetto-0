@@ -8,15 +8,16 @@
     "repository_url": "https://github.com/enricopuntog-cpu/vinae-progetto-0"
   },
   "verified_git_snapshot": {
-    "branch": "origin/main",
-    "head": "61e3fde",
-    "origin_main": "61e3fde",
+    "branch": "hardening/phase-6d-1-post-merge-verification",
+    "head": "e2e4fcb",
+    "origin_main": "e2e4fcb",
     "ahead_of_origin_main": 0,
     "behind_origin_main": 0,
     "ahead_of_origin_branch": 0,
     "behind_origin_branch": 0
   },
-  "documentation_branch": "codex/controlla-rapporto-fase-6d1",
+  "documentation_branch": "hardening/phase-6d-1-post-merge-verification",
+  "verification_pr": 16,
   "runtime_truth": {
     "served_frontend": "frontend/",
     "served_backend": "backend/",
@@ -37,8 +38,8 @@
     "phase_6b": "merged",
     "phase_6c_1": "merged",
     "phase_6c_2": "merged",
-    "phase_6d_1": "merged_ci_green_fixture_retest_evidence_pending",
-    "phase_6d_2a": "blocked_pending_phase_6d_1_fixture_evidence",
+    "phase_6d_1": "merged_ci_green_fixture_grids_33_33_and_11_11_zero_residue",
+    "phase_6d_2a": "blocked_pending_verification_pr_merge_and_explicit_approval",
     "phase_7": "not_started",
     "phase_8": "not_started",
     "phase_9": "not_started",
@@ -62,6 +63,6 @@
     "docs/ROADMAP_V1.md",
     "docs/MIGRATION_PHASE_1_BACKLOG.md"
   ],
-  "next_gate": "Audit the Phase 6d-1 merge, obtain separate authorization for the remote fixture grids, document 33/33, 11/11, 13/13 and zero residue, then request approval for Phase 6d-2a.",
+  "next_gate": "Merge draft PR #16 after green CI and explicit approval, then request explicit approval before starting Phase 6d-2a.",
   "remote_sql_rule": "Show exact SQL and obtain explicit in-session approval before applying any migration to the real Supabase project."
 }
