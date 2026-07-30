@@ -4,11 +4,12 @@
 - `origin/main` was refreshed on 30 July 2026 and contains Phase 6d-1 at merge commit `61e3fde`.
 - Pull Request #14 is merged; its final head is `6bbe4dd`.
 - GitHub Actions run `30554736346` is green on `6bbe4dd` for backend, frontend and frontend-next.
+- Draft Pull Request #15 contains the post-merge handoff reconciliation; its CI run `30557208557` is in progress.
 - The repair verifier remains documented at 13/13 `PASSA` with fixture residue 0.
 - No final post-repair evidence for the remote fixture grids 33/33 and 11/11 is recorded in the repository.
 
 ## ACTIVE TASK
-- Reconcile the post-merge Phase 6d-1 handoff and close its missing behavioral evidence before Phase 6d-2a.
+- Post-merge Phase 6d-1 handoff reconciliation is complete in draft PR #15; behavioral evidence remains open before Phase 6d-2a.
 
 ## NEXT STEPS
 1. Audit and record the authorization and evidence surrounding the Phase 6d-1 merge.

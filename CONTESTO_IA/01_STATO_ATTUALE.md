@@ -14,6 +14,7 @@ Fotografia del **30 luglio 2026**.
 | Ultima fase integrata in `main` | Fase 6d-1 — invarianti di sicurezza Supabase |
 | Attività corrente | Riconciliazione handoff e gate delle prove post-merge |
 | PR della 6d-1 | [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) — merged |
+| PR di riconciliazione | [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) — draft |
 
 ## Stato Git e prove
 

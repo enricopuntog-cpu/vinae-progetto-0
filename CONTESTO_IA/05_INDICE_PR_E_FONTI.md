@@ -18,6 +18,7 @@
 | [#12](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/12) | 29-07-2026 | chiusa, non merged | Duplicato draft amministrativo della 6c-1 |
 | [#13](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/13) | 29-07-2026 | merged | Fase 6c-2 — interfaccia Cantina |
 | [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) | 30-07-2026 | merged | Fase 6d-1 — invarianti di sicurezza e repair deriva remota |
+| [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) | 30-07-2026 | draft | Riconciliazione handoff post-merge 6d-1 e prompt operativi |
 
 ## Anomalie della cronologia da conoscere
 
