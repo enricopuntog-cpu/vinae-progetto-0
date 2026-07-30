@@ -17,6 +17,7 @@
 | [#11](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/11) | 29-07-2026 | merged | Fase 6c-1 — schema Cantina |
 | [#12](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/12) | 29-07-2026 | chiusa, non merged | Duplicato draft amministrativo della 6c-1 |
 | [#13](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/13) | 29-07-2026 | merged | Fase 6c-2 — interfaccia Cantina |
+| [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) | 30-07-2026 | merged | Fase 6d-1 — invarianti di sicurezza e repair deriva remota |
 
 ## Anomalie della cronologia da conoscere
 
@@ -42,6 +43,14 @@ Il subject del commit locale `a857f3b` può mostrare `(#12)` anche se GitHub
 identifica la PR di UI come #13. Per lo stato remoto e il corpo della PR,
 usare GitHub come fonte.
 
+### PR #14
+
+La PR #14 è stata unita con merge commit `61e3fde`. La CI finale
+[`30554736346`](https://github.com/enricopuntog-cpu/vinae-progetto-0/actions/runs/30554736346)
+è verde sull'HEAD `6bbe4dd`. I documenti inclusi nel merge dichiaravano ancora
+pendenti le griglie remote post-repair 33/33 e 11/11: il merge non va usato come
+prova implicita della loro autorizzazione o del loro esito.
+
 ## Fonti autorevoli nel repository
 
 | Fonte | Uso |
@@ -55,8 +64,10 @@ usare GitHub come fonte.
 | [`../docs/ENVIRONMENT.md`](../docs/ENVIRONMENT.md) | Variabili e ambienti |
 | [`../docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md) | Git, verifiche e definition of done |
 | [`../docs/PHASE_6D1_SUPABASE_REVIEW.md`](../docs/PHASE_6D1_SUPABASE_REVIEW.md) | Esito della verifica reale 6d-1 |
+| [`../docs/PHASE_6D1_FINAL_EXECUTION_REPORT.md`](../docs/PHASE_6D1_FINAL_EXECUTION_REPORT.md) | Fotografia storica conclusiva del branch 6d-1 |
 | [`../supabase/tests/README.md`](../supabase/tests/README.md) | Ordine e scopo dei test SQL |
 | [`../frontend-next/src/services/types.ts`](../frontend-next/src/services/types.ts) | Contratti dei servizi target |
+| [`06_PROMPT_CHAT_OPERATIVE.md`](06_PROMPT_CHAT_OPERATIVE.md) | Prompt sequenziali per le prossime chat |
 
 ## Gerarchia pratica delle prove
 

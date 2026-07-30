@@ -35,7 +35,10 @@
 - La Fase 4 è assorbita nella Fase 3.
 - Le fasi 6a, 6b, 6c-1, 6c-2 sono sotto-fasi deliberate, non duplicati di
   prodotto.
-- La 6d-1 non è ancora in `main`.
+- La 6d-1 è in `main` tramite PR #14, ma il repository non registra ancora
+  l'esito finale post-repair delle griglie remote 33/33 e 11/11.
+- Il merge non equivale ad autorizzazione o prova delle fixture remote.
+- La Fase 6d-2a non è iniziata e resta bloccata dal gate delle griglie.
 - Le fasi 7–11 non sono iniziate.
 - La vecchia app resta quella servita.
 - Auth reale e ruoli demo coesistono intenzionalmente.
@@ -66,12 +69,29 @@ esplicita per le fixture remote.
 ## Se il lavoro riguarda una nuova fase
 
 - Accertare che la fase precedente sia integrata e approvata.
+- Per la 6d-2a verificare anche 33/33, 11/11, 13/13 e residui fixture zero.
 - Creare un branch dedicato partendo da `main` aggiornato.
 - Non portare due fasi avanti insieme sullo stesso dominio.
 - Definire parità e fuori-scope prima di scrivere codice.
 - A ogni checkpoint eseguire lint/typecheck/test/build pertinenti.
 - Fare commit piccoli e descrittivi.
 - Aprire una PR draft; non fare merge autonomamente.
+
+## Handoff specifico alla Fase 6d-2a
+
+La Fase 6d-2a deve:
+
+- distinguere in modo autoritativo il catalogo curato dallo staff dai vini
+  inseriti dagli utenti;
+- separare aggiunta privata, aggiunta pubblica e vendita da bottiglia esistente;
+- rendere atomica la creazione dell'ambiente e del modulo iniziale;
+- collegare alla home soltanto dati reali della Cantina;
+- preservare gli invarianti, i privilegi e le viste chiuse introdotti dalla
+  6d-1;
+- fermarsi prima di qualsiasi SQL remoto e chiedere conferma esplicita.
+
+Non avviare questa fase finché il gate post-merge 6d-1 non è documentato e
+approvato.
 
 ## Handoff specifico alla Fase 7
 
@@ -86,8 +106,7 @@ La Fase 7 deve:
 - progettare Stripe Connect/KYC prima di denaro reale;
 - colmare il rate limiting delle RPC prima di esporre pagamenti.
 
-Non avviare questa fase finché 6d-1 e la deriva remota non sono chiuse e
-approvate.
+Non avviare questa fase finché 6d-2a non è chiusa e approvata.
 
 ## Cosa aggiornare alla fine di una fase
 

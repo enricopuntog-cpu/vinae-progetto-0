@@ -70,7 +70,7 @@ Il dettaglio di ogni ticket è in
 | Fase | Contenuto | Tocca dati reali? |
 | --- | --- | --- |
 | 1 | Piano, ADR, pulizia backlog | No — solo documentazione |
-| 2 | Scaffold Next.js 15 App Router + copia invariata di UI/dati/config | No |
+| 2 | Scaffold Next.js App Router + copia invariata di UI/dati/config; versione vincolata nel package manifest | No |
 | 3 | Porting pagine statiche con mock esistenti **+** store (8 slice) montato come client provider Next.js — fasi fuse, vedi nota sotto | No — dati ancora mock |
 | ~~4~~ | *(assorbita in Fase 3, vedi sotto — numerazione 5+ invariata)* | — |
 | 5 | `AuthService` reale su Supabase (email + magic link) | Sì — primo dominio reale |
@@ -79,6 +79,7 @@ Il dettaglio di ogni ticket è in
 | 6c-1 | **Cantina**, schema: ambienti/moduli/slot, metadati di bevuta su `wines`, funzioni di posizionamento. Nessuna interfaccia | Sì |
 | 6c-2 | **Cantina**, interfaccia: `/cantina` portata, viste, visualizzazione 3D, collegamento bottiglia → posizione | Sì |
 | 6d-1 | **Invarianti di sicurezza**: confini di autorizzazione fra bottiglie, annunci e ruoli; controllo età server-side; invarianti bottiglia–annuncio. Nessuna nuova fonte di dati | Sì |
+| 6d-2a | **Provenienza catalogo e percorsi Cantina**: distinzione catalogo curato/utente, aggiunta privata/pubblica/vendita, inizializzazione atomica Cantina e home con dati reali | Sì |
 | 7 | `OrderService` + `ProposalService` + `PaymentService` (Stripe) | Sì |
 | 8 | `MessagingService` + `NotificationService` (Realtime) | Sì |
 | 9 | `ModerationService` + audit persistente | Sì |
@@ -322,6 +323,31 @@ Il trasferimento di proprietà della bottiglia al compratore non è implementato
 non esiste in `frontend/` e sarebbe funzionalità nuova. È debito dichiarato in
 [`MIGRATION_PHASE_1_BACKLOG.md`](MIGRATION_PHASE_1_BACKLOG.md), con il campo già
 pronto ad accoglierlo.
+
+### Stato di integrazione e gate successivo
+
+La Fase 6d-1 è stata integrata in `main` il 30 luglio 2026 tramite PR #14,
+merge commit `61e3fde`. La CI finale `30554736346` è verde sull'HEAD
+`6bbe4dd`. Il repository non registra però ancora una prova finale post-repair
+delle griglie remote 33/33 e 11/11: il merge non sostituisce quel gate.
+
+## Fase 6d-2a — provenienza catalogo e percorsi Cantina
+
+Questa sotto-fase viene prima degli ordini perché `listing_crea` può oggi
+inserire un vino tramite `SECURITY DEFINER` senza distinguere una scheda curata
+dallo staff da una descrizione immessa da un utente.
+
+Deve:
+
+- introdurre una provenienza autoritativa del catalogo;
+- separare aggiunta privata, aggiunta pubblica e vendita da bottiglia esistente;
+- rendere atomica l'inizializzazione ambiente/modulo della Cantina;
+- collegare alla home solo riepiloghi reali;
+- preservare RLS, privilegi, viste chiuse e invarianti della 6d-1.
+
+Non contiene ordini, proposte, pagamenti o trasferimento di proprietà. Non può
+iniziare finché 33/33, 11/11, 13/13 e residui fixture zero non sono documentati
+e la fase non è autorizzata esplicitamente.
 
 ## Cosa NON è ancora deciso
 

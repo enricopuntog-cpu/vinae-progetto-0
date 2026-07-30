@@ -93,7 +93,9 @@ CONTESTO_IA/    handoff sintetico per nuove IA/chat
 - trasferimento reale della proprietà della bottiglia al compratore in Fase 7;
 - scheduler affidabile per scadenza annunci;
 - catalogo condiviso: `listing_crea` può inserire un vino tramite
-  `SECURITY DEFINER`, decisione da governare;
+  `SECURITY DEFINER`; la Fase 6d-2a deve distinguere catalogo curato e vino
+  inserito dall'utente prima della Fase 7;
+- prove remote post-repair 33/33 e 11/11 ancora da autorizzare e documentare;
 - automazione dei test Supabase in CI con database effimero;
 - test frontend per `frontend-next/`;
 - revisione delle viste proprietario/security barrier prima del cutover;

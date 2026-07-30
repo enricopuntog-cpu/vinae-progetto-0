@@ -8,14 +8,15 @@
     "repository_url": "https://github.com/enricopuntog-cpu/vinae-progetto-0"
   },
   "verified_git_snapshot": {
-    "branch": "hardening/phase-6d-1-security-invariants",
-    "head": "bebdf79",
-    "origin_main": "a857f3b",
-    "ahead_of_origin_main": 20,
+    "branch": "origin/main",
+    "head": "61e3fde",
+    "origin_main": "61e3fde",
+    "ahead_of_origin_main": 0,
     "behind_origin_main": 0,
     "ahead_of_origin_branch": 0,
     "behind_origin_branch": 0
   },
+  "documentation_branch": "codex/controlla-rapporto-fase-6d1",
   "runtime_truth": {
     "served_frontend": "frontend/",
     "served_backend": "backend/",
@@ -36,33 +37,31 @@
     "phase_6b": "merged",
     "phase_6c_1": "merged",
     "phase_6c_2": "merged",
-    "phase_6d_1": "repair_deployed_read_only_verified_fixture_retest_pending_not_in_main",
+    "phase_6d_1": "merged_ci_green_fixture_retest_evidence_pending",
+    "phase_6d_2a": "blocked_pending_phase_6d_1_fixture_evidence",
     "phase_7": "not_started",
     "phase_8": "not_started",
     "phase_9": "not_started",
     "phase_10": "not_started",
     "phase_11": "not_started"
   },
-  "concurrent_work_detected": true,
-  "concurrent_commits_detected": [
-    "012fdef",
-    "fc62781",
-    "82ae7fc"
-  ],
-  "outside_context_modified_at_snapshot": [
-    "AGENTS.md"
-  ],
+  "concurrent_work_detected": false,
+  "concurrent_commits_detected": [],
+  "outside_context_modified_at_snapshot": [],
   "mandatory_read_order": [
     "AGENTS.md",
+    "CLAUDE.md",
+    "CHANGES.log",
     "CONTESTO_IA/README.md",
     "CONTESTO_IA/01_STATO_ATTUALE.md",
     "CONTESTO_IA/02_STORIA_FASI.md",
     "CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md",
     "CONTESTO_IA/04_HANDOFF_NUOVA_IA.md",
     "CONTESTO_IA/05_INDICE_PR_E_FONTI.md",
+    "CONTESTO_IA/06_PROMPT_CHAT_OPERATIVE.md",
     "docs/ROADMAP_V1.md",
     "docs/MIGRATION_PHASE_1_BACKLOG.md"
   ],
-  "next_gate": "Approve and run the two remote fixture grids, finalize the Phase 6d-1 draft PR, then and only then consider Phase 7.",
+  "next_gate": "Audit the Phase 6d-1 merge, obtain separate authorization for the remote fixture grids, document 33/33, 11/11, 13/13 and zero residue, then request approval for Phase 6d-2a.",
   "remote_sql_rule": "Show exact SQL and obtain explicit in-session approval before applying any migration to the real Supabase project."
 }

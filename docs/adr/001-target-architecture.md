@@ -25,7 +25,8 @@ migrazione.
 
 L'architettura target è:
 
-- **Frontend**: Next.js 15 (App Router). Stesso design system (Tailwind v4
+- **Frontend**: Next.js App Router, con versione vincolata in
+  `frontend-next/package.json`. Stesso design system (Tailwind v4
   + shadcn/ui), stessi componenti `src/components/**`, stessi tipi e mock
   `src/data/**`, stessa configurazione `src/config/**`. Nessuna riscrittura
   di UI o flussi già validati.

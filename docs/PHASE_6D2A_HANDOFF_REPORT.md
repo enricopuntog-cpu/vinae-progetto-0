@@ -2,6 +2,15 @@
 
 Data e ora: 30 luglio 2026, 16:27:57 +02:00
 
+> **Fotografia storica, superata in parte.** Il gate Git/PR descritto sotto è
+> stato successivamente superato dal merge della PR #14 in `main`
+> (`61e3fde`) e dalla CI finale verde `30554736346` su `6bbe4dd`. Resta invece
+> aperto il gate comportamentale: il repository non contiene ancora prove
+> finali post-repair 33/33 e 11/11. La Fase 6d-2a resta quindi non autorizzata.
+> Per lo stato corrente usare `CHANGES.log` e
+> `CONTESTO_IA/01_STATO_ATTUALE.md`; il rapporto sotto conserva la fotografia
+> del controllo eseguito alle 16:27.
+
 Stato finale: **Non pronta per revisione SQL**
 
 ## Repository e stato Git

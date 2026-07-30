@@ -9,7 +9,7 @@ items, facts only, no pleasantries, no secrets. Verify Git state before writing
 and preserve unresolved blockers.
 
 ## Tech Stack
-- Next.js 15 (App Router)
+- Next.js App Router (versione effettiva vincolata in `frontend-next/package.json`)
 - TailwindCSS
 - TypeScript
 

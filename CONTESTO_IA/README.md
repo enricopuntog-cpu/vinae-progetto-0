@@ -19,7 +19,9 @@ devono essere reinterpretati.
    prima di modificare codice, database o documentazione.
 5. [`05_INDICE_PR_E_FONTI.md`](05_INDICE_PR_E_FONTI.md) — indice delle PR e
    gerarchia delle fonti.
-6. [`context-manifest.json`](context-manifest.json) — riepilogo
+6. [`06_PROMPT_CHAT_OPERATIVE.md`](06_PROMPT_CHAT_OPERATIVE.md) — prompt
+   sequenziali pronti da copiare per audit, prove remote e Fase 6d-2a.
+7. [`context-manifest.json`](context-manifest.json) — riepilogo
    machine-readable per strumenti automatici.
 
 ## Regola di interpretazione
@@ -38,8 +40,7 @@ contrasto:
 ## In una frase
 
 Vinea sta migrando gradualmente dall'app servita
-`frontend/` + `backend/` verso `frontend-next/` + Supabase. Le fasi fino alla
-6c-2 sono integrate in `main`; la repair remota della 6d-1 è applicata e
-verificata in sola lettura, ma la fase resta sul branch
-`hardening/phase-6d-1-security-invariants` in attesa delle due griglie con
-fixture e dell'integrazione; le fasi 7–11 non sono iniziate.
+`frontend/` + `backend/` verso `frontend-next/` + Supabase. La Fase 6d-1 è
+integrata in `main` tramite PR #14 e ha CI finale verde; le griglie remote
+post-repair 33/33 e 11/11 non hanno ancora una prova finale registrata. La
+Fase 6d-2a e le fasi 7–11 non sono iniziate.

@@ -230,14 +230,14 @@ persiste.
 
 ### Fase 6d-1 — invarianti di sicurezza
 
-**Stato:** repair remota applicata, retest con fixture pendente, non integrata
-in `main`
+**Stato:** integrata il 30 luglio 2026; retest remoto con fixture ancora privo
+di prova finale
 
 **Branch:** `hardening/phase-6d-1-security-invariants`
 
-**PR:** non rilevata al 30 luglio 2026
+**PR:** [#14 — Fase 6d-1 — Security invariants and remote drift repair](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14)
 
-Consegnato sul branch:
+Consegnato:
 
 - chiusura dei grant e dei percorsi di lettura troppo ampi;
 - proiezioni pubbliche con elenco chiuso di colonne;
@@ -254,9 +254,21 @@ derivate rispetto alle migrazioni registrate. Il 30 luglio 2026 la repair è
 stata applicata come versione remota `20260730140948`; la query unica read-only
 è 13/13 e `auth_rls_initplan` è scomparso. Le griglie comportamentali con
 fixture restano da autorizzare e rieseguire. Il deploy remoto non equivale
-all'integrazione della fase in `main`.
+alla prova comportamentale. La PR è stata unita con merge commit `61e3fde` e la
+CI finale `30554736346` è verde su `6bbe4dd`; il merge non prova da solo che le
+griglie siano state autorizzate o superate.
 
 ## Fasi future
+
+### Fase 6d-2a — provenienza catalogo e percorsi Cantina
+
+**Stato:** non iniziata.
+
+Deve distinguere il catalogo curato dallo staff dai vini inseriti dagli utenti,
+separare aggiunta privata, aggiunta pubblica e vendita da bottiglia esistente,
+rendere atomica la creazione iniziale della Cantina e collegare alla home solo
+riepiloghi reali. Non può iniziare finché il gate 33/33, 11/11, 13/13 e residui
+fixture zero non è documentato e approvato.
 
 ### Fase 7 — ordini, proposte e pagamenti
 

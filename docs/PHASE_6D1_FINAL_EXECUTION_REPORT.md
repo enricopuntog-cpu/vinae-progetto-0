@@ -2,6 +2,14 @@
 
 Data e ora della ripresa: 30 luglio 2026, 16:56:49 +02:00
 
+> **Fotografia storica, superata per lo stato corrente.** Dopo questa
+> esecuzione la PR #14 è stata unita in `main` con merge commit `61e3fde` e la
+> CI finale `30554736346` è risultata verde sull'HEAD `6bbe4dd`. Il repository
+> non registra ancora una prova finale post-repair delle griglie remote 33/33 e
+> 11/11. Per lo stato operativo corrente usare `CHANGES.log` e
+> `CONTESTO_IA/01_STATO_ATTUALE.md`; il testo sotto resta invariato come prova
+> di ciò che era noto e autorizzato al momento della ripresa.
+
 ## Decisione
 
 **PR pronta per revisione in draft; merge bloccato.**

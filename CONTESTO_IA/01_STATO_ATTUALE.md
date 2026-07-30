@@ -7,31 +7,20 @@ Fotografia del **30 luglio 2026**.
 | Voce | Valore |
 | --- | --- |
 | Repository GitHub | [`enricopuntog-cpu/vinae-progetto-0`](https://github.com/enricopuntog-cpu/vinae-progetto-0) |
-| Branch locale attivo | `hardening/phase-6d-1-security-invariants` |
-| HEAD verificato | `82ae7fc` — `docs: record phase 6d-1 remote drift` |
-| `origin/main` verificato | `a857f3b` — Fase 6c-2 |
-| Distanza da `origin/main` | 17 commit avanti, 0 indietro |
-| Distanza da `origin/hardening/phase-6d-1-security-invariants` | 3 commit avanti, 0 indietro |
-| Ultima fase integrata in `main` | Fase 6c-2 — Cantina UI |
-| Lavoro sul branch | Fase 6d-1 — invarianti di sicurezza Supabase |
-| PR della 6d-1 | Non rilevata tra le PR GitHub al momento della fotografia |
+| Branch documentale attivo | `codex/controlla-rapporto-fase-6d1` |
+| Base verificata | `61e3fde` — merge della PR #14 |
+| `origin/main` verificato | `61e3fde` — Fase 6d-1 integrata |
+| Distanza iniziale della branch documentale da `origin/main` | 0 commit avanti, 0 indietro |
+| Ultima fase integrata in `main` | Fase 6d-1 — invarianti di sicurezza Supabase |
+| Attività corrente | Riconciliazione handoff e gate delle prove post-merge |
+| PR della 6d-1 | [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) — merged |
 
-## Stato dei file locali
+## Stato Git e prove
 
-Durante la creazione di questa cartella il working tree è cambiato in
-parallelo. Tre commit sono comparsi sul branch locale:
-
-- `012fdef` — aggiunge `AGENTS.md`;
-- `fc62781` — aggiunge la migrazione additiva di riparazione deriva
-  poi riallineata alla versione remota come
-  `20260730140948_security_invariants_remote_drift_repair.sql`, e la query
-  `6d-1_remote_drift_repair_verifica.sql`.
-- `82ae7fc` — registra la deriva e la riparazione nei report e nel backlog.
-
-Questi tre commit sono locali e, all'ultima verifica, non erano ancora presenti
-su `origin/hardening/phase-6d-1-security-invariants`. Il working tree esterno a
-`CONTESTO_IA/` conteneva inoltre una modifica non committata ad `AGENTS.md`,
-prodotta dal lavoro parallelo.
+La PR #14 è stata unita in `main` con merge commit `61e3fde`. L'HEAD finale del
+branch era `6bbe4dd`; la run GitHub Actions
+[`30554736346`](https://github.com/enricopuntog-cpu/vinae-progetto-0/actions/runs/30554736346)
+è verde per backend, frontend e frontend-next.
 
 Il 30 luglio 2026 la repair è stata applicata al progetto Supabase reale dopo
 approvazione esplicita. La migration history registra
@@ -40,8 +29,10 @@ read-only restituisce 13/13 `PASSA` e gli advisor non riportano più
 `auth_rls_initplan`. Le due griglie comportamentali restano da autorizzare
 separatamente perché inseriscono e cancellano fixture remote.
 
-Poiché è stato rilevato lavoro parallelo attivo, questa è solo una fotografia:
-rieseguire sempre `git status --short --branch` e `git log`.
+Il merge non dimostra né l'autorizzazione né l'esito delle griglie. Nel
+repository restano documentate solo le baseline pre-repair 31/33 e 7/11.
+Rieseguire sempre `git status --short --branch` e verificare GitHub prima di
+usare questa fotografia.
 
 ## Quale versione è servita
 
@@ -64,19 +55,18 @@ Fase 11 e richiede una decisione esplicita.
 | Creazione/pubblicazione annunci e foto | Integrato in `main` — Fase 6b |
 | Cantina: schema, metadati e posizioni | Integrato in `main` — Fase 6c-1 |
 | Cantina: pagina, store reale, vendita da bottiglia | Integrato in `main` — Fase 6c-2 |
-| Invarianti bottiglia–annuncio e hardening RLS | Repair remota applicata; retest con fixture pendente — Fase 6d-1, non ancora in `main` |
+| Invarianti bottiglia–annuncio e hardening RLS | Integrati in `main` — Fase 6d-1; retest remoto con fixture ancora privo di prova finale |
+| Provenienza catalogo e percorsi Cantina | Non iniziati — Fase 6d-2a |
 | Ordini, proposte, pagamenti | Non migrati — Fase 7 |
 | Messaggi e notifiche | Non migrati — Fase 8 |
 | Moderazione e audit persistente | Non migrati — Fase 9 |
 | AI reale | Non migrata — Fase 10 |
 | Cutover | Non iniziato — Fase 11 |
 
-## Fase 6d-1 sul branch
+## Fase 6d-1 integrata
 
-La parte originaria della 6d-1 modificava o aggiungeva 18 file rispetto a
-`origin/main`, circa 4.419 righe. I tre commit locali successivi aggiungono le
-regole agenti, circa 599 righe per la riparazione deriva e la sua verifica, e
-l'aggiornamento dei report. I punti principali sono:
+La PR #14 ha integrato migrazioni, regole agenti, repair della deriva, verifier
+e documentazione. I punti principali sono:
 
 - revoca dei privilegi di lettura/scrittura troppo ampi;
 - viste pubbliche a elenco chiuso di colonne;
@@ -100,15 +90,16 @@ riporta:
 - 0 duplicati non terminali e 0 mismatch venditore/proprietario.
 
 Le griglie comportamentali avevano una baseline pre-repair di 31/33 e 7/11;
-il loro retest post-repair è ancora pendente. Questi risultati non dichiarano
-né la fase integrata in `main` né il prodotto pronto per la produzione.
+il loro retest post-repair è ancora pendente. L'integrazione in `main` non
+sostituisce la prova comportamentale e non dichiara il prodotto pronto per la
+produzione.
 
 ## Prossimo confine corretto
 
-Prima di iniziare la Fase 7 occorre:
+Prima di iniziare la Fase 6d-2a occorre:
 
-1. ottenere conferma esplicita per le due griglie remote con fixture;
-2. ottenere 33/33 nella griglia principale e 11/11 nel follow-up;
-3. pubblicare e revisionare la PR draft della 6d-1;
-4. integrare la 6d-1 solo dopo approvazione;
-5. ottenere approvazione esplicita per iniziare la Fase 7.
+1. verificare e registrare l'autorizzazione del merge e delle prove remote;
+2. ottenere conferma separata per le due griglie con fixture;
+3. ottenere e documentare 33/33, 11/11, 13/13 e residui fixture zero;
+4. integrare in `main` il rapporto post-merge aggiornato;
+5. ottenere approvazione esplicita per iniziare la Fase 6d-2a.
