@@ -1,7 +1,11 @@
 # Fase 6d-1 — Revisione Supabase sul database reale
 
-Data della verifica: 29 luglio 2026  
-Progetto Supabase: `pijnmcllmfgjmgsvtcej` (`vinea wine club`)  
+Data della verifica iniziale: 29 luglio 2026
+
+Ultimo riesame: 30 luglio 2026
+
+Progetto Supabase: `pijnmcllmfgjmgsvtcej` (`vinea wine club`)
+
 Branch Git: `hardening/phase-6d-1-security-invariants`
 
 ## Esito
@@ -25,6 +29,37 @@ repository:
 | `20260729230000` | `security_invariants` |
 | `20260729234500` | `security_invariants_followup` |
 | `20260729235500` | `security_helper_invoker` |
+
+## Riesame del 30 luglio 2026: deriva remota
+
+Le tre versioni risultano ancora registrate, ma il catalogo attivo non
+corrisponde più allo stato finale del follow-up:
+
+- `bottiglia_apri` e `bottiglia_cancella` sono tornate alle definizioni base:
+  non leggono `ceduta_at`, controllano soltanto annunci `attivo`/`riservato` e
+  hanno `search_path = public`;
+- `listings_bottiglia_idonea` non verifica
+  `listings.seller_id = bottle_units.owner_id` ed è tornata
+  `SECURITY DEFINER` con `search_path = public`;
+- `listings_marca_bottiglia_ceduta` valorizza `ceduta_at`, ma non elimina lo
+  slot, ed è tornata `SECURITY DEFINER` con `search_path = public`;
+- `user_roles_select_own` usa di nuovo `user_id = auth.uid()`.
+
+Il trigger speculare `bottle_units_preserva_annuncio_non_terminale`, i tre
+trigger registrati e gli helper della migrazione `20260729235500` sono invece
+presenti nella forma attesa. La combinazione dimostra una **deriva delle
+definizioni**, non una migration history mancante: porzioni della migrazione
+base sono state riapplicate o ripristinate dopo il follow-up, senza un replay
+coerente della cronologia. I cataloghi PostgreSQL non permettono di attribuire
+con certezza quale operazione o strumento abbia eseguito la sovrascrittura.
+
+È stata preparata, ma **non applicata**, la migrazione additiva:
+
+- `20260730153957_security_invariants_remote_drift_repair.sql`.
+
+La repair non modifica dati applicativi, ripristina le quattro funzioni e la
+policy, rende espliciti `search_path` e privilegi e può essere riapplicata in
+sicurezza. Richiede approvazione esplicita in sessione prima del deploy remoto.
 
 ## Cosa era corretto
 
@@ -92,7 +127,26 @@ Correzioni:
 
 ## Test eseguiti
 
-### Griglia originale aggiornata
+### Stato corrente del riesame
+
+I risultati remoti comunicati e usati come baseline della repair sono:
+
+- griglia principale: **31 PASSA, 2 FALLISCE**;
+- griglia follow-up: **7 PASSA, 4 FALLISCE**;
+- fixture utente residue: **0**.
+
+Le sei anomalie corrispondono alle cinque definizioni derivate elencate sopra.
+Le query read-only di preflight rieseguite il 30 luglio restituiscono zero per:
+
+- annunci non terminali duplicati;
+- annunci non terminali con bottiglia non idonea o proprietario discordante;
+- slot su bottiglie cancellate o cedute;
+- utenti di test residui.
+
+La Fase 6d-1 non è conclusa finché, dopo l'applicazione approvata della repair,
+le due griglie non restituiscono rispettivamente **33/33** e **11/11**.
+
+### Esito storico del 29 luglio — griglia originale
 
 - 33 test superati;
 - 0 test falliti;
@@ -103,7 +157,7 @@ Le attese sono state aggiornate perché:
 - il messaggio delle RPC copre ora qualsiasi annuncio non terminale;
 - una bottiglia ceduta non è più leggibile nella cantina del venditore.
 
-### Regressione follow-up
+### Esito storico del 29 luglio — regressione follow-up
 
 File: `supabase/tests/6d-1_followup_invarianti.sql`
 
@@ -135,6 +189,22 @@ Copertura:
 
 ## Advisor Supabase
 
+### Riesame corrente
+
+Prima della repair gli advisor riportano:
+
+- `auth_rls_initplan` su `user_roles_select_own`, direttamente causato dal
+  ritorno a `auth.uid()` senza `select`;
+- le due viste `public_listings` e `public_bottle_units` come
+  `security_definer_view`;
+- le otto RPC applicative come funzioni `SECURITY DEFINER` eseguibili da
+  `authenticated`;
+- **Leaked Password Protection** disabilitata;
+- indici non ancora usati su un database privo di traffico rappresentativo.
+
+Il primo avviso deve sparire dopo la repair. Gli advisor Security e Performance
+devono essere rieseguiti dopo il deploy; non sono ancora un esito finale.
+
 ### Eccezioni accettate e documentate
 
 `public_listings` e `public_bottle_units` sono viste con privilegi del
@@ -159,6 +229,23 @@ diretti. Ognuna verifica `auth.uid()`, proprietà e stato e usa
   rappresentativo. Il database è nuovo: rimuoverli ora sarebbe prematuro;
 - automatizzare queste griglie in CI con un database Supabase effimero.
 
+## Rischi e rollback della repair
+
+La repair non contiene DML applicativo. I rischi operativi sono limitati ai
+lock DDL brevi necessari per sostituire funzioni, ricreare due trigger e
+ricreare una policy; il deploy va comunque eseguito in una finestra controllata
+e seguito immediatamente dalle verifiche.
+
+Se la migrazione fallisce dentro il sistema di migrazioni, la transazione deve
+essere lasciata in rollback e non va registrata manualmente come applicata. Se
+un problema emerge dopo il commit, il rollback non richiede bonifica dati:
+le definizioni precedenti sono già state catturate con `pg_get_functiondef` e
+`pg_policies`. Ripristinarle riaprirebbe però le vulnerabilità note, quindi la
+strategia preferita è una correzione **roll-forward**. Un eventuale rollback
+d'emergenza deve essere una nuova migrazione limitata alle quattro definizioni
+e alla policy catturate; non si deve modificare né rieseguire integralmente una
+migrazione storica.
+
 ## Nota sull'atomicità del SQL Editor
 
 Non bisogna basare l'atomicità sull'assunzione che il SQL Editor invii sempre
@@ -169,6 +256,7 @@ sostituisce un processo di deploy riproducibile.
 
 ## Stato finale
 
-La Fase 6d-1 è verificata sul database collegato. Non rende l'intero progetto
-production-ready: pagamenti, ordini, messaggi, moderazione e AI appartengono
-alle fasi successive.
+La repair è pronta per revisione locale, ma non è stata applicata al database
+collegato. La Fase 6d-1 resta **aperta**: non va dichiarata conclusa e non si
+avvia la Fase 6d-2 o la Fase 7 finché deploy approvato, 33/33, 11/11, preflight,
+assenza di fixture e advisor riesaminati non sono tutti documentati.

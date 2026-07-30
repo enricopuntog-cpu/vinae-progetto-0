@@ -188,8 +188,42 @@ successive rilevate durante la revisione finale. Il loro esito CI sarà riportat
 nella Pull Request dopo il push; nessun esito locale sostituisce la nuova
 esecuzione remota.
 
+## Aggiornamento Fase 6d-1 — repair della deriva remota
+
+Data: 30 luglio 2026.
+
+Il progetto Supabase `pijnmcllmfgjmgsvtcej` è stato ispezionato in sola
+lettura. Le versioni `20260729230000`, `20260729234500` e `20260729235500`
+risultano registrate, ma quattro funzioni e la policy
+`user_roles_select_own` non corrispondono al follow-up. È stata preparata la
+migrazione additiva
+`20260730153957_security_invariants_remote_drift_repair.sql`; non è stata
+applicata al database remoto.
+
+| Area | Comando o verifica | Esito | Dettaglio |
+|---|---|---|---|
+| Supabase remoto | `pg_get_functiondef`, `pg_trigger`, `pg_policies` e privilegi | Deriva confermata | definizioni base riemerse per apertura, cancellazione, idoneità annuncio, cessione e policy ruoli |
+| Supabase remoto | migration history | Superato | base, follow-up e helper risultano registrati |
+| Supabase remoto | preflight read-only | Superato | 0 duplicati, 0 bottiglie non idonee/mismatch, 0 slot invalidi |
+| Supabase remoto | fixture residue | Superato | 0 utenti `vinea-test-*` |
+| Supabase remoto | griglia principale | Non verde | baseline corrente: 31 PASSA, 2 FALLISCE |
+| Supabase remoto | griglia follow-up | Non verde | baseline corrente: 7 PASSA, 4 FALLISCE |
+| Supabase remoto | query unica della repair | Validata in sola lettura | compila; prima del deploy segnala correttamente migration history e cinque definizioni non conformi |
+| Supabase advisor | Security e Performance | Riesaminati prima della repair | presente `auth_rls_initplan`; restano le eccezioni deliberate e Leaked Password Protection disabilitata |
+| Repository | `git diff --check` | Superato | nessun errore di whitespace |
+| Frontend Next.js | `bun install --frozen-lockfile`, lint, typecheck, build | Non eseguiti | Bun non è disponibile nel PATH; npm non è stato usato come sostituto |
+| Supabase locale | CLI, replay e test SQL locali | Non eseguiti | Supabase CLI, `psql` e Docker non sono disponibili |
+
+La query read-only
+`supabase/tests/6d-1_remote_drift_repair_verifica.sql` raccoglie in una sola
+griglia i controlli di definizione, privilegi, trigger, policy, preflight e
+fixture. Dopo un deploy approvato devono essere rieseguite entrambe le griglie
+comportamentali, la query unica e gli advisor. Fino ad allora la Fase 6d-1
+resta aperta.
+
 ## Conclusione
 
-La base è coerente e riproducibile localmente. Restano obbligatorie le verifiche di
-staging e compliance indicate sopra; il progetto non deve essere presentato come
-production-ready.
+La base storica è riproducibile localmente, ma lo stato remoto della Fase 6d-1
+non è coerente finché la repair non viene approvata, applicata e verificata.
+Restano obbligatorie le verifiche di staging e compliance indicate sopra; il
+progetto non deve essere presentato come production-ready.

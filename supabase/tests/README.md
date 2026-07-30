@@ -21,14 +21,26 @@ riportato nel rapporto di fase, incollato e non riassunto.
 ## Fase 6d-1 — invarianti di sicurezza
 
 Eseguire **in quest'ordine**. Ogni file si incolla per intero e si esegue in una
-sola volta.
+sola volta. Le migrazioni già registrate non vanno modificate o rieseguite a
+mano per correggerne il contenuto.
 
 | # | File | Quando | Esito atteso |
 | --- | --- | --- | --- |
-| 1 | [`6d-1_preflight.sql`](6d-1_preflight.sql) | **prima** della migrazione | sezioni [1] e [3]: zero righe |
-| 2 | `supabase/migrations/20260729230000_security_invariants.sql` | dopo il preflight | applicata senza errori |
-| 3 | [`6d-1_invarianti_sicurezza.sql`](6d-1_invarianti_sicurezza.sql) | dopo la migrazione | 33 righe, tutte `PASSA`, nessuna riga 99 |
-| 4 | [`6d-1_verifica.sql`](6d-1_verifica.sql) | dopo la migrazione | vedi gli attesi scritti sopra ogni query |
+| 1 | [`6d-1_preflight.sql`](6d-1_preflight.sql) | **prima** della migrazione base | sezioni [1], [3] e [4]: zero righe |
+| 2 | `supabase/migrations/20260729230000_security_invariants.sql` | dopo il preflight | migrazione base applicata senza errori |
+| 3 | `supabase/migrations/20260729234500_security_invariants_followup.sql` | dopo la base | follow-up applicato senza errori |
+| 4 | `supabase/migrations/20260729235500_security_helper_invoker.sql` | dopo il follow-up | helper RLS applicati senza errori |
+| 5 | `supabase/migrations/20260730153957_security_invariants_remote_drift_repair.sql` | solo dopo approvazione esplicita, se il catalogo remoto mostra la deriva documentata | repair applicata e registrata senza modificare dati applicativi |
+| 6 | [`6d-1_invarianti_sicurezza.sql`](6d-1_invarianti_sicurezza.sql) | dopo tutte le migrazioni | 33 righe, tutte `PASSA`, nessuna riga 99 |
+| 7 | [`6d-1_followup_invarianti.sql`](6d-1_followup_invarianti.sql) | dopo tutte le migrazioni | 11 righe, tutte `PASSA`, nessuna riga 99 |
+| 8 | [`6d-1_remote_drift_repair_verifica.sql`](6d-1_remote_drift_repair_verifica.sql) | dopo la repair | una sola griglia, tutte le righe `PASSA` |
+| 9 | [`6d-1_verifica.sql`](6d-1_verifica.sql) | controllo statico finale | vedi gli attesi scritti sopra ogni query |
+
+Dopo le query SQL riesaminare sia gli advisor **Security** sia gli advisor
+**Performance**. La repair deve eliminare l'avviso `auth_rls_initplan` sulla
+policy `user_roles_select_own`; le eccezioni deliberate per le viste pubbliche
+e le RPC applicative restano documentate in
+[`docs/PHASE_6D1_SUPABASE_REVIEW.md`](../../docs/PHASE_6D1_SUPABASE_REVIEW.md).
 
 ### Se il preflight trova righe
 
