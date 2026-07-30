@@ -30,7 +30,7 @@ mano per correggerne il contenuto.
 | 2 | `supabase/migrations/20260729230000_security_invariants.sql` | dopo il preflight | migrazione base applicata senza errori |
 | 3 | `supabase/migrations/20260729234500_security_invariants_followup.sql` | dopo la base | follow-up applicato senza errori |
 | 4 | `supabase/migrations/20260729235500_security_helper_invoker.sql` | dopo il follow-up | helper RLS applicati senza errori |
-| 5 | `supabase/migrations/20260730153957_security_invariants_remote_drift_repair.sql` | solo dopo approvazione esplicita, se il catalogo remoto mostra la deriva documentata | repair applicata e registrata senza modificare dati applicativi |
+| 5 | `supabase/migrations/20260730140948_security_invariants_remote_drift_repair.sql` | solo dopo approvazione esplicita, se il catalogo remoto mostra la deriva documentata | repair applicata e registrata senza modificare dati applicativi |
 | 6 | [`6d-1_invarianti_sicurezza.sql`](6d-1_invarianti_sicurezza.sql) | dopo tutte le migrazioni | 33 righe, tutte `PASSA`, nessuna riga 99 |
 | 7 | [`6d-1_followup_invarianti.sql`](6d-1_followup_invarianti.sql) | dopo tutte le migrazioni | 11 righe, tutte `PASSA`, nessuna riga 99 |
 | 8 | [`6d-1_remote_drift_repair_verifica.sql`](6d-1_remote_drift_repair_verifica.sql) | dopo la repair | una sola griglia, tutte le righe `PASSA` |
@@ -41,6 +41,9 @@ Dopo le query SQL riesaminare sia gli advisor **Security** sia gli advisor
 policy `user_roles_select_own`; le eccezioni deliberate per le viste pubbliche
 e le RPC applicative restano documentate in
 [`docs/PHASE_6D1_SUPABASE_REVIEW.md`](../../docs/PHASE_6D1_SUPABASE_REVIEW.md).
+
+Le griglie ai punti 6 e 7 creano e cancellano fixture nel progetto remoto:
+richiedono un'approvazione esplicita separata dal deploy della migrazione.
 
 ### Se il preflight trova righe
 

@@ -15,13 +15,14 @@ presente nello schema del database, contrariamente a quanto indicato nel
 riepilogo precedente, ma non era registrata nella cronologia delle migrazioni.
 
 La struttura iniziale era valida nelle sue scelte principali, ma non chiudeva
-tutta la superficie di sicurezza dichiarata. Sono state applicate due
+tutta la superficie di sicurezza dichiarata. Sono state applicate tre
 migrazioni additive, senza modificare retroattivamente il file già eseguito:
 
 - `20260729234500_security_invariants_followup.sql`;
-- `20260729235500_security_helper_invoker.sql`.
+- `20260729235500_security_helper_invoker.sql`;
+- `20260730140948_security_invariants_remote_drift_repair.sql`.
 
-La cronologia del database è stata riallineata ai tre nomi presenti nel
+La cronologia del database è stata riallineata ai quattro nomi presenti nel
 repository:
 
 | Versione | Nome |
@@ -29,6 +30,7 @@ repository:
 | `20260729230000` | `security_invariants` |
 | `20260729234500` | `security_invariants_followup` |
 | `20260729235500` | `security_helper_invoker` |
+| `20260730140948` | `security_invariants_remote_drift_repair` |
 
 ## Riesame del 30 luglio 2026: deriva remota
 
@@ -53,13 +55,15 @@ base sono state riapplicate o ripristinate dopo il follow-up, senza un replay
 coerente della cronologia. I cataloghi PostgreSQL non permettono di attribuire
 con certezza quale operazione o strumento abbia eseguito la sovrascrittura.
 
-È stata preparata, ma **non applicata**, la migrazione additiva:
+La migrazione additiva è stata applicata il 30 luglio 2026 dopo approvazione
+esplicita:
 
-- `20260730153957_security_invariants_remote_drift_repair.sql`.
+- `20260730140948_security_invariants_remote_drift_repair.sql`.
 
 La repair non modifica dati applicativi, ripristina le quattro funzioni e la
-policy, rende espliciti `search_path` e privilegi e può essere riapplicata in
-sicurezza. Richiede approvazione esplicita in sessione prima del deploy remoto.
+policy e rende espliciti `search_path` e privilegi. L'API Supabase ha assegnato
+la versione `20260730140948`; il file locale è stato rinominato per mantenere
+repository e migration history allineati.
 
 ## Cosa era corretto
 
@@ -143,8 +147,12 @@ Le query read-only di preflight rieseguite il 30 luglio restituiscono zero per:
 - slot su bottiglie cancellate o cedute;
 - utenti di test residui.
 
-La Fase 6d-1 non è conclusa finché, dopo l'applicazione approvata della repair,
-le due griglie non restituiscono rispettivamente **33/33** e **11/11**.
+Dopo il deploy la query unica read-only restituisce **13/13 PASSA**: migration
+history, quattro funzioni, trigger, policy, privilegi, preflight e assenza di
+fixture sono conformi. Le due griglie comportamentali non sono state rieseguite
+perché creano e cancellano fixture remote e richiedono un'approvazione
+esplicita separata. La Fase 6d-1 non è conclusa finché non restituiscono
+rispettivamente **33/33** e **11/11**.
 
 ### Esito storico del 29 luglio — griglia originale
 
@@ -191,10 +199,9 @@ Copertura:
 
 ### Riesame corrente
 
-Prima della repair gli advisor riportano:
+Dopo la repair gli advisor confermano che `auth_rls_initplan` su
+`user_roles_select_own` è scomparso. Restano:
 
-- `auth_rls_initplan` su `user_roles_select_own`, direttamente causato dal
-  ritorno a `auth.uid()` senza `select`;
 - le due viste `public_listings` e `public_bottle_units` come
   `security_definer_view`;
 - le otto RPC applicative come funzioni `SECURITY DEFINER` eseguibili da
@@ -202,8 +209,8 @@ Prima della repair gli advisor riportano:
 - **Leaked Password Protection** disabilitata;
 - indici non ancora usati su un database privo di traffico rappresentativo.
 
-Il primo avviso deve sparire dopo la repair. Gli advisor Security e Performance
-devono essere rieseguiti dopo il deploy; non sono ancora un esito finale.
+Gli advisor Security e Performance sono stati rieseguiti dopo il deploy; gli
+avvisi residui coincidono con le eccezioni e i debiti già documentati.
 
 ### Eccezioni accettate e documentate
 
@@ -256,7 +263,7 @@ sostituisce un processo di deploy riproducibile.
 
 ## Stato finale
 
-La repair è pronta per revisione locale, ma non è stata applicata al database
-collegato. La Fase 6d-1 resta **aperta**: non va dichiarata conclusa e non si
-avvia la Fase 6d-2 o la Fase 7 finché deploy approvato, 33/33, 11/11, preflight,
-assenza di fixture e advisor riesaminati non sono tutti documentati.
+La repair è applicata e la verifica read-only è interamente verde. La Fase
+6d-1 resta **aperta**: non va dichiarata conclusa e non si avvia la Fase 6d-2
+o la Fase 7 finché le griglie remote con fixture non restituiscono 33/33 e
+11/11 e il branch non completa il normale ciclo di review/integrazione.

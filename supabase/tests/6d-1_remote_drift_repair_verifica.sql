@@ -2,7 +2,7 @@
 -- Fase 6d-1 — verifica unica della repair della deriva remota.
 --
 -- Eseguire dopo avere applicato, con il sistema di migrazioni e previa
--- approvazione, 20260730153957_security_invariants_remote_drift_repair.sql.
+-- approvazione, 20260730140948_security_invariants_remote_drift_repair.sql.
 --
 -- È una sola query, non modifica dati e restituisce una riga nominata per ogni
 -- controllo. Atteso: tutte le righe con esito = PASSA.
@@ -35,7 +35,7 @@ metriche as (
     (
       select count(*)
       from supabase_migrations.schema_migrations m
-      where m.version = '20260730153957'
+      where m.version = '20260730140948'
     ) as repair_registrata,
     (
       select count(*)

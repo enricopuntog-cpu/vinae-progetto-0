@@ -486,7 +486,7 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
      * Dalla 6d-1 aprire una bottiglia è una RPC e non più un UPDATE diretto.
      * La 6c-2 poteva permetterselo perché `stato` non aveva regole dietro; ora
      * ne ha una che un CHECK non sa esprimere — «non si apre una bottiglia con
-     * un annuncio attivo o riservato» guarda un'altra tabella — e la verifica
+     * un annuncio non terminale» guarda un'altra tabella — e la verifica
      * deve avvenire sotto lock di riga, o due sessioni concorrenti la
      * aggirerebbero. `stato` è quindi uscito dai GRANT di colonna: questo
      * `UPDATE` oggi verrebbe rifiutato da PostgreSQL prima ancora della RLS.

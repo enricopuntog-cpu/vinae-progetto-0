@@ -219,20 +219,18 @@ retroattiva a un file già applicato:
 - `20260729230000_security_invariants.sql`;
 - `20260729234500_security_invariants_followup.sql`;
 - `20260729235500_security_helper_invoker.sql`;
-- `20260730153957_security_invariants_remote_drift_repair.sql`.
+- `20260730140948_security_invariants_remote_drift_repair.sql`.
 
 La verifica sul database reale, i problemi corretti e le eccezioni deliberate
 degli advisor Supabase sono in
 [`PHASE_6D1_SUPABASE_REVIEW.md`](PHASE_6D1_SUPABASE_REVIEW.md).
 
-**Stato al 30 luglio 2026: fase riaperta, repair non ancora applicata.** Le
-prime tre migrazioni risultano registrate, ma quattro funzioni e la policy
-`user_roles_select_own` hanno subito una deriva verso definizioni precedenti.
-La quarta migrazione ripristina lo stato finale senza modificare dati. Prima di
-dichiarare di nuovo conclusa la 6d-1 servono approvazione al deploy, 33/33 nella
-griglia principale, 11/11 nel follow-up, zero fixture, zero violazioni di
-preflight e un nuovo riesame degli advisor. Fino ad allora non si avvia la
-Fase 6d-2 né la Fase 7.
+**Stato al 30 luglio 2026: repair applicata, fase ancora aperta.** La quarta
+migrazione ha ripristinato lo stato finale senza modificare dati applicativi;
+la query read-only post-deploy è 13/13 e `auth_rls_initplan` è scomparso.
+Restano da autorizzare e rieseguire le griglie remote con fixture, attese a
+33/33 e 11/11. Fino a quel risultato e alla normale integrazione del branch non
+si avvia la Fase 6d-2 né la Fase 7.
 
 Sette confini chiusi: privacy di `bottle_units` e di `listings` (viste a elenco
 chiuso di colonne al posto dei `GRANT` di tabella), `user_roles` non più
