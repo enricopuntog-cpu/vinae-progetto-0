@@ -15,15 +15,14 @@
  * Le scritture non toccano mai `stato` direttamente: quelle colonne non sono
  * nei GRANT concessi al client, quindi ogni transizione passa da una funzione
  * SECURITY DEFINER che verifica proprietà e stato di partenza. Vale anche per
- * la creazione, che deve attraversare `wines` — catalogo condiviso scrivibile
- * solo dallo staff.
+ * la creazione: dalla 6d-2a un annuncio parte sempre da una bottle_unit già
+ * presente in Cantina e non può più coniare una scheda catalogo.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Wine } from "@/data/wines";
 import type {
   DatiModificaAnnuncio,
-  DatiNuovoAnnuncio,
   DatiVenditaDaCantina,
   ListingService,
   Result,
@@ -59,6 +58,7 @@ type PublicListingRow = {
   seller_username: string;
   seller_citta: string;
   seller_avatar_url: string;
+  wine_provenienza: "staff" | "utente";
 };
 
 const COLONNE = [
@@ -90,6 +90,7 @@ const COLONNE = [
   "seller_username",
   "seller_citta",
   "seller_avatar_url",
+  "wine_provenienza",
 ].join(",");
 
 /** Immagine mostrata quando un annuncio non ne ha nessuna. */
@@ -146,10 +147,12 @@ export function rigaAWine(riga: PublicListingRow): Wine {
   return {
     // L'identità pubblica dell'annuncio, quella che finisce in /annuncio/<id>.
     id: riga.slug,
+    detailHref: `/annuncio/${riga.slug}`,
     // Lo slug del vino è un'altra cosa: è la chiave con cui i componenti
     // ritrovano finestra di bevuta e abbinamenti nei metadati non ancora
     // migrati. Due annunci dello stesso vino condividono wineSlug ma non id.
     wineSlug: riga.wine_slug,
+    catalogSource: riga.wine_provenienza,
     produttore: riga.produttore,
     nome: riga.nome,
     annata: riga.annata,
@@ -279,22 +282,15 @@ export function createListingService(client: SupabaseClient | null): ListingServ
     // -- Scritture (Fase 6b) --------------------------------------------------
 
     /**
-     * Creazione. Una sola chiamata: `listing_crea` crea vino (se manca), unità
-     * fisica e annuncio in bozza dentro la stessa transazione. Il venditore
-     * non è un parametro — la funzione usa `auth.uid()` e ignora qualunque
-     * cosa il client dica di essere.
-     *
-     * Dalla Fase 6c-2 la stessa funzione serve anche la via che parte da una
-     * bottiglia già in cantina: si passa `p_bottle_unit_id` e i cinque campi
-     * che descrivono il vino restano fuori, perché il database li legge
-     * dall'unità. La proprietà dell'unità la verifica la funzione, non qui.
+     * La 6d-2a chiude la via che coniava vino, bottiglia e annuncio insieme.
+     * Una vendita parte sempre da una bottle_unit esistente; proprietà, stato,
+     * età e assenza di altri annunci vivi sono verificati nel database.
      */
-    async crea(
-      dati: DatiNuovoAnnuncio | DatiVenditaDaCantina,
-    ): Promise<Result<{ id: string; slug: string }>> {
+    async crea(dati: DatiVenditaDaCantina): Promise<Result<{ id: string; slug: string }>> {
       if (!client) return NESSUN_CLIENT;
 
-      const comuni = {
+      const parametri = {
+        p_bottle_unit_id: dati.bottleUnitId,
         p_prezzo_cents: dati.prezzoCents,
         p_condizione: dati.condizione,
         p_conservazione: dati.conservazione,
@@ -302,19 +298,7 @@ export function createListingService(client: SupabaseClient | null): ListingServ
         p_immagini: dati.immagini,
       };
 
-      const parametri =
-        "bottleUnitId" in dati
-          ? { ...comuni, p_bottle_unit_id: dati.bottleUnitId }
-          : {
-              ...comuni,
-              p_produttore: dati.produttore,
-              p_nome: dati.nome,
-              p_annata: dati.annata,
-              p_regione: dati.regione,
-              p_tipo: dati.tipo,
-            };
-
-      const { data, error } = await client.rpc("listing_crea", parametri);
+      const { data, error } = await client.rpc("listing_crea_da_bottiglia", parametri);
 
       if (error) return { ok: false, error: messaggioPerUtente("crea", error) };
 
@@ -322,7 +306,7 @@ export function createListingService(client: SupabaseClient | null): ListingServ
       // una riga sola.
       const riga = (data as { annuncio_id: string; annuncio_slug: string }[] | null)?.[0];
       if (!riga) {
-        segnalaErrore("crea", "listing_crea non ha restituito nessuna riga");
+        segnalaErrore("crea", "listing_crea_da_bottiglia non ha restituito nessuna riga");
         return { ok: false, error: ERRORE_GENERICO };
       }
 

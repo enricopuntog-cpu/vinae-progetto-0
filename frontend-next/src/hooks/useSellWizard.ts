@@ -4,8 +4,9 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { firmaUploadFoto } from "@/app/vendi/actions";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { BUCKET_ANNUNCI, createListingService } from "@/services/listing-service";
-import type { DatiNuovoAnnuncio, DatiVenditaDaCantina } from "@/services/types";
+import { createCellarService } from "@/services/cellar-service";
+import { createListingService } from "@/services/listing-service";
+import type { DatiNuovaBottiglia, DatiVenditaDaCantina } from "@/services/types";
 import type { Wine } from "@/data/wines";
 
 export type Modalita = "privata" | "pubblica" | "vendita";
@@ -70,8 +71,8 @@ export const MAX_FOTO = 6;
  * 1. `askListingAI` / `applyAiSuggestion` non ci sono: chiamavano
  *    /api/ai/listing-suggestion sul backend FastAPI, e il dominio AI è Fase 10.
  *    Stessa esclusione già decisa per l'assistente Sommelier in Fase 3.
- * 2. Le fotografie si caricano sul serio, su Supabase Storage, invece di
- *    mostrare un toast "(demo)".
+ * 2. Le fotografie si caricano sul serio: bucket privato `cantina` per la
+ *    catalogazione, bucket pubblico `annunci` per la vendita.
  * 3. `pubblica` e `salvaBozza` sono asincroni e possono fallire: il messaggio
  *    che arriva dal database è già leggibile e viene mostrato così com'è.
  * 4. `sellerStatus` non è più un parametro. In frontend/ blocca la
@@ -80,9 +81,10 @@ export const MAX_FOTO = 6;
  *    /verifica-venditore non è ancora portata, quindi il blocco non avrebbe
  *    né una verifica da controllare né una pagina dove mandare l'utente.
  *
+ * Dalla 6d-2a privata/pubblica creano direttamente una bottle_unit senza
+ * annuncio; la vendita è raggiungibile solo dopo averne scelta una esistente.
  * `salvaBozza` seguito da `pubblica` non crea due annunci: l'id della bozza
- * resta in memoria e la pubblicazione riusa quello. Vale anche quando la
- * pubblicazione fallisce e l'utente riprova.
+ * resta in memoria e la pubblicazione riusa quello.
  */
 export function useSellWizard({
   initialMode,
@@ -121,7 +123,8 @@ export function useSellWizard({
   // Id della bozza già creata su Supabase, se c'è.
   const [bozzaId, setBozzaId] = useState<string | null>(null);
 
-  const service = useMemo(() => createListingService(getSupabaseClient()), []);
+  const listingService = useMemo(() => createListingService(getSupabaseClient()), []);
+  const cellarService = useMemo(() => createCellarService(getSupabaseClient()), []);
 
   const isVendita = modalita === "vendita";
   const steps = isVendita ? VENDITA_STEPS : CATALOGAZIONE_STEPS;
@@ -141,14 +144,18 @@ export function useSellWizard({
 
     setFotoInCorso(true);
     try {
-      const firma = await firmaUploadFoto(file.type, file.size);
+      const firma = await firmaUploadFoto(
+        file.type,
+        file.size,
+        daCantina ? "annuncio" : "cantina",
+      );
       if (!firma.ok) {
         toast.error(firma.error);
         return;
       }
 
       const { error } = await client.storage
-        .from(BUCKET_ANNUNCI)
+        .from(firma.data.bucket)
         .uploadToSignedUrl(firma.data.percorso, firma.data.token, file);
 
       if (error) {
@@ -162,7 +169,7 @@ export function useSellWizard({
     } finally {
       setFotoInCorso(false);
     }
-  }, []);
+  }, [daCantina]);
 
   const rimuoviFoto = useCallback((indice: number) => {
     setFoto((f) => {
@@ -176,9 +183,10 @@ export function useSellWizard({
     });
   }, []);
 
-  /** Dati del wizard nella forma che il servizio (e il database) si aspettano. */
-  const datiAnnuncio = useCallback((): DatiNuovoAnnuncio | DatiVenditaDaCantina => {
-    const comuni = {
+  const datiVendita = useCallback((): DatiVenditaDaCantina | null => {
+    if (!bottleUnitId) return null;
+    return {
+      bottleUnitId,
       condizione: d.condizione as Wine["condizione"],
       conservazione: d.conservazione.trim(),
       storia: d.storia.trim(),
@@ -187,26 +195,31 @@ export function useSellWizard({
       prezzoCents: Math.round(Number(d.prezzo) * 100),
       immagini: foto.map((f) => f.percorso),
     };
+  }, [d, foto, bottleUnitId]);
 
-    // I cinque campi che descrivono il vino restano fuori quando la bottiglia
-    // esiste già: li legge il database dall'unità.
-    if (bottleUnitId) return { ...comuni, bottleUnitId };
-
+  const datiBottiglia = useCallback((): DatiNuovaBottiglia => {
     return {
-      ...comuni,
       produttore: d.produttore.trim(),
       nome: d.nome.trim(),
       annata: Number(d.annata),
       regione: d.regione.trim(),
       tipo: d.tipo as Wine["tipo"],
+      visibilita: modalita === "pubblica" ? "cantina_pubblica" : "privata",
+      immagini: foto.map((f) => f.percorso),
     };
-  }, [d, foto, bottleUnitId]);
+  }, [d, foto, modalita]);
 
   /** Crea la bozza se non esiste ancora, e ne restituisce id e slug. */
   const assicuraBozza = useCallback(async () => {
     if (bozzaId) return { id: bozzaId, slug: null as string | null };
 
-    const esito = await service.crea(datiAnnuncio());
+    const dati = datiVendita();
+    if (!dati) {
+      toast.error("Scegli una bottiglia dalla Cantina prima di metterla in vendita.");
+      return null;
+    }
+
+    const esito = await listingService.crea(dati);
     if (!esito.ok) {
       toast.error(esito.error);
       return null;
@@ -216,18 +229,32 @@ export function useSellWizard({
     // ora un annuncio.
     await onCantinaCambiata?.();
     return { id: esito.data.id, slug: esito.data.slug as string | null };
-  }, [bozzaId, datiAnnuncio, service, onCantinaCambiata]);
+  }, [bozzaId, datiVendita, listingService, onCantinaCambiata]);
+
+  const aggiungiInCantina = useCallback(async () => {
+    const esito = await cellarService.aggiungiBottiglia(datiBottiglia());
+    if (!esito.ok) {
+      toast.error(esito.error);
+      return false;
+    }
+    await onCantinaCambiata?.();
+    toast.success(
+      modalita === "pubblica"
+        ? "Bottiglia aggiunta alla cantina pubblica"
+        : "Bottiglia aggiunta alla tua cantina privata",
+    );
+    onNavigate("/cantina");
+    return true;
+  }, [cellarService, datiBottiglia, modalita, onCantinaCambiata, onNavigate]);
 
   const pubblica = useCallback(async () => {
     if (!isVendita) {
-      // Catalogazione: in frontend/ è un toast di demo che non scrive nulla, e
-      // resta tale. Le bottiglie in cantina senza annuncio sono la Fase 6c.
-      toast.success(
-        modalita === "pubblica"
-          ? "Bottiglia aggiunta alla cantina pubblica (demo)"
-          : "Bottiglia aggiunta alla tua cantina privata (demo)",
-      );
-      onNavigate("/cantina");
+      setInviando(true);
+      try {
+        await aggiungiInCantina();
+      } finally {
+        setInviando(false);
+      }
       return;
     }
 
@@ -236,7 +263,7 @@ export function useSellWizard({
       const bozza = await assicuraBozza();
       if (!bozza) return;
 
-      const esito = await service.pubblica(bozza.id);
+      const esito = await listingService.pubblica(bozza.id);
       if (!esito.ok) {
         toast.error(esito.error);
         return;
@@ -253,12 +280,16 @@ export function useSellWizard({
     } finally {
       setInviando(false);
     }
-  }, [assicuraBozza, isVendita, modalita, onNavigate, service, onCantinaCambiata]);
+  }, [aggiungiInCantina, assicuraBozza, isVendita, onNavigate, listingService, onCantinaCambiata]);
 
   const salvaBozza = useCallback(async () => {
     if (!isVendita) {
-      toast.success("Bozza salvata nella cantina (demo)");
-      onNavigate("/cantina");
+      setInviando(true);
+      try {
+        await aggiungiInCantina();
+      } finally {
+        setInviando(false);
+      }
       return;
     }
 
@@ -274,7 +305,7 @@ export function useSellWizard({
     } finally {
       setInviando(false);
     }
-  }, [assicuraBozza, isVendita, onNavigate]);
+  }, [aggiungiInCantina, assicuraBozza, isVendita, onNavigate]);
 
   const suggerito = d.produttore.toLowerCase().includes("sassicaia")
     ? 260

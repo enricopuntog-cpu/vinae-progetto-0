@@ -1,12 +1,34 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { Heart, MapPin, ShieldCheck, Tag, EyeOff } from "lucide-react";
 import type { Wine } from "@/data/wines";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
 import { DrinkBadge } from "@/components/vinea/DrinkWindow";
 import { listingStatusLabel, listingStatusTone } from "@/data/moderation";
 import { SafeImage } from "@/components/vinea/States";
+
+const DetailLink = ({
+  href,
+  className,
+  testId,
+  children,
+}: {
+  href: string | null;
+  className: string;
+  testId: string;
+  children: ReactNode;
+}) =>
+  href ? (
+    <Link href={href} data-testid={testId} className={className}>
+      {children}
+    </Link>
+  ) : (
+    <div data-testid={testId} className={className}>
+      {children}
+    </div>
+  );
 
 export function WineCard({
   wine,
@@ -21,16 +43,20 @@ export function WineCard({
 }) {
   const { favorites, toggleFavorite, inVendita, prezzoNascosto, listingStatus } = useVinea();
   const fav = favorites.has(wine.id);
-  const sale = showSaleBadge && inVendita.has(wine.id);
-  const priceHidden = hidePriceIfPrivate && prezzoNascosto.has(wine.id);
+  const cellarKey = wine.wineSlug ?? wine.id;
+  const sale = showSaleBadge && inVendita.has(cellarKey);
+  const priceHidden = hidePriceIfPrivate && prezzoNascosto.has(cellarKey);
+  const priceUnavailable = wine.detailHref === null && wine.prezzo === 0;
   const stato = listingStatus[wine.id];
   const mostraStato = stato && stato !== "attivo";
+  const detailHref =
+    wine.detailHref === undefined ? `/annuncio/${wine.id}` : wine.detailHref;
 
   if (variant === "list") {
     return (
-      <Link
-        href={`/annuncio/${wine.id}`}
-        data-testid={`wine-card-list-${wine.id}`}
+      <DetailLink
+        href={detailHref}
+        testId={`wine-card-list-${wine.id}`}
         className="flex gap-3 rounded-2xl border border-border bg-card p-3 card-lift perf-card"
       >
         <div className="relative">
@@ -59,6 +85,8 @@ export function WineCard({
               <p className="flex items-center gap-1 text-xs text-muted-foreground">
                 <EyeOff className="h-3 w-3" /> Prezzo riservato
               </p>
+            ) : priceUnavailable ? (
+              <p className="text-xs text-muted-foreground">Nessun prezzo</p>
             ) : (
               <p className="font-serif text-lg font-semibold text-bordeaux">
                 {formatEUR(wine.prezzo)}
@@ -67,7 +95,7 @@ export function WineCard({
             <span className="text-[10px] text-muted-foreground">{wine.condizione}</span>
           </div>
         </div>
-      </Link>
+      </DetailLink>
     );
   }
 
@@ -111,9 +139,9 @@ export function WineCard({
           className={`h-4 w-4 transition-colors ${fav ? "fill-bordeaux text-bordeaux" : "text-antracite"}`}
         />
       </button>
-      <Link
-        href={`/annuncio/${wine.id}`}
-        data-testid={`wine-card-link-${wine.id}`}
+      <DetailLink
+        href={detailHref}
+        testId={`wine-card-link-${wine.id}`}
         className="block"
       >
         <div className="img-sheen aspect-[4/5] overflow-hidden bg-secondary">
@@ -143,6 +171,8 @@ export function WineCard({
                 <p className="flex items-center gap-1 font-serif text-sm text-muted-foreground">
                   <EyeOff className="h-3.5 w-3.5" /> Prezzo riservato
                 </p>
+              ) : priceUnavailable ? (
+                <p className="text-xs text-muted-foreground">Nessun prezzo</p>
               ) : (
                 <>
                   <p className="font-serif text-xl font-semibold text-bordeaux">
@@ -161,7 +191,7 @@ export function WineCard({
             </span>
           </div>
         </div>
-      </Link>
+      </DetailLink>
     </div>
   );
 }
