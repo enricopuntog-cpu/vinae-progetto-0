@@ -45,6 +45,19 @@ e le RPC applicative restano documentate in
 Le griglie ai punti 6 e 7 creano e cancellano fixture nel progetto remoto:
 richiedono un'approvazione esplicita separata dal deploy della migrazione.
 
+## Fase 6d-2a — catalogo e percorsi Cantina
+
+Applicare la migrazione solo dopo revisione e autorizzazione esplicita:
+
+| # | File | Esito atteso |
+| --- | --- | --- |
+| 1 | `supabase/migrations/20260730184956_catalog_cellar_paths.sql` | migrazione applicata e registrata senza riscrivere versioni storiche |
+| 2 | [`6d-2a_catalog_cellar_paths.sql`](6d-2a_catalog_cellar_paths.sql) | 17 righe, tutte `PASSA`, nessuna riga 99 |
+
+La griglia crea e cancella due utenti, due vini, due bottiglie, un annuncio e un
+ambiente. Richiede un'autorizzazione fixture separata da quella della
+migrazione. Non riesegue le griglie 6d-1.
+
 ### Se il preflight trova righe
 
 La migrazione **fallirà di proposito**, con un messaggio che rimanda qui: il
