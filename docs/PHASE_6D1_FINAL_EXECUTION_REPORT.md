@@ -45,10 +45,13 @@ Il diff completo contro `origin/main` copre:
 - roadmap, sicurezza, backlog, rapporti e handoff.
 
 Non sono stati rilevati `.env`, token, chiavi private, credenziali o file
-estranei. L'unico warning `git diff --check` era una riga vuota finale
-superflua in `CONTESTO_IA/05_INDICE_PR_E_FONTI.md`; è stata rimossa senza altre
-modifiche al file. La descrizione client di `bottiglia_apri` è stata riallineata
-all'invariante effettivo su tutti gli annunci non terminali.
+estranei. La riga vuota finale superflua in
+`CONTESTO_IA/05_INDICE_PR_E_FONTI.md` è stata rimossa senza altre modifiche al
+file. Il controllo completo verso `origin/main` segnala anche una riga vuota
+EOF in `20260729234500_security_invariants_followup.sql`: il file è una
+migrazione già applicata e non è stato modificato retroattivamente per
+correggere un warning cosmetico. La descrizione client di `bottiglia_apri` è
+stata riallineata all'invariante effettivo su tutti gli annunci non terminali.
 
 ## Repair e migration history
 
@@ -114,7 +117,8 @@ ricampionati in questa ripresa.
 | `bun run build` | PASSA — Next.js 16.2.12, 13 route |
 | scansione segreti sui file modificati | PASSA |
 | identità byte-per-byte repair | PASSA |
-| `git diff --check` | PASSA dopo la sola rimozione EOF autorizzata |
+| `git diff --check` staged/unstaged | PASSA |
+| `git diff --check origin/main...HEAD` | una riga vuota EOF in una migrazione già applicata, preservata |
 
 I test SQL locali non sono stati eseguiti perché l'ambiente non dispone di un
 database Supabase locale riproducibile. Nessun risultato locale è presentato

@@ -18,5 +18,6 @@
 - Blocking evidence is recorded in `docs/PHASE_6D2A_HANDOFF_REPORT.md`.
 - `origin/main` lacks the repair migration, final Phase 6d-1 documentation and verified final grid results.
 - Local `frontend-next` install, lint, typecheck and build are green; lint reports 23 preexisting warnings and zero errors.
+- The full branch diff has one whitespace warning at EOF in the already-applied follow-up migration; the historical SQL was not rewritten.
 - No remote Supabase SQL or fixture test was executed in this resumed session.
 - Remote 33/33 and 11/11 fixture grids remain required before merge; do not start Phase 6d-2a or Phase 7.

@@ -209,7 +209,7 @@ allineato alla migration history.
 | Supabase remoto | griglia follow-up | In attesa di approvazione separata | lo script crea e cancella fixture; baseline pre-repair 7/11 |
 | Supabase remoto | query unica della repair | Superato | 13/13 `PASSA` dopo il deploy |
 | Supabase advisor | Security e Performance | Riesaminati dopo la repair | `auth_rls_initplan` eliminato; restano eccezioni deliberate, indici senza traffico e Leaked Password Protection disabilitata |
-| Repository | `git diff --check` | Superato | nessun errore di whitespace dopo la rimozione della riga vuota finale preesistente in `CONTESTO_IA/05_INDICE_PR_E_FONTI.md` |
+| Repository | `git diff --check` | Eccezione documentata | diff staged/unstaged puliti dopo la rimozione della riga vuota in `CONTESTO_IA/05_INDICE_PR_E_FONTI.md`; il diff completo verso `main` segnala una riga vuota EOF nella migrazione già applicata `20260729234500_security_invariants_followup.sql`, non modificata retroattivamente |
 | Repository | scansione file modificati | Superato | nessun `.env`, chiave privata, token o credenziale rilevato |
 | Frontend Next.js | `bun install --frozen-lockfile` | Superato | Bun 1.3.14; lockfile invariato |
 | Frontend Next.js | `bun run lint` | Superato | exit code 0; 23 warning preesistenti, 0 errori |
