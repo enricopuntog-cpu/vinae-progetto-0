@@ -4,7 +4,7 @@
 -- Eseguire dopo 20260730184956_catalog_cellar_paths.sql.
 -- Crea e cancella due utenti, due vini, due bottiglie, un annuncio e un
 -- ambiente temporanei. Richiede autorizzazione fixture separata.
--- Atteso: 17 PASSA, 0 FALLISCE, nessuna riga 99.
+-- Atteso: 18 PASSA, 0 FALLISCE, nessuna riga 99.
 -- ============================================================================
 
 drop table if exists esiti_6d2a;
@@ -345,6 +345,31 @@ exception when others then
   delete from auth.users where id in (v_owner, v_other);
 end;
 $test$;
+
+with residui as (
+  select
+    (select count(*)
+     from auth.users
+     where email like 'vinea-test-6d2a-%@example.invalid')
+    + (select count(*)
+       from public.profiles
+       where username like 'vinea_test_6d2a_owner%'
+          or username like 'vinea_test_6d2a_other%')
+    + (select count(*)
+       from public.wines
+       where produttore = 'Test6D2A')
+    + (select count(*)
+       from public.cellar_environments
+       where nome = 'Ambiente Test 6d-2a') as totale
+)
+insert into esiti_6d2a
+select
+  18,
+  'La pulizia finale non lascia residui fixture 6d-2a',
+  'residui = 0',
+  case when totale = 0 then 'PASSA' else 'FALLISCE' end,
+  'residui trovati ' || totale
+from residui;
 
 select n, esito, caso, atteso, dettaglio
 from esiti_6d2a
