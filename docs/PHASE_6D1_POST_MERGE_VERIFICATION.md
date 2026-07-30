@@ -114,4 +114,4 @@ Il gate tecnico post-merge della Fase 6d-1 è verde:
 - residui fixture: **0**.
 
 La Fase 6d-2a resta non iniziata. Può essere proposta soltanto dopo
-l'integrazione di questo rapporto in `main` e una nuova approvazione esplicita.
+l'integrazione della draft PR #16 in `main` e una nuova approvazione esplicita.

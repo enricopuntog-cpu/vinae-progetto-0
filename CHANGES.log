@@ -5,16 +5,17 @@
 - Pull Request #14 is merged; its final head is `6bbe4dd`.
 - GitHub Actions run `30554736346` is green on `6bbe4dd` for backend, frontend and frontend-next.
 - Pull Request #15 is merged in `main`.
+- Draft Pull Request #16 targets `main` with the Phase 6d-1 post-merge verification evidence.
 - The repair verifier remains documented at 13/13 `PASSA` with fixture residue 0.
 - Remote migration `20260730162046 fix_6d1_bottle_message_encoding` is applied and present in migration history.
 - Final remote fixture grids are 33/33 and 11/11; the post-run residue check is zero in all recorded categories.
 
 ## ACTIVE TASK
-- Phase 6d-1 post-merge evidence is complete on branch `hardening/phase-6d-1-post-merge-verification`; Phase 6d-2a has not started.
+- Phase 6d-1 post-merge evidence is complete in draft Pull Request #16; Phase 6d-2a has not started.
 
 ## NEXT STEPS
-1. Review the Phase 6d-1 post-merge verification draft PR after CI is green.
-2. Merge the verification PR only after explicit approval.
+1. Review draft Pull Request #16 after CI is green.
+2. Merge Pull Request #16 only after explicit approval.
 3. Use Prompt 2 only after the verification PR is integrated and Phase 6d-2a is explicitly approved.
 
 ## BLOCKERS / NOTES

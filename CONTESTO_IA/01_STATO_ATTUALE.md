@@ -15,6 +15,7 @@ Fotografia del **30 luglio 2026**.
 | Attività corrente | Documentazione delle prove post-merge 33/33 e 11/11 |
 | PR della 6d-1 | [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) — merged |
 | PR di riconciliazione | [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) — merged |
+| PR di verifica post-merge | [#16](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/16) — draft |
 
 ## Stato Git e prove
 

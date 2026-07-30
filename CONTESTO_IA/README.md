@@ -43,5 +43,5 @@ Vinea sta migrando gradualmente dall'app servita
 `frontend/` + `backend/` verso `frontend-next/` + Supabase. La Fase 6d-1 è
 integrata in `main` tramite PR #14 e ha CI finale verde. Le griglie remote
 post-repair sono 33/33 e 11/11, il verifier storico è 13/13 e i residui delle
-fixture sono zero; l'evidenza resta da integrare tramite la PR di verifica
-post-merge. La Fase 6d-2a e le fasi 7–11 non sono iniziate.
+fixture sono zero; l'evidenza resta da integrare tramite la draft PR #16. La
+Fase 6d-2a e le fasi 7–11 non sono iniziate.

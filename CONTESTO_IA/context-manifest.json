@@ -17,6 +17,7 @@
     "behind_origin_branch": 0
   },
   "documentation_branch": "hardening/phase-6d-1-post-merge-verification",
+  "verification_pr": 16,
   "runtime_truth": {
     "served_frontend": "frontend/",
     "served_backend": "backend/",
@@ -62,6 +63,6 @@
     "docs/ROADMAP_V1.md",
     "docs/MIGRATION_PHASE_1_BACKLOG.md"
   ],
-  "next_gate": "Merge the Phase 6d-1 post-merge verification PR after green CI, then request explicit approval before starting Phase 6d-2a.",
+  "next_gate": "Merge draft PR #16 after green CI and explicit approval, then request explicit approval before starting Phase 6d-2a.",
   "remote_sql_rule": "Show exact SQL and obtain explicit in-session approval before applying any migration to the real Supabase project."
 }
