@@ -19,8 +19,8 @@ devono essere reinterpretati.
    prima di modificare codice, database o documentazione.
 5. [`05_INDICE_PR_E_FONTI.md`](05_INDICE_PR_E_FONTI.md) — indice delle PR e
    gerarchia delle fonti.
-6. [`06_PROMPT_CHAT_OPERATIVE.md`](06_PROMPT_CHAT_OPERATIVE.md) — prompt
-   sequenziali pronti da copiare per audit, prove remote e Fase 6d-2a.
+6. [`06_PROMPT_CHAT_OPERATIVE.md`](06_PROMPT_CHAT_OPERATIVE.md) — tre prompt
+   sequenziali per chiudere il solo gate mancante e avanzare nella Fase 6d-2a.
 7. [`context-manifest.json`](context-manifest.json) — riepilogo
    machine-readable per strumenti automatici.
 
