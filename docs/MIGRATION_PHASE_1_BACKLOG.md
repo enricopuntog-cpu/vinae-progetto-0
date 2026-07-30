@@ -10,7 +10,7 @@ fase precedente riportata nella zona organizzativa. Vedi
 
 **Branch**: `migration/phase-2-nextjs-scaffold`
 
-Scaffold Next.js 15 App Router + Tailwind v4 + shadcn/ui in una directory
+Scaffold Next.js App Router + Tailwind v4 + shadcn/ui in una directory
 nuova, separata da `frontend/` (nome esatto da confermare in fase, es.
 `web-next/`). Copia invariata: `styles.css`, `components/ui/**`,
 `components/vinea/**` (aggiungendo `"use client"` dove necessario),
@@ -225,12 +225,14 @@ La verifica sul database reale, i problemi corretti e le eccezioni deliberate
 degli advisor Supabase sono in
 [`PHASE_6D1_SUPABASE_REVIEW.md`](PHASE_6D1_SUPABASE_REVIEW.md).
 
-**Stato al 30 luglio 2026: repair applicata, fase ancora aperta.** La quarta
+**Stato al 30 luglio 2026: integrata in `main`, prova comportamentale
+post-repair ancora aperta.** La PR #14 è stata unita con merge commit
+`61e3fde`; la CI finale `30554736346` è verde sull'HEAD `6bbe4dd`. La quarta
 migrazione ha ripristinato lo stato finale senza modificare dati applicativi;
 la query read-only post-deploy è 13/13 e `auth_rls_initplan` è scomparso.
 Restano da autorizzare e rieseguire le griglie remote con fixture, attese a
-33/33 e 11/11. Fino a quel risultato e alla normale integrazione del branch non
-si avvia la Fase 6d-2 né la Fase 7.
+33/33 e 11/11. Il merge non prova il loro esito: fino alla documentazione del
+gate non si avvia la Fase 6d-2a né la Fase 7.
 
 Sette confini chiusi: privacy di `bottle_units` e di `listings` (viste a elenco
 chiuso di colonne al posto dei `GRANT` di tabella), `user_roles` non più
@@ -274,6 +276,27 @@ Le tre regole permanenti che ne derivano sono in `CLAUDE.md`, sezione
   esclude le unità cedute dalla policy del proprietario e libera l'eventuale
   `cellar_slot`. Il trasferimento al compratore resta una responsabilità della
   Fase 7: questa fase rappresenta soltanto l'uscita dal possesso del venditore.
+
+## Fase 6d-2a — Provenienza catalogo e percorsi Cantina
+
+**Branch**: `migration/phase-6d-2a-catalog-cellar-paths`
+
+Precondizione obbligatoria: rapporto post-merge integrato con griglie 33/33 e
+11/11, verifier repair 13/13, residui fixture zero e approvazione esplicita
+della fase.
+
+Perimetro:
+
+- distinguere il catalogo curato dallo staff dai vini inseriti dagli utenti;
+- separare aggiunta privata, aggiunta pubblica e vendita da `bottle_unit`
+  esistente;
+- rendere atomica la creazione dell'ambiente e del modulo iniziale;
+- collegare alla home solo riepiloghi reali della Cantina;
+- mantenere invarianti, RLS, privilegi e viste chiuse della 6d-1.
+
+Fuori perimetro: ordini, proposte, pagamenti, payout, KYC, trasferimento della
+proprietà e qualsiasi lavoro della Fase 7. Ogni migrazione è additiva; SQL e
+fixture sul progetto remoto richiedono autorizzazioni esplicite separate.
 
 ## Fase 7 — OrderService + ProposalService + PaymentService
 
