@@ -3,16 +3,17 @@
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
 - Handoff bridge reloaded on 30 July 2026 from `CLAUDE.md` and `CHANGES.log`; Git state was verified before this update.
 - Remote refs refreshed again on 30 July 2026: `origin/main` remains at 6c-2 (`a857f3b`) and does not contain Phase 6d-1.
-- Validated code/evidence commit `52316c9` is 18 commits ahead of `origin/main` and 4 commits ahead of the Phase 6d-1 remote branch; handoff files remain to be committed.
+- Published branch `hardening/phase-6d-1-security-invariants` is at `bebdf79`, 20 commits ahead of `origin/main` and aligned with its remote.
 - GitHub CLI 2.96.0 is authenticated as `enricopuntog-cpu`; repository access and `repo`/`workflow` token scopes were verified on 30 July 2026.
+- Draft Pull Request #14 targets `main`; GitHub Actions run 30554557435 is green for backend, frontend and frontend-next.
 
 ## ACTIVE TASK
-- Phase 6d-1 diff review and local qualification are complete; push, draft PR and GitHub Actions remain.
+- Phase 6d-1 branch publication and CI qualification are complete; the PR remains draft and unmerged.
 
 ## NEXT STEPS
-1. Commit the Phase 6d-1 handoff and context files.
-2. Push the dedicated branch and open the draft Pull Request toward `main`.
-3. Verify GitHub Actions on the final commit without merging.
+1. Keep Pull Request #14 in draft pending the required remote fixture grids.
+2. Execute and document 33/33 and 11/11 only after separate authorization.
+3. Merge only after all evidence is green and approval is explicit.
 
 ## BLOCKERS / NOTES
 - Blocking evidence is recorded in `docs/PHASE_6D2A_HANDOFF_REPORT.md`.

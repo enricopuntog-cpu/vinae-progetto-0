@@ -156,8 +156,13 @@ riscrivere i commit storici della fase.
 
 ## Pull Request e GitHub Actions
 
-- Pull Request: da creare in draft verso `main`.
-- GitHub Actions: da eseguire sull'ultimo commit pubblicato.
+- Pull Request:
+  [#14 — Fase 6d-1 — Security invariants and remote drift repair](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14),
+  draft verso `main`.
+- GitHub Actions:
+  [run 30554557435](https://github.com/enricopuntog-cpu/vinae-progetto-0/actions/runs/30554557435),
+  verde sul commit `bebdf79`: backend, frontend e frontend-next completati con
+  successo.
 - Merge: non autorizzato e non eseguito.
 
 ## Prossimi 3 passi atomici
