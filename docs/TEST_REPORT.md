@@ -202,11 +202,11 @@ allineato alla migration history.
 |---|---|---|---|
 | Supabase remoto | `pg_get_functiondef`, `pg_trigger`, `pg_policies` e privilegi | Deriva confermata | definizioni base riemerse per apertura, cancellazione, idoneità annuncio, cessione e policy ruoli |
 | Supabase remoto | deploy repair | Superato | DDL applicato e registrato come `20260730140948 security_invariants_remote_drift_repair` |
-| Supabase remoto | migration history | Superato | base, follow-up, helper e repair risultano registrati |
+| Supabase remoto | migration history | Superato | base, follow-up, helper, repair e correzione messaggi `20260730162046` risultano registrati |
 | Supabase remoto | preflight read-only | Superato | 0 duplicati, 0 bottiglie non idonee/mismatch, 0 slot invalidi |
 | Supabase remoto | fixture residue | Superato | 0 utenti `vinea-test-*` |
-| Supabase remoto | griglia principale | In attesa di approvazione separata | lo script crea e cancella fixture; baseline pre-repair 31/33 |
-| Supabase remoto | griglia follow-up | In attesa di approvazione separata | lo script crea e cancella fixture; baseline pre-repair 7/11 |
+| Supabase remoto | griglia principale | Superato | 33/33 post-repair |
+| Supabase remoto | griglia follow-up | Superato | 11/11 dopo la correzione UTF-8 dei due messaggi |
 | Supabase remoto | query unica della repair | Superato | 13/13 `PASSA` dopo il deploy |
 | Supabase advisor | Security e Performance | Riesaminati dopo la repair | `auth_rls_initplan` eliminato; restano eccezioni deliberate, indici senza traffico e Leaked Password Protection disabilitata |
 | Repository | `git diff --check` | Eccezione documentata | diff staged/unstaged puliti dopo la rimozione della riga vuota in `CONTESTO_IA/05_INDICE_PR_E_FONTI.md`; il diff completo verso `main` segnala una riga vuota EOF nella migrazione già applicata `20260729234500_security_invariants_followup.sql`, non modificata retroattivamente |
@@ -220,18 +220,18 @@ allineato alla migration history.
 La query read-only
 `supabase/tests/6d-1_remote_drift_repair_verifica.sql` raccoglie in una sola
 griglia i controlli di definizione, privilegi, trigger, policy, preflight e
-fixture ed è interamente verde. Restano da autorizzare separatamente e
-rieseguire entrambe le griglie comportamentali con fixture. Fino ad allora la
-Fase 6d-1 resta aperta.
+fixture ed è interamente verde. Le due griglie comportamentali sono state
+autorizzate separatamente e concluse con 33/33 e 11/11; il controllo finale dei
+residui è zero.
 
-Nella ripresa del 30 luglio 2026 non è stato eseguito alcun SQL remoto, per
-istruzione esplicita. I risultati Supabase sopra restano quelli documentati
-dalla sessione precedente e non sono stati reinterpretati come una nuova
-esecuzione.
+Nella verifica post-merge del 30 luglio 2026 il SQL remoto e le fixture sono
+stati eseguiti soltanto dopo autorizzazioni esplicite separate. Il dettaglio
+della migrazione `20260730162046`, delle griglie e dei residui è in
+`docs/PHASE_6D1_POST_MERGE_VERIFICATION.md`.
 
 ## Conclusione
 
 Lo stato remoto statico della Fase 6d-1 è nuovamente coerente con il repository.
-Restano obbligatorie le due griglie comportamentali, le verifiche di staging e
+Le due griglie comportamentali sono verdi. Restano le verifiche di staging e
 compliance indicate sopra; il progetto non deve essere presentato come
 production-ready.

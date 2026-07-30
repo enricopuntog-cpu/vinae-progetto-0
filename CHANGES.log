@@ -1,25 +1,26 @@
 <!-- PROTOCOL: Read at session start. Every AI MUST update this file at session end or before handoff/context reset. Keep exactly the 4 headings below; facts only; NEXT STEPS exactly 3 atomic items; no pleasantries/secrets. Verify Git state first; preserve unresolved blockers. -->
 ## CURRENT STATE
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
-- `origin/main` was refreshed on 30 July 2026 and contains Phase 6d-1 at merge commit `61e3fde`.
+- `origin/main` was refreshed on 30 July 2026 and contains the post-merge handoff reconciliation at `e2e4fcb`.
 - Pull Request #14 is merged; its final head is `6bbe4dd`.
 - GitHub Actions run `30554736346` is green on `6bbe4dd` for backend, frontend and frontend-next.
-- Draft Pull Request #15 contains the post-merge handoff reconciliation; verify CI on its current head before review or merge.
+- Pull Request #15 is merged in `main`.
 - The repair verifier remains documented at 13/13 `PASSA` with fixture residue 0.
-- No final post-repair evidence for the remote fixture grids 33/33 and 11/11 is recorded in the repository.
+- Remote migration `20260730162046 fix_6d1_bottle_message_encoding` is applied and present in migration history.
+- Final remote fixture grids are 33/33 and 11/11; the post-run residue check is zero in all recorded categories.
 
 ## ACTIVE TASK
-- Post-merge handoff and the reduced three-prompt progression flow are complete in draft PR #15; only the 33/33 and 11/11 evidence remains open before Phase 6d-2a.
+- Phase 6d-1 post-merge evidence is complete on branch `hardening/phase-6d-1-post-merge-verification`; Phase 6d-2a has not started.
 
 ## NEXT STEPS
-1. Review and explicitly merge draft Pull Request #15 after CI is green.
-2. Use Prompt 1 to authorize and execute only the missing remote 33/33 and 11/11 fixture grids.
-3. Use Prompt 2 to start Phase 6d-2a after the missing evidence is integrated and the phase is approved.
+1. Review the Phase 6d-1 post-merge verification draft PR after CI is green.
+2. Merge the verification PR only after explicit approval.
+3. Use Prompt 2 only after the verification PR is integrated and Phase 6d-2a is explicitly approved.
 
 ## BLOCKERS / NOTES
 - `docs/PHASE_6D1_FINAL_EXECUTION_REPORT.md` and `docs/PHASE_6D2A_HANDOFF_REPORT.md` are historical snapshots and not current-state sources.
-- The merge is not evidence that remote fixture execution was authorized or successful.
 - Local `frontend-next` install, lint, typecheck and build are green; lint reports 23 preexisting warnings and zero errors.
 - The full branch diff has one whitespace warning at EOF in the already-applied follow-up migration; the historical SQL was not rewritten.
-- No remote Supabase SQL or fixture test was executed during this handoff reconciliation.
-- Do not start Phase 6d-2a or Phase 7 while the 33/33 and 11/11 evidence gate remains open.
+- Remote SQL and fixture execution for the post-merge gate were separately authorized in-session.
+- No Advisor, repair verifier or test from Phases 1–6c was rerun.
+- Do not start Phase 6d-2a or Phase 7 before this verification is integrated and the next phase is explicitly approved.

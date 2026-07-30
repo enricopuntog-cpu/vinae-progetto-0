@@ -18,7 +18,7 @@
 | [#12](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/12) | 29-07-2026 | chiusa, non merged | Duplicato draft amministrativo della 6c-1 |
 | [#13](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/13) | 29-07-2026 | merged | Fase 6c-2 — interfaccia Cantina |
 | [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) | 30-07-2026 | merged | Fase 6d-1 — invarianti di sicurezza e repair deriva remota |
-| [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) | 30-07-2026 | draft | Riconciliazione handoff post-merge 6d-1 e prompt operativi |
+| [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) | 30-07-2026 | merged | Riconciliazione handoff post-merge 6d-1 e prompt operativi |
 
 ## Anomalie della cronologia da conoscere
 
@@ -48,9 +48,9 @@ usare GitHub come fonte.
 
 La PR #14 è stata unita con merge commit `61e3fde`. La CI finale
 [`30554736346`](https://github.com/enricopuntog-cpu/vinae-progetto-0/actions/runs/30554736346)
-è verde sull'HEAD `6bbe4dd`. I documenti inclusi nel merge dichiaravano ancora
-pendenti le griglie remote post-repair 33/33 e 11/11: il merge non va usato come
-prova implicita della loro autorizzazione o del loro esito.
+è verde sull'HEAD `6bbe4dd`. Le griglie sono state autorizzate ed eseguite
+separatamente dopo il merge: risultati finali 33/33 e 11/11, verifier storico
+13/13 e residui fixture zero.
 
 ## Fonti autorevoli nel repository
 

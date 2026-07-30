@@ -230,9 +230,11 @@ post-repair ancora aperta.** La PR #14 è stata unita con merge commit
 `61e3fde`; la CI finale `30554736346` è verde sull'HEAD `6bbe4dd`. La quarta
 migrazione ha ripristinato lo stato finale senza modificare dati applicativi;
 la query read-only post-deploy è 13/13 e `auth_rls_initplan` è scomparso.
-Restano da autorizzare e rieseguire le griglie remote con fixture, attese a
-33/33 e 11/11. Il merge non prova il loro esito: fino alla documentazione del
-gate non si avvia la Fase 6d-2a né la Fase 7.
+Le griglie remote autorizzate separatamente restituiscono 33/33 e 11/11, con
+residui fixture zero. La migrazione additiva
+`20260730162046_fix_6d1_bottle_message_encoding.sql` corregge i due messaggi
+UTF-8 emersi dal primo retest follow-up. Fino all'integrazione del rapporto
+post-merge non si avvia la Fase 6d-2a né la Fase 7.
 
 Sette confini chiusi: privacy di `bottle_units` e di `listings` (viste a elenco
 chiuso di colonne al posto dei `GRANT` di tabella), `user_roles` non più

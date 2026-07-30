@@ -328,8 +328,9 @@ pronto ad accoglierlo.
 
 La Fase 6d-1 è stata integrata in `main` il 30 luglio 2026 tramite PR #14,
 merge commit `61e3fde`. La CI finale `30554736346` è verde sull'HEAD
-`6bbe4dd`. Il repository non registra però ancora una prova finale post-repair
-delle griglie remote 33/33 e 11/11: il merge non sostituisce quel gate.
+`6bbe4dd`. La verifica post-merge autorizzata separatamente registra 33/33,
+11/11, verifier storico 13/13 e residui fixture zero. La correzione additiva
+dei messaggi UTF-8 è registrata come migrazione `20260730162046`.
 
 ## Fase 6d-2a — provenienza catalogo e percorsi Cantina
 
@@ -345,9 +346,10 @@ Deve:
 - collegare alla home solo riepiloghi reali;
 - preservare RLS, privilegi, viste chiuse e invarianti della 6d-1.
 
-Non contiene ordini, proposte, pagamenti o trasferimento di proprietà. Non può
-iniziare finché 33/33, 11/11, 13/13 e residui fixture zero non sono documentati
-e la fase non è autorizzata esplicitamente.
+Non contiene ordini, proposte, pagamenti o trasferimento di proprietà. Le prove
+33/33, 11/11, 13/13 e residui fixture zero sono documentate nel rapporto
+post-merge; la fase non può iniziare finché quel rapporto non è integrato e la
+fase non è autorizzata esplicitamente.
 
 ## Cosa NON è ancora deciso
 

@@ -19,8 +19,8 @@ devono essere reinterpretati.
    prima di modificare codice, database o documentazione.
 5. [`05_INDICE_PR_E_FONTI.md`](05_INDICE_PR_E_FONTI.md) — indice delle PR e
    gerarchia delle fonti.
-6. [`06_PROMPT_CHAT_OPERATIVE.md`](06_PROMPT_CHAT_OPERATIVE.md) — tre prompt
-   sequenziali per chiudere il solo gate mancante e avanzare nella Fase 6d-2a.
+6. [`06_PROMPT_CHAT_OPERATIVE.md`](06_PROMPT_CHAT_OPERATIVE.md) — prompt
+   sequenziali per chiudere i gate e avanzare nella Fase 6d-2a.
 7. [`context-manifest.json`](context-manifest.json) — riepilogo
    machine-readable per strumenti automatici.
 
@@ -41,6 +41,7 @@ contrasto:
 
 Vinea sta migrando gradualmente dall'app servita
 `frontend/` + `backend/` verso `frontend-next/` + Supabase. La Fase 6d-1 è
-integrata in `main` tramite PR #14 e ha CI finale verde; le griglie remote
-post-repair 33/33 e 11/11 non hanno ancora una prova finale registrata. La
-Fase 6d-2a e le fasi 7–11 non sono iniziate.
+integrata in `main` tramite PR #14 e ha CI finale verde. Le griglie remote
+post-repair sono 33/33 e 11/11, il verifier storico è 13/13 e i residui delle
+fixture sono zero; l'evidenza resta da integrare tramite la PR di verifica
+post-merge. La Fase 6d-2a e le fasi 7–11 non sono iniziate.

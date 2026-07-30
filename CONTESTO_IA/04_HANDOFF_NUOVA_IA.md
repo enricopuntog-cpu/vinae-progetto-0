@@ -35,10 +35,11 @@
 - La Fase 4 è assorbita nella Fase 3.
 - Le fasi 6a, 6b, 6c-1, 6c-2 sono sotto-fasi deliberate, non duplicati di
   prodotto.
-- La 6d-1 è in `main` tramite PR #14, ma il repository non registra ancora
-  l'esito finale post-repair delle griglie remote 33/33 e 11/11.
+- La 6d-1 è in `main` tramite PR #14; il branch di verifica post-merge registra
+  33/33, 11/11, verifier storico 13/13 e residui fixture zero.
 - Il merge non equivale ad autorizzazione o prova delle fixture remote.
-- La Fase 6d-2a non è iniziata e resta bloccata dal gate delle griglie.
+- La Fase 6d-2a non è iniziata e resta bloccata finché il rapporto post-merge
+  non è integrato e la fase non riceve approvazione esplicita.
 - Le fasi 7–11 non sono iniziate.
 - La vecchia app resta quella servita.
 - Auth reale e ruoli demo coesistono intenzionalmente.

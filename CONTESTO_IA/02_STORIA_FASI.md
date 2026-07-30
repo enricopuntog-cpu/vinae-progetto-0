@@ -230,8 +230,7 @@ persiste.
 
 ### Fase 6d-1 — invarianti di sicurezza
 
-**Stato:** integrata il 30 luglio 2026; retest remoto con fixture ancora privo
-di prova finale
+**Stato:** integrata il 30 luglio 2026; retest remoto post-merge completato
 
 **Branch:** `hardening/phase-6d-1-security-invariants`
 
@@ -252,11 +251,13 @@ Consegnato:
 Importante: sul progetto Supabase collegato quattro funzioni e una policy erano
 derivate rispetto alle migrazioni registrate. Il 30 luglio 2026 la repair è
 stata applicata come versione remota `20260730140948`; la query unica read-only
-è 13/13 e `auth_rls_initplan` è scomparso. Le griglie comportamentali con
-fixture restano da autorizzare e rieseguire. Il deploy remoto non equivale
-alla prova comportamentale. La PR è stata unita con merge commit `61e3fde` e la
-CI finale `30554736346` è verde su `6bbe4dd`; il merge non prova da solo che le
-griglie siano state autorizzate o superate.
+è 13/13 e `auth_rls_initplan` è scomparso. La PR è stata unita con merge commit
+`61e3fde` e la CI finale `30554736346` è verde su `6bbe4dd`.
+
+Il retest post-merge autorizzato separatamente ha rilevato due messaggi remoti
+con codifica corrotta. La migrazione additiva
+`20260730162046 fix_6d1_bottle_message_encoding` li ha riallineati alle
+sorgenti UTF-8. I risultati finali sono 33/33 e 11/11, con residui fixture zero.
 
 ## Fasi future
 

@@ -95,7 +95,7 @@ CONTESTO_IA/    handoff sintetico per nuove IA/chat
 - catalogo condiviso: `listing_crea` può inserire un vino tramite
   `SECURITY DEFINER`; la Fase 6d-2a deve distinguere catalogo curato e vino
   inserito dall'utente prima della Fase 7;
-- prove remote post-repair 33/33 e 11/11 ancora da autorizzare e documentare;
+- automazione delle prove remote 33/33 e 11/11, oggi eseguite manualmente;
 - automazione dei test Supabase in CI con database effimero;
 - test frontend per `frontend-next/`;
 - revisione delle viste proprietario/security barrier prima del cutover;
