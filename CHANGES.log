@@ -4,7 +4,7 @@
 - `origin/main` was refreshed on 30 July 2026 and contains Phase 6d-1 at merge commit `61e3fde`.
 - Pull Request #14 is merged; its final head is `6bbe4dd`.
 - GitHub Actions run `30554736346` is green on `6bbe4dd` for backend, frontend and frontend-next.
-- Draft Pull Request #15 contains the post-merge handoff reconciliation; its CI run `30557208557` is in progress.
+- Draft Pull Request #15 contains the post-merge handoff reconciliation; verify CI on its current head before review or merge.
 - The repair verifier remains documented at 13/13 `PASSA` with fixture residue 0.
 - No final post-repair evidence for the remote fixture grids 33/33 and 11/11 is recorded in the repository.
 
