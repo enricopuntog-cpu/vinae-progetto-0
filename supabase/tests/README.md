@@ -51,7 +51,7 @@ Applicare la migrazione solo dopo revisione e autorizzazione esplicita:
 
 | # | File | Esito atteso |
 | --- | --- | --- |
-| 1 | `supabase/migrations/20260730184956_catalog_cellar_paths.sql` | migrazione applicata e registrata senza riscrivere versioni storiche |
+| 1 | `supabase/migrations/20260731120340_catalog_cellar_paths.sql` | migrazione applicata e registrata senza riscrivere versioni storiche |
 | 2 | [`6d-2a_catalog_cellar_paths.sql`](6d-2a_catalog_cellar_paths.sql) | 18 righe, tutte `PASSA`, nessuna riga 99 |
 
 La griglia crea e cancella due utenti, due vini, due bottiglie, un annuncio e un
@@ -82,7 +82,7 @@ rimossa di troppo.
 
 ### Residui
 
-Lo script crea tre utenti (`vinea-test-*@example.invalid`) e li distrugge alla
+Lo script crea due utenti (`vinea-test-*@example.invalid`) e li distrugge alla
 fine, anche in caso di errore. La sezione [6] è una rete di sicurezza da
 scommentare solo se un'interruzione ha lasciato qualcosa indietro: cancella
 soltanto ciò che porta il marchio della prova.
