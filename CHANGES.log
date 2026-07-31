@@ -2,26 +2,29 @@
 ## CURRENT STATE
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
 - `origin/main` è a `dc1fe88` e integra il gate post-merge della Fase 6d-1 con 33/33 casi, verifier corrente 11/11, verifier storico 13/13 e zero residui fixture documentati.
-- Il branch `migration/phase-6d-2a-catalog-cellar-paths` è pubblicato nella draft PR #17; include i 3 commit di fase più questo aggiornamento finale di handoff.
-- La migrazione `20260730184956_catalog_cellar_paths.sql` e la griglia SQL `6d-2a_catalog_cellar_paths.sql` sono preparate ma non applicate o eseguite su Supabase remoto.
+- La draft PR #17 è aperta e mergeable sul branch `migration/phase-6d-2a-catalog-cellar-paths`.
+- La migrazione 6d-2a è applicata al progetto remoto come `20260731120340 catalog_cellar_paths`.
+- Il file locale è allineato a `supabase/migrations/20260731120340_catalog_cellar_paths.sql`; il contenuto conserva SHA-256 `ffb0d4351e12bade1891e7912825a9d9ecb410b2c0df642e9c2d5f129d7d5834`.
 
 ## ACTIVE TASK
-- La Fase 6d-2a è implementata localmente con contratti additivi per catalogo, percorsi Cantina e adattamenti `frontend-next`.
-- Lint mirato, typecheck, build, controlli statici SQL, scansione segreti, `git diff --check` e smoke test browser non autenticati sono conclusi.
-- La griglia 6d-2a include 18 casi; il caso finale controlla esplicitamente i residui fixture marcati dalla fase.
-- La draft PR #17 verso `main` è aperta; la CI #40 su `ed00838` è conclusa con successo per backend, frontend e frontend-next.
+- Il gate remoto di applicazione della Fase 6d-2a è completato.
+- Il backfill remoto contiene 8 vini `staff` e 1 vino `utente`; nessun vino utente è privo di `creato_da`.
+- Le RPC 6d-2a hanno `search_path = ''`, accesso `authenticated` esplicito e nessun `EXECUTE` per `anon` o `PUBLIC`; l'helper `private` non è eseguibile dai client.
+- Le tabelle coinvolte e `storage.objects` hanno RLS attiva; i grant di colonna nascondono `wines.creato_da` e consentono `wines.provenienza`.
+- Il bucket `cantina` è privato, limita gli upload a 5 MiB e ai MIME immagine previsti, ha quattro policy per cartella proprietaria e contiene zero oggetti.
+- `public_listings` include i filtri bottiglia 6d-1, `security_barrier=true` e la colonna chiusa `wine_provenienza`.
 
 ## NEXT STEPS
-1. Revisionare la migrazione esatta prima di decidere se autorizzarne l'applicazione remota.
-2. Autorizzare separatamente l'esecuzione fixture della griglia 6d-2a dopo l'eventuale migrazione remota.
-3. Verificare fotografie reali e residui finali propri durante il gate remoto autorizzato.
+1. Attendere la CI del commit di allineamento della draft PR #17.
+2. Richiedere autorizzazione separata prima di qualsiasi esecuzione della griglia 6d-2a con fixture.
+3. Eseguire merge o avviare la Fase 7 solo dopo autorizzazioni esplicite separate.
 
 ## BLOCKERS / NOTES
-- Nessun SQL remoto è stato eseguito e nessuna applicazione remota è autorizzata in questa sessione.
 - La griglia SQL crea e cancella fixture: non è stata eseguita e richiede un'autorizzazione separata.
-- La griglia 6d-2a non verifica ancora fotografie reali e non ha ancora prodotto una prova remota dei propri residui finali.
-- Nessun blocco GitHub residuo: push e creazione della draft PR sono conclusi.
-- La migrazione e la griglia non sono state eseguite localmente perché Supabase CLI e un database PostgreSQL locale non sono disponibili.
-- Il lint mirato termina con zero errori e due warning preesistenti per `<img>` in `frontend-next/src/app/home/page-client.tsx`.
-- Typecheck e build sono verdi; gli smoke test browser coprono il gate non autenticato di `/vendi?mode=sell` e lo stato Cantina vuota di `/home`.
+- Non sono state rieseguite le griglie storiche 33/33, 11/11 o 13/13 e non è stata eseguita la griglia 6d-2a.
+- Gli Advisor non hanno nuovi `ERROR`: restano i due `ERROR` preesistenti sulle viste `security_invoker=off`.
+- I nuovi warning di sicurezza riguardano le tre RPC 6d-2a `SECURITY DEFINER` intenzionali; il warning preesistente su `listing_crea` è rimosso perché `authenticated` non può più eseguirla.
+- I nuovi avvisi performance sono l'indice `wines_creato_da_idx` ancora inutilizzato subito dopo la creazione e le due policy SELECT permissive su `wines`.
+- La protezione password compromesse resta disattivata come warning Auth preesistente.
+- Nessuna fotografia reale è stata caricata o verificata.
 - Nessun lavoro della Fase 7 è incluso e nessun merge autonomo è stato eseguito.
