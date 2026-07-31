@@ -283,8 +283,9 @@ Le tre regole permanenti che ne derivano sono in `CLAUDE.md`, sezione
 
 **Branch**: `migration/phase-6d-2a-catalog-cellar-paths`
 
-**Stato**: implementata localmente sul branch; migrazione remota e griglia
-fixture non eseguite.
+**Stato**: integrata in `main` tramite PR #17 al merge squash `3037bf4`; CI #44
+verde. La migrazione `20260731120340 catalog_cellar_paths` e la griglia 18/18
+sono registrate, con residui database e Storage zero.
 
 Precondizione obbligatoria: rapporto post-merge integrato con griglie 33/33 e
 11/11, verifier repair 13/13, residui fixture zero e approvazione esplicita
@@ -323,6 +324,11 @@ Ordini, proposte e pagamenti Stripe reali via Edge Function
 attivazione controllata. Stessa disciplina di sicurezza pagamenti già
 validata in Sprint 0 (stato solo da `payment_status=paid`, idempotenza,
 protezione da eventi tardivi).
+
+**Stato al 31 luglio 2026**: avvio autorizzato sul branch
+`migration/phase-7-order-payment-service`. Il primo checkpoint è locale: schema,
+limiter server-side, servizi, Edge Function, Route Handler e test. Nessuna
+migrazione o funzione remota è autorizzata.
 
 ## Fase 8 — MessagingService + NotificationService
 
