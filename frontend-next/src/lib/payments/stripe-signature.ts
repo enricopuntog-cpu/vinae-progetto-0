@@ -4,7 +4,6 @@ type SignatureParts = {
   timestamp: number;
   signatures: string[];
 };
-
 const parseSignature = (header: string): SignatureParts | null => {
   const values = header.split(",").map((part) => part.trim().split("=", 2));
   const timestamp = Number(values.find(([key]) => key === "t")?.[1]);
@@ -58,4 +57,3 @@ export const verifyStripeSignature = async ({
   const expected = toHex(digest);
   return parts.signatures.some((signature) => constantTimeEqual(signature, expected));
 };
-

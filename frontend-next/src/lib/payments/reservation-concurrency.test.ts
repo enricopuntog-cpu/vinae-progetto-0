@@ -23,4 +23,3 @@ describe("prenotazione concorrente", () => {
     expect(await reserve(winner)).toBeTrue();
   });
 });
-

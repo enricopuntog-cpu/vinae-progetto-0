@@ -23,7 +23,7 @@ bozza ──▶ in_revisione ──▶ attivo ──▶ riservato ──▶ vend
 ## Proposta (`Proposal.stato`)
 
 ```text
-inviata ──▶ controproposta ──▶ accettata ──▶ (crea Order)
+inviata ──▶ controproposta ──▶ accettata ──▶ convertita (al checkout)
    │             │                │
    ▼             ▼                ▼
  rifiutata    scaduta         (nessuna)
@@ -33,7 +33,25 @@ Regole:
 
 - Doppio invio bloccato quando esiste una proposta `inviata` o
   `controproposta` per la stessa coppia (wine, utente).
-- Alla scadenza (mock 48h) transita in `scaduta` automaticamente.
+- Le nuove proposte scadono dopo 7 giorni; la validità viene ricontrollata sotto
+  lock all'accettazione e al checkout.
+
+## Ordine e pagamento — contratto Fase 7
+
+```text
+ordine:    in_attesa_pagamento ──▶ pagato
+                    └────────────▶ annullato
+             pagato ─────────────▶ rimborsato
+
+pagamento: checkout_pending ──▶ processing ──▶ paid
+                    │              ├──────────▶ failed
+                    └──────────────└──────────▶ expired
+paid ──▶ partially_refunded ──▶ refunded
+```
+
+Il solo evento firmato con `payment_status=paid` porta a `paid`. Eventi tardivi
+di fallimento/scadenza non retrocedono un pagamento pagato o rimborsato; ogni
+`event_id` è applicato una volta sola.
 
 ## Ordine — lato acquirente (`BuyerOrderStatus`)
 

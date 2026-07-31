@@ -34,4 +34,3 @@ export const reducePaymentState = (current: PaymentState, signal: PaymentSignal)
   if (signal.type === "expired") return "expired";
   return current;
 };
-

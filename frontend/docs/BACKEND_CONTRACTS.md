@@ -15,9 +15,13 @@ listings            (id, wine_id, seller_id, prezzo, stato, immagini[], provenan
 cellar_environments (id, user_id, tipo, nome)
 cellar_modules      (id, environment_id, forma, slots)
 cellar_bottles      (id, user_id, wine_id, slot_id, stato, drink_window_override)
-proposals           (id, listing_id, buyer_id, prezzo, stato, scadenza)
-orders              (id, listing_id, buyer_id, seller_id, prezzo, modo_consegna,
-                     buyer_status, seller_status, indirizzo)
+proposals           (id, listing_id, buyer_id, seller_id, prezzi_cents, stato, scadenza)
+orders              (id, listing_id, proposal_id?, buyer_id, seller_id,
+                     seller_bottle_unit_id, buyer_bottle_unit_id?, prezzo_cents,
+                     currency, stato, delivery_mode, reservation_expires_at)
+payments            (id, order_id, stato, amount_cents, currency,
+                     stripe_session_id, stripe_payment_intent_id)
+stripe_webhook_events (event_id, event_type, stripe_created_at, processed_at)
 order_events        (id, order_id, tipo, payload, created_at)
 disputes            (id, order_id, motivo, descrizione, prove[], stato, esito)
 order_reviews       (id, order_id, voti, testo, created_at)
@@ -45,11 +49,12 @@ audit_log           (id, actor_id, action, target_type, target_id, motivo, at)
 - `user_roles`: SELECT authenticated (usato da `has_role()` SECURITY DEFINER);
   INSERT/UPDATE solo service_role.
 
-## Edge Functions previste
+## Edge Functions
 
-- `payments-checkout` — crea PaymentIntent Stripe (input: `orderId`).
-- `payments-webhook` — Route Handler `/api/public/webhooks/stripe`, verifica
-  firma HMAC prima di aggiornare l'ordine.
+- `payments-checkout` — verifica JWT, riserva atomicamente l'annuncio e crea una
+  Checkout Session Stripe da dati risolti dal server. È locale e non distribuita.
+- `/api/public/webhooks/stripe` — Route Handler Next.js: usa il corpo raw,
+  verifica HMAC, limita la frequenza e applica eventi deduplicati via RPC.
 - `ai-identify-bottle` — proxy verso provider vision (rate-limit per utente).
 - `moderation-decision` — applica azione, scrive `audit_log`, notifica utente.
 

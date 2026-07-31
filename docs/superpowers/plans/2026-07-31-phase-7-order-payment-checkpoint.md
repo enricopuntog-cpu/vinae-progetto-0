@@ -36,4 +36,3 @@
    segreti.
 7. Committare per checkpoint, pushare solo il branch Fase 7, aprire draft PR e
    monitorare la CI senza passare a ready e senza merge.
-
