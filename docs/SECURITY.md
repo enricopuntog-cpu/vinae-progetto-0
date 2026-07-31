@@ -49,8 +49,16 @@ sembri sbagliata. Sono vincolanti dalla Fase 6d-1 e ripetute in `CLAUDE.md`.
 Confini specifici già applicati:
 
 - Un anonimo non raggiunge `listings` né `bottle_units`: legge solo le due viste.
+- La tabella `wines` espone direttamente a tutti soltanto le schede con
+  provenienza `staff`. Una scheda `utente` è leggibile dalla tabella base solo
+  da chi possiede una sua unità; quando sostiene un annuncio attivo, i suoi
+  campi pubblici passano da `public_listings`. `creato_da` non è una colonna
+  leggibile o scrivibile dai ruoli client.
 - Note personali, date di apertura pianificata, override della finestra di bevuta
   e visibilità del prezzo sono leggibili dal solo proprietario.
+- Le foto della Cantina sono nel bucket privato `cantina`, con accesso limitato
+  alla cartella dell'utente. Le foto di vendita restano nel bucket pubblico
+  `annunci` e sono riferite soltanto da annunci.
 - La traccia dell'ultima transizione di moderazione (`stato_motivo`,
   `stato_aggiornato_da`, `stato_aggiornato_at`) non è leggibile da nessun ruolo
   client, proprietario compreso.
@@ -63,6 +71,11 @@ Confini specifici già applicati:
 - Una bottiglia aperta, consumata, tolta dalla cantina o già ceduta non può
   essere messa in vendita; una bottiglia con annuncio attivo o riservato non può
   essere aperta né tolta. Le transizioni prendono un lock di riga sull'unità.
+- Catalogazione privata/pubblica e vendita hanno porte distinte:
+  `cellar_bottiglia_aggiungi` non crea annunci,
+  `listing_crea_da_bottiglia` richiede una unità esistente e la vecchia RPC
+  completa non è eseguibile dai client. Ambiente e modulo iniziale nascono
+  insieme tramite `cellar_ambiente_crea`.
 
 Le prove versionate di questi confini sono in `supabase/tests/`.
 
@@ -98,8 +111,9 @@ della firma; traffico non firmato e volumetrico deve essere filtrato al bordo
 tramite WAF o reverse proxy attendibile.
 
 **Sullo stack Supabase non esiste niente di equivalente.** PostgREST espone le
-funzioni RPC senza alcun limite di frequenza: `listing_crea`, `bottiglia_apri` e
-le altre sono chiamabili in raffica da qualunque sessione autenticata. Nessun
+funzioni RPC senza alcun limite di frequenza: `listing_crea_da_bottiglia`,
+`cellar_bottiglia_aggiungi`, `bottiglia_apri` e le altre sono chiamabili in
+raffica da qualunque sessione autenticata. `listing_crea` resta interna. Nessun
 invariante di dati ne viene violato — sono tutti applicati in database — ma il
 costo e il rumore sì. Va colmato prima che i pagamenti passino di lì; è
 registrato come debito dichiarato in `docs/MIGRATION_PHASE_1_BACKLOG.md`.

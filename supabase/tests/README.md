@@ -45,6 +45,25 @@ e le RPC applicative restano documentate in
 Le griglie ai punti 6 e 7 creano e cancellano fixture nel progetto remoto:
 richiedono un'approvazione esplicita separata dal deploy della migrazione.
 
+## Fase 6d-2a — catalogo e percorsi Cantina
+
+Applicare la migrazione solo dopo revisione e autorizzazione esplicita:
+
+| # | File | Esito atteso |
+| --- | --- | --- |
+| 1 | `supabase/migrations/20260731120340_catalog_cellar_paths.sql` | migrazione applicata e registrata senza riscrivere versioni storiche |
+| 2 | [`6d-2a_catalog_cellar_paths.sql`](6d-2a_catalog_cellar_paths.sql) | 18 righe, tutte `PASSA`, nessuna riga 99 |
+
+La griglia crea e cancella due utenti, due vini, due bottiglie, un annuncio e un
+ambiente. Richiede un'autorizzazione fixture separata da quella della
+migrazione. Non riesegue le griglie 6d-1. Il caso 18 verifica esplicitamente che
+la pulizia non lasci utenti, profili, vini o ambienti marcati dalla prova.
+
+La griglia non carica né legge fotografie reali dal bucket `cantina`: verifica
+soltanto che il bucket sia privato. Fino alla prima esecuzione autorizzata, non
+esiste inoltre un esito remoto verificato né per i 18 casi né per i residui
+finali propri della 6d-2a.
+
 ### Se il preflight trova righe
 
 La migrazione **fallirà di proposito**, con un messaggio che rimanda qui: il
@@ -63,7 +82,7 @@ rimossa di troppo.
 
 ### Residui
 
-Lo script crea tre utenti (`vinea-test-*@example.invalid`) e li distrugge alla
+Lo script crea due utenti (`vinea-test-*@example.invalid`) e li distrugge alla
 fine, anche in caso di errore. La sezione [6] è una rete di sicurezza da
 scommentare solo se un'interruzione ha lasciato qualcosa indietro: cancella
 soltanto ciò che porta il marchio della prova.

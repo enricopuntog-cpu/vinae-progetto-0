@@ -1,27 +1,34 @@
 <!-- PROTOCOL: Read at session start. Every AI MUST update this file at session end or before handoff/context reset. Keep exactly the 4 headings below; facts only; NEXT STEPS exactly 3 atomic items; no pleasantries/secrets. Verify Git state first; preserve unresolved blockers. -->
 ## CURRENT STATE
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
-- `origin/main` was refreshed on 30 July 2026 and contains the post-merge handoff reconciliation at `e2e4fcb`.
-- Pull Request #14 is merged; its final head is `6bbe4dd`.
-- GitHub Actions run `30554736346` is green on `6bbe4dd` for backend, frontend and frontend-next.
-- Pull Request #15 is merged in `main`.
-- Draft Pull Request #16 targets `main` with the Phase 6d-1 post-merge verification evidence.
-- The repair verifier remains documented at 13/13 `PASSA` with fixture residue 0.
-- Remote migration `20260730162046 fix_6d1_bottle_message_encoding` is applied and present in migration history.
-- Final remote fixture grids are 33/33 and 11/11; the post-run residue check is zero in all recorded categories.
+- `origin/main` è a `dc1fe88` e integra il gate post-merge della Fase 6d-1 con 33/33 casi, verifier corrente 11/11, verifier storico 13/13 e zero residui fixture documentati.
+- La draft PR #17 è aperta e mergeable sul branch `migration/phase-6d-2a-catalog-cellar-paths`.
+- La migrazione 6d-2a è applicata al progetto remoto come `20260731120340 catalog_cellar_paths`.
+- Il file locale è allineato a `supabase/migrations/20260731120340_catalog_cellar_paths.sql`; il contenuto conserva SHA-256 `ffb0d4351e12bade1891e7912825a9d9ecb410b2c0df642e9c2d5f129d7d5834`.
+- L'HEAD remoto verificato prima delle evidenze è `e6329a5e192e8c85223b45b61d47c20998112ee4`.
+- GitHub Actions CI #43, run `30629492177`, è verde su `e6329a5` per backend, frontend e frontend-next.
 
 ## ACTIVE TASK
-- Phase 6d-1 post-merge evidence is complete in draft Pull Request #16; Phase 6d-2a has not started.
+- Il gate remoto di applicazione della Fase 6d-2a è completato.
+- Il backfill remoto contiene 8 vini `staff` e 1 vino `utente`; nessun vino utente è privo di `creato_da`.
+- Le RPC 6d-2a hanno `search_path = ''`, accesso `authenticated` esplicito e nessun `EXECUTE` per `anon` o `PUBLIC`; l'helper `private` non è eseguibile dai client.
+- Le tabelle coinvolte e `storage.objects` hanno RLS attiva; i grant di colonna nascondono `wines.creato_da` e consentono `wines.provenienza`.
+- Il bucket `cantina` è privato, limita gli upload a 5 MiB e ai MIME immagine previsti, ha quattro policy per cartella proprietaria e contiene zero oggetti.
+- `public_listings` include i filtri bottiglia 6d-1, `security_barrier=true` e la colonna chiusa `wine_provenienza`.
+- La griglia remota 6d-2a è stata eseguita una sola volta dal file con SHA-256 `6ed78d2dfa163cdf98c73a51599d16400c40a6cabbdfb9e0b099d4d49991d951`: 18/18 `PASSA`, 0 `FALLISCE`, nessuna riga 99.
+- Il caso 18 e la query read-only indipendente confermano zero residui fixture 6d-2a.
+- Il cleanup Storage finale conferma zero utenti tecnici, zero profili tecnici e zero oggetti nel bucket `cantina`.
 
 ## NEXT STEPS
-1. Review draft Pull Request #16 after CI is green.
-2. Merge Pull Request #16 only after explicit approval.
-3. Use Prompt 2 only after the verification PR is integrated and Phase 6d-2a is explicitly approved.
+1. Completare manualmente lo smoke Storage autenticato dopo il reset del rate limit Auth.
+2. Revisionare la draft PR #17 dopo la nuova CI delle evidenze.
+3. Eseguire merge o avviare la Fase 7 solo dopo autorizzazioni esplicite separate.
 
 ## BLOCKERS / NOTES
-- `docs/PHASE_6D1_FINAL_EXECUTION_REPORT.md` and `docs/PHASE_6D2A_HANDOFF_REPORT.md` are historical snapshots and not current-state sources.
-- Local `frontend-next` install, lint, typecheck and build are green; lint reports 23 preexisting warnings and zero errors.
-- The full branch diff has one whitespace warning at EOF in the already-applied follow-up migration; the historical SQL was not rewritten.
-- Remote SQL and fixture execution for the post-merge gate were separately authorized in-session.
-- No Advisor, repair verifier or test from Phases 1–6c was rerun.
-- Do not start Phase 6d-2a or Phase 7 before this verification is integrated and the next phase is explicitly approved.
+- Non sono state rieseguite le griglie storiche 33/33, 11/11 o 13/13.
+- Gli Advisor non hanno nuovi `ERROR`: restano i due `ERROR` preesistenti sulle viste `security_invoker=off`.
+- I nuovi warning di sicurezza riguardano le tre RPC 6d-2a `SECURITY DEFINER` intenzionali; il warning preesistente su `listing_crea` è rimosso perché `authenticated` non può più eseguirla.
+- L'avviso performance atteso sulle due policy SELECT permissive di `wines` resta; `wines_creato_da_idx` non è più segnalato dopo la griglia.
+- La protezione password compromesse resta disattivata come warning Auth preesistente.
+- Lo smoke fotografico non ha creato oggetti: Auth ha rifiutato il TLD `.invalid` e il tentativo successivo è stato bloccato dal rate limit 429; resta necessaria la prova autenticata manuale.
+- Nessun lavoro della Fase 7 è incluso e nessun merge autonomo è stato eseguito.

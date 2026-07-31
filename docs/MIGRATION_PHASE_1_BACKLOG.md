@@ -283,6 +283,9 @@ Le tre regole permanenti che ne derivano sono in `CLAUDE.md`, sezione
 
 **Branch**: `migration/phase-6d-2a-catalog-cellar-paths`
 
+**Stato**: implementata localmente sul branch; migrazione remota e griglia
+fixture non eseguite.
+
 Precondizione obbligatoria: rapporto post-merge integrato con griglie 33/33 e
 11/11, verifier repair 13/13, residui fixture zero e approvazione esplicita
 della fase.
@@ -295,6 +298,17 @@ Perimetro:
 - rendere atomica la creazione dell'ambiente e del modulo iniziale;
 - collegare alla home solo riepiloghi reali della Cantina;
 - mantenere invarianti, RLS, privilegi e viste chiuse della 6d-1.
+
+Decisioni implementate:
+
+- `wines.provenienza` e `creato_da` separano autorità editoriale e inserimento
+  utente senza duplicare la tripletta produttore/nome/annata;
+- `cellar_bottiglia_aggiungi` crea una unità privata o pubblica senza annuncio;
+- `listing_crea_da_bottiglia` vende soltanto un'unità già in Cantina e la
+  vecchia via di creazione completa non è più eseguibile dai client;
+- `cellar_ambiente_crea` rende atomici ambiente e modulo iniziale;
+- le foto personali usano il bucket privato `cantina`;
+- `/home` usa soltanto riepiloghi reali del `CellarService`.
 
 Fuori perimetro: ordini, proposte, pagamenti, payout, KYC, trasferimento della
 proprietà e qualsiasi lavoro della Fase 7. Ogni migrazione è additiva; SQL e

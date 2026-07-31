@@ -334,6 +334,9 @@ dei messaggi UTF-8 è registrata come migrazione `20260730162046`.
 
 ## Fase 6d-2a — provenienza catalogo e percorsi Cantina
 
+**Stato sul branch `migration/phase-6d-2a-catalog-cellar-paths`: implementazione
+locale in corso; SQL remoto non applicato.**
+
 Questa sotto-fase viene prima degli ordini perché `listing_crea` può oggi
 inserire un vino tramite `SECURITY DEFINER` senza distinguere una scheda curata
 dallo staff da una descrizione immessa da un utente.
@@ -345,6 +348,12 @@ Deve:
 - rendere atomica l'inizializzazione ambiente/modulo della Cantina;
 - collegare alla home solo riepiloghi reali;
 - preservare RLS, privilegi, viste chiuse e invarianti della 6d-1.
+
+La soluzione sul branch introduce provenienza `staff`/`utente`, una RPC di
+catalogazione senza annuncio, una RPC di vendita che accetta soltanto una
+`bottle_unit` esistente, un bucket privato per le foto della Cantina e una RPC
+transazionale per ambiente più modulo iniziale. La home legge i riepiloghi
+Cantina dal servizio reale.
 
 Non contiene ordini, proposte, pagamenti o trasferimento di proprietà. Le prove
 33/33, 11/11, 13/13 e residui fixture zero sono documentate nel rapporto

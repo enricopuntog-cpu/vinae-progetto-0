@@ -15,6 +15,14 @@ export type Wine = {
    * usare `wineSlug ?? id`.
    */
   wineSlug?: string;
+  /** Provenienza autoritativa della scheda catalogo (Fase 6d-2a). */
+  catalogSource?: "staff" | "utente";
+  /**
+   * Destinazione della scheda. `null` significa che la bottiglia è soltanto
+   * in Cantina e non ha un annuncio; `undefined` conserva il comportamento dei
+   * dati mock, dove `id` identifica anche l'annuncio.
+   */
+  detailHref?: string | null;
   produttore: string;
   nome: string;
   annata: number;

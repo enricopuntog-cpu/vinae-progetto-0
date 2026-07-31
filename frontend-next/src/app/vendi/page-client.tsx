@@ -34,6 +34,7 @@ import { Progress } from "@/components/ui/progress";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
 import { wineImages } from "@/lib/wine-images";
 import { useSellWizard, MAX_FOTO, type Modalita } from "@/hooks/useSellWizard";
+import { BottleSelector } from "@/app/vendi/bottle-selector";
 
 /**
  * /vendi portata da frontend/src/routes/vendi.tsx.
@@ -46,8 +47,7 @@ import { useSellWizard, MAX_FOTO, type Modalita } from "@/hooks/useSellWizard";
  * - il passo Foto carica davvero su Supabase Storage invece di mostrare un
  *   toast di demo;
  * - il campo "Bottiglie disponibili" è visibile ma disabilitato: un annuncio
- *   vende una singola bottle_unit finché la Cantina (Fase 6c) non permetterà
- *   di collegarne più d'una.
+ *   vende una singola bottle_unit identificata.
  *
  * L'accesso non è più deciso dal demo-switcher `ruolo` ma dalla sessione reale
  * Supabase: da questa fase il wizard scrive, e scrivere richiede un utente
@@ -127,6 +127,18 @@ export default function VendiPageClient() {
     );
   }
 
+  if (initialMode === "vendita" && !bottleUnitId) {
+    if (cantinaLoading) {
+      return (
+        <div className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
+          <Loader2 className="mx-auto h-6 w-6 animate-spin text-bordeaux" />
+          <p className="mt-3">Carico la Cantina…</p>
+        </div>
+      );
+    }
+    return <BottleSelector bottiglie={bottiglieCantina} vini={viniCantina} />;
+  }
+
   // Bottiglia richiesta ma cantina non ancora letta: si aspetta invece di
   // mostrare "non è tua" a chi la possiede davvero.
   if (daCantina && cantinaLoading) {
@@ -139,7 +151,8 @@ export default function VendiPageClient() {
   }
 
   // Id inventato, bottiglia di un altro, o unità cancellata. Il database la
-  // rifiuterebbe comunque (`listing_crea` verifica la proprietà), ma dirlo qui
+  // rifiuterebbe comunque (`listing_crea_da_bottiglia` verifica la proprietà),
+  // ma dirlo qui
   // evita di far compilare sei passi per poi negare alla fine.
   if (daCantina && !bottiglia) {
     return (
@@ -150,14 +163,14 @@ export default function VendiPageClient() {
         <h1 className="font-serif text-2xl md:text-3xl">Bottiglia non trovata</h1>
         <p className="text-sm text-muted-foreground">
           Questa bottiglia non è nella tua cantina. Scegline una dalla tua cantina, oppure
-          descrivine una nuova.
+          aggiungine prima una nuova.
         </p>
         <div className="flex flex-wrap justify-center gap-2">
           <Button asChild className="bg-bordeaux hover:bg-bordeaux/90">
             <Link href="/cantina">Vai alla cantina</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/vendi?mode=sell">Descrivi una bottiglia nuova</Link>
+            <Link href="/vendi?mode=catalog">Aggiungi una bottiglia</Link>
           </Button>
         </div>
       </div>
@@ -252,7 +265,7 @@ export default function VendiPageClient() {
 
           I cinque campi liberi spariscono e restano in sola lettura: descrivono
           il vino, che per un'unità esistente è già deciso e vive in `wines`,
-          catalogo condiviso scrivibile solo dallo staff. Renderli modificabili
+          catalogo condiviso già collegato all'unità. Renderli modificabili
           suggerirebbe di poter correggere il vino da qui — la stessa ragione
           per cui in 6b `aggiorna` non li contiene.
         */}
@@ -474,9 +487,11 @@ export default function VendiPageClient() {
           <ArrowLeft className="h-4 w-4" /> Indietro
         </Button>
         <div className="flex flex-wrap gap-2">
-          <Button variant="ghost" onClick={salvaBozza} disabled={inviando}>
-            Salva bozza
-          </Button>
+          {isVendita && (
+            <Button variant="ghost" onClick={salvaBozza} disabled={inviando}>
+              Salva bozza
+            </Button>
+          )}
           {step < steps.length - 1 ? (
             <Button className="bg-bordeaux hover:bg-bordeaux/90" onClick={next}>
               Continua <ArrowRight className="h-4 w-4" />

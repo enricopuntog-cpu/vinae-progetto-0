@@ -173,6 +173,9 @@ export interface DatiCantina {
 export interface CellarService {
   carica(): Promise<DatiCantina>;
 
+  aggiungiBottiglia(
+    dati: DatiNuovaBottiglia,
+  ): Promise<Result<{ bottleUnitId: string; wineId: string }>>;
   apri(bottleUnitId: string, nota?: string): Promise<Result<void>>;
   pianificaApertura(bottleUnitId: string, data: string): Promise<Result<void>>;
   colloca(
@@ -213,13 +216,24 @@ export interface ListingReadService {
   dettaglio(slug: string): Promise<Wine | null>;
 }
 
-/** Dati che il wizard /vendi raccoglie per creare un annuncio. */
-export interface DatiNuovoAnnuncio {
+/** Descrizione immessa da un utente per catalogare una propria bottiglia. */
+export interface DatiVinoUtente {
   produttore: string;
   nome: string;
   annata: number;
   regione: string;
   tipo: Wine["tipo"];
+}
+
+/** Aggiunta alla Cantina: non contiene prezzo né campi di un annuncio. */
+export interface DatiNuovaBottiglia extends DatiVinoUtente {
+  visibilita: "privata" | "cantina_pubblica";
+  /** Percorsi nel bucket privato `cantina`. */
+  immagini: string[];
+}
+
+/** Campi di contenuto di una vendita, sempre riferita a una bottle_unit. */
+export interface DatiModificaAnnuncio {
   condizione: Wine["condizione"];
   conservazione: string;
   storia: string;
@@ -228,20 +242,6 @@ export interface DatiNuovoAnnuncio {
   /** Percorsi dentro il bucket `annunci`, nella forma `<uid>/<uuid>.<est>`. */
   immagini: string[];
 }
-
-/**
- * I campi modificabili dopo la creazione.
- *
- * Produttore, nome, annata, regione e tipologia non ci sono: descrivono il
- * vino, che vive in `wines` ed è un catalogo condiviso scrivibile solo dallo
- * staff. Correggere "Antinori" in "Antinory" su un annuncio cambierebbe il
- * vino per tutti gli annunci che lo citano. Un annuncio sbagliato sul vino si
- * ricrea; il catalogo lo corregge chi ha il ruolo per farlo.
- */
-export type DatiModificaAnnuncio = Pick<
-  DatiNuovoAnnuncio,
-  "prezzoCents" | "condizione" | "conservazione" | "storia" | "immagini"
->;
 
 /**
  * Mettere in vendita una bottiglia che è già in cantina (Fase 6c-2).
@@ -275,12 +275,10 @@ export type DatiVenditaDaCantina = DatiModificaAnnuncio & { bottleUnitId: string
  */
 export interface ListingService extends ListingReadService {
   /**
-   * Crea un annuncio in bozza. Due vie, una funzione sola: da testo digitato
-   * (`DatiNuovoAnnuncio`, il wizard che descrive una bottiglia nuova) o da
-   * un'unità già in cantina (`DatiVenditaDaCantina`). È il database a
-   * distinguerle, tramite `p_bottle_unit_id`.
+   * Crea un annuncio in bozza esclusivamente da una bottle_unit già presente
+   * in Cantina. La catalogazione privata/pubblica appartiene a CellarService.
    */
-  crea(dati: DatiNuovoAnnuncio | DatiVenditaDaCantina): Promise<Result<{ id: string; slug: string }>>;
+  crea(dati: DatiVenditaDaCantina): Promise<Result<{ id: string; slug: string }>>;
   aggiorna(id: string, dati: Partial<DatiModificaAnnuncio>): Promise<Result<void>>;
   pubblica(id: string): Promise<Result<void>>;
   sospendi(id: string, motivo?: string): Promise<Result<void>>;

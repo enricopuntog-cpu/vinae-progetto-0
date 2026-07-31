@@ -10,7 +10,7 @@ import {
   Wine as WineIcon,
   Sparkles,
 } from "lucide-react";
-import { wines, type Wine } from "@/data/wines";
+import type { Wine } from "@/data/wines";
 import { communities, discussions } from "@/data/communities";
 import { WineCard } from "@/components/vinea/WineCard";
 import { SectionTitle, Kpi } from "@/components/vinea/Layout";
@@ -23,21 +23,30 @@ import { formatInteger } from "@/lib/format";
  * Pagina a due sorgenti, e la divisione non è arbitraria.
  *
  * Consigliati, novità dai venditori seguiti e ribassi sono marketplace:
- * arrivano da `annunci`, cioè da Supabase (Fase 6a). Valore della cantina e
- * sezione "La tua cantina" restano sui dati mock perché la Cantina non è
- * ancora un dominio migrato — vedi "Fase 6c" in docs/ROADMAP_V1.md. Preferiti,
- * seguiti, notifiche e club restano nello store mock per lo stesso motivo.
+ * arrivano da `annunci`, cioè da Supabase. Valore e schede della Cantina
+ * arrivano dal CellarService reale. Preferiti, seguiti, notifiche e club
+ * restano nello store mock finché i rispettivi domini non saranno migrati.
  */
 export default function HomeUtentePageClient({ annunci }: { annunci: Wine[] }) {
-  const { favorites, follows, notifiche, nonLette, communityFollows } = useVinea();
+  const {
+    favorites,
+    follows,
+    notifiche,
+    nonLette,
+    communityFollows,
+    viniCantina,
+    cantinaLoading,
+  } = useVinea();
   const consigliati = annunci.slice(0, 4);
   const nuoviSeguiti = annunci.filter((w) => follows.has(w.venditore.nome)).slice(0, 3);
   const ribassi = annunci
     .filter((w) => favorites.has(w.id) && w.prezzoMercato && w.prezzoMercato > w.prezzo)
     .slice(0, 3);
   const attivita = discussions.slice(0, 4);
-  // Cantina: ancora mock.
-  const cantinaValore = wines.slice(0, 6).reduce((s, w) => s + w.prezzo, 0);
+  const cantinaValore = viniCantina.reduce(
+    (totale, vino) => totale + vino.prezzo * vino.disponibili,
+    0,
+  );
   const myCommunities = communities.filter((c) => communityFollows.has(c.slug));
 
   return (
@@ -61,7 +70,7 @@ export default function HomeUtentePageClient({ annunci }: { annunci: Wine[] }) {
           </div>
           <div className="flex flex-wrap gap-3">
             <Button asChild size="lg" className="bg-oro text-antracite hover:bg-oro/90">
-              <Link href="/vendi">
+              <Link href="/vendi?mode=catalog">
                 <PlusCircle className="h-4 w-4" /> Aggiungi bottiglia
               </Link>
             </Button>
@@ -242,11 +251,17 @@ export default function HomeUtentePageClient({ annunci }: { annunci: Wine[] }) {
             <WineIcon className="h-5 w-5" /> La tua cantina
           </span>
         </SectionTitle>
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {wines.slice(0, 4).map((w) => (
-            <WineCard key={w.id} wine={w} showSaleBadge />
-          ))}
-        </div>
+        {cantinaLoading ? (
+          <EmptyBox testo="Caricamento della Cantina…" />
+        ) : viniCantina.length === 0 ? (
+          <EmptyBox testo="La tua Cantina è vuota. Aggiungi la prima bottiglia per vederla qui." />
+        ) : (
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            {viniCantina.slice(0, 4).map((w) => (
+              <WineCard key={w.id} wine={w} showSaleBadge />
+            ))}
+          </div>
+        )}
       </section>
 
       {myCommunities.length > 0 && (

@@ -13,10 +13,9 @@
  * introdurre un raggruppamento che il database non ha.
  *
  * IL PREZZO VIENE DALL'ANNUNCIO, non dal catalogo. In `wines` un prezzo non
- * esiste: appartiene a `listings`. Ogni bottiglia in cantina ha un annuncio —
- * `listing_crea` è l'unico scrittore di `bottle_units`, e crea sempre i due
- * insieme — quindi il prezzo mostrato è quello del suo annuncio, in qualunque
- * stato esso sia.
+ * esiste: appartiene a `listings`. Dalla 6d-2a una bottiglia privata o pubblica
+ * può non avere annunci; in quel caso il valore resta zero invece di inventare
+ * una stima.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -33,12 +32,14 @@ import { urlImmagine } from "@/services/listing-service";
 import type {
   CellarService,
   DatiCantina,
+  DatiNuovaBottiglia,
   DatiNuovoAmbiente,
   OverrideFinestra,
   Result,
 } from "@/services/types";
 
 const IMMAGINE_ASSENTE = "/images/vinea-bottle-1.jpg";
+export const BUCKET_CANTINA = "cantina";
 
 const CANTINA_VUOTA: DatiCantina = {
   bottiglie: [],
@@ -100,6 +101,7 @@ type RigaVinoCantina = RigaMetaVino & {
   denominazione: string;
   tipo: string;
   formato: string;
+  provenienza: "staff" | "utente";
 };
 
 type RigaBottiglia = {
@@ -116,6 +118,7 @@ type RigaBottiglia = {
   override_preferenza: "giovane" | "equilibrato" | "evoluto" | null;
   override_nota: string;
   ceduta_at: string | null;
+  immagini: string[] | null;
   created_at: string;
   wines: RigaVinoCantina | RigaVinoCantina[] | null;
   cellar_slots: RigaSlot | RigaSlot[] | null;
@@ -136,9 +139,10 @@ const COLONNE_BOTTIGLIE = `
   id, stato, visibilita, apertura_pianificata, note_personali, prezzo_visibilita,
   override_finestra_inizio, override_finestra_fine,
   override_apice_inizio, override_apice_fine,
-  override_preferenza, override_nota, ceduta_at, created_at,
+  override_preferenza, override_nota, ceduta_at, immagini, created_at,
   wines!inner (
     slug, produttore, nome, annata, regione, denominazione, tipo, formato,
+    provenienza,
     finestra_inizio, finestra_fine, apice_inizio, apice_fine,
     finestra_fonte, finestra_affidabilita, finestra_aggiornata_at,
     temperatura_servizio, decantazione_minuti, calice, occasione, abbinamenti
@@ -251,17 +255,22 @@ function rigaAVino(
   annuncio: RigaAnnuncio | null,
   venditore: Venditore,
   disponibili: number,
+  immaginiCantina: string[],
 ): Wine {
   const immagini =
     annuncio?.immagini && annuncio.immagini.length > 0
       ? annuncio.immagini.map(urlImmagine)
-      : [IMMAGINE_ASSENTE];
+      : immaginiCantina.length > 0
+        ? immaginiCantina
+        : [IMMAGINE_ASSENTE];
 
   return {
-    // Il collegamento della scheda è /annuncio/<id>: senza annuncio non c'è
-    // pagina da aprire, e lo slug del vino è il ripiego meno sorprendente.
+    // Senza annuncio l'id resta quello del vino, ma detailHref è null: una
+    // bottiglia privata non deve produrre un collegamento /annuncio inesistente.
     id: annuncio?.slug ?? vino.slug,
+    detailHref: annuncio ? `/annuncio/${annuncio.slug}` : null,
     wineSlug: vino.slug,
+    catalogSource: vino.provenienza,
     produttore: vino.produttore,
     nome: vino.nome,
     annata: vino.annata,
@@ -443,6 +452,22 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
       const moduli = righeAmbienti.flatMap((a) => (a.cellar_modules ?? []).map(rigaAModulo));
 
       const righeBottiglie = (bottiglieRes.data ?? []) as unknown as RigaBottiglia[];
+      const percorsiCantina = Array.from(
+        new Set(righeBottiglie.flatMap((riga) => riga.immagini ?? [])),
+      );
+      const urlCantina = new Map<string, string>();
+      if (percorsiCantina.length > 0) {
+        const { data: firme, error: erroreFirme } = await client.storage
+          .from(BUCKET_CANTINA)
+          .createSignedUrls(percorsiCantina, 3600);
+        if (erroreFirme) {
+          segnalaErrore("foto cantina", erroreFirme);
+        } else {
+          for (const firma of firme ?? []) {
+            if (firma.path && firma.signedUrl) urlCantina.set(firma.path, firma.signedUrl);
+          }
+        }
+      }
 
       const bottiglie: CellarBottle[] = [];
       const metaPerVino: Record<string, WineVintageMeta> = {};
@@ -450,6 +475,7 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
       // mostrano vini, non unità. La prima bottiglia incontrata (ordine di
       // creazione) è quella che presta annuncio, prezzo e foto alla scheda.
       const primoAnnuncioPerVino = new Map<string, RigaAnnuncio | null>();
+      const primeImmaginiPerVino = new Map<string, string[]>();
       const vinoPerSlug = new Map<string, RigaVinoCantina>();
       const chiusePerVino = new Map<string, number>();
 
@@ -464,6 +490,14 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
           metaPerVino[vino.slug] = rigaAMeta(vino);
           primoAnnuncioPerVino.set(vino.slug, annuncioRappresentativo(riga.listings ?? []));
         }
+        if ((primeImmaginiPerVino.get(vino.slug)?.length ?? 0) === 0) {
+          primeImmaginiPerVino.set(
+            vino.slug,
+            (riga.immagini ?? [])
+              .map((percorso) => urlCantina.get(percorso))
+              .filter((url): url is string => Boolean(url)),
+          );
+        }
         chiusePerVino.set(
           vino.slug,
           (chiusePerVino.get(vino.slug) ?? 0) + (riga.stato === "chiusa" ? 1 : 0),
@@ -476,10 +510,41 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
           primoAnnuncioPerVino.get(vino.slug) ?? null,
           venditore,
           chiusePerVino.get(vino.slug) ?? 0,
+          primeImmaginiPerVino.get(vino.slug) ?? [],
         ),
       );
 
       return { bottiglie, vini, metaPerVino, ambienti, moduli };
+    },
+
+    async aggiungiBottiglia(
+      dati: DatiNuovaBottiglia,
+    ): Promise<Result<{ bottleUnitId: string; wineId: string }>> {
+      if (!client) return NESSUN_CLIENT;
+
+      const { data, error } = await client.rpc("cellar_bottiglia_aggiungi", {
+        p_produttore: dati.produttore,
+        p_nome: dati.nome,
+        p_annata: dati.annata,
+        p_regione: dati.regione,
+        p_tipo: dati.tipo,
+        p_visibilita: dati.visibilita,
+        p_immagini: dati.immagini,
+      });
+
+      if (error) return { ok: false, error: messaggioPerUtente("aggiungiBottiglia", error) };
+
+      const riga = (
+        data as { bottle_unit_id: string; wine_id: string }[] | null
+      )?.[0];
+      if (!riga) {
+        segnalaErrore("aggiungiBottiglia", "RPC senza risultato");
+        return { ok: false, error: ERRORE_GENERICO };
+      }
+      return {
+        ok: true,
+        data: { bottleUnitId: riga.bottle_unit_id, wineId: riga.wine_id },
+      };
     },
 
     /**
@@ -578,42 +643,16 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
       );
     },
 
-    /**
-     * Ambiente e primo modulo insieme, come fa il configuratore mock: un
-     * ambiente senza scaffali non ha posizioni e la scena 3D sarebbe vuota.
-     * Le due INSERT non sono in transazione — PostgREST non ne offre una — ma
-     * l'ordine è quello giusto: se la seconda fallisce resta un ambiente senza
-     * moduli, che l'interfaccia sa mostrare, e non un modulo orfano.
-     */
+    /** Ambiente e primo modulo nascono nella stessa transazione SQL. */
     async creaAmbiente(dati: DatiNuovoAmbiente): Promise<Result<void>> {
       if (!client) return NESSUN_CLIENT;
-
-      const { data, error } = await client
-        .from("cellar_environments")
-        .insert({
-          nome: dati.nome,
-          forma: dati.forma,
-          tema: dati.tema,
-          materiale: "rovere",
-          illuminazione: "neutra",
-          // Le stesse proporzioni del configuratore mock, in centimetri.
-          larghezza_cm: Math.round((dati.colonne * 0.3 + 0.5) * 100),
-          altezza_cm: Math.round((dati.righe * 0.35 + 0.5) * 100),
-          profondita_cm: 40,
-        })
-        .select("id")
-        .single();
-
-      if (error || !data) {
-        return { ok: false, error: messaggioPerUtente("creaAmbiente", error ?? {}) };
-      }
-
-      return scrittura("creaModulo", async () =>
-        client.from("cellar_modules").insert({
-          environment_id: data.id as string,
-          etichetta: `${dati.nome} — modulo principale`,
-          righe: dati.righe,
-          colonne: dati.colonne,
+      return scrittura("creaAmbiente", async () =>
+        client.rpc("cellar_ambiente_crea", {
+          p_nome: dati.nome,
+          p_forma: dati.forma,
+          p_tema: dati.tema,
+          p_righe: dati.righe,
+          p_colonne: dati.colonne,
         }),
       );
     },
