@@ -5,6 +5,7 @@
 - La draft PR #17 è aperta e mergeable sul branch `migration/phase-6d-2a-catalog-cellar-paths`.
 - La migrazione 6d-2a è applicata al progetto remoto come `20260731120340 catalog_cellar_paths`.
 - Il file locale è allineato a `supabase/migrations/20260731120340_catalog_cellar_paths.sql`; il contenuto conserva SHA-256 `ffb0d4351e12bade1891e7912825a9d9ecb410b2c0df642e9c2d5f129d7d5834`.
+- GitHub Actions CI #42, run `30629391080`, è verde sul commit `8740dd416734176fa1e160d14fbaf3c36f095001` per backend, frontend e frontend-next.
 
 ## ACTIVE TASK
 - Il gate remoto di applicazione della Fase 6d-2a è completato.
@@ -15,7 +16,7 @@
 - `public_listings` include i filtri bottiglia 6d-1, `security_barrier=true` e la colonna chiusa `wine_provenienza`.
 
 ## NEXT STEPS
-1. Attendere la CI del commit di allineamento della draft PR #17.
+1. Revisionare la draft PR #17 con le evidenze del gate remoto e della CI.
 2. Richiedere autorizzazione separata prima di qualsiasi esecuzione della griglia 6d-2a con fixture.
 3. Eseguire merge o avviare la Fase 7 solo dopo autorizzazioni esplicite separate.
 
