@@ -2,23 +2,25 @@
 ## CURRENT STATE
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
 - `origin/main` è a `dc1fe88` e integra il gate post-merge della Fase 6d-1 con 33/33 casi, verifier corrente 11/11, verifier storico 13/13 e zero residui fixture documentati.
-- Il branch `migration/phase-6d-2a-catalog-cellar-paths` ha HEAD `97b893c` ed è avanti di 3 commit rispetto a `origin/main`.
+- Il branch `migration/phase-6d-2a-catalog-cellar-paths` è pubblicato nella draft PR #17; include i 3 commit di fase più questo aggiornamento finale di handoff.
 - La migrazione `20260730184956_catalog_cellar_paths.sql` e la griglia SQL `6d-2a_catalog_cellar_paths.sql` sono preparate ma non applicate o eseguite su Supabase remoto.
 
 ## ACTIVE TASK
 - La Fase 6d-2a è implementata localmente con contratti additivi per catalogo, percorsi Cantina e adattamenti `frontend-next`.
 - Lint mirato, typecheck, build, controlli statici SQL, scansione segreti, `git diff --check` e smoke test browser non autenticati sono conclusi.
 - La griglia 6d-2a include 18 casi; il caso finale controlla esplicitamente i residui fixture marcati dalla fase.
+- La draft PR #17 verso `main` è aperta; la CI #40 su `ed00838` è conclusa con successo per backend, frontend e frontend-next.
 
 ## NEXT STEPS
-1. Eseguire push del branch e creare la draft PR verso `main`.
-2. Attendere e registrare l'esito dei check CI della draft PR.
-3. Revisionare la migrazione esatta prima di decidere se autorizzarne l'applicazione remota.
+1. Revisionare la migrazione esatta prima di decidere se autorizzarne l'applicazione remota.
+2. Autorizzare separatamente l'esecuzione fixture della griglia 6d-2a dopo l'eventuale migrazione remota.
+3. Verificare fotografie reali e residui finali propri durante il gate remoto autorizzato.
 
 ## BLOCKERS / NOTES
 - Nessun SQL remoto è stato eseguito e nessuna applicazione remota è autorizzata in questa sessione.
 - La griglia SQL crea e cancella fixture: non è stata eseguita e richiede un'autorizzazione separata.
 - La griglia 6d-2a non verifica ancora fotografie reali e non ha ancora prodotto una prova remota dei propri residui finali.
+- Nessun blocco GitHub residuo: push e creazione della draft PR sono conclusi.
 - La migrazione e la griglia non sono state eseguite localmente perché Supabase CLI e un database PostgreSQL locale non sono disponibili.
 - Il lint mirato termina con zero errori e due warning preesistenti per `<img>` in `frontend-next/src/app/home/page-client.tsx`.
 - Typecheck e build sono verdi; gli smoke test browser coprono il gate non autenticato di `/vendi?mode=sell` e lo stato Cantina vuota di `/home`.
