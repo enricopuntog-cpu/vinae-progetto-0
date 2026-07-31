@@ -3,7 +3,8 @@
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
 - `origin/main` è `3037bf4f8fa5269895bb01a998d85bb5f629cd34`, merge squash della Pull Request #17; CI run `30635023614` era verde per backend, frontend e frontend-next.
 - L'ultima migrazione remota letta è `20260731120340 catalog_cellar_paths`; nessun SQL o deploy remoto di Fase 7 è stato eseguito.
-- Il branch corrente è `migration/phase-7-order-payment-service` con cinque checkpoint locali sopra `origin/main`.
+- La draft Pull Request #18 è aperta dal branch `migration/phase-7-order-payment-service`, resta draft ed è mergeable.
+- La CI iniziale della PR #18, run `30637845042`, è verde per backend, frontend e frontend-next sull'HEAD `712912d`.
 
 ## ACTIVE TASK
 - Il checkpoint locale di Fase 7 include schema proposte/ordini/pagamenti, prenotazione atomica, RLS/grant, rate limiter Postgres, Edge Function checkout e Route Handler webhook.
@@ -12,9 +13,9 @@
 - Nessuna API Stripe, migrazione remota, fixture SQL, Edge Function remota o pagamento reale è stato eseguito.
 
 ## NEXT STEPS
-1. Pubblicare il branch e aprire una draft Pull Request senza merge né passaggio a ready.
-2. Monitorare la CI della draft Pull Request e correggere soltanto regressioni del checkpoint.
-3. Richiedere autorizzazioni separate prima di migrazione remota, deploy Edge Function o smoke Storage autenticato.
+1. Revisionare la draft Pull Request #18 senza merge né passaggio a ready.
+2. Riprendere lo smoke Storage solo con dashboard autenticata e cleanup Auth Admin garantito.
+3. Richiedere autorizzazioni separate prima di migrazione remota o deploy Edge Function.
 
 ## BLOCKERS / NOTES
 - Lo smoke Storage non è stato avviato: la dashboard Supabase ha reindirizzato al login e il cleanup Auth Admin non era garantibile; non sono stati creati utenti o oggetti.
