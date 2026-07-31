@@ -11,16 +11,6 @@
  */
 
 import type {
-  Order,
-  Proposal,
-  BuyerOrderStatus,
-  SellerOrderStatus,
-  DeliveryMode,
-  TrackingEvent,
-  Dispute,
-  OrderReview,
-} from "@/data/orders";
-import type {
   Report,
   ReportStatus,
   ReportTargetType,
@@ -286,29 +276,102 @@ export interface ListingService extends ListingReadService {
 }
 
 // ---- Proposte & Ordini -----------------------------------------------------
+export type ProposalStatus =
+  | "inviata"
+  | "controproposta"
+  | "accettata"
+  | "rifiutata"
+  | "scaduta"
+  | "convertita";
+
+export type ProposalRecord = {
+  id: string;
+  listing_id: string;
+  buyer_id: string;
+  seller_id: string;
+  prezzo_richiesto_cents: number;
+  prezzo_proposto_cents: number;
+  controproposta_cents: number | null;
+  stato: ProposalStatus;
+  scadenza: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OrderStatus =
+  | "in_attesa_pagamento"
+  | "pagato"
+  | "in_preparazione"
+  | "spedito"
+  | "consegnato"
+  | "verifica"
+  | "completato"
+  | "contestato"
+  | "rimborsato"
+  | "annullato";
+export type OrderDeliveryMode = "consegna_mano" | "spedizione";
+
+export type OrderRecord = {
+  id: string;
+  listing_id: string;
+  proposal_id: string | null;
+  buyer_id: string;
+  seller_id: string;
+  seller_bottle_unit_id: string;
+  buyer_bottle_unit_id: string | null;
+  stato: OrderStatus;
+  delivery_mode: OrderDeliveryMode;
+  prezzo_cents: number;
+  currency: "eur";
+  reservation_expires_at: string;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PaymentStatus =
+  | "checkout_pending"
+  | "processing"
+  | "paid"
+  | "failed"
+  | "expired"
+  | "partially_refunded"
+  | "refunded";
+
+export type PaymentRecord = {
+  id: string;
+  order_id: string;
+  stato: PaymentStatus;
+  amount_cents: number;
+  amount_refunded_cents: number;
+  currency: "eur";
+  created_at: string;
+  updated_at: string;
+};
+
 export interface ProposalService {
-  invia(listingId: string, prezzo: number): Promise<Proposal>;
-  controproposta(id: string, prezzo: number): Promise<Proposal>;
-  accetta(id: string): Promise<Order>;
-  rifiuta(id: string): Promise<void>;
+  invia(listingId: string, prezzoCents: number): Promise<Result<ProposalRecord>>;
+  controproposta(id: string, prezzoCents: number): Promise<Result<ProposalRecord>>;
+  accetta(id: string): Promise<Result<ProposalRecord>>;
+  rifiuta(id: string): Promise<Result<void>>;
+  mie(): Promise<Result<ProposalRecord[]>>;
 }
 
 export interface OrderService {
-  acquisti(userId: string): Promise<Order[]>;
-  vendite(userId: string): Promise<Order[]>;
-  get(id: string): Promise<Order | null>;
-  aggiornaAcquirente(id: string, stato: BuyerOrderStatus): Promise<void>;
-  aggiornaVenditore(id: string, stato: SellerOrderStatus): Promise<void>;
-  aggiungiTracking(id: string, evento: TrackingEvent): Promise<void>;
-  scegliConsegna(id: string, modo: DeliveryMode): Promise<void>;
-  apriContestazione(id: string, dispute: Omit<Dispute, "id" | "stato">): Promise<Dispute>;
-  recensisci(id: string, review: Omit<OrderReview, "id" | "createdAt">): Promise<OrderReview>;
+  acquisti(): Promise<Result<OrderRecord[]>>;
+  vendite(): Promise<Result<OrderRecord[]>>;
+  get(id: string): Promise<Result<OrderRecord | null>>;
 }
 
-// ---- Pagamenti (demo-only) -------------------------------------------------
+// ---- Pagamenti -------------------------------------------------------------
 export interface PaymentService {
-  /** Puramente dimostrativo: non raccoglie dati reali. */
-  simulaCheckout(orderId: string): Promise<Result<{ paymentId: string }>>;
+  creaCheckout(input: {
+    listingId: string;
+    proposalId?: string;
+    deliveryMode: OrderDeliveryMode;
+    idempotencyKey: string;
+  }): Promise<Result<{ checkoutUrl: string }>>;
+  perOrdine(orderId: string): Promise<Result<PaymentRecord | null>>;
 }
 
 // ---- Messaggi --------------------------------------------------------------
