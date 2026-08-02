@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-07-30",
+  "updated_at": "2026-08-02",
   "language": "it",
   "project": {
     "name": "Vinea",
@@ -8,16 +8,17 @@
     "repository_url": "https://github.com/enricopuntog-cpu/vinae-progetto-0"
   },
   "verified_git_snapshot": {
-    "branch": "hardening/phase-6d-1-post-merge-verification",
-    "head": "e2e4fcb",
-    "origin_main": "e2e4fcb",
-    "ahead_of_origin_main": 0,
+    "branch": "migration/phase-7-order-payment-service",
+    "head": "4d82fa4",
+    "origin_main": "3037bf4",
+    "ahead_of_origin_main": 11,
     "behind_origin_main": 0,
-    "ahead_of_origin_branch": 0,
-    "behind_origin_branch": 0
+    "ahead_of_origin_branch": 2,
+    "behind_origin_branch": 0,
+    "snapshot_note": "Rilevato a lavoro in corso sul branch di Fase 7: i due contatori avanzano a ogni commit successivo dello stesso task. Branch e origin_main restano validi."
   },
-  "documentation_branch": "hardening/phase-6d-1-post-merge-verification",
-  "verification_pr": 16,
+  "documentation_branch": "migration/phase-7-order-payment-service",
+  "verification_pr": 18,
   "runtime_truth": {
     "served_frontend": "frontend/",
     "served_backend": "backend/",
@@ -39,8 +40,8 @@
     "phase_6c_1": "merged",
     "phase_6c_2": "merged",
     "phase_6d_1": "merged_ci_green_fixture_grids_33_33_and_11_11_zero_residue",
-    "phase_6d_2a": "blocked_pending_verification_pr_merge_and_explicit_approval",
-    "phase_7": "not_started",
+    "phase_6d_2a": "merged_pr_17_migration_20260731120340_applied_storage_smoke_still_open",
+    "phase_7": "in_progress_draft_pr_18_no_remote_sql_no_edge_deploy_no_stripe_call_started_without_recorded_approval",
     "phase_8": "not_started",
     "phase_9": "not_started",
     "phase_10": "not_started",
@@ -63,6 +64,7 @@
     "docs/ROADMAP_V1.md",
     "docs/MIGRATION_PHASE_1_BACKLOG.md"
   ],
-  "next_gate": "Merge draft PR #16 after green CI and explicit approval, then request explicit approval before starting Phase 6d-2a.",
+  "mandatory_read_order_verified_at": "2026-08-02",
+  "next_gate": "Sottoporre la PR #18 a ratifica o sospensione: la Fase 7 e' iniziata senza l'autorizzazione esplicita richiesta. Nessun apply_migration, deploy della Edge Function, chiamata Stripe o merge senza approvazione separata registrata in sede organizzativa.",
   "remote_sql_rule": "Show exact SQL and obtain explicit in-session approval before applying any migration to the real Supabase project."
 }
