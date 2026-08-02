@@ -388,15 +388,26 @@ export type ProviderPaymentRef = {
   intentId?: string | null;
 };
 
-/** Tutto risolto server-side: nessun campo di questo tipo arriva dal client. */
+/**
+ * Tutto risolto server-side: nessun campo di questo tipo arriva dal client.
+ * Gli identificativi sono di dominio Vinea, non del fornitore: sta all'adapter
+ * decidere come trasportarli.
+ *
+ * Rispecchia `CheckoutRequest` in supabase/functions/_shared/payment-provider.ts,
+ * che vive nel runtime Deno e non puo' importare da qui: i due vanno cambiati
+ * insieme.
+ */
 export type CheckoutRequest = {
   orderId: string;
+  buyerId: string;
+  listingId: string;
+  descrizione: string;
   amountCents: number;
-  currency: "eur";
+  currency: string;
   successUrl: string;
   cancelUrl: string;
   idempotencyKey: string;
-  expiresAt: string;
+  expiresAt: string | null;
 };
 
 export type CheckoutHandle = {
