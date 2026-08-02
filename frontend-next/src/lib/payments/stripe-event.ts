@@ -30,11 +30,23 @@ export type StripeEventEnvelope = {
 export const isSupportedStripeEvent = (type: string): type is StripeEventType =>
   (STRIPE_EVENT_TYPES as readonly string[]).includes(type);
 
-export const normalizeStripeObject = (object: StripeObject): Record<string, unknown> => ({
-  id: object.id,
-  payment_intent:
+/**
+ * Riduce l'oggetto Stripe ai soli campi che la RPC riverifica, con nomi che non
+ * sono di Stripe: è il payload che attraversa il confine verso il database.
+ *
+ * `payment_status` non passa più: era il campo su cui la RPC decideva se
+ * l'incasso fosse avvenuto, e quella decisione ora è tradotta in un
+ * `PaymentOutcomeKind` da `traduciEventoStripe`. Il database non legge più
+ * vocabolario Stripe.
+ */
+export const normalizeStripeObject = (
+  object: StripeObject,
+  eventType: StripeEventType,
+): Record<string, unknown> => ({
+  session_id: object.id,
+  intent_id:
     typeof object.payment_intent === "string" ? object.payment_intent : object.payment_intent?.id,
-  payment_status: object.payment_status,
+  provider_event_type: eventType,
   amount_cents: object.amount_total ?? object.amount ?? 0,
   amount_refunded: object.amount_refunded ?? 0,
   refunded: object.refunded ?? false,

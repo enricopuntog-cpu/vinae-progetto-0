@@ -1,11 +1,15 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { traduciEventoStripe } from "@/lib/payments/payment-state";
 import {
   isSupportedStripeEvent,
   normalizeStripeObject,
   type StripeEventEnvelope,
 } from "@/lib/payments/stripe-event";
 import { verifyStripeSignature } from "@/lib/payments/stripe-signature";
+
+/** Identificativo del fornitore per la chiave di deduplicazione (provider, event_id). */
+const PROVIDER = "stripe";
 
 export const runtime = "nodejs";
 
@@ -57,11 +61,14 @@ export const POST = async (request: Request): Promise<NextResponse> => {
   });
   if (limitError) return NextResponse.json({ error: "Troppe richieste." }, { status: 429 });
 
-  const { error } = await supabase.rpc("payment_apply_stripe_event", {
+  // La traduzione dal vocabolario Stripe alla tassonomia interna avviene qui,
+  // prima del confine: la RPC riceve un esito e non un nome evento.
+  const { error } = await supabase.rpc("payment_apply_provider_event", {
+    p_provider: PROVIDER,
     p_event_id: event.id,
-    p_event_type: event.type,
-    p_stripe_created_at: event.created,
-    p_object: normalizeStripeObject(event.data.object),
+    p_outcome: traduciEventoStripe(event.type, event.data.object),
+    p_occurred_at: event.created,
+    p_object: normalizeStripeObject(event.data.object, event.type),
   });
   if (error) {
     console.error("[Stripe webhook] applicazione evento fallita", {
