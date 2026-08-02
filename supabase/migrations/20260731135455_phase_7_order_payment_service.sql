@@ -180,6 +180,16 @@ create type public.payment_stato as enum (
   'partially_refunded', 'refunded'
 );
 
+-- Tassonomia interna degli esiti di pagamento. Non è il vocabolario di nessun
+-- provider: è ciò su cui `payment_apply_provider_event` ramifica. Tradurre
+-- `checkout.session.completed` o l'equivalente di un altro fornitore in uno di
+-- questi valori è compito dell'adapter, fuori dal database. Rispecchia
+-- `PaymentOutcomeKind` in frontend-next/src/services/types.ts: i due elenchi
+-- vanno cambiati insieme.
+create type public.payment_outcome as enum (
+  'pending', 'authorized', 'settled', 'failed', 'expired', 'refunded'
+);
+
 alter table public.listings
   add column reserved_by uuid references public.profiles (id) on delete set null,
   add column reserved_until timestamptz;
@@ -263,23 +273,35 @@ create trigger orders_set_updated_at
 create table public.payments (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null unique references public.orders (id) on delete restrict,
-  stripe_session_id text unique,
-  stripe_payment_intent_id text unique,
+  provider text check (provider ~ '^[a-z0-9_]{2,32}$'),
+  provider_session_id text,
+  provider_intent_id text,
   checkout_url text,
   stato public.payment_stato not null default 'checkout_pending',
   amount_cents integer not null check (amount_cents > 0),
   amount_refunded_cents integer not null default 0 check (amount_refunded_cents >= 0),
   currency text not null check (currency = 'eur'),
-  stripe_event_created_at timestamptz,
+  provider_event_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint payments_refund_within_amount
-    check (amount_refunded_cents <= amount_cents)
+    check (amount_refunded_cents <= amount_cents),
+  -- La riga nasce senza provider: `order_checkout_reserve` prenota, e solo
+  -- `payment_checkout_attach` sa presso chi è stata aperta la sessione. Da quel
+  -- momento i tre campi viaggiano insieme.
+  constraint payments_provider_with_session
+    check ((provider is null) = (provider_session_id is null)),
+  constraint payments_intent_needs_provider
+    check (provider_intent_id is null or provider is not null),
+  -- L'unicità è per provider: due fornitori possono emettere lo stesso
+  -- identificativo di sessione senza collidere.
+  constraint payments_provider_session_unique unique (provider, provider_session_id),
+  constraint payments_provider_intent_unique unique (provider, provider_intent_id)
 );
 
-create index payments_intent_idx
-  on public.payments (stripe_payment_intent_id)
-  where stripe_payment_intent_id is not null;
+-- Nessun indice separato su (provider, provider_intent_id): lo fornisce già il
+-- vincolo payments_provider_intent_unique, e l'aggancio del rimborso usa
+-- esattamente quelle due colonne nello stesso ordine.
 
 create trigger payments_set_updated_at
   before update on public.payments
@@ -296,21 +318,28 @@ create table public.order_events (
 create index order_events_order_created_idx
   on public.order_events (order_id, created_at);
 
-create table public.stripe_webhook_events (
-  event_id text primary key,
-  event_type text not null,
-  stripe_created_at timestamptz not null,
-  processed_at timestamptz not null default now()
+-- La chiave di deduplicazione è `(provider, event_id)`: l'unicità dell'id
+-- evento è garantita dal singolo fornitore, non fra fornitori diversi.
+-- `provider_event_type` conserva il nome originale dell'evento a fini
+-- forensi: è dato, non controllo di flusso — nessun ramo della RPC lo legge.
+create table public.payment_provider_events (
+  provider text not null check (provider ~ '^[a-z0-9_]{2,32}$'),
+  event_id text not null,
+  outcome public.payment_outcome not null,
+  provider_event_type text not null check (length(provider_event_type) between 1 and 120),
+  occurred_at timestamptz not null,
+  processed_at timestamptz not null default now(),
+  primary key (provider, event_id)
 );
 
 alter table public.proposals enable row level security;
 alter table public.orders enable row level security;
 alter table public.payments enable row level security;
 alter table public.order_events enable row level security;
-alter table public.stripe_webhook_events enable row level security;
+alter table public.payment_provider_events enable row level security;
 
 revoke all on public.proposals, public.orders, public.payments,
-  public.order_events, public.stripe_webhook_events from public, anon, authenticated;
+  public.order_events, public.payment_provider_events from public, anon, authenticated;
 
 grant select on public.proposals to authenticated;
 grant select (
@@ -534,7 +563,8 @@ begin
     return jsonb_build_object(
       'order_id', v_order.id, 'amount_cents', v_order.prezzo_cents,
       'currency', v_order.currency, 'checkout_url', v_payment.checkout_url,
-      'stripe_session_id', v_payment.stripe_session_id,
+      'provider', v_payment.provider,
+      'provider_session_id', v_payment.provider_session_id,
       'order_status', v_order.stato, 'payment_status', v_payment.stato
     );
   end if;
@@ -551,7 +581,8 @@ begin
     return jsonb_build_object(
       'order_id', v_order.id, 'amount_cents', v_order.prezzo_cents,
       'currency', v_order.currency, 'checkout_url', v_payment.checkout_url,
-      'stripe_session_id', v_payment.stripe_session_id,
+      'provider', v_payment.provider,
+      'provider_session_id', v_payment.provider_session_id,
       'reservation_expires_at', v_order.reservation_expires_at,
       'order_status', v_order.stato, 'payment_status', v_payment.stato
     );
@@ -643,7 +674,8 @@ $$;
 create or replace function public.payment_checkout_attach(
   p_order_id uuid,
   p_buyer_id uuid,
-  p_stripe_session_id text,
+  p_provider text,
+  p_provider_session_id text,
   p_checkout_url text
 )
 returns void
@@ -652,14 +684,21 @@ security definer
 set search_path = ''
 as $$
 begin
+  if coalesce(p_provider, '') !~ '^[a-z0-9_]{2,32}$'
+     or length(coalesce(p_provider_session_id, '')) < 4 then
+    raise exception 'Checkout non collegabile.' using errcode = '22023';
+  end if;
   update public.payments p set
-    stripe_session_id = p_stripe_session_id,
+    provider = p_provider,
+    provider_session_id = p_provider_session_id,
     checkout_url = p_checkout_url,
     stato = 'processing'
   from public.orders o
   where p.order_id = p_order_id and o.id = p.order_id
     and o.buyer_id = p_buyer_id and o.stato = 'in_attesa_pagamento'
-    and p.stato in ('checkout_pending', 'processing');
+    and p.stato in ('checkout_pending', 'processing')
+    -- Un pagamento già collegato non cambia fornitore in corsa.
+    and (p.provider is null or p.provider = p_provider);
   if not found then raise exception 'Checkout non collegabile.' using errcode = 'P0001'; end if;
 end;
 $$;
@@ -694,10 +733,20 @@ begin
 end;
 $$;
 
-create or replace function public.payment_apply_stripe_event(
+-- La RPC ramifica su `p_outcome`, cioè sulla tassonomia interna
+-- `public.payment_outcome`, e mai sul nome evento del fornitore. Tradurre
+-- `checkout.session.completed` (o l'equivalente di un altro provider) in
+-- 'settled' oppure 'authorized' è compito dell'adapter, che è l'unico punto
+-- del sistema autorizzato a conoscere quel vocabolario.
+--
+-- Ciò che resta qui, e che nessun adapter può aggirare, è la riverifica: i
+-- campi di `p_object` sono dichiarazioni del fornitore e vengono riconfrontati
+-- con la riga di `payments` scritta al momento della prenotazione.
+create or replace function public.payment_apply_provider_event(
+  p_provider text,
   p_event_id text,
-  p_event_type text,
-  p_stripe_created_at bigint,
+  p_outcome public.payment_outcome,
+  p_occurred_at bigint,
   p_object jsonb
 )
 returns text
@@ -706,60 +755,69 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_created_at timestamptz := to_timestamp(p_stripe_created_at);
+  v_created_at timestamptz := to_timestamp(p_occurred_at);
   v_payment public.payments%rowtype;
   v_order public.orders%rowtype;
   v_bottle public.bottle_units%rowtype;
-  v_session_id text := p_object ->> 'id';
-  v_intent_id text := p_object ->> 'payment_intent';
-  v_payment_status text := p_object ->> 'payment_status';
+  v_session_id text := p_object ->> 'session_id';
+  v_intent_id text := p_object ->> 'intent_id';
+  v_event_type text := p_object ->> 'provider_event_type';
   v_amount integer := coalesce((p_object ->> 'amount_cents')::integer, 0);
   v_refunded integer := coalesce((p_object ->> 'amount_refunded')::integer, 0);
   v_fully_refunded boolean := coalesce((p_object ->> 'refunded')::boolean, false);
   v_currency text := lower(coalesce(p_object ->> 'currency', ''));
   v_order_ref uuid := nullif(p_object ->> 'order_id', '')::uuid;
 begin
-  if length(coalesce(p_event_id, '')) < 4 or p_stripe_created_at <= 0 then
-    raise exception 'Evento Stripe non valido.' using errcode = '22023';
+  -- I null sono respinti qui e non lasciati arrivare ai vincoli not null delle
+  -- tabelle: un messaggio di violazione esporrebbe nomi di colonna al chiamante.
+  if p_outcome is null or p_occurred_at is null
+     or coalesce(p_provider, '') !~ '^[a-z0-9_]{2,32}$'
+     or length(coalesce(p_event_id, '')) < 4
+     or length(coalesce(v_event_type, '')) not between 1 and 120
+     or p_occurred_at <= 0 then
+    raise exception 'Evento di pagamento non valido.' using errcode = '22023';
   end if;
-  insert into public.stripe_webhook_events (event_id, event_type, stripe_created_at)
-  values (p_event_id, p_event_type, v_created_at)
-  on conflict (event_id) do nothing;
+  insert into public.payment_provider_events (
+    provider, event_id, outcome, provider_event_type, occurred_at
+  )
+  values (p_provider, p_event_id, p_outcome, v_event_type, v_created_at)
+  on conflict (provider, event_id) do nothing;
   if not found then return 'duplicate'; end if;
 
-  if p_event_type = 'charge.refunded' then
+  -- Il rimborso arriva sull'incasso, non sulla sessione: è l'unico esito che
+  -- si aggancia per `provider_intent_id`.
+  if p_outcome = 'refunded' then
     select * into v_payment from public.payments
-    where stripe_payment_intent_id = v_intent_id for update;
+    where provider = p_provider and provider_intent_id = v_intent_id for update;
   else
     select * into v_payment from public.payments
-    where stripe_session_id = v_session_id for update;
+    where provider = p_provider and provider_session_id = v_session_id for update;
   end if;
-  if not found then raise exception 'Pagamento Stripe non riconosciuto.' using errcode = 'P0001'; end if;
+  if not found then raise exception 'Pagamento non riconosciuto.' using errcode = 'P0001'; end if;
   select * into v_order from public.orders where id = v_payment.order_id for update;
 
-  if p_event_type in ('checkout.session.completed', 'checkout.session.async_payment_succeeded')
-     and (p_event_type = 'checkout.session.async_payment_succeeded' or v_payment_status = 'paid')
+  if p_outcome = 'settled'
      and v_payment.stato not in ('partially_refunded', 'refunded') then
     if v_order_ref is distinct from v_order.id or v_amount <> v_payment.amount_cents
        or v_currency <> v_payment.currency then
-      raise exception 'Importo, valuta o ordine Stripe non corrispondono.' using errcode = 'P0001';
+      raise exception 'Importo, valuta o ordine non corrispondono.' using errcode = 'P0001';
     end if;
     if v_order.stato <> 'in_attesa_pagamento'
        or v_created_at > v_order.reservation_expires_at then
       update public.payments set
-        stato = 'paid', stripe_payment_intent_id = coalesce(v_intent_id, stripe_payment_intent_id),
-        stripe_event_created_at = greatest(coalesce(stripe_event_created_at, v_created_at), v_created_at)
+        stato = 'paid', provider_intent_id = coalesce(v_intent_id, provider_intent_id),
+        provider_event_at = greatest(coalesce(provider_event_at, v_created_at), v_created_at)
       where id = v_payment.id;
       insert into public.order_events (order_id, tipo, payload)
       values (v_order.id, 'late_payment_requires_refund', jsonb_build_object(
-        'stripe_event_created_at', v_created_at
+        'provider_event_at', v_created_at
       ));
       return 'late_paid_requires_refund';
     end if;
 
     update public.payments set
-      stato = 'paid', stripe_payment_intent_id = coalesce(v_intent_id, stripe_payment_intent_id),
-      stripe_event_created_at = greatest(coalesce(stripe_event_created_at, v_created_at), v_created_at)
+      stato = 'paid', provider_intent_id = coalesce(v_intent_id, provider_intent_id),
+      provider_event_at = greatest(coalesce(provider_event_at, v_created_at), v_created_at)
     where id = v_payment.id;
     update public.orders set stato = 'pagato', paid_at = coalesce(paid_at, now())
     where id = v_order.id and stato = 'in_attesa_pagamento';
@@ -782,23 +840,23 @@ begin
       update public.orders set buyer_bottle_unit_id = v_bottle.id where id = v_order.id;
     end if;
     insert into public.order_events (order_id, tipo) values (v_order.id, 'payment_paid');
-  elsif p_event_type = 'checkout.session.completed'
+  elsif p_outcome = 'authorized'
         and v_payment.stato in ('checkout_pending', 'processing') then
     update public.payments set stato = 'processing',
-      stripe_payment_intent_id = coalesce(v_intent_id, stripe_payment_intent_id),
-      stripe_event_created_at = greatest(coalesce(stripe_event_created_at, v_created_at), v_created_at)
+      provider_intent_id = coalesce(v_intent_id, provider_intent_id),
+      provider_event_at = greatest(coalesce(provider_event_at, v_created_at), v_created_at)
     where id = v_payment.id;
-  elsif p_event_type = 'checkout.session.async_payment_failed'
+  elsif p_outcome = 'failed'
         and v_payment.stato in ('checkout_pending', 'processing') then
-    update public.payments set stato = 'failed', stripe_event_created_at = v_created_at
+    update public.payments set stato = 'failed', provider_event_at = v_created_at
     where id = v_payment.id;
     perform public.order_checkout_release(v_order.id, v_order.buyer_id);
-  elsif p_event_type = 'checkout.session.expired'
+  elsif p_outcome = 'expired'
         and v_payment.stato in ('checkout_pending', 'processing') then
-    update public.payments set stato = 'expired', stripe_event_created_at = v_created_at
+    update public.payments set stato = 'expired', provider_event_at = v_created_at
     where id = v_payment.id;
     perform public.order_checkout_release(v_order.id, v_order.buyer_id);
-  elsif p_event_type = 'charge.refunded' and v_refunded > 0 then
+  elsif p_outcome = 'refunded' and v_refunded > 0 then
     update public.payments set
       amount_refunded_cents = greatest(amount_refunded_cents, least(v_refunded, amount_cents)),
       stato = case
@@ -806,7 +864,7 @@ begin
           then 'refunded'::public.payment_stato
         else 'partially_refunded'::public.payment_stato
       end,
-      stripe_event_created_at = greatest(coalesce(stripe_event_created_at, v_created_at), v_created_at)
+      provider_event_at = greatest(coalesce(provider_event_at, v_created_at), v_created_at)
     where id = v_payment.id;
     update public.orders set stato = case
       when v_fully_refunded or (v_amount > 0 and v_refunded >= v_amount)
@@ -825,17 +883,34 @@ $$;
 
 revoke execute on function public.order_checkout_reserve(
   uuid, uuid, uuid, public.delivery_mode, text
-), public.payment_checkout_attach(uuid, uuid, text, text),
+), public.payment_checkout_attach(uuid, uuid, text, text, text),
   public.order_checkout_release(uuid, uuid),
-  public.payment_apply_stripe_event(text, text, bigint, jsonb)
+  public.payment_apply_provider_event(text, text, public.payment_outcome, bigint, jsonb)
 from public, anon, authenticated;
 
 grant execute on function public.order_checkout_reserve(
   uuid, uuid, uuid, public.delivery_mode, text
-), public.payment_checkout_attach(uuid, uuid, text, text),
+), public.payment_checkout_attach(uuid, uuid, text, text, text),
   public.order_checkout_release(uuid, uuid),
-  public.payment_apply_stripe_event(text, text, bigint, jsonb)
+  public.payment_apply_provider_event(text, text, public.payment_outcome, bigint, jsonb)
 to service_role;
 
-comment on function public.payment_apply_stripe_event(text, text, bigint, jsonb) is
-  'Applica eventi Stripe già verificati e deduplicati senza conservare il payload completo.';
+comment on function public.payment_apply_provider_event(
+  text, text, public.payment_outcome, bigint, jsonb
+) is
+  'Applica un evento di incasso già verificato e deduplicato, ramificando sulla '
+  'tassonomia interna public.payment_outcome e mai sul nome evento del '
+  'fornitore, senza conservare il payload completo.';
+
+comment on type public.payment_outcome is
+  'Tassonomia interna degli esiti di incasso. La traduzione dal vocabolario di '
+  'un fornitore a questi valori avviene nell''adapter, fuori dal database.';
+
+comment on table public.payment_provider_events is
+  'Registro di deduplicazione degli eventi di incasso, con chiave (provider, '
+  'event_id). provider_event_type è conservato a fini forensi e non è letto da '
+  'nessun ramo della RPC.';
+
+comment on column public.payments.provider is
+  'Fornitore presso cui è aperta la sessione di incasso, valorizzato da '
+  'payment_checkout_attach insieme a provider_session_id.';
