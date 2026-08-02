@@ -488,6 +488,56 @@ Nessun invariante di dati ne viene violato, ma il costo e il rumore sì.
 Va risolto prima che la Fase 7 esponga i pagamenti, ed è lavoro di infrastruttura
 (Edge Function con storage condiviso, o limiti al bordo), non di questa traccia.
 
+## Debito dichiarato dalla diagnosi della storia migrazioni — 2 agosto 2026
+
+Trovato creando il branch Supabase `phase-7-migration-verify` e finito in
+`MIGRATIONS_FAILED`. Precede la Fase 7 di giorni e non le appartiene: riguarda
+la fedeltà di qualunque ambiente ricostruito dalle migrazioni. Diagnosi completa
+in [`docs/PHASE_7_VERIFICATION.md`](PHASE_7_VERIFICATION.md).
+
+### L'event trigger `ensure_rls` non è creato da nessun file — da decidere prima di fidarsi di un branch
+
+`public.rls_auto_enable()` ritorna `event_trigger`, proprietario `postgres`,
+`security definer`, `search_path=pg_catalog`. Il corpo scorre
+`pg_event_trigger_ddl_commands()` e abilita RLS sulle tabelle nuove in `public`.
+È agganciata all'event trigger `ensure_rls` su `ddl_command_end`, proprietario
+`postgres` — gli altri sei event trigger del progetto sono di `supabase_admin`,
+cioè di Supabase.
+
+**Nessun file di `supabase/migrations/` la crea.** L'unica menzione in tutto il
+repository è `20260729234500_security_invariants_followup.sql:86`, che le revoca
+`execute`. È deriva vera, dello stesso genere riparato in parte dalla
+`20260730140948`, che però non la copriva.
+
+Va tenuta distinta dalla deriva del ledger — le sette versioni con `statements`
+vuoto, la cui bozza di riparazione è
+[`supabase/repair/ledger_statements_vuoti.sql`](../supabase/repair/ledger_statements_vuoti.sql).
+Sono due difetti indipendenti: **riparato il ledger, `ensure_rls` resta comunque
+assente** da ogni ambiente ricostruito, perché non c'è alcun file da registrare.
+
+**Non blocca la Fase 7.** La sua migrazione abilita RLS esplicitamente su tutte e
+sei le tabelle che crea (righe 20 e 335–339), quindi non dipende dall'auto-enable
+implicito. L'effetto non è sulla fase, è sul metodo: finché la decisione non è
+presa, **un branch Supabase non è un proxy fedele della produzione** per
+qualunque migrazione che crei una tabella in `public` senza
+`enable row level security` esplicito. Lì la tabella nascerebbe con RLS attiva e
+sul branch no, e la differenza non comparirebbe in nessun errore.
+
+**Da decidere**, e registrare la scelta, prima di usare un branch come prova di
+una migrazione futura. Due strade, nessuna delle due presa qui:
+
+1. **Ricreare il trigger in una migrazione propria**, che lo renda parte della
+   storia e quindi presente in ogni ambiente ricostruito. Mantiene la rete di
+   sicurezza e chiude la deriva.
+2. **Dichiarare deprecato l'auto-enable implicito** in favore di RLS sempre
+   esplicita in ogni migrazione, e rimuovere trigger e funzione dal progetto
+   reale con una migrazione che lo registri. Rende la storia autosufficiente al
+   prezzo di togliere la rete: un `create table` che dimentichi
+   `enable row level security` non verrebbe più corretto da nessuno.
+
+Nessuna delle due va eseguita senza approvazione esplicita: entrambe toccano il
+progetto reale, e la seconda cambia una protezione attiva.
+
 ## Debito tecnico noto
 
 Difetti reali, individuati durante la migrazione, che **non** appartengono a
