@@ -55,9 +55,13 @@ bun install --frozen-lockfile
 bun run dev
 bun run lint
 bun run typecheck
+bun run test         # Bun's native test runner — esiste, ma non è agganciato a nulla
 bun run build
 ```
-There is **no test script here yet** — CI for `frontend-next` only runs lint/typecheck/build.
+A `test` script exists here, but **nothing invokes it**: CI for `frontend-next` runs only
+lint/typecheck/build, and `tsconfig.json` excludes `**/*.test.ts` from typecheck (there is no
+`@types/bun` among the devDependencies, unlike `frontend/`). Tests under `frontend-next/` are
+therefore neither type-checked nor enforced — a green CI says nothing about them.
 
 ### backend/ (current, FastAPI/MongoDB) — Python 3.12
 ```bash
