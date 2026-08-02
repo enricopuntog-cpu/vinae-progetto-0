@@ -188,3 +188,172 @@ autorizzata da esso:
 7. **Lo smoke Storage 6d-2a resta aperto**, invariato rispetto a sopra.
 8. **Nessun job CI per le griglie SQL.** Il blocco `do` finale prepara il
    terreno; il job non esiste.
+
+---
+
+# Deriva pre-esistente: la storia migrazioni non ricostruisce il database
+
+Data: 2 agosto 2026. Scoperta creando il branch Supabase `phase-7-migration-verify`
+(`ccnufawxtaykgjftvauc`, genitore `pijnmcllmfgjmgsvtcej`), che è finito in
+`MIGRATIONS_FAILED` **prima** di arrivare alla migrazione di Fase 7.
+
+Questo debito è indipendente dalla Fase 7 e la precede di giorni.
+
+## L'errore riportato non è la causa
+
+L'errore visibile è:
+
+```
+ERROR: function public.bottiglia_apri(uuid, text) does not exist
+```
+
+sollevato da `20260729234500_security_invariants_followup.sql:35`. Ma
+`bottiglia_apri` non ha niente che non va:
+
+- esiste sul progetto reale con la firma esatta `(p_bottle_unit_id uuid, p_nota text)`,
+  `security definer`, `search_path=""`;
+- è creata da tre file tracciati: `20260729230000:341`, `20260730140948:30`,
+  `20260730162046:1`.
+
+Non è deriva non tracciata. È solo il primo statement che tocca un oggetto assente.
+
+## La causa: sette migrazioni su quattordici sono registrate vuote
+
+`supabase_migrations.schema_migrations` conserva in `statements` il SQL di ogni
+versione. Un branch replica **quella colonna**, non i file del repository. Sette
+righe su quattordici hanno `statements` vuoto: la versione risulta applicata e
+non viene eseguito nulla.
+
+| Versione | Nome | Byte nel file | Caratteri registrati |
+|---|---|---|---|
+| 20260728000545 | auth_profiles_roles | 5891 | 5838 |
+| 20260728073915 | oauth_profile_without_dob | 3877 | 3845 |
+| 20260728193937 | listings_catalog | 21840 | **0** |
+| 20260728194500 | seed_wines_catalog | 2707 | **0** |
+| 20260729112500 | listings_write | 22005 | **0** |
+| 20260729180000 | cellar_schema | 27402 | **0** |
+| 20260729180500 | seed_wine_meta | 7999 | **0** |
+| 20260729210000 | listing_crea_da_bottiglia | 11704 | **0** |
+| 20260729230000 | security_invariants | 47896 | **0** |
+| 20260729234500 | security_invariants_followup | 24548 | 24505 |
+| 20260729235500 | security_helper_invoker | 2005 | 1532 |
+| 20260730140948 | security_invariants_remote_drift_repair | 9615 | 9615 |
+| 20260730162046 | fix_6d1_bottle_message_encoding | 4410 | 4390 |
+| 20260731120340 | catalog_cellar_paths | 19712 | 19692 |
+
+**141 553 byte di DDL sono registrati come applicati e conservati come niente.**
+
+Le differenze nelle righe non vuote sono intestazioni di commento rimosse da
+`apply_migration` più il newline finale. Verificato sul caso più sospetto,
+`20260729235500` (473 caratteri di scarto): il contenuto registrato è identico al
+file meno le prime 8 righe di commento. Le sette migrazioni registrate non sono
+quindi da rifare — solo le sette vuote.
+
+## Prova diretta sul branch, non deduzione
+
+Interrogando il catalogo del branch fallito:
+
+- `schema_migrations` contiene nove versioni, da `20260728000545` a `20260729230000`;
+- le relazioni in `public` sono **due**: `profiles`, `user_roles`;
+- le funzioni in `public` sono **due**: `handle_new_user`, `has_role`.
+
+Le sei versioni vuote hanno segnato il proprio numero senza creare nulla. Mancano
+`wines`, `bottle_units`, `listings`, `cellar_environments`, `cellar_modules`,
+`cellar_slots`, i tre enum, `slugifica`, `listing_crea`, `listing_pubblica`,
+`listing_sospendi`, `listing_scadi`, `utente_maggiorenne`, `bottiglia_apri`,
+`bottiglia_cancella` e i due trigger di annuncio.
+
+Correggere il solo `REVOKE` di riga 35 sposterebbe l'errore alla riga 40
+(`bottiglia_cancella`), poi a `listing_crea`, poi a ogni tabella toccata dal
+follow-up. **Non esiste un primo errore da correggere: metà della storia è in bianco.**
+
+## Seconda deriva, distinta: `rls_auto_enable` non è tracciata da nessuna parte
+
+- `public.rls_auto_enable()` ritorna `event_trigger`, proprietario `postgres`,
+  `security definer`, `search_path=pg_catalog`. Il corpo scorre
+  `pg_event_trigger_ddl_commands()` e abilita RLS sulle tabelle nuove in `public`.
+- È agganciata all'event trigger `ensure_rls` su `ddl_command_end`, proprietario
+  `postgres`. Tutti gli altri sei event trigger del progetto sono di
+  `supabase_admin`, cioè di Supabase.
+- **Nessun file di migrazione la crea.** L'unica menzione in tutto il repository è
+  `20260729234500:86`, che le revoca `execute`.
+
+Quindi, anche riparata la prima deriva, la replica fallirebbe di nuovo a quella
+riga. Questa è deriva vera, dello stesso genere riparato in parte dalla
+`20260730140948`, che però non la copriva.
+
+**Effetto sulla Fase 7:** nessuno. La migrazione di Fase 7 abilita RLS
+esplicitamente su tutte e sei le tabelle che crea (righe 20, 335–339), quindi non
+dipende da `ensure_rls`. L'effetto è sul metodo: un branch senza `ensure_rls` non
+è un proxy fedele della produzione per qualunque migrazione che crei una tabella
+senza `enable row level security` esplicito.
+
+## Conseguenza sulla verifica della Fase 7
+
+La migrazione di Fase 7 **non è applicabile oggi** sul branch: referenzia
+`listings`, `bottle_units`, `profiles` e gli enum, che lì non esistono. Il piano
+«far girare la Fase 7 su un Postgres qualsiasi» resta valido ma è ora subordinato
+alla riparazione della storia.
+
+## Ciò che NON è stato fatto in questa diagnosi
+
+- Nessuna migrazione di correzione scritta: la fermata obbligatoria la vincola a
+  revisione preventiva.
+- Nessuna scrittura sul progetto reale né sul branch: solo `select` di catalogo.
+- Il branch `phase-7-migration-verify` è stato lasciato in `MIGRATIONS_FAILED`,
+  non cancellato e non ricreato.
+
+---
+
+# Smoke Storage — perché il 429, e il setup alternativo
+
+## La causa del 429, verificata sui documenti e non dedotta
+
+Il limite che ha respinto il secondo tentativo è quello di invio email del
+servizio SMTP incorporato. I documenti Supabase lo descrivono così, per gli
+endpoint `/auth/v1/signup`, `/auth/v1/recover` e `/auth/v1/user`:
+
+- l'ambito è **«Sum of combined requests project-wide»**, non per IP e non per utente;
+- la configurabilità è **«Custom SMTP Only»**, con la nota «You can only change
+  this with a custom SMTP setup».
+
+Da qui le tre risposte alla domanda posta:
+
+1. **Il passaggio a Pro non ha cambiato questo limite.** Non è legato al piano ma
+   alla presenza di un SMTP proprio. Il piano dell'organizzazione è `pro`,
+   verificato, e resta irrilevante per questo limite.
+2. **Non è per IP né per utente**, quindi cambiare rete o indirizzo non aiuta.
+3. Aspettare funziona ma è a ore, e il primo tentativo aveva già consumato quota
+   fallendo per il TLD `.invalid`.
+
+## Perché le griglie SQL non hanno mai visto questo limite
+
+`6d-2a_catalog_cellar_paths.sql:117` crea gli utenti con `insert into auth.users`
+diretto e li elimina con `delete from auth.users` (righe 330, 345). Non passa
+dall'API HTTP di Auth, quindi non incontra alcun rate limit. Lo smoke Storage
+invece passava da `signUp` perché servono JWT veri per esercitare le policy dello
+Storage — ed è esattamente lì che ha preso il 429.
+
+## Setup alternativo proposto, prima di un terzo tentativo
+
+Non usare `signUp`. Usare l'**Auth Admin API** con la chiave `service_role`:
+
+- `POST /auth/v1/admin/users` con `email_confirm: true` crea un utente già
+  confermato. Non essendoci email di conferma da spedire, il limite dell'SMTP
+  incorporato non viene toccato e il 429 non può ripresentarsi.
+- La pulizia è `DELETE /auth/v1/admin/users/{id}`: garantita e scriptabile, senza
+  dipendere da una sessione dashboard attiva. È precisamente il requisito che
+  aveva bloccato il terzo tentativo.
+- Il JWT per esercitare Storage si ottiene poi con
+  `POST /auth/v1/token?grant_type=password`, che non spedisce email.
+- Indirizzi: `@example.com`, non `@example.invalid`. `.invalid` non è un TLD
+  valido per il validatore di Auth ed è ciò che ha fatto fallire il primo
+  tentativo.
+
+Da confermare alla prima esecuzione, perché non è stato provato: che
+`admin/users` non spedisca email è comportamento atteso dell'endpoint, non un
+fatto misurato qui. Se comparisse un 429 anche per quella via, l'ipotesi sarebbe
+da rifare.
+
+Resta il vincolo già noto: la chiave `service_role` non va incollata in chat né
+committata, e lo smoke va eseguito in una sessione dove sia già disponibile.
