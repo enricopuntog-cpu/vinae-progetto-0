@@ -346,5 +346,3 @@ sulla PR #18, che è organizzativa e non tecnica.
   ricavata da un caso solo, con il rischio che questo comporta.
 - Il costo di S1 dopo `apply_migration` è una stima ricavata dalla forma dello
   schema, non da una migrazione di rename effettivamente scritta.
-</content>
-</invoke>

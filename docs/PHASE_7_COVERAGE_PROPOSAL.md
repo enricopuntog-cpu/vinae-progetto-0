@@ -248,4 +248,3 @@ senso solo dopo la separazione, non prima.
 - La fattibilità del job CI Supabase (§5.2) si basa sul funzionamento noto di
   `supabase db start` su runner Linux; non è stata provata in questo repo.
 - Non è stato verificato l'exit code di `bun test` a suite vuota (§5.1).
-</content>
