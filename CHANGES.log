@@ -3,46 +3,43 @@
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
 - `origin/main` è `3037bf4f8fa5269895bb01a998d85bb5f629cd34`, squash-merge della PR #17 eseguito il 2026-07-31 alle 13:37:21Z da `enricopuntog-cpu`.
 - La migrazione 6d-2a resta l'ultima applicata al progetto remoto come `20260731120340 catalog_cellar_paths`.
-- I dieci commit da `b463bfb` a `75e414f`, prima solo locali, sono su `origin`: push del 2026-08-02, `cd7b1a0..75e414f`, 11 commit, branch allineato 0/0.
-- La draft PR #18 resta aperta sul branch `migration/phase-7-order-payment-service`, mai mergiata e mai segnata pronta per revisione; il push la aggiorna e non la apre.
-- **La storia migrazioni non ricostruisce il database.** Sette versioni su quattordici sono registrate in `supabase_migrations.schema_migrations` con `statements` vuoto: la versione risulta applicata e non viene eseguito nulla. Sono `20260728193937`, `20260728194500`, `20260729112500`, `20260729180000`, `20260729180500`, `20260729210000`, `20260729230000`, per 141 553 byte di DDL complessivi.
-- La bozza di riparazione è `supabase/repair/ledger_statements_vuoti.sql`, commit `dc5e1df`: sette `update` sulla sola colonna `statements`, nessuna DDL applicativa, nessun DDL rieseguito. **Mai eseguita su alcun database.**
-- I sette corpi incorporati nella bozza sono byte e SHA-256 identici ai file tracciati in `supabase/migrations/`; il tag di dollar-quoting `$vinea_ledger_<versione>$` è assente da tutti e sette i sorgenti.
-- Ogni istruzione della bozza porta la guardia `and coalesce(array_length(statements, 1), 0) = 0` ed è quindi rieseguibile senza danno; le sezioni `[0]` e `[8]` sono di sola lettura.
-- Il debito dell'event trigger `ensure_rls` è registrato in `docs/MIGRATION_PHASE_1_BACKLOG.md`, commit `d027c76`, come sola documentazione: nessun SQL scritto né eseguito.
-- Il branch `phase-7-migration-verify` (`ccnufawxtaykgjftvauc`) è in `MIGRATIONS_FAILED`, lasciato intatto: ha registrato nove versioni e contiene due sole relazioni (`profiles`, `user_roles`) e due sole funzioni (`handle_new_user`, `has_role`).
-- Le sette migrazioni registrate con contenuto corrispondono ai file: le differenze sono intestazioni di commento rimosse da `apply_migration` più il newline finale, verificato riga per riga sul caso di scarto maggiore (`20260729235500`, 473 caratteri).
+- Il branch di lavoro è `migration/phase-7-order-payment-service`, worktree `C:/Users/enrico/.codex/worktrees/ddc2`, allineato con `origin`, 23 commit avanti a `origin/main` e 0 indietro.
+- La draft PR #18 resta aperta su quel branch, mai mergiata e mai segnata pronta per revisione.
+- **La riparazione del ledger è applicata.** Eseguita il 2026-08-02 via API dalla chat organizzativa, non da questa sessione né dal SQL Editor. Riletta in sola lettura il 2026-08-03: quattordici righe di `supabase_migrations.schema_migrations`, nessuna con `statements` vuoto, le sette riparate a un elemento ciascuna.
+- I `caratteri` registrati risultano inferiori ai byte dei file (21 722 contro 21 840 per `listings_catalog`) perché `length()` conta caratteri e non byte: la differenza sono le lettere accentate UTF-8.
+- **Il replay di un branch pulito resta impossibile, per una causa diversa dal ledger.** `revoke execute on function public.rls_auto_enable()` alla riga 86 della `20260729234500` è presente anche nel testo registrato a ledger, e la funzione non esiste su un branch nuovo.
+- Misure del 2026-08-03: progetto reale sette event trigger, branch fresco `ccnufawxtaykgjftvauc` sei; `ensure_rls` e `rls_auto_enable` presenti solo sul progetto reale. Delle 21 funzioni in `public`, 20 sono create da almeno un file tracciato e `rls_auto_enable` da nessuno.
+- In Postgres `revoke ... on function` non ammette `if exists`: è un errore duro. Il replay si ferma quindi alla decima versione su quattordici con `function public.rls_auto_enable() does not exist`.
+- Il branch `phase-7-migration-verify` (`ccnufawxtaykgjftvauc`) resta in `MIGRATIONS_FAILED` con nove versioni registrate, non toccato: in questa sessione è stato solo interrogato in sola lettura. Moriva prima, alla riga 35 su `bottiglia_apri`, per effetto delle sette versioni vuote.
+- Nessun branch Supabase creato in questa sessione: la creazione richiede conferma di costo, 0,01344 USD l'ora sull'organizzazione `erqvomhopuzvzxvgdiyt`, piano Pro. Conferma non richiesta e non data.
 - Lo schema di Fase 7 è indipendente dal fornitore: `payment_provider_events` con chiave `(provider, event_id)`, colonne `provider_*` su `payments`, RPC `payment_apply_provider_event` che ramifica sull'enum `public.payment_outcome` e non contiene alcuna occorrenza della stringa `stripe`.
 - I test di `frontend-next` sono 12 su 12 e toccano tutti codice di produzione, eseguiti in CI e inclusi nel typecheck.
 - La griglia `supabase/tests/7_ordini_pagamenti.sql` è scritta, 16 casi, mai eseguita.
 
 ## ACTIVE TASK
-- Riparazione del ledger delle migrazioni: bozza scritta e sottoposta a revisione, non applicata. La fermata è obbligatoria e vincola l'esecuzione ad approvazione esplicita nella chat organizzativa.
-- Il contenuto registrato è il file verbatim di `supabase/migrations/`, byte per byte, come array a UN SOLO ELEMENTO, imitando il pattern delle cinque versioni registrate dopo il riallineamento di fine luglio; nessuno split per singola istruzione.
-- Differenza dichiarata e voluta rispetto alle righe scritte da `apply_migration`: la bozza registra anche l'intestazione di commento e il newline finale, così il contenuto è verificabile con un confronto di hash contro il file tracciato. La differenza è inerte per Postgres.
-- Verifica preventiva dei sette file tracciati: dimensioni identiche a quelle della diagnosi (21840, 2707, 22005, 27402, 7999, 11704, 47896), somma 141 553, tutti tracciati, working tree identico a `HEAD`, solo LF, tutti terminati da `0x0a`. Nessuna discrepanza, quindi nessuna fermata per contenuto ricostruito.
-- Debito registrato per `public.rls_auto_enable()` e l'event trigger `ensure_rls`: proprietario `postgres`, non creati da alcun file tracciato, unica menzione la revoca a `20260729234500_security_invariants_followup.sql:86`, riverificata con `grep` su tutto `supabase/`.
-- Le due strade — ricreare il trigger in una migrazione propria, o dichiarare deprecato l'auto-enable implicito in favore di RLS sempre esplicita — sono registrate e non prese.
-- Nessuna scrittura su alcun progetto o branch Supabase in tutta la sessione: nessun SQL eseguito, nemmeno di lettura.
+- Verificare la riparazione del ledger creando un branch Supabase pulito e controllando che le quattordici migrazioni si replichino senza errori; se il replay riesce, smoke di Fase 7 sul branch con creazione utenti via `POST /auth/v1/admin/users`, `email_confirm: true`, indirizzi `@example.com`, cleanup via `DELETE /auth/v1/admin/users/{id}`.
+- Fermo su due gate distinti, nessuno dei due superabile senza decisione in chat: la conferma del costo del branch, e il difetto che farebbe fallire il replay comunque.
+- Il secondo gate è stato accertato prima di spendere: nessun branch è stato creato per scoprirlo, la previsione poggia su misure di sola lettura sul progetto reale e sul branch già fallito.
+- Il debito `ensure_rls` in `docs/MIGRATION_PHASE_1_BACKLOG.md` è stato corretto: prima diceva che l'effetto era solo sulla fedeltà del branch, ora registra che blocca il replay alla decima versione.
+- Registrato anche che nessuna delle due strade già enumerate ripara il replay da sola: la `revoke` sta dentro una versione già registrata e gira prima di qualunque cosa una migrazione nuova possa creare, perché il replay segue l'ordine delle versioni.
+- Nessuna scrittura su alcun progetto o branch Supabase in tutta la sessione: solo `select` di verifica, nessun DDL, nessun `insert`, nessun utente creato.
 - Nessuna PR aperta, nessun merge, nessun branch creato o cancellato; `frontend/` e `backend/` non toccati; lavoro applicativo della Fase 7 non ripreso.
 
 ## NEXT STEPS
-1. Sottoporre a revisione `supabase/repair/ledger_statements_vuoti.sql` ed eseguirlo nel SQL Editor di `pijnmcllmfgjmgsvtcej` solo dopo approvazione esplicita registrata.
-2. Decidere fra ricreare `ensure_rls` in una migrazione propria e dichiarare deprecato l'auto-enable implicito, e registrare la scelta.
-3. Rifare lo smoke Storage con `POST /auth/v1/admin/users` e `email_confirm: true` invece di `signUp`, con cleanup via `DELETE /auth/v1/admin/users/{id}`.
+1. Confermare o negare in chat il costo di 0,01344 USD l'ora per il branch Supabase pulito, sapendo che allo stato attuale il replay si ferma alla decima versione su quattordici.
+2. Decidere come rendere replicabile la `20260729234500` — riga di ledger antedatata che crei `rls_auto_enable`, oppure modifica chirurgica del testo registrato di quella versione — e registrare la scelta.
+3. Eseguire lo smoke di Fase 7 sul branch pulito quando il replay arriva a quattordici versioni su quattordici.
 
 ## BLOCKERS / NOTES
-- La storia migrazioni resta irriproducibile: finché la bozza non è approvata ed eseguita, nessun ambiente nuovo, branch o locale, può essere ricostruito dalle migrazioni registrate. Blocca la verifica su Postgres di qualunque fase, non solo della Fase 7.
-- La bozza di riparazione non è stata eseguita né validata da un motore Postgres: Docker, `psql` e la CLI Supabase non sono disponibili sulla postazione. Gli attesi (`UPDATE 1` per sezione, poi `UPDATE 0`) derivano dal testo, non da un'esecuzione.
-- `rls_auto_enable` e `ensure_rls` restano deriva non tracciata: anche eseguita la riparazione del ledger, restano assenti da ogni ambiente ricostruito perché non c'è alcun file da registrare.
-- Un branch senza `ensure_rls` non è un proxy fedele della produzione per qualunque migrazione che crei una tabella senza `enable row level security` esplicito. Non riguarda la Fase 7, riguarda il metodo di verifica.
-- Il branch `phase-7-migration-verify` è stato lasciato in `MIGRATIONS_FAILED`, non cancellato e non ricreato; consuma risorse del piano Pro finché resta.
-- La migrazione di Fase 7 non è applicabile sul branch allo stato attuale: referenzia `listings`, `bottle_units`, `profiles` e gli enum, che lì non esistono.
-- La migrazione di Fase 7 non è mai stata applicata a nessun database e non è stata controllata sintatticamente da un motore Postgres: il rinominio dello schema è revisione a vista.
+- La storia migrazioni resta irriproducibile, ma non più per il ledger: il difetto residuo è la `revoke` su `rls_auto_enable` dentro la `20260729234500`. Blocca la verifica su Postgres di qualunque fase, non solo della Fase 7.
+- `rls_auto_enable` e `ensure_rls` restano deriva non tracciata: nessun file li crea, quindi restano assenti da ogni ambiente ricostruito e la loro assenza è ora un errore di replay, non solo una differenza silenziosa.
+- Un branch senza `ensure_rls` non sarebbe comunque un proxy fedele della produzione per qualunque migrazione che crei una tabella senza `enable row level security` esplicito. Non riguarda la Fase 7, riguarda il metodo di verifica.
+- Il branch `phase-7-migration-verify` è stato lasciato in `MIGRATIONS_FAILED`, non cancellato e non ricreato; consuma risorse del piano Pro finché resta. La decisione è di Enrico.
+- La migrazione di Fase 7 non è mai stata applicata a nessun database e non è stata controllata sintatticamente da un motore Postgres: il rinominio dello schema è revisione a vista. Docker, `psql` e la CLI Supabase non sono disponibili sulla postazione.
 - La griglia `7_ordini_pagamenti.sql` non è mai stata eseguita: i 16 esiti attesi derivano dal testo del SQL. Gira inoltre in una sola sessione, quindi i casi del gruppo C provano l'invariante e non la gara; la prova di gara richiede due sessioni concorrenti e resta un passo manuale separato.
 - Il caso 4 della griglia verifica il trigger `bottle_units_preserva_annuncio_non_terminale` e non la guardia su `ceduta_at` dentro `order_checkout_reserve`: quella guardia è difesa in profondità e non è raggiungibile per vie normali.
 - La Fase 7 è iniziata 35 minuti dopo il merge della PR #17 senza l'autorizzazione esplicita richiesta da `CLAUDE.md`, `docs/ROADMAP_V1.md` e `CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md`; nessuna autorizzazione risulta in PR, commenti, `CHANGES.log`, `CONTESTO_IA/**` o `docs/**`. La ratifica o la sospensione della PR #18 resta da sottoporre.
-- Nessun SQL applicato al remoto, nessuna Edge Function distribuita, nessuna chiamata Stripe nemmeno in test mode, nessun merge, nessuna PR segnata pronta per revisione: restano gate separati e nessuno è autorizzato. `PAYMENTS_ENABLED=false` resta il gate server-side e la verticale non è raggiungibile dalla UI.
+- Nessuna Edge Function distribuita, nessuna chiamata Stripe nemmeno in test mode, nessun merge, nessuna PR segnata pronta per revisione: restano gate separati e nessuno è autorizzato. `PAYMENTS_ENABLED=false` resta il gate server-side e la verticale non è raggiungibile dalla UI.
 - Il filename `20260731135455_phase_7_order_payment_service.sql` dovrà essere riallineato alla versione assegnata dal server dopo un futuro `apply_migration` autorizzato.
 - Il parse dei tre file Deno è stato fatto con `tsc --noResolve`: prova la sintassi e i tipi del codice proprio, non il runtime.
 - Il percorso pubblico del Route Handler webhook non è stato cambiato di proposito: è un URL da registrare presso il fornitore.
