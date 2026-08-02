@@ -19,7 +19,13 @@ attendere conferma esplicita in sessione, e solo dopo eseguire.
 
 | File | Stato | Effetto |
 | --- | --- | --- |
-| [`ledger_statements_vuoti.sql`](ledger_statements_vuoti.sql) | **BOZZA — mai eseguita** | Riscrive `statements` su sette righe di `supabase_migrations.schema_migrations` |
+| [`ledger_statements_vuoti.sql`](ledger_statements_vuoti.sql) | **APPLICATO** il 2026-08-02 su `pijnmcllmfgjmgsvtcej`, via API dalla chat organizzativa | Riscrive `statements` su sette righe di `supabase_migrations.schema_migrations` |
+
+Esito registrato: quattordici righe con `statements` non vuoto, SHA-256 coincidenti
+con i file tracciati. Riletto il 2026-08-03 in sola lettura — nessuna riga a zero.
+I `caratteri` a ledger risultano inferiori ai byte del file (per esempio 21 722
+contro 21 840) perché `length()` conta caratteri e non byte: la differenza sono le
+lettere accentate, che in UTF-8 occupano due byte.
 
 ## `ledger_statements_vuoti.sql`
 
@@ -91,3 +97,9 @@ reale e non sono creati da alcun file tracciato: riparato il ledger, restano
 comunque assenti da ogni ambiente ricostruito. Debito registrato in
 [`docs/MIGRATION_PHASE_1_BACKLOG.md`](../../docs/MIGRATION_PHASE_1_BACKLOG.md);
 non lo tocca questo script e non lo tocca alcun SQL finora scritto.
+
+Misurato il 2026-08-03: non è solo una differenza silenziosa. La `revoke` alla
+riga 86 della `20260729234500` cade su una funzione che su un branch nuovo non
+esiste, e `revoke ... on function` non ammette `if exists`. **Il replay di un
+branch pulito si ferma alla decima versione su quattordici**, quindi questo
+script da solo non rende la storia ricostruibile.

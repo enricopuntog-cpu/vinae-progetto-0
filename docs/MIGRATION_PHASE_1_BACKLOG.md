@@ -510,18 +510,52 @@ repository è `20260729234500_security_invariants_followup.sql:86`, che le revoc
 `20260730140948`, che però non la copriva.
 
 Va tenuta distinta dalla deriva del ledger — le sette versioni con `statements`
-vuoto, la cui bozza di riparazione è
-[`supabase/repair/ledger_statements_vuoti.sql`](../supabase/repair/ledger_statements_vuoti.sql).
-Sono due difetti indipendenti: **riparato il ledger, `ensure_rls` resta comunque
-assente** da ogni ambiente ricostruito, perché non c'è alcun file da registrare.
+vuoto, riparate il 2 agosto 2026. Sono due difetti indipendenti: **riparato il
+ledger, `ensure_rls` resta comunque assente** da ogni ambiente ricostruito,
+perché non c'è alcun file da registrare.
 
-**Non blocca la Fase 7.** La sua migrazione abilita RLS esplicitamente su tutte e
-sei le tabelle che crea (righe 20 e 335–339), quindi non dipende dall'auto-enable
-implicito. L'effetto non è sulla fase, è sul metodo: finché la decisione non è
-presa, **un branch Supabase non è un proxy fedele della produzione** per
-qualunque migrazione che crei una tabella in `public` senza
-`enable row level security` esplicito. Lì la tabella nascerebbe con RLS attiva e
-sul branch no, e la differenza non comparirebbe in nessun errore.
+### Aggiornamento 3 agosto 2026 — blocca il replay, non solo la fedeltà
+
+Misurato dopo la riparazione del ledger, sul progetto reale e sul branch fallito
+`ccnufawxtaykgjftvauc`:
+
+| Misura | Progetto reale | Branch fresco |
+| --- | --- | --- |
+| Event trigger totali | 7 | 6 |
+| `ensure_rls` | presente | assente |
+| `public.rls_auto_enable()` | presente | assente |
+
+I sei event trigger comuni sono di Supabase: **il settimo non arriva dalla
+piattaforma**, quindi un branch nuovo nasce senza. Delle 21 funzioni in `public`
+del progetto reale, 20 sono create da almeno un file tracciato e
+`rls_auto_enable` da nessuno.
+
+Conseguenza: `revoke execute on function public.rls_auto_enable()` alla riga 86
+della `20260729234500` — presente anche nel testo registrato a ledger, verificato
+— gira su un branch dove la funzione non esiste. In Postgres `revoke ... on
+function` non ammette `if exists`: è un errore duro. **Il replay di un branch
+pulito si ferma alla decima versione su quattordici** con
+`function public.rls_auto_enable() does not exist`.
+
+Il branch `phase-7-migration-verify` non lo aveva rivelato perché moriva prima,
+alla riga 35 su `bottiglia_apri`, per effetto delle sette versioni vuote.
+
+**Nessuna delle due strade sotto ripara il replay da sola.** La `revoke` sta
+dentro una versione già registrata e gira prima di qualunque cosa una migrazione
+nuova possa creare, perché il replay segue l'ordine delle versioni: una
+migrazione con timestamp successivo arriva troppo tardi. Ripararlo richiede o una
+riga di ledger antedatata rispetto alla `20260729234500`, o una modifica
+chirurgica del testo registrato di quella versione. Entrambe sono scritture sul
+bookkeeping, entrambe da autorizzare a parte.
+
+**Non blocca la Fase 7 come schema.** La sua migrazione abilita RLS
+esplicitamente su tutte e sei le tabelle che crea (righe 20 e 335–339), quindi
+non dipende dall'auto-enable implicito. Blocca il metodo di verifica: finché la
+decisione non è presa, **un branch Supabase non è né ricostruibile né un proxy
+fedele della produzione** per qualunque migrazione che crei una tabella in
+`public` senza `enable row level security` esplicito. Lì la tabella nascerebbe
+con RLS attiva e sul branch no, e la differenza non comparirebbe in nessun
+errore.
 
 **Da decidere**, e registrare la scelta, prima di usare un branch come prova di
 una migrazione futura. Due strade, nessuna delle due presa qui:
@@ -536,7 +570,9 @@ una migrazione futura. Due strade, nessuna delle due presa qui:
    `enable row level security` non verrebbe più corretto da nessuno.
 
 Nessuna delle due va eseguita senza approvazione esplicita: entrambe toccano il
-progetto reale, e la seconda cambia una protezione attiva.
+progetto reale, e la seconda cambia una protezione attiva. Entrambe vanno
+accompagnate dalla riparazione del replay descritta sopra, altrimenti il branch
+continua a fermarsi alla decima versione.
 
 ## Debito tecnico noto
 
