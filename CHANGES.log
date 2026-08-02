@@ -8,10 +8,14 @@
 - La draft PR #18 è aperta sul branch `migration/phase-7-order-payment-service`, HEAD `fe3c9723e9c7a6f4884d091b18097ad3c76f4bc8` al momento della verifica, 6 commit, 34 file, mergeable e mai mergiata.
 - Il rapporto di riconciliazione autosufficiente `docs/PHASE_7_RECONCILIATION_HANDOFF.md` è stato spostato da `main` a questo branch insieme a questo file, nel commit `83d23d1` di sola documentazione, già su `origin`.
 - L'inventario file per file della PR #18 è in `docs/PHASE_7_FILE_INVENTORY.md`: 34 file classificati, 27 Categoria A, 5 Categoria B, 2 misti.
+- I commit `0609efb` (inventario e questo file) e `cd7b1a0` (nota sui test di `frontend-next` in `CLAUDE.md`) sono di sola documentazione e sono su `origin`; la PR #18 conta ora 9 commit.
+- Le proposte `docs/PHASE_7_PAYMENT_PROVIDER_PROPOSAL.md` e `docs/PHASE_7_COVERAGE_PROPOSAL.md` sono scritte e non committate, in attesa di revisione.
 
 ## ACTIVE TASK
 - Verifica di sola lettura su Git e GitHub completata; nessuna azione su risorse remote Supabase, Storage o Stripe è stata eseguita.
-- Step 1 di riconciliazione chiuso alla fermata obbligatoria: inventario prodotto, Step 2 non avviato e nessuna proposta di interfaccia `PaymentProvider` scritta.
+- Riconciliazione ferma alla seconda fermata obbligatoria: housekeeping committato, proposte consegnate come documenti, nessuna implementata e nessuna rinomina eseguita.
+- Le proposte espongono opzioni con compromessi e nessuna raccomandazione unica: tre per lo schema SQL (rinominare ora, porta agnostica additiva, accettare e rimandare) e due per la Edge Function (split in due file, adapter risolto a runtime).
+- Zero file di Categoria A importano SDK o tipi Stripe: il disaccoppiamento riguarda 1 file SQL misto, 1 Edge Function mista, 4 file TypeScript di Categoria B e 1 file nuovo per l'interfaccia.
 - Le quattro verifiche puntuali dell'inventario: `ceduta_at` mai scritto dalla Fase 7 e trigger `listings_marca_bottiglia_ceduta` unico scrittore; prezzo e valuta risolti lato server; `search_path = ''` su 11 funzioni `SECURITY DEFINER` su 11; test pagamenti fuori da CI e typecheck.
 - Gate 6d-2a riscontrati sul contenuto di `3037bf4`: SHA-256 della migrazione `ffb0d4351e12bade1891e7912825a9d9ecb410b2c0df642e9c2d5f129d7d5834` e della griglia `6ed78d2dfa163cdf98c73a51599d16400c40a6cabbdfb9e0b099d4d49991d951` confermati byte per byte; backfill provenienza e `creato_da`, grant di colonna, policy RLS e `search_path = ''` su 4 RPC su 4 presenti nel SQL.
 - La griglia remota 18/18 e i residui fixture zero restano dichiarazioni documentali in `docs/PHASE_6D2A_FIXTURE_VERIFICATION.md`, non riverificabili da Git e non riverificate in questa sessione.
@@ -20,7 +24,7 @@
 - Verifica locale dichiarata al checkpoint di Fase 7 e non rieseguita in questa sessione: 10 test su 10 superati, typecheck e build passati, lint con zero errori e 23 warning preesistenti fuori dalla verticale.
 
 ## NEXT STEPS
-1. Revisionare `docs/PHASE_7_FILE_INVENTORY.md` e concedere o negare il via libera allo Step 2, fermo alla fermata obbligatoria.
+1. Scegliere fra le opzioni S1/S2/S3 ed E1/E2 delle due proposte prima di qualunque `apply_migration`, che rende irreversibile il costo della rinomina dello schema.
 2. Sottoporre alla zona organizzativa la ratifica o la sospensione della PR #18, avviata senza autorizzazione esplicita.
 3. Completare lo smoke Storage autenticato sul bucket `cantina` con dashboard autenticata e cleanup Auth Admin garantito.
 
@@ -33,6 +37,10 @@
 - I test sono esclusi dal typecheck da `frontend-next/tsconfig.json:33` perché manca `@types/bun` fra le `devDependencies`, e non sono eseguiti in CI perché la PR #18 non tocca `.github/workflows/ci.yml`; `CLAUDE.md:60` dichiara ancora che in `frontend-next` non esiste uno script di test.
 - Lo schema SQL della Fase 7 nomina il provider in colonne, indice, tabella `stripe_webhook_events` e RPC `payment_apply_stripe_event`: un secondo provider richiederebbe una migrazione, mentre `frontend-next/src/services/types.ts` è già agnostico.
 - Non sono state rieseguite le griglie storiche 33/33, 11/11 o 13/13 e non sono stati riletti gli Advisor Supabase.
-- Residuo non documentato in precedenza, trovato nel worktree `C:/Users/enrico/.codex/worktrees/ddc2`: il file `CONTESTO_IA/fase_7_ordini_pagamenti.md` è non tracciato e una modifica non committata di `CHANGES.log` era presente; nessuno dei due è incluso nella PR #18 e il primo non è stato committato in questo passaggio.
+- `payment-state.ts:31-32` e la RPC in `20260731135455_…sql:785-786` divergono: da `expired`, un evento `completed` non pagato porta a `processing` in TypeScript e non cambia nulla in SQL; il test blinda il ramo che non gira.
+- Il costo della rinomina dello schema resta minimo finché `20260731135455_phase_7_order_payment_service.sql` non è applicata a nessun database e cresce in modo discontinuo dopo il primo `apply_migration`; lo stesso vale per il percorso pubblico del webhook, mai registrato presso Stripe.
+- La RPC `payment_apply_stripe_event` ramifica sulle stringhe evento di Stripe alle righe 730, 740, 785, 791, 796 e 801: rinominare colonne e tabella non basterebbe a renderla agnostica.
+- Il residuo `CONTESTO_IA/fase_7_ordini_pagamenti.md` resta non tracciato e non committato: 29 righe di stato di fase, mtime 2026-07-31 20:10 locali, quasi quattro ore dopo l'ultimo commit della fase `fe3c972`; fuori dalla convenzione di numerazione di `CONTESTO_IA/` e assente dal `mandatory_read_order` del manifest.
+- `CONTESTO_IA/context-manifest.json` è fermo al 2026-07-30 e dichiara `phase_7: not_started` con `origin_main: e2e4fcb`: contraddice sia il residuo non tracciato sia lo stato reale del branch.
 - Residui locali già noti: `stash@{0}` del trasferimento 6d-1, superato da `main`; branch locali `codex/automatizza-handoff-agentsmd` e `migration/phase-6c-cellar-schema`, entrambi senza lavoro non integrato; dodici branch remoti di PR già mergiate mai eliminati.
 - Stripe Connect, payout, KYC, contestazioni operative e Fase 8 restano fuori scope.
