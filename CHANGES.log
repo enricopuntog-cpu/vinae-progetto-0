@@ -1,24 +1,32 @@
 <!-- PROTOCOL: Read at session start. Every AI MUST update this file at session end or before handoff/context reset. Keep exactly the 4 headings below; facts only; NEXT STEPS exactly 3 atomic items; no pleasantries/secrets. Verify Git state first; preserve unresolved blockers. -->
 ## CURRENT STATE
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
-- `origin/main` è `3037bf4f8fa5269895bb01a998d85bb5f629cd34`, merge squash della Pull Request #17; CI run `30635023614` era verde per backend, frontend e frontend-next.
-- L'ultima migrazione remota letta è `20260731120340 catalog_cellar_paths`; nessun SQL o deploy remoto di Fase 7 è stato eseguito.
-- La draft Pull Request #18 è aperta dal branch `migration/phase-7-order-payment-service`, resta draft ed è mergeable.
-- La CI iniziale della PR #18, run `30637845042`, è verde per backend, frontend e frontend-next sull'HEAD `712912d`.
+- `origin/main` è `3037bf4f8fa5269895bb01a998d85bb5f629cd34`, squash-merge della PR #17 eseguito il 2026-07-31 alle 13:37:21Z da `enricopuntog-cpu`.
+- Il merge della PR #17 è preceduto da CI verde: run `30635023614` (#44) sull'HEAD mergiato `c54939213686ea5ca02e26434a3079cfd474be89`, tre job `success`, conclusa 89 secondi prima del merge; la run `30629492177` (#43) citata in precedenza copre l'HEAD anteriore `e6329a5`.
+- La CI post-merge su `main`, run `30635200772` (#45), è verde.
+- La migrazione 6d-2a resta l'ultima applicata al progetto remoto come `20260731120340 catalog_cellar_paths`.
+- La draft PR #18 è aperta sul branch `migration/phase-7-order-payment-service`, HEAD `fe3c9723e9c7a6f4884d091b18097ad3c76f4bc8` al momento della verifica, 6 commit, 34 file, mergeable e mai mergiata.
+- Il rapporto di riconciliazione autosufficiente `docs/PHASE_7_RECONCILIATION_HANDOFF.md` è stato spostato da `main` a questo branch insieme a questo file.
 
 ## ACTIVE TASK
-- Il checkpoint locale di Fase 7 include schema proposte/ordini/pagamenti, prenotazione atomica, RLS/grant, rate limiter Postgres, Edge Function checkout e Route Handler webhook.
-- `ProposalService`, `OrderService` e `PaymentService` hanno adapter Supabase reali; `PAYMENTS_ENABLED=false` resta il gate server-side.
-- Verifica locale: 10/10 test, typecheck e build passati; lint con zero errori e 23 warning preesistenti fuori dalla verticale; parsing TypeScript Edge passato.
-- Nessuna API Stripe, migrazione remota, fixture SQL, Edge Function remota o pagamento reale è stato eseguito.
+- Verifica di sola lettura su Git e GitHub completata; nessuna azione su risorse remote Supabase, Storage o Stripe è stata eseguita.
+- Gate 6d-2a riscontrati sul contenuto di `3037bf4`: SHA-256 della migrazione `ffb0d4351e12bade1891e7912825a9d9ecb410b2c0df642e9c2d5f129d7d5834` e della griglia `6ed78d2dfa163cdf98c73a51599d16400c40a6cabbdfb9e0b099d4d49991d951` confermati byte per byte; backfill provenienza e `creato_da`, grant di colonna, policy RLS e `search_path = ''` su 4 RPC su 4 presenti nel SQL.
+- La griglia remota 18/18 e i residui fixture zero restano dichiarazioni documentali in `docs/PHASE_6D2A_FIXTURE_VERIFICATION.md`, non riverificabili da Git e non riverificate in questa sessione.
+- Il contenuto della PR #18 include schema Fase 7 non applicato, Edge Function `payments-checkout`, Route Handler webhook Stripe e adapter dei tre servizi; nessun adapter è importato da pagine o componenti.
+- La CI della PR #18, run `30637964542` (#47), è verde su backend, frontend e frontend-next; i 10 test della verticale pagamenti non sono eseguiti dalla CI e i file `*.test.ts` sono esclusi dal typecheck.
+- Verifica locale dichiarata al checkpoint di Fase 7 e non rieseguita in questa sessione: 10 test su 10 superati, typecheck e build passati, lint con zero errori e 23 warning preesistenti fuori dalla verticale.
 
 ## NEXT STEPS
-1. Revisionare la draft Pull Request #18 senza merge né passaggio a ready.
-2. Riprendere lo smoke Storage solo con dashboard autenticata e cleanup Auth Admin garantito.
-3. Richiedere autorizzazioni separate prima di migrazione remota o deploy Edge Function.
+1. Completare lo smoke Storage autenticato sul bucket `cantina` con dashboard autenticata e cleanup Auth Admin garantito.
+2. Sottoporre alla zona organizzativa la ratifica o la sospensione della PR #18, avviata senza autorizzazione esplicita.
+3. Aggiungere lo step `test` al job `frontend-next` della CI prima di considerare chiuso il checkpoint Fase 7.
 
 ## BLOCKERS / NOTES
-- Lo smoke Storage non è stato avviato: la dashboard Supabase ha reindirizzato al login e il cleanup Auth Admin non era garantibile; non sono stati creati utenti o oggetti.
-- Docker e Deno non sono disponibili, quindi migrazione e runtime Edge non sono stati eseguiti localmente.
-- La migrazione locale è `supabase/migrations/20260731135455_phase_7_order_payment_service.sql`; il filename dovrà essere riallineato alla versione server subito dopo un futuro `apply_migration` autorizzato.
+- Lo smoke Storage 6d-2a resta aperto: primo tentativo respinto da Auth per il TLD `.invalid`, secondo respinto dal rate limit HTTP 429, terzo non avviato perché la sessione dashboard era scaduta e il cleanup Auth Admin non era garantibile; nessun utente, oggetto o URL firmato è stato creato.
+- La Fase 7 è iniziata 35 minuti dopo il merge della PR #17 senza l'autorizzazione esplicita richiesta da `CLAUDE.md`, `docs/ROADMAP_V1.md` e `CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md`; nessuna autorizzazione risulta in PR, commenti, `CHANGES.log`, `CONTESTO_IA/**` o `docs/**`, e `CONTESTO_IA/**` non registra l'avvio della fase.
+- La Fase 7 non ha eseguito SQL remoto, deploy Edge Function, fixture remote o chiamate Stripe; `PAYMENTS_ENABLED=false` resta il gate server-side e la verticale non è raggiungibile dalla UI.
+- Docker e Deno non sono disponibili sulla postazione: la migrazione `supabase/migrations/20260731135455_phase_7_order_payment_service.sql` non è stata applicata nemmeno in locale e il filename dovrà essere riallineato alla versione server dopo un futuro `apply_migration` autorizzato.
+- Non sono state rieseguite le griglie storiche 33/33, 11/11 o 13/13 e non sono stati riletti gli Advisor Supabase.
+- Residuo non documentato in precedenza, trovato nel worktree `C:/Users/enrico/.codex/worktrees/ddc2`: il file `CONTESTO_IA/fase_7_ordini_pagamenti.md` è non tracciato e una modifica non committata di `CHANGES.log` era presente; nessuno dei due è incluso nella PR #18 e il primo non è stato committato in questo passaggio.
+- Residui locali già noti: `stash@{0}` del trasferimento 6d-1, superato da `main`; branch locali `codex/automatizza-handoff-agentsmd` e `migration/phase-6c-cellar-schema`, entrambi senza lavoro non integrato; dodici branch remoti di PR già mergiate mai eliminati.
 - Stripe Connect, payout, KYC, contestazioni operative e Fase 8 restano fuori scope.
