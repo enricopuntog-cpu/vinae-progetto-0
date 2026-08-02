@@ -55,7 +55,7 @@ jobs:
         run: bun run build
 
   frontend-next:
-    name: Frontend Next - lint, typecheck, build
+    name: Frontend Next - lint, typecheck, test, build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -87,6 +87,26 @@ jobs:
 
       - name: Typecheck
         run: bun run typecheck
+
+      # `bun test` esce 1 se non trova alcun file di test, ma esce 0 se i file
+      # ci sono e non contengono casi: verificato con bun 1.3.14. Il verde da
+      # solo non dimostra quindi che i test siano stati eseguiti, e la soglia
+      # qui sotto e' cio' che lo dimostra. Va alzata quando se ne aggiungono e
+      # abbassata solo di proposito: e' l'unica cosa che si oppone a una suite
+      # che si svuota in silenzio.
+      - name: Test
+        env:
+          MIN_TESTS: "12"
+        run: |
+          set -o pipefail
+          bun run test 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
+          passati=$(grep -oE '^ *[0-9]+ pass' "$RUNNER_TEMP/test-output.txt" | grep -oE '[0-9]+' | head -1)
+          passati=${passati:-0}
+          if [ "$passati" -lt "$MIN_TESTS" ]; then
+            echo "::error::$passati test superati, ne erano attesi almeno $MIN_TESTS."
+            exit 1
+          fi
+          echo "$passati test superati (soglia $MIN_TESTS)."
 
       - name: Build
         run: bun run build
