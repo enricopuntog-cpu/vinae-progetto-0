@@ -374,6 +374,91 @@ export interface PaymentService {
   perOrdine(orderId: string): Promise<Result<PaymentRecord | null>>;
 }
 
+// ---- Provider di incasso ---------------------------------------------------
+// `PaymentService` è ciò che la UI chiama; `PaymentProvider` è ciò che il server
+// usa per parlare con l'incasso. Sono due livelli distinti e non vanno fusi.
+// Il modello è `AIProvider` in backend/ai_provider.py — un contratto che non
+// nomina il fornitore — non `StripeGatewayProtocol` in backend/stripe_service.py,
+// che è una cucitura per sostituire l'SDK e non il provider.
+
+/** Riferimento opaco a una transazione presso il provider. */
+export type ProviderPaymentRef = {
+  provider: string;
+  sessionId: string;
+  intentId?: string | null;
+};
+
+/** Tutto risolto server-side: nessun campo di questo tipo arriva dal client. */
+export type CheckoutRequest = {
+  orderId: string;
+  amountCents: number;
+  currency: "eur";
+  successUrl: string;
+  cancelUrl: string;
+  idempotencyKey: string;
+  expiresAt: string;
+};
+
+export type CheckoutHandle = {
+  ref: ProviderPaymentRef;
+  redirectUrl: string;
+};
+
+/**
+ * Tassonomia interna degli esiti: non è il vocabolario di nessun provider.
+ * Questi identificatori sono anche il contratto verso la RPC
+ * `payment_apply_provider_event`, che ramifica su di essi e non sui nomi
+ * evento del provider. Aggiungere un caso qui è un cambio di schema.
+ */
+export type PaymentOutcomeKind =
+  | "pending"
+  | "authorized"
+  | "settled"
+  | "failed"
+  | "expired"
+  | "refunded";
+
+export type PaymentOutcome =
+  | { kind: "pending" }
+  | { kind: "authorized" }
+  | { kind: "settled"; amountCents: number; currency: string; settledAt: string }
+  | { kind: "failed"; reason: string }
+  | { kind: "expired" }
+  | { kind: "refunded"; refundedCents: number; fully: boolean };
+
+/**
+ * Evento tradotto dal provider. I campi `declared*` sono dichiarazioni del
+ * provider da riverificare server-side contro l'ordine: non sono verità.
+ */
+export type ProviderEvent = {
+  id: string;
+  occurredAt: string;
+  ref: ProviderPaymentRef;
+  outcome: PaymentOutcome;
+  declaredAmountCents: number;
+  declaredCurrency: string;
+  orderRef: string | null;
+};
+
+export interface PaymentProvider {
+  readonly id: string;
+  /** Apre la sessione di checkout presso il provider. */
+  apriCheckout(input: CheckoutRequest): Promise<Result<CheckoutHandle>>;
+  /** Interroga il provider sullo stato di una transazione. */
+  statoPagamento(ref: ProviderPaymentRef): Promise<Result<PaymentOutcome>>;
+  /**
+   * Verifica la firma e traduce l'evento. Riceve il raw body, non un oggetto
+   * già deserializzato: la verifica di firma è sui byte trasmessi.
+   * Traduce e basta — non decide e non scrive stato: la transizione resta
+   * nella RPC, che riconfronta importo, valuta e ordine.
+   */
+  interpretaEvento(input: {
+    rawBody: string;
+    headers: Headers;
+    secret: string;
+  }): Promise<Result<ProviderEvent>>;
+}
+
 // ---- Messaggi --------------------------------------------------------------
 export interface MessagingService {
   conversazioni(userId: string): Promise<unknown[]>;
