@@ -495,7 +495,13 @@ Trovato creando il branch Supabase `phase-7-migration-verify` e finito in
 la fedeltà di qualunque ambiente ricostruito dalle migrazioni. Diagnosi completa
 in [`docs/PHASE_7_VERIFICATION.md`](PHASE_7_VERIFICATION.md).
 
-### L'event trigger `ensure_rls` non è creato da nessun file — da decidere prima di fidarsi di un branch
+### L'event trigger `ensure_rls` non è creato da nessun file — CHIUSO il 3 agosto 2026
+
+> **Chiuso.** Risolto per la strada 1: la versione `20260729234000`
+> `rls_auto_enable_bootstrap` è registrata a ledger sul progetto reale e il file
+> tracciato `supabase/migrations/20260729234000_rls_auto_enable_bootstrap.sql`
+> esiste. Il testo che segue resta come diagnosi storica; l'esito è in fondo,
+> nella sezione «Stato della riparazione».
 
 `public.rls_auto_enable()` ritorna `event_trigger`, proprietario `postgres`,
 `security definer`, `search_path=pg_catalog`. Il corpo scorre
@@ -558,25 +564,26 @@ con RLS attiva e sul branch no, e la differenza non comparirebbe in nessun
 errore.
 
 **Da decidere**, e registrare la scelta, prima di usare un branch come prova di
-una migrazione futura. Due strade, nessuna delle due presa qui:
+una migrazione futura. Due strade:
 
 1. **Ricreare il trigger in una migrazione propria**, che lo renda parte della
    storia e quindi presente in ogni ambiente ricostruito. Mantiene la rete di
-   sicurezza e chiude la deriva.
+   sicurezza e chiude la deriva. ← **strada scelta**, applicata il 3 agosto 2026
+   come versione `20260729234000`.
 2. **Dichiarare deprecato l'auto-enable implicito** in favore di RLS sempre
    esplicita in ogni migrazione, e rimuovere trigger e funzione dal progetto
    reale con una migrazione che lo registri. Rende la storia autosufficiente al
    prezzo di togliere la rete: un `create table` che dimentichi
-   `enable row level security` non verrebbe più corretto da nessuno.
-
-Nessuna delle due va eseguita senza approvazione esplicita: entrambe toccano il
-progetto reale, e la seconda cambia una protezione attiva. Entrambe vanno
-accompagnate dalla riparazione del replay descritta sopra, altrimenti il branch
-continua a fermarsi alla decima versione.
+   `enable row level security` non verrebbe più corretto da nessuno. **Scartata**
+   per ora: resta praticabile in futuro, e allora andrà revocata la 1.
 
 ### Definizioni esatte degli oggetti derivati — estratte il 3 agosto 2026
 
 Sola lettura sul progetto reale, prima di scrivere qualunque proposta.
+**Estratte due volte in modo indipendente** — da Claude Code e dalla chat
+organizzativa, su sessioni separate — e risultate identiche carattere per
+carattere. Il testo qui sotto e quello del file tracciato sono la stessa
+estrazione confermata due volte, non una lettura sola ricopiata.
 
 `public.rls_auto_enable()` — `returns event_trigger`, `language plpgsql`,
 `security definer`, `set search_path to 'pg_catalog'`, proprietario `postgres`.
@@ -612,10 +619,12 @@ versioni successive alla decima nominano qualcuno dei residui.
 
 Oggetti presenti sul progetto reale e assenti da un progetto appena creato:
 
+Stato al momento della misura, cioè **prima** della riparazione:
+
 | Oggetto | Creato da file tracciato | Blocca il replay |
 | --- | --- | --- |
-| `public.rls_auto_enable()` | **no** | **sì, versione 10** |
-| event trigger `ensure_rls` | **no** | no (nessuno lo nomina) |
+| `public.rls_auto_enable()` | **no** → sì, dalla `20260729234000` | **sì, versione 10** → risolto |
+| event trigger `ensure_rls` | **no** → sì, dalla `20260729234000` | no (nessuno lo nomina) |
 | estensione `pg_trgm` | sì — `20260728193937:34` | no |
 | schema `private` | sì — `20260731120340:201`, `20260731135455:4` | no |
 | ruolo `cli_login_postgres` | no (ruolo di login della CLI) | no — mai nominato da alcuna migrazione |
@@ -649,7 +658,16 @@ Per le sole versioni 11-14 il dettaglio è:
   presente ovunque.
 
 **Esito: dopo la versione 10 il replay non incontra altri blocchi.** Risolto
-`rls_auto_enable`, un branch pulito dovrebbe arrivare a 14 su 14.
+`rls_auto_enable`, un branch pulito dovrebbe arrivare in fondo — ora **15 su 15**,
+perché la riparazione aggiunge la `20260729234000`. Resta una previsione: nessun
+branch è stato creato dopo la riparazione, quindi non è ancora misurata.
+
+Il branch fallito `phase-7-migration-verify` (`ccnufawxtaykgjftvauc`) è stato
+**eliminato dalla chat organizzativa il 3 agosto 2026** — il tentativo da Claude
+Code era stato negato dal classificatore dei permessi. Non c'è fatturazione
+residua. Il suo inventario, catturato in sola lettura prima dell'eliminazione, è
+la fonte della colonna «progetto appena creato» di questa sezione: è l'ultimo
+riferimento disponibile finché non se ne crea un altro.
 
 Resta **una sola incognita, e non riguarda le versioni a ledger**: la migrazione
 di Fase 7, non ancora applicata da nessuna parte, esegue alla riga 140
@@ -659,34 +677,43 @@ che `postgres` possa fare `alter role … set` su di esso non è mai stato prova
 È una questione di privilegi, non di oggetti mancanti, e si scoprirà alla prima
 applicazione autorizzata.
 
-### Stato della riparazione — proposta scritta, non applicata
+### Stato della riparazione — applicata il 3 agosto 2026
 
-`supabase/repair/proposal_ledger_bootstrap_replay.sql` contiene il testo SQL
-completo che la riga di ledger antedatata dovrebbe registrare: la
-`create or replace function public.rls_auto_enable()` verbatim dal progetto
-reale, più la `create event trigger ensure_rls` avvolta in un blocco `do` che
-controlla `pg_event_trigger`, perché `create event trigger` non ammette
-`if not exists`. Versione proposta `20260729220000`, libera fra la
-`20260729210000` e la `20260729230000`. Sul progetto reale il DDL è un no-op.
+La proposta è stata validata in chat organizzativa e applicata. Il file di bozza
+`supabase/repair/proposal_ledger_bootstrap_replay.sql` è stato **rimosso**:
+sostituito dal file tracciato definitivo, non c'è più una bozza da approvare.
 
-**Non applicata.** Nessuna riga scritta sul ledger, nessun SQL eseguito, nessun
-branch creato. L'`insert` è lasciato in commento dentro il file perché non possa
-partire per errore. Attende approvazione esplicita in chat organizzativa.
+**Riga di ledger applicata al progetto reale** dalla chat organizzativa, versione
+`20260729234000`, nome `rls_auto_enable_bootstrap`. **Il ledger passa da 14 a 15
+righe.** Il file tracciato corrispondente è
+[`supabase/migrations/20260729234000_rls_auto_enable_bootstrap.sql`](../supabase/migrations/20260729234000_rls_auto_enable_bootstrap.sql):
+1970 byte, ASCII puro, esattamente i 1970 caratteri che il ledger registra per
+quello statement. Repository e ledger tornano confrontabili.
 
-Due cose che l'approvazione deve decidere, non date per scontate nel file:
+Contenuto: `create or replace function public.rls_auto_enable()` verbatim dal
+progetto reale, più la `create event trigger ensure_rls` avvolta in un blocco
+`do` che interroga `pg_event_trigger`, perché `create event trigger` non ammette
+`if not exists`. Sul progetto reale il DDL è un no-op — la funzione viene
+riscritta identica, il trigger già presente non viene ricreato.
 
-1. **La collocazione.** A `20260729220000` il trigger esiste già quando girano
-   le versioni successive, quindi ogni `create table` in `public` dalla
-   `20260729230000` in poi riceve l'auto-enable. Non è dimostrabile che
-   riproduca la storia vera — `pg_proc` non conserva la data di creazione, e
-   quando `ensure_rls` sia nato sul progetto reale non è ricostruibile.
-   L'effetto atteso è inerte perché ogni migrazione abilita RLS esplicitamente.
-   L'alternativa che restringe al minimo la differenza è `20260729234000`,
-   subito prima della versione che fa la `revoke`.
-2. **Il file tracciato.** Registrare la sola riga di ledger ripeterebbe il
-   difetto originario — una versione senza file. L'approvazione va accompagnata
-   da `supabase/migrations/20260729220000_rls_auto_enable_bootstrap.sql` con lo
-   stesso contenuto, perché repository e ledger tornino confrontabili per hash.
+**Collocazione scelta: `20260729234000`**, l'alternativa a blast radius minimo,
+non la `20260729220000` della bozza. Sta subito prima della `20260729234500`, la
+versione che fa la `revoke` che falliva. La neutralità della scelta è ora
+**confermata empiricamente, non più per inferenza**: né la `20260729230000` né la
+`20260729234500` contengono un `create table`, un `create table as` o un
+`select into`, cioè nessuno dei tre tag su cui `ensure_rls` si attiva. In quella
+finestra il trigger non ha nulla da intercettare, quindi anticiparlo a
+`20260729234000` non cambia il comportamento di replay di alcuna versione.
+
+Resta vero che quando `ensure_rls` sia nato davvero sul progetto reale non è
+ricostruibile — `pg_proc` non conserva la data di creazione. La collocazione è
+scelta per effetto nullo dimostrato, non per fedeltà storica dimostrata.
+
+**Cosa non chiude.** L'unica incognita che resta per il merge della PR #18 è
+quella descritta sopra: se `postgres` abbia il privilegio di eseguire
+`alter role authenticator set pgrst.db_pre_request = …` (riga 140 della
+migrazione di Fase 7). È verificabile solo con un nuovo replay su branch, e
+quel branch non è ancora autorizzato.
 
 ## Debito tecnico noto
 

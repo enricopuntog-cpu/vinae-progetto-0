@@ -20,13 +20,17 @@ attendere conferma esplicita in sessione, e solo dopo eseguire.
 | File | Stato | Effetto |
 | --- | --- | --- |
 | [`ledger_statements_vuoti.sql`](ledger_statements_vuoti.sql) | **APPLICATO** il 2026-08-02 su `pijnmcllmfgjmgsvtcej`, via API dalla chat organizzativa | Riscrive `statements` su sette righe di `supabase_migrations.schema_migrations` |
-| [`proposal_ledger_bootstrap_replay.sql`](proposal_ledger_bootstrap_replay.sql) | **PROPOSTA — non applicata**, scritta il 2026-08-03, in attesa di approvazione in chat organizzativa | Aggiungerebbe una riga di ledger antedatata (`20260729220000`) che crea `public.rls_auto_enable()` e l'event trigger `ensure_rls` |
+| ~~`proposal_ledger_bootstrap_replay.sql`~~ | **RIMOSSO** il 2026-08-03: validato in chat organizzativa e sostituito dal file tracciato | Registrava `public.rls_auto_enable()` e l'event trigger `ensure_rls` |
 
 Esito registrato: quattordici righe con `statements` non vuoto, SHA-256 coincidenti
 con i file tracciati. Riletto il 2026-08-03 in sola lettura — nessuna riga a zero.
 I `caratteri` a ledger risultano inferiori ai byte del file (per esempio 21 722
 contro 21 840) perché `length()` conta caratteri e non byte: la differenza sono le
 lettere accentate, che in UTF-8 occupano due byte.
+
+Dal 2026-08-03 il ledger ha **quindici righe**: la chat organizzativa ha applicato
+al progetto reale la versione `20260729234000 rls_auto_enable_bootstrap`, di cui
+sotto.
 
 ## `ledger_statements_vuoti.sql`
 
@@ -91,72 +95,70 @@ riesecuzione integrale aggiorna zero righe.
 Attesi: `[0]` sette righe con `caratteri = 0`; `[1]`–`[7]` `UPDATE 1` alla prima
 esecuzione e `UPDATE 0` poi; `[8]` quattordici righe, nessuna a zero.
 
-### Cosa resta scoperto dopo la riparazione
+### Cosa restava scoperto dopo la riparazione — chiuso il 2026-08-03
 
 L'event trigger `ensure_rls` e `public.rls_auto_enable()` esistono sul progetto
-reale e non sono creati da alcun file tracciato: riparato il ledger, restano
-comunque assenti da ogni ambiente ricostruito. Debito registrato in
-[`docs/MIGRATION_PHASE_1_BACKLOG.md`](../../docs/MIGRATION_PHASE_1_BACKLOG.md);
-non lo tocca questo script e non lo tocca alcun SQL finora scritto.
+reale e non erano creati da alcun file tracciato: riparato il ledger, restavano
+comunque assenti da ogni ambiente ricostruito.
 
-Misurato il 2026-08-03: non è solo una differenza silenziosa. La `revoke` alla
+Misurato il 2026-08-03: non era solo una differenza silenziosa. La `revoke` alla
 riga 86 della `20260729234500` cade su una funzione che su un branch nuovo non
 esiste, e `revoke ... on function` non ammette `if exists`. **Il replay di un
-branch pulito si ferma alla decima versione su quattordici**, quindi questo
-script da solo non rende la storia ricostruibile.
+branch pulito si fermava alla decima versione su quattordici**, quindi questo
+script da solo non rendeva la storia ricostruibile.
 
-Da lì nasce `proposal_ledger_bootstrap_replay.sql`, che copre esattamente questo
-residuo e nient'altro.
+Chiuso lo stesso giorno dalla versione `20260729234000`, sotto.
 
-## `proposal_ledger_bootstrap_replay.sql`
+## `20260729234000_rls_auto_enable_bootstrap` — applicata, non è uno script di questa cartella
 
-**Non applicata.** Nessuna riga scritta sul ledger, nessun SQL eseguito, nessun
-branch creato. L'`insert` è lasciato in commento dentro il file perché una
-esecuzione integrale per errore non possa scrivere nulla.
+Nasceva qui come `proposal_ledger_bootstrap_replay.sql`. **La bozza è stata
+validata in chat organizzativa, applicata al progetto reale e rimossa da questa
+cartella**: l'oggetto definitivo è una migrazione tracciata,
+[`supabase/migrations/20260729234000_rls_auto_enable_bootstrap.sql`](../migrations/20260729234000_rls_auto_enable_bootstrap.sql),
+e non uno script di riparazione. Resta descritta qui perché la sua ragione
+d'essere è il difetto di bookkeeping riparato sopra.
 
-### Cosa registrerebbe
+### Cosa registra
 
-Una riga nuova, versione `20260729220000`, nome `rls_auto_enable_bootstrap`, con
-il DDL che crea `public.rls_auto_enable()` e l'event trigger `ensure_rls`. Il
-corpo della funzione è `pg_get_functiondef` estratto verbatim dal progetto reale
-il 2026-08-03; gli attributi del trigger vengono da `pg_event_trigger`.
+Versione `20260729234000`, nome `rls_auto_enable_bootstrap`, con il DDL che crea
+`public.rls_auto_enable()` e l'event trigger `ensure_rls`. Il corpo della
+funzione è `pg_get_functiondef` estratto verbatim dal progetto reale il
+2026-08-03 — **estratto due volte in modo indipendente**, da Claude Code e dalla
+chat organizzativa, con esito identico; gli attributi del trigger vengono da
+`pg_event_trigger`. Il file tracciato è di 1970 byte, ASCII puro, e il ledger
+registra 1970 caratteri per quello statement.
 
 La versione è antedatata perché il replay applica in ordine di `version`: la
-`revoke` che fallisce sta dentro la `20260729234500`, quindi una migrazione con
-timestamp successivo arriverebbe dopo l'errore. `20260729220000` è libera, fra la
-`20260729210000` e la `20260729230000`.
+`revoke` che falliva sta dentro la `20260729234500`, quindi una migrazione con
+timestamp successivo sarebbe arrivata dopo l'errore.
+
+### Perché `20260729234000` e non `20260729220000`
+
+È lo slot che restringe al minimo la differenza rispetto alla storia reale:
+subito prima della versione che fa la `revoke`, invece che sette ore prima. La
+neutralità è **verificata, non inferita**: né la `20260729230000` né la
+`20260729234500` contengono `create table`, `create table as` o `select into` —
+i tre soli tag su cui `ensure_rls` si attiva. Nella finestra fra le due il
+trigger non ha nulla da intercettare, quindi anticiparlo non cambia il
+comportamento di replay di alcuna versione.
 
 ### Idempotenza
 
 `create or replace function` lo è per costruzione. `create event trigger` **non
 ammette `if not exists`** in Postgres, quindi è avvolto in un blocco `do` che
 interroga `pg_event_trigger`. Sul progetto reale il DDL è un no-op: la funzione
-viene riscritta identica, il trigger già presente non viene ricreato. L'`insert`
-porta una guardia `where not exists` sulla versione.
-
-### Cosa deve decidere chi approva
-
-1. **La collocazione.** A `20260729220000` il trigger esiste già quando girano
-   le versioni successive, quindi in un ambiente ricostruito ogni `create table`
-   in `public` dalla `20260729230000` in poi riceve l'auto-enable. Non è
-   dimostrabile che riproduca la storia vera: `pg_proc` non conserva la data di
-   creazione. L'effetto atteso è inerte perché ogni migrazione tracciata abilita
-   RLS esplicitamente. L'alternativa che restringe al minimo la differenza è
-   `20260729234000`, subito prima della versione che fa la `revoke`.
-2. **Il file tracciato.** Registrare la sola riga di ledger ripeterebbe il
-   difetto originario — una versione senza file. L'approvazione va accompagnata
-   da `supabase/migrations/20260729220000_rls_auto_enable_bootstrap.sql` con lo
-   stesso contenuto. La proposta non lo crea: toccare `supabase/migrations/` era
-   fuori mandato.
+viene riscritta identica, il trigger già presente non viene ricreato.
 
 ### Cosa non copre
 
 Non decide fra le due strade del backlog — tenere l'auto-enable implicito o
 dichiararlo deprecato in favore di RLS sempre esplicita. Registra lo stato di
-fatto, quindi è compatibile con la prima e va revocata se si sceglie la seconda.
+fatto: è compatibile con la prima, che è la strada presa, e andrà revocata se si
+sceglie la seconda.
 
 Non copre l'unica incognita oltre la versione 14: la Fase 7 esegue
 `alter role authenticator set pgrst.db_pre_request = …` alla riga 140. Il ruolo
 esiste su un progetto appena creato, ma che `postgres` possa fare
 `alter role … set` su di esso non è mai stato provato. È una questione di
-privilegi, non di oggetti mancanti.
+privilegi, non di oggetti mancanti, e si misura solo con un nuovo replay su
+branch — non ancora autorizzato.
