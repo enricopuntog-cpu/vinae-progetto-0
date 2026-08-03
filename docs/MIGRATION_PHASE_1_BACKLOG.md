@@ -611,7 +611,10 @@ in tutti i file è la `revoke` alla riga 86 della `20260729234500`.
 ### Controllo preventivo sulle versioni 11-14 — 3 agosto 2026
 
 Fatto prima di proporre la riparazione, per non scoprire un blocco alla volta un
-branch alla volta. Metodo: il replay di un ambiente ricostruito può divergere
+branch alla volta. **Gli ordinali di questa sezione — «versione 10», «11-14» —
+sono quelli del ledger a quattordici righe di allora**: dopo la riparazione la
+`20260729234000` si inserisce come decima e sposta le successive di uno.
+Metodo: il replay di un ambiente ricostruito può divergere
 dall'applicazione originale solo sugli oggetti che esistono sul progetto reale
 ma non sono creati da alcun file tracciato. Quindi si diffa l'inventario del
 progetto reale contro quello di un progetto appena creato, e si verifica se le
