@@ -64,6 +64,45 @@ soltanto che il bucket sia privato. Fino alla prima esecuzione autorizzata, non
 esiste inoltre un esito remoto verificato né per i 18 casi né per i residui
 finali propri della 6d-2a.
 
+## Fase 7 — ordini e pagamenti
+
+Applicare la migrazione solo dopo revisione e autorizzazione esplicita. Alla
+data di scrittura **non è stata applicata a nessun database**, né remoto né
+locale, quindi la griglia non ha ancora alcun esito verificato:
+
+| # | File | Esito atteso |
+| --- | --- | --- |
+| 1 | `supabase/migrations/20260731135455_phase_7_order_payment_service.sql` | migrazione applicata e registrata |
+| 2 | [`7_ordini_pagamenti.sql`](7_ordini_pagamenti.sql) | 16 righe, tutte `PASSA`, nessuna riga 99 |
+
+La griglia crea e cancella tre utenti, due vini, due bottiglie, due annunci e i
+relativi ordini, pagamenti ed eventi. Richiede un'autorizzazione fixture
+separata da quella della migrazione. Il caso 16 verifica che la pulizia non
+lasci utenti, profili, vini, eventi o bucket di rate limit marcati dalla prova.
+
+Copre i tre comportamenti che nessun test TypeScript può coprire perché vivono
+in Postgres: l'unicità `(provider, event_id)`, il `select … for update`
+sull'annuncio, e il bucket a finestra fissa di `private.rate_limit_consume`.
+
+**Limite da non lasciare implicito:** la griglia gira in una sola sessione,
+quindi `select … for update` non entra mai in contesa con sé stesso. I casi del
+gruppo C provano l'*invariante* — un solo compratore vince, il ritentativo è
+idempotente — e **non la gara**. La prova di gara vera richiede due sessioni
+concorrenti e resta un passo manuale separato, non ancora eseguito.
+
+Il caso 4 merita una nota. La guardia su `ceduta_at` dentro
+`order_checkout_reserve` è difesa in profondità e non è raggiungibile per vie
+normali, perché `bottle_units_preserva_annuncio_non_terminale` impedisce di
+marcare ceduta una bottiglia con un annuncio vivo. Il caso verifica quel
+vincolo, non la guardia: costruire lo stato illegale richiederebbe di
+disabilitare un trigger sul progetto vero.
+
+A differenza delle griglie 6d-1 e 6d-2a, questo file termina con un blocco `do`
+che solleva un'eccezione se una riga non è `PASSA`. Serve a un futuro job CI,
+dove la sola tabella di risultati non basterebbe perché `psql` uscirebbe
+comunque 0; con `-v ON_ERROR_STOP=1` il job fallisce da solo. Per la lettura a
+mano non cambia nulla.
+
 ### Se il preflight trova righe
 
 La migrazione **fallirà di proposito**, con un messaggio che rimanda qui: il

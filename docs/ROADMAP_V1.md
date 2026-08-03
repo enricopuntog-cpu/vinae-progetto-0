@@ -334,8 +334,12 @@ dei messaggi UTF-8 è registrata come migrazione `20260730162046`.
 
 ## Fase 6d-2a — provenienza catalogo e percorsi Cantina
 
-**Stato sul branch `migration/phase-6d-2a-catalog-cellar-paths`: implementazione
-locale in corso; SQL remoto non applicato.**
+**Stato: integrata in `main` tramite PR #17, merge squash
+`3037bf4f8fa5269895bb01a998d85bb5f629cd34`.** L'ultimo HEAD della PR è
+`c54939213686ea5ca02e26434a3079cfd474be89`; la CI #44, run `30635023614`, è
+verde. La migrazione remota è registrata come
+`20260731120340 catalog_cellar_paths`; la griglia è 18/18 `PASSA` e i residui
+fixture database e Storage documentati sono zero.
 
 Questa sotto-fase viene prima degli ordini perché `listing_crea` può oggi
 inserire un vino tramite `SECURITY DEFINER` senza distinguere una scheda curata
@@ -359,6 +363,20 @@ Non contiene ordini, proposte, pagamenti o trasferimento di proprietà. Le prove
 33/33, 11/11, 13/13 e residui fixture zero sono documentate nel rapporto
 post-merge; la fase non può iniziare finché quel rapporto non è integrato e la
 fase non è autorizzata esplicitamente.
+
+## Fase 7 — proposte, ordini e pagamenti
+
+**Stato: primo checkpoint implementato soltanto in locale sul branch
+`migration/phase-7-order-payment-service`; feature flag spenta.** Include schema
+versionato, prenotazione atomica, RLS/grant, limiter condiviso, Edge Function di
+checkout, webhook firmato, adapter e test. Nessuna migrazione o funzione è stata
+distribuita e nessuna API Stripe è stata chiamata.
+
+Il pagamento confermato crea una nuova unità privata per il buyer e conserva
+l'unità storica del seller, che il trigger esistente marca come ceduta. Restano
+fuori Stripe Connect, payout, KYC, contestazioni operative e qualunque pagamento
+reale. Specifica, gate e limiti di verifica sono in `docs/superpowers/` e
+`docs/PHASE_7_VERIFICATION.md`.
 
 ## Cosa NON è ancora deciso
 

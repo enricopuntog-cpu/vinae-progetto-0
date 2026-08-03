@@ -110,13 +110,16 @@ Il bucket applicativo del webhook viene consumato soltanto dopo la verifica
 della firma; traffico non firmato e volumetrico deve essere filtrato al bordo
 tramite WAF o reverse proxy attendibile.
 
-**Sullo stack Supabase non esiste niente di equivalente.** PostgREST espone le
-funzioni RPC senza alcun limite di frequenza: `listing_crea_da_bottiglia`,
-`cellar_bottiglia_aggiungi`, `bottiglia_apri` e le altre sono chiamabili in
-raffica da qualunque sessione autenticata. `listing_crea` resta interna. Nessun
-invariante di dati ne viene violato — sono tutti applicati in database — ma il
-costo e il rumore sì. Va colmato prima che i pagamenti passino di lì; è
-registrato come debito dichiarato in `docs/MIGRATION_PHASE_1_BACKLOG.md`.
+La migrazione locale di Fase 7 introduce bucket atomici condivisi in schema
+`private`, un hook `pgrst.db_pre_request` per le scritture Data API e bucket
+dedicati per proposte, checkout e webhook. La firma Stripe viene verificata
+prima di consumare il bucket applicativo del webhook. Prima del deploy vanno
+verificati supporto/configurazione dell'hook, privilegi espliciti Data API,
+pulizia dei bucket scaduti e un limite al bordo per traffico non firmato.
+
+Le funzioni checkout e webhook sono eseguibili soltanto da `service_role`;
+l'identità browser viene prima verificata da Supabase Auth. La `service_role`
+resta confinata a Edge Function e Route Handler, non è un meccanismo client.
 
 ## AI
 

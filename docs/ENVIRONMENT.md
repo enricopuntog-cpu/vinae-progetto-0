@@ -28,6 +28,31 @@ VITE_API_BASE_URL=http://localhost:8001
 Se frontend e API sono esposti dallo stesso dominio o da un reverse proxy, lasciare
 il valore vuoto è la scelta consigliata.
 
+## Stack di destinazione (`frontend-next/` + Supabase)
+
+File di esempio: `frontend-next/.env.example`. `PAYMENTS_ENABLED=false` è il
+default obbligatorio finché migrazione, Edge Function, endpoint webhook e
+configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
+
+| Variabile | Destinazione | Descrizione |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | client/server | URL progetto Supabase. |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | client/server | Chiave publishable/anon soggetta a RLS. |
+| `SUPABASE_SERVICE_ROLE_KEY` | solo server | Bypassa RLS; mai nel browser o nei log. |
+| `PAYMENTS_ENABLED` | solo server | Kill switch del checkout e del webhook. |
+| `NEXT_PUBLIC_PHASE_7_PAYMENTS_ENABLED` | client | Visibilità UI soltanto; non autorizza operazioni. |
+| `PAYMENT_ALLOWED_ORIGINS` | Edge Function | Allowlist CORS esatta, separata da virgole. |
+| `PAYMENT_REDIRECT_ALLOWED_ORIGINS` | Edge Function | Allowlist server-side dei ritorni Stripe. |
+| `PAYMENT_REDIRECT_ORIGIN` | Edge Function | Origin scelta dal server, appartenente all'allowlist. |
+| `STRIPE_SECRET_KEY` | Edge Function | Chiave segreta Stripe dell'ambiente. |
+| `STRIPE_WEBHOOK_SECRET` | Route Handler | Segreto firma dell'endpoint webhook. |
+| `PAYMENTS_WEBHOOK_RATE_LIMIT` | Route Handler | Limite per bucket, default `600`. |
+| `PAYMENTS_WEBHOOK_RATE_WINDOW_SECONDS` | Route Handler | Finestra del bucket, default `60`. |
+
+I segreti della Edge Function vanno impostati nell'ambiente Supabase; quelli del
+Route Handler nell'ambiente server Next.js. Non copiare la `service_role` in un
+file `.env` versionato.
+
 ## Backend
 
 File di esempio: `backend/.env.example`.

@@ -11,16 +11,6 @@
  */
 
 import type {
-  Order,
-  Proposal,
-  BuyerOrderStatus,
-  SellerOrderStatus,
-  DeliveryMode,
-  TrackingEvent,
-  Dispute,
-  OrderReview,
-} from "@/data/orders";
-import type {
   Report,
   ReportStatus,
   ReportTargetType,
@@ -286,29 +276,198 @@ export interface ListingService extends ListingReadService {
 }
 
 // ---- Proposte & Ordini -----------------------------------------------------
+export type ProposalStatus =
+  | "inviata"
+  | "controproposta"
+  | "accettata"
+  | "rifiutata"
+  | "scaduta"
+  | "convertita";
+
+export type ProposalRecord = {
+  id: string;
+  listing_id: string;
+  buyer_id: string;
+  seller_id: string;
+  prezzo_richiesto_cents: number;
+  prezzo_proposto_cents: number;
+  controproposta_cents: number | null;
+  stato: ProposalStatus;
+  scadenza: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OrderStatus =
+  | "in_attesa_pagamento"
+  | "pagato"
+  | "in_preparazione"
+  | "spedito"
+  | "consegnato"
+  | "verifica"
+  | "completato"
+  | "contestato"
+  | "rimborsato"
+  | "annullato";
+export type OrderDeliveryMode = "consegna_mano" | "spedizione";
+
+export type OrderRecord = {
+  id: string;
+  listing_id: string;
+  proposal_id: string | null;
+  buyer_id: string;
+  seller_id: string;
+  seller_bottle_unit_id: string;
+  buyer_bottle_unit_id: string | null;
+  stato: OrderStatus;
+  delivery_mode: OrderDeliveryMode;
+  prezzo_cents: number;
+  currency: "eur";
+  reservation_expires_at: string;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PaymentStatus =
+  | "checkout_pending"
+  | "processing"
+  | "paid"
+  | "failed"
+  | "expired"
+  | "partially_refunded"
+  | "refunded";
+
+export type PaymentRecord = {
+  id: string;
+  order_id: string;
+  stato: PaymentStatus;
+  amount_cents: number;
+  amount_refunded_cents: number;
+  currency: "eur";
+  created_at: string;
+  updated_at: string;
+};
+
 export interface ProposalService {
-  invia(listingId: string, prezzo: number): Promise<Proposal>;
-  controproposta(id: string, prezzo: number): Promise<Proposal>;
-  accetta(id: string): Promise<Order>;
-  rifiuta(id: string): Promise<void>;
+  invia(listingId: string, prezzoCents: number): Promise<Result<ProposalRecord>>;
+  controproposta(id: string, prezzoCents: number): Promise<Result<ProposalRecord>>;
+  accetta(id: string): Promise<Result<ProposalRecord>>;
+  rifiuta(id: string): Promise<Result<void>>;
+  mie(): Promise<Result<ProposalRecord[]>>;
 }
 
 export interface OrderService {
-  acquisti(userId: string): Promise<Order[]>;
-  vendite(userId: string): Promise<Order[]>;
-  get(id: string): Promise<Order | null>;
-  aggiornaAcquirente(id: string, stato: BuyerOrderStatus): Promise<void>;
-  aggiornaVenditore(id: string, stato: SellerOrderStatus): Promise<void>;
-  aggiungiTracking(id: string, evento: TrackingEvent): Promise<void>;
-  scegliConsegna(id: string, modo: DeliveryMode): Promise<void>;
-  apriContestazione(id: string, dispute: Omit<Dispute, "id" | "stato">): Promise<Dispute>;
-  recensisci(id: string, review: Omit<OrderReview, "id" | "createdAt">): Promise<OrderReview>;
+  acquisti(): Promise<Result<OrderRecord[]>>;
+  vendite(): Promise<Result<OrderRecord[]>>;
+  get(id: string): Promise<Result<OrderRecord | null>>;
 }
 
-// ---- Pagamenti (demo-only) -------------------------------------------------
+// ---- Pagamenti -------------------------------------------------------------
 export interface PaymentService {
-  /** Puramente dimostrativo: non raccoglie dati reali. */
-  simulaCheckout(orderId: string): Promise<Result<{ paymentId: string }>>;
+  creaCheckout(input: {
+    listingId: string;
+    proposalId?: string;
+    deliveryMode: OrderDeliveryMode;
+    idempotencyKey: string;
+  }): Promise<Result<{ checkoutUrl: string }>>;
+  perOrdine(orderId: string): Promise<Result<PaymentRecord | null>>;
+}
+
+// ---- Provider di incasso ---------------------------------------------------
+// `PaymentService` è ciò che la UI chiama; `PaymentProvider` è ciò che il server
+// usa per parlare con l'incasso. Sono due livelli distinti e non vanno fusi.
+// Il modello è `AIProvider` in backend/ai_provider.py — un contratto che non
+// nomina il fornitore — non `StripeGatewayProtocol` in backend/stripe_service.py,
+// che è una cucitura per sostituire l'SDK e non il provider.
+
+/** Riferimento opaco a una transazione presso il provider. */
+export type ProviderPaymentRef = {
+  provider: string;
+  sessionId: string;
+  intentId?: string | null;
+};
+
+/**
+ * Tutto risolto server-side: nessun campo di questo tipo arriva dal client.
+ * Gli identificativi sono di dominio Vinea, non del fornitore: sta all'adapter
+ * decidere come trasportarli.
+ *
+ * Rispecchia `CheckoutRequest` in supabase/functions/_shared/payment-provider.ts,
+ * che vive nel runtime Deno e non puo' importare da qui: i due vanno cambiati
+ * insieme.
+ */
+export type CheckoutRequest = {
+  orderId: string;
+  buyerId: string;
+  listingId: string;
+  descrizione: string;
+  amountCents: number;
+  currency: string;
+  successUrl: string;
+  cancelUrl: string;
+  idempotencyKey: string;
+  expiresAt: string | null;
+};
+
+export type CheckoutHandle = {
+  ref: ProviderPaymentRef;
+  redirectUrl: string;
+};
+
+/**
+ * Tassonomia interna degli esiti: non è il vocabolario di nessun provider.
+ * Questi identificatori sono anche il contratto verso la RPC
+ * `payment_apply_provider_event`, che ramifica su di essi e non sui nomi
+ * evento del provider. Aggiungere un caso qui è un cambio di schema.
+ */
+export type PaymentOutcomeKind =
+  | "pending"
+  | "authorized"
+  | "settled"
+  | "failed"
+  | "expired"
+  | "refunded";
+
+export type PaymentOutcome =
+  | { kind: "pending" }
+  | { kind: "authorized" }
+  | { kind: "settled"; amountCents: number; currency: string; settledAt: string }
+  | { kind: "failed"; reason: string }
+  | { kind: "expired" }
+  | { kind: "refunded"; refundedCents: number; fully: boolean };
+
+/**
+ * Evento tradotto dal provider. I campi `declared*` sono dichiarazioni del
+ * provider da riverificare server-side contro l'ordine: non sono verità.
+ */
+export type ProviderEvent = {
+  id: string;
+  occurredAt: string;
+  ref: ProviderPaymentRef;
+  outcome: PaymentOutcome;
+  declaredAmountCents: number;
+  declaredCurrency: string;
+  orderRef: string | null;
+};
+
+export interface PaymentProvider {
+  readonly id: string;
+  /** Apre la sessione di checkout presso il provider. */
+  apriCheckout(input: CheckoutRequest): Promise<Result<CheckoutHandle>>;
+  /** Interroga il provider sullo stato di una transazione. */
+  statoPagamento(ref: ProviderPaymentRef): Promise<Result<PaymentOutcome>>;
+  /**
+   * Verifica la firma e traduce l'evento. Riceve il raw body, non un oggetto
+   * già deserializzato: la verifica di firma è sui byte trasmessi.
+   * Traduce e basta — non decide e non scrive stato: la transizione resta
+   * nella RPC, che riconfronta importo, valuta e ordine.
+   */
+  interpretaEvento(input: {
+    rawBody: string;
+    headers: Headers;
+    secret: string;
+  }): Promise<Result<ProviderEvent>>;
 }
 
 // ---- Messaggi --------------------------------------------------------------

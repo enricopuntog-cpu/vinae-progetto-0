@@ -283,8 +283,9 @@ Le tre regole permanenti che ne derivano sono in `CLAUDE.md`, sezione
 
 **Branch**: `migration/phase-6d-2a-catalog-cellar-paths`
 
-**Stato**: implementata localmente sul branch; migrazione remota e griglia
-fixture non eseguite.
+**Stato**: integrata in `main` tramite PR #17 al merge squash `3037bf4`; CI #44
+verde. La migrazione `20260731120340 catalog_cellar_paths` e la griglia 18/18
+sono registrate, con residui database e Storage zero.
 
 Precondizione obbligatoria: rapporto post-merge integrato con griglie 33/33 e
 11/11, verifier repair 13/13, residui fixture zero e approvazione esplicita
@@ -323,6 +324,31 @@ Ordini, proposte e pagamenti Stripe reali via Edge Function
 attivazione controllata. Stessa disciplina di sicurezza pagamenti già
 validata in Sprint 0 (stato solo da `payment_status=paid`, idempotenza,
 protezione da eventi tardivi).
+
+**Stato al 31 luglio 2026**: avvio autorizzato sul branch
+`migration/phase-7-order-payment-service`. Il primo checkpoint è locale: schema,
+limiter server-side, servizi, Edge Function, Route Handler e test. Nessuna
+migrazione o funzione remota è autorizzata.
+
+**Stato al 3 agosto 2026 — verifica tecnica chiusa.** Riportato dalla chat
+organizzativa: su un branch Supabase di sviluppo temporaneo, creato ed
+eliminato nella stessa sessione, il replay del ledger è arrivato a **15 su 15**
+e la migrazione
+[`20260731135455_phase_7_order_payment_service.sql`](../supabase/migrations/20260731135455_phase_7_order_payment_service.sql)
+(917 righe) è stata applicata **per intero, senza errori**. Verificato con
+query diretta sul branch: cinque tabelle create — `proposals`, `orders`,
+`payments`, `order_events`, `payment_provider_events` — undici funzioni create,
+e il `rolconfig` di `authenticator` che contiene
+`pgrst.db_pre_request=private.vinea_check_request`. **L'incognita del privilegio
+`alter role` è quindi risolta in positivo: quel privilegio esiste davvero.**
+Nessun branch Supabase esiste ora oltre a `main`, nessuna fatturazione residua.
+
+Non resta alcun gate tecnico per il merge della PR #18. Restano fuori, come
+gate separati e nessuno autorizzato: `apply_migration` sul progetto reale,
+distribuzione della Edge Function, esecuzione della griglia
+[`supabase/tests/7_ordini_pagamenti.sql`](../supabase/tests/7_ordini_pagamenti.sql)
+e smoke Storage. L'esito sopra è una misura eseguita fuori da questa
+postazione: è riportato qui come tale, non è riverificabile da Git.
 
 ## Fase 8 — MessagingService + NotificationService
 
@@ -481,6 +507,246 @@ Nessun invariante di dati ne viene violato, ma il costo e il rumore sì.
 
 Va risolto prima che la Fase 7 esponga i pagamenti, ed è lavoro di infrastruttura
 (Edge Function con storage condiviso, o limiti al bordo), non di questa traccia.
+
+## Debito dichiarato dalla diagnosi della storia migrazioni — 2 agosto 2026
+
+Trovato creando il branch Supabase `phase-7-migration-verify` e finito in
+`MIGRATIONS_FAILED`. Precede la Fase 7 di giorni e non le appartiene: riguarda
+la fedeltà di qualunque ambiente ricostruito dalle migrazioni. Diagnosi completa
+in [`docs/PHASE_7_VERIFICATION.md`](PHASE_7_VERIFICATION.md).
+
+### L'event trigger `ensure_rls` non è creato da nessun file — CHIUSO il 3 agosto 2026
+
+> **Chiuso.** Risolto per la strada 1: la versione `20260729234000`
+> `rls_auto_enable_bootstrap` è registrata a ledger sul progetto reale e il file
+> tracciato `supabase/migrations/20260729234000_rls_auto_enable_bootstrap.sql`
+> esiste. Il testo che segue resta come diagnosi storica; l'esito è in fondo,
+> nella sezione «Stato della riparazione».
+
+`public.rls_auto_enable()` ritorna `event_trigger`, proprietario `postgres`,
+`security definer`, `search_path=pg_catalog`. Il corpo scorre
+`pg_event_trigger_ddl_commands()` e abilita RLS sulle tabelle nuove in `public`.
+È agganciata all'event trigger `ensure_rls` su `ddl_command_end`, proprietario
+`postgres` — gli altri sei event trigger del progetto sono di `supabase_admin`,
+cioè di Supabase.
+
+**Nessun file di `supabase/migrations/` la crea.** L'unica menzione in tutto il
+repository è `20260729234500_security_invariants_followup.sql:86`, che le revoca
+`execute`. È deriva vera, dello stesso genere riparato in parte dalla
+`20260730140948`, che però non la copriva.
+
+Va tenuta distinta dalla deriva del ledger — le sette versioni con `statements`
+vuoto, riparate il 2 agosto 2026. Sono due difetti indipendenti: **riparato il
+ledger, `ensure_rls` resta comunque assente** da ogni ambiente ricostruito,
+perché non c'è alcun file da registrare.
+
+### Aggiornamento 3 agosto 2026 — blocca il replay, non solo la fedeltà
+
+Misurato dopo la riparazione del ledger, sul progetto reale e sul branch fallito
+`ccnufawxtaykgjftvauc`:
+
+| Misura | Progetto reale | Branch fresco |
+| --- | --- | --- |
+| Event trigger totali | 7 | 6 |
+| `ensure_rls` | presente | assente |
+| `public.rls_auto_enable()` | presente | assente |
+
+I sei event trigger comuni sono di Supabase: **il settimo non arriva dalla
+piattaforma**, quindi un branch nuovo nasce senza. Delle 21 funzioni in `public`
+del progetto reale, 20 sono create da almeno un file tracciato e
+`rls_auto_enable` da nessuno.
+
+Conseguenza: `revoke execute on function public.rls_auto_enable()` alla riga 86
+della `20260729234500` — presente anche nel testo registrato a ledger, verificato
+— gira su un branch dove la funzione non esiste. In Postgres `revoke ... on
+function` non ammette `if exists`: è un errore duro. **Il replay di un branch
+pulito si ferma alla decima versione su quattordici** con
+`function public.rls_auto_enable() does not exist`.
+
+Il branch `phase-7-migration-verify` non lo aveva rivelato perché moriva prima,
+alla riga 35 su `bottiglia_apri`, per effetto delle sette versioni vuote.
+
+**Nessuna delle due strade sotto ripara il replay da sola.** La `revoke` sta
+dentro una versione già registrata e gira prima di qualunque cosa una migrazione
+nuova possa creare, perché il replay segue l'ordine delle versioni: una
+migrazione con timestamp successivo arriva troppo tardi. Ripararlo richiede o una
+riga di ledger antedatata rispetto alla `20260729234500`, o una modifica
+chirurgica del testo registrato di quella versione. Entrambe sono scritture sul
+bookkeeping, entrambe da autorizzare a parte.
+
+**Non blocca la Fase 7 come schema.** La sua migrazione abilita RLS
+esplicitamente su tutte e sei le tabelle che crea (righe 20 e 335–339), quindi
+non dipende dall'auto-enable implicito. Blocca il metodo di verifica: finché la
+decisione non è presa, **un branch Supabase non è né ricostruibile né un proxy
+fedele della produzione** per qualunque migrazione che crei una tabella in
+`public` senza `enable row level security` esplicito. Lì la tabella nascerebbe
+con RLS attiva e sul branch no, e la differenza non comparirebbe in nessun
+errore.
+
+**Da decidere**, e registrare la scelta, prima di usare un branch come prova di
+una migrazione futura. Due strade:
+
+1. **Ricreare il trigger in una migrazione propria**, che lo renda parte della
+   storia e quindi presente in ogni ambiente ricostruito. Mantiene la rete di
+   sicurezza e chiude la deriva. ← **strada scelta**, applicata il 3 agosto 2026
+   come versione `20260729234000`.
+2. **Dichiarare deprecato l'auto-enable implicito** in favore di RLS sempre
+   esplicita in ogni migrazione, e rimuovere trigger e funzione dal progetto
+   reale con una migrazione che lo registri. Rende la storia autosufficiente al
+   prezzo di togliere la rete: un `create table` che dimentichi
+   `enable row level security` non verrebbe più corretto da nessuno. **Scartata**
+   per ora: resta praticabile in futuro, e allora andrà revocata la 1.
+
+### Definizioni esatte degli oggetti derivati — estratte il 3 agosto 2026
+
+Sola lettura sul progetto reale, prima di scrivere qualunque proposta.
+**Estratte due volte in modo indipendente** — da Claude Code e dalla chat
+organizzativa, su sessioni separate — e risultate identiche carattere per
+carattere. Il testo qui sotto e quello del file tracciato sono la stessa
+estrazione confermata due volte, non una lettura sola ricopiata.
+
+`public.rls_auto_enable()` — `returns event_trigger`, `language plpgsql`,
+`security definer`, `set search_path to 'pg_catalog'`, proprietario `postgres`.
+Il corpo scorre `pg_event_trigger_ddl_commands()` filtrando i tag
+`CREATE TABLE, CREATE TABLE AS, SELECT INTO` e gli `object_type`
+`table, partitioned table`; per ogni oggetto in `public` esegue
+`alter table if exists … enable row level security` dentro un blocco
+`exception when others` che degrada a `raise log`, quindi non fa mai fallire il
+`create table` che lo ha innescato.
+
+Event trigger `ensure_rls` — evento `ddl_command_end`, tag
+`CREATE TABLE, CREATE TABLE AS, SELECT INTO`, funzione `rls_auto_enable()`,
+`evtenabled = 'O'` (abilitato), proprietario `postgres`.
+
+**Non sono bootstrap di piattaforma.** La prova non è più solo il conteggio
+7 contro 6: i sei event trigger presenti anche su un progetto appena creato
+(`issue_graphql_placeholder`, `issue_pg_cron_access`, `issue_pg_graphql_access`,
+`issue_pg_net_access`, `pgrst_ddl_watch`, `pgrst_drop_watch`) hanno tutti
+proprietario `supabase_admin`, cioè il ruolo di Supabase. `ensure_rls` ha
+proprietario `postgres`, il ruolo con cui si applicano le migrazioni e con cui
+opera il SQL Editor. È stato creato da un'azione nostra fuori dalla storia, non
+dalla piattaforma. Nessuna origine tracciabile nel repository: l'unica menzione
+in tutti i file è la `revoke` alla riga 86 della `20260729234500`.
+
+### Controllo preventivo sulle versioni 11-14 — 3 agosto 2026
+
+Fatto prima di proporre la riparazione, per non scoprire un blocco alla volta un
+branch alla volta. **Gli ordinali di questa sezione — «versione 10», «11-14» —
+sono quelli del ledger a quattordici righe di allora**: dopo la riparazione la
+`20260729234000` si inserisce come decima e sposta le successive di uno.
+Metodo: il replay di un ambiente ricostruito può divergere
+dall'applicazione originale solo sugli oggetti che esistono sul progetto reale
+ma non sono creati da alcun file tracciato. Quindi si diffa l'inventario del
+progetto reale contro quello di un progetto appena creato, e si verifica se le
+versioni successive alla decima nominano qualcuno dei residui.
+
+Oggetti presenti sul progetto reale e assenti da un progetto appena creato:
+
+Stato al momento della misura, cioè **prima** della riparazione:
+
+| Oggetto | Creato da file tracciato | Blocca il replay |
+| --- | --- | --- |
+| `public.rls_auto_enable()` | **no** → sì, dalla `20260729234000` | **sì, versione 10** → risolto |
+| event trigger `ensure_rls` | **no** → sì, dalla `20260729234000` | no (nessuno lo nomina) |
+| estensione `pg_trgm` | sì — `20260728193937:34` | no |
+| schema `private` | sì — `20260731120340:201`, `20260731135455:4` | no |
+| ruolo `cli_login_postgres` | no (ruolo di login della CLI) | no — mai nominato da alcuna migrazione |
+| le altre 20 funzioni di `public` | sì | no |
+
+`pg_trgm` e lo schema `private` risultavano assenti dal branch fallito, ma **non
+erano deriva**: erano una conseguenza del ledger vuoto, perché le versioni che
+li creano erano fra le sette che non registravano nulla. Riparato il ledger,
+tornano.
+
+Poi il controllo diretto: ognuno dei 62 `revoke execute on function` di tutte le
+migrazioni è stato tracciato fino a chi crea il suo bersaglio. **Tutti hanno una
+`create function` che li precede, tranne uno** — `public.rls_auto_enable()`.
+Per le sole versioni 11-14 il dettaglio è:
+
+- **11 `20260729235500`** — crea `has_role`, `cellar_ambiente_e_mio`,
+  `cellar_modulo_e_mio` e revoca solo su quelle. Autosufficiente.
+- **12 `20260730140948`** — crea `bottiglia_apri` (riga 30),
+  `bottiglia_cancella` (107), `listings_bottiglia_idonea` (177),
+  `listings_marca_bottiglia_ceduta` (244) prima di ogni `comment`/`revoke`/
+  `grant` su di esse. `alter default privileges for role postgres`: il ruolo
+  esiste ovunque. `drop trigger`/`drop policy` sono tutti `if exists`.
+- **13 `20260730162046`** — crea `bottiglia_apri` e `bottiglia_cancella` e
+  revoca solo su quelle. Le tabelle che il corpo nomina arrivano dalle versioni
+  3 e 6, che il ledger riparato ora registra.
+- **14 `20260731120340`** — crea `catalogo_risolvi_vino_utente` (204),
+  `cellar_bottiglia_aggiungi` (307), `listing_crea_da_bottiglia` (401),
+  `cellar_ambiente_crea` (447), la vista `public_listings` (541) prima di
+  nominarle. `revoke execute on function public.listing_crea` alla 439 punta
+  alla versione 5. `drop policy … on storage.objects`: schema di piattaforma,
+  presente ovunque.
+
+**Esito: dopo la versione 10 il replay non incontra altri blocchi.** Risolto
+`rls_auto_enable`, un branch pulito arriva in fondo — **15 su 15**, perché la
+riparazione aggiunge la `20260729234000`. Non è più una previsione: il 3 agosto
+2026 la chat organizzativa ha creato un branch Supabase di sviluppo temporaneo,
+poi eliminato, e **ha misurato il replay a 15 su 15**. Previsione del controllo
+preventivo e misura coincidono.
+
+Il branch fallito `phase-7-migration-verify` (`ccnufawxtaykgjftvauc`) è stato
+**eliminato dalla chat organizzativa il 3 agosto 2026** — il tentativo da Claude
+Code era stato negato dal classificatore dei permessi. Non c'è fatturazione
+residua. Il suo inventario, catturato in sola lettura prima dell'eliminazione, è
+la fonte della colonna «progetto appena creato» di questa sezione: è l'ultimo
+riferimento disponibile finché non se ne crea un altro.
+
+L'unica incognita che restava — e non riguardava le versioni a ledger — era la
+riga 140 della migrazione di Fase 7:
+`alter role authenticator set pgrst.db_pre_request = 'private.vinea_check_request'`.
+Il ruolo `authenticator` esiste su un progetto appena creato, ma che `postgres`
+potesse fare `alter role … set` su di esso non era mai stato provato: questione
+di privilegi, non di oggetti mancanti.
+
+**Risolta il 3 agosto 2026.** Sullo stesso branch temporaneo la chat
+organizzativa ha applicato la migrazione di Fase 7 per intero, senza errori, e
+ha riletto il `rolconfig` di `authenticator`: contiene
+`pgrst.db_pre_request=private.vinea_check_request`. Il privilegio esiste.
+
+### Stato della riparazione — applicata il 3 agosto 2026
+
+La proposta è stata validata in chat organizzativa e applicata. Il file di bozza
+`supabase/repair/proposal_ledger_bootstrap_replay.sql` è stato **rimosso**:
+sostituito dal file tracciato definitivo, non c'è più una bozza da approvare.
+
+**Riga di ledger applicata al progetto reale** dalla chat organizzativa, versione
+`20260729234000`, nome `rls_auto_enable_bootstrap`. **Il ledger passa da 14 a 15
+righe.** Il file tracciato corrispondente è
+[`supabase/migrations/20260729234000_rls_auto_enable_bootstrap.sql`](../supabase/migrations/20260729234000_rls_auto_enable_bootstrap.sql):
+1970 byte, ASCII puro, esattamente i 1970 caratteri che il ledger registra per
+quello statement. Repository e ledger tornano confrontabili.
+
+Contenuto: `create or replace function public.rls_auto_enable()` verbatim dal
+progetto reale, più la `create event trigger ensure_rls` avvolta in un blocco
+`do` che interroga `pg_event_trigger`, perché `create event trigger` non ammette
+`if not exists`. Sul progetto reale il DDL è un no-op — la funzione viene
+riscritta identica, il trigger già presente non viene ricreato.
+
+**Collocazione scelta: `20260729234000`**, l'alternativa a blast radius minimo,
+non la `20260729220000` della bozza. Sta subito prima della `20260729234500`, la
+versione che fa la `revoke` che falliva. La neutralità della scelta è ora
+**confermata empiricamente, non più per inferenza**: né la `20260729230000` né la
+`20260729234500` contengono un `create table`, un `create table as` o un
+`select into`, cioè nessuno dei tre tag su cui `ensure_rls` si attiva. In quella
+finestra il trigger non ha nulla da intercettare, quindi anticiparlo a
+`20260729234000` non cambia il comportamento di replay di alcuna versione.
+
+Resta vero che quando `ensure_rls` sia nato davvero sul progetto reale non è
+ricostruibile — `pg_proc` non conserva la data di creazione. La collocazione è
+scelta per effetto nullo dimostrato, non per fedeltà storica dimostrata.
+
+**Cosa non chiudeva — e che è stato chiuso il giorno stesso.** L'unica incognita
+che restava per il merge della PR #18 era quella descritta sopra: se `postgres`
+avesse il privilegio di eseguire
+`alter role authenticator set pgrst.db_pre_request = …` (riga 140 della
+migrazione di Fase 7). Era verificabile solo con un nuovo replay su branch, e
+quel branch è stato creato, misurato ed eliminato dalla chat organizzativa il
+3 agosto 2026: replay 15 su 15, migrazione di Fase 7 applicata per intero senza
+errori, privilegio confermato. **Non resta alcun gate tecnico per il merge della
+PR #18.**
 
 ## Debito tecnico noto
 

@@ -9,6 +9,20 @@ attendibile per identità, ruoli, prezzi o stato di un ordine.
 
 ## Componenti
 
+Lo stack servito (`frontend/` + FastAPI) resta invariato. Per lo stack di
+destinazione, Fase 7 aggiunge questo percorso locale e ancora non distribuito:
+
+```text
+Browser -> frontend-next -> Supabase Auth/RLS/Data API
+                       \-> Edge Function payments-checkout -> Stripe Checkout
+Stripe -> Next Route Handler webhook -> RPC service_role -> Postgres
+```
+
+La prenotazione dell'annuncio e la creazione di ordine/pagamento avvengono in
+una singola transazione PostgreSQL con lock di riga. Stripe riceve soltanto
+prezzo, valuta, buyer e ordine risolti dal server. Il webhook conserva ID e
+metadati minimi dell'evento, non il payload completo.
+
 ```text
 Browser
   └─ Frontend React/TanStack
@@ -56,16 +70,16 @@ rete o credenziali.
 
 ## Pagamenti
 
-Il flusso previsto è:
+Il flusso dello stack di destinazione è:
 
 1. l’utente autenticato richiede un checkout;
-2. il server verifica identità, namespace del catalogo demo, prezzo una tantum e
-   redirect ammesso;
-3. crea la sessione con chiave di idempotenza;
-4. registra lo stato iniziale;
+2. il database blocca l'annuncio, ricontrolla disponibilità e riserva per 30 minuti;
+3. il server risolve prezzo, valuta e parti, poi crea la sessione con idempotenza;
+4. un errore Stripe rilascia ordine e prenotazione con una compensazione;
 5. Stripe invia un webhook firmato;
 6. il server deduplica l’evento e aggiorna lo stato solo da segnali affidabili;
-7. la lettura dello stato è consentita solo al proprietario o a un amministratore.
+7. soltanto `payment_status=paid` trasferisce l'unità logica al buyer e marca
+   come ceduta la bottiglia storica del seller; la lettura resta limitata alle parti.
 
 In questa pre-release Stripe addebita soltanto il prezzo una tantum del catalogo
 server. Spedizione e protezione restano valori UX dimostrativi e sono marcati

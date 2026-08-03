@@ -1,34 +1,60 @@
 <!-- PROTOCOL: Read at session start. Every AI MUST update this file at session end or before handoff/context reset. Keep exactly the 4 headings below; facts only; NEXT STEPS exactly 3 atomic items; no pleasantries/secrets. Verify Git state first; preserve unresolved blockers. -->
 ## CURRENT STATE
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
-- `origin/main` è a `dc1fe88` e integra il gate post-merge della Fase 6d-1 con 33/33 casi, verifier corrente 11/11, verifier storico 13/13 e zero residui fixture documentati.
-- La draft PR #17 è aperta e mergeable sul branch `migration/phase-6d-2a-catalog-cellar-paths`.
-- La migrazione 6d-2a è applicata al progetto remoto come `20260731120340 catalog_cellar_paths`.
-- Il file locale è allineato a `supabase/migrations/20260731120340_catalog_cellar_paths.sql`; il contenuto conserva SHA-256 `ffb0d4351e12bade1891e7912825a9d9ecb410b2c0df642e9c2d5f129d7d5834`.
-- L'HEAD remoto verificato prima delle evidenze è `e6329a5e192e8c85223b45b61d47c20998112ee4`.
-- GitHub Actions CI #43, run `30629492177`, è verde su `e6329a5` per backend, frontend e frontend-next.
+- `origin/main` è `3037bf4f8fa5269895bb01a998d85bb5f629cd34`, squash-merge della PR #17 eseguito il 2026-07-31 alle 13:37:21Z da `enricopuntog-cpu`.
+- Il branch di lavoro è `migration/phase-7-order-payment-service`, worktree `C:/Users/enrico/.codex/worktrees/ddc2`, 33 commit avanti a `origin/main` e 0 indietro, allineato con `origin` dopo il push.
+- La draft PR #18 resta aperta su quel branch, mai mergiata e mai segnata pronta per revisione.
+- **Ogni verifica tecnica pendente per la PR #18 è chiusa.** Riportato dalla chat organizzativa il 2026-08-03: su un branch Supabase di sviluppo temporaneo, creato ed eliminato nella stessa sessione, il replay è arrivato a **15 su 15** e `supabase/migrations/20260731135455_phase_7_order_payment_service.sql` (917 righe) è stata applicata **per intero, senza errori**.
+- Verificato con query diretta su quel branch: 5 tabelle create — `proposals`, `orders`, `payments`, `order_events`, `payment_provider_events` — 11 funzioni create, e il `rolconfig` di `authenticator` che contiene `pgrst.db_pre_request=private.vinea_check_request`.
+- **L'incognita del privilegio `alter role` è risolta in positivo**: quel privilegio esiste sul progetto reale. Era l'ultimo gate tecnico al merge della PR #18; resta solo l'azione manuale su GitHub.
+- Nessun branch Supabase esiste ora oltre a `main`. Nessuna fatturazione residua.
+- **Verifica locale rieseguita il 2026-08-03 sul commit di testa del branch**, in `frontend-next/`: `bun install --frozen-lockfile`, `bun run lint`, `bun run typecheck`, `bun run test`, `bun run build` — tutti e cinque a exit 0. Test 12 su 12, 0 fail, 38 `expect()`; lint 0 errori e 23 warning preesistenti; build Next.js 16.2.12, 14 pagine generate.
+- `frontend/` e `backend/` non hanno alcuna differenza di codice rispetto a `origin/main` su questo branch: misurato con `git diff --name-only origin/main...HEAD`, zero file fuori da `frontend/docs/`.
+- **L'avvio della Fase 7 è stato ratificato retroattivamente in chat organizzativa il 2026-08-03.** Gate di avvio fase e gate di replay sono entrambi chiusi; resta solo il merge.
+- **Il ledger ha quindici righe.** Alle quattordici precedenti la chat organizzativa ha aggiunto il 2026-08-03 la versione `20260729234000 rls_auto_enable_bootstrap`, collocata fra la `20260729230000` e la `20260729234500`.
+- Ordine a ledger: 1 `20260728000545`, 2 `20260728073915`, 3 `20260728193937`, 4 `20260728194500`, 5 `20260729112500`, 6 `20260729180000`, 7 `20260729180500`, 8 `20260729210000`, 9 `20260729230000`, 10 `20260729234000`, 11 `20260729234500`, 12 `20260729235500`, 13 `20260730140948`, 14 `20260730162046`, 15 `20260731120340`.
+- Il file tracciato `supabase/migrations/20260729234000_rls_auto_enable_bootstrap.sql` esiste: 1970 byte, ASCII puro, esattamente i 1970 caratteri che il ledger registra per quello statement. Repository e ledger tornano confrontabili.
+- **Il debito «event trigger `ensure_rls` non versionato» è chiuso**, per la strada 1 del backlog: ricrearlo in una migrazione propria. La strada 2, deprecare l'auto-enable implicito, resta praticabile in futuro e allora andrà revocata la 1.
+- Le definizioni di `public.rls_auto_enable()` e dell'event trigger `ensure_rls` sono state **estratte due volte in modo indipendente** — Claude Code e chat organizzativa, sessioni separate — con esito identico.
+- `public.rls_auto_enable()` è `returns event_trigger`, `plpgsql`, `security definer`, `search_path = 'pg_catalog'`, proprietario `postgres`; abilita RLS sulle tabelle nuove in `public` dentro un `exception when others` che degrada a `raise log`. Event trigger `ensure_rls`: `ddl_command_end`, tag `CREATE TABLE, CREATE TABLE AS, SELECT INTO`, `evtenabled = 'O'`, proprietario `postgres`.
+- **Non sono bootstrap di piattaforma**: i sei event trigger presenti anche su un progetto appena creato hanno tutti proprietario `supabase_admin`; `ensure_rls` ha `postgres`, il ruolo con cui si applicano le migrazioni.
+- **Confermato empiricamente, non più per inferenza**: né la `20260729230000` né la `20260729234500` contengono `create table`, `create table as` o `select into` — i tre soli tag su cui `ensure_rls` si attiva. La collocazione a `20260729234000` è quindi neutra rispetto al comportamento di replay in quella finestra.
+- Il branch fallito `phase-7-migration-verify` (`ccnufawxtaykgjftvauc`) è stato **eliminato dalla chat organizzativa il 2026-08-03. Nessuna fatturazione residua.**
+- Controllo preventivo sulle versioni successive alla decima eseguito: **nessun altro blocco**. Ognuno dei 62 `revoke execute on function` di tutte le migrazioni ha una `create function` che lo precede, tranne quello su `rls_auto_enable`, ora coperto. `pg_trgm` e lo schema `private` non erano deriva: li creano file tracciati.
+- `supabase/repair/proposal_ledger_bootstrap_replay.sql` è stato rimosso: validato e sostituito dal file tracciato definitivo.
+- Lo schema di Fase 7 è indipendente dal fornitore: `payment_provider_events` con chiave `(provider, event_id)`, colonne `provider_*` su `payments`, RPC `payment_apply_provider_event` che ramifica sull'enum `public.payment_outcome` e non contiene alcuna occorrenza della stringa `stripe`.
+- I test di `frontend-next` sono 12 su 12 e toccano tutti codice di produzione, eseguiti in CI e inclusi nel typecheck.
+- La griglia `supabase/tests/7_ordini_pagamenti.sql` è scritta, 16 casi, mai eseguita.
 
 ## ACTIVE TASK
-- Il gate remoto di applicazione della Fase 6d-2a è completato.
-- Il backfill remoto contiene 8 vini `staff` e 1 vino `utente`; nessun vino utente è privo di `creato_da`.
-- Le RPC 6d-2a hanno `search_path = ''`, accesso `authenticated` esplicito e nessun `EXECUTE` per `anon` o `PUBLIC`; l'helper `private` non è eseguibile dai client.
-- Le tabelle coinvolte e `storage.objects` hanno RLS attiva; i grant di colonna nascondono `wines.creato_da` e consentono `wines.provenienza`.
-- Il bucket `cantina` è privato, limita gli upload a 5 MiB e ai MIME immagine previsti, ha quattro policy per cartella proprietaria e contiene zero oggetti.
-- `public_listings` include i filtri bottiglia 6d-1, `security_barrier=true` e la colonna chiusa `wine_provenienza`.
-- La griglia remota 6d-2a è stata eseguita una sola volta dal file con SHA-256 `6ed78d2dfa163cdf98c73a51599d16400c40a6cabbdfb9e0b099d4d49991d951`: 18/18 `PASSA`, 0 `FALLISCE`, nessuna riga 99.
-- Il caso 18 e la query read-only indipendente confermano zero residui fixture 6d-2a.
-- Il cleanup Storage finale conferma zero utenti tecnici, zero profili tecnici e zero oggetti nel bucket `cantina`.
+- Chiusura documentale della Fase 7: `docs/MIGRATION_PHASE_1_BACKLOG.md`, `supabase/repair/README.md` e questo file aggiornati con l'esito della verifica remota; link di confronto e corpo aggiornato della PR #18 preparati come testo da incollare a mano.
+- Link di confronto: `https://github.com/enricopuntog-cpu/vinae-progetto-0/compare/main...migration/phase-7-order-payment-service`.
+- La PR #18 non è stata aperta né modificata: nessun `gh pr edit`, nessun `gh pr ready`, nessun `gh pr merge`.
+- Il branch Supabase temporaneo è stato creato, misurato ed eliminato dalla chat organizzativa, non da Claude Code. Il gate di costo per Claude Code resta non autorizzato e non serve più: stima nota 0,01344 USD l'ora, organizzazione `erqvomhopuzvzxvgdiyt`, piano Pro.
+- Che il replay arrivi a 15 su 15 non è più una previsione: è la misura riportata sopra.
+- Nessuna chiamata a tool Supabase da Claude Code in questa sessione: nessun `confirm_cost`, `create_branch`, `apply_migration`, `execute_sql`, `delete_branch`. Nessun DDL, nessun `insert`, nessun utente creato.
+- Nessun merge; `frontend/` e `backend/` non toccati; lavoro applicativo della Fase 7 non ripreso.
 
 ## NEXT STEPS
-1. Completare manualmente lo smoke Storage autenticato dopo il reset del rate limit Auth.
-2. Revisionare la draft PR #17 dopo la nuova CI delle evidenze.
-3. Eseguire merge o avviare la Fase 7 solo dopo autorizzazioni esplicite separate.
+1. Incollare il corpo aggiornato nella PR #18 e toglierle lo stato draft.
+2. Mergiare la PR #18 a mano su GitHub — decisione di Enrico, mai autonoma.
+3. Dopo il merge, autorizzare `apply_migration` della migrazione di Fase 7 sul progetto reale e riallineare il filename alla versione assegnata dal server.
 
 ## BLOCKERS / NOTES
-- Non sono state rieseguite le griglie storiche 33/33, 11/11 o 13/13.
-- Gli Advisor non hanno nuovi `ERROR`: restano i due `ERROR` preesistenti sulle viste `security_invoker=off`.
-- I nuovi warning di sicurezza riguardano le tre RPC 6d-2a `SECURITY DEFINER` intenzionali; il warning preesistente su `listing_crea` è rimosso perché `authenticated` non può più eseguirla.
-- L'avviso performance atteso sulle due policy SELECT permissive di `wines` resta; `wines_creato_da_idx` non è più segnalato dopo la griglia.
-- La protezione password compromesse resta disattivata come warning Auth preesistente.
-- Lo smoke fotografico non ha creato oggetti: Auth ha rifiutato il TLD `.invalid` e il tentativo successivo è stato bloccato dal rate limit 429; resta necessaria la prova autenticata manuale.
-- Nessun lavoro della Fase 7 è incluso e nessun merge autonomo è stato eseguito.
+- **Nessun gate tecnico resta aperto per il merge della PR #18.** I gate elencati sotto sono successivi al merge, o indipendenti da esso, e nessuno è autorizzato.
+- L'esito della verifica remota è una misura eseguita fuori da questa postazione, riportata dalla chat organizzativa: registrata come tale, non riverificabile da Git. Il replay prova che la storia è ricostruibile, non che il branch temporaneo fosse identico al progetto reale.
+- Quando `ensure_rls` sia nato davvero sul progetto reale non è ricostruibile: `pg_proc` non conserva la data di creazione. La collocazione a `20260729234000` è scelta per effetto nullo dimostrato, non per fedeltà storica dimostrata.
+- La migrazione di Fase 7 non è ancora applicata al progetto **reale**: l'applicazione riuscita è avvenuta sul branch temporaneo, ora eliminato. Un motore Postgres l'ha comunque eseguita per intero, quindi non è più solo revisione a vista. Docker, `psql` e la CLI Supabase restano non disponibili sulla postazione.
+- La griglia `7_ordini_pagamenti.sql` non è mai stata eseguita: i 16 esiti attesi derivano dal testo del SQL. Gira inoltre in una sola sessione, quindi i casi del gruppo C provano l'invariante e non la gara; la prova di gara richiede due sessioni concorrenti e resta un passo manuale separato.
+- Il caso 4 della griglia verifica il trigger `bottle_units_preserva_annuncio_non_terminale` e non la guardia su `ceduta_at` dentro `order_checkout_reserve`: quella guardia è difesa in profondità e non è raggiungibile per vie normali.
+- Nessuna Edge Function distribuita, nessuna chiamata Stripe nemmeno in test mode, nessun merge, nessuna PR segnata pronta per revisione: restano gate separati e nessuno è autorizzato. `PAYMENTS_ENABLED=false` resta il gate server-side e la verticale non è raggiungibile dalla UI.
+- Il filename `20260731135455_phase_7_order_payment_service.sql` dovrà essere riallineato alla versione assegnata dal server dopo un futuro `apply_migration` autorizzato.
+- Il parse dei tre file Deno è stato fatto con `tsc --noResolve`: prova la sintassi e i tipi del codice proprio, non il runtime.
+- Il percorso pubblico del Route Handler webhook non è stato cambiato di proposito: è un URL da registrare presso il fornitore.
+- Che `POST /auth/v1/admin/users` non spedisca email è comportamento atteso dell'endpoint, non un fatto misurato: va confermato alla prima esecuzione. Il 429 dello smoke è il limite di invio email dell'SMTP incorporato, ambito project-wide, non modificabile dal piano.
+- Lo smoke Storage 6d-2a resta aperto: nessun utente, oggetto o URL firmato è mai stato creato. Gate indipendente dalla Fase 7.
+- La griglia remota 18/18 e i residui fixture zero della 6d-2a restano dichiarazioni documentali, non riverificabili da Git e non riverificate.
+- Non sono state rieseguite le griglie storiche 33/33, 11/11 o 13/13 e non sono stati riletti gli Advisor Supabase.
+- Non esiste ancora un job CI che esegua le griglie SQL, né che copra `supabase/**` o `docs/**`: i tre job di CI restano `frontend`, `frontend-next`, `backend` e nessuno tocca i file di questa sessione.
+- Residui locali già noti: `stash@{0}` del trasferimento 6d-1, superato da `main`; branch locali `codex/automatizza-handoff-agentsmd` e `migration/phase-6c-cellar-schema`, entrambi senza lavoro non integrato; dodici branch remoti di PR già mergiate mai eliminati.
+- Stripe Connect, payout, KYC, contestazioni operative e Fase 8 restano fuori scope.

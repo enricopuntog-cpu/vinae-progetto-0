@@ -1,6 +1,6 @@
 # Contesto completo Vinea per IA e nuove chat
 
-Ultimo aggiornamento: **30 luglio 2026**
+Ultimo aggiornamento: **3 agosto 2026**
 
 Questa cartella è il punto di ingresso rapido per chi deve lavorare su Vinea
 senza conoscere le conversazioni precedenti. Riassume la cronologia delle fasi,
@@ -40,8 +40,9 @@ contrasto:
 ## In una frase
 
 Vinea sta migrando gradualmente dall'app servita
-`frontend/` + `backend/` verso `frontend-next/` + Supabase. La Fase 6d-1 è
-integrata in `main` tramite PR #14 e ha CI finale verde. Le griglie remote
-post-repair sono 33/33 e 11/11, il verifier storico è 13/13 e i residui delle
-fixture sono zero; l'evidenza resta da integrare tramite la draft PR #16. La
-Fase 6d-2a e le fasi 7–11 non sono iniziate.
+`frontend/` + `backend/` verso `frontend-next/` + Supabase. L'ultima fase
+integrata in `main` è la 6d-2a, tramite PR #17 al merge squash `3037bf4`; le
+evidenze post-merge della 6d-1 sono in `main` tramite PR #16. La Fase 7 vive sul
+branch `migration/phase-7-order-payment-service` con la draft PR #18 aperta e
+mai mergiata: la verifica remota del 3 agosto 2026 ha chiuso i gate tecnici, ma
+nulla è applicato al progetto Supabase reale. Le fasi 8–11 non sono iniziate.
