@@ -103,6 +103,47 @@ dove la sola tabella di risultati non basterebbe perché `psql` uscirebbe
 comunque 0; con `-v ON_ERROR_STOP=1` il job fallisce da solo. Per la lettura a
 mano non cambia nulla.
 
+## Fase 7b — Connect, commissione e trattenuta fondi
+
+Applicare la migrazione solo dopo revisione e autorizzazione esplicita. Alla
+data di scrittura **non è stata applicata a nessun database**, né remoto né
+locale, quindi la griglia non ha ancora alcun esito verificato:
+
+| # | File | Esito atteso |
+| --- | --- | --- |
+| 1 | `supabase/migrations/20260803150000_phase_7b_stripe_connect_marketplace.sql` | migrazione applicata e registrata |
+| 2 | [`7b_connect_marketplace.sql`](7b_connect_marketplace.sql) | 18 righe, tutte `PASSA`, nessuna riga 99 |
+
+Presuppone che la migrazione della Fase 7 sia già applicata: la griglia parte da
+`order_checkout_reserve` e da `payment_apply_provider_event`, che sono sue.
+
+Crea e cancella due utenti, quattro vini, quattro bottiglie, quattro annunci e i
+relativi ordini, pagamenti, payout ed eventi; tocca anche
+`public.marketplace_config`, ripristinando la riga corrente alla fine. Richiede
+un'autorizzazione fixture separata da quella della migrazione. Il caso 18
+verifica staticamente che nessuna coordinata di incasso sia leggibile dai ruoli
+client.
+
+Copre i quattro comportamenti la cui autorità è in Postgres e non nella
+traduzione TypeScript: percentuale congelata sull'ordine, blocco del rilascio
+su contestazione, idempotenza del rilascio, singola esecuzione
+dell'auto-rilascio.
+
+**Limite da non lasciare implicito**, identico a quello della Fase 7: la griglia
+gira in una sola sessione, quindi `for update … skip locked` non entra mai in
+contesa con sé stesso. I casi del gruppo D provano che la seconda esecuzione non
+trova più nulla da reclamare — l'*invariante* — e **non la gara** fra due job
+concorrenti, che richiede due sessioni e resta un passo manuale separato.
+
+La griglia non chiama Stripe: `payout_prepara` restituisce le coordinate del
+Transfer e `payout_registra_esito` ne registra l'esito come lo farebbe la Edge
+Function. Nessuna chiamata di rete, nemmeno in test mode.
+
+Due casi spostano `auto_rilascio_scadenza` nel passato con un `update` diretto:
+è l'unico modo di provare l'auto-rilascio senza aspettare quattordici giorni. La
+finestra è un dato della riga e non una regola nascosta, quindi spostarla non
+falsifica il caso.
+
 ### Se il preflight trova righe
 
 La migrazione **fallirà di proposito**, con un messaggio che rimanda qui: il
