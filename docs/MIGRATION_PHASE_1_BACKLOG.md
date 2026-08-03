@@ -330,6 +330,26 @@ protezione da eventi tardivi).
 limiter server-side, servizi, Edge Function, Route Handler e test. Nessuna
 migrazione o funzione remota è autorizzata.
 
+**Stato al 3 agosto 2026 — verifica tecnica chiusa.** Riportato dalla chat
+organizzativa: su un branch Supabase di sviluppo temporaneo, creato ed
+eliminato nella stessa sessione, il replay del ledger è arrivato a **15 su 15**
+e la migrazione
+[`20260731135455_phase_7_order_payment_service.sql`](../supabase/migrations/20260731135455_phase_7_order_payment_service.sql)
+(917 righe) è stata applicata **per intero, senza errori**. Verificato con
+query diretta sul branch: cinque tabelle create — `proposals`, `orders`,
+`payments`, `order_events`, `payment_provider_events` — undici funzioni create,
+e il `rolconfig` di `authenticator` che contiene
+`pgrst.db_pre_request=private.vinea_check_request`. **L'incognita del privilegio
+`alter role` è quindi risolta in positivo: quel privilegio esiste davvero.**
+Nessun branch Supabase esiste ora oltre a `main`, nessuna fatturazione residua.
+
+Non resta alcun gate tecnico per il merge della PR #18. Restano fuori, come
+gate separati e nessuno autorizzato: `apply_migration` sul progetto reale,
+distribuzione della Edge Function, esecuzione della griglia
+[`supabase/tests/7_ordini_pagamenti.sql`](../supabase/tests/7_ordini_pagamenti.sql)
+e smoke Storage. L'esito sopra è una misura eseguita fuori da questa
+postazione: è riportato qui come tale, non è riverificabile da Git.
+
 ## Fase 8 — MessagingService + NotificationService
 
 **Branch**: `migration/phase-8-messaging-notifications`
@@ -661,9 +681,11 @@ Per le sole versioni 11-14 il dettaglio è:
   presente ovunque.
 
 **Esito: dopo la versione 10 il replay non incontra altri blocchi.** Risolto
-`rls_auto_enable`, un branch pulito dovrebbe arrivare in fondo — ora **15 su 15**,
-perché la riparazione aggiunge la `20260729234000`. Resta una previsione: nessun
-branch è stato creato dopo la riparazione, quindi non è ancora misurata.
+`rls_auto_enable`, un branch pulito arriva in fondo — **15 su 15**, perché la
+riparazione aggiunge la `20260729234000`. Non è più una previsione: il 3 agosto
+2026 la chat organizzativa ha creato un branch Supabase di sviluppo temporaneo,
+poi eliminato, e **ha misurato il replay a 15 su 15**. Previsione del controllo
+preventivo e misura coincidono.
 
 Il branch fallito `phase-7-migration-verify` (`ccnufawxtaykgjftvauc`) è stato
 **eliminato dalla chat organizzativa il 3 agosto 2026** — il tentativo da Claude
@@ -672,13 +694,17 @@ residua. Il suo inventario, catturato in sola lettura prima dell'eliminazione, �
 la fonte della colonna «progetto appena creato» di questa sezione: è l'ultimo
 riferimento disponibile finché non se ne crea un altro.
 
-Resta **una sola incognita, e non riguarda le versioni a ledger**: la migrazione
-di Fase 7, non ancora applicata da nessuna parte, esegue alla riga 140
+L'unica incognita che restava — e non riguardava le versioni a ledger — era la
+riga 140 della migrazione di Fase 7:
 `alter role authenticator set pgrst.db_pre_request = 'private.vinea_check_request'`.
-Il ruolo `authenticator` esiste su un progetto appena creato — verificato — ma
-che `postgres` possa fare `alter role … set` su di esso non è mai stato provato.
-È una questione di privilegi, non di oggetti mancanti, e si scoprirà alla prima
-applicazione autorizzata.
+Il ruolo `authenticator` esiste su un progetto appena creato, ma che `postgres`
+potesse fare `alter role … set` su di esso non era mai stato provato: questione
+di privilegi, non di oggetti mancanti.
+
+**Risolta il 3 agosto 2026.** Sullo stesso branch temporaneo la chat
+organizzativa ha applicato la migrazione di Fase 7 per intero, senza errori, e
+ha riletto il `rolconfig` di `authenticator`: contiene
+`pgrst.db_pre_request=private.vinea_check_request`. Il privilegio esiste.
 
 ### Stato della riparazione — applicata il 3 agosto 2026
 
@@ -712,11 +738,15 @@ Resta vero che quando `ensure_rls` sia nato davvero sul progetto reale non è
 ricostruibile — `pg_proc` non conserva la data di creazione. La collocazione è
 scelta per effetto nullo dimostrato, non per fedeltà storica dimostrata.
 
-**Cosa non chiude.** L'unica incognita che resta per il merge della PR #18 è
-quella descritta sopra: se `postgres` abbia il privilegio di eseguire
+**Cosa non chiudeva — e che è stato chiuso il giorno stesso.** L'unica incognita
+che restava per il merge della PR #18 era quella descritta sopra: se `postgres`
+avesse il privilegio di eseguire
 `alter role authenticator set pgrst.db_pre_request = …` (riga 140 della
-migrazione di Fase 7). È verificabile solo con un nuovo replay su branch, e
-quel branch non è ancora autorizzato.
+migrazione di Fase 7). Era verificabile solo con un nuovo replay su branch, e
+quel branch è stato creato, misurato ed eliminato dalla chat organizzativa il
+3 agosto 2026: replay 15 su 15, migrazione di Fase 7 applicata per intero senza
+errori, privilegio confermato. **Non resta alcun gate tecnico per il merge della
+PR #18.**
 
 ## Debito tecnico noto
 

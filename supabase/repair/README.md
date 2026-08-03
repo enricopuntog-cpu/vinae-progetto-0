@@ -156,9 +156,37 @@ dichiararlo deprecato in favore di RLS sempre esplicita. Registra lo stato di
 fatto: è compatibile con la prima, che è la strada presa, e andrà revocata se si
 sceglie la seconda.
 
-Non copre l'unica incognita oltre la versione 14: la Fase 7 esegue
+Non copriva l'unica incognita oltre la versione 14: la Fase 7 esegue
 `alter role authenticator set pgrst.db_pre_request = …` alla riga 140. Il ruolo
-esiste su un progetto appena creato, ma che `postgres` possa fare
-`alter role … set` su di esso non è mai stato provato. È una questione di
+esiste su un progetto appena creato, ma che `postgres` potesse fare
+`alter role … set` su di esso non era mai stato provato. È una questione di
 privilegi, non di oggetti mancanti, e si misura solo con un nuovo replay su
-branch — non ancora autorizzato.
+branch, poi eseguito il 3 agosto 2026 — sezione sotto.
+
+## Replay misurato — 3 agosto 2026
+
+Riportato dalla chat organizzativa, che ha creato un branch Supabase di sviluppo
+temporaneo e lo ha eliminato nella stessa sessione. Nessun branch esiste ora
+oltre a `main`, nessuna fatturazione residua.
+
+| Cosa | Esito |
+| --- | --- |
+| Replay del ledger riparato | **15 su 15**, nessun arresto |
+| `20260731135455_phase_7_order_payment_service.sql`, 917 righe | applicata **per intero, senza errori** |
+| Tabelle create dalla Fase 7 | 5 — `proposals`, `orders`, `payments`, `order_events`, `payment_provider_events` |
+| Funzioni create dalla Fase 7 | 11 |
+| `rolconfig` di `authenticator` | contiene `pgrst.db_pre_request=private.vinea_check_request` |
+
+L'ultima riga è quella che chiude l'incognita: il privilegio esiste davvero. La
+riparazione del ledger regge una ricostruzione completa, e sopra di essa la
+Fase 7 si applica.
+
+Due avvertenze sulla portata. Il replay prova che la storia è **ricostruibile**,
+non che il branch temporaneo fosse identico al progetto reale. E l'esito è una
+misura eseguita fuori da questa postazione: è registrato qui come tale, non è
+riverificabile da Git.
+
+Restano gate separati, e nessuno di essi è autorizzato: `apply_migration` della
+Fase 7 sul progetto reale, distribuzione della Edge Function, esecuzione della
+griglia [`7_ordini_pagamenti.sql`](../tests/7_ordini_pagamenti.sql) e smoke
+Storage.
