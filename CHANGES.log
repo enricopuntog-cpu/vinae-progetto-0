@@ -2,7 +2,7 @@
 ## CURRENT STATE
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
 - `origin/main` è `3037bf4f8fa5269895bb01a998d85bb5f629cd34`, squash-merge della PR #17 eseguito il 2026-07-31 alle 13:37:21Z da `enricopuntog-cpu`.
-- Il branch di lavoro è `migration/phase-7-order-payment-service`, worktree `C:/Users/enrico/.codex/worktrees/ddc2`, allineato con `origin`, 29 commit avanti a `origin/main` e 0 indietro.
+- Il branch di lavoro è `migration/phase-7-order-payment-service`, worktree `C:/Users/enrico/.codex/worktrees/ddc2`, allineato con `origin`, 31 commit avanti a `origin/main` e 0 indietro.
 - La draft PR #18 resta aperta su quel branch, mai mergiata e mai segnata pronta per revisione.
 - **L'avvio della Fase 7 è stato ratificato retroattivamente in chat organizzativa il 2026-08-03.** Il gate di avvio fase è chiuso; restano aperti solo quelli di replay e di merge.
 - **Il ledger ha quindici righe.** Alle quattordici precedenti la chat organizzativa ha aggiunto il 2026-08-03 la versione `20260729234000 rls_auto_enable_bootstrap`, collocata fra la `20260729230000` e la `20260729234500`.
