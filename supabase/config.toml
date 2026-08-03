@@ -385,6 +385,16 @@ deno_version = 2
 [functions.payments-checkout]
 verify_jwt = true
 
+[functions.connect-onboarding]
+verify_jwt = true
+
+# Non è un endpoint del browser: il chiamante è uno scheduler, non una sessione
+# utente. `verify_jwt` resta attivo — la service role key è comunque un JWT —
+# e sopra c'è un secondo fattore, `x-vinea-job-token`, revocabile da solo senza
+# ruotare la service role key.
+[functions.payouts-release]
+verify_jwt = true
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
