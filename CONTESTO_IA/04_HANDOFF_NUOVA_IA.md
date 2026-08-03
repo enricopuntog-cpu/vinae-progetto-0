@@ -38,9 +38,12 @@
 - La 6d-1 è in `main` tramite PR #14; il branch di verifica post-merge registra
   33/33, 11/11, verifier storico 13/13 e residui fixture zero.
 - Il merge non equivale ad autorizzazione o prova delle fixture remote.
-- La Fase 6d-2a non è iniziata e resta bloccata finché il rapporto post-merge
-  non è integrato e la fase non riceve approvazione esplicita.
-- Le fasi 7–11 non sono iniziate.
+- La Fase 6d-2a è in `main` tramite PR #17 al merge squash `3037bf4`; lo smoke
+  Storage del bucket `cantina` non è compreso nel merge e resta aperto.
+- La Fase 7 esiste sul branch `migration/phase-7-order-payment-service` con la
+  draft PR #18 aperta e mai mergiata. Nulla è applicato al progetto Supabase
+  reale.
+- Le fasi 8–11 non sono iniziate.
 - La vecchia app resta quella servita.
 - Auth reale e ruoli demo coesistono intenzionalmente.
 - Facebook OAuth non è “da finire nel codice”: è disabilitato per un problema
@@ -91,8 +94,9 @@ La Fase 6d-2a deve:
   6d-1;
 - fermarsi prima di qualsiasi SQL remoto e chiedere conferma esplicita.
 
-Non avviare questa fase finché il gate post-merge 6d-1 non è documentato e
-approvato.
+Il gate post-merge 6d-1 è stato documentato e approvato, e la fase è stata
+consegnata: questo elenco resta come descrizione di ciò che la 6d-2a ha dovuto
+garantire, non come lavoro da avviare.
 
 ## Handoff specifico alla Fase 7
 
@@ -107,7 +111,12 @@ La Fase 7 deve:
 - progettare Stripe Connect/KYC prima di denaro reale;
 - colmare il rate limiting delle RPC prima di esporre pagamenti.
 
-Non avviare questa fase finché 6d-2a non è chiusa e approvata.
+Il checkpoint sul branch copre schema, rate limiting condiviso, Edge Function,
+webhook e adapter; il trasferimento reale della proprietà al compratore non è
+stato implementato e resta un debito dichiarato. Prima di toccare il progetto
+Supabase reale servono autorizzazioni esplicite separate per `apply_migration`,
+per il deploy di `payments-checkout` e per l'esecuzione della griglia
+`supabase/tests/7_ordini_pagamenti.sql`.
 
 ## Cosa aggiornare alla fine di una fase
 

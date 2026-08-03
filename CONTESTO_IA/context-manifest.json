@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-02",
+  "updated_at": "2026-08-03",
   "language": "it",
   "project": {
     "name": "Vinea",
@@ -9,13 +9,13 @@
   },
   "verified_git_snapshot": {
     "branch": "migration/phase-7-order-payment-service",
-    "head": "4d82fa4",
+    "head": "62cf75a",
     "origin_main": "3037bf4",
-    "ahead_of_origin_main": 11,
+    "ahead_of_origin_main": 33,
     "behind_origin_main": 0,
-    "ahead_of_origin_branch": 2,
+    "ahead_of_origin_branch": 0,
     "behind_origin_branch": 0,
-    "snapshot_note": "Rilevato a lavoro in corso sul branch di Fase 7: i due contatori avanzano a ogni commit successivo dello stesso task. Branch e origin_main restano validi."
+    "snapshot_note": "Rilevato il 2026-08-03 con git fetch --prune: branch allineato con il proprio origin, working tree pulito. I contatori avanzano a ogni commit successivo dello stesso task."
   },
   "documentation_branch": "migration/phase-7-order-payment-service",
   "verification_pr": 18,
@@ -41,7 +41,7 @@
     "phase_6c_2": "merged",
     "phase_6d_1": "merged_ci_green_fixture_grids_33_33_and_11_11_zero_residue",
     "phase_6d_2a": "merged_pr_17_migration_20260731120340_applied_storage_smoke_still_open",
-    "phase_7": "in_progress_draft_pr_18_no_remote_sql_no_edge_deploy_no_stripe_call_started_without_recorded_approval",
+    "phase_7": "on_branch_draft_pr_18_open_never_merged_start_ratified_2026_08_03_remote_verification_closed_no_remote_sql_no_edge_deploy_no_stripe_call",
     "phase_8": "not_started",
     "phase_9": "not_started",
     "phase_10": "not_started",
@@ -64,7 +64,7 @@
     "docs/ROADMAP_V1.md",
     "docs/MIGRATION_PHASE_1_BACKLOG.md"
   ],
-  "mandatory_read_order_verified_at": "2026-08-02",
-  "next_gate": "Sottoporre la PR #18 a ratifica o sospensione: la Fase 7 e' iniziata senza l'autorizzazione esplicita richiesta. Nessun apply_migration, deploy della Edge Function, chiamata Stripe o merge senza approvazione separata registrata in sede organizzativa.",
+  "mandatory_read_order_verified_at": "2026-08-03",
+  "next_gate": "Merge manuale della PR #18 su GitHub, decisione di Enrico: la verifica remota del 2026-08-03 ha chiuso ogni gate tecnico. Restano separati e non autorizzati apply_migration sul progetto reale, deploy della Edge Function payments-checkout, esecuzione della griglia supabase/tests/7_ordini_pagamenti.sql e smoke Storage della 6d-2a.",
   "remote_sql_rule": "Show exact SQL and obtain explicit in-session approval before applying any migration to the real Supabase project."
 }

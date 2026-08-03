@@ -19,7 +19,9 @@
 | [#13](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/13) | 29-07-2026 | merged | Fase 6c-2 — interfaccia Cantina |
 | [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) | 30-07-2026 | merged | Fase 6d-1 — invarianti di sicurezza e repair deriva remota |
 | [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) | 30-07-2026 | merged | Riconciliazione handoff post-merge 6d-1 e prompt operativi |
-| [#16](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/16) | 30-07-2026 | draft | Evidenze post-merge 33/33, 11/11 e residui fixture zero |
+| [#16](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/16) | 30-07-2026 | merged | Evidenze post-merge 33/33, 11/11 e residui fixture zero |
+| [#17](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/17) | 31-07-2026 | merged | Fase 6d-2a — provenienza catalogo e percorsi Cantina |
+| [#18](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/18) | — | aperta, draft | Fase 7 — proposte, ordini e pagamenti; mai mergiata |
 
 ## Anomalie della cronologia da conoscere
 
@@ -53,6 +55,18 @@ La PR #14 è stata unita con merge commit `61e3fde`. La CI finale
 separatamente dopo il merge: risultati finali 33/33 e 11/11, verifier storico
 13/13 e residui fixture zero.
 
+### PR #17 e #18
+
+- #17 è la Fase 6d-2a, unita in `main` il 31 luglio 2026 con merge squash
+  `3037bf4`. Lo smoke Storage del bucket `cantina` resta però aperto: il merge
+  non lo include.
+- #18 è la Fase 7, aperta come draft sul branch
+  `migration/phase-7-order-payment-service` e mai mergiata. Il branch è 33
+  commit avanti a `origin/main`. La verifica remota del 3 agosto 2026 ha chiuso
+  i gate tecnici, ma il merge resta un'azione umana esplicita.
+
+Non contare #18 come fase integrata finché GitHub non la mostra merged.
+
 ## Fonti autorevoli nel repository
 
 | Fonte | Uso |
@@ -67,6 +81,9 @@ separatamente dopo il merge: risultati finali 33/33 e 11/11, verifier storico
 | [`../docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md) | Git, verifiche e definition of done |
 | [`../docs/PHASE_6D1_SUPABASE_REVIEW.md`](../docs/PHASE_6D1_SUPABASE_REVIEW.md) | Esito della verifica reale 6d-1 |
 | [`../docs/PHASE_6D1_FINAL_EXECUTION_REPORT.md`](../docs/PHASE_6D1_FINAL_EXECUTION_REPORT.md) | Fotografia storica conclusiva del branch 6d-1 |
+| [`../docs/PHASE_6D2A_SPEC.md`](../docs/PHASE_6D2A_SPEC.md) | Decisioni della Fase 6d-2a |
+| [`../docs/PHASE_7_VERIFICATION.md`](../docs/PHASE_7_VERIFICATION.md) | Verifiche locali e gate remoti della Fase 7 |
+| [`../supabase/repair/README.md`](../supabase/repair/README.md) | Riparazione del ledger delle migrazioni e replay misurato |
 | [`../supabase/tests/README.md`](../supabase/tests/README.md) | Ordine e scopo dei test SQL |
 | [`../frontend-next/src/services/types.ts`](../frontend-next/src/services/types.ts) | Contratti dei servizi target |
 | [`06_PROMPT_CHAT_OPERATIVE.md`](06_PROMPT_CHAT_OPERATIVE.md) | Prompt sequenziali per le prossime chat |

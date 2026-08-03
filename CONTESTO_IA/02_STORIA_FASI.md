@@ -1,6 +1,6 @@
 # Storia fase per fase
 
-Le date e gli stati delle PR sono stati verificati su GitHub il 30 luglio
+Le date e gli stati delle PR sono stati verificati su GitHub il 3 agosto
 2026. “Integrata” significa presente in `main`; “sul branch” significa che il
 lavoro esiste ma non è ancora parte di `main`.
 
@@ -259,26 +259,80 @@ con codifica corrotta. La migrazione additiva
 `20260730162046 fix_6d1_bottle_message_encoding` li ha riallineati alle
 sorgenti UTF-8. I risultati finali sono 33/33 e 11/11, con residui fixture zero.
 
-## Fasi future
-
 ### Fase 6d-2a — provenienza catalogo e percorsi Cantina
 
-**Stato:** non iniziata.
+**Stato:** integrata il 31 luglio 2026
 
-Deve distinguere il catalogo curato dallo staff dai vini inseriti dagli utenti,
-separare aggiunta privata, aggiunta pubblica e vendita da bottiglia esistente,
-rendere atomica la creazione iniziale della Cantina e collegare alla home solo
-riepiloghi reali. Non può iniziare finché il gate 33/33, 11/11, 13/13 e residui
-fixture zero non è documentato e approvato.
+**Branch:** `migration/phase-6d-2a-catalog-cellar-paths`
 
-### Fase 7 — ordini, proposte e pagamenti
+**PR:** [#17 — Fase 6d-2a — Catalogo e percorsi Cantina](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/17)
 
-**Stato:** non iniziata.
+Consegnato:
 
-Previsti `OrderService`, `ProposalService`, `PaymentService`, transizioni
-server-side, Stripe e trasferimento reale della bottiglia al compratore.
-Deve conoscere il trigger che valorizza `ceduta_at`, ricontrollare scadenza e
-stock nella stessa transazione e non fidarsi di prezzo/stato dal browser.
+- `wines.provenienza` e `wines.creato_da` distinguono il catalogo curato dallo
+  staff dai vini inseriti dagli utenti, senza duplicare la tripletta
+  produttore/nome/annata;
+- `cellar_bottiglia_aggiungi` crea una unità privata o pubblica senza annuncio;
+- `listing_crea_da_bottiglia` vende soltanto un'unità già in Cantina; la vecchia
+  via che coniava vino, bottiglia e annuncio non è più eseguibile dai client;
+- `cellar_ambiente_crea` rende atomici ambiente e modulo iniziale;
+- le foto personali della Cantina usano il bucket privato `cantina`, quelle
+  degli annunci restano nel bucket pubblico `annunci`;
+- `/home` mostra soltanto riepiloghi reali del `CellarService`;
+- migrazione `20260731120340 catalog_cellar_paths` e griglia
+  `supabase/tests/6d-2a_catalog_cellar_paths.sql`.
+
+La PR è stata unita con merge squash `3037bf4` e la CI #44 è verde. La griglia
+remota 18/18 e i residui fixture zero sono dichiarazioni documentali della fase,
+non riverificabili da Git. Lo smoke Storage del bucket privato `cantina` non è
+mai stato eseguito — nessun utente, oggetto o URL firmato è stato creato — e
+resta aperto.
+
+### Fase 7 — proposte, ordini e pagamenti
+
+**Stato:** sul branch, non integrata in `main`; verifica tecnica chiusa il
+3 agosto 2026
+
+**Branch:** `migration/phase-7-order-payment-service`
+
+**PR:** [#18 — Fase 7 — ordini e pagamenti (checkpoint locale)](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/18) — aperta, draft, mai mergiata
+
+Consegnato sul branch:
+
+- migrazione `20260731135455_phase_7_order_payment_service.sql`, 917 righe:
+  `proposals`, `orders`, `payments`, `order_events`, `payment_provider_events`,
+  prenotazione atomica dell'unità in `order_checkout_reserve`, idempotenza sulla
+  chiave `(provider, event_id)`, RLS e grant a colonne chiuse;
+- rate limiting condiviso lato server: `private.rate_limit_buckets`,
+  `private.vinea_check_request` e l'aggancio a PostgREST tramite
+  `alter role authenticator set pgrst.db_pre_request`;
+- Edge Function `payments-checkout` dietro il gate server-side
+  `PAYMENTS_ENABLED=false`, con l'adapter Stripe isolato dietro l'interfaccia
+  `PaymentProvider`;
+- webhook Stripe come Route Handler Next.js: corpo raw, firma HMAC verificata
+  prima del parsing, deduplicazione degli eventi già registrati e protezione
+  dagli eventi tardivi;
+- adapter reali di `ProposalService`, `OrderService` e `PaymentService` sotto
+  `frontend-next/src/services/phase7/`;
+- riparazione del ledger delle migrazioni con
+  `20260729234000_rls_auto_enable_bootstrap`;
+- griglia `supabase/tests/7_ordini_pagamenti.sql`, 16 casi, mai eseguita;
+- il job CI `frontend-next` esegue anche i test, con soglia `MIN_TESTS=12`.
+
+Il 3 agosto 2026 la chat organizzativa ha creato un branch Supabase di sviluppo
+temporaneo, poi eliminato: il replay del ledger riparato è 15 su 15, la
+migrazione si applica per intero senza errori, e le query dirette contano cinque
+tabelle, undici funzioni e il `rolconfig` di `authenticator` con
+`pgrst.db_pre_request=private.vinea_check_request`. È una misura presa fuori dal
+repository e registrata come tale. Con essa cade l'ultima incognita tecnica al
+merge.
+
+Nulla è stato applicato al progetto Supabase reale, nessuna Edge Function è
+distribuita e nessuna chiamata Stripe è stata fatta, nemmeno in test mode.
+L'avvio della fase è stato ratificato retroattivamente in sede organizzativa il
+3 agosto 2026.
+
+## Fasi future
 
 ### Fase 8 — messaggi e notifiche
 
