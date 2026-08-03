@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { noClient, serviceError } from "@/services/phase7/shared";
-import type { PaymentRecord, PaymentService } from "@/services/types";
+import type { CheckoutAperto, PaymentRecord, PaymentService } from "@/services/types";
 
 export const createPaymentService = (client: SupabaseClient | null): PaymentService => ({
   creaCheckout: async (input) => {
@@ -14,10 +14,13 @@ export const createPaymentService = (client: SupabaseClient | null): PaymentServ
       headers: { "x-idempotency-key": input.idempotencyKey },
     });
     if (error) return serviceError("payments-checkout", error);
-    const checkoutUrl = (data as { checkoutUrl?: string } | null)?.checkoutUrl;
-    return checkoutUrl
-      ? { ok: true, data: { checkoutUrl } }
-      : { ok: false, error: "Il checkout non ha restituito un indirizzo valido." };
+    const aperto = data as CheckoutAperto | null;
+    // Uno dei due basta: `clientSecret` per il componente in pagina,
+    // `checkoutUrl` per un fornitore che offra solo una pagina ospitata.
+    // Nessuno dei due significa che non c'è niente da mostrare.
+    return aperto && (aperto.clientSecret || aperto.checkoutUrl)
+      ? { ok: true, data: aperto }
+      : { ok: false, error: "Il checkout non ha restituito un pagamento valido." };
   },
   perOrdine: async (orderId) => {
     if (!client) return noClient();

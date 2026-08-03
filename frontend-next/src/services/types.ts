@@ -311,6 +311,20 @@ export type OrderStatus =
   | "annullato";
 export type OrderDeliveryMode = "consegna_mano" | "spedizione";
 
+/**
+ * Stato del trasferimento verso il venditore (Fase 7b). È **ortogonale** a
+ * `OrderStatus`, non una sua estensione: un ordine `completato` può avere il
+ * Transfer ancora da creare, in corso o fallito. Rispecchia l'enum
+ * `public.payout_stato`: i due elenchi vanno cambiati insieme.
+ */
+export type PayoutStatus =
+  | "trattenuto"
+  | "in_attesa"
+  | "in_corso"
+  | "trasferito"
+  | "bloccato"
+  | "fallito";
+
 export type OrderRecord = {
   id: string;
   listing_id: string;
@@ -321,7 +335,19 @@ export type OrderRecord = {
   buyer_bottle_unit_id: string | null;
   stato: OrderStatus;
   delivery_mode: OrderDeliveryMode;
+  /** Quanto incassa il venditore. La commissione sta sopra, non dentro. */
   prezzo_cents: number;
+  /** Punti base congelati alla creazione: non si rileggono dalla configurazione. */
+  commissione_bps: number;
+  commissione_cents: number;
+  /** Quanto paga il compratore. Colonna generata: `prezzo + commissione`. */
+  totale_cents: number;
+  payout_stato: PayoutStatus;
+  consegnato_at: string | null;
+  auto_rilascio_scadenza: string | null;
+  ricezione_confermata_at: string | null;
+  contestato_at: string | null;
+  contestazione_motivo: string | null;
   currency: "eur";
   reservation_expires_at: string;
   paid_at: string | null;
@@ -357,21 +383,102 @@ export interface ProposalService {
   mie(): Promise<Result<ProposalRecord[]>>;
 }
 
+/**
+ * Come per `ListingService`, un metodo per transizione e non un
+ * `aggiornaStato(id, stato)`: ogni passaggio ha precondizioni diverse e vive in
+ * una funzione SQL dedicata, quindi chiedere una transizione che non esiste
+ * dev'essere impossibile da scrivere.
+ *
+ * Nessun metodo di rilascio: il Transfer non è un'azione dell'interfaccia. Il
+ * compratore conferma, e il rilascio lo esegue il job server-side — se una
+ * schermata potesse chiederlo, il denaro dipenderebbe da chi apre una pagina.
+ */
 export interface OrderService {
   acquisti(): Promise<Result<OrderRecord[]>>;
   vendite(): Promise<Result<OrderRecord[]>>;
   get(id: string): Promise<Result<OrderRecord | null>>;
+  /** Solo il venditore. Fa partire la finestra di verifica. */
+  segnaConsegnato(id: string): Promise<Result<OrderRecord>>;
+  /** Solo il compratore. Libera i fondi trattenuti. Idempotente. */
+  confermaRicezione(id: string): Promise<Result<OrderRecord>>;
+  /** Solo il compratore. Blocca rilascio e auto-rilascio. Idempotente. */
+  contesta(id: string, motivo: string): Promise<Result<OrderRecord>>;
 }
 
 // ---- Pagamenti -------------------------------------------------------------
+
+/**
+ * Ciò che serve al browser per montare **un solo** componente di pagamento.
+ *
+ * `clientSecret` non è un URL: i metodi disponibili (carta, wallet, PayPal,
+ * Satispay) sono capability configurate sull'account presso il fornitore, non
+ * flussi separati da costruire. `checkoutUrl` resta per un fornitore che offra
+ * soltanto una pagina ospitata.
+ *
+ * La scomposizione arriva dal server ed è quella congelata sull'ordine: il
+ * browser la mostra e non la ricalcola.
+ */
+export type CheckoutAperto = {
+  clientSecret: string | null;
+  checkoutUrl: string | null;
+  orderId: string;
+  amountCents: number;
+  prezzoVenditoreCents: number | null;
+  commissioneCents: number | null;
+  commissioneBps: number | null;
+  currency: string;
+};
+
 export interface PaymentService {
   creaCheckout(input: {
     listingId: string;
     proposalId?: string;
     deliveryMode: OrderDeliveryMode;
     idempotencyKey: string;
-  }): Promise<Result<{ checkoutUrl: string }>>;
+  }): Promise<Result<CheckoutAperto>>;
   perOrdine(orderId: string): Promise<Result<PaymentRecord | null>>;
+}
+
+// ---- Incassi del venditore -------------------------------------------------
+
+export type SellerPayoutAccount = {
+  id: string;
+  seller_id: string;
+  provider: string;
+  charges_enabled: boolean;
+  payouts_enabled: boolean;
+  details_submitted: boolean;
+  requisiti_pendenti: string[];
+  disabled_reason: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * Il dominio che chiude il debito `seller_enabled` della Fase 6a.
+ *
+ * Non c'è alcun metodo per *abilitare* un venditore, e l'assenza è il punto:
+ * `charges_enabled` e `payouts_enabled` arrivano solo da un evento firmato dal
+ * fornitore, e da lì un trigger deriva il ruolo. Un'interfaccia può avviare
+ * l'onboarding e leggere lo stato, non decretarne l'esito.
+ */
+export interface SellerPayoutService {
+  /** Apre o riprende l'onboarding ospitato e restituisce il link. */
+  avviaOnboarding(): Promise<Result<{ onboardingUrl: string; expiresAt: string | null }>>;
+  /** Stato del proprio account, o `null` se l'onboarding non è mai partito. */
+  mioAccount(): Promise<Result<SellerPayoutAccount | null>>;
+}
+
+// ---- Configurazione di mercato ---------------------------------------------
+
+/** Solo la configurazione corrente, dalla vista pubblica a colonne chiuse. */
+export type MarketplaceConfigPubblica = {
+  commissione_bps: number;
+  auto_rilascio_giorni: number;
+};
+
+export interface MarketplaceConfigService {
+  corrente(): Promise<Result<MarketplaceConfigPubblica | null>>;
 }
 
 // ---- Provider di incasso ---------------------------------------------------
