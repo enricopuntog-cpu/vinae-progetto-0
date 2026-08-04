@@ -43,7 +43,8 @@ Vinea sta migrando gradualmente dall'app servita
 `frontend/` + `backend/` verso `frontend-next/` + Supabase. L'ultima fase
 integrata in `main` è la 7b — Stripe Connect, commissione e trattenuta fondi —
 tramite PR #19 al merge squash `5e6b8e4`, preceduta dalla Fase 7 con la PR #18
-al merge squash `2a47952`. Integrate non vuol dire attive: nessuna delle due
-migrazioni è applicata al progetto Supabase reale, nessuna Edge Function è
-distribuita, `PAYMENTS_ENABLED` resta `false` e nessuna chiamata a Stripe è mai
-stata fatta. Le fasi 8–11 non sono iniziate.
+al merge squash `2a47952`. Entrambe sono **distribuite** sul progetto Supabase
+reale — le applica l'integrazione GitHub al merge, migrazioni e Edge Function
+insieme — e nessuna delle due è mai stata **percorsa**: tabelle di denaro a zero
+righe, nessun percorso UI, `PAYMENTS_ENABLED` resta `false` e nessuna chiamata a
+Stripe è mai stata fatta. Le fasi 8–11 non sono iniziate.

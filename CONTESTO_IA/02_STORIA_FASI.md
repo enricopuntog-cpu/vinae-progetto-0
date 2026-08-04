@@ -328,10 +328,12 @@ tabelle, undici funzioni e il `rolconfig` di `authenticator` con
 repository e registrata come tale. Con essa cade l'ultima incognita tecnica al
 merge.
 
-Nulla è stato applicato al progetto Supabase reale, nessuna Edge Function è
-distribuita e nessuna chiamata Stripe è stata fatta, nemmeno in test mode.
+Al merge della PR #18, lo stesso 3 agosto 2026, l'integrazione GitHub di Supabase
+ha applicato `20260731135455 phase_7_order_payment_service` al progetto reale:
+verificato a ledger il 4 agosto. Le tabelle di ordine e pagamento esistono e sono
+a zero righe; nessuna chiamata Stripe è stata fatta, nemmeno in test mode.
 L'avvio della fase è stato ratificato retroattivamente in sede organizzativa il
-3 agosto 2026. Il merge della PR #18 è avvenuto lo stesso giorno.
+3 agosto 2026.
 
 ### Fase 7b — Stripe Connect, commissione e trattenuta fondi
 
@@ -378,9 +380,13 @@ Consegnato:
 - griglia `supabase/tests/7b_connect_marketplace.sql`, 23 casi, mai eseguita;
 - soglia CI `MIN_TESTS` alzata da 69 a 83.
 
-Il gate sulla creazione di annunci resta spento, e nulla è stato applicato al
-progetto Supabase reale: nessuna migrazione, nessuna Edge Function distribuita,
-nessuna chiamata a Stripe nemmeno in test mode.
+Il gate sulla creazione di annunci resta spento. Al merge della PR #19
+l'integrazione GitHub di Supabase ha distribuito sul progetto reale sia la
+migrazione `20260803150000` sia le tre Edge Function, che risultano `ACTIVE`;
+il contenuto applicato è quello a netto garantito e non la prima bozza a
+percentuale piatta. Ciò che non è mai successo è più stretto: le tabelle di
+denaro sono a zero righe, nessun percorso UI le raggiunge e nessuna chiamata a
+Stripe è stata fatta, nemmeno in test mode.
 
 Da questa fase nasce anche una regola di processo permanente, registrata in
 `CLAUDE.md` e nel punto 11 delle regole di migrazione: un file di migrazione già

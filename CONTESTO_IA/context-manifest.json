@@ -26,10 +26,18 @@
     "target_backend": "supabase/",
     "frontend_next_is_production": false,
     "payments_enabled": false,
-    "phase_7_migration_applied_to_real_project": false,
-    "phase_7b_migration_applied_to_real_project": false,
-    "edge_functions_deployed": false,
-    "stripe_api_ever_called": false
+    "phase_7_migration_applied_to_real_project": true,
+    "phase_7b_migration_applied_to_real_project": true,
+    "edge_functions_deployed": true,
+    "stripe_api_ever_called": false,
+    "remote_migration_ledger_rows": 17,
+    "edge_functions_active": ["payments-checkout", "connect-onboarding", "payouts-release"],
+    "deployment_mechanism": "Integrazione GitHub di Supabase: il merge su main distribuisce migrazioni ed Edge Function da solo, senza supabase db push ne' apply_migration. Il branch Supabase main e' legato al git branch main con stato FUNCTIONS_DEPLOYED.",
+    "applied_content_is_guaranteed_net_formula": true,
+    "money_tables_row_count": "zero: orders, payments, payouts, seller_payout_accounts, proposals, order_events, payment_provider_events. marketplace_config ha la sola riga di configurazione iniziale.",
+    "ui_paths_to_payment_flow_exist": false,
+    "runtime_truth_verified_at": "2026-08-04",
+    "runtime_truth_verified_how": "list_migrations, list_edge_functions, list_branches e execute_sql di sole select in lettura sul progetto pijnmcllmfgjmgsvtcej"
   },
   "phase_status": {
     "sprint_0": "merged",
@@ -46,8 +54,8 @@
     "phase_6c_2": "merged",
     "phase_6d_1": "merged_ci_green_fixture_grids_33_33_and_11_11_zero_residue",
     "phase_6d_2a": "merged_pr_17_migration_20260731120340_applied_storage_smoke_still_open",
-    "phase_7": "merged_pr_18_squash_2a47952_migration_not_applied_to_real_project_no_edge_deploy_no_stripe_call",
-    "phase_7b": "merged_pr_19_squash_5e6b8e4_ci_green_run_30900108638_migration_not_applied_no_edge_deploy_no_stripe_call_seller_enabled_gate_off",
+    "phase_7": "merged_pr_18_squash_2a47952_migration_20260731135455_applied_to_real_project_at_merge_tables_zero_rows_no_stripe_call",
+    "phase_7b": "merged_pr_19_squash_5e6b8e4_ci_green_run_30900108638_migration_20260803150000_applied_and_three_edge_functions_active_tables_zero_rows_no_ui_path_no_stripe_call_seller_enabled_gate_off",
     "phase_8": "not_started",
     "phase_9": "not_started",
     "phase_10": "not_started",
@@ -71,14 +79,17 @@
     "docs/MIGRATION_PHASE_1_BACKLOG.md"
   ],
   "mandatory_read_order_verified_at": "2026-08-04",
+  "closed_gates": [
+    "apply_migration di Fase 7 e Fase 7b: chiuso non da un'autorizzazione ma dal merge, che ha distribuito entrambe automaticamente. Verificato il 2026-08-04.",
+    "deploy delle Edge Function payments-checkout, connect-onboarding e payouts-release: chiuso allo stesso modo, tutte e tre ACTIVE.",
+    "riallineamento dei filename di migrazione alle versioni server: non necessario, le versioni a ledger coincidono con i nomi dei file."
+  ],
   "open_gates_in_order": [
-    "apply_migration della migrazione di Fase 7 sul progetto reale",
-    "apply_migration della migrazione di Fase 7b, che dipende dalla precedente, con riallineamento dei filename alle versioni assegnate dal server",
-    "esecuzione delle griglie supabase/tests/7_ordini_pagamenti.sql (16 casi) e 7b_connect_marketplace.sql (23 casi), con autorizzazione fixture separata",
-    "deploy delle Edge Function payments-checkout, connect-onboarding e payouts-release",
+    "esecuzione delle griglie supabase/tests/7_ordini_pagamenti.sql (16 casi) e 7b_connect_marketplace.sql (23 casi) sul progetto reale, con autorizzazione fixture separata",
+    "decidere dove sta il gate di autorizzazione ora che il merge distribuisce da solo: la regola scritta presidia supabase db push, che non e' il percorso reale",
     "smoke Storage del bucket cantina, aperto dalla Fase 6d-2a"
   ],
-  "next_gate": "apply_migration della migrazione di Fase 7 sul progetto reale, prima di quella di Fase 7b che ne dipende. Nessuno dei gate aperti e' autorizzato.",
-  "remote_sql_rule": "Show exact SQL and obtain explicit in-session approval before applying any migration to the real Supabase project.",
+  "next_gate": "esecuzione autorizzata delle griglie 7_ordini_pagamenti.sql e 7b_connect_marketplace.sql sul progetto reale, ora che lo schema c'e' davvero. Nessuno dei gate aperti e' autorizzato.",
+  "remote_sql_rule": "Show exact SQL and obtain explicit in-session approval before applying any migration to the real Supabase project. Attenzione: dal merge della Fase 7 questa regola non copre piu' il percorso reale di distribuzione, che e' il merge su main via integrazione GitHub e non passa da un comando esplicito.",
   "migration_file_rule": "A migration file that has been pushed at least once is frozen: every later correction is a new file with a more recent timestamp, in draft too and even if no real database ever ran the previous version. Supabase preview branches run migrations at PR open and compare version, not content."
 }

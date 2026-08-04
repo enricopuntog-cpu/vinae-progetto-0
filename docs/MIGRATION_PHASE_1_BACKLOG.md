@@ -358,20 +358,27 @@ e il `rolconfig` di `authenticator` che contiene
 `alter role` è quindi risolta in positivo: quel privilegio esiste davvero.**
 Nessun branch Supabase esiste ora oltre a `main`, nessuna fatturazione residua.
 
-Non resta alcun gate tecnico per il merge della PR #18. Restano fuori, come
-gate separati e nessuno autorizzato: `apply_migration` sul progetto reale,
-distribuzione della Edge Function, esecuzione della griglia
+Non resta alcun gate tecnico per il merge della PR #18. L'esito sopra è una
+misura eseguita fuori da questa postazione: è riportato qui come tale, non è
+riverificabile da Git.
+
+**Aggiornamento del 4 agosto 2026.** I due gate qui dichiarati aperti —
+`apply_migration` sul progetto reale e distribuzione della Edge Function — sono
+chiusi, e non da un'autorizzazione: li ha chiusi il merge. L'integrazione GitHub
+di Supabase applica migrazioni e function appena la PR entra in `main`.
+Verificato in lettura: `20260731135455` è a ledger, `payments-checkout` è
+`ACTIVE`. Restano aperti l'esecuzione della griglia
 [`supabase/tests/7_ordini_pagamenti.sql`](../supabase/tests/7_ordini_pagamenti.sql)
-e smoke Storage. L'esito sopra è una misura eseguita fuori da questa
-postazione: è riportato qui come tale, non è riverificabile da Git.
+e lo smoke Storage.
 
 ## Fase 7b — Stripe Connect, commissione e trattenuta fondi
 
 **Branch**: `migration/phase-7b-stripe-connect-marketplace`
 
-**Stato al 3 agosto 2026**: primo checkpoint locale sopra lo schema della Fase 7,
-già integrato in `main` con la PR #18. Nessuna migrazione, Edge Function o
-griglia è applicata o distribuita.
+**Stato al 4 agosto 2026**: integrata in `main` con la PR #19 al merge squash
+`5e6b8e4`, sopra lo schema della Fase 7. Migrazione e Edge Function sono
+distribuite sul progetto reale dall'integrazione GitHub al merge; la griglia
+resta non eseguita.
 
 Modello economico, deciso fuori dal codice e qui soltanto reso esecutivo:
 
@@ -431,9 +438,12 @@ gli dia il potere di tenere i fondi bloccati non dichiarando mai la consegna,
 `conferma_ricezione` è ammessa anche da `pagato`: chi ha la bottiglia in mano può
 liberare i fondi comunque.
 
-Restano fuori, come gate separati e nessuno autorizzato: `apply_migration` di
-[`20260803150000_phase_7b_stripe_connect_marketplace.sql`](../supabase/migrations/20260803150000_phase_7b_stripe_connect_marketplace.sql),
-distribuzione di `connect-onboarding`, `payments-checkout` e `payouts-release`,
+**Aggiornamento del 4 agosto 2026.** La migrazione
+[`20260803150000_phase_7b_stripe_connect_marketplace.sql`](../supabase/migrations/20260803150000_phase_7b_stripe_connect_marketplace.sql)
+è a ledger sul progetto reale e `connect-onboarding`, `payments-checkout` e
+`payouts-release` sono `ACTIVE`: li ha distribuiti l'integrazione GitHub di
+Supabase al merge, non un'autorizzazione. Il contenuto applicato è quello a netto
+garantito. Restano fuori, come gate separati e nessuno autorizzato:
 esecuzione della griglia
 [`supabase/tests/7b_connect_marketplace.sql`](../supabase/tests/7b_connect_marketplace.sql)
 (18 casi, mai eseguita), e la schedulazione reale del job — che richiede

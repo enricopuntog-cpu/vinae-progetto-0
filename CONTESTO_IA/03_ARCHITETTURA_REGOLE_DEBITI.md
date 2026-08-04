@@ -109,9 +109,10 @@ CONTESTO_IA/    handoff sintetico per nuove IA/chat
 
 ### Bloccanti prima di denaro reale o beta pubblica
 
-- Stripe Connect, payout e onboarding venditore: progettati e merged con la
-  Fase 7b, ma non applicati ad alcun database e mai provati contro Stripe,
-  nemmeno in test mode. Restano fuori il KYC oltre l'onboarding ospitato,
+- Stripe Connect, payout e onboarding venditore: merged con la Fase 7b e
+  distribuiti sul progetto reale al merge — schema a ledger e tre Edge Function
+  `ACTIVE` — ma mai percorsi da un ordine e mai provati contro Stripe, nemmeno
+  in test mode. Restano fuori il KYC oltre l'onboarding ospitato,
   l'interfaccia di gestione delle contestazioni e il recupero automatico di un
   rimborso successivo a un Transfer già creato;
 - schedulazione dell'auto-rilascio: richiede `pg_cron` e `pg_net` sul progetto

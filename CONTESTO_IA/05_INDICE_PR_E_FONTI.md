@@ -66,10 +66,13 @@ separatamente dopo il merge: risultati finali 33/33 e 11/11, verifier storico
   sulla run
   [`30900108638`](https://github.com/enricopuntog-cpu/vinae-progetto-0/actions/runs/30900108638).
 
-Per #18 e #19 vale una distinzione che il solo stato «merged» non mostra:
-nessuna delle due migrazioni è applicata al progetto Supabase reale, nessuna
-Edge Function è distribuita e nessuna chiamata Stripe è mai stata fatta. Sono
-fasi integrate e inerti.
+Per #18 e #19 vale una distinzione che il solo stato «merged» non mostra, ed è
+l'opposto di quella che questo documento riportava prima. Il merge **ha
+distribuito**: l'integrazione GitHub di Supabase ha portato entrambe le
+migrazioni a ledger e reso `ACTIVE` le tre Edge Function, senza che nessuno
+lanciasse un comando. Verificato in lettura il 4 agosto 2026. Non sono fasi
+inerti: sono fasi vive e mai percorse — tabelle di denaro a zero righe, nessun
+percorso UI, `PAYMENTS_ENABLED=false`, nessuna chiamata Stripe.
 
 ### Il branch di anteprima della #19
 

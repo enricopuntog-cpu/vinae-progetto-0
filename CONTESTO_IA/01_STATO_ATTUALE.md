@@ -25,11 +25,31 @@ verde su tutti e tre i job.
 
 ## Distinzione che regge tutto il resto
 
-Fase 7 e Fase 7b sono **integrate in `main`**, e questo non significa che
-esistano su un database. Nessuna delle due migrazioni è applicata al progetto
-Supabase reale, nessuna Edge Function è distribuita, `PAYMENTS_ENABLED` resta
-`false` e nessuna chiamata a Stripe è mai stata fatta, nemmeno in test mode. Il
-codice degli ordini e del marketplace è merged e inerte.
+Fase 7 e Fase 7b sono **integrate in `main`**, e su questo progetto integrare
+vuol dire anche distribuire: l'integrazione GitHub di Supabase applica migrazioni
+e Edge Function al merge, senza `supabase db push` né `apply_migration`. La
+distinzione utile non è più fra integrato e applicato, ma fra **distribuito e
+percorso**. Verificato in sola lettura il 4 agosto 2026 sul progetto
+`pijnmcllmfgjmgsvtcej`:
+
+- **distribuito**: `20260731135455 phase_7_order_payment_service` e
+  `20260803150000 phase_7b_stripe_connect_marketplace` sono entrambe nel
+  registro; `payments-checkout`, `connect-onboarding` e `payouts-release` sono
+  `ACTIVE`;
+- **e distribuito nella versione giusta**: il contenuto applicato è quello a
+  netto garantito, non la prima bozza a percentuale piatta — `orders` porta
+  `margine_obiettivo_bps`, `riferimento_stripe_percentuale_bps`,
+  `riferimento_stripe_fisso_cents` e `commissione_cents`, `commissione_bps` non
+  esiste, `marketplace_config` è versionata su `valida_da`/`valida_fino`;
+- **mai percorso**: `orders`, `payments`, `payouts`, `seller_payout_accounts`,
+  `proposals`, `order_events` e `payment_provider_events` sono a **zero righe**,
+  `marketplace_config` ha la sola riga iniziale, nessun percorso UI raggiunge
+  onboarding, checkout, conferma o contestazione, `PAYMENTS_ENABLED` resta
+  `false` e nessuna chiamata a Stripe è mai stata fatta, nemmeno in test mode.
+
+Il codice è raggiungibile; nessun denaro lo ha mai percorso. Dettaglio in
+[`../docs/ROADMAP_V1.md`](../docs/ROADMAP_V1.md), sezione «Distribuita non vuol
+dire percorsa».
 
 ## Stato Git e prove
 
@@ -49,11 +69,13 @@ verifier repair storico resta 13/13 e il controllo finale dei residui fixture
 restituisce zero in tutte le categorie registrate. Il rapporto corrente è
 [`../docs/PHASE_6D1_POST_MERGE_VERIFICATION.md`](../docs/PHASE_6D1_POST_MERGE_VERIFICATION.md).
 
-Il ledger delle migrazioni remote resta a quindici righe: né
-`20260731135455_phase_7_order_payment_service` né
-`20260803150000_phase_7b_stripe_connect_marketplace` vi compaiono. È una
-dichiarazione documentale ereditata dall'ultima lettura autorizzata, non
-riverificata il 4 agosto 2026.
+Il ledger delle migrazioni remote è a **diciassette righe**, letto con
+`list_migrations` il 4 agosto 2026: le ultime due sono
+`20260731135455 phase_7_order_payment_service` e
+`20260803150000 phase_7b_stripe_connect_marketplace`. Le versioni a ledger
+coincidono con i nomi dei file, perché a distribuire è l'integrazione GitHub
+partendo dal repository: il riallineamento dei filename previsto per il percorso
+`apply_migration` non serve.
 
 ## Quale versione è servita
 
@@ -78,8 +100,8 @@ Fase 11 e richiede una decisione esplicita.
 | Cantina: pagina, store reale, vendita da bottiglia | Integrato in `main` — Fase 6c-2 |
 | Invarianti bottiglia–annuncio e hardening RLS | Integrati in `main` — Fase 6d-1; prove post-merge 33/33 e 11/11, residui zero |
 | Provenienza catalogo e percorsi Cantina | Integrati in `main` — Fase 6d-2a, PR #17 al merge squash `3037bf4`; smoke Storage del bucket `cantina` ancora aperto |
-| Ordini, proposte, pagamenti | Integrati in `main` — Fase 7, PR #18 al merge squash `2a47952`; migrazione non applicata al progetto reale |
-| Connect, commissione, trattenuta e rilascio fondi | Integrati in `main` — Fase 7b, PR #19 al merge squash `5e6b8e4`; migrazione non applicata, nessuna function distribuita |
+| Ordini, proposte, pagamenti | Integrati in `main` — Fase 7, PR #18 al merge squash `2a47952`; migrazione applicata al progetto reale al merge, tabelle a zero righe |
+| Connect, commissione, trattenuta e rilascio fondi | Integrati in `main` — Fase 7b, PR #19 al merge squash `5e6b8e4`; migrazione applicata e tre Edge Function `ACTIVE`, tabelle a zero righe, nessun percorso UI |
 | Messaggi e notifiche | Non migrati — Fase 8 |
 | Moderazione e audit persistente | Non migrati — Fase 9 |
 | AI reale | Non migrata — Fase 10 |
@@ -205,19 +227,24 @@ applica ancora `has_role(auth.uid(), 'seller_enabled')` alla creazione di
 annunci. Accenderlo oggi impedirebbe di vendere a chiunque, perché con
 `PAYMENTS_ENABLED=false` nessuno ha completato l'onboarding.
 
+## Gate chiusi senza essere stati autorizzati
+
+Due dei gate che questo documento elencava come aperti non lo sono più, e non
+perché qualcuno li abbia autorizzati: li ha chiusi il merge. L'integrazione
+GitHub di Supabase ha distribuito entrambe le migrazioni e le tre Edge Function
+appena la PR è entrata in `main`. Il riallineamento dei filename cade con loro,
+perché le versioni a ledger sono già quelle dei file.
+
 ## Gate aperti, in ordine
 
-1. autorizzare in sessione `apply_migration` della migrazione di **Fase 7** sul
-   progetto reale: quella di Fase 7b ne dipende e applicata prima fallirebbe;
-2. autorizzare `apply_migration` della migrazione di **Fase 7b** e riallineare
-   entrambi i filename alle versioni assegnate dal server;
-3. autorizzare separatamente l'esecuzione delle griglie
+1. autorizzare separatamente l'esecuzione delle griglie
    [`7_ordini_pagamenti.sql`](../supabase/tests/7_ordini_pagamenti.sql) — 16
    casi — e [`7b_connect_marketplace.sql`](../supabase/tests/7b_connect_marketplace.sql)
-   — 23 casi — che creano e cancellano fixture remote;
-4. autorizzare il deploy di `payments-checkout`, `connect-onboarding` e
-   `payouts-release`;
-5. chiudere lo smoke Storage del bucket `cantina`, aperto dalla 6d-2a e
+   — 23 casi — che creano e cancellano fixture remote, ora su uno schema che
+   esiste davvero;
+2. decidere dove sta il gate di autorizzazione, visto che la regola scritta
+   presidia `supabase db push` e il percorso reale è il merge;
+3. chiudere lo smoke Storage del bucket `cantina`, aperto dalla 6d-2a e
    indipendente da tutto il resto.
 
-Nessuna delle cinque è autorizzata e nessuna è stata eseguita.
+Nessuno dei tre è autorizzato e nessuno è stato eseguito.

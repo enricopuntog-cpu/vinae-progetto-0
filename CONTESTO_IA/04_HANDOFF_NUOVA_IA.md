@@ -42,13 +42,22 @@
   Storage del bucket `cantina` non è compreso nel merge e resta aperto.
 - La Fase 7 è in `main` tramite PR #18 al merge squash `2a47952`, la Fase 7b
   tramite PR #19 al merge squash `5e6b8e4`.
-- «Integrata» non significa «attiva»: nessuna delle due migrazioni è applicata
-  al progetto Supabase reale, nessuna Edge Function è distribuita,
-  `PAYMENTS_ENABLED` resta `false` e nessuna chiamata a Stripe è mai stata
-  fatta, nemmeno in test mode. Il codice di ordini e marketplace è merged e
-  inerte.
-- La migrazione di Fase 7b **dipende** da quella di Fase 7: applicarla per prima
-  fallisce, perché estende tabelle e RPC che l'altra crea.
+- «Integrata» qui significa anche «distribuita»: l'integrazione GitHub di
+  Supabase applica migrazioni e Edge Function al merge su `main`, da sola.
+  Verificato in lettura il 4 agosto 2026 — entrambe le migrazioni sono a ledger
+  (diciassette righe) e `payments-checkout`, `connect-onboarding` e
+  `payouts-release` sono `ACTIVE`. Il contenuto applicato è quello a netto
+  garantito, non la prima bozza a percentuale piatta.
+- «Distribuita» non significa «percorsa», ed è questa la distinzione da tenere:
+  le tabelle di denaro sono a **zero righe**, `marketplace_config` ha la sola
+  riga iniziale, nessun percorso UI raggiunge onboarding, checkout, conferma o
+  contestazione, `PAYMENTS_ENABLED` resta `false` e nessuna chiamata a Stripe è
+  mai stata fatta, nemmeno in test mode. Dettaglio in
+  [`../docs/ROADMAP_V1.md`](../docs/ROADMAP_V1.md), sezione «Distribuita non
+  vuol dire percorsa».
+- La migrazione di Fase 7b **dipende** da quella di Fase 7: sul progetto reale
+  l'ordine è stato rispettato dalle versioni, ma in qualsiasi ambiente nuovo
+  applicarla per prima fallisce, perché estende tabelle e RPC che l'altra crea.
 - Il ruolo `seller_enabled` ha una sorgente autoritativa dalla 7b, ma il gate
   sulla creazione di annunci è deliberatamente spento.
 - Le fasi 8–11 non sono iniziate.
@@ -142,18 +151,23 @@ codice:
 - la fee davvero trattenuta si misura e non decide nulla;
 - il gate `seller_enabled` sulla creazione di annunci è spento di proposito.
 
+## Gate chiusi dal merge, non da un'autorizzazione
+
+`apply_migration` di Fase 7 e Fase 7b e il deploy delle tre Edge Function erano
+elencati qui come gate aperti. Non lo sono più, e nessuno li ha autorizzati: li
+ha chiusi il merge, tramite l'integrazione GitHub. Il riallineamento dei filename
+cade con loro, perché le versioni a ledger coincidono già con i nomi dei file.
+
 ## Gate ancora aperti, in ordine
 
-1. `apply_migration` della migrazione di **Fase 7** sul progetto reale;
-2. `apply_migration` della migrazione di **Fase 7b**, che dipende dalla prima,
-   con riallineamento di entrambi i filename alle versioni assegnate dal server;
-3. esecuzione delle griglie `7_ordini_pagamenti.sql` (16 casi) e
+1. esecuzione delle griglie `7_ordini_pagamenti.sql` (16 casi) e
    `7b_connect_marketplace.sql` (23 casi), che creano e cancellano fixture
-   remote e richiedono un'autorizzazione separata da quella del deploy;
-4. deploy di `payments-checkout`, `connect-onboarding` e `payouts-release`;
-5. smoke Storage del bucket `cantina`, aperto dalla 6d-2a e indipendente.
+   remote e richiedono un'autorizzazione esplicita;
+2. decidere dove sta il gate di autorizzazione, dato che la regola scritta
+   presidia `supabase db push` e il percorso reale è il merge su `main`;
+3. smoke Storage del bucket `cantina`, aperto dalla 6d-2a e indipendente.
 
-Nessuno dei cinque è autorizzato. L'ordine non è negoziabile per i primi due.
+Nessuno dei tre è autorizzato.
 
 ## Cosa aggiornare alla fine di una fase
 
