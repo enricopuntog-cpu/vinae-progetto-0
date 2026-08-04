@@ -31,7 +31,9 @@ type Reservation = {
   amount_cents: number;
   prezzo_venditore_cents?: number;
   commissione_cents?: number;
-  commissione_bps?: number;
+  margine_obiettivo_bps?: number;
+  riferimento_stripe_percentuale_bps?: number;
+  riferimento_stripe_fisso_cents?: number;
   currency: string;
   wine_name?: string;
   checkout_url?: string | null;
@@ -89,7 +91,12 @@ const rispostaCheckout = (
   amountCents: reservation.amount_cents,
   prezzoVenditoreCents: reservation.prezzo_venditore_cents ?? null,
   commissioneCents: reservation.commissione_cents ?? null,
-  commissioneBps: reservation.commissione_bps ?? null,
+  // I parametri congelati viaggiano con la risposta: il browser deve poter
+  // spiegare il rincaro, non ricalcolarlo. La percentuale effettiva è un
+  // rapporto fra due numeri che sono già qui.
+  margineObiettivoBps: reservation.margine_obiettivo_bps ?? null,
+  riferimentoStripePercentualeBps: reservation.riferimento_stripe_percentuale_bps ?? null,
+  riferimentoStripeFissoCents: reservation.riferimento_stripe_fisso_cents ?? null,
   currency: reservation.currency,
 });
 

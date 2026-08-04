@@ -337,8 +337,15 @@ export type OrderRecord = {
   delivery_mode: OrderDeliveryMode;
   /** Quanto incassa il venditore. La commissione sta sopra, non dentro. */
   prezzo_cents: number;
-  /** Punti base congelati alla creazione: non si rileggono dalla configurazione. */
-  commissione_bps: number;
+  /**
+   * I tre parametri congelati alla creazione. Non si rileggono dalla
+   * configurazione corrente, e ci sono tutti e tre perché il risultato da solo
+   * non spiegherebbe più un ordine vecchio una volta cambiato il listino.
+   */
+  margine_obiettivo_bps: number;
+  riferimento_stripe_percentuale_bps: number;
+  riferimento_stripe_fisso_cents: number;
+  /** Il rincaro risultante. La percentuale effettiva si deriva, non si legge. */
   commissione_cents: number;
   /** Quanto paga il compratore. Colonna generata: `prezzo + commissione`. */
   totale_cents: number;
@@ -425,7 +432,9 @@ export type CheckoutAperto = {
   amountCents: number;
   prezzoVenditoreCents: number | null;
   commissioneCents: number | null;
-  commissioneBps: number | null;
+  margineObiettivoBps: number | null;
+  riferimentoStripePercentualeBps: number | null;
+  riferimentoStripeFissoCents: number | null;
   currency: string;
 };
 
@@ -473,7 +482,9 @@ export interface SellerPayoutService {
 
 /** Solo la configurazione corrente, dalla vista pubblica a colonne chiuse. */
 export type MarketplaceConfigPubblica = {
-  commissione_bps: number;
+  margine_obiettivo_bps: number;
+  riferimento_stripe_percentuale_bps: number;
+  riferimento_stripe_fisso_cents: number;
   auto_rilascio_giorni: number;
 };
 

@@ -27,6 +27,15 @@ export const STRIPE_ACCOUNT_EVENT_TYPES = ["account.updated"] as const;
 
 export type StripeAccountEventType = (typeof STRIPE_ACCOUNT_EVENT_TYPES)[number];
 
+/**
+ * La transazione di saldo: è lì che vive la fee davvero trattenuta. Nel payload
+ * di un webhook arriva quasi sempre come **identificativo**, non espansa — e in
+ * quel caso la fee non è nel messaggio e va recuperata dopo. Il tipo ammette
+ * entrambe le forme apposta: quella espansa quando c'è, l'identificativo come
+ * appiglio quando non c'è.
+ */
+type StripeBalanceTransaction = { id?: string; fee?: number };
+
 type StripeObject = Record<string, unknown> & {
   id?: string;
   payment_intent?: string | { id?: string };
@@ -37,6 +46,8 @@ type StripeObject = Record<string, unknown> & {
   amount_refunded?: number;
   refunded?: boolean;
   currency?: string;
+  balance_transaction?: string | StripeBalanceTransaction;
+  latest_charge?: string | { id?: string; balance_transaction?: string | StripeBalanceTransaction };
   metadata?: { order_id?: string };
 };
 
@@ -71,6 +82,46 @@ export const isStripeAccountEvent = (type: string): type is StripeAccountEventTy
 const isPaymentIntentEvent = (type: StripeEventType): boolean =>
   type.startsWith("payment_intent.");
 
+/** Ciò che si riesce a sapere della fee da un payload, che può essere poco. */
+export type RiferimentoSaldo = {
+  /** Nulla quando il payload non porta la transazione espansa: non è zero. */
+  feeCents: number | null;
+  /** L'appiglio per recuperare la fee più tardi. */
+  transazioneId: string | null;
+};
+
+const leggiTransazione = (
+  valore: string | StripeBalanceTransaction | undefined,
+): RiferimentoSaldo => {
+  if (typeof valore === "string") return { feeCents: null, transazioneId: valore };
+  if (!valore || typeof valore !== "object") return { feeCents: null, transazioneId: null };
+  // Una fee frazionaria o negativa non è un costo: è un payload da non credere.
+  const fee = valore.fee;
+  return {
+    feeCents: typeof fee === "number" && Number.isInteger(fee) && fee >= 0 ? fee : null,
+    transazioneId: typeof valore.id === "string" ? valore.id : null,
+  };
+};
+
+/**
+ * Dove cercare la transazione di saldo, in ordine: sull'oggetto stesso (eventi
+ * `charge.*`), poi sulla carica collegata (eventi `payment_intent.*`, dove
+ * l'oggetto è l'intento e la fee sta un livello sotto).
+ *
+ * Se nessuna delle due è espansa si esce con l'identificativo e `feeCents`
+ * nullo, che è la verità: la fee non era nel messaggio.
+ */
+export const riferimentoSaldoDa = (object: StripeObject): RiferimentoSaldo => {
+  const diretta = leggiTransazione(object.balance_transaction);
+  if (diretta.feeCents !== null) return diretta;
+  const carica = object.latest_charge;
+  if (carica && typeof carica === "object") {
+    const indiretta = leggiTransazione(carica.balance_transaction);
+    if (indiretta.feeCents !== null || indiretta.transazioneId !== null) return indiretta;
+  }
+  return diretta;
+};
+
 /**
  * Riduce l'oggetto Stripe ai soli campi che la RPC riverifica, con nomi che non
  * sono di Stripe: è il payload che attraversa il confine verso il database.
@@ -87,20 +138,27 @@ const isPaymentIntentEvent = (type: StripeEventType): boolean =>
 export const normalizeStripeObject = (
   object: StripeObject,
   eventType: StripeEventType,
-): Record<string, unknown> => ({
-  session_id: object.id,
-  intent_id: isPaymentIntentEvent(eventType)
-    ? object.id
-    : typeof object.payment_intent === "string"
-      ? object.payment_intent
-      : object.payment_intent?.id,
-  provider_event_type: eventType,
-  amount_cents: object.amount_total ?? object.amount ?? 0,
-  amount_refunded: object.amount_refunded ?? 0,
-  refunded: object.refunded ?? false,
-  currency: object.currency,
-  order_id: object.metadata?.order_id,
-});
+): Record<string, unknown> => {
+  const saldo = riferimentoSaldoDa(object);
+  return {
+    session_id: object.id,
+    intent_id: isPaymentIntentEvent(eventType)
+      ? object.id
+      : typeof object.payment_intent === "string"
+        ? object.payment_intent
+        : object.payment_intent?.id,
+    provider_event_type: eventType,
+    amount_cents: object.amount_total ?? object.amount ?? 0,
+    amount_refunded: object.amount_refunded ?? 0,
+    refunded: object.refunded ?? false,
+    currency: object.currency,
+    // La fee non decide nulla: attraversa il confine come misura, e la RPC la
+    // scrive senza che alcun ramo la legga. Nulla resta nulla.
+    fee_reale_cents: saldo.feeCents,
+    fee_transazione_id: saldo.transazioneId,
+    order_id: object.metadata?.order_id,
+  };
+};
 
 /** Ciò che la RPC di Connect riverifica. Nessun campo con nome di Stripe. */
 export type AccountEventNormalizzato = {

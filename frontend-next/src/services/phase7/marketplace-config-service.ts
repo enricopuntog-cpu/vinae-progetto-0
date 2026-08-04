@@ -5,12 +5,12 @@ import type { MarketplaceConfigPubblica, MarketplaceConfigService } from "@/serv
 /**
  * Legge la configurazione corrente dalla vista `public_marketplace_config`, non
  * dalla tabella: la tabella non ha alcun `GRANT` verso i ruoli client, e la
- * vista espone due sole colonne della sola riga aperta. Una colonna aggiunta
- * domani alla configurazione resta privata finché qualcuno non la elenca nella
- * vista di proposito.
+ * vista espone quattro sole colonne della sola riga aperta. Una colonna
+ * aggiunta domani alla configurazione resta privata finché qualcuno non la
+ * elenca nella vista di proposito.
  *
- * Serve a mostrare la commissione **prima** che un ordine esista. Per un ordine
- * già creato la fonte è la riga dell'ordine, dove la percentuale è congelata:
+ * Serve a calcolare un preventivo **prima** che un ordine esista. Per un ordine
+ * già creato la fonte è la riga dell'ordine, dove i parametri sono congelati:
  * usare questa al suo posto è esattamente il bug che
  * `scomposizioneOrdine` esiste per rendere difficile.
  */
@@ -21,7 +21,10 @@ export const createMarketplaceConfigService = (
     if (!client) return noClient();
     const { data, error } = await client
       .from("public_marketplace_config")
-      .select("commissione_bps,auto_rilascio_giorni")
+      .select(
+        "margine_obiettivo_bps,riferimento_stripe_percentuale_bps," +
+          "riferimento_stripe_fisso_cents,auto_rilascio_giorni",
+      )
       .maybeSingle();
     return error
       ? serviceError("public_marketplace_config.select", error)
