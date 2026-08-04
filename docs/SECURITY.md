@@ -92,11 +92,23 @@ Le prove versionate di questi confini sono in `supabase/tests/`.
 
 ### Marketplace e trattenuta fondi (Fase 7b, locale)
 
-- **La commissione non è mai calcolata dal browser.** La percentuale in vigore
-  viene letta e congelata su `orders.commissione_bps` dentro la transazione di
-  prenotazione; l'importo addebitato è `orders.totale_cents`, una colonna
-  generata. Una modifica successiva della configurazione non tocca gli ordini
-  già nati, e nessuna schermata può proporre un importo diverso da quello.
+- **La commissione non è mai calcolata dal browser.** I parametri in vigore
+  vengono letti e congelati sull'ordine — `margine_obiettivo_bps`,
+  `riferimento_stripe_percentuale_bps`, `riferimento_stripe_fisso_cents` — dentro
+  la transazione di prenotazione, insieme al risultato; l'importo addebitato è
+  `orders.totale_cents`, una colonna generata. Una modifica successiva della
+  configurazione non tocca gli ordini già nati, e nessuna schermata può proporre
+  un importo diverso da quello. La copia TypeScript serve al preventivo, non
+  all'addebito, e non sa ricalcolare un ordine esistente.
+- **Il rincaro è arrotondato per eccesso, non al più vicino.** Per difetto il
+  margine netto scenderebbe sotto l'obiettivo di un centesimo. La formula vive
+  in `private.marketplace_totale_cents`, non eseguibile dai ruoli client.
+- **La fee reale è una misura, non un ingresso decisionale.**
+  `payments.fee_stripe_reale_cents` viene scritta dall'evento firmato o da
+  `payment_fee_reale_registra`, riservata a `service_role`; non è leggibile da
+  alcun ruolo client, e nemmeno la vista `order_margine_riconciliazione` lo è.
+  Nessun percorso di rilascio fondi la interroga: se `payout_prepara` la
+  leggesse, una misura sarebbe diventata una decisione.
 - **L'addebito non porta istruzioni di trasferimento.** Nessun `transfer_data`,
   nessun `on_behalf_of`: è quell'assenza a far restare i fondi sul balance della
   piattaforma. Il denaro raggiunge il venditore solo con un Transfer separato,

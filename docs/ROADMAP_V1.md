@@ -381,9 +381,18 @@ Specifica, gate e limiti di verifica sono in `docs/superpowers/` e
 **Stato: primo checkpoint implementato soltanto in locale sul branch
 `migration/phase-7b-stripe-connect-marketplace`; feature flag spenta.** Estende
 lo schema della Fase 7 — non lo sostituisce — con account Connect Express del
-venditore, commissione di piattaforma configurabile e congelata sull'ordine,
+venditore, rincaro di piattaforma a percentuale variabile congelato sull'ordine,
 trattenuta dei fondi sul balance della piattaforma, rilascio su conferma del
 compratore o auto-rilascio a scadenza, e stato `contestato` che blocca entrambi.
+
+Il rincaro non è una percentuale scelta: è il numero che lascia alla piattaforma
+un margine netto costante **dopo** la fee del fornitore, arrotondato per eccesso
+perché per difetto il margine scenderebbe sotto l'obiettivo di un centesimo. Con
+i parametri iniziali — 5% netto, fee di riferimento 1,5% più 0,25 € — la
+percentuale effettiva vale 9,20% su 10 €, 6,86% su 100 € e converge a 6,60% sui
+prezzi alti. I **tre parametri** sono congelati sull'ordine insieme al risultato:
+senza di essi un ordine vecchio resta addebitabile ma non più spiegabile. La fee
+davvero trattenuta è misurata a parte e non entra in nessuna decisione.
 
 Il checkout passa dalla Checkout Session ospitata a un PaymentIntent con un solo
 Payment Element. **Non porta `transfer_data` né `on_behalf_of`**: è quell'assenza

@@ -201,3 +201,31 @@ TypeScript e SQL divergano.
   esecuzione delle griglie SQL: tre autorizzazioni separate, nessuna ottenuta.
 - Schedulazione reale del job (`pg_cron` + `pg_net`): documentata nella
   migrazione come blocco commentato, non eseguita.
+
+---
+
+## Aggiornamento 4 agosto 2026 — commissione a netto garantito
+
+Il modello economico è cambiato **prima** di qualunque applicazione remota:
+il piano sopra descrive una percentuale fissa sul prezzo, superata da un rincaro
+calcolato per garantire un margine netto costante dopo la fee del fornitore.
+Poiché nessuna delle due migrazioni è mai stata applicata, la sostituzione è
+avvenuta **nel file esistente** e non in una migrazione correttiva: una
+migrazione che nessun database ha visto non ha storia da preservare.
+
+Cosa cambia rispetto ai punti 1 e 7 del piano:
+
+- `marketplace_config` non ha più `commissione_bps`. Ha `margine_obiettivo_bps`,
+  `riferimento_stripe_percentuale_bps`, `riferimento_stripe_fisso_cents`, tutti
+  versionati con lo stesso meccanismo di storico;
+- `orders` congela i **tre** parametri oltre a `commissione_cents`;
+- la formula vive in un posto solo, `private.marketplace_totale_cents`, usata
+  tanto dalla prenotazione quanto dalla vista di riconciliazione;
+- `payments` guadagna `fee_stripe_reale_cents`, `fee_provider_transazione_id` e
+  `fee_riconciliata_at`; la vista `order_margine_riconciliazione` confronta
+  proiezione e realtà, e **nessun percorso di rilascio fondi la legge**.
+
+Un minimo in centesimi (`commissione_minima_cents`) è stato **valutato e
+scartato**: risolve lo stesso problema — la quota fissa della fee che divora il
+margine sui prezzi bassi — ma con un gradino, e sopra la soglia il margine
+tornerebbe a erodersi. Non compare in alcun file.

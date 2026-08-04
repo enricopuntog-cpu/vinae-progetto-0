@@ -375,11 +375,31 @@ griglia è applicata o distribuita.
 
 Modello economico, deciso fuori dal codice e qui soltanto reso esecutivo:
 
-- commissione di piattaforma **configurabile**, `500` punti base (5%) iniziali,
+- commissione di piattaforma a **percentuale variabile con netto garantito**,
   applicata **sopra** il prezzo del venditore — il compratore paga
-  `prezzo + commissione`, il venditore incassa il prezzo esatto;
-- la percentuale è **congelata su `orders.commissione_bps`** alla creazione:
-  cambiare `marketplace_config` dopo non tocca gli ordini già nati;
+  `prezzo + commissione`, il venditore incassa il prezzo esatto. Il rincaro non
+  è una percentuale scelta ma il numero che lascia alla piattaforma un margine
+  netto costante **dopo** la fee del fornitore:
+
+  ```text
+  totale = ceil( (prezzo * (10000 + margine_obiettivo_bps) / 10000
+                  + riferimento_stripe_fisso_cents)
+                 / (1 - riferimento_stripe_percentuale_bps / 10000) )
+  ```
+
+  Parametri iniziali `500 / 150 / 25`: 5% netto, fee di riferimento 1,5% più
+  0,25 €. L'arrotondamento è **sempre per eccesso**, perché per difetto il
+  margine scenderebbe sotto l'obiettivo di un centesimo. La percentuale
+  effettiva è un risultato e non un parametro: 9,20% su 10 €, 6,86% su 100 €,
+  6,60% su 5000 €, con asintoto a 6,5990%;
+- i **tre parametri** sono congelati sull'ordine alla creazione, non solo il
+  risultato: senza di essi un ordine vecchio resta addebitabile ma non più
+  spiegabile. Cambiare `marketplace_config` dopo non tocca gli ordini già nati;
+- il margine garantito è una **proiezione**, non una misura: chi paga con
+  Satispay, PayPal o una carta extra-SEE produce una fee diversa. La fee reale
+  arriva su `payments.fee_stripe_reale_cents` e il confronto vive in
+  `order_margine_riconciliazione`. **Nessuna decisione di rilascio fondi
+  dipende da quei numeri**;
 - trattenuta fondi con il pattern "separate charges and transfers". L'addebito
   non porta `transfer_data`, quindi i fondi restano sul balance della
   piattaforma; il Transfer verso l'account del venditore nasce solo al rilascio

@@ -112,7 +112,7 @@ locale, quindi la griglia non ha ancora alcun esito verificato:
 | # | File | Esito atteso |
 | --- | --- | --- |
 | 1 | `supabase/migrations/20260803150000_phase_7b_stripe_connect_marketplace.sql` | migrazione applicata e registrata |
-| 2 | [`7b_connect_marketplace.sql`](7b_connect_marketplace.sql) | 18 righe, tutte `PASSA`, nessuna riga 99 |
+| 2 | [`7b_connect_marketplace.sql`](7b_connect_marketplace.sql) | 23 righe, tutte `PASSA`, nessuna riga 99 |
 
 Presuppone che la migrazione della Fase 7 sia già applicata: la griglia parte da
 `order_checkout_reserve` e da `payment_apply_provider_event`, che sono sue.
@@ -123,6 +123,13 @@ relativi ordini, pagamenti, payout ed eventi; tocca anche
 un'autorizzazione fixture separata da quella della migrazione. Il caso 18
 verifica staticamente che nessuna coordinata di incasso sia leggibile dai ruoli
 client.
+
+Il gruppo F prova la formula del rincaro: gli otto prezzi del caso 19 sono gli
+stessi asseriti da `marketplace-fee.test.ts`, ed è lì che le due copie della
+formula si incontrano davvero — se divergessero, uno dei due linguaggi starebbe
+addebitando un altro numero. Il caso 20 verifica l'invariante del margine su un
+campione di prezzi in aritmetica intera; i casi 21-23 riguardano la fee reale e
+la sua invisibilità ai ruoli client.
 
 Copre i quattro comportamenti la cui autorità è in Postgres e non nella
 traduzione TypeScript: percentuale congelata sull'ordine, blocco del rilascio

@@ -1,43 +1,51 @@
 <!-- PROTOCOL: Read at session start. Every AI MUST update this file at session end or before handoff/context reset. Keep exactly the 4 headings below; facts only; NEXT STEPS exactly 3 atomic items; no pleasantries/secrets. Verify Git state first; preserve unresolved blockers. -->
 ## CURRENT STATE
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
-- `origin/main` è `2a47952`, squash-merge della PR #18 eseguito il 2026-08-03 alle 14:34:22Z: la Fase 7 è integrata in `main`.
-- Il branch di lavoro è `migration/phase-7b-stripe-connect-marketplace`, creato da `origin/main` aggiornato, 7 commit avanti e 0 indietro, allineato con `origin` dopo il push. HEAD `5ddd25c5218ae1714752557b64edd4dbb32fbbeb`.
+- `origin/main` è `2a47952`, squash-merge della PR #18: la Fase 7 è integrata in `main`.
+- Il branch di lavoro è `migration/phase-7b-stripe-connect-marketplace`, 11 commit avanti e 0 indietro rispetto a `origin/main`.
 - La draft PR #19 è aperta su quel branch, `MERGEABLE`, mai mergiata e mai segnata pronta per revisione.
-- La Fase 7b aggiunge sopra lo schema della Fase 7: `marketplace_config` versionata con vista pubblica a colonne chiuse, `seller_payout_accounts`, `account_provider_events`, enum `payout_stato`, tabella `payouts`, colonne di commissione e trattenuta su `orders`, nove RPC nuove e due sostituite (`order_checkout_reserve`, `payment_apply_provider_event`).
-- Commissione: 500 punti base iniziali, applicata SOPRA il prezzo del venditore, congelata su `orders.commissione_bps` alla creazione. `payments.amount_cents` è il totale; il Transfer al venditore è il solo `prezzo_cents`.
-- Trattenuta fondi con pattern "separate charges and transfers": il PaymentIntent non porta `transfer_data` né `on_behalf_of`, quindi i fondi restano sul balance della piattaforma. Il Transfer nasce solo al rilascio, in `payouts-release`.
-- Rilascio su `conferma_ricezione` del compratore oppure auto-rilascio dopo `auto_rilascio_giorni` (14 iniziali) dalla consegna dichiarata. `ordine_contesta` blocca entrambi.
-- Nessun valore nuovo in `public.order_stato`, per decisione dichiarata: l'enum contiene già `consegnato`, `verifica`, `completato`, `contestato`. La dimensione mancante è ortogonale ed è `public.payout_stato`.
-- `payments-checkout` passa da Checkout Session a PaymentIntent con un solo Payment Element (`automatic_payment_methods` più `allow_redirects=always`). Nuove Edge Function `connect-onboarding` (Express) e `payouts-release`.
-- Webhook: whitelist estesa ai `payment_intent.*`; `account.updated` instradato su `seller_payout_account_apply_event` e sulla tabella di deduplicazione `account_provider_events`, separate da quelle di incasso.
-- Debito `seller_enabled` della Fase 6a: la sorgente esiste. Il trigger `private.seller_enabled_sync` deriva il ruolo da `charges_enabled` e `payouts_enabled` dichiarati da un evento firmato. Nessuna policy applica ancora `has_role(auth.uid(), 'seller_enabled')` alla creazione di annunci.
-- Verifica locale eseguita il 2026-08-03 in `frontend-next/` con Bun 1.3.14: `bun install --frozen-lockfile`, `bun run lint`, `bun run typecheck`, `bun run test`, `bun run build` — tutti e cinque a exit 0. Test 69 su 69, 0 fail, 172 `expect()`, 6 file; lint 0 errori e 23 warning preesistenti; build Next.js 16.2.12, 14 pagine generate. `MIN_TESTS` alzata da 12 a 69.
-- `frontend/` e `backend/` non hanno alcuna differenza rispetto a `origin/main`: misurato con `git diff --name-only origin/main...HEAD`, zero file in quelle directory.
-- La griglia `supabase/tests/7b_connect_marketplace.sql` è scritta, 18 casi, mai eseguita. La griglia `7_ordini_pagamenti.sql` resta scritta, 16 casi, mai eseguita.
-- Il ledger delle migrazioni remote resta a quindici righe: la migrazione di Fase 7 non è applicata al progetto reale, e nemmeno quella di Fase 7b.
+- La Fase 7b aggiunge sopra lo schema della Fase 7: `marketplace_config` versionata con vista pubblica a colonne chiuse, `seller_payout_accounts`, `account_provider_events`, enum `payout_stato`, tabella `payouts`, colonne di commissione e trattenuta su `orders`, colonne di fee reale su `payments`, vista `order_margine_riconciliazione`, undici RPC nuove e due sostituite (`order_checkout_reserve`, `payment_apply_provider_event`).
+- Commissione: rincaro a percentuale variabile con netto garantito, non percentuale fissa. `totale = ceil((prezzo * (10000 + margine_obiettivo_bps) / 10000 + riferimento_stripe_fisso_cents) / (1 - riferimento_stripe_percentuale_bps / 10000))`, `commissione = totale - prezzo`. Parametri iniziali 500 / 150 / 25 e 14 giorni.
+- Percentuale effettiva misurata dal codice reale: 9,20% su 10 €, 8,33% su 15 €, 7,12% su 50 €, 6,86% su 100 €, 6,65% su 500 €, 6,60% su 5000 €. Asintoto 6,5990%, mai raggiunto dal basso.
+- L'arrotondamento del totale è per eccesso. La formula sta in `private.marketplace_totale_cents`, usata sia da `order_checkout_reserve` sia dalla vista di riconciliazione.
+- Sull'ordine sono congelati i tre parametri oltre a `commissione_cents`. `orders.commissione_bps` non esiste più in alcun file.
+- Un minimo in centesimi (`commissione_minima_cents`) è stato valutato e scartato: non compare in nessun file del repository.
+- `payments.fee_stripe_reale_cents`, `fee_provider_transazione_id` e `fee_riconciliata_at` registrano la fee davvero trattenuta; `payment_fee_reale_registra` (solo `service_role`) è la porta per il recupero tardivo. Nessun percorso di rilascio fondi legge quelle colonne; nessun ruolo client le raggiunge, né la vista.
+- Trattenuta fondi con pattern "separate charges and transfers": il PaymentIntent non porta `transfer_data` né `on_behalf_of`. Il Transfer nasce solo al rilascio, in `payouts-release`, e per il solo `prezzo_cents`.
+- Rilascio su `conferma_ricezione` del compratore oppure auto-rilascio dopo `auto_rilascio_giorni` dalla consegna dichiarata. `ordine_contesta` blocca entrambi.
+- Nessun valore nuovo in `public.order_stato`, per decisione dichiarata: la dimensione mancante è ortogonale ed è `public.payout_stato`.
+- `payments-checkout` usa PaymentIntent con un solo Payment Element. Edge Function `connect-onboarding` (Express) e `payouts-release`.
+- Webhook: whitelist estesa ai `payment_intent.*`; `account.updated` su RPC e tabella di deduplicazione separate; la fee di saldo attraversa il confine come misura.
+- Debito `seller_enabled` della Fase 6a: la sorgente esiste, derivata da `charges_enabled` e `payouts_enabled` in un trigger. Nessuna policy applica ancora `has_role(auth.uid(), 'seller_enabled')` alla creazione di annunci.
+- Verifica locale eseguita il 2026-08-04 in `frontend-next/` con Bun 1.3.14: lint, typecheck, test e build tutti a exit 0. Test 83 su 83, 0 fail, 13588 `expect()`, 6 file; lint 0 errori e 23 warning preesistenti; build Next.js 16.2.12, 14 pagine. `MIN_TESTS` alzata da 69 a 83.
+- `frontend/` e `backend/` non hanno alcuna differenza rispetto a `origin/main`.
+- La griglia `supabase/tests/7b_connect_marketplace.sql` è a 23 casi, mai eseguita. La griglia `7_ordini_pagamenti.sql` resta a 16 casi, mai eseguita.
+- Il ledger delle migrazioni remote resta a quindici righe: né la migrazione di Fase 7 né quella di Fase 7b sono applicate al progetto reale.
 
 ## ACTIVE TASK
-- Fase 7b, primo checkpoint locale: migrazione, griglia SQL, tre Edge Function, logica pura, test, servizi e documentazione. Autorizzata all'avvio nel prompt di sessione.
+- Fase 7b, secondo checkpoint locale: rincaro a netto garantito, riconciliazione della fee reale, test e documentazione allineati.
 - Link di confronto: `https://github.com/enricopuntog-cpu/vinae-progetto-0/compare/main...migration/phase-7b-stripe-connect-marketplace`.
-- File di migrazione creato e NON applicato: `supabase/migrations/20260803150000_phase_7b_stripe_connect_marketplace.sql`.
-- Nessuna chiamata a tool Supabase in questa sessione: nessun `get_cost`, `confirm_cost`, `create_branch`, `apply_migration`, `execute_sql`, `deploy_edge_function`, `delete_branch`. Nessun DDL, nessun `insert`, nessun utente creato.
-- Nessuna chiamata a Stripe, nemmeno in test mode: nessun account Connect creato, nessuna capability abilitata, nessun PaymentIntent, nessun Transfer.
+- File di migrazione modificato e NON applicato: `supabase/migrations/20260803150000_phase_7b_stripe_connect_marketplace.sql`. La sostituzione è avvenuta nel file esistente, non in una migrazione correttiva, perché nessun database lo ha mai eseguito.
+- Nessuna chiamata a tool Supabase in questa sessione: nessun `get_cost`, `confirm_cost`, `create_branch`, `apply_migration`, `execute_sql`, `deploy_edge_function`, `delete_branch`.
+- Nessuna chiamata a Stripe, nemmeno in test mode: nessun account Connect, nessuna capability, nessun PaymentIntent, nessun Transfer.
 - `PAYMENTS_ENABLED` non è stata toccata e resta `false` in `frontend-next/.env.example`.
 - Nessun merge, nessun `gh pr ready`, nessun `gh pr merge`; `frontend/` e `backend/` non toccati.
 
 ## NEXT STEPS
-1. Revisionare la draft PR #19 dopo la CI e decidere se toglierle lo stato draft.
-2. Autorizzare in sessione `apply_migration` della migrazione di Fase 7 sul progetto reale, prima di quella di Fase 7b che ne dipende.
-3. Autorizzare separatamente l'esecuzione delle griglie `7_ordini_pagamenti.sql` e `7b_connect_marketplace.sql`, che creano e cancellano fixture remote.
+1. Autorizzare in sessione `apply_migration` della migrazione di Fase 7 sul progetto reale, prima di quella di Fase 7b che ne dipende.
+2. Autorizzare separatamente l'esecuzione delle griglie `7_ordini_pagamenti.sql` e `7b_connect_marketplace.sql`, che creano e cancellano fixture remote.
+3. Decidere se la fee reale va recuperata da un job che chiama `payment_fee_reale_registra` o se resta una lettura manuale.
 
 ## BLOCKERS / NOTES
 - La migrazione di Fase 7b **dipende** da quella di Fase 7, che non è applicata al progetto reale. Applicarla prima fallirebbe: estende `orders`, `payments` e due RPC che quella crea.
-- Nessun motore Postgres ha eseguito la migrazione di Fase 7b: i 18 esiti attesi della griglia derivano dal testo del SQL, non da una misura.
+- Nessun motore Postgres ha eseguito la migrazione di Fase 7b: i 23 esiti attesi della griglia derivano dal testo del SQL, non da una misura.
+- Il payload di un webhook Stripe porta `balance_transaction` come identificativo e non espanso: `fee_stripe_reale_cents` resta quindi nulla nel caso normale, e si popola solo se il payload arriva espanso oppure tramite `payment_fee_reale_registra`. Il recupero non è schedulato da nulla.
+- La fee di riferimento è una proiezione tarata sulla carta SEE. Satispay, PayPal e carte extra-SEE producono uno scarto reale, misurabile in `order_margine_riconciliazione` ma non compensato da alcun automatismo.
 - La griglia 7b gira in una sola sessione: i casi del gruppo D provano che la seconda esecuzione non trova più nulla da reclamare — l'invariante — e non la gara fra due job concorrenti, che richiede due sessioni.
 - Due casi della griglia 7b spostano `auto_rilascio_scadenza` nel passato con un `update` diretto: è l'unico modo di provare l'auto-rilascio senza aspettare quattordici giorni.
-- La schedulazione dell'auto-rilascio non esiste: richiede `pg_cron` e `pg_net` configurati sul progetto ed è registrata come blocco commentato in fondo alla migrazione. Finché non c'è, l'auto-rilascio è raggiungibile solo da un'invocazione manuale della function e la conferma del compratore è l'unica strada percorsa.
+- La schedulazione dell'auto-rilascio non esiste: richiede `pg_cron` e `pg_net` configurati sul progetto ed è registrata come blocco commentato in fondo alla migrazione. Finché non c'è, l'auto-rilascio è raggiungibile solo da un'invocazione manuale della function.
 - Un rimborso successivo a un Transfer già creato non è recuperabile in automatico: la migrazione blocca solo ciò che è ancora fermo, la riconciliazione resta manuale.
+- `frontend-next/src/services/phase7/order-service.ts` legge `orders` con `.select("*")` mentre la tabella ha grant di colonna. Codice preesistente della Fase 7, non verificabile senza un database: da riverificare quando la migrazione verrà applicata.
 - Il filename `20260803150000_phase_7b_stripe_connect_marketplace.sql` dovrà essere riallineato alla versione assegnata dal server dopo un futuro `apply_migration` autorizzato, come già previsto per `20260731135455_…`.
 - Nessuna Edge Function distribuita: `connect-onboarding`, `payments-checkout` e `payouts-release` esistono solo nel repository. `PAYMENTS_ENABLED=false` resta il gate server-side e la verticale non è raggiungibile dalla UI.
 - Non esistono percorsi UI per onboarding, checkout, conferma o contestazione: i servizi sono adapter dietro le interfacce, non pagine.
