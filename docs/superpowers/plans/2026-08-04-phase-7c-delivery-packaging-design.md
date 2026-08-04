@@ -38,6 +38,7 @@ test runner.
 8. [Rischi, debiti dichiarati, punti aperti](#7-rischi-debiti-dichiarati-punti-aperti)
 9. [Sequenza dei task](#8-sequenza-dei-task)
 10. [Decisioni che servono prima di implementare](#9-decisioni-che-servono-prima-di-implementare)
+11. [Debiti accettati](#10-debiti-accettati--chiusi-in-revisione-il-4-agosto-2026)
 
 ---
 
@@ -1171,6 +1172,57 @@ con le formule `calcolaSpedizione` (12 €, gratis sopra 500 €) e
 portarsi dietro le due voci di costo: non è un debito aperto dalla 7c, che si
 limita a non chiuderlo. Va registrato nel backlog sotto la Fase 7, dove sta il
 resto del debito di quel dominio.
+
+---
+
+## 10. Debiti accettati — chiusi in revisione il 4 agosto 2026
+
+La revisione riga per riga della migrazione ha fatto emergere due punti che
+**non sono difetti da correggere ma scelte da dichiarare**. Sono accettati con
+questo documento; entrambi hanno una condizione di scadenza scritta.
+
+### 10.1 La validità del codice di imballaggio non è nel motore
+
+`listings.imballaggio_codice` ha in colonna un solo vincolo, e sintattico:
+`check (imballaggio_codice is null or imballaggio_codice ~ '^[a-z0-9_]{2,40}$')`.
+**Non c'è chiave esterna verso `packaging_options`** — non può esserci: quella
+tabella è versionata su `valida_da`/`valida_fino`, quindi `codice` non è unico e
+non è referenziabile. Il dominio semantico vero, «un codice con la finestra
+aperta», lo verifica soltanto la RPC `public.listing_imballaggio_dichiara`.
+
+**Accettato.** È la stessa forma già in uso per `marketplace_config`, con la
+stessa conseguenza nota: `service_role` o una `update` diretta possono scrivere
+qualunque stringa che passi la regex. Il vincolo di validità vive nella porta,
+non nel motore. Ciò che rende la scelta sostenibile è che la porta sia una sola:
+la colonna resta fuori dal `grant update` del client — terza regola di
+esposizione della 6d-1 — quindi nessun percorso applicativo la aggira.
+
+### 10.2 Una finestra che si chiude fra dichiarazione e checkout degrada in silenzio
+
+Se il venditore dichiara un codice e la finestra di quel codice viene chiusa
+prima che un compratore paghi, `order_checkout_reserve` non lo risolve:
+`v_packaging` resta interamente NULL e **l'ordine nasce con
+`imballaggio_codice` NULL e `imballaggio_cents` a zero**, coerente con
+`orders_imballaggio_congelato`. Non è un errore: è un degrado, e **il compratore
+non vede alcun avviso**.
+
+**Accettato per questa fase**, perché con un provider finto e prezzi di seed a
+zero il fallimento va nella direzione più sicura sul denaro: non si addebita un
+costo che non si è potuto risolvere, e nessun ordine nasce con un importo che
+nessuno può spiegare. Il costo del degrado è informativo, non monetario.
+
+**Condizione di scadenza, esplicita: diventa un blocco prima di collegare un
+fornitore reale.** Nel momento in cui un `provider` smette di essere `fake`, un
+imballaggio non risolto significa una spedizione che nessuno può eseguire, e
+allora `order_checkout_reserve` deve sollevare invece di degradare. È una
+modifica alla RPC, quindi una migrazione nuova: la regola 11 vale anche qui.
+
+**Non coperto dalla griglia.** Il caso 6 di `7c_consegna_imballaggio.sql` prova
+soltanto lo scenario «annuncio mai dichiarato» — codice NULL fin dall'inizio,
+`totale_cents = addebito_totale_cents = 10686`. Lo scenario di questo debito è
+un altro: «dichiarato e poi scaduto», che arriva allo stesso risultato per una
+via diversa e non ha alcun caso che lo eserciti. Chi implementerà il blocco
+scriverà anche quel caso.
 
 ---
 
