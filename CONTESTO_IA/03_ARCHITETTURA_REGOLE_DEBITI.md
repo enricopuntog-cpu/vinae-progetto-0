@@ -84,12 +84,39 @@ CONTESTO_IA/    handoff sintetico per nuove IA/chat
 - Una vendita pubblicata richiede una data di nascita dichiarata compatibile
   con la maggiore età.
 
+## Regole di denaro introdotte dalla 7b
+
+- La commissione è calcolata lato server e **congelata sull'ordine** insieme ai
+  tre parametri che l'hanno prodotta. Il client non la propone mai, e cambiare
+  `marketplace_config` dopo non tocca gli ordini già nati.
+- La formula sta in un posto solo, `private.marketplace_totale_cents`, usata
+  tanto dalla prenotazione quanto dalla vista di riconciliazione. Due copie da
+  tenere allineate sarebbero due copie che divergono.
+- L'arrotondamento del totale è sempre per eccesso: per difetto il margine
+  scenderebbe sotto l'obiettivo di un centesimo.
+- I fondi restano alla piattaforma perché non vengono mossi: l'addebito non
+  porta `transfer_data` né `on_behalf_of`, e il Transfer nasce solo al rilascio,
+  per il solo prezzo del venditore.
+- La fee davvero trattenuta si misura e basta: nessun percorso di rilascio fondi
+  la legge, e lo scarto rispetto alla fee di riferimento non è compensato da
+  alcun automatismo.
+- `charges_enabled`, `payouts_enabled` e il ruolo `seller_enabled` che ne deriva
+  si scrivono solo applicando un evento firmato del fornitore, mai su richiesta
+  del venditore. Il vincolo sta in un trigger, così vale anche per
+  `service_role`.
+
 ## Debiti e decisioni ancora aperte
 
 ### Bloccanti prima di denaro reale o beta pubblica
 
-- progettazione Stripe Connect, payout, KYC/onboarding venditore, rimborsi e
-  contestazioni;
+- Stripe Connect, payout e onboarding venditore: merged con la Fase 7b e
+  distribuiti sul progetto reale al merge — schema a ledger e tre Edge Function
+  `ACTIVE` — ma mai percorsi da un ordine e mai provati contro Stripe, nemmeno
+  in test mode. Restano fuori il KYC oltre l'onboarding ospitato,
+  l'interfaccia di gestione delle contestazioni e il recupero automatico di un
+  rimborso successivo a un Transfer già creato;
+- schedulazione dell'auto-rilascio: richiede `pg_cron` e `pg_net` sul progetto
+  ed è oggi un blocco commentato in fondo alla migrazione di Fase 7b;
 - verifica legale italiana/UE su vendita di alcolici, età, privacy e modello
   marketplace;
 - rate limiting condiviso per RPC/Edge Functions;
@@ -100,14 +127,18 @@ CONTESTO_IA/    handoff sintetico per nuove IA/chat
 
 ### Debiti della migrazione
 
-- trasferimento reale della proprietà della bottiglia al compratore in Fase 7;
+- trasferimento della proprietà della bottiglia al compratore: chiuso dalla
+  Fase 7, che al pagamento confermato crea l'unità privata del compratore in
+  `orders.buyer_bottle_unit_id` e conserva quella storica del venditore;
 - scheduler affidabile per scadenza annunci;
 - catalogo condiviso: chiuso dalla Fase 6d-2a, che ha introdotto
   `wines.provenienza` e `creato_da` e ha tolto ai client la vecchia via
   `listing_crea`; resta da sorvegliare la moderazione della provenienza;
 - automazione delle prove remote 33/33 e 11/11, oggi eseguite manualmente;
-- automazione dei test Supabase in CI con database effimero;
-- test frontend per `frontend-next/`;
+- automazione dei test Supabase in CI con database effimero: nessun job copre
+  ancora `supabase/**`, e le griglie SQL si eseguono a mano;
+- test frontend per `frontend-next/`: esistono e sono imposti in CI da
+  `MIN_TESTS`, ma coprono logica pura e adapter, non le pagine;
 - revisione delle viste proprietario/security barrier prima del cutover;
 - valutazione degli indici dopo traffico rappresentativo;
 - rate limiting delle RPC Supabase;
@@ -142,10 +173,16 @@ cd frontend-next
 bun install --frozen-lockfile
 bun run lint
 bun run typecheck
+bun run test
 bun run build
 ```
 
-Non esiste ancora uno script `test` in `frontend-next/`.
+Lo script `test` esiste ed è eseguito anche in CI, dietro una soglia minima:
+il job imposta `MIN_TESTS` (83 oggi) e fallisce se passano meno casi di così.
+La soglia serve perché `bun test` esce 0 quando i file di test ci sono ma non
+contengono casi: senza di lei una suite che si svuota in silenzio resterebbe
+verde. Si alza di proposito quando si aggiungono test; abbassarla è una
+decisione, non manutenzione.
 
 ### `backend/`
 

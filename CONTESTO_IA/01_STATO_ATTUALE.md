@@ -1,25 +1,55 @@
 # Stato attuale verificato
 
-Fotografia del **3 agosto 2026**.
+Fotografia del **4 agosto 2026**.
 
 ## Repository
 
 | Voce | Valore |
 | --- | --- |
 | Repository GitHub | [`enricopuntog-cpu/vinae-progetto-0`](https://github.com/enricopuntog-cpu/vinae-progetto-0) |
-| Branch attivo | `migration/phase-7-order-payment-service` |
-| HEAD del branch | `62cf75a` |
-| Base verificata | `3037bf4` — merge squash della PR #17 |
-| `origin/main` verificato | `3037bf4` — Fase 6d-2a integrata |
-| Distanza del branch attivo da `origin/main` | 33 commit avanti, 0 indietro |
-| Distanza dal proprio `origin` | 0 avanti, 0 indietro |
-| Ultima fase integrata in `main` | Fase 6d-2a — provenienza catalogo e percorsi Cantina |
-| Attività corrente | Fase 7 sul branch dedicato, in attesa del merge della PR #18 |
+| `origin/main` verificato | `5e6b8e4` — merge squash della PR #19, Fase 7b integrata |
+| Penultimo stato di `main` | `2a47952` — merge squash della PR #18, Fase 7 integrata |
+| Branch attivo | `docs/contesto-post-fase-7b` — solo documentazione, creato da `origin/main` |
+| Ultima fase integrata in `main` | Fase 7b — Stripe Connect, commissione e trattenuta fondi |
+| Attività corrente | Nessuna fase di migrazione aperta; il branch della 7b è stato mergiato |
 | PR della 6d-1 | [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) — merged |
 | PR di riconciliazione | [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) — merged |
 | PR di verifica post-merge 6d-1 | [#16](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/16) — merged il 30 luglio 2026 |
 | PR della 6d-2a | [#17](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/17) — merged il 31 luglio 2026 |
-| PR della Fase 7 | [#18](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/18) — aperta, draft, mai mergiata |
+| PR della Fase 7 | [#18](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/18) — merged il 3 agosto 2026, squash `2a47952` |
+| PR della Fase 7b | [#19](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/19) — merged il 4 agosto 2026, squash `5e6b8e4` |
+
+La CI sul push di `main` dopo il merge della #19 è la run
+[`30900108638`](https://github.com/enricopuntog-cpu/vinae-progetto-0/actions/runs/30900108638),
+verde su tutti e tre i job.
+
+## Distinzione che regge tutto il resto
+
+Fase 7 e Fase 7b sono **integrate in `main`**, e su questo progetto integrare
+vuol dire anche distribuire: l'integrazione GitHub di Supabase applica migrazioni
+e Edge Function al merge, senza `supabase db push` né `apply_migration`. La
+distinzione utile non è più fra integrato e applicato, ma fra **distribuito e
+percorso**. Verificato in sola lettura il 4 agosto 2026 sul progetto
+`pijnmcllmfgjmgsvtcej`:
+
+- **distribuito**: `20260731135455 phase_7_order_payment_service` e
+  `20260803150000 phase_7b_stripe_connect_marketplace` sono entrambe nel
+  registro; `payments-checkout`, `connect-onboarding` e `payouts-release` sono
+  `ACTIVE`;
+- **e distribuito nella versione giusta**: il contenuto applicato è quello a
+  netto garantito, non la prima bozza a percentuale piatta — `orders` porta
+  `margine_obiettivo_bps`, `riferimento_stripe_percentuale_bps`,
+  `riferimento_stripe_fisso_cents` e `commissione_cents`, `commissione_bps` non
+  esiste, `marketplace_config` è versionata su `valida_da`/`valida_fino`;
+- **mai percorso**: `orders`, `payments`, `payouts`, `seller_payout_accounts`,
+  `proposals`, `order_events` e `payment_provider_events` sono a **zero righe**,
+  `marketplace_config` ha la sola riga iniziale, nessun percorso UI raggiunge
+  onboarding, checkout, conferma o contestazione, `PAYMENTS_ENABLED` resta
+  `false` e nessuna chiamata a Stripe è mai stata fatta, nemmeno in test mode.
+
+Il codice è raggiungibile; nessun denaro lo ha mai percorso. Dettaglio in
+[`../docs/ROADMAP_V1.md`](../docs/ROADMAP_V1.md), sezione «Distribuita non vuol
+dire percorsa».
 
 ## Stato Git e prove
 
@@ -38,6 +68,14 @@ Le griglie remote autorizzate separatamente restituiscono 33/33 e 11/11. Il
 verifier repair storico resta 13/13 e il controllo finale dei residui fixture
 restituisce zero in tutte le categorie registrate. Il rapporto corrente è
 [`../docs/PHASE_6D1_POST_MERGE_VERIFICATION.md`](../docs/PHASE_6D1_POST_MERGE_VERIFICATION.md).
+
+Il ledger delle migrazioni remote è a **diciassette righe**, letto con
+`list_migrations` il 4 agosto 2026: le ultime due sono
+`20260731135455 phase_7_order_payment_service` e
+`20260803150000 phase_7b_stripe_connect_marketplace`. Le versioni a ledger
+coincidono con i nomi dei file, perché a distribuire è l'integrazione GitHub
+partendo dal repository: il riallineamento dei filename previsto per il percorso
+`apply_migration` non serve.
 
 ## Quale versione è servita
 
@@ -62,7 +100,8 @@ Fase 11 e richiede una decisione esplicita.
 | Cantina: pagina, store reale, vendita da bottiglia | Integrato in `main` — Fase 6c-2 |
 | Invarianti bottiglia–annuncio e hardening RLS | Integrati in `main` — Fase 6d-1; prove post-merge 33/33 e 11/11, residui zero |
 | Provenienza catalogo e percorsi Cantina | Integrati in `main` — Fase 6d-2a, PR #17 al merge squash `3037bf4`; smoke Storage del bucket `cantina` ancora aperto |
-| Ordini, proposte, pagamenti | Sul branch `migration/phase-7-order-payment-service` — Fase 7; draft PR #18 aperta e mai mergiata, nulla applicato al progetto Supabase reale |
+| Ordini, proposte, pagamenti | Integrati in `main` — Fase 7, PR #18 al merge squash `2a47952`; migrazione applicata al progetto reale al merge, tabelle a zero righe |
+| Connect, commissione, trattenuta e rilascio fondi | Integrati in `main` — Fase 7b, PR #19 al merge squash `5e6b8e4`; migrazione applicata e tre Edge Function `ACTIVE`, tabelle a zero righe, nessun percorso UI |
 | Messaggi e notifiche | Non migrati — Fase 8 |
 | Moderazione e audit persistente | Non migrati — Fase 9 |
 | AI reale | Non migrata — Fase 10 |
@@ -101,11 +140,11 @@ dichiarano il prodotto pronto per la produzione.
 
 ## Fase 7 — proposte, ordini, pagamenti
 
-**Stato:** lavorata sul branch `migration/phase-7-order-payment-service`, draft
-PR [#18](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/18) aperta e
-mai mergiata. Nulla è ancora applicato al progetto Supabase reale.
+**Stato:** integrata in `main` il 3 agosto 2026 con la PR
+[#18](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/18), merge
+squash `2a47952`.
 
-Consegnato sul branch:
+Consegnato:
 
 - schema versionato in
   [`20260731135455_phase_7_order_payment_service.sql`](../supabase/migrations/20260731135455_phase_7_order_payment_service.sql),
@@ -115,7 +154,7 @@ Consegnato sul branch:
   RLS e grant a colonne chiuse;
 - rate limiting condiviso lato server: `private.rate_limit_buckets`,
   `private.vinea_check_request` e l'aggancio a PostgREST tramite
-  `alter role authenticator set pgrst.db_pre_request` alla riga 140;
+  `alter role authenticator set pgrst.db_pre_request`;
 - Edge Function
   [`payments-checkout`](../supabase/functions/payments-checkout/index.ts) dietro
   il gate server-side `PAYMENTS_ENABLED=false`, con l'adapter Stripe isolato
@@ -128,46 +167,84 @@ Consegnato sul branch:
   `20260729234000_rls_auto_enable_bootstrap`, che rende la storia ricostruibile
   da zero.
 
-### Verifica remota — 3 agosto 2026
+La verifica remota del 3 agosto 2026 è stata condotta su un branch Supabase di
+sviluppo temporaneo, poi eliminato: replay del ledger 15 su 15, migrazione
+applicata per intero, cinque tabelle, undici funzioni e il `rolconfig` di
+`authenticator` con `pgrst.db_pre_request=private.vinea_check_request`. Prova
+che la storia è ricostruibile, non che il branch temporaneo fosse identico al
+progetto reale.
 
-Riportata dalla chat organizzativa, che ha creato un branch Supabase di sviluppo
-temporaneo e lo ha eliminato nella stessa sessione. Nessun branch esiste ora
-oltre a `main`.
+## Fase 7b — Connect, commissione e trattenuta fondi
 
-| Cosa | Esito |
-| --- | --- |
-| Replay del ledger riparato | 15 su 15, nessun arresto |
-| Migrazione di Fase 7, 917 righe | applicata per intero, senza errori |
-| Tabelle `public` create | 5 — `proposals`, `orders`, `payments`, `order_events`, `payment_provider_events` |
-| Funzioni create | 11 |
-| `rolconfig` di `authenticator` | contiene `pgrst.db_pre_request=private.vinea_check_request` |
+**Stato:** integrata in `main` il 4 agosto 2026 con la PR
+[#19](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/19), merge
+squash `5e6b8e4`, CI verde.
 
-L'ultima riga chiude l'unica incognita tecnica che restava: il privilegio
-`alter role` esiste davvero. È una misura eseguita fuori dal repository e
-registrata come tale, non riverificabile da Git; prova che la storia è
-ricostruibile, non che il branch temporaneo fosse identico al progetto reale.
+Estende lo schema della Fase 7, non lo sostituisce:
 
-### Fuori scope e non autorizzato da questa fase
+- `marketplace_config` versionata con vista pubblica a colonne chiuse,
+  `seller_payout_accounts`, `account_provider_events`, enum `payout_stato`,
+  tabella `payouts`, colonne di commissione e trattenuta su `orders`, colonne
+  di fee reale su `payments`, vista `order_margine_riconciliazione`, undici RPC
+  nuove e due sostituite;
+- la commissione è un **rincaro a percentuale variabile con netto garantito**,
+  non una percentuale fissa:
+  `totale = ceil((prezzo * (10000 + margine_obiettivo_bps) / 10000 + riferimento_stripe_fisso_cents) / (1 - riferimento_stripe_percentuale_bps / 10000))`,
+  con `commissione = totale - prezzo`. Parametri iniziali 500 / 150 / 25 e 14
+  giorni di verifica;
+- la percentuale effettiva è un risultato, non un parametro: 9,20% su 10 €,
+  7,12% su 50 €, 6,86% su 100 €, 6,60% su 5000 €, con asintoto 6,5990% mai
+  raggiunto dal basso;
+- l'arrotondamento è **sempre per eccesso**: per difetto il margine scenderebbe
+  sotto l'obiettivo di un centesimo, e un centesimo sotto è comunque sotto;
+- sull'ordine sono congelati i **tre parametri** oltre al risultato: senza di
+  essi un ordine vecchio resta addebitabile ma non più spiegabile;
+- trattenuta fondi con il pattern *separate charges and transfers*: il
+  PaymentIntent non porta `transfer_data` né `on_behalf_of`, e il Transfer nasce
+  solo al rilascio, per il solo `prezzo_cents`;
+- rilascio su `conferma_ricezione` del compratore oppure auto-rilascio dopo
+  `auto_rilascio_giorni` dalla consegna dichiarata; `ordine_contesta` blocca
+  entrambi;
+- `payments.fee_stripe_reale_cents` registra la fee davvero trattenuta e
+  `order_margine_riconciliazione` misura lo scarto: nessun percorso di rilascio
+  fondi legge quei numeri;
+- nessun valore nuovo in `public.order_stato`, per decisione dichiarata: la
+  dimensione mancante era ortogonale ed è `public.payout_stato`;
+- Edge Function `connect-onboarding` (Express) e `payouts-release`;
+  `payments-checkout` passa da Checkout Session a PaymentIntent con un solo
+  Payment Element.
 
-- `apply_migration` della migrazione di Fase 7 sul progetto reale;
-- distribuzione della Edge Function `payments-checkout`;
-- esecuzione della griglia
-  [`supabase/tests/7_ordini_pagamenti.sql`](../supabase/tests/7_ordini_pagamenti.sql)
-  — 16 casi, mai eseguita; gira in una sola sessione, quindi la gara concorrente
-  non è provata dai casi che verificano l'invariante;
-- smoke Storage della 6d-2a, ancora aperto e indipendente da questa fase;
-- Stripe Connect, payout, KYC e contestazioni operative.
+Verifica locale del 4 agosto 2026 in `frontend-next/` con Bun 1.3.14: lint,
+typecheck, test e build a exit 0, con 83 test su 83 e `MIN_TESTS` alzata da 69 a
+83 nel job CI.
 
-## Prossimo confine corretto
+### Debito `seller_enabled` della Fase 6a
 
-Non resta alcun gate tecnico per il merge della PR #18: la verifica remota del
-3 agosto 2026 ha chiuso l'ultima incognita. Restano azioni umane e gate
-separati, in quest'ordine:
+La sorgente esiste: il trigger `private.seller_enabled_sync` scrive il ruolo
+quando un evento firmato dichiara insieme `charges_enabled` e `payouts_enabled`,
+e lo toglie appena una delle due decade. **Il gate resta spento**: nessuna policy
+applica ancora `has_role(auth.uid(), 'seller_enabled')` alla creazione di
+annunci. Accenderlo oggi impedirebbe di vendere a chiunque, perché con
+`PAYMENTS_ENABLED=false` nessuno ha completato l'onboarding.
 
-1. incollare il corpo aggiornato nella PR #18, toglierle lo stato draft e
-   mergiarla a mano su GitHub — decisione di Enrico, mai autonoma;
-2. dopo il merge, autorizzare esplicitamente `apply_migration` della migrazione
-   di Fase 7 sul progetto reale e riallineare il filename alla versione
-   assegnata dal server;
-3. autorizzare separatamente il deploy di `payments-checkout`, l'esecuzione
-   della griglia `7_ordini_pagamenti.sql` e lo smoke Storage della 6d-2a.
+## Gate chiusi senza essere stati autorizzati
+
+Due dei gate che questo documento elencava come aperti non lo sono più, e non
+perché qualcuno li abbia autorizzati: li ha chiusi il merge. L'integrazione
+GitHub di Supabase ha distribuito entrambe le migrazioni e le tre Edge Function
+appena la PR è entrata in `main`. Il riallineamento dei filename cade con loro,
+perché le versioni a ledger sono già quelle dei file.
+
+## Gate aperti, in ordine
+
+1. autorizzare separatamente l'esecuzione delle griglie
+   [`7_ordini_pagamenti.sql`](../supabase/tests/7_ordini_pagamenti.sql) — 16
+   casi — e [`7b_connect_marketplace.sql`](../supabase/tests/7b_connect_marketplace.sql)
+   — 23 casi — che creano e cancellano fixture remote, ora su uno schema che
+   esiste davvero;
+2. decidere dove sta il gate di autorizzazione, visto che la regola scritta
+   presidia `supabase db push` e il percorso reale è il merge;
+3. chiudere lo smoke Storage del bucket `cantina`, aperto dalla 6d-2a e
+   indipendente da tutto il resto.
+
+Nessuno dei tre è autorizzato e nessuno è stato eseguito.

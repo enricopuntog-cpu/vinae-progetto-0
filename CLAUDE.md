@@ -55,13 +55,15 @@ bun install --frozen-lockfile
 bun run dev
 bun run lint
 bun run typecheck
-bun run test         # Bun's native test runner — esiste, ma non è agganciato a nulla
+bun run test         # Bun's native test runner — run in CI behind a minimum-count floor
 bun run build
 ```
-A `test` script exists here, but **nothing invokes it**: CI for `frontend-next` runs only
-lint/typecheck/build, and `tsconfig.json` excludes `**/*.test.ts` from typecheck (there is no
-`@types/bun` among the devDependencies, unlike `frontend/`). Tests under `frontend-next/` are
-therefore neither type-checked nor enforced — a green CI says nothing about them.
+CI runs these tests and **enforces a floor**: the `Test` step of the `frontend-next` job sets
+`MIN_TESTS` (83 today) and fails when fewer cases pass than that. The floor is there because
+`bun test` exits 0 when the test files exist but contain no cases — without it a suite that
+silently empties itself would still be green. Raise it deliberately when tests are added;
+lowering it is a decision, not housekeeping. These tests are type-checked as well: `tsconfig.json`
+includes `**/*.ts` and `@types/bun` is among the devDependencies.
 
 ### backend/ (current, FastAPI/MongoDB) — Python 3.12
 ```bash
@@ -164,6 +166,15 @@ These hold for `backend/` today and must hold for any Supabase/Edge Function rep
 - Auth/AI/payment provider credentials are abstracted behind an interface
   (`TokenVerifier`, `AIProvider`) so providers are swappable and tests can inject fakes without
   network or real credentials.
+- The platform markup is computed server-side and **frozen on the order** — result and the three
+  parameters that produced it. A client never sends a commission, and changing
+  `marketplace_config` later must not move an order that already exists.
+- Money moves only by not being moved: the charge carries neither `transfer_data` nor
+  `on_behalf_of`, so funds stay on the platform balance and the seller's Transfer is created
+  separately at release, for the seller's price alone (Phase 7b).
+- Capability flags that mean "this seller can be paid" (`charges_enabled`, `payouts_enabled`,
+  and the `seller_enabled` role derived from them) are written only by applying a signed provider
+  event, never by a request from the seller.
 
 ### Postgres exposure rules (binding since Phase 6d-1)
 

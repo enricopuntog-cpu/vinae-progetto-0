@@ -1,8 +1,10 @@
 # Storia fase per fase
 
-Le date e gli stati delle PR sono stati verificati su GitHub il 3 agosto
+Le date e gli stati delle PR sono stati verificati su GitHub il 4 agosto
 2026. “Integrata” significa presente in `main`; “sul branch” significa che il
-lavoro esiste ma non è ancora parte di `main`.
+lavoro esiste ma non è ancora parte di `main`. Per le fasi 7 e 7b “integrata”
+non significa applicata a un database: le migrazioni sono merged e non eseguite
+sul progetto reale.
 
 ## Fondazione tecnica
 
@@ -290,14 +292,13 @@ resta aperto.
 
 ### Fase 7 — proposte, ordini e pagamenti
 
-**Stato:** sul branch, non integrata in `main`; verifica tecnica chiusa il
-3 agosto 2026
+**Stato:** integrata il 3 agosto 2026
 
 **Branch:** `migration/phase-7-order-payment-service`
 
-**PR:** [#18 — Fase 7 — ordini e pagamenti (checkpoint locale)](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/18) — aperta, draft, mai mergiata
+**PR:** [#18 — Fase 7 — ordini e pagamenti (checkpoint locale)](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/18) — merged con squash `2a47952`
 
-Consegnato sul branch:
+Consegnato:
 
 - migrazione `20260731135455_phase_7_order_payment_service.sql`, 917 righe:
   `proposals`, `orders`, `payments`, `order_events`, `payment_provider_events`,
@@ -327,10 +328,72 @@ tabelle, undici funzioni e il `rolconfig` di `authenticator` con
 repository e registrata come tale. Con essa cade l'ultima incognita tecnica al
 merge.
 
-Nulla è stato applicato al progetto Supabase reale, nessuna Edge Function è
-distribuita e nessuna chiamata Stripe è stata fatta, nemmeno in test mode.
+Al merge della PR #18, lo stesso 3 agosto 2026, l'integrazione GitHub di Supabase
+ha applicato `20260731135455 phase_7_order_payment_service` al progetto reale:
+verificato a ledger il 4 agosto. Le tabelle di ordine e pagamento esistono e sono
+a zero righe; nessuna chiamata Stripe è stata fatta, nemmeno in test mode.
 L'avvio della fase è stato ratificato retroattivamente in sede organizzativa il
 3 agosto 2026.
+
+### Fase 7b — Stripe Connect, commissione e trattenuta fondi
+
+**Stato:** integrata il 4 agosto 2026
+
+**Branch:** `migration/phase-7b-stripe-connect-marketplace`
+
+**PR:** [#19 — Fase 7b — Stripe Connect, commissione e trattenuta fondi](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/19) — merged con squash `5e6b8e4`, CI verde sulla run `30900108638`
+
+Consegnato:
+
+- migrazione additiva `20260803150000_phase_7b_stripe_connect_marketplace.sql`,
+  sopra lo schema della Fase 7 e non al suo posto: `marketplace_config`
+  versionata con vista pubblica a colonne chiuse, `seller_payout_accounts`,
+  `account_provider_events`, enum `payout_stato`, tabella `payouts`, colonne di
+  commissione e trattenuta su `orders`, colonne di fee reale su `payments`,
+  vista `order_margine_riconciliazione`, undici RPC nuove e due sostituite
+  (`order_checkout_reserve`, `payment_apply_provider_event`);
+- il modello economico: rincaro a percentuale variabile calcolato per lasciare
+  alla piattaforma un margine netto costante **dopo** la fee del fornitore,
+  arrotondato per eccesso, con i tre parametri congelati sull'ordine insieme al
+  risultato. La formula vive in `private.marketplace_totale_cents` e in nessun
+  altro posto: la usano tanto la prenotazione quanto la vista di
+  riconciliazione;
+- trattenuta fondi con *separate charges and transfers*: il PaymentIntent non
+  porta `transfer_data` né `on_behalf_of`, quindi i fondi restano sul balance
+  della piattaforma e il Transfer nasce solo al rilascio, per il solo prezzo del
+  venditore. La commissione resta alla piattaforma per il fatto stesso di non
+  muoversi;
+- rilascio su conferma del compratore o auto-rilascio a scadenza, con
+  `ordine_contesta` che blocca entrambi; nessun valore nuovo in
+  `public.order_stato`, perché la dimensione mancante era ortogonale ed è
+  `public.payout_stato`;
+- `payments.fee_stripe_reale_cents` e `payment_fee_reale_registra` registrano la
+  fee davvero trattenuta, misurata in `order_margine_riconciliazione`: nessun
+  percorso di rilascio fondi la legge;
+- Edge Function `connect-onboarding` (Express) e `payouts-release`;
+  `payments-checkout` passa da Checkout Session ospitata a PaymentIntent con un
+  solo Payment Element;
+- webhook con whitelist estesa ai `payment_intent.*` e `account.updated`
+  instradato su RPC e tabella di deduplicazione separate;
+- chiusura della sorgente del debito `seller_enabled` della 6a tramite il
+  trigger `private.seller_enabled_sync`, che vincola anche `service_role`;
+- griglia `supabase/tests/7b_connect_marketplace.sql`, 23 casi, mai eseguita;
+- soglia CI `MIN_TESTS` alzata da 69 a 83.
+
+Il gate sulla creazione di annunci resta spento. Al merge della PR #19
+l'integrazione GitHub di Supabase ha distribuito sul progetto reale sia la
+migrazione `20260803150000` sia le tre Edge Function, che risultano `ACTIVE`;
+il contenuto applicato è quello a netto garantito e non la prima bozza a
+percentuale piatta. Ciò che non è mai successo è più stretto: le tabelle di
+denaro sono a zero righe, nessun percorso UI le raggiunge e nessuna chiamata a
+Stripe è stata fatta, nemmeno in test mode.
+
+Da questa fase nasce anche una regola di processo permanente, registrata in
+`CLAUDE.md` e nel punto 11 delle regole di migrazione: un file di migrazione già
+pushato almeno una volta non si modifica più in place. Il branch di anteprima che
+Supabase crea per ogni PR aveva eseguito la prima bozza della migrazione
+all'apertura della #19 e non ha mai ripreso la riscrittura successiva, perché
+confronta la versione e non il contenuto.
 
 ## Fasi future
 

@@ -40,9 +40,26 @@
 - Il merge non equivale ad autorizzazione o prova delle fixture remote.
 - La Fase 6d-2a è in `main` tramite PR #17 al merge squash `3037bf4`; lo smoke
   Storage del bucket `cantina` non è compreso nel merge e resta aperto.
-- La Fase 7 esiste sul branch `migration/phase-7-order-payment-service` con la
-  draft PR #18 aperta e mai mergiata. Nulla è applicato al progetto Supabase
-  reale.
+- La Fase 7 è in `main` tramite PR #18 al merge squash `2a47952`, la Fase 7b
+  tramite PR #19 al merge squash `5e6b8e4`.
+- «Integrata» qui significa anche «distribuita»: l'integrazione GitHub di
+  Supabase applica migrazioni e Edge Function al merge su `main`, da sola.
+  Verificato in lettura il 4 agosto 2026 — entrambe le migrazioni sono a ledger
+  (diciassette righe) e `payments-checkout`, `connect-onboarding` e
+  `payouts-release` sono `ACTIVE`. Il contenuto applicato è quello a netto
+  garantito, non la prima bozza a percentuale piatta.
+- «Distribuita» non significa «percorsa», ed è questa la distinzione da tenere:
+  le tabelle di denaro sono a **zero righe**, `marketplace_config` ha la sola
+  riga iniziale, nessun percorso UI raggiunge onboarding, checkout, conferma o
+  contestazione, `PAYMENTS_ENABLED` resta `false` e nessuna chiamata a Stripe è
+  mai stata fatta, nemmeno in test mode. Dettaglio in
+  [`../docs/ROADMAP_V1.md`](../docs/ROADMAP_V1.md), sezione «Distribuita non
+  vuol dire percorsa».
+- La migrazione di Fase 7b **dipende** da quella di Fase 7: sul progetto reale
+  l'ordine è stato rispettato dalle versioni, ma in qualsiasi ambiente nuovo
+  applicarla per prima fallisce, perché estende tabelle e RPC che l'altra crea.
+- Il ruolo `seller_enabled` ha una sorgente autoritativa dalla 7b, ma il gate
+  sulla creazione di annunci è deliberatamente spento.
 - Le fasi 8–11 non sono iniziate.
 - La vecchia app resta quella servita.
 - Auth reale e ruoli demo coesistono intenzionalmente.
@@ -55,7 +72,10 @@
 2. Leggere le migrazioni precedenti del dominio.
 3. Trattare lo schema remoto come dato esterno da verificare, non come
    identico al repository.
-4. Preparare una nuova migrazione additiva; non riscrivere file già applicati.
+4. Preparare una nuova migrazione additiva. Un file già pushato almeno una
+   volta non si modifica più in place, nemmeno in bozza e nemmeno se nessun
+   database reale lo ha eseguito: vale la regola 11 di
+   [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md).
 5. Aggiungere/aggiornare RLS, privilegi, test e documentazione.
 6. Fermarsi prima di applicare sul progetto reale.
 7. Mostrare l'SQL esatto e chiedere conferma in sessione.
@@ -111,15 +131,47 @@ La Fase 7 deve:
 - progettare Stripe Connect/KYC prima di denaro reale;
 - colmare il rate limiting delle RPC prima di esporre pagamenti.
 
-Il checkpoint sul branch copre schema, rate limiting condiviso, Edge Function,
-webhook e adapter; il trasferimento reale della proprietà al compratore non è
-stato implementato e resta un debito dichiarato. Prima di toccare il progetto
-Supabase reale servono autorizzazioni esplicite separate per `apply_migration`,
-per il deploy di `payments-checkout` e per l'esecuzione della griglia
-`supabase/tests/7_ordini_pagamenti.sql`.
+La fase è integrata e copre schema, rate limiting condiviso, Edge Function,
+webhook, adapter e il trasferimento della proprietà al compratore tramite
+`orders.buyer_bottle_unit_id`. Questo elenco resta come descrizione di ciò che
+la Fase 7 ha dovuto garantire, non come lavoro da avviare.
+
+## Handoff specifico alla Fase 7b
+
+La Fase 7b è integrata. Ciò che una nuova chat deve sapere prima di toccarne il
+codice:
+
+- la commissione è un rincaro a netto garantito, non una percentuale scelta, e
+  la formula vive in `private.marketplace_totale_cents` e in nessun altro posto;
+- sull'ordine sono congelati i tre parametri oltre al risultato: un ordine
+  vecchio deve restare spiegabile dopo che la configurazione è cambiata;
+- i fondi restano alla piattaforma perché l'addebito non porta `transfer_data`
+  né `on_behalf_of`. Aggiungerli spegnerebbe l'intera trattenuta senza che
+  nessun test lo dica;
+- la fee davvero trattenuta si misura e non decide nulla;
+- il gate `seller_enabled` sulla creazione di annunci è spento di proposito.
+
+## Gate chiusi dal merge, non da un'autorizzazione
+
+`apply_migration` di Fase 7 e Fase 7b e il deploy delle tre Edge Function erano
+elencati qui come gate aperti. Non lo sono più, e nessuno li ha autorizzati: li
+ha chiusi il merge, tramite l'integrazione GitHub. Il riallineamento dei filename
+cade con loro, perché le versioni a ledger coincidono già con i nomi dei file.
+
+## Gate ancora aperti, in ordine
+
+1. esecuzione delle griglie `7_ordini_pagamenti.sql` (16 casi) e
+   `7b_connect_marketplace.sql` (23 casi), che creano e cancellano fixture
+   remote e richiedono un'autorizzazione esplicita;
+2. decidere dove sta il gate di autorizzazione, dato che la regola scritta
+   presidia `supabase db push` e il percorso reale è il merge su `main`;
+3. smoke Storage del bucket `cantina`, aperto dalla 6d-2a e indipendente.
+
+Nessuno dei tre è autorizzato.
 
 ## Cosa aggiornare alla fine di una fase
 
+- `CHANGES.log`, con le quattro intestazioni esatte e `NEXT STEPS` a tre voci;
 - `docs/ROADMAP_V1.md`;
 - `docs/MIGRATION_PHASE_1_BACKLOG.md`;
 - documenti di sicurezza/ambiente se toccati;

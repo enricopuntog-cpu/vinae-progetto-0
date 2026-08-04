@@ -81,6 +81,7 @@ Il dettaglio di ogni ticket è in
 | 6d-1 | **Invarianti di sicurezza**: confini di autorizzazione fra bottiglie, annunci e ruoli; controllo età server-side; invarianti bottiglia–annuncio. Nessuna nuova fonte di dati | Sì |
 | 6d-2a | **Provenienza catalogo e percorsi Cantina**: distinzione catalogo curato/utente, aggiunta privata/pubblica/vendita, inizializzazione atomica Cantina e home con dati reali | Sì |
 | 7 | `OrderService` + `ProposalService` + `PaymentService` (Stripe) | Sì |
+| 7b | **Stripe Connect, commissione e trattenuta fondi**: account di incasso del venditore, rincaro a netto garantito congelato sull'ordine, fondi sul balance della piattaforma e Transfer separato al rilascio | Sì |
 | 8 | `MessagingService` + `NotificationService` (Realtime) | Sì |
 | 9 | `ModerationService` + audit persistente | Sì |
 | 10 | `AiService` reale via Edge Function | Sì |
@@ -319,10 +320,13 @@ auto-riferita verificata lato server, non un accertamento d'identità:
 richiesti prima di qualunque payout reale.** Resta valida la voce «verifica
 legale su vendita di alcolici, età, privacy, marketplace» qui sotto.
 
-Il trasferimento di proprietà della bottiglia al compratore non è implementato —
-non esiste in `frontend/` e sarebbe funzionalità nuova. È debito dichiarato in
+Il trasferimento di proprietà della bottiglia al compratore non è implementato
+**dalla 6d-1** — non esiste in `frontend/` e qui sarebbe stata funzionalità
+nuova. Era debito dichiarato in
 [`MIGRATION_PHASE_1_BACKLOG.md`](MIGRATION_PHASE_1_BACKLOG.md), con il campo già
-pronto ad accoglierlo.
+pronto ad accoglierlo; lo ha chiuso la Fase 7, che alla conferma del pagamento
+conia una `bottle_unit` nuova per il compratore e la registra in
+`orders.buyer_bottle_unit_id`.
 
 ### Stato di integrazione e gate successivo
 
@@ -368,8 +372,11 @@ fase non è autorizzata esplicitamente.
 
 **Stato: integrata in `main` con la PR #18 al merge squash `2a47952`.** Include
 schema versionato, prenotazione atomica, RLS/grant, limiter condiviso, Edge
-Function di checkout, webhook firmato, adapter e test. La migrazione non è
-applicata al progetto reale e nessuna API Stripe è stata chiamata.
+Function di checkout, webhook firmato, adapter e test. La migrazione
+`20260731135455 phase_7_order_payment_service` **è applicata al progetto reale**:
+la distribuisce l'integrazione GitHub di Supabase al merge su `main`, non un
+`supabase db push` manuale. Le tabelle di ordine e pagamento esistono e sono a
+zero righe.
 
 Il pagamento confermato crea una nuova unità privata per il buyer e conserva
 l'unità storica del seller, che il trigger esistente marca come ceduta.
@@ -378,8 +385,8 @@ Specifica, gate e limiti di verifica sono in `docs/superpowers/` e
 
 ## Fase 7b — Stripe Connect, commissione e trattenuta fondi
 
-**Stato: primo checkpoint implementato soltanto in locale sul branch
-`migration/phase-7b-stripe-connect-marketplace`; feature flag spenta.** Estende
+**Stato: integrata in `main` con la PR #19 al merge squash `5e6b8e4`, il 4 agosto
+2026; CI verde sulla run `30900108638`; feature flag spenta.** Estende
 lo schema della Fase 7 — non lo sostituisce — con account Connect Express del
 venditore, rincaro di piattaforma a percentuale variabile congelato sull'ordine,
 trattenuta dei fondi sul balance della piattaforma, rilascio su conferma del
@@ -407,9 +414,30 @@ chiunque.
 
 Restano fuori: interfaccia di gestione delle contestazioni (Fase 9), KYC oltre
 l'onboarding ospitato, schedulazione reale del job di rilascio, e qualunque
-pagamento reale. Nessuna migrazione o funzione è distribuita, nessuna API Stripe
-è stata chiamata nemmeno in test mode. Perimetro e debiti in
-`docs/MIGRATION_PHASE_1_BACKLOG.md`.
+pagamento reale. Perimetro e debiti in `docs/MIGRATION_PHASE_1_BACKLOG.md`.
+
+### Distribuita non vuol dire percorsa
+
+Verificato sul progetto reale il 4 agosto 2026, in sola lettura: la migrazione
+`20260803150000 phase_7b_stripe_connect_marketplace` è nel registro, insieme a
+quella di Fase 7, e le tre Edge Function `payments-checkout`,
+`connect-onboarding` e `payouts-release` risultano `ACTIVE`. **Non c'è nessun
+`apply_migration` in attesa di autorizzazione**: l'integrazione GitHub di
+Supabase distribuisce migrazioni e function al merge su `main`, quindi lo schema
+di 7 e 7b è già live. Il registro remoto è a diciassette voci.
+
+Il contenuto applicato è quello a netto garantito, non la prima bozza a
+percentuale piatta: `orders` porta `margine_obiettivo_bps`,
+`riferimento_stripe_percentuale_bps`, `riferimento_stripe_fisso_cents` e
+`commissione_cents`, e `marketplace_config` è versionata.
+
+Ciò che resta vero è più stretto, e va detto così: `orders`, `payments`,
+`payouts` e `seller_payout_accounts` sono a **zero righe**, `marketplace_config`
+ha la sola riga di configurazione iniziale, nessun percorso dell'interfaccia
+raggiunge onboarding, checkout, conferma o contestazione, e la feature flag resta
+spenta. Restano aperte la schedulazione dell'auto-rilascio, che richiede
+`pg_cron` e `pg_net`, e la riconciliazione della fee reale. Il codice è
+raggiungibile; nessun denaro lo ha mai percorso.
 
 ## Cosa NON è ancora deciso
 

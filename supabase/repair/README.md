@@ -32,6 +32,12 @@ Dal 2026-08-03 il ledger ha **quindici righe**: la chat organizzativa ha applica
 al progetto reale la versione `20260729234000 rls_auto_enable_bootstrap`, di cui
 sotto.
 
+Dal 2026-08-04 ne ha **diciassette**, verificate con `list_migrations`. Le due
+righe in più sono `20260731135455 phase_7_order_payment_service` e
+`20260803150000 phase_7b_stripe_connect_marketplace`, e non le ha scritte
+nessuna sessione: le ha distribuite l'integrazione GitHub di Supabase al merge
+delle PR #18 e #19 su `main`.
+
 ## `ledger_statements_vuoti.sql`
 
 ### Il difetto che ripara
@@ -186,7 +192,9 @@ non che il branch temporaneo fosse identico al progetto reale. E l'esito è una
 misura eseguita fuori da questa postazione: è registrato qui come tale, non è
 riverificabile da Git.
 
-Restano gate separati, e nessuno di essi è autorizzato: `apply_migration` della
-Fase 7 sul progetto reale, distribuzione della Edge Function, esecuzione della
+Restano gate separati, e nessuno di essi è autorizzato: esecuzione della
 griglia [`7_ordini_pagamenti.sql`](../tests/7_ordini_pagamenti.sql) e smoke
-Storage.
+Storage. I due che erano elencati qui — `apply_migration` della Fase 7 sul
+progetto reale e distribuzione della Edge Function — sono chiusi dal
+2026-08-03 senza autorizzazione: li ha eseguiti l'integrazione GitHub di
+Supabase al merge della PR #18.

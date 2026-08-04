@@ -1,5 +1,11 @@
 # Prompt operativi per le prossime chat
 
+**Stato al 4 agosto 2026:** i tre prompt qui sotto appartengono alle fasi 6d-1 e
+6d-2a, entrambe chiuse e integrate. Restano come modello della forma da usare —
+gate espliciti, autorizzazioni separate, fermata prima dell'SQL remoto — non
+come lavoro da avviare. I gate ancora aperti sono elencati in
+[`04_HANDOFF_NUOVA_IA.md`](04_HANDOFF_NUOVA_IA.md).
+
 Questi prompt si usano **in ordine e mai in parallelo**.
 
 Regola generale: le fasi già integrate e documentate si considerano concluse.
