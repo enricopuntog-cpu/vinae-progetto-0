@@ -21,7 +21,8 @@
 | [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) | 30-07-2026 | merged | Riconciliazione handoff post-merge 6d-1 e prompt operativi |
 | [#16](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/16) | 30-07-2026 | merged | Evidenze post-merge 33/33, 11/11 e residui fixture zero |
 | [#17](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/17) | 31-07-2026 | merged | Fase 6d-2a — provenienza catalogo e percorsi Cantina |
-| [#18](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/18) | — | aperta, draft | Fase 7 — proposte, ordini e pagamenti; mai mergiata |
+| [#18](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/18) | 03-08-2026 | merged | Fase 7 — proposte, ordini e pagamenti; squash `2a47952` |
+| [#19](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/19) | 04-08-2026 | merged | Fase 7b — Connect, commissione e trattenuta fondi; squash `5e6b8e4` |
 
 ## Anomalie della cronologia da conoscere
 
@@ -55,23 +56,38 @@ La PR #14 è stata unita con merge commit `61e3fde`. La CI finale
 separatamente dopo il merge: risultati finali 33/33 e 11/11, verifier storico
 13/13 e residui fixture zero.
 
-### PR #17 e #18
+### PR #17, #18 e #19
 
 - #17 è la Fase 6d-2a, unita in `main` il 31 luglio 2026 con merge squash
   `3037bf4`. Lo smoke Storage del bucket `cantina` resta però aperto: il merge
   non lo include.
-- #18 è la Fase 7, aperta come draft sul branch
-  `migration/phase-7-order-payment-service` e mai mergiata. Il branch è 33
-  commit avanti a `origin/main`. La verifica remota del 3 agosto 2026 ha chiuso
-  i gate tecnici, ma il merge resta un'azione umana esplicita.
+- #18 è la Fase 7, unita il 3 agosto 2026 con merge squash `2a47952`.
+- #19 è la Fase 7b, unita il 4 agosto 2026 con merge squash `5e6b8e4`, CI verde
+  sulla run
+  [`30900108638`](https://github.com/enricopuntog-cpu/vinae-progetto-0/actions/runs/30900108638).
 
-Non contare #18 come fase integrata finché GitHub non la mostra merged.
+Per #18 e #19 vale una distinzione che il solo stato «merged» non mostra:
+nessuna delle due migrazioni è applicata al progetto Supabase reale, nessuna
+Edge Function è distribuita e nessuna chiamata Stripe è mai stata fatta. Sono
+fasi integrate e inerti.
+
+### Il branch di anteprima della #19
+
+Supabase crea un branch di anteprima per ogni PR ed esegue le migrazioni
+all'apertura. Sulla #19 quel branch ha eseguito la **prima bozza** della
+migrazione di Fase 7b — commissione 5% piatta — e non ha mai ripreso la
+riscrittura a netto garantito, perché un ambiente che ha già registrato una
+versione come eseguita confronta la versione e non il testo. Il progetto reale
+non è toccato, perché quella versione non l'ha mai eseguita. Da qui la regola 11
+delle regole di migrazione.
 
 ## Fonti autorevoli nel repository
 
 | Fonte | Uso |
 | --- | --- |
 | [`../AGENTS.md`](../AGENTS.md) | Istruzioni correnti per agenti, se presente |
+| [`../CLAUDE.md`](../CLAUDE.md) | Comandi, convenzioni sulle migrazioni e invarianti di sicurezza vincolanti |
+| [`../CHANGES.log`](../CHANGES.log) | Ponte di handoff: stato corrente, task attivo, tre prossimi passi, blocchi |
 | [`../docs/ROADMAP_V1.md`](../docs/ROADMAP_V1.md) | Sequenza e stato logico delle fasi |
 | [`../docs/MIGRATION_PHASE_1_BACKLOG.md`](../docs/MIGRATION_PHASE_1_BACKLOG.md) | Perimetri, debiti e handoff futuri |
 | [`../docs/adr/001-target-architecture.md`](../docs/adr/001-target-architecture.md) | Architettura target |

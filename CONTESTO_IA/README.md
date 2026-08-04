@@ -1,6 +1,6 @@
 # Contesto completo Vinea per IA e nuove chat
 
-Ultimo aggiornamento: **3 agosto 2026**
+Ultimo aggiornamento: **4 agosto 2026**
 
 Questa cartella è il punto di ingresso rapido per chi deve lavorare su Vinea
 senza conoscere le conversazioni precedenti. Riassume la cronologia delle fasi,
@@ -20,7 +20,7 @@ devono essere reinterpretati.
 5. [`05_INDICE_PR_E_FONTI.md`](05_INDICE_PR_E_FONTI.md) — indice delle PR e
    gerarchia delle fonti.
 6. [`06_PROMPT_CHAT_OPERATIVE.md`](06_PROMPT_CHAT_OPERATIVE.md) — prompt
-   sequenziali per chiudere i gate e avanzare nella Fase 6d-2a.
+   operativi storici delle fasi 6d-1 e 6d-2a, tenuti come modello di forma.
 7. [`context-manifest.json`](context-manifest.json) — riepilogo
    machine-readable per strumenti automatici.
 
@@ -41,8 +41,9 @@ contrasto:
 
 Vinea sta migrando gradualmente dall'app servita
 `frontend/` + `backend/` verso `frontend-next/` + Supabase. L'ultima fase
-integrata in `main` è la 6d-2a, tramite PR #17 al merge squash `3037bf4`; le
-evidenze post-merge della 6d-1 sono in `main` tramite PR #16. La Fase 7 vive sul
-branch `migration/phase-7-order-payment-service` con la draft PR #18 aperta e
-mai mergiata: la verifica remota del 3 agosto 2026 ha chiuso i gate tecnici, ma
-nulla è applicato al progetto Supabase reale. Le fasi 8–11 non sono iniziate.
+integrata in `main` è la 7b — Stripe Connect, commissione e trattenuta fondi —
+tramite PR #19 al merge squash `5e6b8e4`, preceduta dalla Fase 7 con la PR #18
+al merge squash `2a47952`. Integrate non vuol dire attive: nessuna delle due
+migrazioni è applicata al progetto Supabase reale, nessuna Edge Function è
+distribuita, `PAYMENTS_ENABLED` resta `false` e nessuna chiamata a Stripe è mai
+stata fatta. Le fasi 8–11 non sono iniziate.

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-03",
+  "updated_at": "2026-08-04",
   "language": "it",
   "project": {
     "name": "Vinea",
@@ -8,23 +8,28 @@
     "repository_url": "https://github.com/enricopuntog-cpu/vinae-progetto-0"
   },
   "verified_git_snapshot": {
-    "branch": "migration/phase-7-order-payment-service",
-    "head": "62cf75a",
-    "origin_main": "3037bf4",
-    "ahead_of_origin_main": 33,
+    "branch": "docs/contesto-post-fase-7b",
+    "head": "5e6b8e4",
+    "origin_main": "5e6b8e4",
+    "ahead_of_origin_main": 0,
     "behind_origin_main": 0,
     "ahead_of_origin_branch": 0,
     "behind_origin_branch": 0,
-    "snapshot_note": "Rilevato il 2026-08-03 con git fetch --prune: branch allineato con il proprio origin, working tree pulito. I contatori avanzano a ogni commit successivo dello stesso task."
+    "snapshot_note": "Rilevato il 2026-08-04 con git fetch --prune, subito dopo il merge squash della PR #19. Il branch e' di sola documentazione, creato da origin/main: i contatori avanzano a ogni commit successivo dello stesso task. Il branch di fase migration/phase-7b-stripe-connect-marketplace e' stato mergiato e non e' piu' quello attivo."
   },
-  "documentation_branch": "migration/phase-7-order-payment-service",
-  "verification_pr": 18,
+  "documentation_branch": "docs/contesto-post-fase-7b",
+  "verification_pr": 19,
   "runtime_truth": {
     "served_frontend": "frontend/",
     "served_backend": "backend/",
     "target_frontend": "frontend-next/",
     "target_backend": "supabase/",
-    "frontend_next_is_production": false
+    "frontend_next_is_production": false,
+    "payments_enabled": false,
+    "phase_7_migration_applied_to_real_project": false,
+    "phase_7b_migration_applied_to_real_project": false,
+    "edge_functions_deployed": false,
+    "stripe_api_ever_called": false
   },
   "phase_status": {
     "sprint_0": "merged",
@@ -41,7 +46,8 @@
     "phase_6c_2": "merged",
     "phase_6d_1": "merged_ci_green_fixture_grids_33_33_and_11_11_zero_residue",
     "phase_6d_2a": "merged_pr_17_migration_20260731120340_applied_storage_smoke_still_open",
-    "phase_7": "on_branch_draft_pr_18_open_never_merged_start_ratified_2026_08_03_remote_verification_closed_no_remote_sql_no_edge_deploy_no_stripe_call",
+    "phase_7": "merged_pr_18_squash_2a47952_migration_not_applied_to_real_project_no_edge_deploy_no_stripe_call",
+    "phase_7b": "merged_pr_19_squash_5e6b8e4_ci_green_run_30900108638_migration_not_applied_no_edge_deploy_no_stripe_call_seller_enabled_gate_off",
     "phase_8": "not_started",
     "phase_9": "not_started",
     "phase_10": "not_started",
@@ -64,7 +70,15 @@
     "docs/ROADMAP_V1.md",
     "docs/MIGRATION_PHASE_1_BACKLOG.md"
   ],
-  "mandatory_read_order_verified_at": "2026-08-03",
-  "next_gate": "Merge manuale della PR #18 su GitHub, decisione di Enrico: la verifica remota del 2026-08-03 ha chiuso ogni gate tecnico. Restano separati e non autorizzati apply_migration sul progetto reale, deploy della Edge Function payments-checkout, esecuzione della griglia supabase/tests/7_ordini_pagamenti.sql e smoke Storage della 6d-2a.",
-  "remote_sql_rule": "Show exact SQL and obtain explicit in-session approval before applying any migration to the real Supabase project."
+  "mandatory_read_order_verified_at": "2026-08-04",
+  "open_gates_in_order": [
+    "apply_migration della migrazione di Fase 7 sul progetto reale",
+    "apply_migration della migrazione di Fase 7b, che dipende dalla precedente, con riallineamento dei filename alle versioni assegnate dal server",
+    "esecuzione delle griglie supabase/tests/7_ordini_pagamenti.sql (16 casi) e 7b_connect_marketplace.sql (23 casi), con autorizzazione fixture separata",
+    "deploy delle Edge Function payments-checkout, connect-onboarding e payouts-release",
+    "smoke Storage del bucket cantina, aperto dalla Fase 6d-2a"
+  ],
+  "next_gate": "apply_migration della migrazione di Fase 7 sul progetto reale, prima di quella di Fase 7b che ne dipende. Nessuno dei gate aperti e' autorizzato.",
+  "remote_sql_rule": "Show exact SQL and obtain explicit in-session approval before applying any migration to the real Supabase project.",
+  "migration_file_rule": "A migration file that has been pushed at least once is frozen: every later correction is a new file with a more recent timestamp, in draft too and even if no real database ever ran the previous version. Supabase preview branches run migrations at PR open and compare version, not content."
 }

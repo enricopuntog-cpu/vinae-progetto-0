@@ -1,44 +1,39 @@
 <!-- PROTOCOL: Read at session start. Every AI MUST update this file at session end or before handoff/context reset. Keep exactly the 4 headings below; facts only; NEXT STEPS exactly 3 atomic items; no pleasantries/secrets. Verify Git state first; preserve unresolved blockers. -->
 ## CURRENT STATE
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
-- `origin/main` è `2a47952`, squash-merge della PR #18: la Fase 7 è integrata in `main`.
-- Il branch di lavoro è `migration/phase-7b-stripe-connect-marketplace`, 11 commit avanti e 0 indietro rispetto a `origin/main`.
-- La draft PR #19 è aperta su quel branch, `MERGEABLE`, mai mergiata e mai segnata pronta per revisione.
+- `origin/main` è `5e6b8e4`, squash-merge della PR #19: la Fase 7b è integrata in `main`. Il commit precedente è `2a47952`, squash-merge della PR #18 con la Fase 7.
+- La PR #19 è stata mergiata il 2026-08-04 da `enricopuntog-cpu`; la CI sul push di `main` è la run `30900108638`, verde su tutti e tre i job.
+- Il branch `migration/phase-7b-stripe-connect-marketplace` è stato mergiato e non è più quello attivo. Il branch corrente è `docs/contesto-post-fase-7b`, di sola documentazione, creato da `origin/main`.
+- Integrata non significa attiva: né la migrazione di Fase 7 né quella di Fase 7b sono applicate al progetto Supabase reale, nessuna Edge Function è distribuita, `PAYMENTS_ENABLED` resta `false` e nessuna chiamata a Stripe è mai stata fatta, nemmeno in test mode.
 - La Fase 7b aggiunge sopra lo schema della Fase 7: `marketplace_config` versionata con vista pubblica a colonne chiuse, `seller_payout_accounts`, `account_provider_events`, enum `payout_stato`, tabella `payouts`, colonne di commissione e trattenuta su `orders`, colonne di fee reale su `payments`, vista `order_margine_riconciliazione`, undici RPC nuove e due sostituite (`order_checkout_reserve`, `payment_apply_provider_event`).
 - Commissione: rincaro a percentuale variabile con netto garantito, non percentuale fissa. `totale = ceil((prezzo * (10000 + margine_obiettivo_bps) / 10000 + riferimento_stripe_fisso_cents) / (1 - riferimento_stripe_percentuale_bps / 10000))`, `commissione = totale - prezzo`. Parametri iniziali 500 / 150 / 25 e 14 giorni.
 - Percentuale effettiva misurata dal codice reale: 9,20% su 10 €, 8,33% su 15 €, 7,12% su 50 €, 6,86% su 100 €, 6,65% su 500 €, 6,60% su 5000 €. Asintoto 6,5990%, mai raggiunto dal basso.
 - L'arrotondamento del totale è per eccesso. La formula sta in `private.marketplace_totale_cents`, usata sia da `order_checkout_reserve` sia dalla vista di riconciliazione.
 - Sull'ordine sono congelati i tre parametri oltre a `commissione_cents`. `orders.commissione_bps` non esiste più in alcun file.
-- Un minimo in centesimi (`commissione_minima_cents`) è stato valutato e scartato: non compare in nessun file del repository.
-- `payments.fee_stripe_reale_cents`, `fee_provider_transazione_id` e `fee_riconciliata_at` registrano la fee davvero trattenuta; `payment_fee_reale_registra` (solo `service_role`) è la porta per il recupero tardivo. Nessun percorso di rilascio fondi legge quelle colonne; nessun ruolo client le raggiunge, né la vista.
 - Trattenuta fondi con pattern "separate charges and transfers": il PaymentIntent non porta `transfer_data` né `on_behalf_of`. Il Transfer nasce solo al rilascio, in `payouts-release`, e per il solo `prezzo_cents`.
 - Rilascio su `conferma_ricezione` del compratore oppure auto-rilascio dopo `auto_rilascio_giorni` dalla consegna dichiarata. `ordine_contesta` blocca entrambi.
-- Nessun valore nuovo in `public.order_stato`, per decisione dichiarata: la dimensione mancante è ortogonale ed è `public.payout_stato`.
-- `payments-checkout` usa PaymentIntent con un solo Payment Element. Edge Function `connect-onboarding` (Express) e `payouts-release`.
-- Webhook: whitelist estesa ai `payment_intent.*`; `account.updated` su RPC e tabella di deduplicazione separate; la fee di saldo attraversa il confine come misura.
-- Debito `seller_enabled` della Fase 6a: la sorgente esiste, derivata da `charges_enabled` e `payouts_enabled` in un trigger. Nessuna policy applica ancora `has_role(auth.uid(), 'seller_enabled')` alla creazione di annunci.
-- Verifica locale eseguita il 2026-08-04 in `frontend-next/` con Bun 1.3.14: lint, typecheck, test e build tutti a exit 0. Test 83 su 83, 0 fail, 13588 `expect()`, 6 file; lint 0 errori e 23 warning preesistenti; build Next.js 16.2.12, 14 pagine. `MIN_TESTS` alzata da 69 a 83.
-- `frontend/` e `backend/` non hanno alcuna differenza rispetto a `origin/main`.
+- `payments.fee_stripe_reale_cents`, `fee_provider_transazione_id` e `fee_riconciliata_at` registrano la fee davvero trattenuta; `payment_fee_reale_registra` (solo `service_role`) è la porta per il recupero tardivo. Nessun percorso di rilascio fondi legge quelle colonne.
+- Debito `seller_enabled` della Fase 6a: la sorgente esiste, derivata da `charges_enabled` e `payouts_enabled` nel trigger `private.seller_enabled_sync`. Nessuna policy applica ancora `has_role(auth.uid(), 'seller_enabled')` alla creazione di annunci: il gate è spento di proposito.
 - La griglia `supabase/tests/7b_connect_marketplace.sql` è a 23 casi, mai eseguita. La griglia `7_ordini_pagamenti.sql` resta a 16 casi, mai eseguita.
-- Il ledger delle migrazioni remote resta a quindici righe: né la migrazione di Fase 7 né quella di Fase 7b sono applicate al progetto reale.
-- Regola vincolante da questa sessione: un file di migrazione già pushato almeno una volta non si modifica più in place; ogni correzione successiva è un nuovo file con timestamp più recente, anche in bozza e anche se nessun database reale lo ha mai eseguito. Registrata in `CLAUDE.md` e in `CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md`.
+- Il ledger delle migrazioni remote resta a quindici righe secondo l'ultima lettura autorizzata; non è stato riverificato il 2026-08-04.
+- Il job CI `frontend-next` esegue anche i test dietro la soglia `MIN_TESTS=83`, che fallisce se passano meno casi. I test sono anche type-checked: `tsconfig.json` include `**/*.ts` e `@types/bun` è fra le devDependencies. La versione precedente di `CLAUDE.md` affermava il contrario ed è stata corretta in questa sessione.
+- Regola vincolante: un file di migrazione già pushato almeno una volta non si modifica più in place; ogni correzione successiva è un nuovo file con timestamp più recente, anche in bozza e anche se nessun database reale lo ha mai eseguito. Registrata in `CLAUDE.md`, nel punto 11 di `CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md` e in `context-manifest.json`.
 
 ## ACTIVE TASK
-- Fase 7b, secondo checkpoint locale: rincaro a netto garantito, riconciliazione della fee reale, test e documentazione allineati.
-- Link di confronto: `https://github.com/enricopuntog-cpu/vinae-progetto-0/compare/main...migration/phase-7b-stripe-connect-marketplace`.
-- `supabase/migrations/20260803150000_phase_7b_stripe_connect_marketplace.sql` non è stato toccato in questa sessione e non è applicato al progetto reale. La riscrittura del checkpoint precedente era avvenuta nel file esistente sul presupposto che nessun database lo avesse mai eseguito: quel presupposto si è rivelato falso ed è la ragione della regola nuova.
-- Nessuna chiamata a tool Supabase in questa sessione: nessun `get_cost`, `confirm_cost`, `create_branch`, `apply_migration`, `execute_sql`, `deploy_edge_function`, `delete_branch`.
-- Nessuna chiamata a Stripe, nemmeno in test mode: nessun account Connect, nessuna capability, nessun PaymentIntent, nessun Transfer.
-- `PAYMENTS_ENABLED` non è stata toccata e resta `false` in `frontend-next/.env.example`.
-- Nessun merge, nessun `gh pr ready`, nessun `gh pr merge`; `frontend/` e `backend/` non toccati.
+- Allineamento della documentazione di contesto dopo il merge della Fase 7b: `CLAUDE.md`, i sei file di `CONTESTO_IA/` più `context-manifest.json`, e questo file.
+- `CLAUDE.md`: corretta la sezione `frontend-next/` (i test sono eseguiti in CI con soglia, sono type-checked e `@types/bun` c'è) e aggiunti tre invarianti di denaro della 7b — commissione risolta e congelata lato server, fondi trattenuti per assenza di `transfer_data`/`on_behalf_of`, capability di incasso scrivibili solo da evento firmato.
+- `CONTESTO_IA/`: fasi 7 e 7b registrate come integrate con i rispettivi squash, sezione 7b nella storia, regole di denaro della 7b, gate aperti in ordine, indice PR con la #19, episodio del branch di anteprima, prompt operativi marcati come storici.
+- Nessuna modifica a `supabase/`, `frontend/`, `backend/`, `frontend-next/`: la sessione tocca solo documentazione.
+- Nessuna chiamata a tool Supabase in questa sessione: nessun `get_cost`, `confirm_cost`, `create_branch`, `apply_migration`, `execute_sql`, `deploy_edge_function`, `list_migrations`, `delete_branch`.
+- Nessuna chiamata a Stripe, nemmeno in test mode. Nessun merge e nessun `gh pr merge`.
 
 ## NEXT STEPS
 1. Autorizzare in sessione `apply_migration` della migrazione di Fase 7 sul progetto reale, prima di quella di Fase 7b che ne dipende.
 2. Autorizzare separatamente l'esecuzione delle griglie `7_ordini_pagamenti.sql` e `7b_connect_marketplace.sql`, che creano e cancellano fixture remote.
-3. Decidere se la fee reale va recuperata da un job che chiama `payment_fee_reale_registra` o se resta una lettura manuale.
+3. Allineare la sezione «Fase 7b» di `docs/ROADMAP_V1.md`, che la dichiara ancora implementata soltanto in locale sul branch.
 
 ## BLOCKERS / NOTES
-- Il branch di anteprima che Supabase crea automaticamente per la PR #19 ha eseguito la prima bozza della migrazione di Fase 7b (commissione 5% piatta) all'apertura della PR, prima della riscrittura a netto garantito, e non l'ha mai ripresa: un ambiente che ha già registrato una versione come eseguita controlla la versione, non il testo. Il progetto reale non è toccato, perché quella versione non l'ha mai eseguita. Disallineamento verificabile e deliberatamente non corretto: irrilevante per il merge.
+- Il branch di anteprima che Supabase crea automaticamente per la PR #19 ha eseguito la prima bozza della migrazione di Fase 7b (commissione 5% piatta) all'apertura della PR, prima della riscrittura a netto garantito, e non l'ha mai ripresa: un ambiente che ha già registrato una versione come eseguita controlla la versione, non il testo. Il progetto reale non è toccato, perché quella versione non l'ha mai eseguita. Disallineamento verificabile e deliberatamente non corretto: irrilevante per il merge, che è già avvenuto.
 - La migrazione di Fase 7b **dipende** da quella di Fase 7, che non è applicata al progetto reale. Applicarla prima fallirebbe: estende `orders`, `payments` e due RPC che quella crea.
 - Nessun motore Postgres ha eseguito la migrazione di Fase 7b: i 23 esiti attesi della griglia derivano dal testo del SQL, non da una misura.
 - Il payload di un webhook Stripe porta `balance_transaction` come identificativo e non espanso: `fee_stripe_reale_cents` resta quindi nulla nel caso normale, e si popola solo se il payload arriva espanso oppure tramite `payment_fee_reale_registra`. Il recupero non è schedulato da nulla.
@@ -48,13 +43,13 @@
 - La schedulazione dell'auto-rilascio non esiste: richiede `pg_cron` e `pg_net` configurati sul progetto ed è registrata come blocco commentato in fondo alla migrazione. Finché non c'è, l'auto-rilascio è raggiungibile solo da un'invocazione manuale della function.
 - Un rimborso successivo a un Transfer già creato non è recuperabile in automatico: la migrazione blocca solo ciò che è ancora fermo, la riconciliazione resta manuale.
 - `frontend-next/src/services/phase7/order-service.ts` legge `orders` con `.select("*")` mentre la tabella ha grant di colonna. Codice preesistente della Fase 7, non verificabile senza un database: da riverificare quando la migrazione verrà applicata.
-- Il filename `20260803150000_phase_7b_stripe_connect_marketplace.sql` dovrà essere riallineato alla versione assegnata dal server dopo un futuro `apply_migration` autorizzato, come già previsto per `20260731135455_…`.
+- I filename `20260731135455_…` e `20260803150000_…` dovranno essere riallineati alle versioni assegnate dal server dopo i rispettivi `apply_migration` autorizzati.
 - Nessuna Edge Function distribuita: `connect-onboarding`, `payments-checkout` e `payouts-release` esistono solo nel repository. `PAYMENTS_ENABLED=false` resta il gate server-side e la verticale non è raggiungibile dalla UI.
 - Non esistono percorsi UI per onboarding, checkout, conferma o contestazione: i servizi sono adapter dietro le interfacce, non pagine.
 - Il percorso pubblico del Route Handler webhook non è stato cambiato: è un URL da registrare presso il fornitore.
-- Lo smoke Storage 6d-2a resta aperto: nessun utente, oggetto o URL firmato è mai stato creato. Gate indipendente dalla Fase 7b.
+- Lo smoke Storage 6d-2a resta aperto: nessun utente, oggetto o URL firmato è mai stato creato. Gate indipendente dalle fasi 7 e 7b.
 - La griglia remota 18/18 e i residui fixture zero della 6d-2a restano dichiarazioni documentali, non riverificabili da Git e non riverificate.
 - Non sono state rieseguite le griglie storiche 33/33, 11/11 o 13/13 e non sono stati riletti gli Advisor Supabase.
 - Non esiste ancora un job CI che esegua le griglie SQL, né che copra `supabase/**` o `docs/**`: i tre job restano `frontend`, `frontend-next`, `backend`.
-- Residui locali già noti: `stash@{0}` del trasferimento 6d-1, superato da `main`; branch locali `codex/automatizza-handoff-agentsmd` e `migration/phase-6c-cellar-schema`, entrambi senza lavoro non integrato; branch remoti di PR già mergiate mai eliminati.
+- Residui locali già noti: `stash@{0}` del trasferimento 6d-1, superato da `main`; branch locali `codex/automatizza-handoff-agentsmd` e `migration/phase-6c-cellar-schema`, entrambi senza lavoro non integrato; branch remoti di PR già mergiate mai eliminati, ora incluso quello della 7b.
 - KYC oltre l'onboarding ospitato, interfaccia di gestione delle contestazioni, moderazione e Fase 8 restano fuori scope.
