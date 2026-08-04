@@ -23,6 +23,21 @@
 -- LIMITE DICHIARATO: come le griglie 7 e 7b, questa gira in una sola sessione.
 -- Prova invarianti, non gare fra transazioni concorrenti.
 --
+-- Secondo limite, accettato in revisione il 4 agosto 2026: l'esito `risolta` di
+-- ordine_contestazione_risolvi non è esercitato separatamente da `respinta`.
+-- Il caso 20 copre solo `respinta`. I due esiti percorrono lo STESSO ramo di
+-- codice — l'`else` che azzera contestato_at — e differiscono per le sole
+-- costanti di tre `case when p_esito = 'respinta'`: stato dell'ordine
+-- (consegnato / completato), payout_stato (trattenuto / in_attesa) e titolo
+-- dell'evento di timeline. Rischio basso: ciò che conta sul denaro —
+-- l'azzeramento del flag su cui filtrano ordine_auto_rilascio_esegui,
+-- payout_coda e payout_prepara — è comune ai due, e il caso 20 lo prova.
+-- Nessun caso nuovo previsto.
+--
+-- Terzo limite: nessun caso copre «codice dichiarato e poi scaduto prima del
+-- checkout». Il caso 6 prova solo «mai dichiarato». È il debito 10.2 del
+-- documento di design, accettato per questa fase.
+--
 -- La griglia non chiama Stripe e non crea Transfer.
 -- ============================================================================
 
