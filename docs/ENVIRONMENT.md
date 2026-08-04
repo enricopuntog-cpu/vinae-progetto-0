@@ -48,10 +48,25 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `STRIPE_WEBHOOK_SECRET` | Route Handler | Segreto firma dell'endpoint webhook. |
 | `PAYMENTS_WEBHOOK_RATE_LIMIT` | Route Handler | Limite per bucket, default `600`. |
 | `PAYMENTS_WEBHOOK_RATE_WINDOW_SECONDS` | Route Handler | Finestra del bucket, default `60`. |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | client | Chiave publishable del Payment Element. Solo `pk_test_…` fuori produzione. |
+| `CONNECT_ACCOUNT_COUNTRY` | Edge Function | Paese degli account Connect Express aperti per i venditori. Default `IT`. |
+| `PAYOUTS_JOB_TOKEN` | Edge Function | Secondo fattore di `payouts-release`. Indipendente dalla service role key e revocabile da solo. |
+| `PAYOUTS_BATCH_LIMIT` | Edge Function | Ordini rilasciati per esecuzione, default `50`, massimo `500`. |
 
 I segreti della Edge Function vanno impostati nell'ambiente Supabase; quelli del
 Route Handler nell'ambiente server Next.js. Non copiare la `service_role` in un
 file `.env` versionato.
+
+`PAYMENTS_ENABLED` è il kill switch di **tutta** la verticale pagamenti, non del
+solo checkout: `payments-checkout`, `connect-onboarding`, `payouts-release` e il
+Route Handler del webhook lo controllano ognuno per conto proprio e rispondono
+`503` quando non è `true`. L'onboarding vi rientra perché apre account veri
+presso il fornitore, anche in test mode.
+
+`PAYOUTS_JOB_TOKEN` è separato dalla service role key di proposito: lo scheduler
+ha bisogno di entrambe, ma comprometterne una sola non basta a far partire un
+rilascio, e ruotare il token non costringe a ruotare la chiave che dà accesso
+all'intero database.
 
 ## Backend
 

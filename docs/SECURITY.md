@@ -89,6 +89,50 @@ Le prove versionate di questi confini sono in `supabase/tests/`.
 - Usare idempotenza nella creazione delle sessioni.
 - Non considerare `session.status=complete` equivalente a pagamento incassato.
 - Accettare redirect solo se origin e percorso rispettano l’allowlist server-side.
+
+### Marketplace e trattenuta fondi (Fase 7b, locale)
+
+- **La commissione non è mai calcolata dal browser.** I parametri in vigore
+  vengono letti e congelati sull'ordine — `margine_obiettivo_bps`,
+  `riferimento_stripe_percentuale_bps`, `riferimento_stripe_fisso_cents` — dentro
+  la transazione di prenotazione, insieme al risultato; l'importo addebitato è
+  `orders.totale_cents`, una colonna generata. Una modifica successiva della
+  configurazione non tocca gli ordini già nati, e nessuna schermata può proporre
+  un importo diverso da quello. La copia TypeScript serve al preventivo, non
+  all'addebito, e non sa ricalcolare un ordine esistente.
+- **Il rincaro è arrotondato per eccesso, non al più vicino.** Per difetto il
+  margine netto scenderebbe sotto l'obiettivo di un centesimo. La formula vive
+  in `private.marketplace_totale_cents`, non eseguibile dai ruoli client.
+- **La fee reale è una misura, non un ingresso decisionale.**
+  `payments.fee_stripe_reale_cents` viene scritta dall'evento firmato o da
+  `payment_fee_reale_registra`, riservata a `service_role`; non è leggibile da
+  alcun ruolo client, e nemmeno la vista `order_margine_riconciliazione` lo è.
+  Nessun percorso di rilascio fondi la interroga: se `payout_prepara` la
+  leggesse, una misura sarebbe diventata una decisione.
+- **L'addebito non porta istruzioni di trasferimento.** Nessun `transfer_data`,
+  nessun `on_behalf_of`: è quell'assenza a far restare i fondi sul balance della
+  piattaforma. Il denaro raggiunge il venditore solo con un Transfer separato,
+  creato da `payouts-release` e autorizzato in transazione da `payout_prepara`.
+- **Il rilascio è idempotente su due livelli**: una sola riga di `payouts` per
+  ordine, e una chiave di idempotenza derivata dall'id dell'ordine, che il
+  fornitore riconosce anche se la nostra riga andasse persa fra la chiamata e la
+  risposta.
+- **La contestazione blocca prima del fornitore.** Un ordine contestato non è
+  rilasciabile né auto-rilasciabile; l'auto-rilascio reclama con
+  `for update … skip locked` e solo ciò che è ancora `trattenuto`, quindi due
+  esecuzioni concorrenti del job non rilasciano lo stesso ordine.
+- **Il ruolo `seller_enabled` non è assegnabile.** Diventa vero solo quando un
+  evento `account.updated` firmato dichiara insieme `charges_enabled` e
+  `payouts_enabled`, e la derivazione sta in un trigger — quindi vincola anche
+  `service_role`, che le RPC potrebbe scavalcarle. Chiude il debito dichiarato
+  dalla Fase 6a.
+- **Gli eventi di account hanno la propria deduplicazione**
+  (`account_provider_events`) e la propria protezione dagli eventi tardivi: un
+  `account.updated` più vecchio dell'ultimo applicato non riapre un account
+  chiuso.
+- `provider_account_id`, `destination_account_id`, `idempotency_key` e
+  `provider_transfer_id` non compaiono in nessun `GRANT` verso ruoli client:
+  sono le coordinate con cui si muove denaro.
 - Non fidarsi di prezzo, valuta, proprietario o stato inviati dal client.
 - Non registrare payload completi contenenti dati personali o di pagamento.
 
@@ -120,6 +164,15 @@ pulizia dei bucket scaduti e un limite al bordo per traffico non firmato.
 Le funzioni checkout e webhook sono eseguibili soltanto da `service_role`;
 l'identità browser viene prima verificata da Supabase Auth. La `service_role`
 resta confinata a Edge Function e Route Handler, non è un meccanismo client.
+
+La Fase 7b aggiunge bucket dedicati per consegna, conferma e contestazione, e un
+secondo fattore per il job di rilascio: `payouts-release` non è un endpoint del
+browser, non ha origini CORS e richiede `PAYOUTS_JOB_TOKEN` oltre alla
+`service_role`. Il confronto del token è a tempo costante. Le RPC di rilascio
+(`ordine_auto_rilascio_esegui`, `payout_coda`, `payout_prepara`,
+`payout_registra_esito`) e quelle di account sono eseguibili solo da
+`service_role`; il compratore e il venditore hanno accesso alle sole tre
+transizioni che li riguardano.
 
 ## AI
 

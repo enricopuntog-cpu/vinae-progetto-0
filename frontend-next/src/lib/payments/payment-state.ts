@@ -37,6 +37,19 @@ export const traduciEventoStripe = (
       return "failed";
     case "checkout.session.expired":
       return "expired";
+    // Payment Element: qui non esiste la biforcazione di
+    // `checkout.session.completed`, perché un PaymentIntent `succeeded` è già
+    // per definizione un incasso avvenuto.
+    case "payment_intent.succeeded":
+      return "settled";
+    case "payment_intent.processing":
+      // Metodi asincroni — PayPal, Satispay, addebiti bancari: la transazione è
+      // partita ma i fondi non sono arrivati. Non è un incasso.
+      return "authorized";
+    case "payment_intent.payment_failed":
+      return "failed";
+    case "payment_intent.canceled":
+      return "expired";
     case "charge.refunded":
       return "refunded";
     default: {

@@ -37,6 +37,19 @@ describe("traduzione degli eventi Stripe", () => {
     expect(traduciEventoStripe("charge.refunded", {})).toBe("refunded");
   });
 
+  it("traduce gli esiti del Payment Element", () => {
+    // Un PaymentIntent `succeeded` non si biforca: è già un incasso avvenuto.
+    // `processing` invece è il caso dei metodi che rimandano l'incasso —
+    // PayPal, Satispay, addebiti bancari — e non vale come pagato.
+    expect(traduciEventoStripe("payment_intent.succeeded", {})).toBe("settled");
+    expect(traduciEventoStripe("payment_intent.succeeded", { payment_status: "unpaid" })).toBe(
+      "settled",
+    );
+    expect(traduciEventoStripe("payment_intent.processing", {})).toBe("authorized");
+    expect(traduciEventoStripe("payment_intent.payment_failed", {})).toBe("failed");
+    expect(traduciEventoStripe("payment_intent.canceled", {})).toBe("expired");
+  });
+
   it("non tratta come incassata una sessione conclusa ma non pagata", () => {
     // È il caso su cui la vecchia copia TypeScript divergeva dalla RPC.
     for (const stato of ["unpaid", "no_payment_required", undefined]) {

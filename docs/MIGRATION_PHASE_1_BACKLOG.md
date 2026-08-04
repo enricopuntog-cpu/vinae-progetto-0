@@ -73,6 +73,21 @@ scrivibile solo da `service_role`) e la verifica venditore non è un dominio
 migrato; applicarlo renderebbe impossibile creare annunci anche in 6b.
 Da riprendere quando esisterà la verifica venditore.
 
+**Aggiornamento 3 agosto 2026 — la sorgente del ruolo esiste, il gate no.** La
+Fase 7b introduce ciò che mancava: `seller_enabled` non è più un flag che
+qualcuno assegna, ma una conseguenza. Il trigger `private.seller_enabled_sync`
+lo scrive in `user_roles` quando un evento `account.updated` firmato dichiara
+insieme `charges_enabled` e `payouts_enabled` sull'account Connect del
+venditore, e lo toglie appena una delle due decade. Sta in un trigger e non
+dentro una RPC apposta: così vincola anche `service_role`.
+
+Ciò che **non** cambia: nessuna policy applica ancora
+`has_role(auth.uid(), 'seller_enabled')` alla creazione di annunci. Applicarlo
+oggi impedirebbe di vendere a chiunque non abbia completato l'onboarding
+Stripe, che con `PAYMENTS_ENABLED=false` è ancora nessuno. Il gate va acceso
+nello stesso momento in cui i pagamenti diventano raggiungibili, non prima, ed è
+una decisione separata da questa fase.
+
 ## Fase 6b — Scritture annunci e wizard /vendi
 
 **Branch**: `migration/phase-6b-listings-write`
@@ -349,6 +364,89 @@ distribuzione della Edge Function, esecuzione della griglia
 [`supabase/tests/7_ordini_pagamenti.sql`](../supabase/tests/7_ordini_pagamenti.sql)
 e smoke Storage. L'esito sopra è una misura eseguita fuori da questa
 postazione: è riportato qui come tale, non è riverificabile da Git.
+
+## Fase 7b — Stripe Connect, commissione e trattenuta fondi
+
+**Branch**: `migration/phase-7b-stripe-connect-marketplace`
+
+**Stato al 3 agosto 2026**: primo checkpoint locale sopra lo schema della Fase 7,
+già integrato in `main` con la PR #18. Nessuna migrazione, Edge Function o
+griglia è applicata o distribuita.
+
+Modello economico, deciso fuori dal codice e qui soltanto reso esecutivo:
+
+- commissione di piattaforma a **percentuale variabile con netto garantito**,
+  applicata **sopra** il prezzo del venditore — il compratore paga
+  `prezzo + commissione`, il venditore incassa il prezzo esatto. Il rincaro non
+  è una percentuale scelta ma il numero che lascia alla piattaforma un margine
+  netto costante **dopo** la fee del fornitore:
+
+  ```text
+  totale = ceil( (prezzo * (10000 + margine_obiettivo_bps) / 10000
+                  + riferimento_stripe_fisso_cents)
+                 / (1 - riferimento_stripe_percentuale_bps / 10000) )
+  ```
+
+  Parametri iniziali `500 / 150 / 25`: 5% netto, fee di riferimento 1,5% più
+  0,25 €. L'arrotondamento è **sempre per eccesso**, perché per difetto il
+  margine scenderebbe sotto l'obiettivo di un centesimo. La percentuale
+  effettiva è un risultato e non un parametro: 9,20% su 10 €, 6,86% su 100 €,
+  6,60% su 5000 €, con asintoto a 6,5990%;
+- i **tre parametri** sono congelati sull'ordine alla creazione, non solo il
+  risultato: senza di essi un ordine vecchio resta addebitabile ma non più
+  spiegabile. Cambiare `marketplace_config` dopo non tocca gli ordini già nati;
+- il margine garantito è una **proiezione**, non una misura: chi paga con
+  Satispay, PayPal o una carta extra-SEE produce una fee diversa. La fee reale
+  arriva su `payments.fee_stripe_reale_cents` e il confronto vive in
+  `order_margine_riconciliazione`. **Nessuna decisione di rilascio fondi
+  dipende da quei numeri**;
+- trattenuta fondi con il pattern "separate charges and transfers". L'addebito
+  non porta `transfer_data`, quindi i fondi restano sul balance della
+  piattaforma; il Transfer verso l'account del venditore nasce solo al rilascio
+  e per il solo prezzo. La commissione resta alla piattaforma per il fatto
+  stesso di non essere trasferita;
+- rilascio su conferma manuale del compratore (`conferma_ricezione`) **oppure**
+  auto-rilascio dopo `marketplace_config.auto_rilascio_giorni` — 14 iniziali —
+  dalla consegna dichiarata;
+- stato `contestato`: blocca rilascio e auto-rilascio, risoluzione manuale. In
+  questa fase esistono lo stato e il blocco, non l'interfaccia di gestione, che
+  appartiene alla Fase 9;
+- account Connect di tipo **Express**, onboarding ospitato da Stripe;
+- un solo Payment Element: carta, Apple Pay, Google Pay, PayPal e Satispay sono
+  capability configurate sull'account, non flussi separati nel codice.
+
+**Nessun nuovo valore in `public.order_stato`, ed è deliberato.** L'enum della
+Fase 7 contiene già `consegnato`, `verifica`, `completato` e `contestato`:
+aggiungere sinonimi renderebbe ambigua ogni query esistente. Ciò che mancava è
+una dimensione **ortogonale** — un ordine può essere `completato` con il Transfer
+ancora da creare, in corso o fallito — e questa è `public.payout_stato`, insieme
+alle date `consegnato_at`, `auto_rilascio_scadenza`, `ricezione_confermata_at` e
+`contestato_at`. La distinzione fra conferma manuale e auto-rilascio resta in
+`order_events`, dove la Fase 7 mette già la storia.
+
+**`ordine_segna_consegnato` è nuova ed è il minimo necessario.** L'auto-rilascio
+è definito «dopo N giorni dalla consegna»: senza qualcuno che dichiari la
+consegna, la funzione sarebbe inerte. È ristretta al venditore. Perché questo non
+gli dia il potere di tenere i fondi bloccati non dichiarando mai la consegna,
+`conferma_ricezione` è ammessa anche da `pagato`: chi ha la bottiglia in mano può
+liberare i fondi comunque.
+
+Restano fuori, come gate separati e nessuno autorizzato: `apply_migration` di
+[`20260803150000_phase_7b_stripe_connect_marketplace.sql`](../supabase/migrations/20260803150000_phase_7b_stripe_connect_marketplace.sql),
+distribuzione di `connect-onboarding`, `payments-checkout` e `payouts-release`,
+esecuzione della griglia
+[`supabase/tests/7b_connect_marketplace.sql`](../supabase/tests/7b_connect_marketplace.sql)
+(18 casi, mai eseguita), e la schedulazione reale del job — che richiede
+`pg_cron` e `pg_net` configurati sul progetto ed è registrata come blocco
+commentato in fondo alla migrazione. `PAYMENTS_ENABLED=false` resta il gate
+server-side: nessuna chiamata Stripe è stata effettuata, nemmeno in test mode.
+
+**Debito che questa fase apre.** Finché la schedulazione non esiste,
+l'auto-rilascio è raggiungibile solo da un'invocazione manuale della function, e
+la conferma del compratore è l'unica strada effettivamente percorsa. Un rimborso
+successivo a un Transfer già creato non è recuperabile in automatico: la
+migrazione blocca soltanto ciò che è ancora fermo e la riconciliazione resta
+manuale.
 
 ## Fase 8 — MessagingService + NotificationService
 

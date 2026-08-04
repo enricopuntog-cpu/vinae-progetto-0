@@ -43,6 +43,16 @@ CONTESTO_IA/    handoff sintetico per nuove IA/chat
    esplicita separata dall'approvazione al deploy.
 10. Dopo `apply_migration` via API/MCP, allineare il file locale alla versione
     assegnata dal server e verificare la migration history.
+11. Un file di migrazione già pushato almeno una volta non si modifica più in
+    place: ogni correzione successiva è un nuovo file con timestamp più
+    recente, anche in bozza e anche se la versione precedente non è mai stata
+    applicata al progetto reale. Il branch di anteprima che Supabase crea per
+    ogni PR esegue le migrazioni all'apertura, e un ambiente che ha già
+    registrato una versione come eseguita non la rilancia quando il testo
+    cambia: controlla la versione, non il contenuto. È successo sulla PR #19,
+    dove l'anteprima ha eseguito la prima bozza della migrazione di Fase 7b
+    (commissione 5% piatta) e non ha mai ripreso la riscrittura a netto
+    garantito.
 
 ## Confini di fiducia
 

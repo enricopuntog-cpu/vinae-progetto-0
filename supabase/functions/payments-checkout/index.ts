@@ -6,6 +6,13 @@
 // (../_shared/payment-provider.ts). L'unico punto in cui compare un nome di
 // fornitore è la riga di import dell'adapter, qui sotto, e la lettura del suo
 // segreto: sostituirlo è cambiare quelle righe, non riscrivere il flusso.
+//
+// Dalla Fase 7b l'importo aperto presso il fornitore è il **totale** — prezzo
+// del venditore più commissione — e non il prezzo del venditore. La
+// scomposizione è già congelata sull'ordine dalla RPC di prenotazione: questa
+// function la trasporta e non la ricalcola. L'incasso non porta istruzioni di
+// trasferimento, quindi i fondi restano sul balance della piattaforma finché
+// `payouts-release` non crea il Transfer.
 
 import { createClient } from "@supabase/supabase-js";
 import { corsHeadersFor } from "../_shared/cors.ts";
@@ -20,7 +27,13 @@ type CheckoutInput = {
 
 type Reservation = {
   order_id: string;
+  /** Quanto paga il compratore: prezzo del venditore più commissione. */
   amount_cents: number;
+  prezzo_venditore_cents?: number;
+  commissione_cents?: number;
+  margine_obiettivo_bps?: number;
+  riferimento_stripe_percentuale_bps?: number;
+  riferimento_stripe_fisso_cents?: number;
   currency: string;
   wine_name?: string;
   checkout_url?: string | null;
@@ -60,6 +73,32 @@ const risolviOrigineRitorno = (): string => {
 // Unico punto di scelta del fornitore. L'adapter legge da sé le proprie
 // credenziali: qui non compare nessun nome di variabile del fornitore.
 const provider: CheckoutProvider = creaStripeProvider();
+
+/**
+ * La risposta al browser. `clientSecret` è ciò che monta il Payment Element;
+ * `checkoutUrl` resta per un eventuale fornitore che offra solo una pagina
+ * ospitata. La scomposizione dell'importo viaggia insieme perché il compratore
+ * deve vedere quanto della cifra è commissione, e quella cifra è quella
+ * congelata sull'ordine — non una ricalcolata dal browser.
+ */
+const rispostaCheckout = (
+  reservation: Reservation,
+  handle: { clientSecret: string | null; redirectUrl: string | null },
+) => ({
+  clientSecret: handle.clientSecret,
+  checkoutUrl: handle.redirectUrl,
+  orderId: reservation.order_id,
+  amountCents: reservation.amount_cents,
+  prezzoVenditoreCents: reservation.prezzo_venditore_cents ?? null,
+  commissioneCents: reservation.commissione_cents ?? null,
+  // I parametri congelati viaggiano con la risposta: il browser deve poter
+  // spiegare il rincaro, non ricalcolarlo. La percentuale effettiva è un
+  // rapporto fra due numeri che sono già qui.
+  margineObiettivoBps: reservation.margine_obiettivo_bps ?? null,
+  riferimentoStripePercentualeBps: reservation.riferimento_stripe_percentuale_bps ?? null,
+  riferimentoStripeFissoCents: reservation.riferimento_stripe_fisso_cents ?? null,
+  currency: reservation.currency,
+});
 
 Deno.serve(async (request) => {
   const corsHeaders = corsHeadersFor(request);
@@ -109,9 +148,23 @@ Deno.serve(async (request) => {
     );
   }
   const reservation = data as Reservation;
-  if (reservation.checkout_url) return json({ checkoutUrl: reservation.checkout_url }, 200, corsHeaders);
   if (reservation.order_status === "annullato" || reservation.payment_status === "failed") {
     return json({ error: "Checkout precedente chiuso; usa una nuova chiave idempotenza." }, 409, corsHeaders);
+  }
+
+  // Ritentativo con la stessa chiave: l'incasso è già aperto presso il
+  // fornitore. Il `client_secret` non è nel database — è un segreto, non un dato
+  // di dominio — quindi si richiede quello esistente invece di aprirne un
+  // secondo.
+  if (reservation.provider_session_id) {
+    const ripresa = await provider.riprendiCheckout({
+      provider: reservation.provider ?? provider.id,
+      sessionId: reservation.provider_session_id,
+    });
+    if (!ripresa.ok) {
+      return json({ error: "Checkout temporaneamente non disponibile." }, 502, corsHeaders);
+    }
+    return json(rispostaCheckout(reservation, ripresa.data), 200, corsHeaders);
   }
 
   let redirectOrigin: string;
@@ -155,5 +208,5 @@ Deno.serve(async (request) => {
   if (attachError) {
     return json({ error: "Checkout creato ma non ancora collegato; riprova." }, 502, corsHeaders);
   }
-  return json({ checkoutUrl: apertura.data.redirectUrl }, 201, corsHeaders);
+  return json(rispostaCheckout(reservation, apertura.data), 201, corsHeaders);
 });

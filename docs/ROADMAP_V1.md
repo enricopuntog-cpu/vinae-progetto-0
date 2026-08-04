@@ -366,17 +366,50 @@ fase non è autorizzata esplicitamente.
 
 ## Fase 7 — proposte, ordini e pagamenti
 
-**Stato: primo checkpoint implementato soltanto in locale sul branch
-`migration/phase-7-order-payment-service`; feature flag spenta.** Include schema
-versionato, prenotazione atomica, RLS/grant, limiter condiviso, Edge Function di
-checkout, webhook firmato, adapter e test. Nessuna migrazione o funzione è stata
-distribuita e nessuna API Stripe è stata chiamata.
+**Stato: integrata in `main` con la PR #18 al merge squash `2a47952`.** Include
+schema versionato, prenotazione atomica, RLS/grant, limiter condiviso, Edge
+Function di checkout, webhook firmato, adapter e test. La migrazione non è
+applicata al progetto reale e nessuna API Stripe è stata chiamata.
 
 Il pagamento confermato crea una nuova unità privata per il buyer e conserva
-l'unità storica del seller, che il trigger esistente marca come ceduta. Restano
-fuori Stripe Connect, payout, KYC, contestazioni operative e qualunque pagamento
-reale. Specifica, gate e limiti di verifica sono in `docs/superpowers/` e
+l'unità storica del seller, che il trigger esistente marca come ceduta.
+Specifica, gate e limiti di verifica sono in `docs/superpowers/` e
 `docs/PHASE_7_VERIFICATION.md`.
+
+## Fase 7b — Stripe Connect, commissione e trattenuta fondi
+
+**Stato: primo checkpoint implementato soltanto in locale sul branch
+`migration/phase-7b-stripe-connect-marketplace`; feature flag spenta.** Estende
+lo schema della Fase 7 — non lo sostituisce — con account Connect Express del
+venditore, rincaro di piattaforma a percentuale variabile congelato sull'ordine,
+trattenuta dei fondi sul balance della piattaforma, rilascio su conferma del
+compratore o auto-rilascio a scadenza, e stato `contestato` che blocca entrambi.
+
+Il rincaro non è una percentuale scelta: è il numero che lascia alla piattaforma
+un margine netto costante **dopo** la fee del fornitore, arrotondato per eccesso
+perché per difetto il margine scenderebbe sotto l'obiettivo di un centesimo. Con
+i parametri iniziali — 5% netto, fee di riferimento 1,5% più 0,25 € — la
+percentuale effettiva vale 9,20% su 10 €, 6,86% su 100 € e converge a 6,60% sui
+prezzi alti. I **tre parametri** sono congelati sull'ordine insieme al risultato:
+senza di essi un ordine vecchio resta addebitabile ma non più spiegabile. La fee
+davvero trattenuta è misurata a parte e non entra in nessuna decisione.
+
+Il checkout passa dalla Checkout Session ospitata a un PaymentIntent con un solo
+Payment Element. **Non porta `transfer_data` né `on_behalf_of`**: è quell'assenza
+a far restare i fondi alla piattaforma, e il denaro raggiunge il venditore solo
+con un Transfer separato creato al rilascio.
+
+Chiude la sorgente del debito `seller_enabled` aperto dalla 6a: il ruolo diventa
+vero solo quando un evento firmato dichiara `charges_enabled` e
+`payouts_enabled` insieme. Il gate sulla creazione di annunci resta però spento
+— accenderlo prima che i pagamenti siano raggiungibili impedirebbe di vendere a
+chiunque.
+
+Restano fuori: interfaccia di gestione delle contestazioni (Fase 9), KYC oltre
+l'onboarding ospitato, schedulazione reale del job di rilascio, e qualunque
+pagamento reale. Nessuna migrazione o funzione è distribuita, nessuna API Stripe
+è stata chiamata nemmeno in test mode. Perimetro e debiti in
+`docs/MIGRATION_PHASE_1_BACKLOG.md`.
 
 ## Cosa NON è ancora deciso
 

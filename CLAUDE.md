@@ -83,6 +83,16 @@ Migrations live in `supabase/migrations/*.sql`, applied via the Supabase CLI. Na
 timestamp-prefixed (`20260728000545_auth_profiles_roles.sql`). Every migration that touches a
 real domain needs RLS policies, and ideally pgTAP tests, per ADR 002.
 
+**A migration file that has been pushed at least once is frozen — never edit it in place.**
+Every later correction is a NEW migration file with a more recent timestamp: in draft too,
+before review too, and even when the previous version was never applied to the real project.
+"No database has ever run it, so editing it is safe" is no longer a valid test. Supabase creates
+a preview branch for each PR and runs the migrations on it as soon as the PR opens, and an
+environment that has already recorded a version as applied does not re-run it when the text
+changes — it compares the version, not the content. Editing in place therefore leaves that
+environment silently out of sync with the file, with nobody watching. The episode that produced
+this rule is recorded in `CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md`.
+
 CI (`.github/workflows/ci.yml`) runs three independent jobs — `frontend`, `frontend-next`,
 `backend` — each in its own working directory. All must pass before merge to `main`.
 
