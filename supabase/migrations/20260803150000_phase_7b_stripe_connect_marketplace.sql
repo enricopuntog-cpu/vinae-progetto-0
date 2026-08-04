@@ -4,11 +4,24 @@
 --
 -- Modello economico, deciso fuori da qui e qui soltanto reso esecutivo:
 --
---   * la commissione è una percentuale configurabile applicata SOPRA il prezzo
---     del venditore. Il compratore paga `prezzo_cents + commissione_cents`; il
---     venditore incassa `prezzo_cents` esatti;
---   * la percentuale in vigore viene CONGELATA sull'ordine alla creazione. Una
---     modifica successiva della configurazione non tocca gli ordini già nati;
+--   * la commissione è un RINCARO applicato SOPRA il prezzo del venditore, e non
+--     una percentuale fissa: è calcolata per lasciare alla piattaforma un margine
+--     netto costante DOPO la fee del fornitore. Il compratore paga
+--     `prezzo_cents + commissione_cents`; il venditore incassa `prezzo_cents`
+--     esatti. La percentuale effettiva non è un parametro ma un risultato: alta
+--     sui prezzi bassi, dove la quota fissa della fee pesa, e decrescente verso
+--     un asintoto sui prezzi alti;
+--   * l'arrotondamento del totale è SEMPRE per eccesso. Un arrotondamento per
+--     difetto farebbe scendere il margine sotto l'obiettivo di un centesimo, e
+--     un centesimo sotto l'obiettivo è comunque sotto l'obiettivo;
+--   * i tre parametri in vigore vengono CONGELATI sull'ordine alla creazione,
+--     non solo il risultato: senza di essi un ordine vecchio non è più
+--     spiegabile una volta che la configurazione è cambiata. Una modifica
+--     successiva non tocca gli ordini già nati;
+--   * la fee di riferimento è una PROIEZIONE, non una misura. Chi paga con
+--     Satispay, PayPal o una carta extra-SEE produce una fee diversa: quella
+--     reale viene riconciliata a parte, e nessuna decisione di rilascio fondi
+--     dipende da lei;
 --   * i fondi restano sul balance della piattaforma finché non c'è un rilascio
 --     ("separate charges and transfers"): l'addebito non porta `transfer_data`,
 --     e il Transfer verso l'account del venditore nasce solo al rilascio, per il
@@ -29,7 +42,20 @@ create table public.marketplace_config (
   id bigint generated always as identity primary key,
   -- Punti base: 500 = 5,00%. Interi, per la stessa ragione per cui i prezzi
   -- sono in centesimi — una percentuale in float entra nei calcoli e ci resta.
-  commissione_bps integer not null check (commissione_bps between 0 and 5000),
+  --
+  -- Il margine che deve restare alla piattaforma DOPO la fee del fornitore.
+  -- Non è la percentuale addebitata al compratore: quella è più alta, perché
+  -- deve coprire anche la fee, e la copre esattamente.
+  margine_obiettivo_bps integer not null
+    check (margine_obiettivo_bps between 0 and 5000),
+  -- Fee di RIFERIMENTO, non fee reale: la quota percentuale e la quota fissa
+  -- della carta SEE, usate per proiettare il rincaro. Sono qui, versionate,
+  -- perché il giorno in cui il fornitore cambia listino la formula non va
+  -- toccata — va chiusa una riga e aperta la successiva.
+  riferimento_stripe_percentuale_bps integer not null
+    check (riferimento_stripe_percentuale_bps between 0 and 5000),
+  riferimento_stripe_fisso_cents integer not null
+    check (riferimento_stripe_fisso_cents between 0 and 10000),
   auto_rilascio_giorni integer not null check (auto_rilascio_giorni between 1 and 180),
   valida_da timestamptz not null default now(),
   valida_fino timestamptz,
@@ -51,11 +77,51 @@ create index marketplace_config_storico_idx
 
 comment on table public.marketplace_config is
   'Configurazione di mercato versionata. Una sola riga corrente (valida_fino '
-  'nulla); le righe chiuse restano come storico. La percentuale applicata a un '
-  'ordine è congelata su orders.commissione_bps e non si rilegge da qui.';
+  'nulla); le righe chiuse restano come storico. I parametri applicati a un '
+  'ordine sono congelati sull''ordine stesso e non si rileggono da qui.';
 
-insert into public.marketplace_config (commissione_bps, auto_rilascio_giorni, nota)
-values (500, 14, 'Configurazione iniziale Fase 7b: 5% sopra il prezzo, 14 giorni di verifica.');
+insert into public.marketplace_config (
+  margine_obiettivo_bps, riferimento_stripe_percentuale_bps,
+  riferimento_stripe_fisso_cents, auto_rilascio_giorni, nota
+)
+values (500, 150, 25, 14,
+  'Configurazione iniziale Fase 7b: 5% netto dopo fee di riferimento 1,5% + 0,25 €, 14 giorni di verifica.');
+
+-- ---------------------------------------------------------------------------
+-- La formula, in un posto solo
+-- ---------------------------------------------------------------------------
+--
+--   totale = ceil( (prezzo * (10000 + margine) / 10000 + fisso)
+--                  / (1 - percentuale / 10000) )
+--
+-- Qui è riscritta in aritmetica intera moltiplicando numeratore e denominatore
+-- per 10000. È la stessa identità, non un'approssimazione: evita di far passare
+-- il valore da una divisione intermedia, e `ceil` agisce una volta sola come
+-- vuole la definizione. Il denominatore è almeno 5000 per il `check` sui
+-- parametri, quindi non si annulla mai.
+--
+-- `immutable` è ciò che la rende usabile tanto dalla prenotazione quanto dalla
+-- vista di riconciliazione: una formula sola, nessuna copia da tenere allineata.
+create or replace function private.marketplace_totale_cents(
+  p_prezzo_cents integer,
+  p_margine_obiettivo_bps integer,
+  p_riferimento_percentuale_bps integer,
+  p_riferimento_fisso_cents integer
+)
+returns integer
+language sql
+immutable
+set search_path = ''
+as $$
+  select ceil(
+    (p_prezzo_cents::numeric * (10000 + p_margine_obiettivo_bps)
+     + p_riferimento_fisso_cents::numeric * 10000)
+    / (10000 - p_riferimento_percentuale_bps)::numeric
+  )::integer;
+$$;
+
+revoke execute on function private.marketplace_totale_cents(integer, integer, integer, integer)
+  from public, anon, authenticated;
 
 -- Lettore unico. Vive in `private` perché è la sorgente della commissione:
 -- nessun client la esegue, e chi la legge lo fa attraverso la vista chiusa qui
@@ -87,7 +153,9 @@ create view public.public_marketplace_config
 with (security_invoker = off, security_barrier = true)
 as
 select
-  c.commissione_bps,
+  c.margine_obiettivo_bps,
+  c.riferimento_stripe_percentuale_bps,
+  c.riferimento_stripe_fisso_cents,
   c.auto_rilascio_giorni
 from public.marketplace_config c
 where c.valida_fino is null;
@@ -96,8 +164,9 @@ grant select on public.public_marketplace_config to anon, authenticated;
 
 comment on view public.public_marketplace_config is
   'Sola configurazione corrente, a elenco colonne chiuso. Serve alla UI per '
-  'mostrare in anticipo la commissione; non è la fonte di ciò che viene '
-  'addebitato, che è congelato sull''ordine.';
+  'calcolare un preventivo prima che l''ordine esista; non è la fonte di ciò '
+  'che viene addebitato, che è congelato sull''ordine. I tre parametri sono '
+  'pubblici perché il rincaro deve essere spiegabile a chi lo paga.';
 
 -- ---------------------------------------------------------------------------
 -- Account di incasso del venditore (Connect Express)
@@ -291,9 +360,17 @@ create policy payouts_participants_select
 -- Estensione di public.orders
 -- ---------------------------------------------------------------------------
 
+-- I tre parametri sono congelati per intero, non solo il loro risultato. Un
+-- ordine di sei mesi fa deve restare spiegabile: senza `riferimento_*` si
+-- saprebbe quanto è stato addebitato ma non con quale fee di riferimento era
+-- stato calcolato, e la revisione contabile diventerebbe archeologia.
 alter table public.orders
-  add column commissione_bps integer not null default 0
-    check (commissione_bps between 0 and 5000),
+  add column margine_obiettivo_bps integer not null default 0
+    check (margine_obiettivo_bps between 0 and 5000),
+  add column riferimento_stripe_percentuale_bps integer not null default 0
+    check (riferimento_stripe_percentuale_bps between 0 and 5000),
+  add column riferimento_stripe_fisso_cents integer not null default 0
+    check (riferimento_stripe_fisso_cents between 0 and 10000),
   add column commissione_cents integer not null default 0
     check (commissione_cents >= 0),
   add column payout_stato public.payout_stato not null default 'trattenuto',
@@ -312,9 +389,18 @@ alter table public.orders
 
 comment on column public.orders.prezzo_cents is
   'Quanto incassa il venditore. La commissione sta sopra, non dentro.';
-comment on column public.orders.commissione_bps is
-  'Percentuale in punti base congelata alla creazione dell''ordine. Una modifica '
-  'successiva di marketplace_config non tocca questa riga.';
+comment on column public.orders.margine_obiettivo_bps is
+  'Margine netto obiettivo, in punti base, congelato alla creazione. Una '
+  'modifica successiva di marketplace_config non tocca questa riga.';
+comment on column public.orders.riferimento_stripe_percentuale_bps is
+  'Quota percentuale della fee di riferimento usata per calcolare il rincaro '
+  'di QUESTO ordine. Serve a spiegarlo dopo, non a ricalcolarlo.';
+comment on column public.orders.riferimento_stripe_fisso_cents is
+  'Quota fissa della fee di riferimento usata per questo ordine. È ciò che '
+  'rende la percentuale effettiva più alta sui prezzi bassi.';
+comment on column public.orders.commissione_cents is
+  'Rincaro effettivo in centesimi, calcolato una volta e mai ricalcolato. La '
+  'percentuale effettiva è un rapporto derivabile, non una colonna.';
 comment on column public.orders.totale_cents is
   'Quanto paga il compratore: prezzo del venditore più commissione. È l''importo '
   'della riga payments e quello riverificato contro il fornitore.';
@@ -334,20 +420,57 @@ create index orders_payout_coda_idx
 -- nessuna delle due è scrivibile, perché `orders` non ha alcun GRANT di
 -- scrittura verso i ruoli client.
 grant select (
-  commissione_bps, commissione_cents, totale_cents, payout_stato, consegnato_at,
-  auto_rilascio_scadenza, ricezione_confermata_at, contestato_at,
+  margine_obiettivo_bps, riferimento_stripe_percentuale_bps,
+  riferimento_stripe_fisso_cents, commissione_cents, totale_cents, payout_stato,
+  consegnato_at, auto_rilascio_scadenza, ricezione_confermata_at, contestato_at,
   contestazione_motivo
 ) on public.orders to authenticated;
 
 -- ---------------------------------------------------------------------------
--- Prenotazione: congela la percentuale e addebita il totale
+-- Estensione di public.payments: la fee davvero pagata
 -- ---------------------------------------------------------------------------
 --
--- Rispetto alla Fase 7 cambiano tre righe e nessun invariante: si legge la
--- configurazione corrente, la si scrive sull'ordine, e la riga di `payments`
--- nasce con `totale_cents` invece che con `prezzo_cents`. Tutto il resto —
--- lock sull'annuncio, ricontrollo idempotenza, scadenza, bottiglia, proposta —
--- è quello già verificato.
+-- Il margine garantito dalla formula è una proiezione costruita sulla fee di
+-- riferimento. La fee reale la conosce solo il fornitore, e dipende dal metodo
+-- che il compratore ha scelto. Queste due colonne servono a misurare lo scarto,
+-- non a decidere alcunché: nessun percorso di rilascio fondi le legge.
+alter table public.payments
+  add column fee_stripe_reale_cents integer
+    check (fee_stripe_reale_cents is null or fee_stripe_reale_cents >= 0),
+  add column fee_provider_transazione_id text
+    check (fee_provider_transazione_id is null
+           or length(fee_provider_transazione_id) between 4 and 255),
+  add column fee_riconciliata_at timestamptz;
+
+comment on column public.payments.fee_stripe_reale_cents is
+  'Fee effettivamente trattenuta dal fornitore su questo incasso. Nulla finché '
+  'non è nota: nulla significa "non misurata", mai "zero".';
+comment on column public.payments.fee_provider_transazione_id is
+  'Identificativo della transazione di saldo presso il fornitore. È l''appiglio '
+  'con cui la fee reale viene recuperata quando l''evento non la porta con sé.';
+
+-- Il compratore vede quanto ha pagato, non quanto è costato incassarlo: la fee
+-- è un dato di conto economico della piattaforma. Nessun GRANT verso i client.
+create index payments_fee_da_riconciliare_idx
+  on public.payments (created_at)
+  where stato = 'paid' and fee_stripe_reale_cents is null;
+
+-- ---------------------------------------------------------------------------
+-- Prenotazione: congela i parametri e addebita il totale
+-- ---------------------------------------------------------------------------
+--
+-- Rispetto alla Fase 7 cambia un blocco e nessun invariante: si legge la
+-- configurazione corrente, si calcola il totale con la formula, si scrivono
+-- sull'ordine i tre parametri E il risultato, e la riga di `payments` nasce con
+-- `totale_cents` invece che con `prezzo_cents`. Tutto il resto — lock
+-- sull'annuncio, ricontrollo idempotenza, scadenza, bottiglia, proposta — è
+-- quello già verificato.
+--
+-- La commissione nasce per sottrazione (`totale - prezzo`) e non per
+-- moltiplicazione: così `totale_cents`, che è una colonna generata come
+-- `prezzo + commissione`, non può che coincidere con il totale calcolato. Un
+-- arrotondamento indipendente sui due numeri li farebbe divergere di un
+-- centesimo prima o poi.
 
 create or replace function public.order_checkout_reserve(
   p_buyer_id uuid,
@@ -369,6 +492,7 @@ declare
   v_payment public.payments%rowtype;
   v_config public.marketplace_config%rowtype;
   v_price integer;
+  v_totale integer;
   v_commissione integer;
   v_wine_name text;
 begin
@@ -387,7 +511,9 @@ begin
       'order_id', v_order.id, 'amount_cents', v_order.totale_cents,
       'prezzo_venditore_cents', v_order.prezzo_cents,
       'commissione_cents', v_order.commissione_cents,
-      'commissione_bps', v_order.commissione_bps,
+      'margine_obiettivo_bps', v_order.margine_obiettivo_bps,
+      'riferimento_stripe_percentuale_bps', v_order.riferimento_stripe_percentuale_bps,
+      'riferimento_stripe_fisso_cents', v_order.riferimento_stripe_fisso_cents,
       'currency', v_order.currency, 'checkout_url', v_payment.checkout_url,
       'provider', v_payment.provider,
       'provider_session_id', v_payment.provider_session_id,
@@ -409,7 +535,9 @@ begin
       'order_id', v_order.id, 'amount_cents', v_order.totale_cents,
       'prezzo_venditore_cents', v_order.prezzo_cents,
       'commissione_cents', v_order.commissione_cents,
-      'commissione_bps', v_order.commissione_bps,
+      'margine_obiettivo_bps', v_order.margine_obiettivo_bps,
+      'riferimento_stripe_percentuale_bps', v_order.riferimento_stripe_percentuale_bps,
+      'riferimento_stripe_fisso_cents', v_order.riferimento_stripe_fisso_cents,
       'currency', v_order.currency, 'checkout_url', v_payment.checkout_url,
       'provider', v_payment.provider,
       'provider_session_id', v_payment.provider_session_id,
@@ -467,22 +595,28 @@ begin
     v_price := coalesce(v_proposal.controproposta_cents, v_proposal.prezzo_proposto_cents);
   end if;
 
-  -- Il congelamento. Da qui in poi la percentuale di questo ordine è un dato
+  -- Il congelamento. Da qui in poi i parametri di questo ordine sono un dato
   -- storico: `marketplace_config` può cambiare senza che questa riga si muova.
   v_config := private.marketplace_config_corrente();
   if v_config.id is null then
     raise exception 'Configurazione di mercato mancante.' using errcode = 'P0001';
   end if;
-  v_commissione := round(v_price::numeric * v_config.commissione_bps / 10000)::integer;
+  v_totale := private.marketplace_totale_cents(
+    v_price, v_config.margine_obiettivo_bps,
+    v_config.riferimento_stripe_percentuale_bps, v_config.riferimento_stripe_fisso_cents
+  );
+  v_commissione := v_totale - v_price;
 
   insert into public.orders (
     listing_id, proposal_id, buyer_id, seller_id, seller_bottle_unit_id,
-    delivery_mode, prezzo_cents, commissione_bps, commissione_cents, currency,
-    idempotency_key, reservation_expires_at
+    delivery_mode, prezzo_cents, margine_obiettivo_bps,
+    riferimento_stripe_percentuale_bps, riferimento_stripe_fisso_cents,
+    commissione_cents, currency, idempotency_key, reservation_expires_at
   ) values (
     v_listing.id, p_proposal_id, p_buyer_id, v_listing.seller_id,
     v_listing.bottle_unit_id, p_delivery_mode, v_price,
-    v_config.commissione_bps, v_commissione, 'eur',
+    v_config.margine_obiettivo_bps, v_config.riferimento_stripe_percentuale_bps,
+    v_config.riferimento_stripe_fisso_cents, v_commissione, 'eur',
     p_idempotency_key, now() + interval '30 minutes'
   ) returning * into v_order;
 
@@ -500,8 +634,10 @@ begin
   end if;
   insert into public.order_events (order_id, tipo, payload)
   values (v_order.id, 'checkout_reserved', jsonb_build_object(
-    'commissione_bps', v_order.commissione_bps,
-    'commissione_cents', v_order.commissione_cents
+    'commissione_cents', v_order.commissione_cents,
+    'margine_obiettivo_bps', v_order.margine_obiettivo_bps,
+    'riferimento_stripe_percentuale_bps', v_order.riferimento_stripe_percentuale_bps,
+    'riferimento_stripe_fisso_cents', v_order.riferimento_stripe_fisso_cents
   ));
   select w.nome into v_wine_name from public.wines w where w.id = v_bottle.wine_id;
 
@@ -509,7 +645,9 @@ begin
     'order_id', v_order.id, 'amount_cents', v_order.totale_cents,
     'prezzo_venditore_cents', v_order.prezzo_cents,
     'commissione_cents', v_order.commissione_cents,
-    'commissione_bps', v_order.commissione_bps,
+    'margine_obiettivo_bps', v_order.margine_obiettivo_bps,
+    'riferimento_stripe_percentuale_bps', v_order.riferimento_stripe_percentuale_bps,
+    'riferimento_stripe_fisso_cents', v_order.riferimento_stripe_fisso_cents,
     'currency', v_order.currency, 'wine_name', v_wine_name,
     'reservation_expires_at', v_order.reservation_expires_at,
     'order_status', v_order.stato, 'payment_status', v_payment.stato
@@ -523,9 +661,15 @@ $$;
 -- Eventi di incasso: il rimborso blocca il payout
 -- ---------------------------------------------------------------------------
 --
--- Unica differenza rispetto alla Fase 7: il ramo `refunded` porta anche
--- `payout_stato` a 'bloccato' quando il denaro non è ancora uscito. Senza,
--- un rimborso e un auto-rilascio potrebbero attraversarsi e pagare due volte.
+-- Due differenze rispetto alla Fase 7.
+--
+-- 1. Il ramo `refunded` porta anche `payout_stato` a 'bloccato' quando il
+--    denaro non è ancora uscito. Senza, un rimborso e un auto-rilascio
+--    potrebbero attraversarsi e pagare due volte.
+-- 2. L'evento può portare con sé la fee reale e l'identificativo della
+--    transazione di saldo. Si registrano PRIMA dei rami, così anche l'uscita
+--    anticipata `late_paid_requires_refund` non li perde. Sono dati di misura:
+--    nessun ramo decide niente in base a loro.
 
 create or replace function public.payment_apply_provider_event(
   p_provider text,
@@ -552,6 +696,8 @@ declare
   v_fully_refunded boolean := coalesce((p_object ->> 'refunded')::boolean, false);
   v_currency text := lower(coalesce(p_object ->> 'currency', ''));
   v_order_ref uuid := nullif(p_object ->> 'order_id', '')::uuid;
+  v_fee_reale integer := nullif(p_object ->> 'fee_reale_cents', '')::integer;
+  v_fee_txn text := nullif(p_object ->> 'fee_transazione_id', '');
 begin
   -- I null sono respinti qui e non lasciati arrivare ai vincoli not null delle
   -- tabelle: un messaggio di violazione esporrebbe nomi di colonna al chiamante.
@@ -580,6 +726,20 @@ begin
   end if;
   if not found then raise exception 'Pagamento non riconosciuto.' using errcode = 'P0001'; end if;
   select * into v_order from public.orders where id = v_payment.order_id for update;
+
+  -- Misura, non decisione. Una fee negativa o non numerica sarebbe già stata
+  -- respinta dal cast; qui si respinge anche quella che eccede l'incasso, che
+  -- sarebbe un errore di lettura del payload e non un costo.
+  if v_fee_reale is not null and v_fee_reale between 0 and v_payment.amount_cents then
+    update public.payments set
+      fee_stripe_reale_cents = v_fee_reale,
+      fee_provider_transazione_id = coalesce(v_fee_txn, fee_provider_transazione_id),
+      fee_riconciliata_at = now()
+    where id = v_payment.id;
+  elsif v_fee_txn is not null then
+    update public.payments set fee_provider_transazione_id = v_fee_txn
+    where id = v_payment.id and fee_provider_transazione_id is distinct from v_fee_txn;
+  end if;
 
   if p_outcome = 'settled'
      and v_payment.stato not in ('partially_refunded', 'refunded') then
@@ -677,6 +837,101 @@ begin
   return 'processed';
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Riconciliazione della fee: registrazione tardiva e confronto
+-- ---------------------------------------------------------------------------
+--
+-- Perché una porta separata dall'evento. Il fornitore, nel payload del webhook,
+-- manda l'identificativo della transazione di saldo e non il suo importo: la
+-- fee si conosce con una lettura successiva. Questa RPC è quella lettura che
+-- rientra, ed è l'unico modo di scrivere la colonna dopo la nascita della riga.
+-- Non tocca stato, importi né payout: se sbagliasse, sbaglierebbe un numero di
+-- conto economico e nient'altro.
+
+create or replace function public.payment_fee_reale_registra(
+  p_provider text,
+  p_provider_intent_id text,
+  p_fee_cents integer,
+  p_transazione_id text default null
+)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_payment public.payments%rowtype;
+begin
+  if coalesce(p_provider, '') !~ '^[a-z0-9_]{2,32}$'
+     or length(coalesce(p_provider_intent_id, '')) < 4
+     or p_fee_cents is null or p_fee_cents < 0 then
+    raise exception 'Riconciliazione fee non valida.' using errcode = '22023';
+  end if;
+
+  select * into v_payment from public.payments
+  where provider = p_provider and provider_intent_id = p_provider_intent_id
+  for update;
+  if not found then return 'unknown_payment'; end if;
+  -- Una fee superiore all'incasso non è un costo: è un aggancio sbagliato.
+  if p_fee_cents > v_payment.amount_cents then return 'implausible'; end if;
+
+  update public.payments set
+    fee_stripe_reale_cents = p_fee_cents,
+    fee_provider_transazione_id = coalesce(p_transazione_id, fee_provider_transazione_id),
+    fee_riconciliata_at = now()
+  where id = v_payment.id;
+  return 'recorded';
+end;
+$$;
+
+-- Confronto fra ciò che la formula prometteva e ciò che è successo. È una
+-- vista di sola lettura e nessun percorso di rilascio fondi la interroga: il
+-- Transfer parte da `payout_prepara`, che non sa nemmeno che questa esista.
+-- Serve a rispondere a una domanda sola — la fee di riferimento è ancora
+-- realistica? — e la risposta si legge nella colonna `scarto_cents`.
+create view public.order_margine_riconciliazione
+with (security_invoker = off, security_barrier = true)
+as
+select
+  o.id as order_id,
+  o.created_at,
+  o.prezzo_cents,
+  o.commissione_cents,
+  o.totale_cents,
+  o.margine_obiettivo_bps,
+  o.riferimento_stripe_percentuale_bps,
+  o.riferimento_stripe_fisso_cents,
+  p.stato as payment_stato,
+  -- Percentuale effettivamente addebitata, derivata e non memorizzata.
+  round(o.commissione_cents::numeric * 10000 / nullif(o.prezzo_cents, 0), 2)
+    as commissione_effettiva_bps,
+  -- Ciò che il fornitore avrebbe trattenuto alle condizioni di riferimento.
+  (round(o.totale_cents::numeric * o.riferimento_stripe_percentuale_bps / 10000)
+    + o.riferimento_stripe_fisso_cents)::integer as fee_riferimento_cents,
+  (o.totale_cents
+    - round(o.totale_cents::numeric * o.riferimento_stripe_percentuale_bps / 10000)
+    - o.riferimento_stripe_fisso_cents
+    - o.prezzo_cents)::integer as margine_proiettato_cents,
+  p.fee_stripe_reale_cents,
+  -- Nullo finché la fee reale non è nota: nullo significa "non misurato".
+  (o.totale_cents - p.fee_stripe_reale_cents - o.prezzo_cents)::integer
+    as margine_reale_cents,
+  (o.totale_cents - p.fee_stripe_reale_cents - o.prezzo_cents
+    - (o.totale_cents
+       - round(o.totale_cents::numeric * o.riferimento_stripe_percentuale_bps / 10000)
+       - o.riferimento_stripe_fisso_cents
+       - o.prezzo_cents))::integer as scarto_cents,
+  p.fee_riconciliata_at
+from public.orders o
+join public.payments p on p.order_id = o.id;
+
+revoke all on public.order_margine_riconciliazione from public, anon, authenticated;
+
+comment on view public.order_margine_riconciliazione is
+  'Margine proiettato contro margine reale, per ordine. Sola lettura, nessun '
+  'GRANT verso ruoli client: è conto economico della piattaforma. Nessuna '
+  'decisione di rilascio fondi dipende da queste colonne.';
 
 -- ---------------------------------------------------------------------------
 -- Account Connect: creazione e applicazione degli eventi firmati
@@ -1180,7 +1435,8 @@ revoke execute on function
   public.ordine_auto_rilascio_esegui(integer),
   public.payout_coda(integer),
   public.payout_prepara(uuid),
-  public.payout_registra_esito(uuid, boolean, text, text)
+  public.payout_registra_esito(uuid, boolean, text, text),
+  public.payment_fee_reale_registra(text, text, integer, text)
   from public, anon, authenticated;
 
 grant execute on function
@@ -1192,7 +1448,8 @@ grant execute on function
   public.ordine_auto_rilascio_esegui(integer),
   public.payout_coda(integer),
   public.payout_prepara(uuid),
-  public.payout_registra_esito(uuid, boolean, text, text)
+  public.payout_registra_esito(uuid, boolean, text, text),
+  public.payment_fee_reale_registra(text, text, integer, text)
   to service_role;
 
 comment on function public.payout_prepara(uuid) is

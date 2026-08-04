@@ -1,19 +1,22 @@
 -- ============================================================================
--- Fase 7b — commissione congelata, contestazione, idempotenza del rilascio,
--- singola esecuzione dell'auto-rilascio.
+-- Fase 7b — parametri congelati, contestazione, idempotenza del rilascio,
+-- singola esecuzione dell'auto-rilascio, riconciliazione della fee.
 --
 -- Eseguire dopo 20260803150000_phase_7b_stripe_connect_marketplace.sql.
 -- Crea e cancella due utenti, quattro vini, quattro bottiglie, quattro annunci
 -- e i relativi ordini, pagamenti, payout ed eventi. Richiede autorizzazione
 -- fixture separata da quella della migrazione.
--- Atteso: 18 PASSA, 0 FALLISCE, nessuna riga 99.
+-- Atteso: 23 PASSA, 0 FALLISCE, nessuna riga 99.
 --
--- Copre i quattro comportamenti che nessun test TypeScript può provare, perché
--- la loro autorità è in Postgres e non nella traduzione TypeScript:
---   A  la percentuale è congelata sulla riga, non riletta dalla configurazione;
+-- Copre i comportamenti che nessun test TypeScript può provare, perché la loro
+-- autorità è in Postgres e non nella traduzione TypeScript:
+--   A  i tre parametri sono congelati sulla riga, non riletti dalla configurazione;
 --   B  la contestazione blocca sia il rilascio sia l'auto-rilascio;
 --   C  il rilascio è idempotente — una riga per ordine, uscita se già trasferito;
---   D  l'auto-rilascio non reclama due volte lo stesso ordine.
+--   D  l'auto-rilascio non reclama due volte lo stesso ordine;
+--   E  seller_enabled decade con l'account e un evento tardivo non lo riapre;
+--   F  la formula arrotonda per eccesso, il margine obiettivo regge a ogni
+--      prezzo, e la fee reale resta una misura invisibile ai ruoli client.
 --
 -- LIMITE DICHIARATO, da non lasciare implicito: come la griglia della Fase 7,
 -- questa gira in una sola sessione. `for update ... skip locked` non entra mai
@@ -163,7 +166,10 @@ declare
   v_order_b    uuid;
   v_order_c    uuid;
   v_order_d    uuid;
-  v_prezzo     integer := 10000;   -- 100,00 € — 5% fa 500, senza arrotondamenti
+  -- 100,00 €. Con i parametri iniziali il rincaro vale 686 e il totale 10686:
+  -- non è una percentuale tonda perché non è una percentuale, è il numero che
+  -- lascia alla piattaforma il 5% netto dopo la fee di riferimento.
+  v_prezzo     integer := 10000;
   v_riserva    jsonb;
   v_payout     jsonb;
   v_payout2    jsonb;
@@ -171,9 +177,13 @@ declare
   v_esito      text;
   v_conteggio  integer;
   v_ids        uuid[];
-  v_bps        integer;
+  v_margine    integer;
+  v_perc       integer;
+  v_fisso      integer;
   v_totale     integer;
   v_i          integer;
+  v_ok         boolean;
+  v_dettaglio  text;
 begin
   insert into auth.users (
     instance_id, id, aud, role, email, encrypted_password,
@@ -217,7 +227,7 @@ begin
   );
 
   -- ==========================================================================
-  -- Gruppo A — la commissione è congelata sull'ordine
+  -- Gruppo A — i parametri sono congelati sull'ordine
   -- ==========================================================================
 
   v_riserva := public.order_checkout_reserve(
@@ -225,60 +235,76 @@ begin
   );
   v_order_a := (v_riserva ->> 'order_id')::uuid;
 
-  select o.commissione_bps, o.commissione_cents, o.totale_cents
-  into v_bps, v_conteggio, v_totale
+  select o.margine_obiettivo_bps, o.riferimento_stripe_percentuale_bps,
+         o.riferimento_stripe_fisso_cents, o.commissione_cents, o.totale_cents
+  into v_margine, v_perc, v_fisso, v_conteggio, v_totale
   from public.orders o where o.id = v_order_a;
 
   perform pg_temp.registra_7b(
-    1, 'A — l''ordine nasce con la percentuale corrente e il totale sopra il prezzo',
-    'bps = 500, commissione = 500, totale = 10500',
-    v_bps = 500 and v_conteggio = 500 and v_totale = 10500,
-    format('bps=%s commissione=%s totale=%s', v_bps, v_conteggio, v_totale)
+    1, 'A — l''ordine nasce con i tre parametri correnti e il totale sopra il prezzo',
+    'margine=500 perc=150 fisso=25, commissione = 686, totale = 10686',
+    v_margine = 500 and v_perc = 150 and v_fisso = 25
+      and v_conteggio = 686 and v_totale = 10686,
+    format('margine=%s perc=%s fisso=%s commissione=%s totale=%s',
+           v_margine, v_perc, v_fisso, v_conteggio, v_totale)
   );
 
   select p.amount_cents into v_conteggio from public.payments p where p.order_id = v_order_a;
   perform pg_temp.registra_7b(
     2, 'A — il pagamento addebita il totale, non il prezzo del venditore',
-    'payments.amount_cents = 10500',
-    v_conteggio = 10500,
+    'payments.amount_cents = 10686',
+    v_conteggio = 10686,
     'amount_cents=' || coalesce(v_conteggio::text, 'NULL')
   );
 
   -- La configurazione cambia DOPO la nascita dell'ordine: è il caso che
-  -- distingue "congelato" da "riletto ogni volta".
+  -- distingue "congelato" da "riletto ogni volta". Cambiano tutti e tre i
+  -- parametri, perché congelarne solo uno lascerebbe l'ordine inspiegabile.
   update public.marketplace_config set valida_fino = now() where valida_fino is null;
-  insert into public.marketplace_config (commissione_bps, auto_rilascio_giorni, nota)
-  values (1200, 3, 'Fixture 7b: percentuale cambiata dopo la creazione dell''ordine.');
+  insert into public.marketplace_config (
+    margine_obiettivo_bps, riferimento_stripe_percentuale_bps,
+    riferimento_stripe_fisso_cents, auto_rilascio_giorni, nota
+  )
+  values (1200, 290, 35, 3, 'Fixture 7b: parametri cambiati dopo la creazione dell''ordine.');
 
-  select o.commissione_bps, o.commissione_cents, o.totale_cents
-  into v_bps, v_conteggio, v_totale
+  select o.margine_obiettivo_bps, o.riferimento_stripe_percentuale_bps,
+         o.riferimento_stripe_fisso_cents, o.commissione_cents, o.totale_cents
+  into v_margine, v_perc, v_fisso, v_conteggio, v_totale
   from public.orders o where o.id = v_order_a;
   perform pg_temp.registra_7b(
     3, 'A — cambiare la configurazione non tocca un ordine già creato',
-    'bps = 500, commissione = 500, totale = 10500 anche dopo il cambio a 1200',
-    v_bps = 500 and v_conteggio = 500 and v_totale = 10500,
-    format('bps=%s commissione=%s totale=%s', v_bps, v_conteggio, v_totale)
+    'margine=500 perc=150 fisso=25, commissione = 686, totale = 10686 dopo il cambio',
+    v_margine = 500 and v_perc = 150 and v_fisso = 25
+      and v_conteggio = 686 and v_totale = 10686,
+    format('margine=%s perc=%s fisso=%s commissione=%s totale=%s',
+           v_margine, v_perc, v_fisso, v_conteggio, v_totale)
   );
 
   v_riserva := public.order_checkout_reserve(
     v_buyer, v_annunci[4], null, 'spedizione', 'idem-7b-d-00000001'
   );
   v_order_d := (v_riserva ->> 'order_id')::uuid;
-  select o.commissione_bps, o.commissione_cents, o.totale_cents
-  into v_bps, v_conteggio, v_totale
+  select o.margine_obiettivo_bps, o.riferimento_stripe_percentuale_bps,
+         o.riferimento_stripe_fisso_cents, o.commissione_cents, o.totale_cents
+  into v_margine, v_perc, v_fisso, v_conteggio, v_totale
   from public.orders o where o.id = v_order_d;
   perform pg_temp.registra_7b(
-    4, 'A — un ordine creato dopo il cambio usa la nuova percentuale',
-    'bps = 1200, commissione = 1200, totale = 11200',
-    v_bps = 1200 and v_conteggio = 1200 and v_totale = 11200,
-    format('bps=%s commissione=%s totale=%s', v_bps, v_conteggio, v_totale)
+    4, 'A — un ordine creato dopo il cambio usa i nuovi parametri',
+    'margine=1200 perc=290 fisso=35, commissione = 1571, totale = 11571',
+    v_margine = 1200 and v_perc = 290 and v_fisso = 35
+      and v_conteggio = 1571 and v_totale = 11571,
+    format('margine=%s perc=%s fisso=%s commissione=%s totale=%s',
+           v_margine, v_perc, v_fisso, v_conteggio, v_totale)
   );
 
   -- Ripristina la configurazione iniziale: il resto della griglia ragiona su 14
   -- giorni di finestra, e lasciarne 3 renderebbe i casi D dipendenti da A.
   update public.marketplace_config set valida_fino = now() where valida_fino is null;
-  insert into public.marketplace_config (commissione_bps, auto_rilascio_giorni, nota)
-  values (500, 14, 'Fixture 7b: ripristino della configurazione iniziale.');
+  insert into public.marketplace_config (
+    margine_obiettivo_bps, riferimento_stripe_percentuale_bps,
+    riferimento_stripe_fisso_cents, auto_rilascio_giorni, nota
+  )
+  values (500, 150, 25, 14, 'Fixture 7b: ripristino della configurazione iniziale.');
 
   -- ==========================================================================
   -- Gruppo B — la contestazione blocca rilascio e auto-rilascio
@@ -341,8 +367,12 @@ begin
     'stripe', 'evt_7b_pi_test_7b_a', 'settled', extract(epoch from now())::bigint,
     jsonb_build_object(
       'session_id', 'pi_test_7b_a', 'intent_id', 'pi_test_7b_a',
-      'provider_event_type', 'test.evento', 'amount_cents', 10500,
+      'provider_event_type', 'test.evento', 'amount_cents', 10686,
       'amount_refunded', 0, 'refunded', false, 'currency', 'eur',
+      -- Fee reale 205 contro una di riferimento da 185: è il caso che rende
+      -- visibile lo scarto, cioè un compratore che ha pagato con un metodo più
+      -- caro della carta SEE su cui la formula è tarata.
+      'fee_reale_cents', 205, 'fee_transazione_id', 'txn_test_7b_a',
       'order_id', v_order_a::text
     )
   );
@@ -366,7 +396,7 @@ begin
   select count(*) into v_conteggio from public.payouts where order_id = v_order_a;
   perform pg_temp.registra_7b(
     10, 'C — due preparazioni non creano due payout e trasferiscono il solo prezzo',
-    'una riga, stesso payout_id, amount = 10000 (non 10500)',
+    'una riga, stesso payout_id, amount = 10000 (non 10686)',
     v_conteggio = 1
       and (v_payout2 ->> 'payout_id')::uuid = v_payout_id
       and (v_payout ->> 'amount_cents')::integer = 10000,
@@ -463,6 +493,93 @@ begin
       and (select count(*) from public.user_roles
            where user_id = v_seller and role = 'seller_enabled') = 0,
     format('ruoli=%s esito=%s', v_conteggio, coalesce(v_esito, 'NULL'))
+  );
+
+  -- ==========================================================================
+  -- Gruppo F — formula del rincaro e riconciliazione della fee
+  -- ==========================================================================
+
+  -- I valori attesi sono gli stessi asseriti da marketplace-fee.test.ts. È il
+  -- punto in cui le due copie della formula si incontrano davvero: se qui
+  -- divergessero, uno dei due linguaggi starebbe addebitando un altro numero.
+  -- Gli ultimi due prezzi hanno divisione esatta: `ceil` non deve aggiungere
+  -- nulla, o il rincaro crescerebbe di un centesimo senza motivo.
+  select bool_and(
+    t.atteso = private.marketplace_totale_cents(t.prezzo, 500, 150, 25)
+  ), string_agg(
+    format('%s→%s(atteso %s)', t.prezzo,
+           private.marketplace_totale_cents(t.prezzo, 500, 150, 25), t.atteso), ' '
+  )
+  into v_ok, v_dettaglio
+  from (values
+    (1000, 1092), (1500, 1625), (5000, 5356), (10000, 10686),
+    (50000, 53325), (500000, 533021), (70, 100), (267, 310)
+  ) as t(prezzo, atteso);
+
+  perform pg_temp.registra_7b(
+    19, 'F — la formula arrotonda per eccesso e concorda con la copia TypeScript',
+    'otto prezzi da 0,70 € a 5000 €, tutti uguali agli attesi',
+    v_ok,
+    coalesce(v_dettaglio, 'NULL')
+  );
+
+  -- L'invariante per cui esiste il `ceil`: dopo la fee di riferimento resta
+  -- almeno il margine obiettivo. Confronto in aritmetica intera — moltiplicato
+  -- per 10000 — così nessun arrotondamento intermedio può mascherare un caso
+  -- che sfora di un centesimo.
+  select bool_and(
+    s.totale::bigint * (10000 - 150) - 25::bigint * 10000 - s.prezzo::bigint * 10000
+      >= s.prezzo::bigint * 500
+  ), count(*)
+  into v_ok, v_conteggio
+  from (
+    select g as prezzo, private.marketplace_totale_cents(g, 500, 150, 25) as totale
+    from generate_series(100, 300000, 137) g
+  ) s;
+
+  perform pg_temp.registra_7b(
+    20, 'F — il margine netto proiettato non scende mai sotto l''obiettivo',
+    'invariante vera su tutti i prezzi campionati',
+    v_ok,
+    format('prezzi=%s tutti conformi=%s', v_conteggio, v_ok)
+  );
+
+  -- La fee reale è entrata dall'evento del gruppo C. La vista deve misurare uno
+  -- scarto negativo, perché 205 è più di 185 e il margine reale è più magro.
+  select p.fee_stripe_reale_cents, p.fee_provider_transazione_id
+  into v_conteggio, v_esito
+  from public.payments p where p.order_id = v_order_a;
+
+  select r.margine_proiettato_cents, r.margine_reale_cents, r.scarto_cents
+  into v_margine, v_perc, v_fisso
+  from public.order_margine_riconciliazione r where r.order_id = v_order_a;
+
+  perform pg_temp.registra_7b(
+    21, 'F — la fee reale arriva dall''evento e la vista misura lo scarto',
+    'fee = 205, txn = txn_test_7b_a, proiettato = 501, reale = 481, scarto = -20',
+    v_conteggio = 205 and v_esito = 'txn_test_7b_a'
+      and v_margine = 501 and v_perc = 481 and v_fisso = -20,
+    format('fee=%s txn=%s proiettato=%s reale=%s scarto=%s',
+           coalesce(v_conteggio::text, 'NULL'), coalesce(v_esito, 'NULL'),
+           coalesce(v_margine::text, 'NULL'), coalesce(v_perc::text, 'NULL'),
+           coalesce(v_fisso::text, 'NULL'))
+  );
+
+  -- La fee è conto economico della piattaforma: il compratore vede quanto ha
+  -- pagato, non quanto è costato incassarlo. Nessun ruolo client la raggiunge,
+  -- né sulla colonna né sulla vista.
+  perform pg_temp.att_errore_7b(
+    22, 'F — la colonna della fee non è leggibile nemmeno dal compratore dell''ordine',
+    'authenticated', v_buyer,
+    format('select fee_stripe_reale_cents from public.payments where order_id = %L', v_order_a),
+    'permission denied'
+  );
+
+  perform pg_temp.att_errore_7b(
+    23, 'F — la vista di riconciliazione non è raggiungibile da un ruolo client',
+    'authenticated', v_buyer,
+    'select margine_reale_cents from public.order_margine_riconciliazione',
+    'permission denied'
   );
 
   -- ==========================================================================
