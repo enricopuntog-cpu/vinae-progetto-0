@@ -1,10 +1,17 @@
 # Fase 7c — Consegna, tracking e selezione imballaggio: documento di design
 
-> **Stato: proposta.** Nessuna riga di SQL è stata eseguita, nessuna migrazione
-> è stata scritta su disco, nessun file di `frontend-next/` è stato toccato.
-> Questo documento si legge e si approva prima che l'implementazione sia
-> autorizzata. L'SQL qui dentro è **bozza illustrativa**, non un file di
-> migrazione.
+> **Stato: approvato e implementato.** Le sette decisioni della sezione 9 sono
+> state chiuse il 4 agosto 2026; l'esito di ciascuna è riportato in linea, nella
+> sezione che la riguarda, e riassunto in §9.
+>
+> L'implementazione è sul branch. La migrazione
+> `supabase/migrations/20260804160000_phase_7c_delivery_packaging.sql`
+> **non è stata applicata**: nessun `apply_migration`, nessun `supabase db push`,
+> nessuna chiamata Supabase in scrittura. Va mostrata per intero e approvata in
+> sessione organizzativa **prima del merge** — perché è il merge a distribuirla,
+> non un comando manuale, e un'approvazione successiva arriverebbe a cose fatte.
+>
+> L'SQL citato qui sotto resta illustrativo: la fonte è il file di migrazione.
 
 **Branch:** `migration/phase-7c-delivery-packaging`, creato da `origin/main`
 @ `1782a1a`.
@@ -444,21 +451,20 @@ Effetti collaterali, dichiarati:
   È **una riga** dentro `order_checkout_reserve`, che va riscritta con
   `create or replace` nella migrazione 7c. La formula del rincaro,
   `private.marketplace_totale_cents`, **non viene toccata**.
-- `order_margine_riconciliazione` continua a leggere `totale_cents` e resta
-  corretta **a patto che** il confronto con la fee reale usi la base giusta. La
-  fee del fornitore si calcola sull'importo davvero incassato, cioè
-  `addebito_totale_cents`: la vista va estesa con quella colonna e con lo scarto
-  attribuibile all'imballaggio, altrimenti misura una fee su una base che non è
-  stata addebitata. **Questa estensione è correzione di misura, non di logica di
-  rilascio: nessun percorso di payout la legge.**
+- `order_margine_riconciliazione` **resta invariata: la decisione (g) non è stata
+  autorizzata.** Continua a calcolare la fee di riferimento su `totale_cents`
+  mentre il fornitore la tratterrà su `addebito_totale_cents`. Con i prezzi di
+  imballaggio a zero — la decisione (d) — i due numeri coincidono e lo scarto è
+  nullo; diventa reale quando un prezzo smetterà di essere zero. Punto aperto
+  della 7b, annotato in coda alla migrazione.
 - `payouts` trasferisce `prezzo_cents` e continua a farlo. Il venditore incassa
   il prezzo esatto: invariante 7b, intatto.
 
-**Chi paga l'imballaggio è la decisione aperta numero uno.** Lo schema qui sopra
-descrive il caso «lo paga il compratore al checkout». Le altre due strade
-(a carico del venditore, dedotto dal payout; a carico della piattaforma)
-cambiano il design: la prima toccherebbe `payout_prepara`, che questa fase ha
-il divieto esplicito di modificare. Vedi §5 e §9.
+**Chi paga l'imballaggio — deciso (e): il compratore, al checkout, come riga
+separata fuori dal calcolo della commissione.** Lo schema qui sopra è quello
+implementato. Le altre due strade (a carico del venditore, dedotto dal payout;
+a carico della piattaforma) sono state scartate: la prima toccherebbe
+`payout_prepara`, che questa fase ha il divieto esplicito di modificare.
 
 ### 2.7 Che cosa NON viene messo a schema
 
@@ -495,12 +501,14 @@ impossibile da scrivere. Tutte `SECURITY DEFINER`, `set search_path = ''`,
 | `ordine_recensisci(p_order_id uuid, p_voto smallint, p_conformita smallint, p_imballaggio smallint, p_comunicazione smallint, p_testo text)` | **compratore** | `completato` | crea `order_reviews`; unica per ordine | `authenticated` |
 | `ordine_imballaggio_scegli(p_order_id uuid, p_codice text, p_punto_id text, p_punto_nome text)` | dipende da §5 | vedi §5 | risolve il prezzo da `packaging_options` e lo congela sull'ordine | `authenticated` |
 
-L'ultima riga è **condizionata alla decisione §9(a)**. Con **P2** — la
-raccomandazione — questa RPC non esiste nella forma scritta sopra: il prezzo lo
-congela `order_checkout_reserve` dal codice dichiarato sull'annuncio, e ciò che
-resta è `ordine_imballaggio_punto_scegli(p_order_id uuid, p_punto_id text,
-p_punto_nome text)`, riservata al **venditore**, che registra il punto fisico e
-**non tocca alcun importo**. Con **P1** o **P3** resta la firma sopra.
+**Risolta dalla decisione §9(a) — P2.** L'ultima riga non esiste nella forma
+scritta sopra. Il prezzo lo congela `order_checkout_reserve` dal codice
+dichiarato sull'annuncio, e le due RPC realmente implementate sono:
+
+| RPC | Chi la chiama | Effetto | Grant |
+|---|---|---|---|
+| `listing_imballaggio_dichiara(p_listing_id uuid, p_codice text)` | **venditore** dell'annuncio | valida il codice contro `public_packaging_options` e lo scrive su `listings.imballaggio_codice` | `authenticated` |
+| `ordine_imballaggio_punto_scegli(p_order_id uuid, p_punto_id text, p_punto_nome text)` | **venditore** dell'ordine, da `pagato` o `in_preparazione` | registra il punto fisico. **Non scrive `imballaggio_cents`**: non può muovere un importo per costruzione | `authenticated` |
 
 `ordine_prepara_spedizione` accetta `pagato` e basta: da `in_preparazione` in
 poi la ri-esecuzione è idempotente e non riscrive `preparazione_avviata_at`.
@@ -545,14 +553,15 @@ propria controversia, e a un venditore di respingere una contestazione che
 blocca i suoi stessi fondi. Contraddice frontalmente l'invariante di
 `CLAUDE.md`: *«il frontend non è un confine di fiducia»*.
 
-**Proposta:** `ordine_contestazione_risolvi` è riservata a `service_role` e al
-ruolo `admin`. Il pannello resta identico nella forma per compratore e
-venditore, ma in sola lettura; i tre bottoni compaiono solo a un `admin`. È
-coerente con quanto la 7b ha già dichiarato: *«in questa fase esistono lo stato
-e il blocco, non l'interfaccia di gestione, che appartiene alla Fase 9»*.
+**Deciso (b): `ordine_contestazione_risolvi` è riservata a `service_role` e al
+ruolo `admin`.** Nella migrazione non ha alcun `grant execute` verso
+`authenticated`: non è che il bottone sia nascosto, è che la chiamata non
+passerebbe. Il pannello resta identico nella forma per compratore e venditore,
+ma in sola lettura. È coerente con quanto la 7b ha già dichiarato: *«in questa
+fase esistono lo stato e il blocco, non l'interfaccia di gestione, che
+appartiene alla Fase 9»*.
 
-È una divergenza dalla parità letterale, ed è la decisione aperta numero due
-(§9).
+È una divergenza dalla parità letterale, approvata esplicitamente.
 
 ### 3.4 Riepilogo dei permessi per stato
 
@@ -742,11 +751,23 @@ nessuna variabile d'ambiente con un URL. Comportamento:
 |---|---|---|---|---|
 | `kit_domicilio` | `kit_a_domicilio` | Kit a domicilio | `false` | **da decidere** |
 | `centro_partner` | `centro_partner` | Centro partner più vicino | `true` | **da decidere** |
-| `punto_quartiere` | `punto_quartiere` | Punto di consegna in quartiere | `true` | **da decidere** |
+| `punto_quartiere` | `punto_quartiere` | Punto di consegna in quartiere | `true` | **0** |
 
-I tre prezzi di seed sono un dato commerciale, non tecnico: li chiedo in §9.
-In assenza di indicazione la migrazione li semina a `0` — visibile, gratuito,
-onesto — e non a un numero inventato che sembrerebbe una decisione presa.
+**Deciso (d): tutti e tre a zero.** Verranno aggiornati con dati commerciali
+reali dopo gli accordi, e non modificando quelle righe: chiudendone la finestra
+`valida_fino` e aprendone di nuove, perché un ordine già nato non deve muoversi.
+Uno zero è visibile e onesto; un numero inventato sembrerebbe una decisione
+presa.
+
+**Dove vive il fake, nell'implementazione reale.** Il piano ipotizzava
+`supabase/functions/_shared/packaging-provider.ts`. In fase di scrittura è
+finito in `frontend-next/src/lib/packaging/fake-packaging-provider.ts`, e
+l'interfaccia `PackagingProvider` in `services/types.ts` accanto a
+`PaymentProvider`. La ragione: **non esiste alcuna chiamata esterna da nascondere
+dietro una Edge Function**, quindi un file Deno che nessuno importa sarebbe
+codice morto. Le due interfacce restano distinte come previsto, e la cucitura
+per il fornitore vero è il parametro `provider` di `createPackagingService`:
+quando arriverà, cambia quella funzione e non il servizio.
 
 ### 4.4 Feature flag
 
@@ -843,9 +864,9 @@ ha già pagato.
 P3 è realizzabile solo nella variante (c), e la variante (c) è un listino finto
 che non fattura: utile come prova d'interfaccia, inutile come modello.
 
-### 5.5 Raccomandazione
+### 5.5 Decisione: P2, approvata
 
-**P2**, con questa forma concreta:
+**P2**, con questa forma concreta — è ciò che è stato implementato:
 
 1. `listings` acquisisce `imballaggio_codice text` nullable, scrivibile dal
    venditore tramite la RPC di aggiornamento annuncio già esistente e mai con un
@@ -866,12 +887,10 @@ che non fattura: utile come prova d'interfaccia, inutile come modello.
 
 Il punto 4 è ciò che rende P2 non una rinuncia: il **metodo** (che ha un
 prezzo) si decide prima, il **punto fisico** (che non ne ha) si decide dopo,
-quando serve davvero. `ordine_imballaggio_scegli` di §3.1 diventa allora
-`ordine_imballaggio_punto_scegli`, e non tocca nessun importo.
-
-**Se la deviazione su `listings` non è accettabile**, il ripiego è **P1** —
-sceglie il compratore, tutto il resto identico. Non serve alcun cambiamento a
-questo documento oltre a chi vede il selettore.
+quando serve davvero. `ordine_imballaggio_scegli` di §3.1 è diventata quindi
+`ordine_imballaggio_punto_scegli`, riservata al venditore, e non scrive
+`imballaggio_cents`: non può muovere un importo per costruzione, non per
+disciplina.
 
 ---
 
@@ -1013,7 +1032,7 @@ mosso è precisamente ciò che quell'invariante vieta.
 | # | Rischio | Perché è reale | Mitigazione proposta |
 |---|---|---|---|
 | R1 | **`payments.amount_cents` cambia base.** Passare da `totale_cents` a `addebito_totale_cents` significa riscrivere una riga dentro `order_checkout_reserve`, funzione di denaro della 7b. | Un errore qui addebita l'importo sbagliato, e la griglia 7b non è mai stata eseguita: non esiste una misura di partenza contro cui confrontarsi. | Riscrittura `create or replace` che cambia **solo** quella riga; caso di griglia dedicato con imballaggio a 0 che deve dare esattamente i numeri della 7b. |
-| R2 | **`order_margine_riconciliazione` misura su una base che non è più quella addebitata.** La fee del fornitore si applica ad `addebito_totale_cents`. | La vista diventerebbe silenziosamente sbagliata: nessun errore, solo numeri che non tornano. | Estenderla con `addebito_totale_cents` e con la quota di fee attribuibile all'imballaggio. È misura, non logica di rilascio. |
+| R2 | **`order_margine_riconciliazione` misura su una base che non è più quella addebitata.** La fee del fornitore si applica ad `addebito_totale_cents`. | La vista è silenziosamente imprecisa: nessun errore, solo numeri che non tornano. | **Nessuna: la decisione (g) non è stata autorizzata.** Il rischio è però *dormiente* finché i prezzi di imballaggio restano a zero, perché lo scarto è esattamente nullo. Si sveglia con il primo prezzo non nullo. Punto aperto della 7b. |
 | R3 | **Doppia sorgente di verità sulla contestazione.** `orders.contestato_at` (7b, autorità sul denaro) e `disputes.stato` (7c, dettaglio). | Se divergono, il payout può restare bloccato con la pratica chiusa, o sbloccarsi con la pratica aperta. | Trigger che impone `disputes` esiste ⟺ `contestato_at is not null` fino alla chiusura; caso di griglia che tenta la divergenza da `service_role`. |
 | R4 | **`.select("*")` in `order-service.ts`.** Difetto già noto, che la 7c aggrava aggiungendo colonne senza grant. | Passa da latente a rottura del percorso principale. | Elenco esplicito di colonne, in questa fase. Test che fallisce se `select("*")` ricompare. |
 | R5 | **`tracking_events` è testo che un utente legge.** Titoli e descrizioni nascono da RPC. | Un titolo con dati altrui dentro è una perdita di informazione. | Titoli da un vocabolario chiuso nella RPC; solo corriere e tracking, già visibili a entrambi, finiscono in `descrizione`. |
@@ -1028,9 +1047,13 @@ mosso è precisamente ciò che quell'invariante vieta.
 2. **Nessuna interfaccia di gestione contestazioni.** La 7c consegna la RPC e la
    riserva a `admin`; la coda, l'assegnazione e l'audit sono Fase 9, come già
    dichiarato dalla 7b.
-3. **`spedizione` e `protezione` restano non migrate.** Due voci di costo che
-   `frontend/` calcola e Supabase non conosce. La 7c non le introduce e non le
-   cancella: le lascia dichiarate.
+3. **`spedizione` e `protezione` non esistono nello schema — ed è un debito
+   della Fase 7 (7a), non della 7c.** Verificato su tutto
+   `supabase/migrations/`: l'unica occorrenza della parola è il valore dell'enum
+   `delivery_mode`, che è una modalità e non un costo. La 7a ha migrato ordini e
+   pagamenti senza portarsi dietro `calcolaSpedizione` e `calcolaProtezione`;
+   la 7c si limita a non chiudere quel buco. Va registrato nel backlog sotto la
+   Fase 7. Vedi §9.
 4. **Indirizzo di consegna non migrato.** `frontend/` usa una costante demo.
 5. **Recensioni non pubbliche.** L'indice per la futura vista di reputazione
    c'è; la vista no.
@@ -1082,11 +1105,15 @@ compratore — che è già ciò che `CHANGES.log` dichiara oggi.
 
 ---
 
-## 8. Sequenza dei task
+## 8. Sequenza dei task — eseguita
 
-Da autorizzare **solo dopo** la revisione di questo documento. Ogni task chiude
-con `lint`/`typecheck`/`test`/`build` in `frontend-next/` e un commit atomico.
-`bun` non è su PATH: `& "$env:USERPROFILE\.bun\bin\bun.exe"`.
+Tutti i task sotto sono stati eseguiti sul branch dopo l'approvazione delle
+decisioni di §9. `bun` non è su PATH: `& "$env:USERPROFILE\.bun\bin\bun.exe"`.
+
+**Verifica finale in locale, 4 agosto 2026:** `lint` 0 errori (23 warning, tutti
+preesistenti e in file non toccati), `typecheck` pulito, `test` **123 su 123**
+in 8 file, `build` a exit 0 con le tre rotte nuove `/acquisti`, `/vendite` e
+`/ordine/[id]` presenti. `MIN_TESTS` in CI alzata da 83 a **123**.
 
 | # | Task | Consegna | Dipende da |
 |---|---|---|---|
@@ -1108,41 +1135,42 @@ test, non di un passaggio finale: si alza di proposito.
 
 ---
 
-## 9. Decisioni che servono prima di implementare
+## 9. Decisioni — chiuse il 4 agosto 2026
 
-Ognuna cambia il codice da scrivere. Nessuna è rimandabile a dopo il task 1.
+| # | Decisione | Esito |
+|---|---|---|
+| (a) | Collocazione della selezione imballaggio | **P2, approvata.** Il venditore dichiara il metodo sull'annuncio; il compratore paga un costo già noto al checkout; il punto fisico si sceglie dopo il pagamento, senza impatto sul totale. |
+| (b) | Chi risolve una contestazione | **Solo `admin`/`service_role`.** Nessuna parte in causa può decidere il proprio caso. |
+| (c) | Esito `rimborsata` | **L'ordine resta `contestato`** finché non arriva un evento di rimborso firmato. Nessun `rimborsato` scritto da un cambio di stato lato client. |
+| (d) | Prezzi di seed delle opzioni | **Zero.** Verranno aggiornati con dati commerciali reali dopo gli accordi, con una migrazione nuova. |
+| (e) | Chi paga l'imballaggio | **Il compratore**, come riga separata fuori dal calcolo della commissione. |
+| (f) | `spedizione` e `protezione` di `frontend/` | **Fuori dalla 7c.** Vedi sotto: sono un debito della 7a, non di questa fase. |
+| (g) | Estendere `order_margine_riconciliazione` | **NON autorizzata.** La vista resta com'è; il punto resta aperto per una decisione dedicata sulla 7b. |
 
-**(a) Collocazione della selezione imballaggio** — §5. Raccomando **P2**
-(il venditore pre-dichiara sull'annuncio, il compratore paga al checkout, il
-punto fisico si sceglie nel pannello di preparazione). È l'unica che soddisfa
-insieme «sceglie il venditore» e «costo visibile al checkout». Costo: una
-colonna nullable su `listings`, dominio della Fase 6. Ripiego senza deviazione:
-**P1**, sceglie il compratore.
+### Conseguenza di (g), da non perdere di vista
 
-**(b) Chi può risolvere una contestazione** — §3.3. Raccomando
-`admin`/`service_role` soltanto. La parità letterale darebbe a compratore e
-venditore il potere di chiudere la propria controversia.
+La vista continua a calcolare la fee di riferimento su `totale_cents`, mentre il
+fornitore la tratterrà su `addebito_totale_cents`. **Con i prezzi di imballaggio
+a zero — cioè oggi, per la decisione (d) — i due numeri coincidono e lo scarto è
+esattamente nullo.** Diventa reale il giorno in cui un prezzo smette di essere
+zero, e da quel giorno `margine_proiettato_cents` sottostima la fee. Registrato
+come punto aperto della 7b, non della 7c, e annotato in coda alla migrazione.
 
-**(c) Esito `rimborsata`** — §6.3(b). Raccomando che la RPC registri la
-decisione e lasci l'ordine `contestato` finché il rimborso non arriva da un
-evento firmato. La parità letterale scriverebbe `rimborsato` prima che il denaro
-si muova.
+### Verifica richiesta da (f): `spedizione` e `protezione` dopo la 7a
 
-**(d) I tre prezzi di seed** delle opzioni di imballaggio — §4.3. Sono un dato
-commerciale. Senza indicazione la migrazione semina `0`.
+Verificato in questa sessione su tutto `supabase/migrations/`: **nessuna delle
+due esiste.** L'unica occorrenza della parola «spedizione» in tutto lo schema è
+il valore dell'enum `public.delivery_mode`, che è una **modalità**
+(`spedizione` / `consegna_mano`) e non un costo.
 
-**(e) Chi paga l'imballaggio** — §2.6. La proposta è: il compratore, al
-checkout, come riga separata che non entra nel calcolo della commissione.
-Discende da (a) e va confermata esplicitamente perché è denaro.
-
-**(f) `spedizione` e `protezione`** — §6.5. Restano non migrate, oppure la 7c le
-introduce come voci di costo. Raccomando di **lasciarle fuori**: sono due
-formule di `frontend/` senza un modello economico dietro, e la commissione della
-7b copre già la parte di protezione.
-
-**(g) Estensione di `order_margine_riconciliazione`** — R2. È l'unica modifica
-a un oggetto della 7b che propongo oltre alla riga di `amount_cents`. È misura,
-non logica di rilascio, ma tocca la 7b e va autorizzata.
+Quindi `Order.spedizione` e `Order.protezione` di
+[`frontend/src/data/orders.ts:66`](../../../frontend/src/data/orders.ts) —
+con le formule `calcolaSpedizione` (12 €, gratis sopra 500 €) e
+`calcolaProtezione` (3% del prezzo) — **non hanno alcuna controparte**. È un
+**debito di parità della Fase 7 (7a)**, che ha migrato ordini e pagamenti senza
+portarsi dietro le due voci di costo: non è un debito aperto dalla 7c, che si
+limita a non chiuderlo. Va registrato nel backlog sotto la Fase 7, dove sta il
+resto del debito di quel dominio.
 
 ---
 
