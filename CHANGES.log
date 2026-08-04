@@ -21,11 +21,12 @@
 - `frontend/` e `backend/` non hanno alcuna differenza rispetto a `origin/main`.
 - La griglia `supabase/tests/7b_connect_marketplace.sql` è a 23 casi, mai eseguita. La griglia `7_ordini_pagamenti.sql` resta a 16 casi, mai eseguita.
 - Il ledger delle migrazioni remote resta a quindici righe: né la migrazione di Fase 7 né quella di Fase 7b sono applicate al progetto reale.
+- Regola vincolante da questa sessione: un file di migrazione già pushato almeno una volta non si modifica più in place; ogni correzione successiva è un nuovo file con timestamp più recente, anche in bozza e anche se nessun database reale lo ha mai eseguito. Registrata in `CLAUDE.md` e in `CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md`.
 
 ## ACTIVE TASK
 - Fase 7b, secondo checkpoint locale: rincaro a netto garantito, riconciliazione della fee reale, test e documentazione allineati.
 - Link di confronto: `https://github.com/enricopuntog-cpu/vinae-progetto-0/compare/main...migration/phase-7b-stripe-connect-marketplace`.
-- File di migrazione modificato e NON applicato: `supabase/migrations/20260803150000_phase_7b_stripe_connect_marketplace.sql`. La sostituzione è avvenuta nel file esistente, non in una migrazione correttiva, perché nessun database lo ha mai eseguito.
+- `supabase/migrations/20260803150000_phase_7b_stripe_connect_marketplace.sql` non è stato toccato in questa sessione e non è applicato al progetto reale. La riscrittura del checkpoint precedente era avvenuta nel file esistente sul presupposto che nessun database lo avesse mai eseguito: quel presupposto si è rivelato falso ed è la ragione della regola nuova.
 - Nessuna chiamata a tool Supabase in questa sessione: nessun `get_cost`, `confirm_cost`, `create_branch`, `apply_migration`, `execute_sql`, `deploy_edge_function`, `delete_branch`.
 - Nessuna chiamata a Stripe, nemmeno in test mode: nessun account Connect, nessuna capability, nessun PaymentIntent, nessun Transfer.
 - `PAYMENTS_ENABLED` non è stata toccata e resta `false` in `frontend-next/.env.example`.
@@ -37,6 +38,7 @@
 3. Decidere se la fee reale va recuperata da un job che chiama `payment_fee_reale_registra` o se resta una lettura manuale.
 
 ## BLOCKERS / NOTES
+- Il branch di anteprima che Supabase crea automaticamente per la PR #19 ha eseguito la prima bozza della migrazione di Fase 7b (commissione 5% piatta) all'apertura della PR, prima della riscrittura a netto garantito, e non l'ha mai ripresa: un ambiente che ha già registrato una versione come eseguita controlla la versione, non il testo. Il progetto reale non è toccato, perché quella versione non l'ha mai eseguita. Disallineamento verificabile e deliberatamente non corretto: irrilevante per il merge.
 - La migrazione di Fase 7b **dipende** da quella di Fase 7, che non è applicata al progetto reale. Applicarla prima fallirebbe: estende `orders`, `payments` e due RPC che quella crea.
 - Nessun motore Postgres ha eseguito la migrazione di Fase 7b: i 23 esiti attesi della griglia derivano dal testo del SQL, non da una misura.
 - Il payload di un webhook Stripe porta `balance_transaction` come identificativo e non espanso: `fee_stripe_reale_cents` resta quindi nulla nel caso normale, e si popola solo se il payload arriva espanso oppure tramite `payment_fee_reale_registra`. Il recupero non è schedulato da nulla.
