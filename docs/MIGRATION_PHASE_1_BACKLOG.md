@@ -371,6 +371,32 @@ Verificato in lettura: `20260731135455` è a ledger, `payments-checkout` è
 [`supabase/tests/7_ordini_pagamenti.sql`](../supabase/tests/7_ordini_pagamenti.sql)
 e lo smoke Storage.
 
+### Debito di parità aperto dalla Fase 7: `spedizione` e `protezione`
+
+Rilevato durante il design della Fase 7c e verificato su tutto
+`supabase/migrations/` il 4 agosto 2026: **nessuna delle due voci di costo
+esiste nello schema.** L'unica occorrenza della parola «spedizione» è il valore
+dell'enum `public.delivery_mode`, che è una *modalità* (`spedizione` /
+`consegna_mano`) e non un importo.
+
+In [`frontend/src/data/orders.ts`](../frontend/src/data/orders.ts) l'ordine
+porta invece due colonne di costo, con le rispettive formule:
+
+- `spedizione`, da `calcolaSpedizione`: 12 € per spedizione, 0 per consegna a
+  mano, 0 sopra i 500 € di imponibile;
+- `protezione`, da `calcolaProtezione`: 3% del prezzo.
+
+Su Supabase il totale è esattamente `prezzo + commissione`, e dalla 7c
+`prezzo + commissione + imballaggio`. **Appartiene alla Fase 7**, che ha migrato
+ordini e pagamenti senza portarsi dietro le due voci: la 7c si è limitata a non
+chiuderlo, e a non introdurne di nuove senza un modello economico dietro.
+
+Da decidere quando si affronterà: se la copertura «protezione» sia già assorbita
+dalla commissione a netto garantito della 7b — nel qual caso la voce va tolta
+anche da `frontend/` al cutover, non aggiunta a Supabase — e se la spedizione
+debba diventare una voce di costo o restare a carico del venditore dentro il
+prezzo. Non è una svista da colmare meccanicamente.
+
 ## Fase 7b — Stripe Connect, commissione e trattenuta fondi
 
 **Branch**: `migration/phase-7b-stripe-connect-marketplace`
