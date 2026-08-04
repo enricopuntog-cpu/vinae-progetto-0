@@ -10,7 +10,12 @@ attendibile per identità, ruoli, prezzi o stato di un ordine.
 ## Componenti
 
 Lo stack servito (`frontend/` + FastAPI) resta invariato. Per lo stack di
-destinazione, Fase 7 aggiunge questo percorso locale e ancora non distribuito:
+destinazione, Fase 7 aggiunge questo percorso, distribuito sul progetto Supabase
+reale ma mai percorso — `20260731135455 phase_7_order_payment_service` è a
+ledger e `payments-checkout` è `ACTIVE`, ma le tabelle di denaro sono a zero
+righe, nessun percorso UI raggiunge il checkout e `PAYMENTS_ENABLED` resta
+`false`. Dettaglio in [`ROADMAP_V1.md`](ROADMAP_V1.md), sezione «Distribuita non
+vuol dire percorsa»:
 
 ```text
 Browser -> frontend-next -> Supabase Auth/RLS/Data API
