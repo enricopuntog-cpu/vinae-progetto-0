@@ -1,15 +1,20 @@
 # Fase 7d — Decisioni economiche aperte: auto-rilascio, fee reale, spedizione e protezione
 
-> **Stato: solo documento di design. Nessuna delle tre decisioni è presa qui.**
+> **Stato: documento di design. Tre delle cinque decisioni bloccanti sono state
+> chiuse in sessione organizzativa il 5 agosto 2026 — vedi
+> [«Esito della sessione organizzativa»](#esito-della-sessione-organizzativa--5-agosto-2026).
+> Restano aperte 2c e 3e.**
 >
 > Nessuna riga di SQL, nessuna migrazione, nessuna modifica a schema o RPC.
 > Nessuna estensione Postgres abilitata. Nessuna chiamata Supabase, né in lettura
 > né in scrittura. Nessuna chiamata Stripe, nemmeno in test mode. Nessuna modifica
-> a `frontend/`, `backend/`, `frontend-next/`.
+> a `frontend/`, `backend/`, `frontend-next/`. **Anche le decisioni prese non hanno
+> prodotto codice**: registrarle è il loro effetto in questa fase.
 >
-> Ogni sezione **raccomanda con motivazione** e lascia la decisione a chi
-> revisiona. La sezione 5 elenca cosa deve essere deciso prima che sia lecito
-> scrivere una sola riga di SQL.
+> Le sezioni 2, 3 e 4 conservano il ragionamento **come è stato presentato alla
+> revisione** — opzioni, trade-off, raccomandazione — e portano in testa l'esito.
+> La sezione 5 elenca cosa resta da decidere prima che sia lecito scrivere una
+> sola riga di SQL.
 
 **Branch:** `migration/phase-7d-decisioni-economiche`, creato da `origin/main`
 @ `471b529`.
@@ -24,7 +29,7 @@ branch. Lo stato del progetto Supabase remoto non è stato interrogato.
 
 ---
 
-## Nota preliminare — `CHANGES.log` è disallineato su un fatto verificabile
+## Nota preliminare — `CHANGES.log` era disallineato su un fatto verificabile
 
 Verificato con `git` e `gh` all'apertura di questa sessione:
 
@@ -34,22 +39,69 @@ Verificato con `git` e `gh` all'apertura di questa sessione:
 | `origin/main` | `1782a1a` | **`471b529`**, squash-merge della Fase 7c |
 | Migrazione 7c | «non applicata, nessun `apply_migration`» | presente in `main`, quindi **distribuita dall'integrazione GitHub al merge** |
 
-Non è un rilievo di questo documento e non viene corretto qui: va sistemato
-insieme all'aggiornamento di `CHANGES.log` alla chiusura della fase. È annotato
-perché chi legge questo documento troverà su `main` un log che descrive uno stato
-precedente, e la fonte da credere è Git.
+**Corretto.** Il disallineamento è stato sistemato sullo stesso branch, con il
+commit `969774f`, subito dopo la prima stesura di questo documento. La tabella
+resta qui perché documenta un modo di sbagliare che si ripeterà: un log scritto
+prima del merge descrive lo stato di prima, e la fonte da credere è Git.
 
 **Conseguenza diretta sulla decisione 1:** poiché la 7c *è* su `main`, il debito
 dell'auto-rilascio non è più prospettico. È attivo adesso.
 
 ---
 
+## Esito della sessione organizzativa — 5 agosto 2026
+
+Tre delle cinque decisioni bloccanti sono chiuse. Le altre due restano aperte per
+ragioni diverse fra loro, e la differenza conta: una attende un progetto (2c),
+l'altra attende una risposta commerciale che non dipende da questo repository
+(3e).
+
+| # | Oggetto | Esito | Dove sta il ragionamento |
+|---|---|---|---|
+| **1a** | Chi chiama l'auto-rilascio | **DECISO — scheduler esterno via GitHub Actions (opzione B).** Non `pg_cron`. | [§2.5](#25-opzione-b--scheduler-esterno-github-actions-schedulato), [§2.8](#28-raccomandazione--opzione-b-scheduler-esterno) |
+| **1e** | Ordine di accensione | **DECISO — lo scheduler si accende e si verifica PRIMA di `PAYMENTS_ENABLED`, mai dopo.** | [§2.7(iii)](#iii-il-backlog-storico-alla-prima-accensione) |
+| **3a** | La voce «protezione» (3%) | **DECISO — si toglie dal modello Supabase. In `frontend/` resta invariata fino al cutover di Fase 11.** | [§4.4](#44-la-protezione-è-già-coperta-dal-margine-garantito), [§4.6](#46-raccomandazione) |
+| **2c** | Tetto ai tentativi per le fee irrecuperabili | **APERTO.** È la sola parte di tutte e tre le decisioni che richiede schema nuovo. Tre opzioni progettate in [§3.11](#311-addendum--il-tetto-ai-tentativi-decisione-2c). | [§3.11](#311-addendum--il-tetto-ai-tentativi-decisione-2c) |
+| **3e** | Se il partner logistico fatturi un importo unico per modalità o due importi separati | **APERTO — domanda commerciale, in attesa di risposta da Enrico.** Nessuna azione tecnica è possibile prima: da questa risposta dipende se serva una colonna nuova o basti prezzare `packaging_options`. | [§4.5](#45-la-spedizione-è-già-implicita-nel-prezzo-o-deve-diventare-esplicita) |
+
+Le decisioni non bloccanti — 1b, 1c, 1d, 1f, 1g, 2a, 2b, 2d, 2e, 2f, 3b, 3c, 3d,
+3f, 3g — non sono state discusse in questa sessione e restano nelle tabelle di
+[§2.10](#210-cosa-resta-da-decidere-in-sessione-organizzativa),
+[§3.10](#310-cosa-resta-da-decidere-in-sessione-organizzativa) e
+[§4.7](#47-cosa-resta-da-decidere-in-sessione-organizzativa). Due di esse — 2a e
+2b — sono ora *implicate* da 1a e da 2c: vedi le rispettive tabelle.
+
+### Nessun motore ha mai eseguito questo codice
+
+Fatto verificato mentre si registravano le decisioni, e che chiunque accenda lo
+scheduler deve conoscere: **di `ordine_auto_rilascio_esegui`, `payout_coda` e
+`payout_prepara` non esiste alcuna esecuzione verificata su un ordine vero.** Le
+tre griglie che le eserciterebbero — `7_ordini_pagamenti.sql`,
+`7b_connect_marketplace.sql`, `7c_consegna_imballaggio.sql` — non sono mai state
+eseguite su nessun ambiente, e al 4 agosto 2026 le tabelle di denaro risultavano a
+zero righe. La 7c non è passata nemmeno da un branch di anteprima: il controllo
+`Supabase Preview` della PR [#21](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/21)
+risulta `SKIPPED` perché il bot ha valutato il diff sei secondi dopo l'apertura,
+diciannove minuti prima che il commit con la migrazione (`b07bac9`) esistesse.
+
+Conseguenza sulla decisione 1a, che non ne cambia l'esito ma cambia la prima
+accensione: quel primo `POST` sarà anche la prima esecuzione documentata di quelle
+tre funzioni. Va fatto con `workflow_dispatch` e `PAYMENTS_ENABLED=false` — dove
+l'unica risposta possibile è `503` e nulla si muove — e non lasciato al primo
+`schedule` con i pagamenti già accesi. Eseguire prima la griglia 7b resta un gate
+separato: richiede l'autorizzazione fixture, mai concessa.
+
+---
+
 ## Indice
 
+0. [Esito della sessione organizzativa — 5 agosto 2026](#esito-della-sessione-organizzativa--5-agosto-2026)
 1. [Perimetro](#0-perimetro)
 2. [Stato di partenza verificato](#1-stato-di-partenza-verificato)
 3. [Decisione 1 — Schedulazione dell'auto-rilascio](#2-decisione-1--schedulazione-dellauto-rilascio)
+   — inclusa [§2.9, la credenziale del workflow](#29-la-credenziale-che-il-workflow-userà)
 4. [Decisione 2 — Riconciliazione della fee reale Stripe](#3-decisione-2--riconciliazione-della-fee-reale-stripe)
+   — incluso [§3.11, l'addendum sul tetto ai tentativi (2c)](#311-addendum--il-tetto-ai-tentativi-decisione-2c)
 5. [Decisione 3 — `spedizione` e `protezione`: debito della Fase 7 (7a)](#4-decisione-3--spedizione-e-protezione-debito-della-fase-7-7a)
 6. [Riepilogo: cosa serve prima di poter scrivere SQL](#5-riepilogo-cosa-serve-prima-di-poter-scrivere-sql)
 7. [Fonti](#fonti)
@@ -430,6 +482,12 @@ per questo è quella raccomandata.
 
 ### 2.8 Raccomandazione — Opzione B, scheduler esterno
 
+> **DECISO in sessione organizzativa il 5 agosto 2026: opzione B, scheduler
+> esterno via GitHub Actions. Non `pg_cron`.** Decisa anche la 1e: lo scheduler si
+> accende e si verifica **prima** di `PAYMENTS_ENABLED`, mai dopo — cioè la
+> sequenza (1) di §2.7(iii). Il ragionamento sotto è quello con cui è stata
+> presentata alla revisione e resta a verbale.
+
 **Si raccomanda l'opzione B**, GitHub Actions schedulato, con la (1) di §2.7(iii)
 come sequenza di accensione.
 
@@ -467,16 +525,120 @@ chiamano lo stesso endpoint con gli stessi segreti; passare da B ad A più tardi
 un `cron.schedule` e la cancellazione di un file di workflow. La decisione da
 prendere ora è quale accendere per prima, non quale per sempre.
 
-### 2.9 Cosa resta da decidere in sessione organizzativa
+### 2.9 La credenziale che il workflow userà
+
+Ora che l'opzione B è decisa, la domanda «con quale credenziale il workflow chiama
+`payouts-release`» ha una risposta e va scritta, perché la risposta ovvia — la
+service role key — non è la migliore delle tre disponibili.
+
+#### Cosa serve davvero, letto dal codice
+
+Il chiamante deve soddisfare quattro condizioni (§2.3), e due riguardano
+credenziali: un JWT accettato dal gateway, perché `verify_jwt = true` in
+`supabase/config.toml:395`, e l'header `x-vinea-job-token`.
+
+Il punto che decide è **che cosa la function fa del JWT del chiamante: niente.**
+A `payouts-release/index.ts:146` il client Supabase nasce dalle variabili
+d'ambiente **della function**:
+
+```ts
+supabase = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
+```
+
+Non dall'header `Authorization`. L'autorità con cui vengono chiamate
+`ordine_auto_rilascio_esegui`, `payout_coda` e `payout_prepara` — tutte e tre
+revocate a `public`, `anon` e `authenticated` (7b:1429-1440) e concesse al solo
+`service_role` (7b:1442-1453) — è la service role key **già configurata come
+segreto della function sul progetto**, dove sta da quando la 7b è stata
+distribuita. Il JWT del chiamante è consumato dal gateway e
+non arriva mai al codice; l'autorizzazione vera, dentro la function, è il
+confronto a tempo costante sul job token (righe 138-142).
+
+#### Conseguenza: la credenziale più ristretta che funziona è la anon key
+
+**Raccomandata: la anon/publishable key del progetto, più `PAYOUTS_JOB_TOKEN`. La
+service role key non serve al workflow.**
+
+La anon key è un JWT firmato con il segreto del progetto, quindi soddisfa
+`verify_jwt`, ed è **già pubblica per costruzione**: viaggia nel bundle del
+browser di `frontend-next` come `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+(`frontend-next/.env.example`). Metterla in GitHub Secrets non aggiunge alcuna
+esposizione, perché non c'è esposizione da aggiungere: chiunque apra il sito la
+ha già. E non porta alcun privilegio utile a chi la rubasse, perché le tre RPC
+del rilascio sono revocate ad `anon` e ad `authenticated`.
+
+Il segreto vero, l'unico, è quindi **`PAYOUTS_JOB_TOKEN`**: dedicato a questo
+endpoint, che non dà accesso a nient'altro, e — come già annota il commento in
+`config.toml` — revocabile da solo senza ruotare la service role key. Va generato
+lungo e casuale e non deve avere altri usi: è l'intera differenza fra «lo
+scheduler può rilasciare fondi» e «chiunque può».
+
+#### Le due alternative, e perché sono peggiori
+
+**La service role key in GitHub Secrets.** Funzionerebbe — è un JWT — ed è la
+lettura naturale del commento in `config.toml:392`, che dice «la service role key
+è comunque un JWT». Vero, ma è una constatazione sul perché `verify_jwt` non è
+d'ostacolo, non una prescrizione su quale chiave usare. Adoperarla qui
+significherebbe distribuire a un secondo sistema la credenziale che scavalca ogni
+RLS del progetto, per ottenere **esattamente lo stesso effetto** della anon key:
+attraversare un gateway che non guarda i privilegi, solo la firma. È privilegio
+distribuito senza contropartita, e ogni copia in più di quella chiave è un posto
+in più da cui può uscire.
+
+**Un JWT di un utente tecnico** (`POST /auth/v1/token?grant_type=password`).
+Sarebbe il più ristretto in assoluto — `role: authenticated`, un utente vero — e
+va scartato comunque: quei token scadono in un'ora, quindi il workflow dovrebbe
+ottenerne uno a ogni esecuzione, e per farlo dovrebbe custodire **una password**
+in GitHub Secrets invece di una chiave pubblica. Più parti in movimento, un
+segreto in più e un modo nuovo di rompersi (l'utente disabilitato, la password
+ruotata), per una sicurezza che non migliora: nessuno dei due token dà accesso
+alle RPC.
+
+#### Se la anon key non bastasse — e perché GitHub Secrets non è `cron.job`
+
+Da verificare alla prima implementazione, perché richiede una lettura sul
+progetto che il perimetro di questa fase esclude: quale sistema di chiavi è
+attivo. Con le chiavi storiche la anon key **è** un JWT e la risposta è quella
+sopra; se il progetto è passato al sistema nuovo (`sb_publishable_…` /
+`sb_secret_…`, che non sono JWT), la chiave publishable è l'equivalente da usare
+al suo posto, con la stessa logica — è pubblica e non porta privilegi.
+
+Il controllo è un solo `curl` fatto con `PAYMENTS_ENABLED=false`, e la sua
+risposta è inequivocabile: **`503` significa che la credenziale è passata** (la
+function è partita), **`401` che l'ha rifiutata il gateway** — perché con il flag
+spento la function esce al `503` *prima* di guardare il job token, righe 131 e
+138. Non serve accendere niente per sapere se la chiave va bene.
+
+Se nessuna delle due passasse, la ricaduta è la service role key in GitHub
+Secrets, **e lì è accettabile** — a differenza di `cron.job`, che è la ragione per
+cui l'opzione A è stata scartata (§2.4). La differenza non è di grado:
+
+- GitHub Secrets è un **archivio cifrato, in scrittura sola**: dopo la creazione
+  nessuno lo rilegge, né dalla UI né dall'API, e nei log dei run i valori sono
+  mascherati. `cron.job.command` è **una colonna di testo in una tabella
+  Postgres**: chiunque possa fare `select` su quello schema la legge in chiaro, e
+  se lo statement fallisce può finire nel log del database.
+- Un backup del database non contiene i segreti di GitHub. Un `pg_dump` che
+  includa `cron` contiene la service role key, e i backup vivono più a lungo e in
+  più posti delle chiavi che custodiscono.
+- Ruotare la chiave in GitHub è sostituire un secret. Ruotarla in `cron.job` è
+  riscrivere gli statement schedulati, ricordandosi di tutti.
+
+Il criterio è uno: **un segreto sta in un archivio di segreti, non in una riga di
+dati.** GitHub Secrets è la prima cosa; `cron.job` è la seconda.
+
+### 2.10 Cosa resta da decidere in sessione organizzativa
 
 | # | Decisione | Perché non può essere presa qui |
 |---|---|---|
-| 1a | **A, B o C** | Sposta dove vivono due segreti di produzione e a chi arriva l'allarme. È una scelta di custodia delle credenziali, non di implementazione. |
-| 1b | Se A: **abilitare `pg_cron`, `pg_net` e (necessariamente) Vault** sul progetto reale | Costo operativo su risorsa reale, che il perimetro di questa fase esclude espressamente. |
-| 1c | Se B: **quali secret di repository**, chi li ruota, e **a chi arriva la notifica di fallimento** | La service role key in GitHub Actions è una decisione di sicurezza a sé. La notifica va a chi ha toccato per ultimo la schedulazione: se nessuno lo decide, l'allarme finisce a caso. |
-| 1d | **Cadenza** e `PAYOUTS_BATCH_LIMIT` | Insieme determinano la capacità di recupero. Raccomandato `0 */6 * * *` e 50. |
-| 1e | **Ordine di accensione** rispetto a `PAYMENTS_ENABLED` | È la sola difesa a costo zero contro il backlog storico. Raccomandato: scheduler prima, pagamenti dopo. |
-| 1f | Se B: come trattare il `503` da flag spento | Senza una regola, la prima settimana produce fallimenti attesi e si impara a ignorarli. |
+| 1a | ~~**A, B o C**~~ | **DECISO il 5 agosto 2026: opzione B, GitHub Actions.** Restano da attuare 1c e 1d, che erano condizionati a questa risposta. |
+| 1b | ~~Se A: abilitare `pg_cron`, `pg_net` e Vault sul progetto reale~~ | **Decaduta con 1a.** Non c'è più alcuna estensione da abilitare, e con essa è caduta l'autorizzazione separata che sarebbe servita. |
+| 1c | **A chi arriva la notifica di fallimento**, e chi ruota `PAYOUTS_JOB_TOKEN` | Ora attiva, perché B è stata scelta. **Quale credenziale** non è più aperta: §2.9 risponde — anon/publishable key più job token, non la service role key. Resta da decidere una persona: la notifica GitHub va a chi ha toccato per ultimo la schedulazione, quindi senza una scelta l'allarme finisce a caso. |
+| 1d | **Cadenza** e `PAYOUTS_BATCH_LIMIT` | Ora attiva. Insieme determinano la capacità di recupero. Raccomandato `0 */6 * * *` e 50. |
+| 1e | ~~**Ordine di accensione** rispetto a `PAYMENTS_ENABLED`~~ | **DECISO il 5 agosto 2026: scheduler acceso e verificato prima, pagamenti dopo.** Era la sola difesa a costo zero contro il backlog storico, e vale solo se presa prima: la decisione arriva in tempo. |
+| 1f | Come trattare il `503` da flag spento | Ora attiva, e più stretta di prima: con 1e decisa, lo scheduler girerà *di proposito* contro un flag spento per un periodo. Quel `503` è l'esito atteso, non un guasto, e serve una regola — o la prima settimana insegna a ignorare i fallimenti. |
 | 1g | Se il controllo di sanità di §2.7(ii) diventi un oggetto versionato | È il solo controllo che funziona quando lo scheduler è ciò che è rotto. |
 
 ---
@@ -781,10 +943,193 @@ punto in cui il job comincerebbe a riportare uno scarto che non esiste.
 |---|---|---|
 | 2a | **A, B o C** (raccomandata B) | Determina se `STRIPE_SECRET_KEY` finisce su un endpoint pubblico. |
 | 2b | **Dove gira il job**: nuova Edge Function, step nel workflow della decisione 1, o altro | Dipende da 1a: se la decisione 1 va su Actions, questo è marginale; altrimenti è infrastruttura nuova. |
-| 2c | **Tetto di tentativi o esclusione per età** per gli irrecuperabili | **È la sola parte che richiede schema nuovo.** Va decisa prima di scrivere il job: aggiungere una colonna dopo è una seconda migrazione. |
+| 2c | **Tetto di tentativi o esclusione per età** per gli irrecuperabili | **APERTA, e confermata tale il 5 agosto 2026. È la sola parte che richiede schema nuovo.** Va decisa prima di scrivere il job: aggiungere una colonna dopo è una seconda migrazione. Tre opzioni progettate in §3.11. |
 | 2d | **Cadenza** | Raccomandata giornaliera. |
 | 2e | Se lo **scarto aggregato** debba avere una soglia che fa scattare la revisione di `marketplace_config` | Senza, la misura si accumula e nessuno la guarda: è il difetto che ha reso necessaria questa sezione. |
 | 2f | Se e quando **ritarare** `riferimento_stripe_*` sulla base della misura | Cambiare i parametri è una riga nuova in `marketplace_config`, non una modifica: gli ordini già nati non si muovono. |
+
+### 3.11 Addendum — il tetto ai tentativi (decisione 2c)
+
+Scritto dopo la sessione organizzativa del 5 agosto 2026, che ha confermato 2c
+come aperta. Nessuno SQL: tre opzioni, come per lo scheduler.
+
+#### 3.11.1 Perché un tetto serve, e cosa succede senza
+
+Il job dell'opzione B legge le righe che l'indice parziale già seleziona —
+`stato = 'paid' and fee_stripe_reale_cents is null` (7b:454) — e per ognuna
+tenta una lettura presso il fornitore. Alcune di quelle righe **non
+diventeranno mai riconciliabili**, e non per un guasto:
+
+- il `balance_transaction` non è mai arrivato, quindi non c'è appiglio da cui
+  partire: `fee_provider_transazione_id` resta nullo (§3.2);
+- l'oggetto presso il fornitore non è più raggiungibile, o non è mai esistito con
+  quell'identificativo;
+- `payment_fee_reale_registra` risponde `'implausible'` — la fee letta supera
+  `amount_cents`, guardia di 7b:877 — oppure `'unknown_payment'`: in entrambi i
+  casi l'aggancio è sbagliato e ritentarlo darà lo stesso esito per sempre;
+- l'incasso è stato rimborsato e la fee ristrutturata dal fornitore in un modo che
+  quella singola lettura non ricostruisce.
+
+Senza tetto, il costo non è il ritentativo: è che **la coda perde significato.**
+L'indice parziale accumula per sempre le righe impossibili, quindi la domanda «di
+quanti incassi non conosco il costo?» smette di avere una risposta utile — il
+numero cresce, e non si sa se cresce perché il job è fermo o perché ci sono dieci
+righe rotte del maggio scorso. Le due situazioni richiedono azioni opposte e
+diventano indistinguibili. In più ogni esecuzione paga N chiamate al fornitore per
+riscoprire N volte la stessa impossibilità.
+
+#### 3.11.2 Come si conta un tentativo — le tre opzioni
+
+**Opzione A — colonna contatore su `payments`.**
+
+Tre colonne nuove sul modello di ciò che 7b ha già fatto per i payout:
+`fee_tentativi integer not null default 0 check (>= 0)`,
+`fee_ultimo_tentativo_at timestamptz`, `fee_ultimo_errore text`. Le scrive una RPC
+nuova a `service_role`, chiamata dal job quando la lettura non riesce; l'indice
+parziale acquisisce `and fee_tentativi < N`.
+
+*A favore.* **Il precedente è nello stesso schema, scritto dalla stessa mano:**
+`payouts.tentativi integer not null default 0 check (tentativi >= 0)` e
+`payouts.ultimo_errore text`, incrementati da `payout_prepara` a 7b:1359. Copiare
+quella forma è la scelta che sorprende meno chi leggerà. Lo stato sta accanto al
+dato, quindi la query del job è autosufficiente e la domanda contabile — «quali
+fee non si leggeranno più?» — è un `select`, non un'indagine. Sopravvive alla
+rotazione dei log, che è il punto: la risposta serve a chiusura di bilancio, i log
+no. E per la regola di esposizione della 6d-1 le colonne nuove nascono private
+senza fare niente: il `grant select` su `payments` è **a colonne elencate** (Fase
+7, righe 350-353) e nessuna delle tre vi comparirebbe.
+
+*Contro.* È l'unica delle tre che richiede una migrazione, e per la regola 11 va
+scritta **prima** del job: aggiungerla dopo è un secondo file. Serve inoltre uno
+scrittore, perché `payment_fee_reale_registra` scrive solo in caso di successo:
+una RPC nuova, `service_role`-only, che non tocchi nient'altro. E un'esecuzione
+che fallisce su 500 righe fa 500 scritture — costo trascurabile, ma da dire.
+
+*Variante considerata e scartata:* una tabella separata di tentativi
+(`payment_fee_reconciliation_attempts`, una riga per tentativo). Darebbe la storia
+completa invece dell'ultimo esito, ma per decidere «ritento o no» serve un
+contatore, non un archivio; e sarebbe una tabella nuova con le sue RLS e i suoi
+grant, dove tre colonne bastano. Se un giorno servisse l'audit dei tentativi, la
+si aggiunge allora senza disfare nulla.
+
+**Opzione B — derivare il conteggio dai log del job.**
+
+Nessuna colonna. Il job registra ogni esito nei propri log — Edge Function o run
+del workflow — e il tetto si applica leggendo quei log.
+
+*A favore.* Zero schema, zero migrazione, disponibile subito, e nessuna colonna
+nuova che possa essere scritta male.
+
+*Contro, e sono decisivi.* Il tetto **non è applicabile**: la query del job non
+può filtrare su un fatto che vive nei log, quindi per saltare una riga il job
+dovrebbe rileggere i propri log a ogni esecuzione e ricostruirsi un insieme in
+memoria — cioè tenere lo stato, ma in un posto peggiore. La conservazione dei log
+è finita e la domanda contabile non lo è: passata la finestra di retention, «era
+irrecuperabile» diventa «non ci ho ancora provato». E il difetto di forma che
+conta più di tutti: lo stato che serve al conto economico vivrebbe **fuori** dal
+database, mentre `order_margine_riconciliazione` — che è ciò che lo consuma — è
+una vista **dentro**. Chi guardasse quella vista vedrebbe `scarto_cents` nullo
+senza alcun modo, dalla stessa query, di sapere perché.
+
+**Opzione C — finestra d'età, nessun contatore.**
+
+Nessuna colonna nuova: il job (o l'indice) esclude le righe con
+`created_at < now() - interval 'N giorni'`. Dopo N giorni una fee non letta si
+considera non leggibile.
+
+*A favore.* Non richiede niente: `created_at` esiste ed è **già** la colonna
+chiave dell'indice parziale (7b:455), quindi la selezione è ordinata per età da
+sempre. La regola è banalmente corretta nel merito — una fee non letta dopo
+settimane non si leggerà — e N è una scelta amministrativa, non un limite tecnico.
+
+*Contro, e uno è fatale.* La finestra **non distingue «tentato quaranta volte e
+sempre fallito» da «mai tentato perché il job era spento per quaranta giorni».**
+Sono le due situazioni opposte, e l'età le tratta identicamente: se il job resta
+fermo un mese, un mese di incassi esce dalla coda in silenzio e nessuno lo scopre
+— lo stesso modo di sbagliare che ha fatto scartare `pg_net` alla decisione 1.
+Inoltre non registra alcun errore, quindi un difetto sistematico (chiave errata,
+versione API sbagliata, aggancio invertito) è indistinguibile da righe che
+legittimamente non hanno fee.
+
+#### 3.11.3 Raccomandazione — A, con C come complemento e non come alternativa
+
+**Si raccomanda l'opzione A**, le tre colonne sul modello di `payouts`, con un
+tetto iniziale suggerito a **5 tentativi**: con cadenza giornaliera sono abbastanza
+per attraversare qualche giorno di indisponibilità del fornitore, e non tanti da
+lasciare la coda sporca per settimane.
+
+C resta utile ma come **ordinamento**, non come regola di uscita: il job lavora
+prima le righe più vecchie, che è ciò che l'indice già fa. Usarla come tetto
+significherebbe far dipendere il conto economico dal fatto che il job sia stato
+acceso — e la decisione 1e insegna esattamente questo, che un processo spento non
+deve poter cancellare il proprio arretrato.
+
+B non è raccomandata in nessuna forma: il tetto che non si può applicare non è un
+tetto.
+
+#### 3.11.4 Cosa succede al raggiungimento del tetto — e la verifica di coerenza con 7b
+
+**Il vincolo, dichiarato prima del progetto.** Al raggiungimento del tetto la riga
+va marcata **soltanto** come «riconciliazione fallita, da trattare a mano» per il
+conto economico. Non deve toccare in alcun modo `payout_stato`, `order_stato`, il
+rilascio dei fondi o la loro trattenuta. I due percorsi restano disaccoppiati: una
+fee che non si riesce a leggere è un numero che manca a un rendiconto, **non** una
+ragione per non pagare il venditore.
+
+**Verifica di coerenza: lo schema 7b è compatibile, ma solo se il marcatore evita
+una forma precisa.** Il disaccoppiamento è già una proprietà della 7b, dichiarata
+e implementata: il commento di `payment_fee_reale_registra` (7b:849-850) dice che
+la RPC «non tocca stato, importi né payout: se sbagliasse, sbaglierebbe un numero
+di conto economico e nient'altro», e `order_margine_riconciliazione` è una vista
+di sola lettura che nessun percorso di rilascio interroga (7b:888-892). Le colonne
+della fee sono già un'isola. Il tetto deve restare su quell'isola.
+
+**La forma da NON usare: un valore nuovo in `public.payment_stato`.** È
+l'implementazione più naturale — «lo stato del pagamento diventa
+`fee_irrecuperabile`» — ed è quella che rompe il vincolo, in silenzio e in tre
+punti insieme. Tutti e tre filtrano su `stato = 'paid'`:
+
+| Punto | Cosa filtra | Cosa accadrebbe |
+|---|---|---|
+| `payout_prepara` (7b:1337) | `v_payment.stato <> 'paid'` | Ritorna `bloccato` / `incasso_non_valido`: **il Transfer non parte più.** |
+| `ordine_auto_rilascio_esegui` (7b:1263) | `and p.stato = 'paid'` | L'ordine non viene più reclamato: **l'auto-rilascio smette di vederlo.** |
+| `conferma_ricezione` (7b:1156) | `and p.stato = 'paid'` | **Anche la conferma manuale del compratore smette di funzionare** — cioè la via che gli permette di liberare i fondi quando il venditore non dichiara mai la consegna. Non resterebbe nessuna strada. |
+
+Il risultato sarebbe che il denaro del venditore resta congelato per sempre
+perché la piattaforma non è riuscita a leggere il proprio costo — l'esatto
+accoppiamento che il vincolo vieta. E il difetto cancellerebbe le proprie prove:
+`payments_fee_da_riconciliare_idx` filtra anch'esso `stato = 'paid'`, quindi la
+riga uscirebbe dalla coda della riconciliazione mentre il problema resta.
+
+**La forma da usare.** Il marcatore vive sulle colonne della fee e da nessun'altra
+parte: derivato da `fee_tentativi >= N` — quindi senza nemmeno una colonna
+booleana in più — ed eventualmente esposto come vista di sola lettura per il
+conto economico, accanto a `order_margine_riconciliazione` e con gli stessi
+`revoke`.
+
+E non serve un secondo marcatore per «risolta a mano»: se qualcuno recupera la fee
+per altra via, la registra con `payment_fee_reale_registra` — la porta che esiste
+già — e la riga esce dalla coda da sola, perché l'indice parziale filtra su
+`fee_stripe_reale_cents is null`. Il tetto risponde a una domanda sola, «va ancora
+ritentata dal job?», e il resto lo fa lo schema che c'è.
+
+Tre regole, verificabili con un `grep` da chi revisiona:
+
+1. nessun `update` a `orders.payout_stato`, `orders.stato`, `payments.stato` o
+   `payouts.stato` dal percorso della fee;
+2. le colonne nuove **non entrano in alcun predicato di rilascio** — né in
+   `payout_prepara`, né in `payout_coda`, né in `ordine_auto_rilascio_esegui`;
+3. nessun `grant` verso `anon` o `authenticated`: il `grant select` su `payments`
+   è a colonne elencate e va lasciato com'è.
+
+**Un punto in cui il disaccoppiamento è già imperfetto, e non è colpa di 2c.**
+Resta vero ciò che §3.9 ha registrato: `order_margine_riconciliazione` proietta la
+fee su `totale_cents` mentre il fornitore la tratterrà su
+`addebito_totale_cents`. Con i prezzi di imballaggio a zero i due coincidono. Il
+giorno in cui non coincideranno, una riga potrà risultare «riconciliata» con uno
+scarto che non esiste — un difetto di misura, non di rilascio, quindi non viola il
+vincolo, ma chi progetta il tetto deve sapere che sta contando tentativi su un
+confronto che ha già un errore noto dentro.
 
 ---
 
@@ -1013,6 +1358,16 @@ sul contratto, non sullo schema.
 
 ### 4.6 Raccomandazione
 
+> **DECISO in sessione organizzativa il 5 agosto 2026 (decisione 3a): la voce
+> «protezione» (3%) si toglie dal modello Supabase — non viene portata, e non viene
+> aggiunta.** In `frontend/` **resta invariata fino al cutover di Fase 11**: non c'è
+> urgenza, perché nel percorso di pagamento reale non è mai stata addebitata (§4.1).
+> Nessuna modifica a `frontend/` è autorizzata da questa decisione, né ora né come
+> effetto collaterale di un'altra fase.
+>
+> **Non è stata decisa la spedizione**: dipende da 3e, che resta aperta in attesa di
+> una risposta commerciale. Il ragionamento sotto è quello presentato alla revisione.
+
 **Protezione — si raccomanda di non portarla su Supabase, e di togliere la voce
 da `frontend/` al cutover (Fase 11).**
 
@@ -1057,11 +1412,11 @@ della sua §9. Le raccomandazioni sopra non lo chiudono: lo istruiscono.
 
 | # | Decisione | Perché non può essere presa qui |
 |---|---|---|
-| 3a | **La protezione si toglie o si tiene** | È una decisione di prezzo. Tenerla porta il rincaro al 9,6–12,2%; toglierla lo lascia al 6,6–9,2%. |
-| 3b | Se «autenticità, integrità, trasporto» resti una **promessa al compratore** | Se sì, va progettata come prodotto — riserva, sinistri, eventuale intermediazione — e aperta come voce di backlog fuori dalla migrazione. |
-| 3c | Se la rimozione da `frontend/` entri nella **Fase 11** | È l'unico posto in cui si tocca la versione servita. Va messo nella lista di cutover, o si perde. |
+| 3a | ~~**La protezione si toglie o si tiene**~~ | **DECISO il 5 agosto 2026: si toglie dal modello Supabase; in `frontend/` resta fino al cutover di Fase 11.** Il rincaro sul compratore resta quindi il 6,6–9,2% della sola commissione. |
+| 3b | Se «autenticità, integrità, trasporto» resti una **promessa al compratore** | Ancora aperta, e ora è l'unica erede di 3a: togliere la voce economica non risponde alla domanda se la copertura vada promessa. Se sì, va progettata come prodotto — riserva, sinistri, eventuale intermediazione — e aperta come voce di backlog fuori dalla migrazione. |
+| 3c | Se la rimozione da `frontend/` entri nella **Fase 11** | Implicata da 3a e non ancora attuata: la decisione dice «al cutover», quindi va scritta nella lista di cutover della Fase 11, o al cutover nessuno se ne ricorderà. |
 | 3d | Se la spedizione diventi un **costo di piattaforma** o resti nel prezzo del venditore | Cambia chi paga il corriere. Il margine garantito non lo copre: se lo paga la piattaforma, il 5% scende. |
-| 3e | Se il partner logistico fatturerà **un importo o due** | Determina se serve `spedizione_cents` o se basta prezzare `packaging_options`. Domanda commerciale, non tecnica. |
+| 3e | Se il partner logistico fatturerà **un importo o due** | **APERTA, e confermata tale il 5 agosto 2026: domanda commerciale, in attesa di risposta da Enrico.** Nessuna azione tecnica è possibile finché non arriva — da essa dipende se serva `spedizione_cents` o se basti prezzare `packaging_options`, e progettare prima significherebbe scommettere. |
 | 3f | Se la soglia «gratis sopra N» sopravviva, e in che forma | Nella forma attuale produce un totale non monotono. Va riprogettata o abbandonata. |
 | 3g | Se aggiornare il **backlog sotto la Fase 7** con l'esito di 3a-3f | Il debito è registrato lì. Le decisioni prese qui vanno scritte lì, non in questo documento. |
 
@@ -1069,13 +1424,13 @@ della sua §9. Le raccomandazioni sopra non lo chiudono: lo istruiscono.
 
 ## 5. Riepilogo: cosa serve prima di poter scrivere SQL
 
-### 5.1 Le tre raccomandazioni in una riga ciascuna
+### 5.1 Le tre raccomandazioni in una riga ciascuna, e il loro esito
 
-| Decisione | Raccomandazione | SQL richiesto se accolta |
-|---|---|---|
-| **1 — Auto-rilascio** | Scheduler esterno (GitHub Actions), `0 */6 * * *`, acceso **prima** di `PAYMENTS_ENABLED` | **Nessuno.** Un file di workflow e due secret. |
-| **2 — Fee reale** | Job separato e asincrono, giornaliero. Non toccare il webhook. | **Minimo**, e solo per il tetto ai tentativi (2c). |
-| **3 — Spedizione / protezione** | Protezione: togliere, anche da `frontend/` al cutover. Spedizione: non decidere finché gli accordi non sono chiusi; sede predefinita `packaging_options`. | **Nessuno adesso.** |
+| Decisione | Raccomandazione | Esito | SQL richiesto |
+|---|---|---|---|
+| **1 — Auto-rilascio** | Scheduler esterno (GitHub Actions), `0 */6 * * *`, acceso **prima** di `PAYMENTS_ENABLED` | **ACCOLTA** (1a e 1e decise il 5 agosto 2026) | **Nessuno.** Un file di workflow, un secret vero (`PAYOUTS_JOB_TOKEN`) e una chiave pubblica — §2.9. |
+| **2 — Fee reale** | Job separato e asincrono, giornaliero. Non toccare il webhook. | Raccomandata; **2a resta formalmente aperta**, 2c aperta e progettata in §3.11 | **Minimo**, e solo per il tetto ai tentativi (2c). |
+| **3 — Spedizione / protezione** | Protezione: togliere, anche da `frontend/` al cutover. Spedizione: non decidere finché gli accordi non sono chiusi; sede predefinita `packaging_options`. | **Protezione ACCOLTA** (3a). **Spedizione sospesa**: 3e in attesa di risposta commerciale | **Nessuno adesso.** |
 
 Vale la pena notarlo: **le tre raccomandazioni insieme richiedono quasi nessuna
 migrazione.** Non è una coincidenza. Lo schema di 7b e 7c ha già le colonne, le
@@ -1083,28 +1438,46 @@ RPC, l'indice e il pattern di listino versionato per ospitare queste risposte. C
 che manca è quasi tutto fuori dal database — chi chiama, quando, con quali
 segreti.
 
-### 5.2 Le tre decisioni che bloccano tutto il resto
+### 5.2 Cosa blocca ancora, dopo la sessione del 5 agosto 2026
 
-Le altre sono importanti. Queste tre sono bloccanti:
+Delle tre decisioni bloccanti originali, **due sono chiuse**:
 
-1. **1a** — A, B o C per l'auto-rilascio. Se la risposta è A, servono estensioni
-   sul progetto reale, e quella è un'autorizzazione separata che il perimetro di
-   questa fase esclude. Se è B, non serve niente sul progetto e si può procedere.
-2. **1e** — l'ordine di accensione rispetto a `PAYMENTS_ENABLED`. È l'unica
-   difesa a costo zero contro il backlog storico, e la si può usare solo prima:
-   dopo, il backlog esiste già.
-3. **2c** — il tetto ai tentativi per le fee irrecuperabili. È la sola parte di
-   tutte e tre le decisioni che richiede uno schema nuovo. Deciderla dopo aver
-   scritto il job significa una seconda migrazione, per la regola 11.
+1. **1a — CHIUSA.** Scheduler esterno via GitHub Actions. Nessuna estensione da
+   abilitare sul progetto reale, quindi l'autorizzazione separata che l'opzione A
+   avrebbe richiesto non serve più.
+2. **1e — CHIUSA.** Scheduler acceso e verificato prima di `PAYMENTS_ENABLED`. Era
+   utilizzabile solo se decisa prima, e lo è stata: il backlog storico non nascerà.
+3. **2c — APERTA.** Resta la sola parte di tutte e tre le decisioni che richiede
+   schema nuovo. Le opzioni sono progettate in §3.11 e la raccomandazione è
+   l'opzione A, cinque tentativi. Deciderla dopo aver scritto il job significa una
+   seconda migrazione, per la regola 11.
 
-### 5.3 Cosa non va fatto prima di quelle risposte
+A queste si aggiunge un blocco che **non è tecnico e non si sblocca da dentro il
+repository**:
 
-- Nessuna `cron.schedule`, nemmeno di prova, nemmeno su un branch.
-- Nessuna abilitazione di `pg_cron`, `pg_net` o Vault.
-- Nessuna colonna nuova su `payments` per i tentativi di riconciliazione.
-- Nessuna `spedizione_cents` né `protezione_cents` su `orders`.
-- Nessun `PAYMENTS_ENABLED=true`. Con il flag spento nessuna delle tre decisioni
-  ha conseguenze; accendendolo, tutte e tre le acquistano insieme.
+4. **3e — APERTA, in attesa di risposta commerciale da Enrico.** Se il partner
+   logistico fatturerà un importo unico per modalità, `packaging_options` basta
+   così com'è; se saranno due, serve una voce esplicita. Finché la risposta non
+   arriva, progettare è scommettere, e la scommessa costerebbe una migrazione.
+
+### 5.3 Cosa non va fatto
+
+Le prime due righe non sono più «prima di quelle risposte»: la risposta è arrivata
+ed è no.
+
+- **Nessuna `cron.schedule`, e nessuna abilitazione di `pg_cron`, `pg_net` o
+  Vault.** Non «per ora»: la decisione 1a le ha escluse. Riproporle richiede di
+  riaprire 1a con una motivazione nuova.
+- **Nessun `PAYMENTS_ENABLED=true` prima che lo scheduler sia acceso e verificato.**
+  È la decisione 1e, e vale in quell'ordine: invertirlo produce il backlog storico
+  che la decisione serve a evitare.
+- Nessuna colonna nuova su `payments` per i tentativi di riconciliazione finché 2c
+  non è chiusa — e quando lo sarà, **nessun valore nuovo in `public.payment_stato`**
+  in nessun caso: §3.11.4 elenca i tre punti che si romperebbero.
+- Nessuna `spedizione_cents` su `orders` finché 3e non ha risposta; nessuna
+  `protezione_cents`, mai — la 3a l'ha esclusa.
+- Nessuna modifica a `frontend/` per effetto della 3a. La rimozione della voce
+  «protezione» dalla versione servita appartiene alla Fase 11 e a nient'altro.
 
 ---
 
@@ -1115,15 +1488,38 @@ chiamata Stripe.
 
 - `supabase/migrations/20260803150000_phase_7b_stripe_connect_marketplace.sql` —
   `marketplace_config` (41), `private.marketplace_totale_cents` (105),
-  colonne di `payments` per la fee (437), `payment_apply_provider_event` (674),
-  `payment_fee_reale_registra` (852), `order_margine_riconciliazione` (893),
-  `ordine_segna_consegnato` (1080), `ordine_auto_rilascio_esegui` (1244),
-  `payout_coda` (1287), `payout_prepara` (1309), `payout_registra_esito` (1380),
+  colonne di `payments` per la fee (437), indice parziale (454-456),
+  `payment_apply_provider_event` (674), `payment_fee_reale_registra` (852, con la
+  guardia `implausible` a 877), `order_margine_riconciliazione` (893),
+  `ordine_segna_consegnato` (1080), `conferma_ricezione` (1129, filtro a 1156),
+  `ordine_auto_rilascio_esegui` (1244, filtro a 1263), `payout_coda` (1287),
+  tabella `payouts` con `tentativi` e `ultimo_errore`, `payout_prepara` (1309,
+  filtro a 1337, incremento dei tentativi a 1359), `payout_registra_esito` (1380),
+  `revoke`/`grant execute` delle RPC del rilascio (1429-1453),
   blocco di schedulazione commentato (1465-1490)
+- `supabase/migrations/20260731135455_phase_7_order_payment_service.sql` —
+  `public.payment_stato` (178), `payments.stato` (280), `revoke all` e
+  `grant select` a colonne elencate su `payments` (341-353)
 - `supabase/migrations/20260804160000_phase_7c_delivery_packaging.sql` —
   `private.orders_tracking_sync` (237), `packaging_options` (363),
   colonne imballaggio su `orders` (563), `addebito_totale_cents` (594)
-- `supabase/functions/payouts-release/index.ts`, `supabase/config.toml` (385-396)
+- `supabase/functions/payouts-release/index.ts` — costruzione del client dalla
+  service role key **della function** (146), verifica del job token (138-142),
+  clamp del batch (153-156); `supabase/config.toml` (385-396, con il commento su
+  `verify_jwt` a 392)
+- `frontend-next/.env.example` — `NEXT_PUBLIC_SUPABASE_ANON_KEY` come chiave del
+  bundle client, `PAYOUTS_JOB_TOKEN` e `PAYOUTS_BATCH_LIMIT` (blocco Fase 7b)
+- `.github/workflows/` — contiene il solo `ci.yml`: nessun workflow schedulato
+  esiste oggi, e `ci.yml` non ha trigger `schedule`
+- `supabase/tests/README.md` (nessuna sezione per la 7c),
+  `supabase/tests/7c_consegna_imballaggio.sql` (intestazione, 22 casi attesi),
+  `docs/PHASE_6D2A_FIXTURE_VERIFICATION.md` (§«Smoke Storage autenticato»),
+  `docs/PHASE_7_VERIFICATION.md` (13-26, 188, 308-359) — per il fatto che nessun
+  motore ha mai eseguito le griglie né lo smoke Storage
+- PR [#21](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/21):
+  commento del bot Supabase del 2026-08-04T13:45:41Z e controllo
+  `Supabase Preview` a `SKIPPED`, contro il branch di anteprima reale della PR
+  [#19](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/19)
 - `frontend-next/src/lib/payments/stripe-event.ts` (93-161) e il suo `.test.ts`
 - `frontend-next/src/app/api/public/webhooks/stripe/route.ts`
 - `frontend-next/src/app/ordine/[id]/page-client.tsx`,
