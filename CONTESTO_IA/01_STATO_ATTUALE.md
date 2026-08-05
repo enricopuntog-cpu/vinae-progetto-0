@@ -1,23 +1,31 @@
 # Stato attuale verificato
 
-Fotografia del **4 agosto 2026**.
+Fotografia del **5 agosto 2026**, al merge della PR #22.
 
 ## Repository
 
 | Voce | Valore |
 | --- | --- |
 | Repository GitHub | [`enricopuntog-cpu/vinae-progetto-0`](https://github.com/enricopuntog-cpu/vinae-progetto-0) |
-| `origin/main` verificato | `5e6b8e4` — merge squash della PR #19, Fase 7b integrata |
-| Penultimo stato di `main` | `2a47952` — merge squash della PR #18, Fase 7 integrata |
-| Branch attivo | `docs/contesto-post-fase-7b` — solo documentazione, creato da `origin/main` |
-| Ultima fase integrata in `main` | Fase 7b — Stripe Connect, commissione e trattenuta fondi |
-| Attività corrente | Nessuna fase di migrazione aperta; il branch della 7b è stato mergiato |
+| `origin/main` prima di questo merge | `471b529` — merge squash della PR #21, Fase 7c integrata |
+| Stati precedenti di `main` | `1782a1a` (PR #20, documentazione), `5e6b8e4` (PR #19, Fase 7b), `2a47952` (PR #18, Fase 7) |
+| Branch di questa PR | `migration/phase-7d-decisioni-economiche`, creato da `origin/main` @ `471b529` |
+| Ultima fase integrata in `main` | Fase 7d — sola documentazione, nessuno SQL |
 | PR della 6d-1 | [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) — merged |
 | PR di riconciliazione | [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) — merged |
 | PR di verifica post-merge 6d-1 | [#16](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/16) — merged il 30 luglio 2026 |
 | PR della 6d-2a | [#17](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/17) — merged il 31 luglio 2026 |
 | PR della Fase 7 | [#18](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/18) — merged il 3 agosto 2026, squash `2a47952` |
 | PR della Fase 7b | [#19](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/19) — merged il 4 agosto 2026, squash `5e6b8e4` |
+| PR della Fase 7c | [#21](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/21) — merged il 4 agosto 2026, squash `471b529` |
+| PR della Fase 7d | [#22](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/22) — questa, sola documentazione |
+| PR ancora aperte al momento di questo merge | [#23](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/23) Fase 7e e [#24](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/24) correzione di `ARCHITECTURE.md` |
+
+Da questa PR in avanti il merge su `main` non richiede più il click manuale del
+committente: è autorizzato in sessione, **solo in squash**, e ogni PR deve portare
+come ultimo commit l'aggiornamento di `CHANGES.log`, `CLAUDE.md` e di questa
+cartella allo stato che quella PR produce. Regola registrata in `CLAUDE.md` e al
+punto 6 di [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md).
 
 La CI sul push di `main` dopo il merge della #19 è la run
 [`30900108638`](https://github.com/enricopuntog-cpu/vinae-progetto-0/actions/runs/30900108638),
@@ -69,13 +77,19 @@ verifier repair storico resta 13/13 e il controllo finale dei residui fixture
 restituisce zero in tutte le categorie registrate. Il rapporto corrente è
 [`../docs/PHASE_6D1_POST_MERGE_VERIFICATION.md`](../docs/PHASE_6D1_POST_MERGE_VERIFICATION.md).
 
-Il ledger delle migrazioni remote è a **diciassette righe**, letto con
-`list_migrations` il 4 agosto 2026: le ultime due sono
-`20260731135455 phase_7_order_payment_service` e
-`20260803150000 phase_7b_stripe_connect_marketplace`. Le versioni a ledger
-coincidono con i nomi dei file, perché a distribuire è l'integrazione GitHub
-partendo dal repository: il riallineamento dei filename previsto per il percorso
-`apply_migration` non serve.
+Il ledger delle migrazioni remote è a **diciannove righe**, letto con
+`list_migrations` il 5 agosto 2026. Le ultime quattro sono
+`20260731135455 phase_7_order_payment_service`,
+`20260803150000 phase_7b_stripe_connect_marketplace`,
+`20260804160000 phase_7c_delivery_packaging` e
+`20260805160250 phase_7f_fix_contestazione_enum_cast`.
+
+Le prime diciotto hanno versione a ledger uguale al nome del file, perché a
+distribuirle è l'integrazione GitHub partendo dal repository. La diciannovesima è
+l'unica eccezione: appartiene alla **Fase 7f**, che non è ancora in `main`, ed è
+stata applicata per via diretta e non dal merge — il riallineamento del filename
+alla versione assegnata, che per il percorso GitHub non serve mai, per lei serve
+e viene fatto nella PR della 7f.
 
 ## Quale versione è servita
 
@@ -101,7 +115,9 @@ Fase 11 e richiede una decisione esplicita.
 | Invarianti bottiglia–annuncio e hardening RLS | Integrati in `main` — Fase 6d-1; prove post-merge 33/33 e 11/11, residui zero |
 | Provenienza catalogo e percorsi Cantina | Integrati in `main` — Fase 6d-2a, PR #17 al merge squash `3037bf4`; smoke Storage del bucket `cantina` ancora aperto |
 | Ordini, proposte, pagamenti | Integrati in `main` — Fase 7, PR #18 al merge squash `2a47952`; migrazione applicata al progetto reale al merge, tabelle a zero righe |
-| Connect, commissione, trattenuta e rilascio fondi | Integrati in `main` — Fase 7b, PR #19 al merge squash `5e6b8e4`; migrazione applicata e tre Edge Function `ACTIVE`, tabelle a zero righe, nessun percorso UI |
+| Connect, commissione, trattenuta e rilascio fondi | Integrati in `main` — Fase 7b, PR #19 al merge squash `5e6b8e4`; migrazione applicata e tre Edge Function `ACTIVE`, tabelle a zero righe |
+| Consegna, tracking, imballaggio, contestazione, recensione | Integrati in `main` — Fase 7c, PR #21 al merge squash `471b529`; migrazione a ledger, percorsi UI reali per ordine/acquisti/vendite, `Supabase Preview` della PR `SKIPPED` |
+| Decisioni economiche: auto-rilascio, fee reale, spedizione, protezione | Fase 7d, PR #22 — **sola decisione, nessuno SQL**: 1a, 1e e 3a chiuse; 2c approvata in design e non implementata; 3e aperta e commerciale |
 | Messaggi e notifiche | Non migrati — Fase 8 |
 | Moderazione e audit persistente | Non migrati — Fase 9 |
 | AI reale | Non migrata — Fase 10 |
@@ -227,6 +243,53 @@ applica ancora `has_role(auth.uid(), 'seller_enabled')` alla creazione di
 annunci. Accenderlo oggi impedirebbe di vendere a chiunque, perché con
 `PAYMENTS_ENABLED=false` nessuno ha completato l'onboarding.
 
+## Fase 7c — consegna, tracking e imballaggio
+
+**Stato:** integrata in `main` il 4 agosto 2026 con la PR
+[#21](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/21), merge squash
+`471b529`.
+
+Additiva sopra 7 e 7b: `packaging_options` versionata, `tracking_events`,
+`order_reviews`, `disputes`, colonne di consegna e contestazione su `orders`,
+seconda colonna generata `addebito_totale_cents`, sette RPC. Il vincolo di denaro
+è rispettato — `orders.totale_cents` resta `prezzo + commissione` e non si tocca,
+l'imballaggio entra in `addebito_totale_cents`, che è l'importo che
+`payments.amount_cents` addebita.
+
+Due fatti che il solo stato «merged» non mostra:
+
+- **la Parte B viola la regola «nessuna funzionalità nuova durante la
+  migrazione»**, con deroga puntuale autorizzata dal committente nel prompt di
+  apertura e registrata nella sezione 0 del documento di design;
+- **`Supabase Preview` della PR #21 è `SKIPPED`**: il bot valutò il diff sei
+  secondi dopo l'apertura, diciannove minuti prima che esistesse il commit con la
+  migrazione, e non rivalutò. Il primo motore Postgres a eseguire quel testo è
+  stato quello di produzione.
+
+## Fase 7d — decisioni economiche
+
+**Stato:** PR [#22](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/22),
+**sola documentazione**: due file, nessuna migrazione, nessuna riga dei tre stack
+applicativi, nessuna estensione Postgres abilitata, nessuna chiamata Stripe.
+
+- **1a, DECISA** — l'auto-rilascio lo chiama uno scheduler esterno via GitHub
+  Actions, non `pg_cron`. Con 1a è decaduta 1b: nessuna estensione da abilitare,
+  quindi nessuna autorizzazione separata. La credenziale del workflow è
+  anon/publishable key più `PAYOUTS_JOB_TOKEN`, non la service role key.
+- **1e, DECISA** — lo scheduler si accende e si verifica prima di
+  `PAYMENTS_ENABLED`, mai dopo.
+- **3a, DECISA** — la voce «protezione» (3%) esce dal modello Supabase e resta in
+  `frontend/` fino al cutover di Fase 11. Al 3% valeva 0,59–0,60× il margine netto
+  che la 7b già trattiene, e nel percorso Stripe reale non è mai stata addebitata.
+- **2c, design approvato e schema non scritto** — tetto a 5 tentativi di
+  riconciliazione della fee, con colonne contatore su `payments`. Il marcatore non
+  deve essere un valore nuovo di `public.payment_stato`.
+- **3e, aperta** — domanda commerciale al partner logistico: un importo o due.
+  Nessuna azione tecnica è possibile prima della risposta.
+
+Restano attive le non bloccanti 1c (a chi arriva la notifica di fallimento, chi
+ruota il token) e 1d (cadenza e batch, raccomandati `0 */6 * * *` e 50).
+
 ## Gate chiusi senza essere stati autorizzati
 
 Due dei gate che questo documento elencava come aperti non lo sono più, e non
@@ -241,10 +304,13 @@ perché le versioni a ledger sono già quelle dei file.
    [`7_ordini_pagamenti.sql`](../supabase/tests/7_ordini_pagamenti.sql) — 16
    casi — e [`7b_connect_marketplace.sql`](../supabase/tests/7b_connect_marketplace.sql)
    — 23 casi — che creano e cancellano fixture remote, ora su uno schema che
-   esiste davvero;
+   esiste davvero. **Non autorizzate e non eseguite.** L'autorizzazione concessa
+   per la griglia 7c non le copre: è per griglia, non per progetto;
 2. decidere dove sta il gate di autorizzazione, visto che la regola scritta
-   presidia `supabase db push` e il percorso reale è il merge;
-3. chiudere lo smoke Storage del bucket `cantina`, aperto dalla 6d-2a e
-   indipendente da tutto il resto.
-
-Nessuno dei tre è autorizzato e nessuno è stato eseguito.
+   presidia `supabase db push` e il percorso reale è il merge. **Non deciso**, e
+   riguarda ogni fase successiva;
+3. scrivere il workflow schedulato dell'auto-rilascio, ora che la 1a l'ha deciso,
+   e prima 1c e 1d che erano condizionate a quella risposta;
+4. lo smoke Storage del bucket `cantina`, aperto dalla 6d-2a, **è stato eseguito e
+   chiuso il 5 agosto 2026**: la registrazione arriva con la PR #23 e non con
+   questa.

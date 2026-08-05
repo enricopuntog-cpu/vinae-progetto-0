@@ -34,8 +34,14 @@ CONTESTO_IA/    handoff sintetico per nuove IA/chat
 3. Nessuna nuova funzionalità durante la migrazione: cercare parità.
 4. Un solo writer autorevole per dominio.
 5. `frontend/` + `backend/` restano serviti fino alla Fase 11.
-6. Non lavorare direttamente su `main`, non force-pushare e non fare merge
-   autonomamente.
+6. Non lavorare direttamente su `main` e non force-pushare mai. Il merge su
+   `main` è consentito **solo dopo approvazione esplicita data in sessione** e
+   **solo in squash**: l'autorizzazione del 5 agosto 2026 sostituisce il click
+   manuale, non l'approvazione. Prima di chiudere o mergiare qualunque PR,
+   aggiornare `CHANGES.log`, `CLAUDE.md` e questa cartella con lo stato che
+   quella PR produce davvero — numero, cosa cambia, cosa resta aperto — come
+   **ultimo commit della PR stessa**, prima dello squash e non dopo: dopo lo
+   squash il branch non c'è più e l'aggiornamento richiederebbe una PR a parte.
 7. Non usare Lovable o Emergent per generare/modificare il codice.
 8. Le migrazioni sul progetto Supabase reale richiedono revisione dell'SQL e
    conferma esplicita in sessione prima di `supabase db push` o equivalenti.
@@ -105,6 +111,40 @@ CONTESTO_IA/    handoff sintetico per nuove IA/chat
   del venditore. Il vincolo sta in un trigger, così vale anche per
   `service_role`.
 
+## Decisioni economiche chiuse dalla 7d (vincolanti, PR #22)
+
+La 7d non ha scritto SQL. Ha chiuso decisioni che vincolano ciò che le fasi
+successive possono costruire.
+
+- **1a — l'auto-rilascio lo chiama uno scheduler esterno (GitHub Actions), non
+  `pg_cron`.** `pg_cron` e `pg_net` sono esclusi, non rinviati: metterebbero
+  service role key e job token in chiaro in `cron.job`, e `pg_net` è
+  fire-and-forget, quindi `cron.job_run_details` registra `succeeded` anche su
+  `401`/`503`. Riproporli richiede di riaprire la decisione. Raccomandati
+  `0 */6 * * *` e `PAYOUTS_BATCH_LIMIT` 50; un workflow schedulato gira solo dal
+  branch di default, quindi il file dovrà stare su `main`.
+- **1e — lo scheduler si accende e si verifica prima di `PAYMENTS_ENABLED`, mai
+  dopo.** Invertito, la prima esecuzione erediterebbe un backlog storico di
+  ordini già scaduti.
+- **La credenziale del workflow è anon/publishable key più `PAYOUTS_JOB_TOKEN`,
+  non la service role key.** `payouts-release` costruisce il client dalle
+  variabili d'ambiente della function, quindi il JWT del chiamante serve solo ad
+  attraversare il gateway e non porta alcuna autorità. Il segreto vero è uno solo.
+- **3a — la voce «protezione» (3%) esce dal modello Supabase**; in `frontend/`
+  resta fino al cutover di Fase 11, dove la sua rimozione va scritta nella lista
+  di cutover o nessuno se ne ricorderà.
+- **2c — un tetto ai tentativi di riconciliazione della fee non deve mai essere
+  un valore nuovo di `public.payment_stato`.** `payout_prepara`,
+  `ordine_auto_rilascio_esegui` e `conferma_ricezione` filtrano tutti su
+  `payments.stato = 'paid'`: un valore nuovo congelerebbe i fondi del venditore
+  perché la piattaforma non riesce a leggere il proprio costo, e cancellerebbe le
+  proprie prove, dato che `payments_fee_da_riconciliare_idx` filtra anch'esso
+  `stato = 'paid'`. Il marcatore va derivato da un contatore `fee_tentativi >= N`
+  e non deve entrare in alcun predicato di rilascio. Design approvato — opzione A,
+  colonne contatore su `payments`, tetto a 5 — **schema non scritto**.
+- **`spedizione` non si decide** finché la 3e non ha risposta commerciale: un
+  importo unico o due dal partner logistico. Progettare prima è scommettere.
+
 ## Debiti e decisioni ancora aperte
 
 ### Bloccanti prima di denaro reale o beta pubblica
@@ -115,8 +155,18 @@ CONTESTO_IA/    handoff sintetico per nuove IA/chat
   in test mode. Restano fuori il KYC oltre l'onboarding ospitato,
   l'interfaccia di gestione delle contestazioni e il recupero automatico di un
   rimborso successivo a un Transfer già creato;
-- schedulazione dell'auto-rilascio: richiede `pg_cron` e `pg_net` sul progetto
-  ed è oggi un blocco commentato in fondo alla migrazione di Fase 7b;
+- schedulazione dell'auto-rilascio: **decisa dalla 7d e non ancora scritta.**
+  Va su GitHub Actions, non su `pg_cron`, quindi il blocco commentato in fondo
+  alla migrazione di Fase 7b non è più la strada. `.github/workflows/` contiene
+  il solo `ci.yml`, senza trigger `schedule`. **Il debito non è più dormiente**:
+  la 7c è in `main` e il percorso UI che popola `auto_rilascio_scadenza` esiste,
+  quindi ogni ordine dichiarato consegnato nasce con una scadenza reale e nessun
+  job che la guardi, e il compratore legge in pagina «Periodo di verifica aperto
+  fino al …», che è una promessa che nessun processo mantiene. Il solo freno è
+  `PAYMENTS_ENABLED=false`. Manca anche il controllo di sanità che rileva uno
+  scheduler fermo — esiste un ordine con `auto_rilascio_scadenza` scaduta da più
+  di un giorno e `payout_stato = 'trattenuto'`? — che è il solo controllo utile
+  quando è proprio lo scheduler a essere rotto;
 - verifica legale italiana/UE su vendita di alcolici, età, privacy e modello
   marketplace;
 - rate limiting condiviso per RPC/Edge Functions;
@@ -178,7 +228,7 @@ bun run build
 ```
 
 Lo script `test` esiste ed è eseguito anche in CI, dietro una soglia minima:
-il job imposta `MIN_TESTS` (83 oggi) e fallisce se passano meno casi di così.
+il job imposta `MIN_TESTS` (123 oggi) e fallisce se passano meno casi di così.
 La soglia serve perché `bun test` esce 0 quando i file di test ci sono ma non
 contengono casi: senza di lei una suite che si svuota in silenzio resterebbe
 verde. Si alza di proposito quando si aggiungono test; abbassarla è una
