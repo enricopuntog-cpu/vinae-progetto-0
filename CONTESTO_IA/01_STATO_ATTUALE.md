@@ -1,16 +1,16 @@
 # Stato attuale verificato
 
-Fotografia del **5 agosto 2026**, al merge della PR #23.
+Fotografia del **5 agosto 2026**, al merge della PR #25.
 
 ## Repository
 
 | Voce | Valore |
 | --- | --- |
 | Repository GitHub | [`enricopuntog-cpu/vinae-progetto-0`](https://github.com/enricopuntog-cpu/vinae-progetto-0) |
-| `origin/main` prima di questo merge | `d8503af` — merge squash della PR #24 |
-| Stati precedenti di `main` | `306952f` (PR #22, Fase 7d), `471b529` (PR #21, Fase 7c), `1782a1a` (PR #20, documentazione), `5e6b8e4` (PR #19, Fase 7b), `2a47952` (PR #18, Fase 7) |
-| Branch di questa PR | `migration/phase-7e-chiusura-debiti`, nato da `main` @ `471b529` e riallineato con un merge, non con un rebase |
-| Ultima fase integrata in `main` | Fase 7e — chiusura dei debiti 7b/7c, nessuna migrazione |
+| `origin/main` prima di questo merge | `6b5b219` — merge squash della PR #23, Fase 7e |
+| Stati precedenti di `main` | `d8503af` (PR #24), `306952f` (PR #22, Fase 7d), `471b529` (PR #21, Fase 7c), `1782a1a` (PR #20, documentazione), `5e6b8e4` (PR #19, Fase 7b), `2a47952` (PR #18, Fase 7) |
+| Branch di questa PR | `migration/phase-7f-fix-contestazione-payout`, riallineato a `main` con un **rebase** — lecito perché non era ancora stato pushato |
+| Ultima fase integrata in `main` | Fase 7f — correzione di `ordine_contestazione_risolvi`, una migrazione nuova |
 | PR della 6d-1 | [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) — merged |
 | PR di riconciliazione | [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) — merged |
 | PR di verifica post-merge 6d-1 | [#16](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/16) — merged il 30 luglio 2026 |
@@ -20,8 +20,9 @@ Fotografia del **5 agosto 2026**, al merge della PR #23.
 | PR della Fase 7c | [#21](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/21) — merged il 4 agosto 2026, squash `471b529` |
 | PR della Fase 7d | [#22](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/22) — merged il 5 agosto 2026, squash `306952f` |
 | PR della correzione di `ARCHITECTURE.md` | [#24](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/24) — merged il 5 agosto 2026, squash `d8503af` |
-| PR della Fase 7e | [#23](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/23) — questa; CI verde su tutti e quattro i controlli, `Supabase Preview` **`SUCCESS`** |
-| Lavoro non ancora in PR | Fase 7f, branch locale `migration/phase-7f-fix-contestazione-payout`: la sua migrazione è già applicata al progetto reale |
+| PR della Fase 7e | [#23](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/23) — merged il 5 agosto 2026, squash `6b5b219`; CI verde su tutti e quattro i controlli, `Supabase Preview` **`SUCCESS`** |
+| PR della Fase 7f | [#25](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/25) — questa |
+| Lavoro non ancora in PR | Nessuno |
 
 Da questa PR in avanti il merge su `main` non richiede più il click manuale del
 committente: è autorizzato in sessione, **solo in squash**, e ogni PR deve portare
@@ -88,10 +89,12 @@ Il ledger delle migrazioni remote è a **diciannove righe**, letto con
 
 Le prime diciotto hanno versione a ledger uguale al nome del file, perché a
 distribuirle è l'integrazione GitHub partendo dal repository. La diciannovesima è
-l'unica eccezione: appartiene alla **Fase 7f**, che non è ancora in `main`, ed è
-stata applicata per via diretta e non dal merge — il riallineamento del filename
-alla versione assegnata, che per il percorso GitHub non serve mai, per lei serve
-e viene fatto nella PR della 7f.
+l'unica eccezione: appartiene alla **Fase 7f** ed è stata applicata per via diretta
+e non dal merge, quindi è la sola per cui il riallineamento del filename alla
+versione assegnata dal server serve davvero. Nasceva `20260805120000_…` ed è stata
+rinominata mentre il file non era ancora stato pushato: la regola 11 non era in
+gioco, la regola 10 sì. Al merge della PR #25 l'integrazione GitHub ha trovato la
+versione già registrata e **non ha rieseguito il file** — comportamento voluto.
 
 ## Quale versione è servita
 
@@ -120,7 +123,8 @@ Fase 11 e richiede una decisione esplicita.
 | Connect, commissione, trattenuta e rilascio fondi | Integrati in `main` — Fase 7b, PR #19 al merge squash `5e6b8e4`; migrazione applicata e tre Edge Function `ACTIVE`, tabelle a zero righe |
 | Consegna, tracking, imballaggio, contestazione, recensione | Integrati in `main` — Fase 7c, PR #21 al merge squash `471b529`; migrazione a ledger, percorsi UI reali per ordine/acquisti/vendite, `Supabase Preview` della PR `SKIPPED` |
 | Decisioni economiche: auto-rilascio, fee reale, spedizione, protezione | Fase 7d, PR #22 al merge squash `306952f` — **sola decisione, nessuno SQL**: 1a, 1e e 3a chiuse; 2c approvata in design e non implementata; 3e aperta e commerciale |
-| Chiusura debiti 7b/7c: griglia 7c eseguita, smoke Storage chiuso | Fase 7e, PR #23 — quattro difetti della griglia corretti, **21 PASSA / 1 FALLISCE** con causa nota rimandata alla 7f, smoke `cantina` chiuso in dieci passi, residui a zero |
+| Chiusura debiti 7b/7c: griglia 7c eseguita, smoke Storage chiuso | Fase 7e, PR #23 al merge squash `6b5b219` — quattro difetti della griglia corretti, **21 PASSA / 1 FALLISCE** con causa nota rimandata alla 7f, smoke `cantina` chiuso in dieci passi, residui a zero |
+| Contestazione risolvibile a favore del venditore, e fondi che si sbloccano | Fase 7f, PR #25 — `42804` corretto con quattro cast all'enum; griglia 7c rieseguita **22 PASSA / 0 FALLISCE**, residui a zero su 26 controlli |
 | Messaggi e notifiche | Non migrati — Fase 8 |
 | Moderazione e audit persistente | Non migrati — Fase 9 |
 | AI reale | Non migrata — Fase 10 |
@@ -324,7 +328,9 @@ Esito riga per riga con i valori misurati in
 [`../docs/PHASE_7E_DEBT_CLOSURE.md`](../docs/PHASE_7E_DEBT_CLOSURE.md) sezione 3.
 Residui verificati a zero.
 
-**Il caso 20 FALLISCE per un difetto della migrazione, non della prova.**
+**Il caso 20 FALLISCE per un difetto della migrazione, non della prova** — corretto
+poi dalla Fase 7f, dove lo stesso caso passa. Quanto segue descrive lo stato al
+momento della 7e.
 `20260804160000_phase_7c_delivery_packaging.sql:1125` assegna a `orders.stato` e
 `orders.payout_stato`, che sono enum, il risultato di un `case` fra due letterali:
 quel `case` si risolve a `text`, e da `text` a un enum non esiste conversione
@@ -357,6 +363,39 @@ senza JWT 200, cancellazione 200. Senza `service_role` e senza SMTP proprio.
 Il metodo che ha funzionato è la **creazione dell'utente via SQL diretto**, non via
 API Auth, ed è quello da riusare: la procedura completa con le due scoperte non
 ovvie sta in [`04_HANDOFF_NUOVA_IA.md`](04_HANDOFF_NUOVA_IA.md).
+
+## Fase 7f — il rischio economico chiuso
+
+**Stato:** PR [#25](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/25).
+Una migrazione nuova, nessuna riga dei tre stack applicativi, nessuna chiamata
+Stripe, nessuna modifica alla griglia 7b.
+
+**Il difetto.** Un `case` fra due letterali si risolve a `text`, e verso un enum non
+esiste conversione implicita: l'`update` di `ordine_contestazione_risolvi` sollevava
+`42804`. **Nessuna contestazione poteva chiudersi a favore del venditore**, perché
+l'unico codice che azzera `contestato_at` è quello che non compilava, e su quel flag
+filtrano `ordine_auto_rilascio_esegui`, `payout_coda` e `payout_prepara`: la riga di
+`payouts` restava a `bloccato` senza uscita. Il venditore aveva ragione nella
+controversia e non veniva pagato. Nessun ordine reale colpito — tabelle a zero righe,
+difetto latente e non realizzato.
+
+**La correzione.** `20260805160250_phase_7f_fix_contestazione_enum_cast.sql`, file
+nuovo perché la 7c è a ledger. Quattro cast espliciti su **entrambi** i rami di ogni
+`case`, con i nomi degli enum letti da `pg_type` e non assunti. Nient'altro cambia.
+
+**Verificato, non dichiarato.** Griglia 7c rieseguita per intero sul progetto reale:
+**22 PASSA, 0 FALLISCE**, nessuna riga 99, residui a zero su 26 controlli. Il caso 20
+misura ora `stato=consegnato payout=trattenuto flag_nullo=t` dove nella 7e misurava
+`stato=contestato payout=bloccato flag_nullo=f`; il caso 19 continua a passare, quindi
+il ramo che funzionava non è stato rotto. Rapporto con l'esito riga per riga in
+[`../docs/PHASE_7F_FIX_VERIFICATION.md`](../docs/PHASE_7F_FIX_VERIFICATION.md).
+
+**Chiusa anche la decisione lasciata aperta dalla 7e** sull'impalcatura della griglia:
+il gestore `exception when others` della 7b **non conserva** gli esiti già registrati,
+perché un blocco con clausola `exception` è una sottotransazione e catturare l'errore
+annulla anche la tabella degli esiti — misurato, 1 riga superstite contro 4. La
+griglia 7c ha quindi tredici guardie per singolo caso, che fanno il lavoro vero, più
+la rete esterna che copre allestimento e pulizia.
 
 ## Gate chiusi senza essere stati autorizzati
 

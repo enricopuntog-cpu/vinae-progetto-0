@@ -47,11 +47,22 @@
   poteva committare in nessuno scenario. Alla prima esecuzione reale ha dato 21
   PASSA e 1 FALLISCE, e quel FALLISCE era un difetto della migrazione con una
   conseguenza sul denaro. Vale per ogni griglia ancora senza esito.
+- La Fase 7f ha corretto quel difetto e la griglia 7c ora dà **22 PASSA / 0
+  FALLISCE** sul progetto reale, residui a zero su 26 controlli. La regola di tipo che
+  ne deriva è al capitolo «Regole di tipo che hanno già rotto il denaro una volta» di
+  [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md), e va letta
+  prima di scrivere qualunque `update` verso una colonna enum.
+- **Il gestore `exception when others` di una griglia non conserva gli esiti già
+  registrati.** Un blocco PL/pgSQL con clausola `exception` è una sottotransazione:
+  catturare l'errore annulla tutto ciò che il blocco ha scritto, la tabella degli
+  esiti compresa. Misurato: 1 riga superstite contro 4 con la guardia dentro il caso.
+  Chi aggiunge robustezza a una griglia deve metterla **per caso**, con la
+  registrazione fuori dalla sottotransazione. La 7c è fatta così; la 7b non ancora.
 - La Fase 7 è in `main` tramite PR #18 al merge squash `2a47952`, la Fase 7b
   tramite PR #19 al merge squash `5e6b8e4`, la Fase 7c tramite PR #21 al merge
   squash `471b529`, la Fase 7d tramite PR #22 al merge squash `306952f`, la
   correzione di `ARCHITECTURE.md` tramite PR #24 al merge squash `d8503af`, la
-  Fase 7e tramite PR #23.
+  Fase 7e tramite PR #23 al merge squash `6b5b219`, la Fase 7f tramite PR #25.
 - «Integrata» qui significa anche «distribuita»: l'integrazione GitHub di
   Supabase applica migrazioni e Edge Function al merge su `main`, da sola.
   Verificato in lettura il 5 agosto 2026 — il ledger è a **diciannove righe**, le
