@@ -1,16 +1,16 @@
 # Stato attuale verificato
 
-Fotografia del **5 agosto 2026**, al merge della PR #24.
+Fotografia del **5 agosto 2026**, al merge della PR #23.
 
 ## Repository
 
 | Voce | Valore |
 | --- | --- |
 | Repository GitHub | [`enricopuntog-cpu/vinae-progetto-0`](https://github.com/enricopuntog-cpu/vinae-progetto-0) |
-| `origin/main` prima di questo merge | `306952f` — merge squash della PR #22, Fase 7d integrata |
-| Stati precedenti di `main` | `471b529` (PR #21, Fase 7c), `1782a1a` (PR #20, documentazione), `5e6b8e4` (PR #19, Fase 7b), `2a47952` (PR #18, Fase 7) |
-| Branch di questa PR | `docs/architettura-fase-7-distribuita`, nato da `1782a1a` e riallineato a `main` con un merge, non con un rebase |
-| Ultima fase integrata in `main` | Fase 7d — sola documentazione, nessuno SQL |
+| `origin/main` prima di questo merge | `d8503af` — merge squash della PR #24 |
+| Stati precedenti di `main` | `306952f` (PR #22, Fase 7d), `471b529` (PR #21, Fase 7c), `1782a1a` (PR #20, documentazione), `5e6b8e4` (PR #19, Fase 7b), `2a47952` (PR #18, Fase 7) |
+| Branch di questa PR | `migration/phase-7e-chiusura-debiti`, nato da `main` @ `471b529` e riallineato con un merge, non con un rebase |
+| Ultima fase integrata in `main` | Fase 7e — chiusura dei debiti 7b/7c, nessuna migrazione |
 | PR della 6d-1 | [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) — merged |
 | PR di riconciliazione | [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) — merged |
 | PR di verifica post-merge 6d-1 | [#16](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/16) — merged il 30 luglio 2026 |
@@ -19,8 +19,9 @@ Fotografia del **5 agosto 2026**, al merge della PR #24.
 | PR della Fase 7b | [#19](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/19) — merged il 4 agosto 2026, squash `5e6b8e4` |
 | PR della Fase 7c | [#21](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/21) — merged il 4 agosto 2026, squash `471b529` |
 | PR della Fase 7d | [#22](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/22) — merged il 5 agosto 2026, squash `306952f` |
-| PR di questa correzione | [#24](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/24) — una riga di `docs/ARCHITECTURE.md` |
-| PR ancora aperta al momento di questo merge | [#23](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/23), Fase 7e |
+| PR della correzione di `ARCHITECTURE.md` | [#24](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/24) — merged il 5 agosto 2026, squash `d8503af` |
+| PR della Fase 7e | [#23](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/23) — questa; CI verde su tutti e quattro i controlli, `Supabase Preview` **`SUCCESS`** |
+| Lavoro non ancora in PR | Fase 7f, branch locale `migration/phase-7f-fix-contestazione-payout`: la sua migrazione è già applicata al progetto reale |
 
 Da questa PR in avanti il merge su `main` non richiede più il click manuale del
 committente: è autorizzato in sessione, **solo in squash**, e ogni PR deve portare
@@ -114,11 +115,12 @@ Fase 11 e richiede una decisione esplicita.
 | Cantina: schema, metadati e posizioni | Integrato in `main` — Fase 6c-1 |
 | Cantina: pagina, store reale, vendita da bottiglia | Integrato in `main` — Fase 6c-2 |
 | Invarianti bottiglia–annuncio e hardening RLS | Integrati in `main` — Fase 6d-1; prove post-merge 33/33 e 11/11, residui zero |
-| Provenienza catalogo e percorsi Cantina | Integrati in `main` — Fase 6d-2a, PR #17 al merge squash `3037bf4`; smoke Storage del bucket `cantina` ancora aperto |
+| Provenienza catalogo e percorsi Cantina | Integrati in `main` — Fase 6d-2a, PR #17 al merge squash `3037bf4`; **smoke Storage del bucket `cantina` chiuso il 5 agosto 2026**, dieci passi con l'esito atteso; la **griglia** 6d-2a resta non eseguita |
 | Ordini, proposte, pagamenti | Integrati in `main` — Fase 7, PR #18 al merge squash `2a47952`; migrazione applicata al progetto reale al merge, tabelle a zero righe |
 | Connect, commissione, trattenuta e rilascio fondi | Integrati in `main` — Fase 7b, PR #19 al merge squash `5e6b8e4`; migrazione applicata e tre Edge Function `ACTIVE`, tabelle a zero righe |
 | Consegna, tracking, imballaggio, contestazione, recensione | Integrati in `main` — Fase 7c, PR #21 al merge squash `471b529`; migrazione a ledger, percorsi UI reali per ordine/acquisti/vendite, `Supabase Preview` della PR `SKIPPED` |
-| Decisioni economiche: auto-rilascio, fee reale, spedizione, protezione | Fase 7d, PR #22 — **sola decisione, nessuno SQL**: 1a, 1e e 3a chiuse; 2c approvata in design e non implementata; 3e aperta e commerciale |
+| Decisioni economiche: auto-rilascio, fee reale, spedizione, protezione | Fase 7d, PR #22 al merge squash `306952f` — **sola decisione, nessuno SQL**: 1a, 1e e 3a chiuse; 2c approvata in design e non implementata; 3e aperta e commerciale |
+| Chiusura debiti 7b/7c: griglia 7c eseguita, smoke Storage chiuso | Fase 7e, PR #23 — quattro difetti della griglia corretti, **21 PASSA / 1 FALLISCE** con causa nota rimandata alla 7f, smoke `cantina` chiuso in dieci passi, residui a zero |
 | Messaggi e notifiche | Non migrati — Fase 8 |
 | Moderazione e audit persistente | Non migrati — Fase 9 |
 | AI reale | Non migrata — Fase 10 |
@@ -290,6 +292,71 @@ applicativi, nessuna estensione Postgres abilitata, nessuna chiamata Stripe.
 
 Restano attive le non bloccanti 1c (a chi arriva la notifica di fallimento, chi
 ruota il token) e 1d (cadenza e batch, raccomandati `0 */6 * * *` e 50).
+
+## Fase 7e — chiusura dei debiti 7b/7c
+
+**Stato:** PR [#23](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/23).
+Nessuna migrazione scritta né applicata, nessuna riga dei tre stack applicativi,
+nessuna chiamata Stripe. Sei file di fase.
+
+**La griglia 7c non era eseguibile, e nessuno dei quattro difetti era visibile
+leggendo il file.** (1) La pulizia filtrava su `private.rate_limit_buckets.chiave`,
+colonna che non esiste: la tabella ha `scope`, `subject`, `window_started_at`,
+`window_seconds`, `request_count`, `expires_at`. (2) La riga fixture di
+`packaging_options` veniva inserita e scaduta nella stessa transazione con
+`now()`, che è costante: `valida_fino = valida_da` viola
+`packaging_options_finestra`, che è un `>` stretto. Ora `clock_timestamp()`. (3)
+`set_config('role','postgres')` non ripulisce `request.jwt.claims`, quindi
+`auth.uid()` restava il venditore e la porta di back-office di
+`ordine_contestazione_risolvi` respingeva con 42501. (4)
+`orders_contestazione_ha_pratica` è `deferrable initially deferred` e la sua
+verifica scatta al COMMIT, quando la pulizia ha già cancellato i fascicoli: la
+griglia non poteva committare in nessuno scenario, nemmeno con tutti i casi a
+PASSA. Ora la pulizia comincia con `set constraints all immediate`.
+
+Il difetto (2) c'era **anche nella griglia 7b**, su `marketplace_config`: stesso
+vincolo, si sarebbe fermata al caso 6. `marketplace_config` e `packaging_options`
+sono le due sole tabelle del progetto con quella forma di vincolo, verificato su
+`pg_constraint`.
+
+**Griglia 7c eseguita il 5 agosto 2026 sul progetto reale: 21 PASSA, 1 FALLISCE.**
+Esito riga per riga con i valori misurati in
+[`../docs/PHASE_7E_DEBT_CLOSURE.md`](../docs/PHASE_7E_DEBT_CLOSURE.md) sezione 3.
+Residui verificati a zero.
+
+**Il caso 20 FALLISCE per un difetto della migrazione, non della prova.**
+`20260804160000_phase_7c_delivery_packaging.sql:1125` assegna a `orders.stato` e
+`orders.payout_stato`, che sono enum, il risultato di un `case` fra due letterali:
+quel `case` si risolve a `text`, e da `text` a un enum non esiste conversione
+implicita — `42804: column "stato" is of type public.order_stato but expression is
+of type text`. Sono i due soli siti di quella forma in tutte le migrazioni. Il ramo
+`rimborsata` esce prima di quell'`update` e funziona, ed è ciò che rende il difetto
+invisibile a un controllo superficiale: il caso 19 passa.
+
+**Conseguenza sul denaro:** una contestazione non può essere chiusa a favore del
+venditore, `contestato_at` resta acceso e i suoi fondi restano `bloccato` per
+sempre — esattamente ciò che il commento sopra a quell'`update` dichiara di voler
+evitare. Misurato: `stato=contestato payout=bloccato flag_nullo=f`. Nessun ordine
+reale è stato colpito, perché le tabelle di denaro sono a zero righe: il difetto era
+latente, non realizzato. La correzione è la **Fase 7f**, perché la 7c è a ledger e
+si corregge con un file nuovo e non in place.
+
+**La 7c ha finalmente girato su un Postgres di anteprima**, e per effetto
+collaterale: il diff di questa PR tocca un file sotto `supabase/`, quindi il bot ha
+aperto un branch di anteprima e `Supabase Preview` è `SUCCESS`. Le tre migrazioni
+hanno girato da zero e in ordine di versione su un motore che le vedeva per la
+prima volta. Non era pianificato.
+
+### Lo smoke Storage `cantina` è chiuso
+
+Dopo tre tentativi mai andati a segno. Dieci passi, tutti con l'esito atteso:
+upload propria cartella 200, upload altrui nella stessa cartella 400, lettura
+propria 200, lettura altrui 400, lettura anonima 400, signed URL 200 e suo fetch
+senza JWT 200, cancellazione 200. Senza `service_role` e senza SMTP proprio.
+
+Il metodo che ha funzionato è la **creazione dell'utente via SQL diretto**, non via
+API Auth, ed è quello da riusare: la procedura completa con le due scoperte non
+ovvie sta in [`04_HANDOFF_NUOVA_IA.md`](04_HANDOFF_NUOVA_IA.md).
 
 ## Gate chiusi senza essere stati autorizzati
 

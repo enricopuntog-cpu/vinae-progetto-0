@@ -8,13 +8,13 @@
     "repository_url": "https://github.com/enricopuntog-cpu/vinae-progetto-0"
   },
   "verified_git_snapshot": {
-    "branch": "docs/architettura-fase-7-distribuita",
-    "head": "a035ce7 piu' il merge di main e il commit documentale di questa PR",
-    "origin_main": "306952f",
-    "snapshot_note": "Rilevato il 2026-08-05 subito prima del merge squash della PR #24. origin/main e' 306952f, squash della PR #22 con la Fase 7d. Il branch di questa PR e' nato da 1782a1a, prima della Fase 7c, ed e' stato riallineato a main con un merge e non con un rebase, perche' il rebase di un branch gia' pubblicato richiederebbe un force push. Resta aperta la PR #23 (Fase 7e); localmente esiste il branch della Fase 7f."
+    "branch": "migration/phase-7e-chiusura-debiti",
+    "head": "5e91192 piu' il merge di main e il commit documentale di questa PR",
+    "origin_main": "d8503af",
+    "snapshot_note": "Rilevato il 2026-08-05 subito prima del merge squash della PR #23. origin/main e' d8503af, squash della PR #24; prima c'era 306952f, squash della PR #22 con la Fase 7d. Il branch di questa PR e' nato da main @ 471b529 ed e' stato riallineato con un merge e non con un rebase, perche' il rebase di un branch gia' pubblicato richiederebbe un force push. L'unico conflitto e' stato su CHANGES.log, ed era previsto. Resta fuori da main la Fase 7f, che vive sul branch locale migration/phase-7f-fix-contestazione-payout."
   },
-  "documentation_branch": "docs/architettura-fase-7-distribuita",
-  "verification_pr": 24,
+  "documentation_branch": "migration/phase-7e-chiusura-debiti",
+  "verification_pr": 23,
   "merge_rule": "Il merge su main non richiede piu' il click manuale del committente, ma richiede l'approvazione esplicita in sessione, e' solo squash, mai force push. Ogni PR deve portare come ultimo commit l'aggiornamento di CHANGES.log, CLAUDE.md e CONTESTO_IA/ allo stato che quella PR produce davvero: numero, cosa cambia, cosa resta aperto. Prima dello squash, non dopo.",
   "runtime_truth": {
     "served_frontend": "frontend/",
@@ -60,12 +60,12 @@
     "phase_6c_1": "merged",
     "phase_6c_2": "merged",
     "phase_6d_1": "merged_ci_green_fixture_grids_33_33_and_11_11_zero_residue",
-    "phase_6d_2a": "merged_pr_17_migration_20260731120340_applied_storage_smoke_closed_on_2026_08_05_recorded_in_pr_23",
+    "phase_6d_2a": "merged_pr_17_migration_20260731120340_applied_storage_smoke_closed_on_2026_08_05_in_ten_steps_via_direct_sql_user_creation_but_the_18_case_grid_is_still_unexecuted",
     "phase_7": "merged_pr_18_squash_2a47952_migration_20260731135455_applied_to_real_project_at_merge_tables_zero_rows_no_stripe_call",
     "phase_7b": "merged_pr_19_squash_5e6b8e4_ci_green_run_30900108638_migration_20260803150000_applied_and_three_edge_functions_active_tables_zero_rows_no_stripe_call_seller_enabled_gate_off",
     "phase_7c": "merged_pr_21_squash_471b529_migration_20260804160000_applied_at_merge_supabase_preview_skipped_so_production_was_the_first_engine_to_run_it_part_b_is_an_authorised_deviation_from_the_no_new_features_rule",
     "phase_7d": "merged_pr_22_squash_306952f_documentation_only_no_sql_decisions_1a_1e_3a_closed_2c_design_approved_schema_not_written_3e_open_and_commercial",
-    "phase_7e": "open_pr_23_debt_closure_grid_7c_executed_21_pass_1_fail_storage_smoke_closed",
+    "phase_7e": "merged_pr_23_no_migration_written_or_applied_grid_7c_had_four_defects_and_could_not_commit_first_real_run_gave_21_pass_1_fail_case_20_failed_on_a_migration_defect_42804_fixed_by_phase_7f_storage_smoke_cantina_closed_in_ten_steps_residues_zero_supabase_preview_success",
     "phase_7f": "local_branch_migration_20260805160250_applied_to_real_project_not_yet_in_main",
     "phase_8": "not_started",
     "phase_9": "not_started",
@@ -97,12 +97,20 @@
     "abilitazione di pg_cron, pg_net e Vault sul progetto reale: decaduta con la decisione 1a della 7d, che ha scelto lo scheduler esterno. Non c'e' piu' alcuna estensione da abilitare, quindi non serve nemmeno l'autorizzazione separata che sarebbe servita."
   ],
   "open_gates_in_order": [
-    "esecuzione delle griglie supabase/tests/7_ordini_pagamenti.sql (16 casi) e 7b_connect_marketplace.sql (23 casi) sul progetto reale, con autorizzazione fixture separata: l'autorizzazione data per la griglia 7c non le copre, perche' e' per griglia e non per progetto",
+    "completare la Fase 7f: rinominare il file di migrazione alla versione reale 20260805160250, rebase su main, riesecuzione reale della griglia 7c con la correzione in campo dove il caso 20 deve passare, verifica residui a zero, poi PR e merge",
+    "esecuzione delle griglie supabase/tests/7_ordini_pagamenti.sql (16 casi), 7b_connect_marketplace.sql (23 casi) e 6d-2a_catalog_cellar_paths.sql (18 casi) sul progetto reale, con autorizzazione fixture separata: l'autorizzazione data per la griglia 7c non le copre, perche' e' per griglia e non per progetto. La 7e ha dimostrato che una griglia versionata e mai eseguita non e' una prova",
     "decidere dove sta il gate di autorizzazione ora che il merge distribuisce da solo: la regola scritta presidia supabase db push, che non e' il percorso reale",
     "scrivere il workflow GitHub Actions schedulato dell'auto-rilascio, deciso dalla 7d e mai scritto: .github/workflows/ contiene il solo ci.yml, senza trigger schedule. Prima vanno decise 1c (a chi arriva la notifica di fallimento) e 1d (cadenza e batch)",
     "chiudere la decisione 2c con lo schema: e' la sola parte della 7d che richiede una migrazione, e va decisa prima di scrivere il job della fee"
   ],
-  "next_gate": "scrivere il workflow schedulato dell'auto-rilascio: e' il solo debito la cui assenza ha una conseguenza attiva, perche' la 7c fa nascere ordini con auto_rilascio_scadenza reale e nessun job che la guardi. Il freno e' PAYMENTS_ENABLED=false.",
+  "next_gate": "completare e mergiare la Fase 7f: la correzione e' applicata al progetto reale ma il file non e' in main, quindi il repository e il database divergono su quella funzione fino al merge. Subito dopo, lo scheduler dell'auto-rilascio: e' il solo debito la cui assenza ha una conseguenza attiva, perche' la 7c fa nascere ordini con auto_rilascio_scadenza reale e nessun job che la guardi. Il freno e' PAYMENTS_ENABLED=false.",
+  "grid_status": {
+    "7c_consegna_imballaggio": "eseguita il 2026-08-05 sul progetto reale: 21 PASSA, 1 FALLISCE. Il caso 20 fallisce per un difetto della migrazione 7c (42804), corretto dalla Fase 7f. Residui a zero. Esito riga per riga in docs/PHASE_7E_DEBT_CLOSURE.md sezione 3.",
+    "7b_connect_marketplace": "23 casi, non eseguita. Il caso 18 e' stato verificato a parte, statico: privilegi trovati 0, PASSA. Autorizzazione fixture non concessa.",
+    "7_ordini_pagamenti": "16 casi, non eseguita.",
+    "6d-2a_catalog_cellar_paths": "18 casi, non eseguita. Lo smoke Storage del bucket cantina, che e' cosa diversa, e' chiuso.",
+    "lesson": "Una griglia versionata e mai eseguita non e' una prova. La 7c era rotta in quattro punti, nessuno visibile leggendo il file, e non poteva committare in nessuno scenario."
+  },
   "remote_sql_rule": "Show exact SQL and obtain explicit in-session approval before applying any migration to the real Supabase project. Attenzione: dal merge della Fase 7 questa regola non copre piu' il percorso reale di distribuzione, che e' il merge su main via integrazione GitHub e non passa da un comando esplicito.",
   "migration_file_rule": "A migration file that has been pushed at least once is frozen: every later correction is a new file with a more recent timestamp, in draft too and even if no real database ever ran the previous version. Supabase preview branches run migrations at PR open and compare version, not content."
 }

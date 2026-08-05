@@ -262,7 +262,12 @@ begin
   );
 
   -- Il listino cambia DOPO: è ciò che distingue "congelato" da "riletto".
-  update public.packaging_options set valida_fino = now()
+  -- `clock_timestamp()` e non `now()`: la riga da scadere è stata inserita in
+  -- QUESTA transazione, dove `now()` è costante, quindi `valida_fino` uscirebbe
+  -- uguale a `valida_da` e `packaging_options_finestra` — che è un `>` stretto —
+  -- rifiuterebbe l'update. La prima scadenza (riga 215) non ha il problema:
+  -- colpisce la riga di produzione, il cui `valida_da` è del seed.
+  update public.packaging_options set valida_fino = clock_timestamp()
   where codice = 'centro_partner' and valida_fino is null;
   insert into public.packaging_options
     (codice, provider, modalita, etichetta, prezzo_cents, richiede_punto, ordinamento)
@@ -455,6 +460,13 @@ begin
     'permesso negato', 'denied', v_sqlstate, v_msg);
 
   -- `rimborsata` NON scrive `rimborsato`: quello lo fa solo un evento firmato.
+  -- Serve la porta di back-office, e quella pretende `auth.uid()` NULLO:
+  -- `ordine_contestazione_risolvi` respinge chiunque abbia un uid che non sia
+  -- `admin`. `set_config('role','postgres')` cambia il ruolo del database ma
+  -- NON ripulisce `request.jwt.claims`, quindi `auth.uid()` resterebbe il
+  -- venditore del caso 18 e la chiamata fallirebbe con 42501. L'helper della
+  -- griglia con `null` azzera i claim, ed è l'unico modo di essere service_role.
+  perform pg_temp.impersona_7c('postgres', null);
   perform public.ordine_contestazione_risolvi(v_order_a, 'rimborsata', 'Rimborso completo');
   select o.stato::text, o.payout_stato::text, d.stato::text
   into v_stato, v_testo, v_msg
@@ -476,7 +488,8 @@ begin
   perform pg_temp.impersona_7c('authenticated', v_buyer);
   perform public.ordine_contestazione_apri(
     v_order_c, 'Livello alterato', 'Il livello sembra sotto la spalla.', '{}');
-  perform set_config('role', 'postgres', true);
+  -- Stessa ragione del caso 19: claim azzerati, non solo ruolo cambiato.
+  perform pg_temp.impersona_7c('postgres', null);
   perform public.ordine_contestazione_risolvi(v_order_c, 'respinta', 'Nessuna irregolarità');
 
   select o.stato::text, o.payout_stato::text, o.contestato_at is null
@@ -511,9 +524,23 @@ begin
     'errore "già stato recensito"', 'già stato recensito', v_sqlstate, v_msg);
 
   -- Pulizia
+  --
+  -- Prima di cancellare i fascicoli va SVUOTATA la coda dei vincoli differiti.
+  -- `orders_contestazione_ha_pratica` è un constraint trigger `deferrable
+  -- initially deferred`: `ordine_contestazione_apri` ne accoda la verifica
+  -- quando scrive `contestato_at`, e quella verifica scatta al COMMIT, non
+  -- all'istruzione. Al commit i `delete` qui sotto hanno già portato via le
+  -- pratiche, quindi il controllo non le trova e solleva P0001 — e l'ordine A
+  -- resta contestato per progetto, perché è ciò che il caso 19 prova. Senza
+  -- questa riga la griglia non poteva committare in nessuno scenario, nemmeno
+  -- con tutti i casi a PASSA. Qui l'invariante vale ancora: si drena adesso.
+  set constraints all immediate;
+
+  -- La colonna è `subject`, come nella griglia 7b: `chiave` non esiste e questa
+  -- riga rendeva la griglia ineseguibile. `private.rate_limit_consume` riceve
+  -- esattamente 'user:' || uid, senza suffisso, quindi il confronto è per valore.
   delete from private.rate_limit_buckets
-  where chiave like 'user:' || v_seller::text || '%'
-     or chiave like 'user:' || v_buyer::text || '%';
+  where subject in ('user:' || v_seller::text, 'user:' || v_buyer::text);
   delete from public.payment_provider_events where event_id like 'evt_7c_%';
   delete from public.order_reviews where order_id in (
     select id from public.orders where buyer_id = v_buyer);

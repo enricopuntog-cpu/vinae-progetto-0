@@ -299,7 +299,12 @@ begin
 
   -- Ripristina la configurazione iniziale: il resto della griglia ragiona su 14
   -- giorni di finestra, e lasciarne 3 renderebbe i casi D dipendenti da A.
-  update public.marketplace_config set valida_fino = now() where valida_fino is null;
+  -- `clock_timestamp()` e non `now()`: la riga da scadere è quella inserita alla
+  -- riga 264, in QUESTA transazione, dove `now()` è costante. `valida_fino`
+  -- uscirebbe uguale a `valida_da` e `marketplace_config_intervallo_valido` — un
+  -- `>` stretto — rifiuterebbe l'update, fermando la griglia al caso 6. La prima
+  -- scadenza (riga 263) colpisce la riga di produzione e non ha il problema.
+  update public.marketplace_config set valida_fino = clock_timestamp() where valida_fino is null;
   insert into public.marketplace_config (
     margine_obiettivo_bps, riferimento_stripe_percentuale_bps,
     riferimento_stripe_fisso_cents, auto_rilascio_giorni, nota
