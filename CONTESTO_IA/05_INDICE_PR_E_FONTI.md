@@ -25,7 +25,8 @@
 | [#19](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/19) | 04-08-2026 | merged | Fase 7b — Connect, commissione e trattenuta fondi; squash `5e6b8e4` |
 | [#20](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/20) | 04-08-2026 | merged | Documentazione e handoff allineati al merge della 7b; squash `1782a1a` |
 | [#21](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/21) | 04-08-2026 | merged | Fase 7c — consegna, tracking e imballaggio; squash `471b529`; `Supabase Preview` `SKIPPED` |
-| [#22](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/22) | 05-08-2026 | merged | Fase 7d — decisioni economiche, sola documentazione: 1a, 1e, 3a decise; 2c approvata in design; 3e aperta |
+| [#22](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/22) | 05-08-2026 | merged | Fase 7d — decisioni economiche, sola documentazione: 1a, 1e, 3a decise; 2c approvata in design; 3e aperta; squash `306952f` |
+| [#24](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/24) | 05-08-2026 | merged | `docs/ARCHITECTURE.md`: il percorso di pagamento è distribuito, non «ancora non distribuito» |
 
 ## Anomalie della cronologia da conoscere
 
@@ -93,6 +94,20 @@ percorso UI, `PAYMENTS_ENABLED=false`, nessuna chiamata Stripe.
   resta in `frontend/` fino alla Fase 11). La **2c** ha design approvato — tetto a
   5 tentativi con colonne contatore su `payments` — e **schema non scritto**. La
   **3e** resta aperta ed è una domanda commerciale, non tecnica.
+
+### PR #24 — un branch senza PR, per una riga sbagliata
+
+La #24 nasce da un residuo Git: il branch `docs/architettura-fase-7-distribuita`
+portava il commit `1b382b8` che **non era antenato di `main`** e non aveva alcuna
+PR aperta. Il contenuto era però ancora valido, perché `docs/ARCHITECTURE.md` su
+`main` diceva «questo percorso locale e ancora non distribuito» mentre il ledger
+lo smentiva. La correzione è stata aggiornata a tutte e tre le migrazioni a ledger
+e portata in PR sopra `1b382b8`, senza riscrivere quel commit.
+
+Il branch è nato da `1782a1a`, cioè da prima della 7c: al momento del merge è
+stato riallineato a `main` con un **merge** e non con un rebase, perché il rebase
+di un branch già pubblicato richiederebbe un force push. Lo squash finale non
+conserva il commit di merge.
 
 ### Il branch di anteprima della #19
 

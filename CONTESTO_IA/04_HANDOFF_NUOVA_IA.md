@@ -42,7 +42,7 @@
   Storage del bucket `cantina` non è compreso nel merge e resta aperto.
 - La Fase 7 è in `main` tramite PR #18 al merge squash `2a47952`, la Fase 7b
   tramite PR #19 al merge squash `5e6b8e4`, la Fase 7c tramite PR #21 al merge
-  squash `471b529`, la Fase 7d tramite PR #22.
+  squash `471b529`, la Fase 7d tramite PR #22 al merge squash `306952f`.
 - «Integrata» qui significa anche «distribuita»: l'integrazione GitHub di
   Supabase applica migrazioni e Edge Function al merge su `main`, da sola.
   Verificato in lettura il 5 agosto 2026 — il ledger è a **diciannove righe**, le
