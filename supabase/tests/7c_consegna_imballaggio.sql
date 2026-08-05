@@ -3,7 +3,7 @@
 -- recensione e imballaggio congelato.
 --
 -- Eseguire dopo 20260804160000_phase_7c_delivery_packaging.sql E dopo
--- 20260805120000_phase_7f_fix_contestazione_enum_cast.sql: senza la 7f il caso
+-- 20260805160250_phase_7f_fix_contestazione_enum_cast.sql: senza la 7f il caso
 -- 20 fallisce con 42804, perché è il difetto che quel caso ha scoperto.
 -- Crea e cancella due utenti, quattro vini, quattro bottiglie, quattro annunci
 -- e i relativi ordini, pagamenti, eventi, contestazioni e recensioni.
@@ -605,7 +605,7 @@ begin
   -- La guardia qui non è decorativa: è il caso che alla prima esecuzione reale
   -- (Fase 7e) ha scoperto il 42804 di ordine_contestazione_risolvi, e senza di
   -- essa quell'errore portava via l'intera griglia — 21 esiti già registrati
-  -- compresi. La correzione della funzione è 20260805120000_phase_7f_*.sql.
+  -- compresi. La correzione della funzione è 20260805160250_phase_7f_*.sql.
   v_guasto := null;
   begin
     v_order_c := pg_temp.ordine_pagato_7c(v_buyer, v_annunci[3], 'idem-7c-c-00000001', 'cs_7c_c');

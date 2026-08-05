@@ -8,6 +8,20 @@
 -- La 7c è la diciottesima voce del ledger del progetto reale, quindi quel file
 -- è congelato e ogni correzione è un file nuovo con timestamp successivo.
 --
+-- PERCHÉ IL NOME DI QUESTO FILE È STATO CAMBIATO UNA VOLTA
+-- =======================================================
+-- Nasceva `20260805120000_…`. Questa migrazione è l'unica del progetto applicata
+-- per via diretta e non dal merge su `main`, e il server ha registrato a ledger la
+-- versione `20260805160250`. Il filename è stato riallineato a quella versione —
+-- regola 10 — mentre il file non era ancora stato pushato, quindi la regola 11 non
+-- era in gioco: non è una modifica in place di un file distribuito, è
+-- l'allineamento del nome alla versione che esiste davvero. Nelle altre diciotto
+-- voci il riallineamento non serve mai, perché a distribuire è l'integrazione
+-- GitHub partendo dal repository e la versione a ledger la prende dal nome.
+--
+-- Conseguenza pratica: al merge di questa PR l'integrazione GitHub troverà la
+-- versione già registrata e non rieseguirà il file. È il comportamento voluto.
+--
 -- IL DIFETTO
 -- ==========
 -- In 20260804160000_phase_7c_delivery_packaging.sql:1125-1126 il ramo `else`
