@@ -52,10 +52,25 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `CONNECT_ACCOUNT_COUNTRY` | Edge Function | Paese degli account Connect Express aperti per i venditori. Default `IT`. |
 | `PAYOUTS_JOB_TOKEN` | Edge Function | Secondo fattore di `payouts-release`. Indipendente dalla service role key e revocabile da solo. |
 | `PAYOUTS_BATCH_LIMIT` | Edge Function | Ordini rilasciati per esecuzione, default `50`, massimo `500`. |
+| `PACKAGING_ENABLED` | solo server | Gate della selezione imballaggio (Fase 7c). Indipendente da `PAYMENTS_ENABLED`. |
+| `NEXT_PUBLIC_PACKAGING_ENABLED` | client | Visibilità UI dell'imballaggio soltanto; non autorizza operazioni. |
 
 I segreti della Edge Function vanno impostati nell'ambiente Supabase; quelli del
 Route Handler nell'ambiente server Next.js. Non copiare la `service_role` in un
 file `.env` versionato.
+
+`PACKAGING_ENABLED` è **scollegata** da `PAYMENTS_ENABLED`, ed è un requisito
+della Fase 7c e non una svista: l'imballaggio deve poter restare visibile con i
+pagamenti spenti, e i pagamenti devono poter essere accesi senza che
+l'imballaggio compaia. In Fase 7c il fornitore di imballaggio è **finto** —
+nessuna chiamata esterna, nessun endpoint, nessuna credenziale — quindi non
+esiste alcuna variabile con un URL o un segreto di fornitore, e la sua comparsa
+in futuro sarà il segnale che il provider ha smesso di essere finto.
+
+Con `PACKAGING_ENABLED=true` e `PAYMENTS_ENABLED=false` un ordine nasce con
+`addebito_totale_cents` più alto di `totale_cents` e nessun addebito reale
+dietro. È coerente, perché nessun addebito reale esiste comunque, ma è uno stato
+da conoscere in anticipo.
 
 `PAYMENTS_ENABLED` è il kill switch di **tutta** la verticale pagamenti, non del
 solo checkout: `payments-checkout`, `connect-onboarding`, `payouts-release` e il

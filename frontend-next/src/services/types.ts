@@ -347,7 +347,11 @@ export type OrderRecord = {
   riferimento_stripe_fisso_cents: number;
   /** Il rincaro risultante. La percentuale effettiva si deriva, non si legge. */
   commissione_cents: number;
-  /** Quanto paga il compratore. Colonna generata: `prezzo + commissione`. */
+  /**
+   * Base di mercato: `prezzo + commissione`. Colonna generata. L'imballaggio
+   * **non** entra qui, mai — è ciò che tiene intatta la formula del rincaro e
+   * la riconciliazione della 7b.
+   */
   totale_cents: number;
   payout_stato: PayoutStatus;
   consegnato_at: string | null;
@@ -360,6 +364,28 @@ export type OrderRecord = {
   paid_at: string | null;
   created_at: string;
   updated_at: string;
+
+  // ---- Fase 7c ----
+  preparazione_avviata_at: string | null;
+  spedito_at: string | null;
+  corriere: string | null;
+  tracking_number: string | null;
+  imballaggio_checklist: VoceChecklist[];
+  imballaggio_foto: string[];
+  /** Il metodo dichiarato dal venditore sull'annuncio, congelato alla creazione. */
+  imballaggio_codice: string | null;
+  imballaggio_provider: string | null;
+  imballaggio_etichetta: string | null;
+  imballaggio_cents: number;
+  /** Punto fisico, scelto dopo il pagamento. Non ha prezzo. */
+  imballaggio_punto_id: string | null;
+  imballaggio_punto_nome: string | null;
+  imballaggio_scelto_at: string | null;
+  /**
+   * Quanto viene davvero addebitato: `prezzo + commissione + imballaggio`.
+   * Seconda colonna generata, ed è questo il numero della riga `payments`.
+   */
+  addebito_totale_cents: number;
 };
 
 export type PaymentStatus =
@@ -404,12 +430,29 @@ export interface OrderService {
   acquisti(): Promise<Result<OrderRecord[]>>;
   vendite(): Promise<Result<OrderRecord[]>>;
   get(id: string): Promise<Result<OrderRecord | null>>;
+  /**
+   * Solo il venditore, da `pagato`. Idempotente: riaprire la preparazione
+   * aggiorna la checklist e non riscrive l'istante di avvio, che è ciò che
+   * distingue il seller status «nuovo» da «da_preparare».
+   */
+  preparaSpedizione(
+    id: string,
+    checklist: VoceChecklist[],
+    foto?: string[],
+  ): Promise<Result<OrderRecord>>;
+  /** Solo il venditore, da `pagato` o `in_preparazione`. */
+  segnaSpedito(id: string, corriere: string, trackingNumber: string): Promise<Result<OrderRecord>>;
   /** Solo il venditore. Fa partire la finestra di verifica. */
   segnaConsegnato(id: string): Promise<Result<OrderRecord>>;
   /** Solo il compratore. Libera i fondi trattenuti. Idempotente. */
   confermaRicezione(id: string): Promise<Result<OrderRecord>>;
-  /** Solo il compratore. Blocca rilascio e auto-rilascio. Idempotente. */
-  contesta(id: string, motivo: string): Promise<Result<OrderRecord>>;
+  /**
+   * Nessun `contesta` qui, dalla Fase 7c: aprire una contestazione significa
+   * anche creare il fascicolo con descrizione e foto, e la porta è
+   * `DisputeService.apri`. La RPC `ordine_contesta` della 7b resta il motore
+   * interno, ma il suo `execute` è stato revocato ad `authenticated` proprio
+   * perché lato client resti una sola strada.
+   */
 }
 
 // ---- Pagamenti -------------------------------------------------------------
@@ -586,6 +629,224 @@ export interface PaymentProvider {
     headers: Headers;
     secret: string;
   }): Promise<Result<ProviderEvent>>;
+}
+
+// ---- Fase 7c: consegna, tracking, contestazione, recensione ----------------
+
+/**
+ * Stato dell'ordine visto dal **venditore**. Non è una colonna: si deriva da
+ * `OrderRecord` con `sellerStatusDaOrdine`, che rispecchia la funzione SQL
+ * `public.order_seller_stato`. Due colonne di stato sulla stessa riga sono due
+ * scritture da tenere allineate, e prima o poi divergono.
+ *
+ * Rispecchia `SellerOrderStatus` in frontend/src/data/orders.ts: i due elenchi
+ * vanno cambiati insieme.
+ */
+export type SellerOrderStatus =
+  | "nuovo"
+  | "da_preparare"
+  | "da_spedire"
+  | "spedito"
+  | "consegnato"
+  | "completato"
+  | "contestato"
+  | "rimborsato"
+  | "annullato";
+
+/** Rispecchia `public.tracking_event_tipo`. */
+export type TrackingEventTipo = "info" | "spedizione" | "consegna" | "problema" | "sistema";
+
+export type TrackingEventRecord = {
+  id: number;
+  order_id: string;
+  tipo: TrackingEventTipo;
+  titolo: string;
+  descrizione: string | null;
+  luogo: string | null;
+  created_at: string;
+};
+
+/** Rispecchia `public.dispute_stato`. */
+export type DisputeStato = "aperta" | "in_valutazione" | "rimborsata" | "risolta" | "respinta";
+
+/**
+ * Il fascicolo della contestazione. `risolta_da` non c'è, e l'assenza è
+ * deliberata: la colonna esiste ma resta fuori dal `GRANT`, perché chi ha
+ * deciso la pratica è dato di moderazione e non informazione dovuta alle parti.
+ */
+export type DisputeRecord = {
+  id: string;
+  order_id: string;
+  aperta_da: string;
+  motivo: string;
+  descrizione: string;
+  foto: string[];
+  stato: DisputeStato;
+  esito_nota: string | null;
+  apertura_at: string;
+  chiusura_at: string | null;
+};
+
+export type OrderReviewRecord = {
+  id: string;
+  order_id: string;
+  autore_id: string;
+  destinatario_id: string;
+  voto: number;
+  conformita: number;
+  imballaggio: number;
+  comunicazione: number;
+  testo: string | null;
+  created_at: string;
+};
+
+/** Una voce della checklist di imballaggio, come la salva il venditore. */
+export type VoceChecklist = { id: string; label: string; done: boolean };
+
+export interface TrackingService {
+  /** Timeline di un ordine, dal più vecchio al più recente. */
+  perOrdine(orderId: string): Promise<Result<TrackingEventRecord[]>>;
+}
+
+/**
+ * Nessun metodo di risoluzione, e l'assenza è il punto: in `frontend/` il
+ * pannello mostrava a entrambe le parti tre bottoni che chiudevano la pratica,
+ * sotto la scritta «Azioni demo». Era impalcatura, non un modello di permessi.
+ * `ordine_contestazione_risolvi` esiste ma non ha alcun `GRANT` verso
+ * `authenticated`: è back-office, e non può essere chiamata da qui.
+ */
+export interface DisputeService {
+  apri(input: {
+    orderId: string;
+    motivo: string;
+    descrizione: string;
+    foto?: string[];
+  }): Promise<Result<OrderRecord>>;
+  perOrdine(orderId: string): Promise<Result<DisputeRecord | null>>;
+}
+
+export interface ReviewService {
+  invia(input: {
+    orderId: string;
+    voto: number;
+    conformita: number;
+    imballaggio: number;
+    comunicazione: number;
+    testo?: string | null;
+  }): Promise<Result<OrderReviewRecord>>;
+  perOrdine(orderId: string): Promise<Result<OrderReviewRecord | null>>;
+}
+
+// ---- Fase 7c: imballaggio ---------------------------------------------------
+
+/** Come la bottiglia entra nella rete logistica. Vocabolario Vinea, non di un fornitore. */
+export type PackagingModalita = "kit_a_domicilio" | "centro_partner" | "punto_quartiere";
+
+/**
+ * Un punto fisico dove consegnare la bottiglia. In Fase 7c i dati sono
+ * inventati e le coordinate non corrispondono a nulla: questo tipo è la forma
+ * che un fornitore vero dovrà riempire, non un indirizzario Vinea.
+ */
+export type PackagingPoint = {
+  id: string;
+  nome: string;
+  indirizzo: string;
+  cap: string;
+  citta: string;
+  provincia: string;
+  /** Finte in Fase 7c. Presenti perché una mappa vera le chiederà. */
+  lat: number | null;
+  lon: number | null;
+  /** Metri in linea d'aria dal riferimento richiesto. Finta in Fase 7c. */
+  distanzaMetri: number | null;
+  orari: string | null;
+};
+
+/**
+ * Un'opzione di consegna alla rete logistica. `prezzoCents` è **indicativo per
+ * il browser**: l'importo che finisce sull'ordine lo rilegge il server da
+ * `packaging_options` al momento della prenotazione. Il client non manda mai
+ * un prezzo.
+ */
+export type PackagingOption = {
+  codice: string;
+  provider: string;
+  modalita: PackagingModalita;
+  etichetta: string;
+  descrizione: string | null;
+  prezzoCents: number;
+  /** Se true, la scelta non è completa senza un `PackagingPoint`. */
+  richiedePunto: boolean;
+};
+
+/** Che cosa resta congelato sull'ordine dopo la scelta. */
+export type PackagingSelection = {
+  codice: string | null;
+  provider: string | null;
+  etichetta: string | null;
+  prezzoCents: number;
+  puntoId: string | null;
+  puntoNome: string | null;
+  sceltoAt: string | null;
+};
+
+/**
+ * Ciò che l'interfaccia chiama. Non conosce alcun fornitore e non decide alcun
+ * prezzo: chiede il listino per mostrarlo, registra una dichiarazione per
+ * codice sull'annuncio, e dopo il pagamento registra il punto fisico — che non
+ * ha prezzo e quindi non muove alcun importo.
+ */
+export interface PackagingService {
+  /** Il listino corrente, dalla vista pubblica a colonne chiuse. */
+  opzioni(): Promise<Result<PackagingOption[]>>;
+  /** Punti disponibili per un'opzione, vicino a un riferimento geografico. */
+  punti(input: {
+    codice: string;
+    cap: string | null;
+  }): Promise<Result<PackagingPoint[]>>;
+  /**
+   * Il venditore dichiara il metodo sull'annuncio. Nessun prezzo fra i
+   * parametri: lo risolve `order_checkout_reserve` dalla versione corrente.
+   */
+  dichiaraSuAnnuncio(listingId: string, codice: string | null): Promise<Result<void>>;
+  /** Il venditore sceglie il punto fisico, dopo il pagamento. Non tocca importi. */
+  scegliPunto(input: {
+    orderId: string;
+    puntoId: string;
+    puntoNome: string;
+  }): Promise<Result<OrderRecord>>;
+}
+
+/**
+ * Ciò che il **server** userà per parlare con la rete logistica. Un fornitore
+ * vero implementa questo, non `PackagingService`. Il modello è `AIProvider` in
+ * backend/ai_provider.py — un contratto che non nomina il fornitore — e la
+ * stessa distinzione a due livelli di `PaymentService` / `PaymentProvider`.
+ *
+ * In Fase 7c l'unica implementazione è `FakePackagingProvider` e vive nel
+ * browser, perché non esiste alcuna chiamata esterna da nascondere dietro una
+ * Edge Function. Quando il fornitore sarà vero, l'implementazione si sposta
+ * dietro una Edge Function e questa interfaccia non cambia.
+ */
+export interface PackagingProvider {
+  readonly id: string;
+  opzioniDisponibili(input: {
+    near: { cap: string; citta: string; provincia: string } | null;
+    formato: string | null;
+    quantita: number;
+  }): Promise<Result<PackagingOption[]>>;
+  puntiVicini(input: { codice: string; cap: string | null }): Promise<Result<PackagingPoint[]>>;
+  /**
+   * Conferma la scelta presso il fornitore. In Fase 7c non fa nulla di remoto e
+   * restituisce un riferimento inventato. Esiste già ora perché un fornitore
+   * vero emette qui un identificativo di ritiro, e aggiungerlo dopo
+   * significherebbe cambiare la firma dell'unico punto di integrazione.
+   */
+  prenota(input: {
+    codice: string;
+    puntoId: string | null;
+    riferimentoOrdine: string;
+  }): Promise<Result<{ provider: string; prenotazioneId: string }>>;
 }
 
 // ---- Messaggi --------------------------------------------------------------
