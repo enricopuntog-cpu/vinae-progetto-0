@@ -28,6 +28,13 @@ dopo l'apertura, diciannove minuti prima che esistesse il commit `b07bac9` con l
 migrazione, e non ha rivalutato. **Il primo motore Postgres a eseguire quel testo
 è stato quello di produzione.**
 
+Post scriptum, e chiude il punto: la PR di questa fase tocca un file sotto
+`supabase/`, quindi il bot ha aperto un branch di anteprima per davvero, e il
+controllo `Supabase Preview` è **`SUCCESS`**. Le tre migrazioni hanno finalmente
+girato su un Postgres che le vedeva per la prima volta, da zero e in ordine di
+versione. È la prova che mancava sulla loro riproducibilità — e la si è ottenuta
+per effetto collaterale, non perché qualcuno l'avesse pianificata.
+
 Il testo applicato è quello del file, verificato per parti:
 
 | Verifica | Come | Esito |
