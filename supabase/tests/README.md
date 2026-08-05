@@ -60,9 +60,25 @@ migrazione. Non riesegue le griglie 6d-1. Il caso 18 verifica esplicitamente che
 la pulizia non lasci utenti, profili, vini o ambienti marcati dalla prova.
 
 La griglia non carica né legge fotografie reali dal bucket `cantina`: verifica
-soltanto che il bucket sia privato. Fino alla prima esecuzione autorizzata, non
-esiste inoltre un esito remoto verificato né per i 18 casi né per i residui
-finali propri della 6d-2a.
+soltanto che il bucket sia privato. Non esiste un esito remoto verificato né per i
+18 casi né per i residui finali propri della 6d-2a.
+
+**Lo smoke Storage autenticato è invece chiuso**, il 5 agosto 2026, dopo essere
+stato aperto per tre tentativi mai andati a segno. Dieci passi, tutti con l'esito
+atteso: upload nella propria cartella `200`, upload di un altro utente nella
+stessa cartella `400`, lettura propria `200`, lettura altrui `400`, lettura
+anonima `400`, signed URL creata `200` e fetch senza JWT `200`, cancellazione
+`200`. Zero oggetti residui nel bucket, zero utenti e profili residui.
+
+Non è passato dall'Auth Admin API né da una chiave `service_role`: l'utente è
+creato con `insert into auth.users` come fanno le griglie — quindi nessuna email,
+quindi nessun rate limit — con una password `extensions.crypt(…, gen_salt('bf'))`,
+e il JWT arriva dal password grant con la sola chiave pubblica. Servono due cose
+non ovvie: una riga in `auth.identities`, e le quattro colonne token
+(`confirmation_token`, `recovery_token`, `email_change_token_new`, `email_change`,
+tutte `varchar(255)`) a stringa vuota invece di `NULL`, perché GoTrue le scansiona
+in `string` non nullable. Procedura e provenienza in
+[`docs/PHASE_7E_DEBT_CLOSURE.md`](../../docs/PHASE_7E_DEBT_CLOSURE.md), sezione 5.
 
 ## Fase 7 — ordini e pagamenti
 
@@ -126,6 +142,16 @@ helper `pg_temp.registra_7b` / `pg_temp.att_errore_7b` dentro il blocco delle
 fixture, il caso 18 da un `insert into esiti_7b` diretto fuori da quel blocco
 (riga 666). La riga 99 non è un caso: è la sentinella che il gestore d'eccezione
 scrive se lo script muore fuori dai casi.
+
+**Difetto corretto il 5 agosto 2026, prima di qualunque esecuzione.** La riga 302
+scadeva con `valida_fino = now()` la riga di `marketplace_config` inserita alla
+riga 264, nella stessa transazione: `now()` è l'istante d'inizio e non si muove,
+quindi `valida_fino` uscirebbe uguale a `valida_da` e
+`marketplace_config_intervallo_valido` — `CHECK (valida_fino > valida_da)`, un `>`
+stretto — rifiuterebbe l'update, fermando la griglia al caso 6. Ora usa
+`clock_timestamp()`. È lo stesso difetto trovato nella 7c eseguendola, e
+`marketplace_config` e `packaging_options` sono le due sole tabelle del progetto
+con quella forma di vincolo.
 
 Presuppone che la migrazione della Fase 7 sia già applicata: la griglia parte da
 `order_checkout_reserve` e da `payment_apply_provider_event`, che sono sue.
@@ -241,52 +267,85 @@ caso 6 copre solo «mai dichiarato».
 
 La griglia non chiama Stripe e non crea Transfer.
 
-### Il difetto corretto il 5 agosto 2026
+### I quattro difetti corretti il 5 agosto 2026
 
-Come è stata consegnata dalla PR #21, **questa griglia non era eseguibile**. La
-prima istruzione della pulizia cancellava da `private.rate_limit_buckets`
-filtrando su una colonna `chiave` che non esiste: la tabella ha `scope`,
-`subject`, `window_started_at`, `window_seconds`, `request_count`, `expires_at` —
-verificato su `pg_attribute` del progetto reale. La griglia 7b usa `subject`
-correttamente; la 7c ha introdotto il nome sbagliato.
+Come è stata consegnata dalla PR #21, **questa griglia non era eseguibile**, e non
+per un motivo solo. Nessuno dei quattro difetti è visibile leggendo il file: si
+sono presentati uno dopo l'altro eseguendo. Dettaglio completo in
+[`docs/PHASE_7E_DEBT_CLOSURE.md`](../../docs/PHASE_7E_DEBT_CLOSURE.md), sezione 2.
 
-Le conseguenze non erano cosmetiche. Il blocco `do` della 7c, a differenza di
-quello della 7b, **non ha un gestore `exception when others`**: un `42703` alla
-riga della pulizia interrompe l'intero blocco, il rollback porta via anche i
-ventuno `insert` sugli esiti, e chi esegue vede un errore Postgres al posto della
-griglia. Nessuno dei ventidue casi avrebbe potuto riportare un esito.
+1. **`chiave` non è una colonna.** La pulizia filtrava
+   `private.rate_limit_buckets.chiave`; la tabella ha `scope`, `subject`,
+   `window_started_at`, `window_seconds`, `request_count`, `expires_at`. Ora usa
+   `subject in (…)`, la forma della 7b (righe 591 e 622).
+2. **`now()` è costante in una transazione.** La griglia inserisce la riga
+   fixture di `packaging_options` — che prende `valida_da = now()` — e poi la
+   scade con `valida_fino = now()` nella stessa transazione, dove `now()` non si
+   muove. `packaging_options_finestra` è `CHECK (valida_fino > valida_da)`, un `>`
+   stretto: `23514`. Ora la seconda scadenza usa `clock_timestamp()`. La prima non
+   ha il problema, perché colpisce la riga di produzione.
+3. **Cambiare ruolo non è diventare `service_role`.**
+   `set_config('role','postgres')` cambia il ruolo del database ma non ripulisce
+   `request.jwt.claims`, quindi `auth.uid()` restava il venditore e la porta di
+   back-office di `ordine_contestazione_risolvi` lo respingeva con `42501` —
+   correttamente. Ora quei due punti usano `pg_temp.impersona_7c('postgres', null)`,
+   l'helper che la griglia aveva già e non aveva mai chiamato con `null`.
+4. **Un vincolo differito non si inganna cancellando.**
+   `orders_contestazione_ha_pratica` è un constraint trigger `deferrable initially
+   deferred`: la verifica accodata da `ordine_contestazione_apri` scatta al COMMIT,
+   quando la pulizia ha già cancellato i fascicoli — `P0001`. E l'ordine A resta
+   contestato **per progetto**, perché è ciò che il caso 19 prova, quindi la
+   griglia non poteva committare in nessuno scenario, nemmeno con tutti i casi a
+   `PASSA`. Ora la pulizia comincia con `set constraints all immediate`, che drena
+   la coda dove l'invariante vale ancora.
+
+Il difetto 2 **c'era anche nella griglia 7b**, alla riga 302, su
+`marketplace_config` — che ha il vincolo identico. Corretto allo stesso modo. Sono
+le due sole tabelle del progetto con quella forma di vincolo.
+
+Il gestore `exception when others` **non** è stato aggiunto: sarebbe un cambio di
+comportamento, non una correzione, e va deciso a parte.
 
 Questo è il motivo per cui «leggere il file e riportare l'atteso dichiarato in
 intestazione» non è una verifica: l'intestazione prometteva 22 `PASSA` da un file
 che non arrivava alla prima riga di risultato.
 
-Il filtro ora è `subject in ('user:' || uid, …)`, la forma della 7b.
-`private.rate_limit_consume` riceve esattamente `'user:' || uid::text` senza
-suffisso, quindi il confronto per valore è corretto e il `like` non serviva.
-Il gestore d'eccezione mancante **non** è stato aggiunto: sarebbe un cambio di
-comportamento, non una correzione, e va deciso a parte.
+## Esiti verificati sul progetto reale
 
-## Esiti statici verificati sul progetto reale
+### Griglia 7c — eseguita il 5 agosto 2026: **21 PASSA, 1 FALLISCE**
 
-Le griglie 7, 7b e 7c non sono mai state eseguite. Le loro parti **statiche** —
-quelle che interrogano solo `information_schema` e vivono fuori dal blocco delle
-fixture — non hanno però bisogno di fixture, e il 5 agosto 2026 sono state
-eseguite sul progetto `pijnmcllmfgjmgsvtcej`:
+Esito riga per riga in
+[`docs/PHASE_7E_DEBT_CLOSURE.md`](../../docs/PHASE_7E_DEBT_CLOSURE.md), sezione 3,
+con il valore misurato di ogni caso. Residui verificati a zero.
 
-| Griglia | Caso | Misurato | Esito |
-| --- | --- | --- | --- |
-| 7b | 18 — nessuna coordinata di incasso o configurazione grezza leggibile dai client | `privilegi trovati 0` | **PASSA** |
-| 7c | 22 — nessuna colonna privata o porta di scrittura aperta ai ruoli client | `privilegi trovati 0` | **PASSA** |
+**Il caso 20 FALLISCE, e non per colpa della prova.**
+`ordine_contestazione_risolvi` non funziona per gli esiti `respinta` e `risolta`:
+`20260804160000_phase_7c_delivery_packaging.sql:1125` assegna a due colonne enum
+il risultato di un `case` fra letterali, che si risolve a `text`, e da `text` a un
+enum non esiste cast implicito — `42804`. Il ramo `rimborsata` esce prima di
+quell'`update` e funziona, ed è ciò che rende il difetto invisibile a un controllo
+superficiale.
 
-Questi due sono casi veri, eseguiti con il testo del file. Sono gli **unici** due
-esiti di griglia verificati che questo repository possiede.
+La conseguenza è quella che il commento sopra a quell'`update` dichiara di voler
+evitare: una contestazione non può essere chiusa a favore del venditore, quindi
+`contestato_at` resta acceso e i suoi fondi restano `bloccato` per sempre.
+**Correzione fuori dal perimetro della Fase 7e**: la migrazione è a ledger, quindi
+serve un file nuovo.
 
-Per i casi 22 e 23 della 7b è stata verificata la sola **precondizione**
+### Griglia 7b — solo il caso 18, statico
+
+| Caso | Misurato | Esito |
+| --- | --- | --- |
+| 18 — nessuna coordinata di incasso o configurazione grezza leggibile dai client | `privilegi trovati 0` | **PASSA** |
+
+Verificata a parte la sola **precondizione** dei casi 22 e 23
 (`payments.fee_stripe_reale_cents`, `payments.fee_riconciliata_at` e la vista
 `order_margine_riconciliazione` non hanno alcun privilegio verso `anon` o
-`authenticated`: zero in tutti e tre i casi). Non è l'esito dei casi: quelli
-impersonano il compratore dell'ordine e pretendono un `permission denied` vero,
-quindi richiedono le fixture. Assenza di grant implica il rifiuto, ma le due
-prove non sono la stessa.
+`authenticated`: zero in tutti e tre). Non è l'esito di quei casi, che impersonano
+il compratore e pretendono un `permission denied` vero. L'assenza di grant implica
+il rifiuto, ma le due prove non sono la stessa.
 
-Tutti gli altri casi delle tre griglie **restano senza esito verificato**.
+**I casi 1-17 e 19-23 della 7b restano senza esito**, e con loro i 16 casi della
+griglia della Fase 7: le fixture della 7b toccano `payouts` e
+`seller_payout_accounts`, ed è un'autorizzazione distinta da quella concessa per
+la 7c.
