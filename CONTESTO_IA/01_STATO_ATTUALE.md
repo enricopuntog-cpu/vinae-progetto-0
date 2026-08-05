@@ -1,15 +1,15 @@
 # Stato attuale verificato
 
-Fotografia del **5 agosto 2026**, al merge della PR #22.
+Fotografia del **5 agosto 2026**, al merge della PR #24.
 
 ## Repository
 
 | Voce | Valore |
 | --- | --- |
 | Repository GitHub | [`enricopuntog-cpu/vinae-progetto-0`](https://github.com/enricopuntog-cpu/vinae-progetto-0) |
-| `origin/main` prima di questo merge | `471b529` — merge squash della PR #21, Fase 7c integrata |
-| Stati precedenti di `main` | `1782a1a` (PR #20, documentazione), `5e6b8e4` (PR #19, Fase 7b), `2a47952` (PR #18, Fase 7) |
-| Branch di questa PR | `migration/phase-7d-decisioni-economiche`, creato da `origin/main` @ `471b529` |
+| `origin/main` prima di questo merge | `306952f` — merge squash della PR #22, Fase 7d integrata |
+| Stati precedenti di `main` | `471b529` (PR #21, Fase 7c), `1782a1a` (PR #20, documentazione), `5e6b8e4` (PR #19, Fase 7b), `2a47952` (PR #18, Fase 7) |
+| Branch di questa PR | `docs/architettura-fase-7-distribuita`, nato da `1782a1a` e riallineato a `main` con un merge, non con un rebase |
 | Ultima fase integrata in `main` | Fase 7d — sola documentazione, nessuno SQL |
 | PR della 6d-1 | [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) — merged |
 | PR di riconciliazione | [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) — merged |
@@ -18,8 +18,9 @@ Fotografia del **5 agosto 2026**, al merge della PR #22.
 | PR della Fase 7 | [#18](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/18) — merged il 3 agosto 2026, squash `2a47952` |
 | PR della Fase 7b | [#19](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/19) — merged il 4 agosto 2026, squash `5e6b8e4` |
 | PR della Fase 7c | [#21](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/21) — merged il 4 agosto 2026, squash `471b529` |
-| PR della Fase 7d | [#22](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/22) — questa, sola documentazione |
-| PR ancora aperte al momento di questo merge | [#23](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/23) Fase 7e e [#24](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/24) correzione di `ARCHITECTURE.md` |
+| PR della Fase 7d | [#22](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/22) — merged il 5 agosto 2026, squash `306952f` |
+| PR di questa correzione | [#24](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/24) — una riga di `docs/ARCHITECTURE.md` |
+| PR ancora aperta al momento di questo merge | [#23](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/23), Fase 7e |
 
 Da questa PR in avanti il merge su `main` non richiede più il click manuale del
 committente: è autorizzato in sessione, **solo in squash**, e ogni PR deve portare

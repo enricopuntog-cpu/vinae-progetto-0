@@ -14,10 +14,15 @@ destinazione, le Fasi 7, 7b e 7c aggiungono questo percorso, **distribuito sul
 progetto Supabase reale ma mai percorso**. Le tre migrazioni sono a ledger —
 `20260731135455 phase_7_order_payment_service`,
 `20260803150000 phase_7b_stripe_connect_marketplace` e
-`20260804160000 phase_7c_delivery_packaging`, che è la diciottesima e ultima voce
-del registro — e le tre Edge Function `payments-checkout`, `connect-onboarding` e
+`20260804160000 phase_7c_delivery_packaging`, che è la diciottesima voce del
+registro — e le tre Edge Function `payments-checkout`, `connect-onboarding` e
 `payouts-release` sono `ACTIVE`. A distribuirle è l'integrazione GitHub di
 Supabase al merge su `main`, non un `supabase db push`.
+
+Il registro ha una diciannovesima voce, `20260805160250
+phase_7f_fix_contestazione_enum_cast`, che non appartiene a questo percorso ma lo
+corregge: è la sola migrazione del progetto applicata per via diretta e non dal
+merge, e il suo file entra in `main` con la PR della Fase 7f.
 
 Distribuito non vuol dire percorso: le tabelle di denaro sono a **zero righe**
 — `orders`, `payments`, `payouts`, `disputes`, `order_events` e
