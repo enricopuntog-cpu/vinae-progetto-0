@@ -511,9 +511,11 @@ begin
     'errore "già stato recensito"', 'già stato recensito', v_sqlstate, v_msg);
 
   -- Pulizia
+  -- La colonna è `subject`, come nella griglia 7b: `chiave` non esiste e questa
+  -- riga rendeva la griglia ineseguibile. `private.rate_limit_consume` riceve
+  -- esattamente 'user:' || uid, senza suffisso, quindi il confronto è per valore.
   delete from private.rate_limit_buckets
-  where chiave like 'user:' || v_seller::text || '%'
-     or chiave like 'user:' || v_buyer::text || '%';
+  where subject in ('user:' || v_seller::text, 'user:' || v_buyer::text);
   delete from public.payment_provider_events where event_id like 'evt_7c_%';
   delete from public.order_reviews where order_id in (
     select id from public.orders where buyer_id = v_buyer);
