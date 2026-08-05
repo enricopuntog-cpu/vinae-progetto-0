@@ -472,7 +472,7 @@ Supabase al merge, non un'autorizzazione. Il contenuto applicato è quello a net
 garantito. Restano fuori, come gate separati e nessuno autorizzato:
 esecuzione della griglia
 [`supabase/tests/7b_connect_marketplace.sql`](../supabase/tests/7b_connect_marketplace.sql)
-(18 casi, mai eseguita), e la schedulazione reale del job — che richiede
+(23 casi, mai eseguita), e la schedulazione reale del job — che richiede
 `pg_cron` e `pg_net` configurati sul progetto ed è registrata come blocco
 commentato in fondo alla migrazione. `PAYMENTS_ENABLED=false` resta il gate
 server-side: nessuna chiamata Stripe è stata effettuata, nemmeno in test mode.
