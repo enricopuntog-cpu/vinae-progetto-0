@@ -10,11 +10,21 @@ attendibile per identità, ruoli, prezzi o stato di un ordine.
 ## Componenti
 
 Lo stack servito (`frontend/` + FastAPI) resta invariato. Per lo stack di
-destinazione, Fase 7 aggiunge questo percorso, distribuito sul progetto Supabase
-reale ma mai percorso — `20260731135455 phase_7_order_payment_service` è a
-ledger e `payments-checkout` è `ACTIVE`, ma le tabelle di denaro sono a zero
-righe, nessun percorso UI raggiunge il checkout e `PAYMENTS_ENABLED` resta
-`false`. Dettaglio in [`ROADMAP_V1.md`](ROADMAP_V1.md), sezione «Distribuita non
+destinazione, le Fasi 7, 7b e 7c aggiungono questo percorso, **distribuito sul
+progetto Supabase reale ma mai percorso**. Le tre migrazioni sono a ledger —
+`20260731135455 phase_7_order_payment_service`,
+`20260803150000 phase_7b_stripe_connect_marketplace` e
+`20260804160000 phase_7c_delivery_packaging`, che è la diciottesima e ultima voce
+del registro — e le tre Edge Function `payments-checkout`, `connect-onboarding` e
+`payouts-release` sono `ACTIVE`. A distribuirle è l'integrazione GitHub di
+Supabase al merge su `main`, non un `supabase db push`.
+
+Distribuito non vuol dire percorso: le tabelle di denaro sono a **zero righe**
+— `orders`, `payments`, `payouts`, `disputes`, `order_events` e
+`payment_provider_events`, riverificate il 5 agosto 2026 — nessun percorso UI
+raggiunge onboarding, checkout, conferma o contestazione, `PAYMENTS_ENABLED`
+resta `false` e nessuna chiamata a Stripe è mai stata fatta, nemmeno in test
+mode. Dettaglio in [`ROADMAP_V1.md`](ROADMAP_V1.md), sezione «Distribuita non
 vuol dire percorsa»:
 
 ```text
