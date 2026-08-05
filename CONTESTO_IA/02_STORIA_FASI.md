@@ -1,10 +1,15 @@
 # Storia fase per fase
 
-Le date e gli stati delle PR sono stati verificati su GitHub il 4 agosto
+Le date e gli stati delle PR sono stati verificati su GitHub il 5 agosto
 2026. “Integrata” significa presente in `main`; “sul branch” significa che il
-lavoro esiste ma non è ancora parte di `main`. Per le fasi 7 e 7b “integrata”
-non significa applicata a un database: le migrazioni sono merged e non eseguite
-sul progetto reale.
+lavoro esiste ma non è ancora parte di `main`.
+
+**Su questo progetto “integrata” significa anche “distribuita”**, e la versione
+precedente di questa nota diceva il contrario: l'integrazione GitHub di Supabase
+applica migrazioni ed Edge Function al merge su `main`, da sola, senza
+`supabase db push` né `apply_migration`. Le migrazioni delle fasi 7, 7b e 7c
+sono a ledger sul progetto reale. La distinzione utile non è fra integrato e
+applicato, ma fra **distribuito e percorso**.
 
 ## Fondazione tecnica
 
@@ -394,6 +399,110 @@ pushato almeno una volta non si modifica più in place. Il branch di anteprima c
 Supabase crea per ogni PR aveva eseguito la prima bozza della migrazione
 all'apertura della #19 e non ha mai ripreso la riscrittura successiva, perché
 confronta la versione e non il contenuto.
+
+### Fase 7c — consegna, tracking e selezione imballaggio
+
+**Stato:** integrata il 4 agosto 2026
+
+**Branch:** `migration/phase-7c-delivery-packaging`
+
+**PR:** [#21 — Fase 7c — consegna, tracking e selezione imballaggio (provider finto)](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/21) — merged con squash `471b529`
+
+Consegnato:
+
+- migrazione additiva `20260804160000_phase_7c_delivery_packaging.sql`:
+  `packaging_options` versionata su `valida_da`/`valida_fino`, `tracking_events`,
+  `order_reviews`, `disputes`, colonne di consegna e contestazione su `orders`,
+  seconda colonna generata `addebito_totale_cents`, sette RPC fra cui
+  `ordine_segna_spedito`, `ordine_segna_consegnato`, `ordine_contesta`,
+  `ordine_contestazione_risolvi` e `ordine_recensisci`;
+- percorsi UI reali per dettaglio ordine, preparazione, spedizione, consegna
+  dichiarata, conferma di ricezione, contestazione e recensione sotto
+  `frontend-next/src/app/ordine/[id]/`, `/acquisti` e `/vendite`;
+- griglia `supabase/tests/7c_consegna_imballaggio.sql`, 22 casi;
+- `MIN_TESTS` alzata a 123.
+
+Vincolo di denaro rispettato: `orders.totale_cents` resta la colonna generata
+`prezzo + commissione` e non è stata toccata; l'imballaggio entra in
+`addebito_totale_cents`, che è l'importo di `payments.amount_cents`.
+
+Due cose vanno sapute di questa fase e non si leggono dal solo stato «merged».
+
+**La Parte B viola la regola «nessuna funzionalità nuova durante la
+migrazione».** La deviazione è stata autorizzata dal committente nel prompt di
+apertura ed è registrata nella sezione 0 del documento di design. Non è un
+precedente: resta una deroga puntuale e dichiarata.
+
+**Nessun motore Postgres ha eseguito quello SQL prima del progetto reale.** Il
+controllo `Supabase Preview` della PR #21 è `SKIPPED`: il bot ha valutato il
+diff sei secondi dopo l'apertura della PR, diciannove minuti prima che esistesse
+il commit con la migrazione, e non ha rivalutato. Il primo motore a eseguire quel
+testo è stato quello di produzione. La lacuna è stata chiusa per effetto
+collaterale dalla PR #23, il cui diff tocca `supabase/` e ha quindi ottenuto un
+branch di anteprima con `Supabase Preview` a `SUCCESS`.
+
+### Fase 7d — decisioni economiche aperte
+
+**Stato:** integrata il 5 agosto 2026 — **sola documentazione, nessuno SQL**
+
+**Branch:** `migration/phase-7d-decisioni-economiche`
+
+**PR:** [#22 — Fase 7d — decisioni economiche aperte: auto-rilascio, fee reale, spedizione e protezione (solo design)](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/22)
+
+Due file in tutto: il documento di design
+`docs/superpowers/plans/2026-08-05-phase-7d-decisioni-economiche.md` e
+`CHANGES.log`. Nessuna migrazione, nessuna riga dei tre stack applicativi,
+nessuna estensione Postgres abilitata, nessuna chiamata Stripe.
+
+Consegnato in due tempi: la prima sessione ha scritto il design delle tre
+decisioni con opzioni, trade-off e raccomandazione motivata; la seconda ha
+registrato l'esito della sessione organizzativa del 5 agosto 2026 e ha aggiunto
+l'addendum di progetto per il tetto ai tentativi.
+
+**Decise:**
+
+- **1a** — l'auto-rilascio lo chiama uno **scheduler esterno via GitHub
+  Actions**, non `pg_cron`. Tre ragioni: `pg_cron` metterebbe service role key e
+  job token in chiaro in `cron.job`; `pg_net` è fire-and-forget, quindi
+  `cron.job_run_details` registra `succeeded` anche su `401`/`503`/`502`; la
+  puntualità non serve su una finestra di 14 giorni. La variante ibrida è stata
+  considerata e respinta perché non elimina lo scheduler esterno, ne aggiunge uno.
+  Con 1a è **decaduta** 1b: nessuna estensione da abilitare, quindi nessuna
+  autorizzazione separata da chiedere.
+- **1e** — lo scheduler si accende e si verifica **prima** di
+  `PAYMENTS_ENABLED`, mai dopo. Era la sola difesa a costo zero contro il backlog
+  storico, e valeva solo se presa prima.
+- **3a** — la voce «protezione» (3%) **si toglie** dal modello Supabase; in
+  `frontend/` resta invariata fino al cutover di Fase 11. Misurata con la formula
+  esatta: al 3% è 0,59–0,60× il margine netto che la 7b già trattiene a ogni
+  punto di prezzo, e sommarle porterebbe il rincaro sul compratore al 9,6–12,2%.
+  Nel percorso Stripe reale di `frontend/` le due voci non sono **mai** state
+  addebitate, quindi non è un debito di parità funzionale.
+
+**Design approvato, schema non scritto:**
+
+- **2c** — tetto ai tentativi di riconciliazione della fee reale: opzione A,
+  colonne contatore su `payments` sul modello di `payouts.tentativi`, con tetto a
+  5 tentativi. È la sola parte della 7d che richiede schema nuovo e **non è
+  stata implementata**. Vincolo verificato che accompagna la decisione: il
+  marcatore «riconciliazione fallita» non deve essere un valore nuovo di
+  `public.payment_stato`, perché `payout_prepara`, `ordine_auto_rilascio_esegui`
+  e `conferma_ricezione` filtrano tutti su `stato = 'paid'` e un valore nuovo
+  congelerebbe i fondi del venditore.
+
+**Ancora aperta:**
+
+- **3e** — se il partner logistico fatturerà un importo unico per modalità o due
+  importi separati. È una **domanda commerciale**, in attesa di risposta: da essa
+  dipende se serva `spedizione_cents` o se basti prezzare `packaging_options`, e
+  nessuna azione tecnica è possibile prima.
+
+Tre misure nuove prodotte da questa fase e non presenti altrove: il rapporto
+protezione/margine costante a 0,59–0,60×; la **non monotonia** del totale nel
+modello legacy, dove 500 € costano al compratore 10,97 € in meno di 499 € per la
+soglia «gratis sopra 500 €»; e il fatto che con un metodo di pagamento al 2,9% +
+0,30 € il margine «garantito» al 5% diventa il 3,5% reale — se ne va il 30% e la
+formula continua a dichiarare 500 bps.
 
 ## Fasi future
 
