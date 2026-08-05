@@ -579,6 +579,72 @@ Conteggio dei casi risolto in questa fase: la griglia 7b ha **23** casi e non 18
 — `docs/MIGRATION_PHASE_1_BACKLOG.md` diceva 18 ed è stato corretto — e la 7c ne
 ha **22**. In entrambe la riga 99 è una sentinella d'errore e non un caso.
 
+### Fase 7f — `ordine_contestazione_risolvi`: i letterali di stato non arrivavano all'enum
+
+**Stato:** integrata il 5 agosto 2026
+
+**Branch:** `migration/phase-7f-fix-contestazione-payout`
+
+**PR:** [#25 — Fase 7f](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/25)
+
+È la fase che ha chiuso un **rischio economico reale**, non un difetto cosmetico.
+
+**Il difetto.** `20260804160000_phase_7c_delivery_packaging.sql:1125` assegnava a
+`orders.stato` e `orders.payout_stato` — due enum — il risultato di un `case` fra
+due letterali. Un letterale isolato ha tipo `unknown` e si lascia coercire dalla
+colonna di destinazione; un `case` fra due letterali si risolve a **`text`**, e da
+`text` a un enum non esiste conversione implicita:
+`42804: column "stato" is of type public.order_stato but expression is of type text`.
+Sono i due soli siti di quella forma in tutte le migrazioni del progetto.
+
+**La conseguenza.** L'unico codice che azzera `contestato_at` è quello che non
+compilava, e su quel flag filtrano `ordine_auto_rilascio_esegui`, `payout_coda` e
+`payout_prepara`. Quindi **nessuna contestazione poteva essere chiusa a favore del
+venditore**: l'ordine restava fuori da ogni rilascio e la riga di `public.payouts`
+restava a `bloccato` senza uscita — né la conferma del compratore né l'auto-rilascio
+potevano più sbloccarla. Il venditore aveva ragione nella controversia e non veniva
+pagato. Era esattamente ciò che il commento della 7c sopra a quell'`update`
+dichiarava di voler evitare.
+
+**Perché nessuno l'aveva visto.** Il ramo `rimborsata` esce prima di quell'`update`,
+quindi la funzione funzionava per un esito su tre. Il difetto è stato trovato dal
+**caso 20 della griglia 7c alla sua prima esecuzione reale**, nella Fase 7e: quel
+caso esisteva per proteggere questa precisa invariante, e l'ha fatto.
+
+**Nessun ordine reale è stato colpito**: le tabelle di denaro sono a zero righe. Il
+difetto era latente, non realizzato.
+
+**La correzione** è `20260805160250_phase_7f_fix_contestazione_enum_cast.sql`, un
+file **nuovo** e non una modifica della 7c, che è a ledger. Il diff effettivo sono
+quattro cast espliciti su **entrambi** i rami di ogni `case`, con i nomi dei due
+enum letti da `pg_type` e non assunti, e le quattro etichette verificate. Nient'altro
+cambia: né firma, né `security definer`, né `search_path`, né permessi, né semantica.
+
+**Verifica.** Griglia 7c rieseguita per intero sul progetto reale: **22 PASSA, 0
+FALLISCE**, nessuna riga 99, residui a zero su 26 controlli. Il caso 20 misura ora
+`stato=consegnato payout=trattenuto flag_nullo=t` dove nella 7e misurava
+`stato=contestato payout=bloccato flag_nullo=f`. Il caso 19 continua a passare,
+quindi il ramo che funzionava non è stato rotto. Esito riga per riga in
+[`../docs/PHASE_7F_FIX_VERIFICATION.md`](../docs/PHASE_7F_FIX_VERIFICATION.md).
+
+**Due cose di metodo che questa fase lascia.**
+
+La prima: questa migrazione è **l'unica del progetto applicata per via diretta e
+non dal merge**, quindi è anche la sola per cui il riallineamento del filename alla
+versione assegnata dal server serve davvero. Nasceva `20260805120000_…` ed è stata
+rinominata `20260805160250_…` mentre il file non era ancora stato pushato: la regola
+11 non era in gioco, la regola 10 sì.
+
+La seconda: **il gestore `exception when others` della 7b non conserva gli esiti già
+registrati**, ed era ciò per cui lo si voleva. Un blocco PL/pgSQL con clausola
+`exception` è una sottotransazione, quindi catturare l'errore annulla tutto ciò che
+il blocco ha scritto, la tabella degli esiti compresa. Misurato con due sonde su sole
+tabelle temporanee: forma 7b → 1 riga superstite, la sola sentinella 99; guardia
+dentro il caso → 4 su 4. L'impalcatura della griglia 7c è quindi in due parti —
+tredici guardie per singolo caso che fanno il lavoro vero, e la rete esterna che
+copre allestimento e pulizia. La griglia 7b ha lo stesso limite e **non è stata
+toccata**: è un'autorizzazione separata.
+
 ## Fasi future
 
 ### Fase 8 — messaggi e notifiche

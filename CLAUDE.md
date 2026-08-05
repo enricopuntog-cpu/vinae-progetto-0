@@ -95,6 +95,16 @@ changes — it compares the version, not the content. Editing in place therefore
 environment silently out of sync with the file, with nobody watching. The episode that produced
 this rule is recorded in `CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md`.
 
+**Never assign a bare `case` to an enum column.** A lone literal is `unknown` and coerces to the
+destination column's type; a `case` between two literals resolves to **`text`**, and text→enum has
+no implicit cast, so the statement fails to compile with `42804`. Cast **both** branches
+(`'consegnato'::public.order_stato`), not just the first — then the `case` is the enum by
+construction rather than by a resolution rule one extra literal could move again. Read the enum's
+exact name from `pg_type` instead of assuming it, and check the labels exist: a cast to a
+non-existent label is a `22P02` at runtime, the same defect moved. Phase 7c shipped this bug into
+production in `ordine_contestazione_risolvi`, where it meant no dispute could ever be closed in the
+seller's favour and their funds stayed frozen — `docs/PHASE_7F_FIX_VERIFICATION.md`.
+
 CI (`.github/workflows/ci.yml`) runs three independent jobs — `frontend`, `frontend-next`,
 `backend` — each in its own working directory. All must pass before merge to `main`.
 

@@ -63,6 +63,25 @@ CONTESTO_IA/    handoff sintetico per nuove IA/chat
     (commissione 5% piatta) e non ha mai ripreso la riscrittura a netto
     garantito.
 
+## Regole di tipo che hanno già rotto il denaro una volta
+
+- **Mai assegnare un `case` nudo a una colonna enum.** Un letterale isolato ha tipo
+  `unknown` e si lascia coercire dalla colonna di destinazione; un `case` fra due
+  letterali si risolve a **`text`**, e da `text` a un enum non esiste conversione
+  implicita: l'istruzione non compila e solleva `42804`. Il cast va su **entrambi** i
+  rami di ogni `case`, non solo sul primo, così il tipo è l'enum per costruzione e non
+  per una regola di risoluzione che un letterale in più potrebbe spostare di nuovo.
+- **Il nome dell'enum si legge da `pg_type`, non si assume**, e si verifica che le
+  etichette esistano: un cast verso un'etichetta inesistente è un `22P02` a runtime,
+  cioè lo stesso difetto spostato.
+- Perché è una regola e non un consiglio: la Fase 7c ha portato in produzione
+  esattamente questo errore in `ordine_contestazione_risolvi`, e la conseguenza era
+  che **nessuna contestazione poteva chiudersi a favore del venditore e i suoi fondi
+  restavano bloccati per sempre**. Corretto dalla Fase 7f — vedi
+  [`../docs/PHASE_7F_FIX_VERIFICATION.md`](../docs/PHASE_7F_FIX_VERIFICATION.md).
+- Il difetto era invisibile a lettura e a chiamata parziale, perché un ramo su tre
+  usciva prima di quell'`update`. L'ha trovato una griglia eseguita, non una revisione.
+
 ## Confini di fiducia
 
 - Il frontend non assegna ruoli, non conferma pagamenti e non decide prezzo,

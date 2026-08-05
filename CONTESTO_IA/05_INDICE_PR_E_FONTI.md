@@ -27,7 +27,8 @@
 | [#21](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/21) | 04-08-2026 | merged | Fase 7c — consegna, tracking e imballaggio; squash `471b529`; `Supabase Preview` `SKIPPED` |
 | [#22](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/22) | 05-08-2026 | merged | Fase 7d — decisioni economiche, sola documentazione: 1a, 1e, 3a decise; 2c approvata in design; 3e aperta; squash `306952f` |
 | [#24](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/24) | 05-08-2026 | merged | `docs/ARCHITECTURE.md`: il percorso di pagamento è distribuito, non «ancora non distribuito»; squash `d8503af` |
-| [#23](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/23) | 05-08-2026 | merged | Fase 7e — chiusura debiti 7b/7c: griglia 7c eseguita 21/1, smoke Storage `cantina` chiuso, `Supabase Preview` `SUCCESS` |
+| [#23](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/23) | 05-08-2026 | merged | Fase 7e — chiusura debiti 7b/7c: griglia 7c eseguita 21/1, smoke Storage `cantina` chiuso, `Supabase Preview` `SUCCESS`; squash `6b5b219` |
+| [#25](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/25) | 05-08-2026 | merged | Fase 7f — `ordine_contestazione_risolvi`: cast dei letterali all'enum, griglia 7c rieseguita 22/0, residui zero |
 
 ## Anomalie della cronologia da conoscere
 
@@ -140,6 +141,7 @@ delle regole di migrazione.
 | [`../docs/PHASE_7_VERIFICATION.md`](../docs/PHASE_7_VERIFICATION.md) | Verifiche locali e gate remoti della Fase 7 |
 | [`../docs/superpowers/plans/2026-08-05-phase-7d-decisioni-economiche.md`](../docs/superpowers/plans/2026-08-05-phase-7d-decisioni-economiche.md) | Decisioni economiche della 7d: auto-rilascio, fee reale, spedizione e protezione, con l'esito della sessione organizzativa in testa |
 | [`../docs/PHASE_7E_DEBT_CLOSURE.md`](../docs/PHASE_7E_DEBT_CLOSURE.md) | Rapporto della 7e: i quattro difetti della griglia 7c, l'esito riga per riga dell'esecuzione reale con i valori misurati, i dieci passi dello smoke Storage, i residui |
+| [`../docs/PHASE_7F_FIX_VERIFICATION.md`](../docs/PHASE_7F_FIX_VERIFICATION.md) | Rapporto della 7f: il difetto `42804`, la sua conseguenza sui fondi del venditore, la correzione, la griglia 7c rieseguita 22/0 riga per riga, i 26 controlli sui residui, e come funziona davvero l'impalcatura della griglia |
 | [`../supabase/repair/README.md`](../supabase/repair/README.md) | Riparazione del ledger delle migrazioni e replay misurato |
 | [`../supabase/tests/README.md`](../supabase/tests/README.md) | Ordine e scopo dei test SQL |
 | [`../frontend-next/src/services/types.ts`](../frontend-next/src/services/types.ts) | Contratti dei servizi target |
