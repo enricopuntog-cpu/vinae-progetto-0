@@ -504,6 +504,81 @@ soglia «gratis sopra 500 €»; e il fatto che con un metodo di pagamento al 2,
 0,30 € il margine «garantito» al 5% diventa il 3,5% reale — se ne va il 30% e la
 formula continua a dichiarare 500 bps.
 
+### Fase 7e — chiusura dei debiti 7b/7c
+
+**Stato:** integrata il 5 agosto 2026 — **nessuna migrazione scritta né applicata**
+
+**Branch:** `migration/phase-7e-chiusura-debiti`
+
+**PR:** [#23 — Fase 7e — chiusura debiti 7b/7c: la griglia 7c non era eseguibile](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/23)
+
+Sei file: le due griglie `7c_consegna_imballaggio.sql` e
+`7b_connect_marketplace.sql`, `supabase/tests/README.md`,
+`docs/MIGRATION_PHASE_1_BACKLOG.md`, il rapporto
+`docs/PHASE_7E_DEBT_CLOSURE.md` e `CHANGES.log`. Nessuna riga dei tre stack
+applicativi, nessuna chiamata Stripe.
+
+**Il risultato che conta: la griglia 7c non era eseguibile, e i quattro difetti
+che la bloccavano non si vedevano leggendo il file.** Una griglia versionata e
+mai eseguita non è una prova; è un documento che somiglia a una prova.
+
+1. La pulizia filtrava su `private.rate_limit_buckets.chiave`, colonna
+   inesistente: la tabella ha `scope`, `subject`, `window_started_at`,
+   `window_seconds`, `request_count`, `expires_at`.
+2. La riga fixture di `packaging_options` veniva inserita e scaduta nella stessa
+   transazione con `now()`, che dentro una transazione è **costante**: quindi
+   `valida_fino = valida_da`, che viola `packaging_options_finestra` perché è un
+   `>` stretto. Corretto con `clock_timestamp()`.
+3. `set_config('role','postgres')` non ripulisce `request.jwt.claims`: `auth.uid()`
+   restava il venditore, e la porta di back-office di
+   `ordine_contestazione_risolvi` respingeva con 42501. Corretto usando
+   `pg_temp.impersona_7c('postgres', null)`, un helper che la griglia aveva già e
+   non aveva mai chiamato con `null`.
+4. `orders_contestazione_ha_pratica` è `deferrable initially deferred`, quindi la
+   sua verifica scatta al COMMIT, quando la pulizia ha già cancellato i fascicoli.
+   La griglia **non poteva committare in nessuno scenario**, nemmeno con tutti i
+   casi a PASSA. Corretto con `set constraints all immediate` in testa alla pulizia.
+
+Il difetto 2 esisteva **anche nella griglia 7b**, su `marketplace_config`: stesso
+vincolo, si sarebbe fermata al caso 6. `marketplace_config` e `packaging_options`
+sono le due sole tabelle del progetto con quella forma di vincolo, verificato su
+`pg_constraint`.
+
+**Esecuzione reale del 5 agosto 2026: 21 PASSA, 1 FALLISCE**, esito riga per riga
+con i valori misurati nel rapporto di fase. Residui a zero.
+
+**Il caso 20 fallisce per un difetto della migrazione 7c, non della prova**, e ha
+una conseguenza economica: `ordine_contestazione_risolvi` assegna a due colonne
+enum il risultato di un `case` fra due letterali, che si risolve a `text` e non ha
+conversione implicita verso l'enum. `42804`. Nessuna contestazione poteva chiudersi
+a favore del venditore, e i suoi fondi restavano bloccati per sempre. Il caso 20
+esisteva per proteggere quella precisa invariante, e l'ha fatto alla prima
+esecuzione. La correzione appartiene alla Fase 7f: la 7c è a ledger e si corregge
+con un file nuovo.
+
+**La 7c ha finalmente girato su un Postgres di anteprima**, per effetto collaterale
+e non per progetto: il diff di questa PR tocca un file sotto `supabase/`, quindi il
+bot Supabase ha aperto un branch di anteprima e `Supabase Preview` è `SUCCESS` —
+le tre migrazioni hanno girato da zero e in ordine di versione su un motore che le
+vedeva per la prima volta. Chiude la lacuna aperta dalla PR #21.
+
+**Lo smoke Storage `cantina` della 6d-2a è chiuso**, dopo tre tentativi mai andati
+a segno nelle fasi precedenti. Dieci passi, tutti con l'esito atteso: upload
+propria cartella 200, upload altrui nella stessa cartella 400, lettura propria 200,
+lettura altrui 400, lettura anonima 400, signed URL 200 e suo fetch senza JWT 200,
+cancellazione 200. Senza `service_role` e senza SMTP proprio. La via d'uscita non
+è stata l'API Auth ma la creazione dell'utente in SQL diretto, che non spedisce
+email e quindi non incontra il limite SMTP che aveva prodotto il 429: la procedura,
+con le due scoperte non ovvie che l'hanno resa possibile, è in
+[`04_HANDOFF_NUOVA_IA.md`](04_HANDOFF_NUOVA_IA.md).
+
+La **griglia** 6d-2a resta invece non eseguita: lo smoke è chiuso, i suoi 18 casi
+no.
+
+Conteggio dei casi risolto in questa fase: la griglia 7b ha **23** casi e non 18
+— `docs/MIGRATION_PHASE_1_BACKLOG.md` diceva 18 ed è stato corretto — e la 7c ne
+ha **22**. In entrambe la riga 99 è una sentinella d'errore e non un caso.
+
 ## Fasi future
 
 ### Fase 8 — messaggi e notifiche

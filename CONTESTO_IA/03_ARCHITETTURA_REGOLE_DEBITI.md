@@ -46,7 +46,10 @@ CONTESTO_IA/    handoff sintetico per nuove IA/chat
 8. Le migrazioni sul progetto Supabase reale richiedono revisione dell'SQL e
    conferma esplicita in sessione prima di `supabase db push` o equivalenti.
 9. I test remoti che inseriscono o cancellano fixture richiedono una conferma
-   esplicita separata dall'approvazione al deploy.
+   esplicita separata dall'approvazione al deploy. L'autorizzazione è **per
+   griglia e non per progetto**: quella concessa per la 7c non copre la 7b. La
+   pulizia va garantita anche sul percorso d'errore, e i residui vanno riletti e
+   riportati dopo l'esecuzione, non dichiarati.
 10. Dopo `apply_migration` via API/MCP, allineare il file locale alla versione
     assegnata dal server e verificare la migration history.
 11. Un file di migrazione già pushato almeno una volta non si modifica più in
@@ -186,7 +189,12 @@ successive possono costruire.
   `listing_crea`; resta da sorvegliare la moderazione della provenienza;
 - automazione delle prove remote 33/33 e 11/11, oggi eseguite manualmente;
 - automazione dei test Supabase in CI con database effimero: nessun job copre
-  ancora `supabase/**`, e le griglie SQL si eseguono a mano;
+  ancora `supabase/**`, e le griglie SQL si eseguono a mano. **La 7e ha misurato
+  quanto costa:** la griglia 7c, versionata e mai eseguita, era rotta in quattro
+  punti e non poteva committare in nessuno scenario; nessuno dei quattro difetti si
+  vedeva leggendo il file. Una griglia versionata e mai eseguita non è una prova.
+  Restano senza esito la griglia della Fase 7 (16 casi), quella della 7b (23) e
+  quella della 6d-2a (18);
 - test frontend per `frontend-next/`: esistono e sono imposti in CI da
   `MIN_TESTS`, ma coprono logica pura e adapter, non le pagine;
 - revisione delle viste proprietario/security barrier prima del cutover;

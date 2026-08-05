@@ -233,6 +233,20 @@ one of them is how a private column ends up readable by strangers:
 Versioned SQL/RLS proofs live in `supabase/tests/` and are run by hand in the Supabase SQL
 Editor — see that directory's README. They are not migrations and CI does not run them yet.
 
+**A versioned grid that has never been executed is not a proof.** Phase 7e measured the cost:
+the 7c grid was broken in four ways, none of them visible by reading the file, and it could not
+have committed under any scenario — not even with every case passing. Its first real run gave
+21 PASSA / 1 FALLISCE, and the one failure was a defect in the migration with a consequence on
+money, not a defect in the test. The grids for Phase 7 (16 cases), 7b (23) and 6d-2a (18) are
+still unexecuted; treat their expected outcomes as text, not results.
+
+Fixture authorization is **per grid, not per project**: approval to run the 7c grid does not
+cover 7b. Cleanup must be guaranteed on the error path too, and residues get re-read and
+reported after the run rather than declared. To create a test user that can actually
+authenticate, follow the verified procedure in `CONTESTO_IA/04_HANDOFF_NUOVA_IA.md` — the Auth
+API path hits a project-wide SMTP limit, and the SQL path needs an `auth.identities` row plus
+four `varchar` token columns set to empty string rather than `NULL`.
+
 Full detail: `docs/SECURITY.md`, `docs/ARCHITECTURE.md`, `docs/ENVIRONMENT.md`.
 
 ## Environment variables

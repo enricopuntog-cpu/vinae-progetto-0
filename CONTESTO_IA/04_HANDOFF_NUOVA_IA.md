@@ -38,11 +38,20 @@
 - La 6d-1 è in `main` tramite PR #14; il branch di verifica post-merge registra
   33/33, 11/11, verifier storico 13/13 e residui fixture zero.
 - Il merge non equivale ad autorizzazione o prova delle fixture remote.
-- La Fase 6d-2a è in `main` tramite PR #17 al merge squash `3037bf4`; lo smoke
-  Storage del bucket `cantina` non è compreso nel merge e resta aperto.
+- La Fase 6d-2a è in `main` tramite PR #17 al merge squash `3037bf4`. Lo smoke
+  Storage del bucket `cantina` non era compreso nel merge ed è stato **chiuso il 5
+  agosto 2026** con la Fase 7e, in dieci passi tutti con l'esito atteso. La
+  **griglia** 6d-2a resta invece non eseguita: sono due cose diverse.
+- **Una griglia versionata e mai eseguita non è una prova.** La 7e l'ha misurato:
+  la griglia 7c era rotta in quattro punti, nessuno visibile leggendo il file, e non
+  poteva committare in nessuno scenario. Alla prima esecuzione reale ha dato 21
+  PASSA e 1 FALLISCE, e quel FALLISCE era un difetto della migrazione con una
+  conseguenza sul denaro. Vale per ogni griglia ancora senza esito.
 - La Fase 7 è in `main` tramite PR #18 al merge squash `2a47952`, la Fase 7b
   tramite PR #19 al merge squash `5e6b8e4`, la Fase 7c tramite PR #21 al merge
-  squash `471b529`, la Fase 7d tramite PR #22 al merge squash `306952f`.
+  squash `471b529`, la Fase 7d tramite PR #22 al merge squash `306952f`, la
+  correzione di `ARCHITECTURE.md` tramite PR #24 al merge squash `d8503af`, la
+  Fase 7e tramite PR #23.
 - «Integrata» qui significa anche «distribuita»: l'integrazione GitHub di
   Supabase applica migrazioni e Edge Function al merge su `main`, da sola.
   Verificato in lettura il 5 agosto 2026 — il ledger è a **diciannove righe**, le
@@ -95,6 +104,39 @@
 8. Dopo l'applicazione, verificare cronologia migrazioni e catalogo effettivo.
 9. Chiedere una conferma separata prima di test che creano/cancellano fixture.
 10. Se l'API assegna la versione, riallineare il filename locale alla history.
+
+## Come creare un utente di test autenticabile (procedura verificata)
+
+Serve per gli smoke Storage e per qualunque prova che richieda un JWT reale. La
+via dell'API Auth **non funziona su questo progetto**: il limite dell'SMTP
+incorporato è project-wide e produce un `429` che né il piano né un IP diverso
+spostano. La via che ha funzionato il 5 agosto 2026, senza `service_role` e senza
+SMTP proprio:
+
+1. `insert into auth.users` con
+   `encrypted_password = extensions.crypt('…', extensions.gen_salt('bf'))` —
+   `pgcrypto` sta nello schema `extensions`, non in `public` — ed
+   `email_confirmed_at = now()`;
+2. `POST /auth/v1/token?grant_type=password` con la sola chiave pubblica. Non
+   spedisce email, quindi non incontra il limite SMTP.
+
+**Due cose non ovvie, scoperte eseguendo e non ragionando.** Senza di esse il primo
+tentativo risponde `500 unexpected_failure`, e la causa esatta arriva dai log di
+Auth, non da un'ipotesi:
+
+- serve **una riga in `auth.identities`**. I 5 utenti reali del progetto ne hanno
+  una, quelli creati in SQL no, e senza di essa GoTrue non autentica;
+- le quattro colonne token `confirmation_token`, `recovery_token`,
+  `email_change_token_new` ed `email_change` vanno messe a **stringa vuota, non a
+  `NULL`**: sono `varchar(255)` e non `text`, e GoTrue le scansiona in `string` non
+  nullable.
+
+`phone` invece **resta `NULL`**: per GoTrue è nullable e ha un indice unico che due
+stringhe vuote violerebbero.
+
+La pulizia va fatta nello stesso ordine inverso, e va verificata: dopo lo smoke del
+5 agosto 2026 `auth.users`, `auth.identities` e `public.profiles` sono tornati a 5
+righe, che è la linea di base reale del progetto.
 
 La repair `supabase/migrations/20260730140948_security_invariants_remote_drift_repair.sql`
 è stata applicata il 30 luglio 2026. La query
