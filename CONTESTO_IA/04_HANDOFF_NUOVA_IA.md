@@ -41,13 +41,26 @@
 - La Fase 6d-2a è in `main` tramite PR #17 al merge squash `3037bf4`; lo smoke
   Storage del bucket `cantina` non è compreso nel merge e resta aperto.
 - La Fase 7 è in `main` tramite PR #18 al merge squash `2a47952`, la Fase 7b
-  tramite PR #19 al merge squash `5e6b8e4`.
+  tramite PR #19 al merge squash `5e6b8e4`, la Fase 7c tramite PR #21 al merge
+  squash `471b529`, la Fase 7d tramite PR #22 al merge squash `306952f`.
 - «Integrata» qui significa anche «distribuita»: l'integrazione GitHub di
   Supabase applica migrazioni e Edge Function al merge su `main`, da sola.
-  Verificato in lettura il 4 agosto 2026 — entrambe le migrazioni sono a ledger
-  (diciassette righe) e `payments-checkout`, `connect-onboarding` e
-  `payouts-release` sono `ACTIVE`. Il contenuto applicato è quello a netto
-  garantito, non la prima bozza a percentuale piatta.
+  Verificato in lettura il 5 agosto 2026 — il ledger è a **diciannove righe**, le
+  migrazioni di 7, 7b e 7c ci sono tutte, e `payments-checkout`,
+  `connect-onboarding` e `payouts-release` sono `ACTIVE`. Il contenuto applicato è
+  quello a netto garantito, non la prima bozza a percentuale piatta. La
+  diciannovesima riga appartiene alla Fase 7f, non ancora in `main`: è l'unica
+  applicata per via diretta e non dal merge.
+- La Fase 7d **non ha scritto SQL**: ha chiuso decisioni. Le sue conseguenze
+  vincolanti sono al capitolo dedicato di
+  [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
+  scheduler esterno e non `pg_cron`, scheduler acceso prima dei pagamenti,
+  «protezione» fuori dal modello Supabase, e nessun valore nuovo in
+  `public.payment_stato` per il tetto ai tentativi della fee.
+- Il merge su `main` non richiede più il click manuale del committente, ma
+  richiede ancora **l'approvazione esplicita in sessione**, è **solo squash**, e
+  pretende come ultimo commit della PR l'aggiornamento di `CHANGES.log`,
+  `CLAUDE.md` e di questa cartella allo stato che quella PR produce.
 - «Distribuita» non significa «percorsa», ed è questa la distinzione da tenere:
   le tabelle di denaro sono a **zero righe**, `marketplace_config` ha la sola
   riga iniziale, nessun percorso UI raggiunge onboarding, checkout, conferma o
@@ -162,16 +175,26 @@ cade con loro, perché le versioni a ledger coincidono già con i nomi dei file.
 
 1. esecuzione delle griglie `7_ordini_pagamenti.sql` (16 casi) e
    `7b_connect_marketplace.sql` (23 casi), che creano e cancellano fixture
-   remote e richiedono un'autorizzazione esplicita;
+   remote e richiedono un'autorizzazione esplicita. **Non autorizzate**:
+   l'autorizzazione data per la griglia 7c non le copre, perché è per griglia e
+   non per progetto;
 2. decidere dove sta il gate di autorizzazione, dato che la regola scritta
    presidia `supabase db push` e il percorso reale è il merge su `main`;
-3. smoke Storage del bucket `cantina`, aperto dalla 6d-2a e indipendente.
+3. scrivere il workflow schedulato dell'auto-rilascio: la 7d ha deciso *dove* gira
+   (GitHub Actions) e *quando* si accende (prima di `PAYMENTS_ENABLED`), ma
+   `.github/workflows/` contiene ancora il solo `ci.yml`, senza trigger `schedule`.
 
-Nessuno dei tre è autorizzato.
+Lo smoke Storage del bucket `cantina`, che questo elenco portava come terza voce,
+è stato eseguito e chiuso il 5 agosto 2026; la sua registrazione arriva con la
+PR #23.
 
 ## Cosa aggiornare alla fine di una fase
 
+Non «alla fine»: **prima del merge**, come ultimo commit della PR. Dopo lo squash
+il branch non c'è più e l'aggiornamento richiederebbe una PR a parte.
+
 - `CHANGES.log`, con le quattro intestazioni esatte e `NEXT STEPS` a tre voci;
+- `CLAUDE.md`, se la fase ha prodotto regole o invarianti vincolanti;
 - `docs/ROADMAP_V1.md`;
 - `docs/MIGRATION_PHASE_1_BACKLOG.md`;
 - documenti di sicurezza/ambiente se toccati;
@@ -180,3 +203,6 @@ Nessuno dei tre è autorizzato.
   - storia della fase;
   - indice PR;
   - `context-manifest.json`.
+
+Con i fatti veri di quella PR — numero, cosa cambia, cosa resta aperto — non con
+un riassunto generico.

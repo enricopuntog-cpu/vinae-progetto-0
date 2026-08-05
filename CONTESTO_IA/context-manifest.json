@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-04",
+  "updated_at": "2026-08-05",
   "language": "it",
   "project": {
     "name": "Vinea",
@@ -8,17 +8,14 @@
     "repository_url": "https://github.com/enricopuntog-cpu/vinae-progetto-0"
   },
   "verified_git_snapshot": {
-    "branch": "docs/contesto-post-fase-7b",
-    "head": "5e6b8e4",
-    "origin_main": "5e6b8e4",
-    "ahead_of_origin_main": 0,
-    "behind_origin_main": 0,
-    "ahead_of_origin_branch": 0,
-    "behind_origin_branch": 0,
-    "snapshot_note": "Rilevato il 2026-08-04 con git fetch --prune, subito dopo il merge squash della PR #19. Il branch e' di sola documentazione, creato da origin/main: i contatori avanzano a ogni commit successivo dello stesso task. Il branch di fase migration/phase-7b-stripe-connect-marketplace e' stato mergiato e non e' piu' quello attivo."
+    "branch": "docs/architettura-fase-7-distribuita",
+    "head": "a035ce7 piu' il merge di main e il commit documentale di questa PR",
+    "origin_main": "306952f",
+    "snapshot_note": "Rilevato il 2026-08-05 subito prima del merge squash della PR #24. origin/main e' 306952f, squash della PR #22 con la Fase 7d. Il branch di questa PR e' nato da 1782a1a, prima della Fase 7c, ed e' stato riallineato a main con un merge e non con un rebase, perche' il rebase di un branch gia' pubblicato richiederebbe un force push. Resta aperta la PR #23 (Fase 7e); localmente esiste il branch della Fase 7f."
   },
-  "documentation_branch": "docs/contesto-post-fase-7b",
-  "verification_pr": 19,
+  "documentation_branch": "docs/architettura-fase-7-distribuita",
+  "verification_pr": 24,
+  "merge_rule": "Il merge su main non richiede piu' il click manuale del committente, ma richiede l'approvazione esplicita in sessione, e' solo squash, mai force push. Ogni PR deve portare come ultimo commit l'aggiornamento di CHANGES.log, CLAUDE.md e CONTESTO_IA/ allo stato che quella PR produce davvero: numero, cosa cambia, cosa resta aperto. Prima dello squash, non dopo.",
   "runtime_truth": {
     "served_frontend": "frontend/",
     "served_backend": "backend/",
@@ -28,16 +25,26 @@
     "payments_enabled": false,
     "phase_7_migration_applied_to_real_project": true,
     "phase_7b_migration_applied_to_real_project": true,
+    "phase_7c_migration_applied_to_real_project": true,
     "edge_functions_deployed": true,
     "stripe_api_ever_called": false,
-    "remote_migration_ledger_rows": 17,
+    "remote_migration_ledger_rows": 19,
+    "remote_migration_ledger_last_four": [
+      "20260731135455 phase_7_order_payment_service",
+      "20260803150000 phase_7b_stripe_connect_marketplace",
+      "20260804160000 phase_7c_delivery_packaging",
+      "20260805160250 phase_7f_fix_contestazione_enum_cast"
+    ],
+    "ledger_filename_alignment_note": "Le prime diciotto voci hanno versione a ledger uguale al nome del file, perche' a distribuirle e' l'integrazione GitHub partendo dal repository. La diciannovesima appartiene alla Fase 7f, non ancora in main, ed e' l'unica applicata per via diretta: per lei il riallineamento del filename serve, e viene fatto nella PR della 7f.",
     "edge_functions_active": ["payments-checkout", "connect-onboarding", "payouts-release"],
     "deployment_mechanism": "Integrazione GitHub di Supabase: il merge su main distribuisce migrazioni ed Edge Function da solo, senza supabase db push ne' apply_migration. Il branch Supabase main e' legato al git branch main con stato FUNCTIONS_DEPLOYED.",
     "applied_content_is_guaranteed_net_formula": true,
-    "money_tables_row_count": "zero: orders, payments, payouts, seller_payout_accounts, proposals, order_events, payment_provider_events. marketplace_config ha la sola riga di configurazione iniziale.",
-    "ui_paths_to_payment_flow_exist": false,
-    "runtime_truth_verified_at": "2026-08-04",
-    "runtime_truth_verified_how": "list_migrations, list_edge_functions, list_branches e execute_sql di sole select in lettura sul progetto pijnmcllmfgjmgsvtcej"
+    "money_tables_row_count": "zero: orders, payments, payouts, seller_payout_accounts, proposals, order_events, payment_provider_events, disputes, tracking_events, order_reviews. marketplace_config ha la sola riga di configurazione iniziale; packaging_options ha tre righe a prezzo_cents zero.",
+    "ui_paths_to_checkout_or_onboarding_exist": false,
+    "ui_paths_to_order_lifecycle_exist": true,
+    "ui_paths_note": "La 7c ha aggiunto percorsi UI reali per dettaglio ordine, preparazione, spedizione, consegna dichiarata, conferma di ricezione, contestazione e recensione sotto frontend-next/src/app/ordine/[id]/, /acquisti e /vendite. Onboarding Connect e checkout restano senza percorso.",
+    "runtime_truth_verified_at": "2026-08-05",
+    "runtime_truth_verified_how": "list_migrations e execute_sql di sole select in lettura sul progetto pijnmcllmfgjmgsvtcej"
   },
   "phase_status": {
     "sprint_0": "merged",
@@ -53,9 +60,13 @@
     "phase_6c_1": "merged",
     "phase_6c_2": "merged",
     "phase_6d_1": "merged_ci_green_fixture_grids_33_33_and_11_11_zero_residue",
-    "phase_6d_2a": "merged_pr_17_migration_20260731120340_applied_storage_smoke_still_open",
+    "phase_6d_2a": "merged_pr_17_migration_20260731120340_applied_storage_smoke_closed_on_2026_08_05_recorded_in_pr_23",
     "phase_7": "merged_pr_18_squash_2a47952_migration_20260731135455_applied_to_real_project_at_merge_tables_zero_rows_no_stripe_call",
-    "phase_7b": "merged_pr_19_squash_5e6b8e4_ci_green_run_30900108638_migration_20260803150000_applied_and_three_edge_functions_active_tables_zero_rows_no_ui_path_no_stripe_call_seller_enabled_gate_off",
+    "phase_7b": "merged_pr_19_squash_5e6b8e4_ci_green_run_30900108638_migration_20260803150000_applied_and_three_edge_functions_active_tables_zero_rows_no_stripe_call_seller_enabled_gate_off",
+    "phase_7c": "merged_pr_21_squash_471b529_migration_20260804160000_applied_at_merge_supabase_preview_skipped_so_production_was_the_first_engine_to_run_it_part_b_is_an_authorised_deviation_from_the_no_new_features_rule",
+    "phase_7d": "merged_pr_22_squash_306952f_documentation_only_no_sql_decisions_1a_1e_3a_closed_2c_design_approved_schema_not_written_3e_open_and_commercial",
+    "phase_7e": "open_pr_23_debt_closure_grid_7c_executed_21_pass_1_fail_storage_smoke_closed",
+    "phase_7f": "local_branch_migration_20260805160250_applied_to_real_project_not_yet_in_main",
     "phase_8": "not_started",
     "phase_9": "not_started",
     "phase_10": "not_started",
@@ -78,18 +89,20 @@
     "docs/ROADMAP_V1.md",
     "docs/MIGRATION_PHASE_1_BACKLOG.md"
   ],
-  "mandatory_read_order_verified_at": "2026-08-04",
+  "mandatory_read_order_verified_at": "2026-08-05",
   "closed_gates": [
-    "apply_migration di Fase 7 e Fase 7b: chiuso non da un'autorizzazione ma dal merge, che ha distribuito entrambe automaticamente. Verificato il 2026-08-04.",
+    "apply_migration di Fase 7, 7b e 7c: chiuso non da un'autorizzazione ma dal merge, che ha distribuito tutte automaticamente. Verificato il 2026-08-05.",
     "deploy delle Edge Function payments-checkout, connect-onboarding e payouts-release: chiuso allo stesso modo, tutte e tre ACTIVE.",
-    "riallineamento dei filename di migrazione alle versioni server: non necessario, le versioni a ledger coincidono con i nomi dei file."
+    "riallineamento dei filename di migrazione alle versioni server: non necessario per il percorso GitHub, le versioni a ledger coincidono con i nomi dei file. Serve solo per la Fase 7f, applicata per via diretta.",
+    "abilitazione di pg_cron, pg_net e Vault sul progetto reale: decaduta con la decisione 1a della 7d, che ha scelto lo scheduler esterno. Non c'e' piu' alcuna estensione da abilitare, quindi non serve nemmeno l'autorizzazione separata che sarebbe servita."
   ],
   "open_gates_in_order": [
-    "esecuzione delle griglie supabase/tests/7_ordini_pagamenti.sql (16 casi) e 7b_connect_marketplace.sql (23 casi) sul progetto reale, con autorizzazione fixture separata",
+    "esecuzione delle griglie supabase/tests/7_ordini_pagamenti.sql (16 casi) e 7b_connect_marketplace.sql (23 casi) sul progetto reale, con autorizzazione fixture separata: l'autorizzazione data per la griglia 7c non le copre, perche' e' per griglia e non per progetto",
     "decidere dove sta il gate di autorizzazione ora che il merge distribuisce da solo: la regola scritta presidia supabase db push, che non e' il percorso reale",
-    "smoke Storage del bucket cantina, aperto dalla Fase 6d-2a"
+    "scrivere il workflow GitHub Actions schedulato dell'auto-rilascio, deciso dalla 7d e mai scritto: .github/workflows/ contiene il solo ci.yml, senza trigger schedule. Prima vanno decise 1c (a chi arriva la notifica di fallimento) e 1d (cadenza e batch)",
+    "chiudere la decisione 2c con lo schema: e' la sola parte della 7d che richiede una migrazione, e va decisa prima di scrivere il job della fee"
   ],
-  "next_gate": "esecuzione autorizzata delle griglie 7_ordini_pagamenti.sql e 7b_connect_marketplace.sql sul progetto reale, ora che lo schema c'e' davvero. Nessuno dei gate aperti e' autorizzato.",
+  "next_gate": "scrivere il workflow schedulato dell'auto-rilascio: e' il solo debito la cui assenza ha una conseguenza attiva, perche' la 7c fa nascere ordini con auto_rilascio_scadenza reale e nessun job che la guardi. Il freno e' PAYMENTS_ENABLED=false.",
   "remote_sql_rule": "Show exact SQL and obtain explicit in-session approval before applying any migration to the real Supabase project. Attenzione: dal merge della Fase 7 questa regola non copre piu' il percorso reale di distribuzione, che e' il merge su main via integrazione GitHub e non passa da un comando esplicito.",
   "migration_file_rule": "A migration file that has been pushed at least once is frozen: every later correction is a new file with a more recent timestamp, in draft too and even if no real database ever ran the previous version. Supabase preview branches run migrations at PR open and compare version, not content."
 }

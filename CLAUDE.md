@@ -59,7 +59,7 @@ bun run test         # Bun's native test runner — run in CI behind a minimum-c
 bun run build
 ```
 CI runs these tests and **enforces a floor**: the `Test` step of the `frontend-next` job sets
-`MIN_TESTS` (83 today) and fails when fewer cases pass than that. The floor is there because
+`MIN_TESTS` (123 today) and fails when fewer cases pass than that. The floor is there because
 `bun test` exits 0 when the test files exist but contain no cases — without it a suite that
 silently empties itself would still be green. Raise it deliberately when tests are added;
 lowering it is a decision, not housekeeping. These tests are type-checked as well: `tsconfig.json`
@@ -134,8 +134,15 @@ The full picture is in `docs/ROADMAP_V1.md`, `docs/MIGRATION_PHASE_1_BACKLOG.md`
   Supabase project's allowed Redirect URLs.
 ## Process rules not covered above
 
-- Never work directly on `main`. Never force-push. Never merge autonomously —
-  merges to `main` require explicit approval recorded in the organizational log.
+- Never work directly on `main`. Never force-push.
+- Merging to `main` is allowed **only after explicit approval given in-session**, and only as a
+  **squash merge**. Approval granted on 5 August 2026 replaces the manual click, it does not
+  replace the approval itself: without an explicit go-ahead for that PR, do not merge.
+- **Before closing or merging any PR, update `CHANGES.log`, `CLAUDE.md` and `CONTESTO_IA/` with the
+  state that PR actually produces** — its number, what it changes, what it leaves open — and commit
+  that as the **last commit of the PR itself**, before the squash merge. Not afterwards: after the
+  squash the branch is gone and the update would need a PR of its own. A generic summary does not
+  satisfy this rule; the facts of that PR do.
 - Do not use Lovable or Emergent to generate or modify code, even to fix a bug
   quickly — both are retired tooling for this project.
 - Commits are small and descriptive, one logical change each.
@@ -175,6 +182,34 @@ These hold for `backend/` today and must hold for any Supabase/Edge Function rep
 - Capability flags that mean "this seller can be paid" (`charges_enabled`, `payouts_enabled`,
   and the `seller_enabled` role derived from them) are written only by applying a signed provider
   event, never by a request from the seller.
+
+### Economic decisions closed in Phase 7d (binding — PR #22)
+
+Phase 7d wrote no SQL. It closed decisions that constrain what later phases may build:
+
+- **Auto-release is driven by an external scheduler (GitHub Actions), not `pg_cron`** (decision
+  1a). `pg_cron` + `pg_net` are excluded, not deferred: they would put the service role key and the
+  job token in clear text in `cron.job`, and `pg_net` is fire-and-forget, so `cron.job_run_details`
+  records `succeeded` even on a `401`/`503`. Reproposing them requires reopening the decision.
+  Recommended cadence `0 */6 * * *` with `PAYOUTS_BATCH_LIMIT` 50; a scheduled workflow only runs
+  from the default branch, so the file has to live on `main`.
+- **The scheduler is switched on and verified before `PAYMENTS_ENABLED`, never after** (decision
+  1e). Inverted, the first run inherits a historical backlog of orders past their deadline.
+- The scheduled workflow authenticates with the **anon/publishable key plus `PAYOUTS_JOB_TOKEN`**,
+  not the service role key: `payouts-release` builds its client from the function's own env, so the
+  caller's JWT only crosses the gateway and carries no authority. The one real secret is the job
+  token.
+- **The "protezione" (3%) line is out of the Supabase model** (decision 3a). It stays untouched in
+  `frontend/` until the Phase 11 cutover, where its removal has to be on the cutover list. It was
+  measured at 0.59–0.60× the net margin Phase 7b already withholds, and in the real Stripe path it
+  was never actually charged.
+- **A fee-reconciliation retry cap must never be a new value of `public.payment_stato`** (decision
+  2c, design approved, schema not written). `payout_prepara`, `ordine_auto_rilascio_esegui` and
+  `conferma_ricezione` all filter on `payments.stato = 'paid'`, so a new value would freeze the
+  seller's funds because the platform cannot read its own cost. Derive the marker from a
+  `fee_tentativi >= N` counter and keep it out of every release predicate.
+- `spedizione` stays undecided until decision 3e (one invoice or two from the logistics partner)
+  has a commercial answer. Designing before it arrives means betting.
 
 ### Postgres exposure rules (binding since Phase 6d-1)
 

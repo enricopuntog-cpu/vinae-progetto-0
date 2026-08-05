@@ -23,6 +23,10 @@
 | [#17](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/17) | 31-07-2026 | merged | Fase 6d-2a — provenienza catalogo e percorsi Cantina |
 | [#18](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/18) | 03-08-2026 | merged | Fase 7 — proposte, ordini e pagamenti; squash `2a47952` |
 | [#19](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/19) | 04-08-2026 | merged | Fase 7b — Connect, commissione e trattenuta fondi; squash `5e6b8e4` |
+| [#20](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/20) | 04-08-2026 | merged | Documentazione e handoff allineati al merge della 7b; squash `1782a1a` |
+| [#21](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/21) | 04-08-2026 | merged | Fase 7c — consegna, tracking e imballaggio; squash `471b529`; `Supabase Preview` `SKIPPED` |
+| [#22](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/22) | 05-08-2026 | merged | Fase 7d — decisioni economiche, sola documentazione: 1a, 1e, 3a decise; 2c approvata in design; 3e aperta; squash `306952f` |
+| [#24](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/24) | 05-08-2026 | merged | `docs/ARCHITECTURE.md`: il percorso di pagamento è distribuito, non «ancora non distribuito» |
 
 ## Anomalie della cronologia da conoscere
 
@@ -74,6 +78,37 @@ lanciasse un comando. Verificato in lettura il 4 agosto 2026. Non sono fasi
 inerti: sono fasi vive e mai percorse — tabelle di denaro a zero righe, nessun
 percorso UI, `PAYMENTS_ENABLED=false`, nessuna chiamata Stripe.
 
+### PR #21 e #22
+
+- **#21 è la Fase 7c**, unita il 4 agosto 2026 con merge squash `471b529`. Il suo
+  controllo `Supabase Preview` è **`SKIPPED`**: il bot ha valutato il diff sei
+  secondi dopo l'apertura della PR, diciannove minuti prima che esistesse il
+  commit con la migrazione, e non ha rivalutato. Conseguenza da non perdere:
+  della 7c **nessun motore Postgres ha eseguito lo SQL prima di quello di
+  produzione**. È la stessa classe di problema della regola 11, dal lato opposto
+  — là l'anteprima aveva eseguito troppo presto, qui non ha eseguito affatto.
+- **#22 è la Fase 7d**, sola documentazione: due file, nessuno SQL. Ha chiuso in
+  sessione organizzativa le decisioni **1a** (scheduler esterno su GitHub Actions,
+  non `pg_cron`), **1e** (scheduler acceso e verificato prima di
+  `PAYMENTS_ENABLED`) e **3a** (la voce «protezione» esce dal modello Supabase e
+  resta in `frontend/` fino alla Fase 11). La **2c** ha design approvato — tetto a
+  5 tentativi con colonne contatore su `payments` — e **schema non scritto**. La
+  **3e** resta aperta ed è una domanda commerciale, non tecnica.
+
+### PR #24 — un branch senza PR, per una riga sbagliata
+
+La #24 nasce da un residuo Git: il branch `docs/architettura-fase-7-distribuita`
+portava il commit `1b382b8` che **non era antenato di `main`** e non aveva alcuna
+PR aperta. Il contenuto era però ancora valido, perché `docs/ARCHITECTURE.md` su
+`main` diceva «questo percorso locale e ancora non distribuito» mentre il ledger
+lo smentiva. La correzione è stata aggiornata a tutte e tre le migrazioni a ledger
+e portata in PR sopra `1b382b8`, senza riscrivere quel commit.
+
+Il branch è nato da `1782a1a`, cioè da prima della 7c: al momento del merge è
+stato riallineato a `main` con un **merge** e non con un rebase, perché il rebase
+di un branch già pubblicato richiederebbe un force push. Lo squash finale non
+conserva il commit di merge.
+
 ### Il branch di anteprima della #19
 
 Supabase crea un branch di anteprima per ogni PR ed esegue le migrazioni
@@ -102,6 +137,7 @@ delle regole di migrazione.
 | [`../docs/PHASE_6D1_FINAL_EXECUTION_REPORT.md`](../docs/PHASE_6D1_FINAL_EXECUTION_REPORT.md) | Fotografia storica conclusiva del branch 6d-1 |
 | [`../docs/PHASE_6D2A_SPEC.md`](../docs/PHASE_6D2A_SPEC.md) | Decisioni della Fase 6d-2a |
 | [`../docs/PHASE_7_VERIFICATION.md`](../docs/PHASE_7_VERIFICATION.md) | Verifiche locali e gate remoti della Fase 7 |
+| [`../docs/superpowers/plans/2026-08-05-phase-7d-decisioni-economiche.md`](../docs/superpowers/plans/2026-08-05-phase-7d-decisioni-economiche.md) | Decisioni economiche della 7d: auto-rilascio, fee reale, spedizione e protezione, con l'esito della sessione organizzativa in testa |
 | [`../supabase/repair/README.md`](../supabase/repair/README.md) | Riparazione del ledger delle migrazioni e replay misurato |
 | [`../supabase/tests/README.md`](../supabase/tests/README.md) | Ordine e scopo dei test SQL |
 | [`../frontend-next/src/services/types.ts`](../frontend-next/src/services/types.ts) | Contratti dei servizi target |
