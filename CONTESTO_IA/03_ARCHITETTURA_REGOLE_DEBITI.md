@@ -142,16 +142,21 @@ successive possono costruire.
   `pg_cron`.** `pg_cron` e `pg_net` sono esclusi, non rinviati: metterebbero
   service role key e job token in chiaro in `cron.job`, e `pg_net` è
   fire-and-forget, quindi `cron.job_run_details` registra `succeeded` anche su
-  `401`/`503`. Riproporli richiede di riaprire la decisione. Raccomandati
+  `401`/`503`. Riproporli richiede di riaprire la decisione. La 1d ha confermato
   `0 */6 * * *` e `PAYOUTS_BATCH_LIMIT` 50; un workflow schedulato gira solo dal
   branch di default, quindi il file dovrà stare su `main`.
 - **1e — lo scheduler si accende e si verifica prima di `PAYMENTS_ENABLED`, mai
   dopo.** Invertito, la prima esecuzione erediterebbe un backlog storico di
   ordini già scaduti.
-- **La credenziale del workflow è anon/publishable key più `PAYOUTS_JOB_TOKEN`,
-  non la service role key.** `payouts-release` costruisce il client dalle
-  variabili d'ambiente della function, quindi il JWT del chiamante serve solo ad
-  attraversare il gateway e non porta alcuna autorità. Il segreto vero è uno solo.
+- **La credenziale del workflow è legacy anon JWT più `PAYOUTS_JOB_TOKEN`, non
+  la service role key.** `payouts-release` costruisce il client privilegiato
+  dalle variabili d'ambiente della function, quindi il JWT del chiamante serve
+  solo ad attraversare il gateway e non porta autorità sul database. Finché
+  `verify_jwt=true`, una chiave `sb_publishable_...` richiede una decisione
+  separata sulla configurazione del gateway.
+- **1c è chiusa:** notifiche native di fallimento e rotazione del job token sono
+  responsabilità di Enrico / `enricopuntog-cpu`; rotazione ogni 90 giorni e
+  immediata dopo sospetta esposizione. Nessuna integrazione esterna in 7g.
 - **3a — la voce «protezione» (3%) esce dal modello Supabase**; in `frontend/`
   resta fino al cutover di Fase 11, dove la sua rimozione va scritta nella lista
   di cutover o nessuno se ne ricorderà.
@@ -177,18 +182,11 @@ successive possono costruire.
   in test mode. Restano fuori il KYC oltre l'onboarding ospitato,
   l'interfaccia di gestione delle contestazioni e il recupero automatico di un
   rimborso successivo a un Transfer già creato;
-- schedulazione dell'auto-rilascio: **decisa dalla 7d e non ancora scritta.**
-  Va su GitHub Actions, non su `pg_cron`, quindi il blocco commentato in fondo
-  alla migrazione di Fase 7b non è più la strada. `.github/workflows/` contiene
-  il solo `ci.yml`, senza trigger `schedule`. **Il debito non è più dormiente**:
-  la 7c è in `main` e il percorso UI che popola `auto_rilascio_scadenza` esiste,
-  quindi ogni ordine dichiarato consegnato nasce con una scadenza reale e nessun
-  job che la guardi, e il compratore legge in pagina «Periodo di verifica aperto
-  fino al …», che è una promessa che nessun processo mantiene. Il solo freno è
-  `PAYMENTS_ENABLED=false`. Manca anche il controllo di sanità che rileva uno
-  scheduler fermo — esiste un ordine con `auto_rilascio_scadenza` scaduta da più
-  di un giorno e `payout_stato = 'trattenuto'`? — che è il solo controllo utile
-  quando è proprio lo scheduler a essere rotto;
+- schedulazione dell'auto-rilascio: **scritta e verificata localmente dalla 7g**
+  nel commit `90f99fa`, con sanità oltre 24 ore e modalità read-only quando
+  `PAYMENTS_ENABLED=false`. Restano aperti il gate remoto di push/PR/merge, la
+  configurazione di variabile e secret, la verifica delle notifiche native e la
+  prima invocazione reale con pagamenti spenti;
 - verifica legale italiana/UE su vendita di alcolici, età, privacy e modello
   marketplace;
 - rate limiting condiviso per RPC/Edge Functions;

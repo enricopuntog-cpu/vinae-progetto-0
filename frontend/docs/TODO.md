@@ -47,8 +47,9 @@ follow-up, aggiungerlo qui con contesto.
   `useModerationActions`). In Next.js questi hook si montano come client
   provider così come sono; non serve un secondo refactor dello stato
   (vedi `docs/adr/001-target-architecture.md` nella root del repo).
-- Le simulazioni di scadenza proposta usano `setTimeout` in-memory: in prod
-  devono diventare job schedulati (pg_cron).
+- Le simulazioni di scadenza proposta usano `setTimeout` in-memory: in produzione
+  devono diventare job orchestrati dallo scheduler esterno GitHub Actions deciso
+  nella Fase 7d, non da `pg_cron`/`pg_net`.
 - Test automatici unitari esistono (73 frontend, 36 backend) ma non c'è
   ancora copertura end-to-end: aggiungere Playwright per i flussi critici
   (checkout, dispute, wizard vendita) prima della beta.

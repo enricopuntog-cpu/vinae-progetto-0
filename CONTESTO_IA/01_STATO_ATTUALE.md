@@ -1,15 +1,15 @@
 # Stato attuale verificato
 
-Fotografia del **5 agosto 2026**, al merge della PR #25.
+Fotografia del **6 agosto 2026**, al checkpoint operativo 7g successivo al merge della PR #25.
 
 ## Repository
 
 | Voce | Valore |
 | --- | --- |
 | Repository GitHub | [`enricopuntog-cpu/vinae-progetto-0`](https://github.com/enricopuntog-cpu/vinae-progetto-0) |
-| `origin/main` prima di questo merge | `6b5b219` — merge squash della PR #23, Fase 7e |
-| Stati precedenti di `main` | `d8503af` (PR #24), `306952f` (PR #22, Fase 7d), `471b529` (PR #21, Fase 7c), `1782a1a` (PR #20, documentazione), `5e6b8e4` (PR #19, Fase 7b), `2a47952` (PR #18, Fase 7) |
-| Branch di questa PR | `migration/phase-7f-fix-contestazione-payout`, riallineato a `main` con un **rebase** — lecito perché non era ancora stato pushato |
+| `origin/main` verificato | `491e10d` — merge squash della PR #25, Fase 7f |
+| Stati precedenti di `main` | `6b5b219` (PR #23, Fase 7e), `d8503af` (PR #24), `306952f` (PR #22, Fase 7d), `471b529` (PR #21, Fase 7c), `1782a1a` (PR #20, documentazione), `5e6b8e4` (PR #19, Fase 7b), `2a47952` (PR #18, Fase 7) |
+| Branch del checkpoint 7g | `hardening/phase-7g-operational-closeout`, pubblicato e collegato alla PR #26 ready-for-review verso `main` |
 | Ultima fase integrata in `main` | Fase 7f — correzione di `ordine_contestazione_risolvi`, una migrazione nuova |
 | PR della 6d-1 | [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) — merged |
 | PR di riconciliazione | [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) — merged |
@@ -21,10 +21,10 @@ Fotografia del **5 agosto 2026**, al merge della PR #25.
 | PR della Fase 7d | [#22](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/22) — merged il 5 agosto 2026, squash `306952f` |
 | PR della correzione di `ARCHITECTURE.md` | [#24](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/24) — merged il 5 agosto 2026, squash `d8503af` |
 | PR della Fase 7e | [#23](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/23) — merged il 5 agosto 2026, squash `6b5b219`; CI verde su tutti e quattro i controlli, `Supabase Preview` **`SUCCESS`** |
-| PR della Fase 7f | [#25](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/25) — questa |
-| Lavoro non ancora in PR | Nessuno |
+| PR della Fase 7f | [#25](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/25) — merged il 5 agosto 2026, squash `491e10d` |
+| PR della Fase 7g | [#26](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/26) — ready-for-review il 6 agosto 2026 dopo backend, frontend, frontend-next e Supabase Preview verdi; squash autorizzato sugli stessi check verdi del commit finale |
 
-Da questa PR in avanti il merge su `main` non richiede più il click manuale del
+Dalla PR #25 in avanti il merge su `main` non richiede più il click manuale del
 committente: è autorizzato in sessione, **solo in squash**, e ogni PR deve portare
 come ultimo commit l'aggiornamento di `CHANGES.log`, `CLAUDE.md` e di questa
 cartella allo stato che quella PR produce. Regola registrata in `CLAUDE.md` e al
@@ -124,7 +124,8 @@ Fase 11 e richiede una decisione esplicita.
 | Consegna, tracking, imballaggio, contestazione, recensione | Integrati in `main` — Fase 7c, PR #21 al merge squash `471b529`; migrazione a ledger, percorsi UI reali per ordine/acquisti/vendite, `Supabase Preview` della PR `SKIPPED` |
 | Decisioni economiche: auto-rilascio, fee reale, spedizione, protezione | Fase 7d, PR #22 al merge squash `306952f` — **sola decisione, nessuno SQL**: 1a, 1e e 3a chiuse; 2c approvata in design e non implementata; 3e aperta e commerciale |
 | Chiusura debiti 7b/7c: griglia 7c eseguita, smoke Storage chiuso | Fase 7e, PR #23 al merge squash `6b5b219` — quattro difetti della griglia corretti, **21 PASSA / 1 FALLISCE** con causa nota rimandata alla 7f, smoke `cantina` chiuso in dieci passi, residui a zero |
-| Contestazione risolvibile a favore del venditore, e fondi che si sbloccano | Fase 7f, PR #25 — `42804` corretto con quattro cast all'enum; griglia 7c rieseguita **22 PASSA / 0 FALLISCE**, residui a zero su 26 controlli |
+| Contestazione risolvibile a favore del venditore, e fondi che si sbloccano | Fase 7f, PR #25 al merge squash `491e10d` — `42804` corretto con quattro cast all'enum; griglia 7c rieseguita **22 PASSA / 0 FALLISCE**, residui a zero su 26 controlli |
+| Scheduler auto-rilascio e sanità backlog | Fase 7g, PR #26 ready-for-review e commit funzionale `90f99fa` — workflow ogni 6 ore, batch 50, runner fail-closed e modalità di sanità con pagamenti spenti; non ancora in `main` né configurata remotamente |
 | Messaggi e notifiche | Non migrati — Fase 8 |
 | Moderazione e audit persistente | Non migrati — Fase 9 |
 | AI reale | Non migrata — Fase 10 |
@@ -289,13 +290,15 @@ applicativi, nessuna estensione Postgres abilitata, nessuna chiamata Stripe.
   `frontend/` fino al cutover di Fase 11. Al 3% valeva 0,59–0,60× il margine netto
   che la 7b già trattiene, e nel percorso Stripe reale non è mai stata addebitata.
 - **2c, design approvato e schema non scritto** — tetto a 5 tentativi di
-  riconciliazione della fee, con colonne contatore su `payments`. Il marcatore non
-  deve essere un valore nuovo di `public.payment_stato`.
+  riconciliazione della fee, con contatore `fee_tentativi` su `payments`. Il
+  marcatore è derivato da `fee_tentativi >= 5`, non è persistito come nuovo valore
+  di `public.payment_stato`; la relativa migrazione resta separata dal workflow 7g.
 - **3e, aperta** — domanda commerciale al partner logistico: un importo o due.
   Nessuna azione tecnica è possibile prima della risposta.
 
-Restano attive le non bloccanti 1c (a chi arriva la notifica di fallimento, chi
-ruota il token) e 1d (cadenza e batch, raccomandati `0 */6 * * *` e 50).
+Le decisioni 1c e 1d sono chiuse nel checkpoint 7g: notifiche native e rotazione
+del token assegnate a Enrico / `enricopuntog-cpu`, rotazione ogni 90 giorni o
+subito dopo sospetta esposizione, cadenza `0 */6 * * *` e batch 50.
 
 ## Fase 7e — chiusura dei debiti 7b/7c
 
@@ -397,6 +400,25 @@ annulla anche la tabella degli esiti — misurato, 1 riga superstite contro 4. L
 griglia 7c ha quindi tredici guardie per singolo caso, che fanno il lavoro vero, più
 la rete esterna che copre allestimento e pulizia.
 
+## Fase 7g — PR #26
+
+**Stato:** branch `hardening/phase-7g-operational-closeout` pubblicato e PR #26
+ready-for-review verso `main` dopo quattro check verdi e nessuna richiesta di
+modifica; commit funzionale `90f99fa` seguito dall'handoff documentale. Nessun
+merge, secret configurato, SQL, fixture o invocazione reale.
+
+- `.github/workflows/payouts-auto-release.yml` ha `schedule` `0 */6 * * *` e
+  `workflow_dispatch`, batch 50, timeout espliciti e concorrenza senza
+  sovrapposizioni;
+- il runner usa legacy anon JWT più `PAYOUTS_JOB_TOKEN`, mai la service role, e
+  fallisce su timeout, HTTP non 2xx, payload inatteso, rilasci falliti o ordini
+  trattenuti e scaduti da oltre 24 ore;
+- `payouts-release` con `PAYMENTS_ENABLED=false` autentica e conta soltanto la
+  sanità, senza reclamare ordini o chiamare Stripe;
+- verifica locale del runner: **8 test superati, 0 falliti**, senza rete e senza
+  invocare la function reale. Rapporto in
+  [`../docs/PHASE_7G_OPERATIONAL_CLOSEOUT.md`](../docs/PHASE_7G_OPERATIONAL_CLOSEOUT.md).
+
 ## Gate chiusi senza essere stati autorizzati
 
 Due dei gate che questo documento elencava come aperti non lo sono più, e non
@@ -407,17 +429,17 @@ perché le versioni a ledger sono già quelle dei file.
 
 ## Gate aperti, in ordine
 
-1. autorizzare separatamente l'esecuzione delle griglie
+1. chiudere il gate della PR #26: CI e Supabase Preview verdi sul commit
+   documentale finale, ready-for-review e merge squash già autorizzati; dopo il
+   merge restano separati configurazione di `SUPABASE_URL`,
+   `SUPABASE_ANON_KEY` e `PAYOUTS_JOB_TOKEN`, verifica delle notifiche native e
+   primo `workflow_dispatch` reale con pagamenti spenti;
+2. autorizzare separatamente l'esecuzione delle griglie
    [`7_ordini_pagamenti.sql`](../supabase/tests/7_ordini_pagamenti.sql) — 16
    casi — e [`7b_connect_marketplace.sql`](../supabase/tests/7b_connect_marketplace.sql)
    — 23 casi — che creano e cancellano fixture remote, ora su uno schema che
    esiste davvero. **Non autorizzate e non eseguite.** L'autorizzazione concessa
    per la griglia 7c non le copre: è per griglia, non per progetto;
-2. decidere dove sta il gate di autorizzazione, visto che la regola scritta
+3. decidere dove sta il gate di autorizzazione, visto che la regola scritta
    presidia `supabase db push` e il percorso reale è il merge. **Non deciso**, e
-   riguarda ogni fase successiva;
-3. scrivere il workflow schedulato dell'auto-rilascio, ora che la 1a l'ha deciso,
-   e prima 1c e 1d che erano condizionate a quella risposta;
-4. lo smoke Storage del bucket `cantina`, aperto dalla 6d-2a, **è stato eseguito e
-   chiuso il 5 agosto 2026**: la registrazione arriva con la PR #23 e non con
-   questa.
+   riguarda ogni fase successiva.

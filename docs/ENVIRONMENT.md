@@ -73,15 +73,24 @@ dietro. È coerente, perché nessun addebito reale esiste comunque, ma è uno st
 da conoscere in anticipo.
 
 `PAYMENTS_ENABLED` è il kill switch di **tutta** la verticale pagamenti, non del
-solo checkout: `payments-checkout`, `connect-onboarding`, `payouts-release` e il
-Route Handler del webhook lo controllano ognuno per conto proprio e rispondono
-`503` quando non è `true`. L'onboarding vi rientra perché apre account veri
-presso il fornitore, anche in test mode.
+solo checkout. `payments-checkout`, `connect-onboarding` e il Route Handler del
+webhook rispondono `503` quando non è `true`. `payouts-release` fa una sola
+eccezione sicura: dopo aver verificato anon JWT e job token risponde `200` con il
+controllo read-only degli ordini trattenuti oltre 24 ore, ma non reclama ordini e
+non chiama Stripe. L'onboarding resta bloccato perché apre account veri presso il
+fornitore, anche in test mode.
 
-`PAYOUTS_JOB_TOKEN` è separato dalla service role key di proposito: lo scheduler
-ha bisogno di entrambe, ma comprometterne una sola non basta a far partire un
-rilascio, e ruotare il token non costringe a ruotare la chiave che dà accesso
-all'intero database.
+Il workflow `.github/workflows/payouts-auto-release.yml` richiede la variabile
+GitHub Actions `SUPABASE_URL` e i secret `SUPABASE_ANON_KEY` e
+`PAYOUTS_JOB_TOKEN`. Con `verify_jwt=true`, `SUPABASE_ANON_KEY` deve essere la
+legacy anon JWT: una nuova chiave `sb_publishable_...` non è un JWT e richiederebbe
+una decisione separata sulla configurazione del gateway. La service role key non
+entra mai in GitHub Actions; resta nell'ambiente server della Edge Function.
+
+Lo stesso valore di `PAYOUTS_JOB_TOKEN` deve essere configurato separatamente
+nella Edge Function e nei secret GitHub. Responsabile: Enrico / account
+`enricopuntog-cpu`; rotazione ogni 90 giorni e immediata in caso di esposizione
+sospetta. La Fase 7g documenta questi requisiti ma non crea né ruota secret.
 
 ## Backend
 

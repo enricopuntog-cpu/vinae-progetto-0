@@ -62,14 +62,15 @@
   tramite PR #19 al merge squash `5e6b8e4`, la Fase 7c tramite PR #21 al merge
   squash `471b529`, la Fase 7d tramite PR #22 al merge squash `306952f`, la
   correzione di `ARCHITECTURE.md` tramite PR #24 al merge squash `d8503af`, la
-  Fase 7e tramite PR #23 al merge squash `6b5b219`, la Fase 7f tramite PR #25.
+  Fase 7e tramite PR #23 al merge squash `6b5b219`, la Fase 7f tramite PR #25 al
+  merge squash `491e10d`. La 7g è solo locale nel commit `90f99fa`.
 - «Integrata» qui significa anche «distribuita»: l'integrazione GitHub di
   Supabase applica migrazioni e Edge Function al merge su `main`, da sola.
   Verificato in lettura il 5 agosto 2026 — il ledger è a **diciannove righe**, le
   migrazioni di 7, 7b e 7c ci sono tutte, e `payments-checkout`,
   `connect-onboarding` e `payouts-release` sono `ACTIVE`. Il contenuto applicato è
   quello a netto garantito, non la prima bozza a percentuale piatta. La
-  diciannovesima riga appartiene alla Fase 7f, non ancora in `main`: è l'unica
+  diciannovesima riga appartiene alla Fase 7f, ora in `main`: è l'unica
   applicata per via diretta e non dal merge.
 - La Fase 7d **non ha scritto SQL**: ha chiuso decisioni. Le sue conseguenze
   vincolanti sono al capitolo dedicato di
@@ -83,9 +84,9 @@
   `CLAUDE.md` e di questa cartella allo stato che quella PR produce.
 - «Distribuita» non significa «percorsa», ed è questa la distinzione da tenere:
   le tabelle di denaro sono a **zero righe**, `marketplace_config` ha la sola
-  riga iniziale, nessun percorso UI raggiunge onboarding, checkout, conferma o
-  contestazione, `PAYMENTS_ENABLED` resta `false` e nessuna chiamata a Stripe è
-  mai stata fatta, nemmeno in test mode. Dettaglio in
+  riga iniziale, nessun percorso UI raggiunge onboarding o checkout; conferma e
+  contestazione hanno percorsi ordine reali. `PAYMENTS_ENABLED` resta `false` e
+  nessuna chiamata a Stripe è mai stata fatta, nemmeno in test mode. Dettaglio in
   [`../docs/ROADMAP_V1.md`](../docs/ROADMAP_V1.md), sezione «Distribuita non
   vuol dire percorsa».
 - La migrazione di Fase 7b **dipende** da quella di Fase 7: sul progetto reale
@@ -233,9 +234,10 @@ cade con loro, perché le versioni a ledger coincidono già con i nomi dei file.
    non per progetto;
 2. decidere dove sta il gate di autorizzazione, dato che la regola scritta
    presidia `supabase db push` e il percorso reale è il merge su `main`;
-3. scrivere il workflow schedulato dell'auto-rilascio: la 7d ha deciso *dove* gira
-   (GitHub Actions) e *quando* si accende (prima di `PAYMENTS_ENABLED`), ma
-   `.github/workflows/` contiene ancora il solo `ci.yml`, senza trigger `schedule`.
+3. chiudere il gate remoto della 7g: il workflow è scritto e testato localmente,
+   ma servono autorizzazioni separate per push/PR/merge, variabile e secret
+   GitHub, verifica delle notifiche native e primo `workflow_dispatch` reale con
+   `PAYMENTS_ENABLED=false`.
 
 Lo smoke Storage del bucket `cantina`, che questo elenco portava come terza voce,
 è stato eseguito e chiuso il 5 agosto 2026; la sua registrazione arriva con la
