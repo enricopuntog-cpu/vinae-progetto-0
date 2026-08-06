@@ -418,13 +418,14 @@ pagamento reale. Perimetro e debiti in `docs/MIGRATION_PHASE_1_BACKLOG.md`.
 
 ### Distribuita non vuol dire percorsa
 
-Verificato sul progetto reale il 4 agosto 2026, in sola lettura: la migrazione
-`20260803150000 phase_7b_stripe_connect_marketplace` è nel registro, insieme a
-quella di Fase 7, e le tre Edge Function `payments-checkout`,
+Verificato sul progetto reale il 5 agosto 2026, in sola lettura: il registro ha
+diciannove voci e termina con
+`20260805160250 phase_7f_fix_contestazione_enum_cast`; le tre Edge Function
+`payments-checkout`,
 `connect-onboarding` e `payouts-release` risultano `ACTIVE`. **Non c'è nessun
 `apply_migration` in attesa di autorizzazione**: l'integrazione GitHub di
 Supabase distribuisce migrazioni e function al merge su `main`, quindi lo schema
-di 7 e 7b è già live. Il registro remoto è a diciassette voci.
+di 7, 7b, 7c e la correzione 7f è già live.
 
 Il contenuto applicato è quello a netto garantito, non la prima bozza a
 percentuale piatta: `orders` porta `margine_obiettivo_bps`,
@@ -434,10 +435,17 @@ percentuale piatta: `orders` porta `margine_obiettivo_bps`,
 Ciò che resta vero è più stretto, e va detto così: `orders`, `payments`,
 `payouts` e `seller_payout_accounts` sono a **zero righe**, `marketplace_config`
 ha la sola riga di configurazione iniziale, nessun percorso dell'interfaccia
-raggiunge onboarding, checkout, conferma o contestazione, e la feature flag resta
-spenta. Restano aperte la schedulazione dell'auto-rilascio, che richiede
-`pg_cron` e `pg_net`, e la riconciliazione della fee reale. Il codice è
-raggiungibile; nessun denaro lo ha mai percorso.
+raggiunge onboarding o checkout, mentre i percorsi dell'ordine coprono conferma e
+contestazione; la feature flag resta spenta. Il checkpoint 7g implementa
+localmente la schedulazione dell'auto-rilascio con uno scheduler esterno GitHub
+Actions, come prescrive la decisione vincolante 1a, non con `pg_cron`/`pg_net`.
+Restano aperti push, review, merge e configurazione remota. Le decisioni sono
+chiuse: 1c assegna notifiche
+native e rotazione del token a Enrico / `enricopuntog-cpu`, ogni 90 giorni o
+subito dopo sospetta esposizione; 1d conferma `0 */6 * * *` e batch 50.
+Resta separato anche lo schema 2c per la fee reale: tetto futuro di 5 tentativi,
+marcatore derivato da `fee_tentativi >= 5` e nessun nuovo valore di
+`public.payment_stato`. Il codice è raggiungibile; nessun denaro lo ha mai percorso.
 
 ## Cosa NON è ancora deciso
 

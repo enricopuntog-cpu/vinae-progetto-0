@@ -645,6 +645,22 @@ tredici guardie per singolo caso che fanno il lavoro vero, e la rete esterna che
 copre allestimento e pulizia. La griglia 7b ha lo stesso limite e **non è stata
 toccata**: è un'autorizzazione separata.
 
+### Fase 7g — chiusura operativa dell'auto-rilascio
+
+**Stato:** locale sul branch `hardening/phase-7g-operational-closeout`;
+implementazione commit `90f99fa`, nessun push o PR.
+
+Le decisioni 1c/1d chiudono il proprietario operativo (`enricopuntog-cpu`), la
+rotazione di `PAYOUTS_JOB_TOKEN` ogni 90 giorni o dopo sospetta esposizione, la
+cadenza `0 */6 * * *` e il batch 50. Il checkpoint consegna workflow, runner
+Node testabile senza rete e sanità post-run sugli ordini `trattenuto` scaduti da
+oltre 24 ore.
+
+`PAYMENTS_ENABLED=false` resta invariato: la function autentica il job e legge
+solo il conteggio di sanità, senza reclamare ordini né chiamare Stripe. Otto test
+mock del runner passano; configurazione secret, invocazione reale, push, PR e
+merge restano gate separati.
+
 ## Fasi future
 
 ### Fase 8 — messaggi e notifiche

@@ -472,17 +472,28 @@ Supabase al merge, non un'autorizzazione. Il contenuto applicato è quello a net
 garantito. Restano fuori, come gate separati e nessuno autorizzato:
 esecuzione della griglia
 [`supabase/tests/7b_connect_marketplace.sql`](../supabase/tests/7b_connect_marketplace.sql)
-(23 casi, mai eseguita), e la schedulazione reale del job — che richiede
-`pg_cron` e `pg_net` configurati sul progetto ed è registrata come blocco
-commentato in fondo alla migrazione. `PAYMENTS_ENABLED=false` resta il gate
-server-side: nessuna chiamata Stripe è stata effettuata, nemmeno in test mode.
+(23 casi, mai eseguita), e la schedulazione reale del job. La decisione
+vincolante 1a della Fase 7d prescrive uno scheduler esterno GitHub Actions, non
+`pg_cron`/`pg_net`; il blocco commentato nella migrazione resta testimonianza
+storica della soluzione respinta. Il checkpoint 7g implementa localmente il
+workflow con cadenza `0 */6 * * *`, batch 50, concorrenza non sovrapposta e
+controllo di sanità oltre 24 ore. `PAYMENTS_ENABLED=false` resta il gate
+server-side: il job può verificare autenticazione e sanità, ma non reclama ordini
+e non chiama Stripe.
 
-**Debito che questa fase apre.** Finché la schedulazione non esiste,
-l'auto-rilascio è raggiungibile solo da un'invocazione manuale della function, e
-la conferma del compratore è l'unica strada effettivamente percorsa. Un rimborso
+**Debito che questa fase apre.** Finché il workflow 7g non è integrato sul branch
+di default e configurato, l'auto-rilascio è raggiungibile solo da un'invocazione
+manuale della function, e la conferma del compratore è l'unica strada
+effettivamente percorsa. Un rimborso
 successivo a un Transfer già creato non è recuperabile in automatico: la
 migrazione blocca soltanto ciò che è ancora fermo e la riconciliazione resta
 manuale.
+
+**Decisione 2c, separata dal workflow.** Il futuro recupero della fee reale ha
+un tetto di 5 tentativi registrati dal contatore `payments.fee_tentativi`; il
+marcatore di esaurimento è derivato da `fee_tentativi >= 5` e non introduce un
+nuovo valore di `public.payment_stato`. Lo schema non è scritto in questo
+checkpoint.
 
 ## Fase 8 — MessagingService + NotificationService
 
@@ -567,9 +578,11 @@ introdotta, non aggirata.
 Dalla 6d-1 un annuncio oltre `expires_at` è escluso da `public_listings`, quindi
 non è più né visibile né acquistabile. Lo **stato materializzato resta però
 `'attivo'`** finché qualcuno non chiama `listing_scadi`, e nessuno la chiama: la
-spazzata periodica su tutti i venditori richiede `pg_cron` o una Edge Function.
-Fino ad allora il numero di righe in quella condizione cresce, ed è la prima
-colonna della sezione [8] di `supabase/tests/6d-1_verifica.sql`.
+spazzata periodica richiede un lavoro esterno che invochi un endpoint server-side.
+Coerentemente con la decisione 1a della Fase 7d, l'orchestrazione prevista è
+GitHub Actions e non `pg_cron`/`pg_net`. Fino ad allora il numero di righe in
+quella condizione cresce, ed è la prima colonna della sezione [8] di
+`supabase/tests/6d-1_verifica.sql`.
 
 La futura RPC di prenotazione (Fase 7) **deve ricontrollare la scadenza** dentro
 la propria transazione: la difesa attuale è in lettura, e non impedisce a nessuno

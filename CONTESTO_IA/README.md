@@ -1,6 +1,6 @@
 # Contesto completo Vinea per IA e nuove chat
 
-Ultimo aggiornamento: **4 agosto 2026**
+Ultimo aggiornamento: **6 agosto 2026**
 
 Questa cartella è il punto di ingresso rapido per chi deve lavorare su Vinea
 senza conoscere le conversazioni precedenti. Riassume la cronologia delle fasi,
@@ -39,12 +39,10 @@ contrasto:
 
 ## In una frase
 
-Vinea sta migrando gradualmente dall'app servita
-`frontend/` + `backend/` verso `frontend-next/` + Supabase. L'ultima fase
-integrata in `main` è la 7b — Stripe Connect, commissione e trattenuta fondi —
-tramite PR #19 al merge squash `5e6b8e4`, preceduta dalla Fase 7 con la PR #18
-al merge squash `2a47952`. Entrambe sono **distribuite** sul progetto Supabase
-reale — le applica l'integrazione GitHub al merge, migrazioni e Edge Function
-insieme — e nessuna delle due è mai stata **percorsa**: tabelle di denaro a zero
-righe, nessun percorso UI, `PAYMENTS_ENABLED` resta `false` e nessuna chiamata a
-Stripe è mai stata fatta. Le fasi 8–11 non sono iniziate.
+Vinea sta migrando gradualmente dall'app servita `frontend/` + `backend/` verso
+`frontend-next/` + Supabase. L'ultima fase integrata in `main` è la 7f, PR #25
+al merge squash `491e10d`. Il checkpoint 7g è locale sul branch
+`hardening/phase-7g-operational-closeout`: workflow GitHub Actions di
+auto-rilascio implementato e verificato senza invocazioni reali. La verticale
+pagamenti resta mai percorsa, `PAYMENTS_ENABLED=false` e nessuna chiamata Stripe
+è stata fatta. Le fasi 8–11 non sono iniziate.

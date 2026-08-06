@@ -201,14 +201,23 @@ Phase 7d wrote no SQL. It closed decisions that constrain what later phases may 
   1a). `pg_cron` + `pg_net` are excluded, not deferred: they would put the service role key and the
   job token in clear text in `cron.job`, and `pg_net` is fire-and-forget, so `cron.job_run_details`
   records `succeeded` even on a `401`/`503`. Reproposing them requires reopening the decision.
-  Recommended cadence `0 */6 * * *` with `PAYOUTS_BATCH_LIMIT` 50; a scheduled workflow only runs
-  from the default branch, so the file has to live on `main`.
+  Cadence confirmed by decision 1d: `0 */6 * * *` with `PAYOUTS_BATCH_LIMIT` 50. A scheduled
+  workflow only runs from the default branch, so the file has to live on `main`.
 - **The scheduler is switched on and verified before `PAYMENTS_ENABLED`, never after** (decision
   1e). Inverted, the first run inherits a historical backlog of orders past their deadline.
-- The scheduled workflow authenticates with the **anon/publishable key plus `PAYOUTS_JOB_TOKEN`**,
-  not the service role key: `payouts-release` builds its client from the function's own env, so the
-  caller's JWT only crosses the gateway and carries no authority. The one real secret is the job
-  token.
+- The scheduled workflow authenticates with the **legacy anon JWT plus `PAYOUTS_JOB_TOKEN`**, not
+  the service role key: `payouts-release` builds its privileged client from the function's own env,
+  so the caller's JWT only crosses the gateway and carries no database authority. With
+  `verify_jwt=true`, a new `sb_publishable_...` key cannot replace the legacy anon JWT without a
+  separate gateway/config decision. The workflow sends no service role credential.
+- Decision 1c assigns native GitHub Actions failure notifications and `PAYOUTS_JOB_TOKEN` rotation
+  to Enrico / `enricopuntog-cpu`. Rotation is every 90 days and immediately after suspected
+  exposure. Phase 7g adds no external notification integration and does not configure or rotate
+  the secret remotely.
+- With `PAYMENTS_ENABLED=false`, `payouts-release` authenticates the scheduler and performs only
+  the read-only health count for orders whose `auto_rilascio_scadenza` is older than 24 hours and
+  whose `payout_stato='trattenuto'`; it does not claim orders or call Stripe. This is the safe
+  precondition for verifying the scheduler before payments are enabled.
 - **The "protezione" (3%) line is out of the Supabase model** (decision 3a). It stays untouched in
   `frontend/` until the Phase 11 cutover, where its removal has to be on the cutover list. It was
   measured at 0.59–0.60× the net margin Phase 7b already withholds, and in the real Stripe path it

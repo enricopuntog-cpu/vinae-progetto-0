@@ -167,12 +167,21 @@ resta confinata a Edge Function e Route Handler, non è un meccanismo client.
 
 La Fase 7b aggiunge bucket dedicati per consegna, conferma e contestazione, e un
 secondo fattore per il job di rilascio: `payouts-release` non è un endpoint del
-browser, non ha origini CORS e richiede `PAYOUTS_JOB_TOKEN` oltre alla
-`service_role`. Il confronto del token è a tempo costante. Le RPC di rilascio
+browser, non ha origini CORS e richiede la legacy anon JWT al gateway più
+`PAYOUTS_JOB_TOKEN`; il workflow non riceve la service role. Il confronto del
+token è a tempo costante. Solo la function costruisce internamente il client
+service role necessario alle RPC. Le RPC di rilascio
 (`ordine_auto_rilascio_esegui`, `payout_coda`, `payout_prepara`,
 `payout_registra_esito`) e quelle di account sono eseguibili solo da
 `service_role`; il compratore e il venditore hanno accesso alle sole tre
 transizioni che li riguardano.
+
+Con `PAYMENTS_ENABLED=false` il job autenticato non reclama ordini e non chiama
+Stripe: esegue soltanto il conteggio read-only delle righe con
+`payout_stato='trattenuto'` e `auto_rilascio_scadenza` più vecchia di 24 ore. Il
+runner considera errore un HTTP non 2xx, un payload inatteso, un timeout, un
+rilascio fallito o un conteggio di sanità maggiore di zero, senza stampare body,
+token o header sensibili.
 
 ## AI
 
