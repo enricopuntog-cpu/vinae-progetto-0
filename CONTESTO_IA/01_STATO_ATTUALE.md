@@ -9,7 +9,7 @@ Fotografia del **6 agosto 2026**, al checkpoint operativo 7g successivo al merge
 | Repository GitHub | [`enricopuntog-cpu/vinae-progetto-0`](https://github.com/enricopuntog-cpu/vinae-progetto-0) |
 | `origin/main` verificato | `491e10d` — merge squash della PR #25, Fase 7f |
 | Stati precedenti di `main` | `6b5b219` (PR #23, Fase 7e), `d8503af` (PR #24), `306952f` (PR #22, Fase 7d), `471b529` (PR #21, Fase 7c), `1782a1a` (PR #20, documentazione), `5e6b8e4` (PR #19, Fase 7b), `2a47952` (PR #18, Fase 7) |
-| Branch del checkpoint 7g | `hardening/phase-7g-operational-closeout`, pubblicato e collegato alla PR draft #26 verso `main` |
+| Branch del checkpoint 7g | `hardening/phase-7g-operational-closeout`, pubblicato e collegato alla PR #26 ready-for-review verso `main` |
 | Ultima fase integrata in `main` | Fase 7f — correzione di `ordine_contestazione_risolvi`, una migrazione nuova |
 | PR della 6d-1 | [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) — merged |
 | PR di riconciliazione | [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) — merged |
@@ -22,7 +22,7 @@ Fotografia del **6 agosto 2026**, al checkpoint operativo 7g successivo al merge
 | PR della correzione di `ARCHITECTURE.md` | [#24](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/24) — merged il 5 agosto 2026, squash `d8503af` |
 | PR della Fase 7e | [#23](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/23) — merged il 5 agosto 2026, squash `6b5b219`; CI verde su tutti e quattro i controlli, `Supabase Preview` **`SUCCESS`** |
 | PR della Fase 7f | [#25](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/25) — merged il 5 agosto 2026, squash `491e10d` |
-| PR della Fase 7g | [#26](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/26) — draft aperta il 6 agosto 2026; scheduler, runner fail-closed e sanità backlog; merge autorizzato solo dopo check verdi |
+| PR della Fase 7g | [#26](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/26) — ready-for-review il 6 agosto 2026 dopo backend, frontend, frontend-next e Supabase Preview verdi; squash autorizzato sugli stessi check verdi del commit finale |
 
 Dalla PR #25 in avanti il merge su `main` non richiede più il click manuale del
 committente: è autorizzato in sessione, **solo in squash**, e ogni PR deve portare
@@ -125,7 +125,7 @@ Fase 11 e richiede una decisione esplicita.
 | Decisioni economiche: auto-rilascio, fee reale, spedizione, protezione | Fase 7d, PR #22 al merge squash `306952f` — **sola decisione, nessuno SQL**: 1a, 1e e 3a chiuse; 2c approvata in design e non implementata; 3e aperta e commerciale |
 | Chiusura debiti 7b/7c: griglia 7c eseguita, smoke Storage chiuso | Fase 7e, PR #23 al merge squash `6b5b219` — quattro difetti della griglia corretti, **21 PASSA / 1 FALLISCE** con causa nota rimandata alla 7f, smoke `cantina` chiuso in dieci passi, residui a zero |
 | Contestazione risolvibile a favore del venditore, e fondi che si sbloccano | Fase 7f, PR #25 al merge squash `491e10d` — `42804` corretto con quattro cast all'enum; griglia 7c rieseguita **22 PASSA / 0 FALLISCE**, residui a zero su 26 controlli |
-| Scheduler auto-rilascio e sanità backlog | Fase 7g, PR draft #26 e commit funzionale `90f99fa` — workflow ogni 6 ore, batch 50, runner fail-closed e modalità di sanità con pagamenti spenti; non ancora in `main` né configurata remotamente |
+| Scheduler auto-rilascio e sanità backlog | Fase 7g, PR #26 ready-for-review e commit funzionale `90f99fa` — workflow ogni 6 ore, batch 50, runner fail-closed e modalità di sanità con pagamenti spenti; non ancora in `main` né configurata remotamente |
 | Messaggi e notifiche | Non migrati — Fase 8 |
 | Moderazione e audit persistente | Non migrati — Fase 9 |
 | AI reale | Non migrata — Fase 10 |
@@ -403,8 +403,9 @@ la rete esterna che copre allestimento e pulizia.
 ## Fase 7g — PR #26
 
 **Stato:** branch `hardening/phase-7g-operational-closeout` pubblicato e PR #26
-aperta in draft verso `main`; commit funzionale `90f99fa` seguito dall'handoff
-documentale. Nessun merge, secret configurato, SQL, fixture o invocazione reale.
+ready-for-review verso `main` dopo quattro check verdi e nessuna richiesta di
+modifica; commit funzionale `90f99fa` seguito dall'handoff documentale. Nessun
+merge, secret configurato, SQL, fixture o invocazione reale.
 
 - `.github/workflows/payouts-auto-release.yml` ha `schedule` `0 */6 * * *` e
   `workflow_dispatch`, batch 50, timeout espliciti e concorrenza senza

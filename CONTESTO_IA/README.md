@@ -41,7 +41,7 @@ contrasto:
 
 Vinea sta migrando gradualmente dall'app servita `frontend/` + `backend/` verso
 `frontend-next/` + Supabase. L'ultima fase integrata in `main` è la 7f, PR #25
-al merge squash `491e10d`. Il checkpoint 7g è nella PR draft #26 dal branch
+al merge squash `491e10d`. Il checkpoint 7g è nella PR #26 ready-for-review dal branch
 `hardening/phase-7g-operational-closeout`: workflow GitHub Actions di
 auto-rilascio implementato, pubblicato e verificato localmente senza invocazioni reali. La verticale
 pagamenti resta mai percorsa, `PAYMENTS_ENABLED=false` e nessuna chiamata Stripe

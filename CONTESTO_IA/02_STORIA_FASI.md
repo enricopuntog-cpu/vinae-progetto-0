@@ -648,8 +648,8 @@ toccata**: è un'autorizzazione separata.
 ### Fase 7g — chiusura operativa dell'auto-rilascio
 
 **Stato:** branch `hardening/phase-7g-operational-closeout` pubblicato; PR #26
-aperta in draft verso `main`, implementazione commit `90f99fa` più handoff
-documentale finale.
+ready-for-review verso `main` dopo quattro check verdi e nessuna richiesta di
+modifica, implementazione commit `90f99fa` più handoff documentale finale.
 
 Le decisioni 1c/1d chiudono il proprietario operativo (`enricopuntog-cpu`), la
 rotazione di `PAYOUTS_JOB_TOKEN` ogni 90 giorni o dopo sospetta esposizione, la

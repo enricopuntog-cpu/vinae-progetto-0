@@ -237,8 +237,9 @@ six-hour GitHub Actions workflow, its fail-closed Node runner and the read-only 
 health response in `payouts-release`. The PR keeps `PAYMENTS_ENABLED=false`, sends only the legacy
 anon JWT plus `PAYOUTS_JOB_TOKEN` and never sends the service role key. It leaves GitHub
 variable/secret configuration, token rotation, the first real `workflow_dispatch`, SQL, fixtures
-and payment activation outside the merge. The PR was opened as draft on 6 August 2026; CI and
-Supabase Preview must be green on its final documentation head before the authorized squash merge.
+and payment activation outside the merge. The PR was opened as draft on 6 August 2026, passed all
+four checks without review requests and moved to ready-for-review; CI and Supabase Preview must be
+green again on its final pre-merge documentation head before the authorized squash merge.
 
 ### Postgres exposure rules (binding since Phase 6d-1)
 

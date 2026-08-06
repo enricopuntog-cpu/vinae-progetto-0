@@ -11,7 +11,7 @@
     "branch": "hardening/phase-7g-operational-closeout",
     "head": "90f99fa plus final documentation handoff for PR #26",
     "origin_main": "491e10d",
-    "snapshot_note": "Rilevato il 2026-08-06 dopo git fetch --prune origin. Il checkpoint 7g parte da origin/main 491e10d; branch pubblicato e PR #26 aperta in draft. Il commit 90f99fa porta workflow, runner, test e sanita della Edge Function; il commit documentale con numero, perimetro e gate aperti e' deliberatamente l'ultimo del branch."
+    "snapshot_note": "Rilevato il 2026-08-06 dopo git fetch --prune origin. Il checkpoint 7g parte da origin/main 491e10d; branch pubblicato e PR #26 ready-for-review dopo quattro check verdi e nessuna richiesta di modifica. Il commit 90f99fa porta workflow, runner, test e sanita della Edge Function; il commit documentale pre-merge e' deliberatamente l'ultimo del branch."
   },
   "documentation_branch": "hardening/phase-7g-operational-closeout",
   "verification_pr": 26,
@@ -68,7 +68,7 @@
     "phase_7d": "merged_pr_22_squash_306952f_documentation_only_no_sql_decisions_1a_1e_3a_closed_2c_design_approved_cap_5_marker_derived_from_fee_tentativi_counter_not_payment_stato_schema_not_written_3e_open_and_commercial",
     "phase_7e": "merged_pr_23_squash_6b5b219_no_migration_written_or_applied_grid_7c_had_four_defects_and_could_not_commit_first_real_run_gave_21_pass_1_fail_case_20_failed_on_a_migration_defect_42804_fixed_by_phase_7f_storage_smoke_cantina_closed_in_ten_steps_residues_zero_supabase_preview_success",
     "phase_7f": "merged_pr_25_migration_20260805160250_fixes_a_42804_in_ordine_contestazione_risolvi_that_meant_no_dispute_could_close_in_the_sellers_favour_and_their_funds_stayed_blocked_forever_no_real_order_was_hit_tables_were_empty_grid_7c_rerun_22_pass_0_fail_residues_zero_on_26_checks",
-    "phase_7g": "draft_pr_26_branch_pushed_functional_commit_90f99fa_workflow_cron_every_6h_batch_50_native_failure_owner_enricopuntog_cpu_token_rotation_90_days_runner_8_mock_tests_health_overdue_24h_payments_enabled_false_no_release_no_stripe_checks_required_before_authorized_squash_merge",
+    "phase_7g": "ready_pr_26_four_checks_green_no_review_requests_functional_commit_90f99fa_workflow_cron_every_6h_batch_50_native_failure_owner_enricopuntog_cpu_token_rotation_90_days_runner_8_mock_tests_health_overdue_24h_payments_enabled_false_no_release_no_stripe_final_checks_required_before_authorized_squash_merge",
     "phase_8": "not_started",
     "phase_9": "not_started",
     "phase_10": "not_started",
@@ -88,7 +88,7 @@
     "health_check": "count orders with payout_stato=trattenuto and auto_rilascio_scadenza older than 24 hours; fail when count is greater than zero",
     "payments_disabled_behavior": "authenticate and run health read only; do not claim orders and do not call Stripe",
     "local_tests": "8 pass, 0 fail, mocked fetch only, no real Edge Function invocation",
-    "remote_status": "branch pushed and draft PR #26 open; GitHub variables and secrets not configured, workflow not invoked"
+    "remote_status": "branch pushed and PR #26 ready-for-review after four green checks; GitHub variables and secrets not configured, workflow not invoked"
   },
   "concurrent_work_detected": false,
   "concurrent_commits_detected": [],
@@ -119,14 +119,14 @@
     "pubblicazione iniziale 7g: branch hardening/phase-7g-operational-closeout pushato senza force e PR #26 aperta in draft verso main"
   ],
   "open_gates_in_order": [
-    "concludere CI e Supabase Preview sul commit documentale finale della PR #26; con check verdi e nessuna richiesta di modifica passare a ready-for-review ed eseguire il merge squash gia' autorizzato",
+    "concludere CI e Supabase Preview sul commit documentale pre-merge finale della PR #26; con check verdi e nessuna richiesta di modifica eseguire il merge squash gia' autorizzato",
     "dopo il merge autorizzare e configurare la variabile Actions SUPABASE_URL e i secret SUPABASE_ANON_KEY legacy JWT e PAYOUTS_JOB_TOKEN, senza service role; verificare anche le notifiche native per enricopuntog-cpu",
     "autorizzare separatamente il primo workflow_dispatch reale con PAYMENTS_ENABLED=false; deve produrre soltanto il controllo di sanita e zero azioni di rilascio",
     "esecuzione delle griglie supabase/tests/7_ordini_pagamenti.sql (16 casi), 7b_connect_marketplace.sql (23 casi) e 6d-2a_catalog_cellar_paths.sql (18 casi) sul progetto reale, con autorizzazione fixture separata: l'autorizzazione data per la griglia 7c non le copre, perche' e' per griglia e non per progetto. La 7e ha dimostrato che una griglia versionata e mai eseguita non e' una prova",
     "scrivere in un checkpoint separato lo schema della decisione 2c: tetto futuro di 5 tentativi, marcatore derivato da fee_tentativi >= 5 e nessun nuovo valore di public.payment_stato. Nessuna migrazione 2c appartiene al checkpoint 7g",
     "decidere dove sta il gate di autorizzazione ora che il merge distribuisce da solo: la regola scritta presidia supabase db push, che non e' il percorso reale"
   ],
-  "next_gate": "gate remoto della PR #26: attendere CI e Supabase Preview sul commit documentale finale, quindi ready-for-review e merge squash gia' autorizzati. Dopo il merge restano separati e non autorizzati la configurazione di SUPABASE_URL, SUPABASE_ANON_KEY e PAYOUTS_JOB_TOKEN, la verifica delle notifiche native e il primo workflow_dispatch reale con PAYMENTS_ENABLED=false. Nessuna service role in GitHub Actions e nessuna abilitazione pagamenti.",
+  "next_gate": "gate remoto della PR #26 ready-for-review: attendere CI e Supabase Preview sul commit documentale pre-merge finale, quindi merge squash gia' autorizzato. Dopo il merge restano separati e non autorizzati la configurazione di SUPABASE_URL, SUPABASE_ANON_KEY e PAYOUTS_JOB_TOKEN, la verifica delle notifiche native e il primo workflow_dispatch reale con PAYMENTS_ENABLED=false. Nessuna service role in GitHub Actions e nessuna abilitazione pagamenti.",
   "grid_status": {
     "7c_consegna_imballaggio": "eseguita due volte sul progetto reale il 2026-08-05. Prima esecuzione (Fase 7e): 21 PASSA, 1 FALLISCE, dove il caso 20 falliva per un difetto della migrazione 7c (42804) e non della prova. Seconda esecuzione (Fase 7f, con la correzione in campo): 22 PASSA, 0 FALLISCE, nessuna riga 99, residui a zero su 26 controlli. Esiti riga per riga in docs/PHASE_7E_DEBT_CLOSURE.md sezione 3 e docs/PHASE_7F_FIX_VERIFICATION.md sezione 4.3.",
     "7b_connect_marketplace": "23 casi, non eseguita. Il caso 18 e' stato verificato a parte, statico: privilegi trovati 0, PASSA. Autorizzazione fixture non concessa.",
