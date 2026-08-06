@@ -230,6 +230,16 @@ Phase 7d wrote no SQL. It closed decisions that constrain what later phases may 
 - `spedizione` stays undecided until decision 3e (one invoice or two from the logistics partner)
   has a commercial answer. Designing before it arrives means betting.
 
+### Phase 7g operational closeout — PR #26
+
+PR #26 is the delivery vehicle for the external scheduler selected in Phase 7d. It adds the
+six-hour GitHub Actions workflow, its fail-closed Node runner and the read-only overdue-payout
+health response in `payouts-release`. The PR keeps `PAYMENTS_ENABLED=false`, sends only the legacy
+anon JWT plus `PAYOUTS_JOB_TOKEN` and never sends the service role key. It leaves GitHub
+variable/secret configuration, token rotation, the first real `workflow_dispatch`, SQL, fixtures
+and payment activation outside the merge. The PR was opened as draft on 6 August 2026; CI and
+Supabase Preview must be green on its final documentation head before the authorized squash merge.
+
 ### Postgres exposure rules (binding since Phase 6d-1)
 
 RLS filters rows, never columns. These three rules are what keeps that gap closed — breaking

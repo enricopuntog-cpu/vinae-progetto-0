@@ -29,10 +29,10 @@
 | [#24](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/24) | 05-08-2026 | merged | `docs/ARCHITECTURE.md`: il percorso di pagamento è distribuito, non «ancora non distribuito»; squash `d8503af` |
 | [#23](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/23) | 05-08-2026 | merged | Fase 7e — chiusura debiti 7b/7c: griglia 7c eseguita 21/1, smoke Storage `cantina` chiuso, `Supabase Preview` `SUCCESS`; squash `6b5b219` |
 | [#25](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/25) | 05-08-2026 | merged | Fase 7f — `ordine_contestazione_risolvi`: cast dei letterali all'enum, griglia 7c rieseguita 22/0, residui zero |
+| [#26](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/26) | 06-08-2026 | draft | Fase 7g — scheduler GitHub Actions, runner fail-closed e sanità backlog con `PAYMENTS_ENABLED=false`; secret e prima invocazione reale esclusi |
 
-Checkpoint 7g non ancora in PR: branch `hardening/phase-7g-operational-closeout`,
-implementazione commit `90f99fa`; workflow auto-rilascio, runner fail-closed e
-sanità backlog, tutti verificati soltanto in locale.
+La PR #26 parte dal commit funzionale `90f99fa` e porta come ultimo commit
+l'handoff documentale con numero, perimetro e gate rimasti aperti.
 
 ## Anomalie della cronologia da conoscere
 

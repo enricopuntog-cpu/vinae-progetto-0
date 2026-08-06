@@ -647,8 +647,9 @@ toccata**: è un'autorizzazione separata.
 
 ### Fase 7g — chiusura operativa dell'auto-rilascio
 
-**Stato:** locale sul branch `hardening/phase-7g-operational-closeout`;
-implementazione commit `90f99fa`, nessun push o PR.
+**Stato:** branch `hardening/phase-7g-operational-closeout` pubblicato; PR #26
+aperta in draft verso `main`, implementazione commit `90f99fa` più handoff
+documentale finale.
 
 Le decisioni 1c/1d chiudono il proprietario operativo (`enricopuntog-cpu`), la
 rotazione di `PAYOUTS_JOB_TOKEN` ogni 90 giorni o dopo sospetta esposizione, la
@@ -658,8 +659,9 @@ oltre 24 ore.
 
 `PAYMENTS_ENABLED=false` resta invariato: la function autentica il job e legge
 solo il conteggio di sanità, senza reclamare ordini né chiamare Stripe. Otto test
-mock del runner passano; configurazione secret, invocazione reale, push, PR e
-merge restano gate separati.
+mock del runner passano; configurazione secret e invocazione reale restano gate
+separati. Il merge squash della PR #26 è autorizzato soltanto dopo CI e Supabase
+Preview verdi e assenza di richieste di modifica.
 
 ## Fasi future
 
