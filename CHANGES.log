@@ -34,14 +34,15 @@
 - Decisioni 1c/1d chiuse: notifiche native e rotazione di `PAYOUTS_JOB_TOKEN` assegnate a Enrico / `enricopuntog-cpu`, rotazione ogni 90 giorni o dopo sospetta esposizione, schedule `0 */6 * * *`, batch 50.
 - Implementazione locale nel commit `90f99fa`: workflow schedulato e manuale, runner fail-closed con 8 test mock, controllo di tipo Deno superato, batch/timeout/concorrenza espliciti e sanità sugli ordini `trattenuto` scaduti da oltre 24 ore.
 - Con `PAYMENTS_ENABLED=false`, `payouts-release` autentica e misura soltanto la sanità: nessun ordine reclamato, nessun Transfer preparato, nessuna chiamata Stripe. Nessuna invocazione reale eseguita.
+- Il committente ha autorizzato push, draft PR, correzioni 7g, ready-for-review e merge squash della sola PR 7g dopo check verdi. Il 6 agosto 2026 `gh auth status` ha però rilevato non valido il token dell'account attivo `enricopuntog-cpu`; nessuna scrittura GitHub è stata eseguita.
 
 ## NEXT STEPS
-1. Autorizzare il push del branch `hardening/phase-7g-operational-closeout` e l'apertura della PR draft con i due commit locali del checkpoint.
-2. Dopo review e autorizzazione al merge squash, configurare `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `PAYOUTS_JOB_TOKEN` in GitHub Actions e verificare le notifiche native per `enricopuntog-cpu`.
-3. Autorizzare separatamente un primo `workflow_dispatch` reale con `PAYMENTS_ENABLED=false` e verificare sanità a zero senza azioni di rilascio.
+1. Ripristinare l'autenticazione GitHub CLI di `enricopuntog-cpu` con `gh auth login -h github.com --web` e verificare `gh auth status`.
+2. Pubblicare `hardening/phase-7g-operational-closeout`, aprire la sola draft PR 7g e aggiungere numero e stato della PR all'ultimo commit documentale.
+3. Attendere CI e Supabase Preview; con check verdi e nessuna richiesta di modifica, passare a ready-for-review, eseguire il merge squash autorizzato e verificare `origin/main`.
 
 ## BLOCKERS / NOTES
-- **La 7g è pronta solo localmente.** Il workflow non gira finché il file non è sul branch di default e variabile/secret GitHub non sono configurati. Push, PR, merge, configurazione secret, notifiche e invocazione reale non sono autorizzati né eseguiti.
+- **La pubblicazione 7g è bloccata soltanto dall'autenticazione GitHub CLI non valida.** Il branch è pulito, `origin/main=491e10d`, divergenza 0 indietro / 2 avanti e i controlli locali sono verdi. Push, PR e merge sono autorizzati ma non eseguiti; configurazione secret, notifiche esterne e invocazione reale restano non autorizzate e non eseguite.
 - `SUPABASE_ANON_KEY` del workflow deve essere la legacy anon JWT finché `payouts-release` mantiene `verify_jwt=true`; una chiave `sb_publishable_...` richiede una decisione separata sul gateway. La service role non entra in GitHub Actions.
 - **L'esito `risolta` di `ordine_contestazione_risolvi` continua a non essere esercitato separatamente da `respinta`.** Percorrono lo stesso ramo e differiscono per tre costanti; due delle tre sono proprio quelle che questa fase ha castato, quindi il caso 20 prova la forma del cast per entrambi, ma le righe di `risolta` restano corrette e non eseguite. Limite dichiarato, invariato. Nessun caso copre nemmeno «codice di imballaggio dichiarato e poi scaduto prima del checkout».
 - Le griglie della Fase 7 (16 casi), della 7b (23) e della 6d-2a (18) restano **senza esito**. La 7e ha misurato quanto costa: una griglia versionata e mai eseguita non è una prova. La **griglia** 6d-2a resta non eseguita anche se il suo smoke Storage è chiuso: sono due cose diverse.
