@@ -14,9 +14,10 @@
 // `payout_prepara`, in transazione, guardando contestazione, incasso, rimborsi
 // e abilitazione del venditore. Questa function esegue e riferisce.
 //
-// Non è schedulata da nessuna migrazione: la schedulazione richiede estensioni e
-// un segreto configurati sul progetto, cioè un'autorizzazione separata da quella
-// dello schema. Finché non esiste, si invoca a mano.
+// La schedulazione vive in GitHub Actions. Con `PAYMENTS_ENABLED=false` la
+// function autentica il job e misura soltanto la coda scaduta: non reclama
+// ordini e non chiama il provider, così lo scheduler può essere verificato prima
+// di abilitare i pagamenti.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { TransferProvider } from "../_shared/payment-provider.ts";
@@ -35,12 +36,17 @@ type Preparazione = {
 };
 
 type Esito = {
+  payments_enabled: boolean;
+  batch_limit: number;
   trasferiti: number;
   gia_trasferiti: number;
   bloccati: number;
   falliti: number;
   auto_rilasciati: number;
+  trattenuti_scaduti_oltre_24h: number;
 };
+
+type LimiteInput = { limit?: unknown };
 
 const json = (body: unknown, status: number): Response =>
   new Response(JSON.stringify(body), {
@@ -69,6 +75,48 @@ const tokenValido = (ricevuto: string, atteso: string): boolean => {
 };
 
 const provider: TransferProvider = creaStripeTransferProvider();
+
+const leggiLimite = async (request: Request, fallback: number): Promise<number> => {
+  const testo = await request.text();
+  if (!testo.trim()) return fallback;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(testo) as unknown;
+  } catch {
+    throw new Error("payload_non_valido");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("payload_non_valido");
+  }
+  const input = parsed as LimiteInput;
+
+  if (input.limit === undefined) return fallback;
+  if (
+    typeof input.limit !== "number" ||
+    !Number.isInteger(input.limit) ||
+    input.limit < 1 ||
+    input.limit > 500
+  ) {
+    throw new Error("limite_non_valido");
+  }
+  return input.limit;
+};
+
+const contaTrattenutiScaduti = async (supabase: SupabaseClient): Promise<number> => {
+  const soglia = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { count, error } = await supabase
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("payout_stato", "trattenuto")
+    .lt("auto_rilascio_scadenza", soglia);
+
+  if (error || count === null) {
+    console.error("[payouts-release] controllo sanita fallito", { code: error?.code });
+    throw new Error("sanita_non_disponibile");
+  }
+  return count;
+};
 
 const rilascia = async (
   supabase: SupabaseClient,
@@ -128,13 +176,10 @@ const rilascia = async (
 
 Deno.serve(async (request) => {
   if (request.method !== "POST") return json({ error: "Metodo non consentito." }, 405);
-  if (Deno.env.get("PAYMENTS_ENABLED") !== "true") {
-    return json({ error: "Pagamenti non attivi." }, 503);
-  }
 
   // Nessuna origine CORS: non è un endpoint del browser. Il chiamante è uno
-  // scheduler e si autentica con un token dedicato, che è indipendente dalla
-  // service role key e revocabile da solo.
+  // scheduler: il gateway verifica la anon key, poi questo confronto verifica
+  // il token dedicato. La service role resta confinata all'ambiente server.
   const atteso = Deno.env.get("PAYOUTS_JOB_TOKEN") ?? "";
   const ricevuto = request.headers.get("x-vinea-job-token") ?? "";
   if (!atteso || !tokenValido(ricevuto, atteso)) {
@@ -150,17 +195,36 @@ Deno.serve(async (request) => {
     return json({ error: "Configurazione server incompleta." }, 503);
   }
 
-  const limite = Math.min(
-    Math.max(Number(Deno.env.get("PAYOUTS_BATCH_LIMIT") ?? "50") || 50, 1),
-    500,
-  );
+  const fallbackConfigurato = Number(Deno.env.get("PAYOUTS_BATCH_LIMIT") ?? "50");
+  const fallbackValido = Number.isInteger(fallbackConfigurato) &&
+    fallbackConfigurato >= 1 && fallbackConfigurato <= 500;
+  const fallbackLimite = fallbackValido ? fallbackConfigurato : 50;
+  let limite: number;
+  try {
+    limite = await leggiLimite(request, fallbackLimite);
+  } catch {
+    return json({ error: "Payload non valido." }, 400);
+  }
+
   const esito: Esito = {
+    payments_enabled: Deno.env.get("PAYMENTS_ENABLED") === "true",
+    batch_limit: limite,
     trasferiti: 0,
     gia_trasferiti: 0,
     bloccati: 0,
     falliti: 0,
     auto_rilasciati: 0,
+    trattenuti_scaduti_oltre_24h: 0,
   };
+
+  if (!esito.payments_enabled) {
+    try {
+      esito.trattenuti_scaduti_oltre_24h = await contaTrattenutiScaduti(supabase);
+    } catch {
+      return json({ error: "Controllo di sanita non disponibile." }, 502);
+    }
+    return json(esito, 200);
+  }
 
   const { data: autoRilasciati, error: autoError } = await supabase.rpc(
     "ordine_auto_rilascio_esegui",
@@ -185,6 +249,12 @@ Deno.serve(async (request) => {
   // più contesa sullo stesso pool di connessioni.
   for (const orderId of (coda as string[] | null) ?? []) {
     await rilascia(supabase, orderId, esito);
+  }
+
+  try {
+    esito.trattenuti_scaduti_oltre_24h = await contaTrattenutiScaduti(supabase);
+  } catch {
+    return json({ error: "Controllo di sanita non disponibile." }, 502);
   }
 
   return json(esito, 200);

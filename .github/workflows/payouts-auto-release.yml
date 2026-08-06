@@ -1,0 +1,37 @@
+name: Phase 7 - auto-release payouts
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase-7g-payouts-auto-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release due payouts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Invoke payouts-release
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          PAYOUTS_JOB_TOKEN: ${{ secrets.PAYOUTS_JOB_TOKEN }}
+          PAYOUTS_BATCH_LIMIT: "50"
+          PAYOUTS_REQUEST_TIMEOUT_MS: "45000"
+        run: node .github/scripts/payouts-release-job.mjs
