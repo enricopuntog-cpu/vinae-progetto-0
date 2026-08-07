@@ -664,8 +664,11 @@ separati e non eseguiti.
 
 ### Fase 8 — messaggi e notifiche
 
-**Stato:** checkpoint locale completato il 7 agosto 2026 nei commit `d4eb981` e
-`9a270f1`; branch non pushata, nessuna PR e nessun SQL applicato.
+**Stato:** checkpoint locale completato il 7 agosto 2026 nei commit `d4eb981`,
+`9a270f1`, `059becc` e `4e97139`; branch non pushata, nessuna PR e nessun SQL
+applicato. L'ultimo commit rimuove l'abilitazione RLS ridondante dalla migrazione
+per la tabella Supabase-managed `realtime.messages` e corregge a 23 casi
+l'intestazione della griglia fixture.
 
 Sono presenti schema additivo, RLS a colonne chiuse, RPC con `auth.uid()`,
 idempotenza/rate limit, Broadcast privati a payload di invalidazione, adapter

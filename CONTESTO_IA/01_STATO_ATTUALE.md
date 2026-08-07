@@ -126,7 +126,7 @@ Fase 11 e richiede una decisione esplicita.
 | Chiusura debiti 7b/7c: griglia 7c eseguita, smoke Storage chiuso | Fase 7e, PR #23 al merge squash `6b5b219` — quattro difetti della griglia corretti, **21 PASSA / 1 FALLISCE** con causa nota rimandata alla 7f, smoke `cantina` chiuso in dieci passi, residui a zero |
 | Contestazione risolvibile a favore del venditore, e fondi che si sbloccano | Fase 7f, PR #25 al merge squash `491e10d` — `42804` corretto con quattro cast all'enum; griglia 7c rieseguita **22 PASSA / 0 FALLISCE**, residui a zero su 26 controlli |
 | Scheduler auto-rilascio e sanità backlog | Fase 7g, PR #26 integrata con squash `f9c53e0`; configurazione secret e prima invocazione restano separate |
-| Messaggi e notifiche | Checkpoint locale Fase 8 nei commit `d4eb981` e `9a270f1`; 166 test, typecheck, lint, build e smoke Browser verdi; SQL non eseguito, nessun push o PR |
+| Messaggi e notifiche | Checkpoint locale Fase 8 nei commit `d4eb981`, `9a270f1`, `059becc` e `4e97139`; 166 test, typecheck, lint, build e smoke Browser rieseguiti verdi; SQL non eseguito, nessun push o PR |
 | Moderazione e audit persistente | Non migrati — Fase 9 |
 | AI reale | Non migrata — Fase 10 |
 | Cutover | Non iniziato — Fase 11 |

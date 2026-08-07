@@ -42,8 +42,11 @@ contrasto:
 Vinea sta migrando gradualmente dall'app servita `frontend/` + `backend/` verso
 `frontend-next/` + Supabase. L'ultima fase integrata in `main` è la 7g, PR #26
 al merge squash `f9c53e0`. La Fase 8 ha un checkpoint locale sul branch
-`migration/phase-8-messaging-notifications`, nei commit `d4eb981` e `9a270f1`:
+`migration/phase-8-messaging-notifications`, nei commit `d4eb981`, `9a270f1`,
+`059becc` e `4e97139`:
 schema/RPC/RLS, UI messaggi e notifiche e Realtime privato sono implementati e
-verificati localmente. SQL e prove concorrenti non sono stati eseguiti perché
-Docker/Postgres non è disponibile; non esistono push, PR o operazioni remote per
+verificati localmente. `4e97139` rimuove soltanto l'abilitazione RLS ridondante
+sulla tabella Supabase-managed `realtime.messages` e corregge a 23 casi
+l'intestazione della griglia fixture. SQL e prove concorrenti non sono stati
+eseguiti perché Docker, `psql` e Supabase CLI non sono disponibili; non esistono push, PR o operazioni remote per
 la Fase 8.

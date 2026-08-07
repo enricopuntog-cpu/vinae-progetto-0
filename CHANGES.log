@@ -2,14 +2,16 @@
 ## CURRENT STATE
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
 - `origin/main` è `f9c53e0`, merge squash della PR #26 e della Fase 7g.
-- Il branch locale `migration/phase-8-messaging-notifications` contiene `d4eb981` (schema, test SQL e specifica 8a) e `9a270f1` (UI, adapter, test e Realtime 8b/8c); non è stato pubblicato.
+- Prima del presente handoff, il branch locale `migration/phase-8-messaging-notifications` contiene quattro commit distinti: `d4eb981` (schema, test SQL e specifica 8a), `9a270f1` (UI, adapter, test e Realtime 8b/8c), `059becc` (documentazione e handoff iniziale) e `4e97139` (correzione locale Realtime e intestazione griglia); non è stato pubblicato.
+- Il ledger Supabase verificato in sola lettura resta a 19 migrazioni e termina con `20260805160250_phase_7f_fix_contestazione_enum_cast`; la migrazione Fase 8 non è applicata.
 - La soglia CI `MIN_TESTS` è 166.
 
 ## ACTIVE TASK
 - La specifica organizzativa della Fase 8 è approvata e l'implementazione locale di messaggistica, notifiche e Realtime privato è completata.
 - Lo schema è additive-only, espone ai client letture RLS e RPC con autorità server-side, usa topic privati `conversation:<uuid>` e `user:<uuid>:notifications` e non concede scritture dirette alle tabelle.
 - Il frontend include `/messaggi`, `/notifiche`, badge/header, apertura conversazione dagli annunci, adapter Supabase/mock, keyset pagination, stati offline/errore e riconciliazione canonica dopo eventi Realtime.
-- Verifiche locali concluse: 166 test passati, typecheck passato, lint con 0 errori e 25 warning non bloccanti, build di produzione passata, smoke browser delle due route passato senza errori console.
+- Verifiche locali rieseguite dopo `4e97139`: 166 test passati, typecheck passato, lint con 0 errori e 25 warning non bloccanti, build di produzione passata, smoke Browser su invio messaggio e lettura totale notifiche passato senza errori console.
+- La migrazione locale ha SHA-256 `277ee13c6d40e4355660dedf9179d083c50a7fe6ea9326d730b3d0f446900eb6`; non forza più l'abilitazione RLS su `realtime.messages` e mantiene la sola policy SELECT privata.
 - Nessun SQL è stato eseguito; nessuna migrazione, fixture, configurazione Dashboard, secret, deploy, push, PR o merge remoto è stato effettuato per la Fase 8.
 
 ## NEXT STEPS
@@ -18,7 +20,7 @@
 3. Ottenere approvazioni distinte per fixture remote, configurazione Realtime Dashboard e smoke, quindi per push e draft PR, senza merge automatico.
 
 ## BLOCKERS / NOTES
-- Docker/Postgres non è disponibile: le griglie SQL e le prove concorrenti sono versionate ma non eseguite e non costituiscono un pass.
+- Docker, `psql` e Supabase CLI non sono disponibili: le griglie SQL e le prove concorrenti sono versionate ma non eseguite e non costituiscono un pass.
 - Non è presente autorizzazione per SQL remoto, fixture remote, configurazione Dashboard Realtime, secret, deploy, push, PR o merge.
 - `PAYMENTS_ENABLED=false` resta il kill switch server-side; secret GitHub e prima invocazione reale del workflow 7g restano attività operative separate.
 - Le griglie storiche della Fase 7 (16 casi), 7b (23) e 6d-2a (18) restano senza esito; nessun job CI esegue ancora `supabase/**`.

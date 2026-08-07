@@ -243,14 +243,19 @@ those remote operations remain separate gates.
 ### Phase 8 messaging and notifications — local checkpoint
 
 The branch is `migration/phase-8-messaging-notifications`, based on `f9c53e0`. Its unpushed local
-checkpoint adds the additive messaging/notification migration, closed-column RLS and RPC ports,
+history is split into `d4eb981` (schema/spec/tests), `9a270f1` (frontend/Realtime), `059becc`
+(documentation/handoff) and `4e97139` (remove the redundant RLS enable on the Supabase-managed
+`realtime.messages` table and correct the fixture-grid header to 23 cases). It adds the additive
+messaging/notification migration, closed-column RLS and RPC ports,
 private Realtime Broadcast invalidations, TypeScript adapters, mock parity and the `/messaggi` and
 `/notifiche` routes. Browser channels call `realtime.setAuth()` before subscribing, use only
 `config.private = true`, treat payloads as closed invalidations and reload canonical rows through
 the RPC adapters. Logout or user change removes every channel and invalidates stale callbacks.
 
-No Phase 8 SQL has been applied locally or remotely: Docker/Postgres is unavailable in the current
-environment. Applying the migration, running its 23-case fixture grid, changing Dashboard Realtime,
+No Phase 8 SQL has been applied locally or remotely: Docker, `psql` and Supabase CLI are unavailable
+in the current environment. The corrected migration SHA-256 is
+`277ee13c6d40e4355660dedf9179d083c50a7fe6ea9326d730b3d0f446900eb6`. Applying the migration,
+running its 23-case fixture grid, changing Dashboard Realtime,
 pushing/opening a PR, deployment and merge each remain separate explicit gates. Migration approval
 does not authorize the fixture grid.
 

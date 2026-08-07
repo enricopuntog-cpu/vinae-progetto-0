@@ -9,9 +9,9 @@
   },
   "verified_git_snapshot": {
     "branch": "migration/phase-8-messaging-notifications",
-    "head": "9a270f1 plus final documentation handoff",
+    "head": "4e97139 plus final documentation handoff",
     "origin_main": "f9c53e0debfd11d817fa0bc5f2d183b1685a05c7",
-    "snapshot_note": "Rilevato il 2026-08-07. La branch Fase 8 parte dal merge squash f9c53e0 della PR #26. d4eb981 contiene specifica, migrazione e test SQL; 9a270f1 contiene route, adapter, mock e Realtime privato. Branch non pushata, nessuna PR e nessuna operazione Supabase remota."
+    "snapshot_note": "Rilevato il 2026-08-07. La branch Fase 8 parte dal merge squash f9c53e0 della PR #26. d4eb981 contiene specifica, migrazione e test SQL; 9a270f1 contiene route, adapter, mock e Realtime privato; 059becc contiene documentazione e handoff; 4e97139 rimuove l'abilitazione RLS ridondante su realtime.messages e corregge a 23 casi l'intestazione fixture. Branch non pushata, nessuna PR e nessuna mutazione Supabase remota. Il ledger verificato in sola lettura resta a 19 migrazioni e non contiene la Fase 8."
   },
   "documentation_branch": "migration/phase-8-messaging-notifications",
   "verification_pr": null,
@@ -28,6 +28,7 @@
     "phase_7c_migration_applied_to_real_project": true,
     "phase_7f_migration_applied_to_real_project": true,
     "phase_8_migration_applied_to_real_project": false,
+    "phase_8_migration_sha256": "277ee13c6d40e4355660dedf9179d083c50a7fe6ea9326d730b3d0f446900eb6",
     "edge_functions_deployed": true,
     "stripe_api_ever_called": false,
     "remote_migration_ledger_rows": 19,
@@ -70,7 +71,7 @@
     "phase_7e": "merged_pr_23_squash_6b5b219_no_migration_written_or_applied_grid_7c_had_four_defects_and_could_not_commit_first_real_run_gave_21_pass_1_fail_case_20_failed_on_a_migration_defect_42804_fixed_by_phase_7f_storage_smoke_cantina_closed_in_ten_steps_residues_zero_supabase_preview_success",
     "phase_7f": "merged_pr_25_migration_20260805160250_fixes_a_42804_in_ordine_contestazione_risolvi_that_meant_no_dispute_could_close_in_the_sellers_favour_and_their_funds_stayed_blocked_forever_no_real_order_was_hit_tables_were_empty_grid_7c_rerun_22_pass_0_fail_residues_zero_on_26_checks",
     "phase_7g": "merged_pr_26_squash_f9c53e0_workflow_cron_every_6h_batch_50_payments_enabled_false_remote_secrets_and_first_dispatch_still_not_configured_or_run",
-    "phase_8": "local_checkpoint_commits_d4eb981_and_9a270f1_schema_rls_rpc_private_realtime_adapters_routes_mock_parity_166_tests_typecheck_lint_build_and_browser_smoke_green_sql_not_executed_no_push_no_pr",
+    "phase_8": "local_checkpoint_commits_d4eb981_9a270f1_059becc_4e97139_schema_rls_rpc_private_realtime_adapters_routes_mock_parity_166_tests_typecheck_lint_build_and_browser_smoke_green_sql_not_executed_no_push_no_pr",
     "phase_9": "not_started",
     "phase_10": "not_started",
     "phase_11": "not_started"
@@ -119,7 +120,7 @@
     "implementazione locale 7g: commit 90f99fa con workflow, runner, otto test mock e sanita oltre 24 ore; nessuna invocazione reale",
     "pubblicazione iniziale 7g: branch hardening/phase-7g-operational-closeout pushato senza force e PR #26 aperta in draft verso main",
     "merge Fase 7g: PR #26 integrata in main con squash f9c53e0",
-    "checkpoint locale Fase 8: commit d4eb981 e 9a270f1, 166 test verdi, typecheck lint build e smoke Browser verdi; nessun SQL o remoto"
+    "checkpoint locale Fase 8: commit d4eb981, 9a270f1, 059becc e 4e97139; 166 test verdi, typecheck lint build e smoke Browser verdi; nessun SQL o remoto"
   ],
   "open_gates_in_order": [
     "rendere disponibile Docker/Postgres locale e rieseguire tutte le migrazioni, la griglia statica Fase 8, la griglia fixture da 23 casi e le cinque prove concorrenti; un atteso scritto non e' un risultato",
