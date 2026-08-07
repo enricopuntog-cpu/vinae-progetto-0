@@ -4,7 +4,7 @@
 -- Crea e cancella tre utenti, un vino, una bottiglia, un annuncio, una
 -- conversazione, messaggi, notifiche e bucket rate limit. Su un progetto
 -- remoto richiede autorizzazione fixture separata dal deploy.
--- Atteso: 21 PASSA, 0 FALLISCE, nessuna riga 99 e residui = 0.
+-- Atteso: 23 PASSA, 0 FALLISCE, nessuna riga 99 e residui = 0.
 --
 -- LIMITE DICHIARATO: questa griglia usa una sola sessione. Verifica invarianti
 -- e retry sequenziali; le gare vere sono nello script manuale concorrente.

@@ -518,8 +518,6 @@ create policy notifications_recipient_select
 
 -- Realtime Authorization: sola SELECT, solo Broadcast, solo topic esatti.
 -- Nessun cast del topic: stringhe malformate non possono generare eccezioni.
-alter table realtime.messages enable row level security;
-
 create policy vinea_phase8_private_broadcast_select
   on realtime.messages for select to authenticated
   using (
