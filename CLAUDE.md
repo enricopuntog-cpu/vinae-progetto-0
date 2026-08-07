@@ -59,7 +59,7 @@ bun run test         # Bun's native test runner — run in CI behind a minimum-c
 bun run build
 ```
 CI runs these tests and **enforces a floor**: the `Test` step of the `frontend-next` job sets
-`MIN_TESTS` (123 today) and fails when fewer cases pass than that. The floor is there because
+`MIN_TESTS` (166 today) and fails when fewer cases pass than that. The floor is there because
 `bun test` exits 0 when the test files exist but contain no cases — without it a suite that
 silently empties itself would still be green. Raise it deliberately when tests are added;
 lowering it is a decision, not housekeeping. These tests are type-checked as well: `tsconfig.json`
@@ -237,9 +237,22 @@ six-hour GitHub Actions workflow, its fail-closed Node runner and the read-only 
 health response in `payouts-release`. The PR keeps `PAYMENTS_ENABLED=false`, sends only the legacy
 anon JWT plus `PAYOUTS_JOB_TOKEN` and never sends the service role key. It leaves GitHub
 variable/secret configuration, token rotation, the first real `workflow_dispatch`, SQL, fixtures
-and payment activation outside the merge. The PR was opened as draft on 6 August 2026, passed all
-four checks without review requests and moved to ready-for-review; CI and Supabase Preview must be
-green again on its final pre-merge documentation head before the authorized squash merge.
+and payment activation outside the merge. The PR merged on 6 August 2026 as squash `f9c53e0`;
+those remote operations remain separate gates.
+
+### Phase 8 messaging and notifications — local checkpoint
+
+The branch is `migration/phase-8-messaging-notifications`, based on `f9c53e0`. Its unpushed local
+checkpoint adds the additive messaging/notification migration, closed-column RLS and RPC ports,
+private Realtime Broadcast invalidations, TypeScript adapters, mock parity and the `/messaggi` and
+`/notifiche` routes. Browser channels call `realtime.setAuth()` before subscribing, use only
+`config.private = true`, treat payloads as closed invalidations and reload canonical rows through
+the RPC adapters. Logout or user change removes every channel and invalidates stale callbacks.
+
+No Phase 8 SQL has been applied locally or remotely: Docker/Postgres is unavailable in the current
+environment. Applying the migration, running its 23-case fixture grid, changing Dashboard Realtime,
+pushing/opening a PR, deployment and merge each remain separate explicit gates. Migration approval
+does not authorize the fixture grid.
 
 ### Postgres exposure rules (binding since Phase 6d-1)
 

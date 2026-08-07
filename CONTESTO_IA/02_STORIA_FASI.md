@@ -647,9 +647,7 @@ toccata**: è un'autorizzazione separata.
 
 ### Fase 7g — chiusura operativa dell'auto-rilascio
 
-**Stato:** branch `hardening/phase-7g-operational-closeout` pubblicato; PR #26
-ready-for-review verso `main` dopo quattro check verdi e nessuna richiesta di
-modifica, implementazione commit `90f99fa` più handoff documentale finale.
+**Stato:** PR #26 integrata in `main` il 6 agosto 2026 con squash `f9c53e0`.
 
 Le decisioni 1c/1d chiudono il proprietario operativo (`enricopuntog-cpu`), la
 rotazione di `PAYOUTS_JOB_TOKEN` ogni 90 giorni o dopo sospetta esposizione, la
@@ -660,17 +658,21 @@ oltre 24 ore.
 `PAYMENTS_ENABLED=false` resta invariato: la function autentica il job e legge
 solo il conteggio di sanità, senza reclamare ordini né chiamare Stripe. Otto test
 mock del runner passano; configurazione secret e invocazione reale restano gate
-separati. Il merge squash della PR #26 è autorizzato soltanto dopo CI e Supabase
-Preview verdi e assenza di richieste di modifica.
+separati e non eseguiti.
 
 ## Fasi future
 
 ### Fase 8 — messaggi e notifiche
 
-**Stato:** non iniziata.
+**Stato:** checkpoint locale completato il 7 agosto 2026 nei commit `d4eb981` e
+`9a270f1`; branch non pushata, nessuna PR e nessun SQL applicato.
 
-Previsti `MessagingService`, `NotificationService`, ownership, Supabase
-Realtime e rate limiting lato server.
+Sono presenti schema additivo, RLS a colonne chiuse, RPC con `auth.uid()`,
+idempotenza/rate limit, Broadcast privati a payload di invalidazione, adapter
+Supabase/mock, route `/messaggi` e `/notifiche`, badge e lifecycle Realtime.
+Verifica locale: 166 test, typecheck, lint, build e smoke Browser verdi. Le
+griglie SQL da 20 e 23 casi e le cinque prove concorrenti non sono state
+eseguite per assenza di Docker/Postgres; ogni operazione remota resta separata.
 
 ### Fase 9 — moderazione
 

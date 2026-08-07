@@ -499,8 +499,19 @@ checkpoint.
 
 **Branch**: `migration/phase-8-messaging-notifications`
 
-Messaggistica (`conversations`, `messages`) e notifiche (`notifications`)
-via Supabase Realtime, con rate limit lato server.
+**Stato 7 agosto 2026:** checkpoint locale implementato, non pushato e senza SQL
+applicato. La migrazione additiva crea `conversations`,
+`conversation_participants`, `messages` e `notifications`; le scritture client
+passano soltanto da RPC con identità derivata da `auth.uid()`, idempotenza e rate
+limit. Realtime usa Broadcast privati a payload chiuso; il database resta la
+fonte canonica. Le route `/messaggi` e `/notifiche`, badge header, adapter
+Supabase/mock e lifecycle logout/reconnect sono presenti in `frontend-next/`.
+
+Verifica locale: 166 test Bun, typecheck, lint e build Next.js superati; smoke
+Browser delle due route superata senza errori console. La migrazione e le due
+griglie SQL non sono state eseguite perché Docker/Postgres non è disponibile.
+Deploy SQL, griglia fixture, Dashboard Realtime, push, PR e merge richiedono gate
+separati; l'approvazione della migrazione non autorizza la griglia fixture.
 
 ## Fase 9 — ModerationService
 

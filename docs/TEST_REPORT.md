@@ -235,3 +235,21 @@ Lo stato remoto statico della Fase 6d-1 è nuovamente coerente con il repository
 Le due griglie comportamentali sono verdi. Restano le verifiche di staging e
 compliance indicate sopra; il progetto non deve essere presentato come
 production-ready.
+
+## Checkpoint locale Fase 8 — 7 agosto 2026
+
+| Area | Comando o verifica | Esito | Dettaglio |
+|---|---|---|---|
+| Frontend Next.js | `bun run test` | Superato | 166/166 test, 13 file, 13.782 asserzioni |
+| Frontend Next.js | `bun run typecheck` | Superato | nessun errore TypeScript |
+| Frontend Next.js | `bun run lint` | Superato | exit code 0; 25 warning non bloccanti, 0 errori |
+| Frontend Next.js | `bun run build` | Superato | Next.js 16.2.12; 18 pagine generate, incluse `/messaggi` e `/notifiche` |
+| Browser locale | messaggi e notifiche mock | Superato | apertura, unread, invio, segna tutte; nessun errore console |
+| SQL statico | revisione migrazione e test contrattuali | Superato | schema, privilegi, RPC, idempotenza e Realtime coperti dai test TypeScript |
+| PostgreSQL locale | replay migrazione + griglie SQL | Non eseguito | Docker/Postgres non disponibile |
+| Supabase remoto | migrazione, fixture, Realtime Dashboard | Non eseguito | non autorizzato in questo checkpoint |
+
+La griglia statica promette 20 casi; la griglia con fixture promette 23 casi e
+cleanup. Sono attesi, non risultati: nessuno script SQL di Fase 8 è stato
+eseguito. Anche le cinque prove concorrenti restano procedure documentate e non
+evidenza eseguita.

@@ -1,6 +1,6 @@
 # Contesto completo Vinea per IA e nuove chat
 
-Ultimo aggiornamento: **6 agosto 2026**
+Ultimo aggiornamento: **7 agosto 2026**
 
 Questa cartella è il punto di ingresso rapido per chi deve lavorare su Vinea
 senza conoscere le conversazioni precedenti. Riassume la cronologia delle fasi,
@@ -40,9 +40,10 @@ contrasto:
 ## In una frase
 
 Vinea sta migrando gradualmente dall'app servita `frontend/` + `backend/` verso
-`frontend-next/` + Supabase. L'ultima fase integrata in `main` è la 7f, PR #25
-al merge squash `491e10d`. Il checkpoint 7g è nella PR #26 ready-for-review dal branch
-`hardening/phase-7g-operational-closeout`: workflow GitHub Actions di
-auto-rilascio implementato, pubblicato e verificato localmente senza invocazioni reali. La verticale
-pagamenti resta mai percorsa, `PAYMENTS_ENABLED=false` e nessuna chiamata Stripe
-è stata fatta. Le fasi 8–11 non sono iniziate.
+`frontend-next/` + Supabase. L'ultima fase integrata in `main` è la 7g, PR #26
+al merge squash `f9c53e0`. La Fase 8 ha un checkpoint locale sul branch
+`migration/phase-8-messaging-notifications`, nei commit `d4eb981` e `9a270f1`:
+schema/RPC/RLS, UI messaggi e notifiche e Realtime privato sono implementati e
+verificati localmente. SQL e prove concorrenti non sono stati eseguiti perché
+Docker/Postgres non è disponibile; non esistono push, PR o operazioni remote per
+la Fase 8.
