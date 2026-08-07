@@ -16,6 +16,8 @@ import { WineCard } from "@/components/vinea/WineCard";
 import { SectionTitle, Kpi } from "@/components/vinea/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formatPhase8Time } from "@/lib/phase8/format";
+import { usePhase8 } from "@/lib/phase8/phase8-context";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
 import { formatInteger } from "@/lib/format";
 
@@ -24,19 +26,18 @@ import { formatInteger } from "@/lib/format";
  *
  * Consigliati, novità dai venditori seguiti e ribassi sono marketplace:
  * arrivano da `annunci`, cioè da Supabase. Valore e schede della Cantina
- * arrivano dal CellarService reale. Preferiti, seguiti, notifiche e club
- * restano nello store mock finché i rispettivi domini non saranno migrati.
+ * arrivano dal CellarService reale. Le notifiche passano dal dominio Fase 8;
+ * preferiti, seguiti e club restano nello store mock.
  */
 export default function HomeUtentePageClient({ annunci }: { annunci: Wine[] }) {
   const {
     favorites,
     follows,
-    notifiche,
-    nonLette,
     communityFollows,
     viniCantina,
     cantinaLoading,
   } = useVinea();
+  const { notifications: notifiche, unreadCount: nonLette } = usePhase8();
   const consigliati = annunci.slice(0, 4);
   const nuoviSeguiti = annunci.filter((w) => follows.has(w.venditore.nome)).slice(0, 3);
   const ribassi = annunci
@@ -220,16 +221,16 @@ export default function HomeUtentePageClient({ annunci }: { annunci: Wine[] }) {
             {notifiche.slice(0, 5).map((n) => (
               <li
                 key={n.id}
-                className={`rounded-2xl border border-border p-3 ${!n.letta ? "bg-crema" : "bg-card"}`}
+                className={`rounded-2xl border border-border p-3 ${!n.readAt ? "bg-crema" : "bg-card"}`}
               >
                 <div className="flex items-start gap-2">
-                  {!n.letta && (
+                  {!n.readAt && (
                     <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-bordeaux" />
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm">{n.testo}</p>
+                    <p className="text-sm">{n.body}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {n.tempo} • {n.categoria}
+                      {formatPhase8Time(n.createdAt)} · {n.category}
                     </p>
                   </div>
                 </div>

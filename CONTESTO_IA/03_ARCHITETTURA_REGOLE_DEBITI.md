@@ -182,11 +182,10 @@ successive possono costruire.
   in test mode. Restano fuori il KYC oltre l'onboarding ospitato,
   l'interfaccia di gestione delle contestazioni e il recupero automatico di un
   rimborso successivo a un Transfer già creato;
-- schedulazione dell'auto-rilascio: **scritta e verificata localmente dalla 7g**
-  nel commit `90f99fa`, con sanità oltre 24 ore e modalità read-only quando
-  `PAYMENTS_ENABLED=false`. Restano aperti il gate remoto di push/PR/merge, la
-  configurazione di variabile e secret, la verifica delle notifiche native e la
-  prima invocazione reale con pagamenti spenti;
+- schedulazione dell'auto-rilascio: **integrata dalla 7g** con la PR #26 al
+  merge squash `f9c53e0`, con sanità oltre 24 ore e modalità read-only quando
+  `PAYMENTS_ENABLED=false`. Restano aperti configurazione di variabile e secret,
+  verifica delle notifiche native e prima invocazione reale con pagamenti spenti;
 - verifica legale italiana/UE su vendita di alcolici, età, privacy e modello
   marketplace;
 - rate limiting condiviso per RPC/Edge Functions;
@@ -213,7 +212,8 @@ successive possono costruire.
   Restano senza esito la griglia della Fase 7 (16 casi), quella della 7b (23) e
   quella della 6d-2a (18);
 - test frontend per `frontend-next/`: esistono e sono imposti in CI da
-  `MIN_TESTS`, ma coprono logica pura e adapter, non le pagine;
+  `MIN_TESTS`; la Fase 8 aggiunge contratti, adapter, mock e Realtime, mentre le
+  pagine sono state verificate con uno smoke locale nel browser;
 - revisione delle viste proprietario/security barrier prima del cutover;
 - valutazione degli indici dopo traffico rappresentativo;
 - rate limiting delle RPC Supabase;
@@ -253,7 +253,7 @@ bun run build
 ```
 
 Lo script `test` esiste ed è eseguito anche in CI, dietro una soglia minima:
-il job imposta `MIN_TESTS` (123 oggi) e fallisce se passano meno casi di così.
+il job imposta `MIN_TESTS` (166 oggi) e fallisce se passano meno casi di così.
 La soglia serve perché `bun test` esce 0 quando i file di test ci sono ma non
 contengono casi: senza di lei una suite che si svuota in silenzio resterebbe
 verde. Si alza di proposito quando si aggiungono test; abbassarla è una

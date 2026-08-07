@@ -436,16 +436,27 @@ Ciò che resta vero è più stretto, e va detto così: `orders`, `payments`,
 `payouts` e `seller_payout_accounts` sono a **zero righe**, `marketplace_config`
 ha la sola riga di configurazione iniziale, nessun percorso dell'interfaccia
 raggiunge onboarding o checkout, mentre i percorsi dell'ordine coprono conferma e
-contestazione; la feature flag resta spenta. Il checkpoint 7g implementa
-localmente la schedulazione dell'auto-rilascio con uno scheduler esterno GitHub
-Actions, come prescrive la decisione vincolante 1a, non con `pg_cron`/`pg_net`.
-Restano aperti push, review, merge e configurazione remota. Le decisioni sono
+contestazione; la feature flag resta spenta. Il checkpoint 7g implementa la
+schedulazione dell'auto-rilascio con uno scheduler esterno GitHub Actions, come
+prescrive la decisione vincolante 1a, non con `pg_cron`/`pg_net`; la PR #26 è
+integrata in `main` con squash `f9c53e0`. Restano aperte configurazione remota e
+prima invocazione. Le decisioni sono
 chiuse: 1c assegna notifiche
 native e rotazione del token a Enrico / `enricopuntog-cpu`, ogni 90 giorni o
 subito dopo sospetta esposizione; 1d conferma `0 */6 * * *` e batch 50.
 Resta separato anche lo schema 2c per la fee reale: tetto futuro di 5 tentativi,
 marcatore derivato da `fee_tentativi >= 5` e nessun nuovo valore di
 `public.payment_stato`. Il codice è raggiungibile; nessun denaro lo ha mai percorso.
+
+La Fase 8 è nella draft PR #27 sulla branch
+`migration/phase-8-messaging-notifications`: schema/RLS/RPC, adapter, route e
+Realtime privato sono implementati. La Supabase Preview ha applicato la
+migrazione e superato la griglia statica 20/20, la griglia fixture 23/23 e le
+cinque prove concorrenti, con residui zero; i quattro check della PR sono verdi
+sul precedente HEAD. Realtime sulla Preview accetta soltanto canali privati e
+lo smoke autenticato ha verificato join autorizzati, rifiuti, payload chiusi e
+assenza di duplicati. Produzione resta a 19 migrazioni fino allo squash;
+ready-for-review e merge sono autorizzati dopo i check del commit finale.
 
 ## Cosa NON è ancora deciso
 

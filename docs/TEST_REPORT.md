@@ -235,3 +235,29 @@ Lo stato remoto statico della Fase 6d-1 è nuovamente coerente con il repository
 Le due griglie comportamentali sono verdi. Restano le verifiche di staging e
 compliance indicate sopra; il progetto non deve essere presentato come
 production-ready.
+
+## Checkpoint Fase 8 e Supabase Preview — 7 agosto 2026
+
+| Area | Comando o verifica | Esito | Dettaglio |
+|---|---|---|---|
+| Frontend Next.js | `bun run test` | Superato | 166/166 test, 13 file, 13.782 asserzioni |
+| Frontend Next.js | `bun run typecheck` | Superato | nessun errore TypeScript |
+| Frontend Next.js | `bun run lint` | Superato | exit code 0; 25 warning non bloccanti, 0 errori |
+| Frontend Next.js | `bun run build` | Superato | Next.js 16.2.12; 18 pagine generate, incluse `/messaggi` e `/notifiche` |
+| Browser locale | messaggi e notifiche mock | Superato | apertura, unread, invio, segna tutte; nessun errore console |
+| SQL statico | `8_messaging_notifications_static.sql` sulla Preview | Superato | 20 PASSA, 0 FALLISCE |
+| SQL fixture | `8_messaging_notifications.sql` sulla Preview | Superato | 23 PASSA, 0 FALLISCE, cleanup incluso |
+| Concorrenza | C1-C5 sulla Preview | Superato | 5 PASSA; idempotenza, dedupe, cursore e rate limit verificati con sessioni indipendenti |
+| Cleanup | controllo esteso post-fixture | Superato | zero residui in 9 classi |
+| Supabase Preview | PR #27, progetto `jggjaqcdbcbxdxhnggio` | Superato | migrazione `20260806224517` applicata; check GitHub verde |
+| Supabase Advisor | Security e Performance sulla Preview | Riesaminati | nessun errore Fase 8; warning sulle RPC `SECURITY DEFINER` autenticate e info su FK composite/indice senza traffico, coerenti con il disegno e non bloccanti |
+| Supabase produzione | migrazione Fase 8 | Non eseguito | ledger invariato a 19 migrazioni prima del merge; nessun SQL manuale |
+| Realtime Dashboard | `Allow public access to channels=false` sulla Preview | Superato | Realtime attivo; valore riletto dopo reload |
+| Realtime autenticato | topic conversazione e notifiche sulla Preview | Superato | partecipante e destinatario iscritti; outsider respinto su entrambi; canale pubblico respinto `PrivateOnly` |
+| Payload e riconnessione | eventi `message.changed` e `notification.changed` | Superato | un evento per tipo, zero duplicati, sole chiavi chiuse previste |
+| Cleanup smoke | controllo esteso post-Realtime | Superato | zero residui in 10 classi |
+
+La Preview ha eseguito realmente la migrazione, la griglia statica da 20 casi,
+la griglia fixture da 23 casi e le cinque prove concorrenti. Il cleanup finale
+ha verificato zero residui. Questi risultati appartengono alla Preview della PR
+#27 e non dimostrano un'applicazione su produzione.

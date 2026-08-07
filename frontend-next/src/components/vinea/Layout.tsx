@@ -7,16 +7,13 @@ import {
   PlusCircle,
   Users,
   User,
-  Bell,
-  MessageCircle,
   Search,
   Shield,
-  Wine,
 } from "lucide-react";
 import { type ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { HeaderInboxActions } from "@/components/vinea/notifications/HeaderInboxActions";
 import { useVinea, type DemoRuolo } from "@/lib/vinea-store";
 
 // SommelierChat (assistente AI) non è ancora portato: dipende dal layer
@@ -42,7 +39,7 @@ const desktopLinks = [
 
 export function VineaLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { ruolo, setRuolo, notifiche, nonLette, segnaLetta, segnaTutteLette } = useVinea();
+  const { ruolo, setRuolo } = useVinea();
 
   return (
     <div className="min-h-dvh bg-background text-foreground pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
@@ -132,70 +129,7 @@ export function VineaLayout({ children }: { children: ReactNode }) {
             >
               <Search className="h-5 w-5" />
             </Link>
-            <Link
-              href="/messaggi"
-              aria-label="Messaggi"
-              data-testid="header-messages-link"
-              className="relative rounded-full p-2 hover:bg-secondary"
-            >
-              <MessageCircle className="h-5 w-5" />
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-bordeaux" />
-            </Link>
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  aria-label="Notifiche"
-                  data-testid="header-notifications-btn"
-                  className="relative rounded-full p-2 hover:bg-secondary"
-                >
-                  <Bell className="h-5 w-5" />
-                  {nonLette > 0 && (
-                    <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-bordeaux px-1 text-[10px] font-semibold text-crema">
-                      {nonLette}
-                    </span>
-                  )}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-80 p-0">
-                <div className="flex items-center justify-between border-b px-4 py-3">
-                  <p className="font-serif text-lg font-semibold">Notifiche</p>
-                  <button
-                    onClick={segnaTutteLette}
-                    className="text-xs text-bordeaux hover:underline"
-                  >
-                    Segna lette
-                  </button>
-                </div>
-                <ul className="max-h-80 overflow-y-auto">
-                  {notifiche.slice(0, 6).map((n) => (
-                    <li key={n.id}>
-                      <button
-                        onClick={() => segnaLetta(n.id)}
-                        className={`flex w-full gap-2 border-b px-4 py-3 text-left last:border-0 hover:bg-secondary/50 ${!n.letta ? "bg-crema" : ""}`}
-                      >
-                        {!n.letta && (
-                          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-bordeaux" />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm">{n.testo}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {n.tempo} • {n.categoria}
-                          </p>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                <div className="border-t p-2">
-                  <Link
-                    href="/notifiche"
-                    className="block rounded-md px-3 py-2 text-center text-sm font-medium text-bordeaux hover:bg-secondary"
-                  >
-                    Vedi tutte le notifiche →
-                  </Link>
-                </div>
-              </PopoverContent>
-            </Popover>
+            <HeaderInboxActions />
           </div>
         </div>
       </header>

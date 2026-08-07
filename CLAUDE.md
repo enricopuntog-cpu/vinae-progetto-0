@@ -59,7 +59,7 @@ bun run test         # Bun's native test runner — run in CI behind a minimum-c
 bun run build
 ```
 CI runs these tests and **enforces a floor**: the `Test` step of the `frontend-next` job sets
-`MIN_TESTS` (123 today) and fails when fewer cases pass than that. The floor is there because
+`MIN_TESTS` (166 today) and fails when fewer cases pass than that. The floor is there because
 `bun test` exits 0 when the test files exist but contain no cases — without it a suite that
 silently empties itself would still be green. Raise it deliberately when tests are added;
 lowering it is a decision, not housekeeping. These tests are type-checked as well: `tsconfig.json`
@@ -237,9 +237,34 @@ six-hour GitHub Actions workflow, its fail-closed Node runner and the read-only 
 health response in `payouts-release`. The PR keeps `PAYMENTS_ENABLED=false`, sends only the legacy
 anon JWT plus `PAYOUTS_JOB_TOKEN` and never sends the service role key. It leaves GitHub
 variable/secret configuration, token rotation, the first real `workflow_dispatch`, SQL, fixtures
-and payment activation outside the merge. The PR was opened as draft on 6 August 2026, passed all
-four checks without review requests and moved to ready-for-review; CI and Supabase Preview must be
-green again on its final pre-merge documentation head before the authorized squash merge.
+and payment activation outside the merge. The PR merged on 6 August 2026 as squash `f9c53e0`;
+those remote operations remain separate gates.
+
+### Phase 8 messaging and notifications — PR #27 pre-merge
+
+The branch is `migration/phase-8-messaging-notifications`, based on `f9c53e0`. Its published
+history is split into `d4eb981` (schema/spec/tests), `9a270f1` (frontend/Realtime), `059becc`
+(documentation/handoff), `4e97139` (remove the redundant RLS enable on the Supabase-managed
+`realtime.messages` table and correct the fixture-grid header to 23 cases) and `6ea0fe6`
+(reconciled local handoff). It adds the additive
+messaging/notification migration, closed-column RLS and RPC ports,
+private Realtime Broadcast invalidations, TypeScript adapters, mock parity and the `/messaggi` and
+`/notifiche` routes. Browser channels call `realtime.setAuth()` before subscribing, use only
+`config.private = true`, treat payloads as closed invalidations and reload canonical rows through
+the RPC adapters. Logout or user change removes every channel and invalidates stale callbacks.
+
+Draft PR #27 created the isolated Supabase Preview `jggjaqcdbcbxdxhnggio`, where migration
+`20260806224517` applied successfully. The static grid passed 20/20, the fixture grid passed 23/23,
+all five concurrent cases passed, and the extended cleanup found zero rows in nine fixture classes.
+The corrected migration SHA-256 is
+`277ee13c6d40e4355660dedf9179d083c50a7fe6ea9326d730b3d0f446900eb6`. Production remains at 19
+migrations with no Phase 8 SQL before merge. Preview Realtime is enabled with public channels
+disabled. The authenticated smoke allowed a participant on the conversation topic and the recipient
+on the notification topic, denied an outsider on both topics, denied an anonymous public channel,
+delivered exactly one closed-column message invalidation and one notification invalidation, and left
+zero fixture rows in ten checked classes. Ready-for-review and squash merge are explicitly authorized
+after the final documentation commit receives the same four green checks. Manual production SQL,
+fixtures and direct production configuration remain forbidden; only automatic merge effects are in scope.
 
 ### Postgres exposure rules (binding since Phase 6d-1)
 

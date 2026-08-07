@@ -499,8 +499,23 @@ checkpoint.
 
 **Branch**: `migration/phase-8-messaging-notifications`
 
-Messaggistica (`conversations`, `messages`) e notifiche (`notifications`)
-via Supabase Realtime, con rate limit lato server.
+**Stato 7 agosto 2026:** draft PR #27 aperta; branch pubblicato e Supabase
+Preview `jggjaqcdbcbxdxhnggio` verde. La migrazione additiva crea `conversations`,
+`conversation_participants`, `messages` e `notifications`; le scritture client
+passano soltanto da RPC con identità derivata da `auth.uid()`, idempotenza e rate
+limit. Realtime usa Broadcast privati a payload chiuso; il database resta la
+fonte canonica. Le route `/messaggi` e `/notifiche`, badge header, adapter
+Supabase/mock e lifecycle logout/reconnect sono presenti in `frontend-next/`.
+
+Verifica: 166 test Bun, typecheck, lint e build Next.js superati; smoke Browser
+delle due route superata senza errori console. Sulla Preview la migrazione è
+applicata, la griglia statica dà 20/20, la griglia fixture 23/23 e le cinque
+prove concorrenti passano; il cleanup esteso dà zero residui in nove classi.
+Realtime sulla Preview è `private_only`: lo smoke autenticato consente i topic
+del partecipante e del destinatario, rifiuta outsider e pubblico, consegna
+payload chiusi una sola volta e lascia zero residui in dieci classi. Produzione
+non è stata modificata; ready-for-review e squash merge sono autorizzati dopo
+i check del commit finale.
 
 ## Fase 9 — ModerationService
 

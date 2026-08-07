@@ -63,7 +63,11 @@
   squash `471b529`, la Fase 7d tramite PR #22 al merge squash `306952f`, la
   correzione di `ARCHITECTURE.md` tramite PR #24 al merge squash `d8503af`, la
   Fase 7e tramite PR #23 al merge squash `6b5b219`, la Fase 7f tramite PR #25 al
-  merge squash `491e10d`. La 7g è solo locale nel commit `90f99fa`.
+  merge squash `491e10d` e la Fase 7g tramite PR #26 al merge squash `f9c53e0`.
+  La Fase 8 è nella PR #27 al checkpoint pre-merge; la Preview
+  `jggjaqcdbcbxdxhnggio` è verde, ha superato griglie 20/20 e 23/23,
+  concorrenza 5/5, smoke Realtime autenticato e cleanup a zero. Produzione
+  resta alla Fase 7f fino allo squash autorizzato.
 - «Integrata» qui significa anche «distribuita»: l'integrazione GitHub di
   Supabase applica migrazioni e Edge Function al merge su `main`, da sola.
   Verificato in lettura il 5 agosto 2026 — il ledger è a **diciannove righe**, le
@@ -94,7 +98,9 @@
   applicarla per prima fallisce, perché estende tabelle e RPC che l'altra crea.
 - Il ruolo `seller_enabled` ha una sorgente autoritativa dalla 7b, ma il gate
   sulla creazione di annunci è deliberatamente spento.
-- Le fasi 8–11 non sono iniziate.
+- La Fase 8 è pubblicata e verificata su Preview, inclusi configurazione Realtime
+  privata e smoke autenticato. Ready-for-review e merge sono autorizzati dopo
+  i check dell'ultimo commit; le fasi 9–11 non sono iniziate.
 - La vecchia app resta quella servita.
 - Auth reale e ruoli demo coesistono intenzionalmente.
 - Facebook OAuth non è “da finire nel codice”: è disabilitato per un problema
@@ -234,10 +240,9 @@ cade con loro, perché le versioni a ledger coincidono già con i nomi dei file.
    non per progetto;
 2. decidere dove sta il gate di autorizzazione, dato che la regola scritta
    presidia `supabase db push` e il percorso reale è il merge su `main`;
-3. chiudere il gate remoto della 7g: il workflow è scritto e testato localmente,
-   ma servono autorizzazioni separate per push/PR/merge, variabile e secret
-   GitHub, verifica delle notifiche native e primo `workflow_dispatch` reale con
-   `PAYMENTS_ENABLED=false`.
+3. chiudere la Fase 8 con l'ultimo commit documentale, gli stessi quattro check,
+   ready-for-review e squash merge già autorizzati; verificare poi `origin/main`,
+   ledger e residui senza SQL manuale o fixture in produzione.
 
 Lo smoke Storage del bucket `cantina`, che questo elenco portava come terza voce,
 è stato eseguito e chiuso il 5 agosto 2026; la sua registrazione arriva con la

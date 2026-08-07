@@ -31,7 +31,6 @@ import type {
   StorageModule,
   WineVintageMeta,
 } from "@/data/cellar";
-import type { Notifica } from "@/data/extra";
 import type { Wine } from "@/data/wines";
 
 export type Result<T, E = string> = { ok: true; data: T } | { ok: false; error: E };
@@ -850,10 +849,83 @@ export interface PackagingProvider {
 }
 
 // ---- Messaggi --------------------------------------------------------------
+export type PageCursor = {
+  createdAt: string;
+  id: string;
+};
+
+export type RealtimeState =
+  | "idle"
+  | "connecting"
+  | "connected"
+  | "reconnecting"
+  | "offline"
+  | "error";
+
+export type ConversationParticipant = {
+  userId: string;
+  username: string;
+  avatarUrl: string;
+};
+
+export type ConversationSummary = {
+  id: string;
+  listingId: string;
+  listingSlug: string;
+  listingPriceCents: number;
+  orderId: string | null;
+  orderStatus: string | null;
+  counterpart: ConversationParticipant;
+  wineName: string;
+  wineImage: string;
+  writable: boolean;
+  lastMessageId: string | null;
+  lastMessageAt: string | null;
+  lastMessagePreview: string | null;
+  unreadCount: number;
+  activityAt: string;
+  createdAt: string;
+};
+
+export type ConversationPage = {
+  items: ConversationSummary[];
+  nextCursor: PageCursor | null;
+};
+
+export type Message = {
+  id: string;
+  conversationId: string;
+  senderId: string | null;
+  kind: "user" | "system";
+  body: string;
+  createdAt: string;
+};
+
+export type MessagePage = {
+  items: Message[];
+  nextCursor: PageCursor | null;
+};
+
+export type OpenConversationInput =
+  | { listingId: string; orderId?: never }
+  | { listingId?: never; orderId: string };
+
+export type SendMessageInput = {
+  conversationId: string;
+  text: string;
+  idempotencyKey: string;
+};
+
 export interface MessagingService {
-  conversazioni(userId: string): Promise<unknown[]>;
-  messaggi(conversationId: string): Promise<unknown[]>;
-  invia(conversationId: string, testo: string): Promise<void>;
+  conversazioni(cursor?: PageCursor, limit?: number): Promise<Result<ConversationPage>>;
+  messaggi(
+    conversationId: string,
+    cursor?: PageCursor,
+    limit?: number,
+  ): Promise<Result<MessagePage>>;
+  apri(input: OpenConversationInput): Promise<Result<{ conversationId: string }>>;
+  invia(input: SendMessageInput): Promise<Result<Message>>;
+  segnaLetti(conversationId: string, messageId?: string): Promise<Result<void>>;
 }
 
 // ---- Club ------------------------------------------------------------------
@@ -865,10 +937,33 @@ export interface ClubService {
 }
 
 // ---- Notifiche -------------------------------------------------------------
+export type NotificationDestination =
+  | { kind: "none" }
+  | { kind: "conversation"; conversationId: string }
+  | { kind: "listing"; listingId: string }
+  | { kind: "order"; orderId: string }
+  | { kind: "club"; clubSlug: string };
+
+export type Notification = {
+  id: string;
+  category: "marketplace" | "community" | "sistema";
+  eventType: string;
+  body: string;
+  destination: NotificationDestination;
+  readAt: string | null;
+  createdAt: string;
+};
+
+export type NotificationPage = {
+  items: Notification[];
+  nextCursor: PageCursor | null;
+};
+
 export interface NotificationService {
-  elenco(userId: string): Promise<Notifica[]>;
-  segnaLetta(id: string): Promise<void>;
-  segnaTutteLette(userId: string): Promise<void>;
+  elenco(cursor?: PageCursor, limit?: number): Promise<Result<NotificationPage>>;
+  nonLette(): Promise<Result<number>>;
+  segnaLetta(id: string): Promise<Result<void>>;
+  segnaTutteLette(): Promise<Result<number>>;
 }
 
 // ---- Moderazione -----------------------------------------------------------

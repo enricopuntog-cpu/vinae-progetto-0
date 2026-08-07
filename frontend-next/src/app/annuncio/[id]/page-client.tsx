@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import type { Wine } from "@/data/wines";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
+import { usePhase8 } from "@/lib/phase8/phase8-context";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -51,6 +52,7 @@ export default function AnnuncioDetailPageClient({
   correlati: Wine[];
 }) {
   const router = useRouter();
+  const { openConversation } = usePhase8();
   const {
     favorites,
     toggleFavorite,
@@ -249,10 +251,18 @@ export default function AnnuncioDetailPageClient({
               <Heart className={`h-4 w-4 ${fav ? "fill-bordeaux text-bordeaux" : ""}`} />{" "}
               {fav ? "Preferito" : "Salva"}
             </Button>
-            <Button variant="ghost" asChild>
-              <Link href="/messaggi">
-                <MessageCircle className="h-4 w-4" /> Messaggio
-              </Link>
+            <Button
+              variant="ghost"
+              onClick={async () => {
+                const result = await openConversation({ listingId: wine.listingId ?? wine.id });
+                if (!result.ok) {
+                  toast.error(result.error);
+                  return;
+                }
+                router.push(`/messaggi?conversation=${result.data}`);
+              }}
+            >
+              <MessageCircle className="h-4 w-4" /> Messaggio
             </Button>
             <Button
               variant="ghost"

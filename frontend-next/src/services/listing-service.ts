@@ -99,6 +99,11 @@ const IMMAGINE_ASSENTE = "/images/vinea-bottle-1.jpg";
 /** Bucket delle fotografie caricate dai venditori (Fase 6b). */
 export const BUCKET_ANNUNCI = "annunci";
 
+const LISTING_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export const listingLookupField = (value: string): "id" | "slug" =>
+  LISTING_UUID.test(value) ? "id" : "slug";
+
 function centesimiInEuro(cents: number): number {
   return cents / 100;
 }
@@ -147,6 +152,7 @@ export function rigaAWine(riga: PublicListingRow): Wine {
   return {
     // L'identità pubblica dell'annuncio, quella che finisce in /annuncio/<id>.
     id: riga.slug,
+    listingId: riga.id,
     detailHref: `/annuncio/${riga.slug}`,
     // Lo slug del vino è un'altra cosa: è la chiave con cui i componenti
     // ritrovano finestra di bevuta e abbinamenti nei metadati non ancora
@@ -267,7 +273,7 @@ export function createListingService(client: SupabaseClient | null): ListingServ
       const { data, error } = await client
         .from("public_listings")
         .select(COLONNE)
-        .eq("slug", slug)
+        .eq(listingLookupField(slug), slug)
         .maybeSingle();
 
       if (error) {
