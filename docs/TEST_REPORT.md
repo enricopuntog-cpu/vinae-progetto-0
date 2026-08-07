@@ -251,8 +251,11 @@ production-ready.
 | Cleanup | controllo esteso post-fixture | Superato | zero residui in 9 classi |
 | Supabase Preview | PR #27, progetto `jggjaqcdbcbxdxhnggio` | Superato | migrazione `20260806224517` applicata; check GitHub verde |
 | Supabase Advisor | Security e Performance sulla Preview | Riesaminati | nessun errore Fase 8; warning sulle RPC `SECURITY DEFINER` autenticate e info su FK composite/indice senza traffico, coerenti con il disegno e non bloccanti |
-| Supabase produzione | migrazione Fase 8 | Non eseguito | ledger invariato a 19 migrazioni; merge non autorizzato |
-| Realtime Dashboard | configurazione e smoke autenticato | Non eseguito | autorizzazione separata non concessa |
+| Supabase produzione | migrazione Fase 8 | Non eseguito | ledger invariato a 19 migrazioni prima del merge; nessun SQL manuale |
+| Realtime Dashboard | `Allow public access to channels=false` sulla Preview | Superato | Realtime attivo; valore riletto dopo reload |
+| Realtime autenticato | topic conversazione e notifiche sulla Preview | Superato | partecipante e destinatario iscritti; outsider respinto su entrambi; canale pubblico respinto `PrivateOnly` |
+| Payload e riconnessione | eventi `message.changed` e `notification.changed` | Superato | un evento per tipo, zero duplicati, sole chiavi chiuse previste |
+| Cleanup smoke | controllo esteso post-Realtime | Superato | zero residui in 10 classi |
 
 La Preview ha eseguito realmente la migrazione, la griglia statica da 20 casi,
 la griglia fixture da 23 casi e le cinque prove concorrenti. Il cleanup finale

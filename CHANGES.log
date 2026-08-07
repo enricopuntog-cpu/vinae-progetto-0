@@ -2,7 +2,7 @@
 ## CURRENT STATE
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
 - `origin/main` è `f9c53e0`, merge squash della PR #26 e della Fase 7g.
-- Il branch `migration/phase-8-messaging-notifications` è pubblicato nella draft PR #27; nessun force push, ready-for-review o merge è stato eseguito.
+- Il branch `migration/phase-8-messaging-notifications` è pubblicato nella draft PR #27; configurazione Realtime e smoke autenticato della Preview sono chiusi, mentre ready-for-review e merge attendono questo ultimo commit documentale e i relativi check.
 - La Supabase Preview isolata `jggjaqcdbcbxdxhnggio` è `ACTIVE_HEALTHY` e contiene la migrazione `20260806224517_phase_8_messaging_notifications`; produzione resta a 19 migrazioni e termina con la Fase 7f.
 - La soglia CI `MIN_TESTS` è 166.
 
@@ -13,16 +13,18 @@
 - Verifiche locali rieseguite dopo `4e97139`: 166 test passati, typecheck passato, lint con 0 errori e 25 warning non bloccanti, build di produzione passata, smoke Browser su invio messaggio e lettura totale notifiche passato senza errori console.
 - La migrazione locale ha SHA-256 `277ee13c6d40e4355660dedf9179d083c50a7fe6ea9326d730b3d0f446900eb6`; non forza più l'abilitazione RLS su `realtime.messages` e mantiene la sola policy SELECT privata.
 - Sulla Preview: griglia statica 20 PASSA / 0 FALLISCE, griglia fixture 23 PASSA / 0 FALLISCE, cinque prove concorrenti superate e cleanup con zero residui in nove classi.
-- I quattro check della PR #27 sono verdi: frontend, frontend-next, backend e Supabase Preview.
+- Sulla Preview Realtime è attivo con `Allow public access to channels=false`. Lo smoke autenticato ha autorizzato partecipante e destinatario, respinto outsider e canale pubblico, ricevuto un solo evento messaggio e un solo evento notifica con payload chiusi e lasciato zero residui in dieci classi.
+- I quattro check della PR #27 sono verdi sul commit `3af8477`; il commit documentale finale deve ottenere gli stessi esiti prima dello squash.
 
 ## NEXT STEPS
-1. Ottenere autorizzazione separata per configurare i canali privati Realtime sulla Preview ed eseguire lo smoke autenticato.
-2. Ottenere autorizzazione esplicita per ready-for-review e merge squash della PR #27.
-3. Dopo il merge autorizzato, verificare `origin/main`, ledger Supabase di produzione e assenza di fixture residue.
+1. Pubblicare il commit documentale finale della PR #27 e attendere i quattro check sul nuovo HEAD.
+2. Con gli stessi check verdi, passare la PR #27 a ready-for-review ed eseguire il merge squash autorizzato.
+3. Dopo il merge, verificare `origin/main`, ledger Supabase di produzione e assenza di fixture residue.
 
 ## BLOCKERS / NOTES
 - Docker, `psql` e Supabase CLI restano assenti, ma le verifiche PostgreSQL Fase 8 sono state eseguite sulla Preview autorizzata e isolata.
-- Non è presente autorizzazione per configurazione Dashboard Realtime, smoke autenticato, ready-for-review, produzione o merge.
+- Il committente ha autorizzato configurazione e smoke sulla Preview, ready-for-review e squash merge della PR #27 con i soli effetti automatici sulla produzione; SQL manuale, fixture e modifiche dirette sulla produzione restano vietati.
+- La restrizione Realtime `private_only` è stata configurata soltanto sulla Preview e non costituisce una modifica diretta della produzione.
 - `PAYMENTS_ENABLED=false` resta il kill switch server-side; secret GitHub e prima invocazione reale del workflow 7g restano attività operative separate.
 - Le griglie storiche della Fase 7 (16 casi), 7b (23) e 6d-2a (18) restano senza esito; nessun job CI esegue ancora `supabase/**`.
 - Pagamenti e Stripe non sono mai stati percorsi; onboarding/checkout UI, recupero automatico di rimborsi dopo Transfer, recupero fee e gate `seller_enabled` restano aperti.

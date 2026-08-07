@@ -30,10 +30,10 @@
 | [#23](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/23) | 05-08-2026 | merged | Fase 7e — chiusura debiti 7b/7c: griglia 7c eseguita 21/1, smoke Storage `cantina` chiuso, `Supabase Preview` `SUCCESS`; squash `6b5b219` |
 | [#25](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/25) | 05-08-2026 | merged | Fase 7f — `ordine_contestazione_risolvi`: cast dei letterali all'enum, griglia 7c rieseguita 22/0, residui zero |
 | [#26](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/26) | 06-08-2026 | merged | Fase 7g — quattro check verdi, scheduler GitHub Actions, runner fail-closed e sanità backlog con `PAYMENTS_ENABLED=false`; squash `f9c53e0`; secret e prima invocazione reale esclusi |
-| [#27](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/27) | 07-08-2026 | draft | Fase 8 — messaggistica, notifiche e Realtime privato; quattro check verdi, Preview 20/20 + 23/23 + 5/5 concorrenti, residui zero; produzione e merge esclusi |
+| [#27](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/27) | 07-08-2026 | pre-merge | Fase 8 — messaggistica, notifiche e Realtime privato; Preview 20/20 + 23/23 + 5/5 concorrenti, smoke autenticato, residui zero; squash autorizzato dopo i check finali |
 
 La PR #26 parte dal commit funzionale `90f99fa` ed è stata integrata in `main`
-con lo squash `f9c53e0`. La Fase 8 usa la sola draft PR #27.
+con lo squash `f9c53e0`. La Fase 8 usa la sola PR #27, ora al checkpoint pre-merge.
 
 ## Anomalie della cronologia da conoscere
 

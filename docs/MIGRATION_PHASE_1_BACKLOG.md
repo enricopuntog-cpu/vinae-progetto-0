@@ -511,8 +511,11 @@ Verifica: 166 test Bun, typecheck, lint e build Next.js superati; smoke Browser
 delle due route superata senza errori console. Sulla Preview la migrazione è
 applicata, la griglia statica dà 20/20, la griglia fixture 23/23 e le cinque
 prove concorrenti passano; il cleanup esteso dà zero residui in nove classi.
-Produzione non è stata modificata. Dashboard Realtime, smoke autenticato,
-ready-for-review e merge richiedono gate separati.
+Realtime sulla Preview è `private_only`: lo smoke autenticato consente i topic
+del partecipante e del destinatario, rifiuta outsider e pubblico, consegna
+payload chiusi una sola volta e lascia zero residui in dieci classi. Produzione
+non è stata modificata; ready-for-review e squash merge sono autorizzati dopo
+i check del commit finale.
 
 ## Fase 9 — ModerationService
 

@@ -664,7 +664,7 @@ separati e non eseguiti.
 
 ### Fase 8 — messaggi e notifiche
 
-**Stato:** draft PR #27 aperta il 7 agosto 2026 dai commit `d4eb981`,
+**Stato:** PR #27 al checkpoint pre-merge il 7 agosto 2026 dai commit `d4eb981`,
 `9a270f1`, `059becc`, `4e97139` e successivo handoff di verifica. La Preview
 `jggjaqcdbcbxdxhnggio` ha applicato la migrazione; produzione resta invariata.
 `4e97139` rimuove l'abilitazione RLS ridondante dalla migrazione
@@ -676,8 +676,11 @@ idempotenza/rate limit, Broadcast privati a payload di invalidazione, adapter
 Supabase/mock, route `/messaggi` e `/notifiche`, badge e lifecycle Realtime.
 Verifica: 166 test, typecheck, lint, build e smoke Browser verdi; quattro check
 della PR verdi. Sulla Preview: griglia statica 20/20, fixture 23/23, concorrenza
-5/5 e cleanup esteso con zero residui. Dashboard Realtime, smoke autenticato,
-ready-for-review e merge restano autorizzazioni separate.
+5/5 e cleanup esteso con zero residui. Realtime sulla Preview è attivo con
+canali pubblici disabilitati; lo smoke autenticato ha consentito i due topic
+proprietari, respinto outsider e pubblico, ricevuto payload chiusi senza
+duplicati e ripulito dieci classi. Ready-for-review e squash merge sono
+autorizzati dopo i check finali; nessuna modifica diretta alla produzione lo è.
 
 ### Fase 9 — moderazione
 

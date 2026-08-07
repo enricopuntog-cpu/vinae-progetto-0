@@ -452,9 +452,11 @@ La Fase 8 è nella draft PR #27 sulla branch
 `migration/phase-8-messaging-notifications`: schema/RLS/RPC, adapter, route e
 Realtime privato sono implementati. La Supabase Preview ha applicato la
 migrazione e superato la griglia statica 20/20, la griglia fixture 23/23 e le
-cinque prove concorrenti, con residui zero; i quattro check della PR sono verdi.
-Produzione resta a 19 migrazioni. Dashboard Realtime, smoke autenticato,
-ready-for-review e merge restano gate distinti.
+cinque prove concorrenti, con residui zero; i quattro check della PR sono verdi
+sul precedente HEAD. Realtime sulla Preview accetta soltanto canali privati e
+lo smoke autenticato ha verificato join autorizzati, rifiuti, payload chiusi e
+assenza di duplicati. Produzione resta a 19 migrazioni fino allo squash;
+ready-for-review e merge sono autorizzati dopo i check del commit finale.
 
 ## Cosa NON è ancora deciso
 

@@ -240,7 +240,7 @@ variable/secret configuration, token rotation, the first real `workflow_dispatch
 and payment activation outside the merge. The PR merged on 6 August 2026 as squash `f9c53e0`;
 those remote operations remain separate gates.
 
-### Phase 8 messaging and notifications — draft PR #27
+### Phase 8 messaging and notifications — PR #27 pre-merge
 
 The branch is `migration/phase-8-messaging-notifications`, based on `f9c53e0`. Its published
 history is split into `d4eb981` (schema/spec/tests), `9a270f1` (frontend/Realtime), `059becc`
@@ -258,8 +258,13 @@ Draft PR #27 created the isolated Supabase Preview `jggjaqcdbcbxdxhnggio`, where
 all five concurrent cases passed, and the extended cleanup found zero rows in nine fixture classes.
 The corrected migration SHA-256 is
 `277ee13c6d40e4355660dedf9179d083c50a7fe6ea9326d730b3d0f446900eb6`. Production remains at 19
-migrations with no Phase 8 SQL. Dashboard Realtime configuration, authenticated Realtime smoke,
-ready-for-review and squash merge remain separate explicit gates.
+migrations with no Phase 8 SQL before merge. Preview Realtime is enabled with public channels
+disabled. The authenticated smoke allowed a participant on the conversation topic and the recipient
+on the notification topic, denied an outsider on both topics, denied an anonymous public channel,
+delivered exactly one closed-column message invalidation and one notification invalidation, and left
+zero fixture rows in ten checked classes. Ready-for-review and squash merge are explicitly authorized
+after the final documentation commit receives the same four green checks. Manual production SQL,
+fixtures and direct production configuration remain forbidden; only automatic merge effects are in scope.
 
 ### Postgres exposure rules (binding since Phase 6d-1)
 
