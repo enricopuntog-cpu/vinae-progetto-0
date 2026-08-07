@@ -349,3 +349,26 @@ il rifiuto, ma le due prove non sono la stessa.
 griglia della Fase 7: le fixture della 7b toccano `payouts` e
 `seller_payout_accounts`, ed è un'autorizzazione distinta da quella concessa per
 la 7c.
+
+## Fase 8 — messaggi e notifiche
+
+Eseguire soltanto dopo l'applicazione autorizzata della migrazione
+`20260806224517_phase_8_messaging_notifications.sql`:
+
+| # | File | Fixture | Esito atteso |
+|---|---|---|---|
+| 1 | [`8_messaging_notifications_static.sql`](8_messaging_notifications_static.sql) | No | 20 `PASSA`, 0 `FALLISCE` |
+| 2 | [`8_messaging_notifications.sql`](8_messaging_notifications.sql) | Sì | 23 `PASSA`, 0 `FALLISCE`, nessuna riga 99 |
+
+La griglia con fixture crea e cancella tre utenti, vino, bottiglia, annuncio,
+conversazione, messaggi, notifiche e bucket rate-limit. Richiede quindi una
+autorizzazione esplicita distinta dal deploy della migrazione. Il caso 23
+misura i residui dopo il cleanup; il test forza inoltre i constraint differiti
+in modalità immediata dopo la creazione della conversazione.
+
+Le cinque gare descritte in
+[`docs/PHASE_8_CONCURRENCY_TEST.md`](../../docs/PHASE_8_CONCURRENCY_TEST.md)
+richiedono due sessioni PostgreSQL indipendenti e non sono coperte dalla griglia
+sequenziale. Al 7 agosto 2026 nessuno dei due script e nessuna prova concorrente
+è stata eseguita: Docker/Postgres non è disponibile e non esiste autorizzazione
+remota per migrazione o fixture.
