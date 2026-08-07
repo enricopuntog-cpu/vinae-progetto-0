@@ -64,9 +64,9 @@
   correzione di `ARCHITECTURE.md` tramite PR #24 al merge squash `d8503af`, la
   Fase 7e tramite PR #23 al merge squash `6b5b219`, la Fase 7f tramite PR #25 al
   merge squash `491e10d` e la Fase 7g tramite PR #26 al merge squash `f9c53e0`.
-  La Fase 8 è solo locale nei commit `d4eb981`, `9a270f1`, `059becc` e
-  `4e97139`; l'ultimo corregge esclusivamente la gestione RLS della tabella
-  Supabase-managed `realtime.messages` e il conteggio atteso della griglia fixture.
+  La Fase 8 è nella draft PR #27; la Preview `jggjaqcdbcbxdxhnggio` è verde e
+  ha superato griglie 20/20 e 23/23, concorrenza 5/5 e cleanup a zero. Produzione
+  resta alla Fase 7f.
 - «Integrata» qui significa anche «distribuita»: l'integrazione GitHub di
   Supabase applica migrazioni e Edge Function al merge su `main`, da sola.
   Verificato in lettura il 5 agosto 2026 — il ledger è a **diciannove righe**, le
@@ -97,8 +97,9 @@
   applicarla per prima fallisce, perché estende tabelle e RPC che l'altra crea.
 - Il ruolo `seller_enabled` ha una sorgente autoritativa dalla 7b, ma il gate
   sulla creazione di annunci è deliberatamente spento.
-- La Fase 8 ha un checkpoint locale completo ma non eseguito su Postgres e non
-  pubblicato; le fasi 9–11 non sono iniziate.
+- La Fase 8 è pubblicata in draft e verificata su Preview; Dashboard Realtime,
+  smoke autenticato, ready-for-review e merge restano aperti. Le fasi 9–11 non
+  sono iniziate.
 - La vecchia app resta quella servita.
 - Auth reale e ruoli demo coesistono intenzionalmente.
 - Facebook OAuth non è “da finire nel codice”: è disabilitato per un problema
@@ -238,10 +239,9 @@ cade con loro, perché le versioni a ledger coincidono già con i nomi dei file.
    non per progetto;
 2. decidere dove sta il gate di autorizzazione, dato che la regola scritta
    presidia `supabase db push` e il percorso reale è il merge su `main`;
-3. chiudere in ordine i gate della Fase 8: esecuzione locale SQL e concorrenza,
-   approvazione separata per DDL remoto, fixture remote e configurazione
-   Realtime Dashboard, quindi approvazione distinta per push e PR; il merge non
-   è mai automatico.
+3. chiudere gli ultimi gate della Fase 8: configurazione Realtime e smoke
+   autenticato sulla Preview, poi approvazione distinta per ready-for-review e
+   merge squash; produzione non è mai implicita.
 
 Lo smoke Storage del bucket `cantina`, che questo elenco portava come terza voce,
 è stato eseguito e chiuso il 5 agosto 2026; la sua registrazione arriva con la

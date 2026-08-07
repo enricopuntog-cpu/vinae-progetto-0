@@ -2,8 +2,8 @@
 ## CURRENT STATE
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
 - `origin/main` è `f9c53e0`, merge squash della PR #26 e della Fase 7g.
-- Prima del presente handoff, il branch locale `migration/phase-8-messaging-notifications` contiene quattro commit distinti: `d4eb981` (schema, test SQL e specifica 8a), `9a270f1` (UI, adapter, test e Realtime 8b/8c), `059becc` (documentazione e handoff iniziale) e `4e97139` (correzione locale Realtime e intestazione griglia); non è stato pubblicato.
-- Il ledger Supabase verificato in sola lettura resta a 19 migrazioni e termina con `20260805160250_phase_7f_fix_contestazione_enum_cast`; la migrazione Fase 8 non è applicata.
+- Il branch `migration/phase-8-messaging-notifications` è pubblicato nella draft PR #27; nessun force push, ready-for-review o merge è stato eseguito.
+- La Supabase Preview isolata `jggjaqcdbcbxdxhnggio` è `ACTIVE_HEALTHY` e contiene la migrazione `20260806224517_phase_8_messaging_notifications`; produzione resta a 19 migrazioni e termina con la Fase 7f.
 - La soglia CI `MIN_TESTS` è 166.
 
 ## ACTIVE TASK
@@ -12,16 +12,17 @@
 - Il frontend include `/messaggi`, `/notifiche`, badge/header, apertura conversazione dagli annunci, adapter Supabase/mock, keyset pagination, stati offline/errore e riconciliazione canonica dopo eventi Realtime.
 - Verifiche locali rieseguite dopo `4e97139`: 166 test passati, typecheck passato, lint con 0 errori e 25 warning non bloccanti, build di produzione passata, smoke Browser su invio messaggio e lettura totale notifiche passato senza errori console.
 - La migrazione locale ha SHA-256 `277ee13c6d40e4355660dedf9179d083c50a7fe6ea9326d730b3d0f446900eb6`; non forza più l'abilitazione RLS su `realtime.messages` e mantiene la sola policy SELECT privata.
-- Nessun SQL è stato eseguito; nessuna migrazione, fixture, configurazione Dashboard, secret, deploy, push, PR o merge remoto è stato effettuato per la Fase 8.
+- Sulla Preview: griglia statica 20 PASSA / 0 FALLISCE, griglia fixture 23 PASSA / 0 FALLISCE, cinque prove concorrenti superate e cleanup con zero residui in nove classi.
+- I quattro check della PR #27 sono verdi: frontend, frontend-next, backend e Supabase Preview.
 
 ## NEXT STEPS
-1. Ripristinare Docker/Postgres locale ed eseguire replay migrazioni, griglia statica da 20 casi, griglia fixture da 23 casi e le cinque prove concorrenti, conservando l'evidenza della pulizia.
-2. Revisionare SQL e hash esatti e ottenere approvazione separata nella sessione corrente prima del DDL remoto, poi allineare filename e migration history se viene usato `apply_migration`.
-3. Ottenere approvazioni distinte per fixture remote, configurazione Realtime Dashboard e smoke, quindi per push e draft PR, senza merge automatico.
+1. Ottenere autorizzazione separata per configurare i canali privati Realtime sulla Preview ed eseguire lo smoke autenticato.
+2. Ottenere autorizzazione esplicita per ready-for-review e merge squash della PR #27.
+3. Dopo il merge autorizzato, verificare `origin/main`, ledger Supabase di produzione e assenza di fixture residue.
 
 ## BLOCKERS / NOTES
-- Docker, `psql` e Supabase CLI non sono disponibili: le griglie SQL e le prove concorrenti sono versionate ma non eseguite e non costituiscono un pass.
-- Non è presente autorizzazione per SQL remoto, fixture remote, configurazione Dashboard Realtime, secret, deploy, push, PR o merge.
+- Docker, `psql` e Supabase CLI restano assenti, ma le verifiche PostgreSQL Fase 8 sono state eseguite sulla Preview autorizzata e isolata.
+- Non è presente autorizzazione per configurazione Dashboard Realtime, smoke autenticato, ready-for-review, produzione o merge.
 - `PAYMENTS_ENABLED=false` resta il kill switch server-side; secret GitHub e prima invocazione reale del workflow 7g restano attività operative separate.
 - Le griglie storiche della Fase 7 (16 casi), 7b (23) e 6d-2a (18) restano senza esito; nessun job CI esegue ancora `supabase/**`.
 - Pagamenti e Stripe non sono mai stati percorsi; onboarding/checkout UI, recupero automatico di rimborsi dopo Transfer, recupero fee e gate `seller_enabled` restano aperti.

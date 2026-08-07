@@ -1,10 +1,29 @@
 # Fase 8 - prove concorrenti PostgreSQL
 
+## Esecuzione verificata - PR #27
+
+Eseguite il 7 agosto 2026 sulla Supabase Preview isolata
+`jggjaqcdbcbxdxhnggio` della draft PR #27, con due chiamate SQL indipendenti
+avviate nello stesso intervallo. Produzione non è stata usata.
+
+| Caso | Esito | Evidenza |
+| --- | --- | --- |
+| C1 - doppia apertura | PASSA | entrambe le sessioni hanno restituito lo stesso UUID; 1 conversazione e 2 partecipanti |
+| C2 - stessa chiave e stesso payload | PASSA | stesso `message.id`; 1 messaggio, 1 notifica e un solo token consumato in entrambi i bucket |
+| C3 - stessa chiave e payload diverso | PASSA | un inserimento canonico; l'altra sessione ha restituito SQLSTATE `22023`; 1 notifica |
+| C4 - cursore ultimo messaggio | PASSA | `last_message_id` e `last_message_at` coincidono con il massimo di `(created_at, id)` |
+| C5 - evento sistema duplicato | PASSA | stesso `message.id`; 1 messaggio sistema e 1 notifica |
+
+Il cleanup finale ha restituito zero residui in tutte le nove classi controllate:
+`auth.users`, `profiles`, `conversations`, `messages`, `notifications`,
+`listings`, `bottle_units`, `wines` e `private.rate_limit_buckets`.
+
 Queste prove sono separate dalla griglia sequenziale. Richiedono un database
-locale ricostruito dalle migrazioni, le fixture di
+PostgreSQL ricostruito dalle migrazioni oppure una Preview isolata esplicitamente
+autorizzata, le fixture di
 `supabase/tests/8_messaging_notifications.sql` mantenute vive per la durata
-della prova e due connessioni `psql` indipendenti. Non vanno eseguite su un
-progetto remoto senza autorizzazione fixture esplicita.
+della prova e due connessioni indipendenti. Non vanno eseguite su produzione
+senza autorizzazione fixture esplicita.
 
 Ogni sessione deve impersonare un partecipante con la stessa procedura
 `request.jwt.claims` usata dalla griglia. Le due chiamate partono nello stesso

@@ -499,19 +499,20 @@ checkpoint.
 
 **Branch**: `migration/phase-8-messaging-notifications`
 
-**Stato 7 agosto 2026:** checkpoint locale implementato, non pushato e senza SQL
-applicato. La migrazione additiva crea `conversations`,
+**Stato 7 agosto 2026:** draft PR #27 aperta; branch pubblicato e Supabase
+Preview `jggjaqcdbcbxdxhnggio` verde. La migrazione additiva crea `conversations`,
 `conversation_participants`, `messages` e `notifications`; le scritture client
 passano soltanto da RPC con identità derivata da `auth.uid()`, idempotenza e rate
 limit. Realtime usa Broadcast privati a payload chiuso; il database resta la
 fonte canonica. Le route `/messaggi` e `/notifiche`, badge header, adapter
 Supabase/mock e lifecycle logout/reconnect sono presenti in `frontend-next/`.
 
-Verifica locale: 166 test Bun, typecheck, lint e build Next.js superati; smoke
-Browser delle due route superata senza errori console. La migrazione e le due
-griglie SQL non sono state eseguite perché Docker/Postgres non è disponibile.
-Deploy SQL, griglia fixture, Dashboard Realtime, push, PR e merge richiedono gate
-separati; l'approvazione della migrazione non autorizza la griglia fixture.
+Verifica: 166 test Bun, typecheck, lint e build Next.js superati; smoke Browser
+delle due route superata senza errori console. Sulla Preview la migrazione è
+applicata, la griglia statica dà 20/20, la griglia fixture 23/23 e le cinque
+prove concorrenti passano; il cleanup esteso dà zero residui in nove classi.
+Produzione non è stata modificata. Dashboard Realtime, smoke autenticato,
+ready-for-review e merge richiedono gate separati.
 
 ## Fase 9 — ModerationService
 

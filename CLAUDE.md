@@ -240,24 +240,26 @@ variable/secret configuration, token rotation, the first real `workflow_dispatch
 and payment activation outside the merge. The PR merged on 6 August 2026 as squash `f9c53e0`;
 those remote operations remain separate gates.
 
-### Phase 8 messaging and notifications — local checkpoint
+### Phase 8 messaging and notifications — draft PR #27
 
-The branch is `migration/phase-8-messaging-notifications`, based on `f9c53e0`. Its unpushed local
+The branch is `migration/phase-8-messaging-notifications`, based on `f9c53e0`. Its published
 history is split into `d4eb981` (schema/spec/tests), `9a270f1` (frontend/Realtime), `059becc`
-(documentation/handoff) and `4e97139` (remove the redundant RLS enable on the Supabase-managed
-`realtime.messages` table and correct the fixture-grid header to 23 cases). It adds the additive
+(documentation/handoff), `4e97139` (remove the redundant RLS enable on the Supabase-managed
+`realtime.messages` table and correct the fixture-grid header to 23 cases) and `6ea0fe6`
+(reconciled local handoff). It adds the additive
 messaging/notification migration, closed-column RLS and RPC ports,
 private Realtime Broadcast invalidations, TypeScript adapters, mock parity and the `/messaggi` and
 `/notifiche` routes. Browser channels call `realtime.setAuth()` before subscribing, use only
 `config.private = true`, treat payloads as closed invalidations and reload canonical rows through
 the RPC adapters. Logout or user change removes every channel and invalidates stale callbacks.
 
-No Phase 8 SQL has been applied locally or remotely: Docker, `psql` and Supabase CLI are unavailable
-in the current environment. The corrected migration SHA-256 is
-`277ee13c6d40e4355660dedf9179d083c50a7fe6ea9326d730b3d0f446900eb6`. Applying the migration,
-running its 23-case fixture grid, changing Dashboard Realtime,
-pushing/opening a PR, deployment and merge each remain separate explicit gates. Migration approval
-does not authorize the fixture grid.
+Draft PR #27 created the isolated Supabase Preview `jggjaqcdbcbxdxhnggio`, where migration
+`20260806224517` applied successfully. The static grid passed 20/20, the fixture grid passed 23/23,
+all five concurrent cases passed, and the extended cleanup found zero rows in nine fixture classes.
+The corrected migration SHA-256 is
+`277ee13c6d40e4355660dedf9179d083c50a7fe6ea9326d730b3d0f446900eb6`. Production remains at 19
+migrations with no Phase 8 SQL. Dashboard Realtime configuration, authenticated Realtime smoke,
+ready-for-review and squash merge remain separate explicit gates.
 
 ### Postgres exposure rules (binding since Phase 6d-1)
 

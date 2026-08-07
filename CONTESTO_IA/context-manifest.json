@@ -9,12 +9,12 @@
   },
   "verified_git_snapshot": {
     "branch": "migration/phase-8-messaging-notifications",
-    "head": "4e97139 plus final documentation handoff",
+    "head": "6ea0fe6 plus PR #27 verification handoff",
     "origin_main": "f9c53e0debfd11d817fa0bc5f2d183b1685a05c7",
-    "snapshot_note": "Rilevato il 2026-08-07. La branch Fase 8 parte dal merge squash f9c53e0 della PR #26. d4eb981 contiene specifica, migrazione e test SQL; 9a270f1 contiene route, adapter, mock e Realtime privato; 059becc contiene documentazione e handoff; 4e97139 rimuove l'abilitazione RLS ridondante su realtime.messages e corregge a 23 casi l'intestazione fixture. Branch non pushata, nessuna PR e nessuna mutazione Supabase remota. Il ledger verificato in sola lettura resta a 19 migrazioni e non contiene la Fase 8."
+    "snapshot_note": "Rilevato il 2026-08-07. La branch Fase 8 parte da f9c53e0 ed e' pubblicata nella draft PR #27. La Preview jggjaqcdbcbxdxhnggio ha applicato 20260806224517 e superato griglie 20/20 e 23/23, cinque prove concorrenti e cleanup a zero. I quattro check sono verdi. Produzione resta a 19 migrazioni e non contiene la Fase 8."
   },
   "documentation_branch": "migration/phase-8-messaging-notifications",
-  "verification_pr": null,
+  "verification_pr": 27,
   "merge_rule": "Il merge su main non richiede piu' il click manuale del committente, ma richiede l'approvazione esplicita in sessione, e' solo squash, mai force push. Ogni PR deve portare come ultimo commit l'aggiornamento di CHANGES.log, CLAUDE.md e CONTESTO_IA/ allo stato che quella PR produce davvero: numero, cosa cambia, cosa resta aperto. Prima dello squash, non dopo.",
   "runtime_truth": {
     "served_frontend": "frontend/",
@@ -29,6 +29,8 @@
     "phase_7f_migration_applied_to_real_project": true,
     "phase_8_migration_applied_to_real_project": false,
     "phase_8_migration_sha256": "277ee13c6d40e4355660dedf9179d083c50a7fe6ea9326d730b3d0f446900eb6",
+    "phase_8_preview_project_ref": "jggjaqcdbcbxdxhnggio",
+    "phase_8_preview_migration_applied": true,
     "edge_functions_deployed": true,
     "stripe_api_ever_called": false,
     "remote_migration_ledger_rows": 19,
@@ -46,8 +48,8 @@
     "ui_paths_to_checkout_or_onboarding_exist": false,
     "ui_paths_to_order_lifecycle_exist": true,
     "ui_paths_note": "La 7c ha aggiunto percorsi UI reali per dettaglio ordine, preparazione, spedizione, consegna dichiarata, conferma di ricezione, contestazione e recensione sotto frontend-next/src/app/ordine/[id]/, /acquisti e /vendite. Onboarding Connect e checkout restano senza percorso.",
-    "runtime_truth_verified_at": "2026-08-05",
-    "runtime_truth_verified_how": "list_migrations e execute_sql di sole select in lettura sul progetto pijnmcllmfgjmgsvtcej"
+    "runtime_truth_verified_at": "2026-08-07",
+    "runtime_truth_verified_how": "list_migrations sul progetto di produzione pijnmcllmfgjmgsvtcej e verifiche SQL autorizzate soltanto sulla Preview jggjaqcdbcbxdxhnggio"
   },
   "phase_status": {
     "sprint_0": "merged",
@@ -71,7 +73,7 @@
     "phase_7e": "merged_pr_23_squash_6b5b219_no_migration_written_or_applied_grid_7c_had_four_defects_and_could_not_commit_first_real_run_gave_21_pass_1_fail_case_20_failed_on_a_migration_defect_42804_fixed_by_phase_7f_storage_smoke_cantina_closed_in_ten_steps_residues_zero_supabase_preview_success",
     "phase_7f": "merged_pr_25_migration_20260805160250_fixes_a_42804_in_ordine_contestazione_risolvi_that_meant_no_dispute_could_close_in_the_sellers_favour_and_their_funds_stayed_blocked_forever_no_real_order_was_hit_tables_were_empty_grid_7c_rerun_22_pass_0_fail_residues_zero_on_26_checks",
     "phase_7g": "merged_pr_26_squash_f9c53e0_workflow_cron_every_6h_batch_50_payments_enabled_false_remote_secrets_and_first_dispatch_still_not_configured_or_run",
-    "phase_8": "local_checkpoint_commits_d4eb981_9a270f1_059becc_4e97139_schema_rls_rpc_private_realtime_adapters_routes_mock_parity_166_tests_typecheck_lint_build_and_browser_smoke_green_sql_not_executed_no_push_no_pr",
+    "phase_8": "draft_pr_27_four_checks_green_preview_jggjaqcdbcbxdxhnggio_migration_applied_static_20_20_fixture_23_23_concurrency_5_5_zero_residue_production_unchanged_realtime_dashboard_and_authenticated_smoke_open",
     "phase_9": "not_started",
     "phase_10": "not_started",
     "phase_11": "not_started"
@@ -120,26 +122,27 @@
     "implementazione locale 7g: commit 90f99fa con workflow, runner, otto test mock e sanita oltre 24 ore; nessuna invocazione reale",
     "pubblicazione iniziale 7g: branch hardening/phase-7g-operational-closeout pushato senza force e PR #26 aperta in draft verso main",
     "merge Fase 7g: PR #26 integrata in main con squash f9c53e0",
-    "checkpoint locale Fase 8: commit d4eb981, 9a270f1, 059becc e 4e97139; 166 test verdi, typecheck lint build e smoke Browser verdi; nessun SQL o remoto"
+    "checkpoint locale Fase 8: commit d4eb981, 9a270f1, 059becc, 4e97139 e 6ea0fe6; 166 test, typecheck lint build e smoke Browser verdi",
+    "pubblicazione Fase 8: branch pushata senza force e draft PR #27 aperta verso main",
+    "verifica Preview Fase 8: migrazione 20260806224517 applicata, griglia statica 20/20, fixture 23/23, concorrenza 5/5, cleanup zero su nove classi e quattro check verdi"
   ],
   "open_gates_in_order": [
-    "rendere disponibile Docker/Postgres locale e rieseguire tutte le migrazioni, la griglia statica Fase 8, la griglia fixture da 23 casi e le cinque prove concorrenti; un atteso scritto non e' un risultato",
-    "revisionare l'hash e il testo esatto della migrazione Fase 8, quindi ottenere approvazione esplicita prima di qualunque deploy SQL remoto",
-    "ottenere una approvazione fixture separata prima della griglia 8_messaging_notifications.sql e verificare cleanup e residui; l'approvazione DDL non la copre",
-    "autorizzare separatamente Dashboard Realtime, smoke autenticato, push, apertura PR draft e merge; nessuno di questi passi e' implicito nel checkpoint locale",
+    "autorizzare separatamente la configurazione Dashboard Realtime sulla Preview e lo smoke autenticato dei topic privati",
+    "autorizzare ready-for-review e merge squash della PR #27; produzione non e' autorizzata dalla verifica Preview",
+    "dopo il merge autorizzato verificare origin/main, ledger Supabase di produzione e assenza di fixture residue",
     "autorizzare e configurare la variabile Actions SUPABASE_URL e i secret SUPABASE_ANON_KEY legacy JWT e PAYOUTS_JOB_TOKEN, senza service role; verificare anche le notifiche native per enricopuntog-cpu",
     "autorizzare separatamente il primo workflow_dispatch reale con PAYMENTS_ENABLED=false; deve produrre soltanto il controllo di sanita e zero azioni di rilascio",
     "esecuzione delle griglie supabase/tests/7_ordini_pagamenti.sql (16 casi), 7b_connect_marketplace.sql (23 casi) e 6d-2a_catalog_cellar_paths.sql (18 casi) sul progetto reale, con autorizzazione fixture separata: l'autorizzazione data per la griglia 7c non le copre, perche' e' per griglia e non per progetto. La 7e ha dimostrato che una griglia versionata e mai eseguita non e' una prova",
     "scrivere in un checkpoint separato lo schema della decisione 2c: tetto futuro di 5 tentativi, marcatore derivato da fee_tentativi >= 5 e nessun nuovo valore di public.payment_stato. Nessuna migrazione 2c appartiene al checkpoint 7g",
     "decidere dove sta il gate di autorizzazione ora che il merge distribuisce da solo: la regola scritta presidia supabase db push, che non e' il percorso reale"
   ],
-  "next_gate": "Fase 8 resta locale: prima replay PostgreSQL locale con Docker e tutte le prove SQL; poi revisione dell'hash e autorizzazione DDL esplicita. Fixture, Dashboard Realtime, smoke autenticato, push, PR e merge sono autorizzazioni separate e non concesse.",
+  "next_gate": "Draft PR #27 verificata su Preview. Restano configurazione Realtime e smoke autenticato sulla Preview, poi approvazione distinta per ready-for-review e merge squash. Produzione non e' stata modificata.",
   "grid_status": {
     "7c_consegna_imballaggio": "eseguita due volte sul progetto reale il 2026-08-05. Prima esecuzione (Fase 7e): 21 PASSA, 1 FALLISCE, dove il caso 20 falliva per un difetto della migrazione 7c (42804) e non della prova. Seconda esecuzione (Fase 7f, con la correzione in campo): 22 PASSA, 0 FALLISCE, nessuna riga 99, residui a zero su 26 controlli. Esiti riga per riga in docs/PHASE_7E_DEBT_CLOSURE.md sezione 3 e docs/PHASE_7F_FIX_VERIFICATION.md sezione 4.3.",
     "7b_connect_marketplace": "23 casi, non eseguita. Il caso 18 e' stato verificato a parte, statico: privilegi trovati 0, PASSA. Autorizzazione fixture non concessa.",
     "7_ordini_pagamenti": "16 casi, non eseguita.",
     "6d-2a_catalog_cellar_paths": "18 casi, non eseguita. Lo smoke Storage del bucket cantina, che e' cosa diversa, e' chiuso.",
-    "8_messaging_notifications": "griglia statica 20 casi e griglia fixture 23 casi non eseguite; cinque prove concorrenti solo documentate. Nessun SQL Fase 8 applicato localmente o remotamente.",
+    "8_messaging_notifications": "Eseguita sulla Preview jggjaqcdbcbxdxhnggio il 2026-08-07: statica 20 PASSA e 0 FALLISCE; fixture 23 PASSA e 0 FALLISCE; cinque prove concorrenti PASSA; cleanup zero su auth.users, profiles, conversations, messages, notifications, listings, bottle_units, wines e rate_limit_buckets. Produzione invariata.",
     "lesson": "Una griglia versionata e mai eseguita non e' una prova. La 7c era rotta in quattro punti, nessuno visibile leggendo il file, e non poteva committare in nessuno scenario. E il difetto che ha poi trovato era sul denaro.",
     "harness_note": "Il gestore exception when others di una griglia NON conserva gli esiti gia' registrati: un blocco PL/pgSQL con clausola exception e' una sottotransazione, quindi catturare l'errore annulla anche la tabella degli esiti. Misurato: 1 riga superstite contro 4 con la guardia dentro il caso. La robustezza va messa PER CASO, con la registrazione fuori dalla sottotransazione. La 7c e' fatta cosi' dalla Fase 7f; la 7b non ancora."
   },

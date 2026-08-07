@@ -1,6 +1,6 @@
 # Stato attuale verificato
 
-Fotografia del **7 agosto 2026**, al checkpoint locale della Fase 8.
+Fotografia del **7 agosto 2026**, alla verifica Preview della draft PR #27.
 
 ## Repository
 
@@ -9,7 +9,7 @@ Fotografia del **7 agosto 2026**, al checkpoint locale della Fase 8.
 | Repository GitHub | [`enricopuntog-cpu/vinae-progetto-0`](https://github.com/enricopuntog-cpu/vinae-progetto-0) |
 | `origin/main` verificato | `f9c53e0` — merge squash della PR #26, Fase 7g |
 | Stati precedenti di `main` | `6b5b219` (PR #23, Fase 7e), `d8503af` (PR #24), `306952f` (PR #22, Fase 7d), `471b529` (PR #21, Fase 7c), `1782a1a` (PR #20, documentazione), `5e6b8e4` (PR #19, Fase 7b), `2a47952` (PR #18, Fase 7) |
-| Branch del checkpoint Fase 8 | `migration/phase-8-messaging-notifications`, locale e non pushata |
+| Branch del checkpoint Fase 8 | `migration/phase-8-messaging-notifications`, pubblicata nella draft PR #27 |
 | Ultima fase integrata in `main` | Fase 7g — scheduler auto-rilascio, squash `f9c53e0` |
 | PR della 6d-1 | [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) — merged |
 | PR di riconciliazione | [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) — merged |
@@ -126,7 +126,7 @@ Fase 11 e richiede una decisione esplicita.
 | Chiusura debiti 7b/7c: griglia 7c eseguita, smoke Storage chiuso | Fase 7e, PR #23 al merge squash `6b5b219` — quattro difetti della griglia corretti, **21 PASSA / 1 FALLISCE** con causa nota rimandata alla 7f, smoke `cantina` chiuso in dieci passi, residui a zero |
 | Contestazione risolvibile a favore del venditore, e fondi che si sbloccano | Fase 7f, PR #25 al merge squash `491e10d` — `42804` corretto con quattro cast all'enum; griglia 7c rieseguita **22 PASSA / 0 FALLISCE**, residui a zero su 26 controlli |
 | Scheduler auto-rilascio e sanità backlog | Fase 7g, PR #26 integrata con squash `f9c53e0`; configurazione secret e prima invocazione restano separate |
-| Messaggi e notifiche | Checkpoint locale Fase 8 nei commit `d4eb981`, `9a270f1`, `059becc` e `4e97139`; 166 test, typecheck, lint, build e smoke Browser rieseguiti verdi; SQL non eseguito, nessun push o PR |
+| Messaggi e notifiche | Draft PR #27; Preview verde con migrazione applicata, griglie 20/20 e 23/23, concorrenza 5/5 e residui zero; quattro check verdi; produzione invariata |
 | Moderazione e audit persistente | Non migrati — Fase 9 |
 | AI reale | Non migrata — Fase 10 |
 | Cutover | Non iniziato — Fase 11 |
@@ -428,11 +428,10 @@ perché le versioni a ledger sono già quelle dei file.
 
 ## Gate aperti, in ordine
 
-1. rendere disponibile PostgreSQL locale e verificare la migrazione Fase 8, le
-   griglie da 20 e 23 casi e le cinque prove concorrenti; poi revisionare hash e
-   SQL esatto prima di una eventuale autorizzazione remota;
-2. autorizzare separatamente fixture Fase 8, Dashboard Realtime, smoke
-   autenticato, push, PR e merge; nessuna di queste autorizzazioni è implicita;
+1. autorizzare separatamente configurazione Dashboard Realtime sulla Preview e
+   smoke autenticato dei topic privati;
+2. autorizzare ready-for-review e merge squash della draft PR #27, poi verificare
+   `origin/main`, ledger di produzione e assenza di fixture;
 3. autorizzare separatamente l'esecuzione delle griglie
    [`7_ordini_pagamenti.sql`](../supabase/tests/7_ordini_pagamenti.sql) — 16
    casi — e [`7b_connect_marketplace.sql`](../supabase/tests/7b_connect_marketplace.sql)

@@ -448,11 +448,13 @@ Resta separato anche lo schema 2c per la fee reale: tetto futuro di 5 tentativi,
 marcatore derivato da `fee_tentativi >= 5` e nessun nuovo valore di
 `public.payment_stato`. Il codice è raggiungibile; nessun denaro lo ha mai percorso.
 
-La Fase 8 ha un checkpoint locale sulla branch
+La Fase 8 è nella draft PR #27 sulla branch
 `migration/phase-8-messaging-notifications`: schema/RLS/RPC, adapter, route e
-Realtime privato sono implementati e verificati lato TypeScript/UI. Nessun SQL
-di Fase 8 è stato applicato e nessuna fixture è stata eseguita; deploy, test SQL,
-Dashboard Realtime, push, PR e merge restano gate distinti.
+Realtime privato sono implementati. La Supabase Preview ha applicato la
+migrazione e superato la griglia statica 20/20, la griglia fixture 23/23 e le
+cinque prove concorrenti, con residui zero; i quattro check della PR sono verdi.
+Produzione resta a 19 migrazioni. Dashboard Realtime, smoke autenticato,
+ready-for-review e merge restano gate distinti.
 
 ## Cosa NON è ancora deciso
 

@@ -236,7 +236,7 @@ Le due griglie comportamentali sono verdi. Restano le verifiche di staging e
 compliance indicate sopra; il progetto non deve essere presentato come
 production-ready.
 
-## Checkpoint locale Fase 8 — 7 agosto 2026
+## Checkpoint Fase 8 e Supabase Preview — 7 agosto 2026
 
 | Area | Comando o verifica | Esito | Dettaglio |
 |---|---|---|---|
@@ -245,11 +245,16 @@ production-ready.
 | Frontend Next.js | `bun run lint` | Superato | exit code 0; 25 warning non bloccanti, 0 errori |
 | Frontend Next.js | `bun run build` | Superato | Next.js 16.2.12; 18 pagine generate, incluse `/messaggi` e `/notifiche` |
 | Browser locale | messaggi e notifiche mock | Superato | apertura, unread, invio, segna tutte; nessun errore console |
-| SQL statico | revisione migrazione e test contrattuali | Superato | schema, privilegi, RPC, idempotenza e Realtime coperti dai test TypeScript |
-| PostgreSQL locale | replay migrazione + griglie SQL | Non eseguito | Docker/Postgres non disponibile |
-| Supabase remoto | migrazione, fixture, Realtime Dashboard | Non eseguito | non autorizzato in questo checkpoint |
+| SQL statico | `8_messaging_notifications_static.sql` sulla Preview | Superato | 20 PASSA, 0 FALLISCE |
+| SQL fixture | `8_messaging_notifications.sql` sulla Preview | Superato | 23 PASSA, 0 FALLISCE, cleanup incluso |
+| Concorrenza | C1-C5 sulla Preview | Superato | 5 PASSA; idempotenza, dedupe, cursore e rate limit verificati con sessioni indipendenti |
+| Cleanup | controllo esteso post-fixture | Superato | zero residui in 9 classi |
+| Supabase Preview | PR #27, progetto `jggjaqcdbcbxdxhnggio` | Superato | migrazione `20260806224517` applicata; check GitHub verde |
+| Supabase Advisor | Security e Performance sulla Preview | Riesaminati | nessun errore Fase 8; warning sulle RPC `SECURITY DEFINER` autenticate e info su FK composite/indice senza traffico, coerenti con il disegno e non bloccanti |
+| Supabase produzione | migrazione Fase 8 | Non eseguito | ledger invariato a 19 migrazioni; merge non autorizzato |
+| Realtime Dashboard | configurazione e smoke autenticato | Non eseguito | autorizzazione separata non concessa |
 
-La griglia statica promette 20 casi; la griglia con fixture promette 23 casi e
-cleanup. Sono attesi, non risultati: nessuno script SQL di Fase 8 è stato
-eseguito. Anche le cinque prove concorrenti restano procedure documentate e non
-evidenza eseguita.
+La Preview ha eseguito realmente la migrazione, la griglia statica da 20 casi,
+la griglia fixture da 23 casi e le cinque prove concorrenti. Il cleanup finale
+ha verificato zero residui. Questi risultati appartengono alla Preview della PR
+#27 e non dimostrano un'applicazione su produzione.

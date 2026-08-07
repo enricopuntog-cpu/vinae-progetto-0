@@ -664,18 +664,20 @@ separati e non eseguiti.
 
 ### Fase 8 — messaggi e notifiche
 
-**Stato:** checkpoint locale completato il 7 agosto 2026 nei commit `d4eb981`,
-`9a270f1`, `059becc` e `4e97139`; branch non pushata, nessuna PR e nessun SQL
-applicato. L'ultimo commit rimuove l'abilitazione RLS ridondante dalla migrazione
+**Stato:** draft PR #27 aperta il 7 agosto 2026 dai commit `d4eb981`,
+`9a270f1`, `059becc`, `4e97139` e successivo handoff di verifica. La Preview
+`jggjaqcdbcbxdxhnggio` ha applicato la migrazione; produzione resta invariata.
+`4e97139` rimuove l'abilitazione RLS ridondante dalla migrazione
 per la tabella Supabase-managed `realtime.messages` e corregge a 23 casi
 l'intestazione della griglia fixture.
 
 Sono presenti schema additivo, RLS a colonne chiuse, RPC con `auth.uid()`,
 idempotenza/rate limit, Broadcast privati a payload di invalidazione, adapter
 Supabase/mock, route `/messaggi` e `/notifiche`, badge e lifecycle Realtime.
-Verifica locale: 166 test, typecheck, lint, build e smoke Browser verdi. Le
-griglie SQL da 20 e 23 casi e le cinque prove concorrenti non sono state
-eseguite per assenza di Docker/Postgres; ogni operazione remota resta separata.
+Verifica: 166 test, typecheck, lint, build e smoke Browser verdi; quattro check
+della PR verdi. Sulla Preview: griglia statica 20/20, fixture 23/23, concorrenza
+5/5 e cleanup esteso con zero residui. Dashboard Realtime, smoke autenticato,
+ready-for-review e merge restano autorizzazioni separate.
 
 ### Fase 9 — moderazione
 
