@@ -369,6 +369,7 @@ in modalità immediata dopo la creazione della conversazione.
 Le cinque gare descritte in
 [`docs/PHASE_8_CONCURRENCY_TEST.md`](../../docs/PHASE_8_CONCURRENCY_TEST.md)
 richiedono due sessioni PostgreSQL indipendenti e non sono coperte dalla griglia
-sequenziale. Al 7 agosto 2026 nessuno dei due script e nessuna prova concorrente
-è stata eseguita: Docker/Postgres non è disponibile e non esiste autorizzazione
-remota per migrazione o fixture.
+sequenziale. Il 7 agosto 2026 la Preview isolata `jggjaqcdbcbxdxhnggio` della
+draft PR #27 ha eseguito la griglia statica 20/20, la griglia fixture 23/23 e
+tutte le cinque prove concorrenti; il cleanup esteso ha trovato zero residui.
+Produzione non è stata usata e resta priva della migrazione di Fase 8.

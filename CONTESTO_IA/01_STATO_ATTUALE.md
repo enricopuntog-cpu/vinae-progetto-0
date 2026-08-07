@@ -9,7 +9,7 @@ Fotografia del **7 agosto 2026**, alla verifica Preview della draft PR #27.
 | Repository GitHub | [`enricopuntog-cpu/vinae-progetto-0`](https://github.com/enricopuntog-cpu/vinae-progetto-0) |
 | `origin/main` verificato | `f9c53e0` — merge squash della PR #26, Fase 7g |
 | Stati precedenti di `main` | `6b5b219` (PR #23, Fase 7e), `d8503af` (PR #24), `306952f` (PR #22, Fase 7d), `471b529` (PR #21, Fase 7c), `1782a1a` (PR #20, documentazione), `5e6b8e4` (PR #19, Fase 7b), `2a47952` (PR #18, Fase 7) |
-| Branch del checkpoint Fase 8 | `migration/phase-8-messaging-notifications`, pubblicata nella draft PR #27 |
+| Branch del checkpoint Fase 8 | `migration/phase-8-messaging-notifications`, pubblicato nella draft PR #27 |
 | Ultima fase integrata in `main` | Fase 7g — scheduler auto-rilascio, squash `f9c53e0` |
 | PR della 6d-1 | [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) — merged |
 | PR di riconciliazione | [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) — merged |
