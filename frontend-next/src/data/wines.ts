@@ -1,5 +1,7 @@
 export type Wine = {
   id: string;
+  /** UUID interno dell'annuncio reale; nei mock `id` resta lo slug demo. */
+  listingId?: string;
   /**
    * Slug del vino di catalogo, distinto da `id`.
    *
