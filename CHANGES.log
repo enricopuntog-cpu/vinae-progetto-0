@@ -1,31 +1,39 @@
 <!-- PROTOCOL: Read at session start. Every AI MUST update this file at session end or before handoff/context reset. Keep exactly the 4 headings below; facts only; NEXT STEPS exactly 3 atomic items; no pleasantries/secrets. Verify Git state first; preserve unresolved blockers. -->
 ## CURRENT STATE
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
-- `origin/main` è `f9c53e0`, merge squash della PR #26 e della Fase 7g.
-- Il branch `migration/phase-8-messaging-notifications` è pubblicato nella draft PR #27; configurazione Realtime e smoke autenticato della Preview sono chiusi, mentre ready-for-review e merge attendono questo ultimo commit documentale e i relativi check.
-- La Supabase Preview isolata `jggjaqcdbcbxdxhnggio` è `ACTIVE_HEALTHY` e contiene la migrazione `20260806224517_phase_8_messaging_notifications`; produzione resta a 19 migrazioni e termina con la Fase 7f.
-- La soglia CI `MIN_TESTS` è 166.
+- `origin/main` è **`4f96864`**, merge squash della PR #27 e della Fase 8, integrata il 7 agosto 2026 alle 11:36 UTC. I quattro check — Frontend, Frontend Next, Backend e `Supabase Preview` — sono `SUCCESS` sull'HEAD finale del branch `b32ff9d`. Stati precedenti: `f9c53e0` (PR #26, Fase 7g), `491e10d` (PR #25, Fase 7f).
+- Il ledger delle migrazioni di **produzione è a venti righe**, riletto con `list_migrations` il 9 agosto 2026. La ventesima è `20260806224517 phase_8_messaging_notifications` e coincide con i venti file di `supabase/migrations/` su `main`: l'ha distribuita l'integrazione GitHub al merge, non un comando.
+- La Fase 8 consegna `conversations`, `conversation_participants`, `messages` e `notifications`, letture RLS a colonne chiuse, scritture solo via RPC con identità da `auth.uid()`, idempotenza e rate limit, Broadcast privati a payload di sola invalidazione sui topic `conversation:<uuid>` e `user:<uuid>:notifications`, route `/messaggi` e `/notifiche`, badge di header, adapter Supabase/mock, keyset pagination e lifecycle logout/riconnessione.
+- `MIN_TESTS` nel job CI `frontend-next` è a **166**, alzata da 123 dalla Fase 8.
+- **La Preview della Fase 8 non esiste più.** Griglia statica 20/20, griglia fixture 23/23, cinque prove concorrenti, smoke Realtime autenticato e residui zero in dieci classi erano stati eseguiti su `jggjaqcdbcbxdxhnggio`, ambiente effimero legato alla PR; `list_branches` sul progetto reale riporta ora il solo branch `main`. Quelle misure sono un rapporto di fase, non uno stato riproducibile.
+- **Lo scheduler dell'auto-rilascio consegnato dalla 7g gira e fallisce sempre.** `Phase 7 - auto-release payouts` è schedulato da `main` dal merge della #26 e ha totalizzato **11 run, tutte `failure`**, dalla prima del 7 agosto 2026 alle 01:53 UTC su `f9c53e0` a quella del 9 agosto alle 14:06 UTC su `4f96864`, tutte con `Configurazione mancante: SUPABASE_URL`. Variabili e secret GitHub non sono mai stati configurati. Il runner è fail-closed e non ha mai raggiunto la rete.
+- Decisioni economiche della 7d, integrate con la PR #22: **1a** scheduler esterno via GitHub Actions e non `pg_cron`, **1e** scheduler acceso e verificato prima di `PAYMENTS_ENABLED`, **3a** la voce «protezione» esce dal modello Supabase. **2c** ha design approvato — tetto a 5 tentativi con contatore su `payments` — e schema non scritto. **3e** resta aperta ed è commerciale. Le 1c/1d sono chiuse dalla 7g: proprietario `enricopuntog-cpu`, rotazione del token ogni 90 giorni, cadenza `0 */6 * * *`, batch 50.
+- Commissione: rincaro a percentuale variabile con netto garantito, parametri 500 / 150 / 25 e 14 giorni, congelati sull'ordine insieme a `commissione_cents`, arrotondamento sempre per eccesso. Trattenuta fondi con "separate charges and transfers": il PaymentIntent non porta `transfer_data` né `on_behalf_of` e il Transfer nasce solo al rilascio, per il solo `prezzo_cents`.
+- Debito `seller_enabled` della Fase 6a: la sorgente esiste nel trigger `private.seller_enabled_sync`, ma nessuna policy applica `has_role(auth.uid(), 'seller_enabled')` alla creazione di annunci. Il gate è spento di proposito.
+- Regola vincolante: un file di migrazione già pushato almeno una volta non si modifica più in place; ogni correzione successiva è un nuovo file con timestamp più recente, anche in bozza e anche se nessun database reale lo ha mai eseguito. I file in `supabase/tests/` **non** sono migrazioni e non sono soggetti al congelamento.
 
 ## ACTIVE TASK
-- La specifica organizzativa della Fase 8 è approvata e l'implementazione locale di messaggistica, notifiche e Realtime privato è completata.
-- Lo schema è additive-only, espone ai client letture RLS e RPC con autorità server-side, usa topic privati `conversation:<uuid>` e `user:<uuid>:notifications` e non concede scritture dirette alle tabelle.
-- Il frontend include `/messaggi`, `/notifiche`, badge/header, apertura conversazione dagli annunci, adapter Supabase/mock, keyset pagination, stati offline/errore e riconciliazione canonica dopo eventi Realtime.
-- Verifiche locali rieseguite dopo `4e97139`: 166 test passati, typecheck passato, lint con 0 errori e 25 warning non bloccanti, build di produzione passata, smoke Browser su invio messaggio e lettura totale notifiche passato senza errori console.
-- La migrazione locale ha SHA-256 `277ee13c6d40e4355660dedf9179d083c50a7fe6ea9326d730b3d0f446900eb6`; non forza più l'abilitazione RLS su `realtime.messages` e mantiene la sola policy SELECT privata.
-- Sulla Preview: griglia statica 20 PASSA / 0 FALLISCE, griglia fixture 23 PASSA / 0 FALLISCE, cinque prove concorrenti superate e cleanup con zero residui in nove classi.
-- Sulla Preview Realtime è attivo con `Allow public access to channels=false`. Lo smoke autenticato ha autorizzato partecipante e destinatario, respinto outsider e canale pubblico, ricevuto un solo evento messaggio e un solo evento notifica con payload chiusi e lasciato zero residui in dieci classi.
-- I quattro check della PR #27 sono verdi sul commit `3af8477`; il commit documentale finale deve ottenere gli stessi esiti prima dello squash.
+- Due lavori documentali separati, entrambi da `4f96864`, entrambi in PR draft e senza merge: `docs/post-phase-8-sync` (questo branch) e `migration/phase-9-moderation-service`.
+- Questo branch allinea allo stato mergiato della Fase 8 i cinque file di `CONTESTO_IA/`, `CLAUDE.md`, `CHANGES.log` e la sezione Fase 8 di `docs/MIGRATION_PHASE_1_BACKLOG.md`. Nessuna riga di `frontend/`, `backend/`, `frontend-next/` o `supabase/`.
+- La **PR #28** porta `docs/PHASE_9_MODERATION_SERVICE_SPEC.md`, unico file: perimetro della Fase 9 con la fonte `file:riga` di ogni requisito, inventario del mock legacy, aggancio alla coda contestazioni senza riaprire `ordine_contestazione_apri`/`risolvi`, schema in linguaggio naturale, pattern di sicurezza, proposta 9a/9b e nove decisioni aperte. Nessuno SQL.
+- La verifica dello stato è stata fatta prima di scrivere: `gh pr view 27` dà `MERGED` con `mergeCommit` `4f96864`, `gh pr list --state open` era vuoto, `list_migrations` e `list_branches` sono state chiamate in sola lettura.
 
 ## NEXT STEPS
-1. Pubblicare il commit documentale finale della PR #27 e attendere i quattro check sul nuovo HEAD.
-2. Con gli stessi check verdi, passare la PR #27 a ready-for-review ed eseguire il merge squash autorizzato.
-3. Dopo il merge, verificare `origin/main`, ledger Supabase di produzione e assenza di fixture residue.
+1. Configurare variabili e secret GitHub dello scheduler — `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `PAYOUTS_JOB_TOKEN` — e ottenere una run verde di `Phase 7 - auto-release payouts`, oggi a 11 su 11 in `failure`: è la precondizione della decisione 1e e quindi di `PAYMENTS_ENABLED`.
+2. Rispondere in chat organizzativa alle nove decisioni aperte della specifica di Fase 9 (PR #28), a partire da chi può moderare e da cosa vede un utente sospeso, prima che venga scritta una riga di SQL della fase.
+3. Autorizzare l'esecuzione delle griglie `supabase/tests/7_ordini_pagamenti.sql` (16 casi) e `7b_connect_marketplace.sql` (23 casi), che creano e cancellano fixture remote e restano senza esito: l'autorizzazione è per griglia e quella data per la 7c non le copre.
 
 ## BLOCKERS / NOTES
-- Docker, `psql` e Supabase CLI restano assenti, ma le verifiche PostgreSQL Fase 8 sono state eseguite sulla Preview autorizzata e isolata.
-- Il committente ha autorizzato configurazione e smoke sulla Preview, ready-for-review e squash merge della PR #27 con i soli effetti automatici sulla produzione; SQL manuale, fixture e modifiche dirette sulla produzione restano vietati.
-- La restrizione Realtime `private_only` è stata configurata soltanto sulla Preview e non costituisce una modifica diretta della produzione.
-- `PAYMENTS_ENABLED=false` resta il kill switch server-side; secret GitHub e prima invocazione reale del workflow 7g restano attività operative separate.
-- Le griglie storiche della Fase 7 (16 casi), 7b (23) e 6d-2a (18) restano senza esito; nessun job CI esegue ancora `supabase/**`.
-- Pagamenti e Stripe non sono mai stati percorsi; onboarding/checkout UI, recupero automatico di rimborsi dopo Transfer, recupero fee e gate `seller_enabled` restano aperti.
-- Restano aperti anche KYC esteso, interfaccia contestazioni, moderazione, revisione legale e hardening operativo già descritti nella documentazione di progetto.
+- **La restrizione Realtime `private_only` è stata configurata sulla sola Preview, mai sulla produzione**, e la Preview non esiste più. Se la produzione accetti canali pubblici non è verificato.
+- **Le tabelle della Fase 8 non sono state rilette dopo il merge**: lo schema è distribuito, il suo stato dati non è verificato.
+- `PAYMENTS_ENABLED=false` resta il kill switch server-side. Non esistono percorsi UI per onboarding Connect e checkout; nessuna chiamata a Stripe è mai stata fatta, nemmeno in test mode. `list_edge_functions` il 9 agosto 2026 conferma le tre function `ACTIVE` con `verify_jwt` attivo: `payments-checkout` v7, `connect-onboarding` v6, `payouts-release` v6 — quest'ultima aggiornata dal merge della 7g.
+- Docker, `psql` e Supabase CLI restano assenti in locale: ogni prova PostgreSQL passa da un ambiente remoto autorizzato.
+- Le griglie della Fase 7 (16 casi), della 7b (23) e della 6d-2a (18) restano **senza esito**. Una griglia versionata e mai eseguita non è una prova: la 7e l'ha misurato, e il difetto trovato aveva conseguenze sul denaro. La griglia 7b ha ancora il gestore `exception when others` che da solo non conserva gli esiti registrati.
+- Nessun job CI esegue le griglie SQL, né copre `supabase/**` o `docs/**`: i tre job restano `frontend`, `frontend-next`, `backend`.
+- **Dove stia il gate di autorizzazione resta non deciso**: la regola scritta presidia `supabase db push`, ma il percorso reale di distribuzione è il merge su `main`. Riguarda ogni fase successiva.
+- La decisione su `public_bottle_units` va chiusa **entro la Fase 9**: la vista non ha consumatori, la Fase 8 non l'ha usata, e le due uscite sono rimuoverla insieme al concetto di cantina pubblica per bottiglia oppure costruire l'interfaccia che la rende visibile.
+- L'esito `risolta` di `ordine_contestazione_risolvi` continua a non essere esercitato separatamente da `respinta`: percorrono lo stesso ramo e il caso 20 prova la forma del cast per entrambi, ma le righe di `risolta` restano corrette e non eseguite. Nessun caso copre «codice di imballaggio dichiarato e poi scaduto prima del checkout».
+- La fee reale resta una proiezione: il payload Stripe porta `balance_transaction` non espanso, `fee_stripe_reale_cents` resta nulla nel caso normale e il recupero non è schedulato da nulla. Un rimborso successivo a un Transfer già creato non è recuperabile in automatico.
+- Gli Advisor Supabase non sono stati riletti dopo il merge della Fase 8. All'ultima lettura restava il warning `auth_leaked_password_protection` disabilitato; viste `security_invoker=off` e RPC `SECURITY DEFINER` sono segnalate dal linter ma corrispondono al modello intenzionale.
+- Restano fuori perimetro e non iniziati: KYC oltre l'onboarding ospitato, interfaccia di gestione delle contestazioni, moderazione (Fase 9), AI reale (Fase 10), cutover (Fase 11), revisione legale e hardening operativo.
+- Residui locali: branch remoti di PR già mergiate mai eliminati; branch locali senza lavoro non integrato.

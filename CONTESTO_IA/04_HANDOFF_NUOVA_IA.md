@@ -63,19 +63,22 @@
   squash `471b529`, la Fase 7d tramite PR #22 al merge squash `306952f`, la
   correzione di `ARCHITECTURE.md` tramite PR #24 al merge squash `d8503af`, la
   Fase 7e tramite PR #23 al merge squash `6b5b219`, la Fase 7f tramite PR #25 al
-  merge squash `491e10d` e la Fase 7g tramite PR #26 al merge squash `f9c53e0`.
-  La Fase 8 è nella PR #27 al checkpoint pre-merge; la Preview
-  `jggjaqcdbcbxdxhnggio` è verde, ha superato griglie 20/20 e 23/23,
-  concorrenza 5/5, smoke Realtime autenticato e cleanup a zero. Produzione
-  resta alla Fase 7f fino allo squash autorizzato.
+  merge squash `491e10d`, la Fase 7g tramite PR #26 al merge squash `f9c53e0` e
+  la **Fase 8 tramite PR #27 al merge squash `4f96864`**, il 7 agosto 2026 con i
+  quattro check `SUCCESS` sull'HEAD finale `b32ff9d`. La Preview
+  `jggjaqcdbcbxdxhnggio`, dove le griglie 20/20 e 23/23, la concorrenza 5/5 e lo
+  smoke Realtime autenticato erano stati eseguiti, era legata alla PR e **non
+  esiste più**: quelle misure sono un rapporto, non uno stato riproducibile.
 - «Integrata» qui significa anche «distribuita»: l'integrazione GitHub di
   Supabase applica migrazioni e Edge Function al merge su `main`, da sola.
-  Verificato in lettura il 5 agosto 2026 — il ledger è a **diciannove righe**, le
+  Riverificato in lettura il 9 agosto 2026 — il ledger è a **venti righe**, le
   migrazioni di 7, 7b e 7c ci sono tutte, e `payments-checkout`,
   `connect-onboarding` e `payouts-release` sono `ACTIVE`. Il contenuto applicato è
   quello a netto garantito, non la prima bozza a percentuale piatta. La
-  diciannovesima riga appartiene alla Fase 7f, ora in `main`: è l'unica
-  applicata per via diretta e non dal merge.
+  diciannovesima riga appartiene alla Fase 7f: è l'unica applicata per via diretta
+  e non dal merge. La ventesima è
+  `20260806224517 phase_8_messaging_notifications` ed è arrivata dal merge della
+  PR #27, come tutte le altre.
 - La Fase 7d **non ha scritto SQL**: ha chiuso decisioni. Le sue conseguenze
   vincolanti sono al capitolo dedicato di
   [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
@@ -98,9 +101,15 @@
   applicarla per prima fallisce, perché estende tabelle e RPC che l'altra crea.
 - Il ruolo `seller_enabled` ha una sorgente autoritativa dalla 7b, ma il gate
   sulla creazione di annunci è deliberatamente spento.
-- La Fase 8 è pubblicata e verificata su Preview, inclusi configurazione Realtime
-  privata e smoke autenticato. Ready-for-review e merge sono autorizzati dopo
-  i check dell'ultimo commit; le fasi 9–11 non sono iniziate.
+- La Fase 8 è **integrata e distribuita**: schema, RPC, RLS, Realtime privato,
+  route `/messaggi` e `/notifiche` sono in `main` e la migrazione è a ledger in
+  produzione. Le fasi 9–11 non sono iniziate.
+- **Lo scheduler dell'auto-rilascio della 7g gira da `main` e fallisce sempre.**
+  `Phase 7 - auto-release payouts` ha 11 run su 11 in `failure`, dal 7 agosto
+  2026 al 9 agosto 2026, tutte con `Configurazione mancante: SUPABASE_URL`:
+  variabili e secret GitHub non sono mai stati configurati. Il runner è
+  fail-closed e non ha mai raggiunto la rete, ma la decisione 1e — scheduler
+  acceso e verificato **prima** di `PAYMENTS_ENABLED` — non è soddisfatta.
 - La vecchia app resta quella servita.
 - Auth reale e ruoli demo coesistono intenzionalmente.
 - Facebook OAuth non è “da finire nel codice”: è disabilitato per un problema
@@ -240,9 +249,12 @@ cade con loro, perché le versioni a ledger coincidono già con i nomi dei file.
    non per progetto;
 2. decidere dove sta il gate di autorizzazione, dato che la regola scritta
    presidia `supabase db push` e il percorso reale è il merge su `main`;
-3. chiudere la Fase 8 con l'ultimo commit documentale, gli stessi quattro check,
-   ready-for-review e squash merge già autorizzati; verificare poi `origin/main`,
-   ledger e residui senza SQL manuale o fixture in produzione.
+3. configurare variabili e secret GitHub dello scheduler di auto-rilascio e
+   ottenere una run verde di `Phase 7 - auto-release payouts`, oggi a 11 run su
+   11 in `failure`. È il gate che la 7g ha dichiarato fuori dal merge, ed è la
+   precondizione della decisione 1e;
+4. approvare l'avvio della Fase 9 — moderazione e audit persistente — nel branch
+   `migration/phase-9-moderation-service` previsto dal backlog.
 
 Lo smoke Storage del bucket `cantina`, che questo elenco portava come terza voce,
 è stato eseguito e chiuso il 5 agosto 2026; la sua registrazione arriva con la

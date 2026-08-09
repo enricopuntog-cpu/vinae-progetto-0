@@ -660,27 +660,37 @@ solo il conteggio di sanità, senza reclamare ordini né chiamare Stripe. Otto t
 mock del runner passano; configurazione secret e invocazione reale restano gate
 separati e non eseguiti.
 
-## Fasi future
+### Fase 8 — messaggistica privata e notifiche persistenti
 
-### Fase 8 — messaggi e notifiche
+**Stato:** integrata il 7 agosto 2026
 
-**Stato:** PR #27 al checkpoint pre-merge il 7 agosto 2026 dai commit `d4eb981`,
-`9a270f1`, `059becc`, `4e97139` e successivo handoff di verifica. La Preview
-`jggjaqcdbcbxdxhnggio` ha applicato la migrazione; produzione resta invariata.
-`4e97139` rimuove l'abilitazione RLS ridondante dalla migrazione
-per la tabella Supabase-managed `realtime.messages` e corregge a 23 casi
-l'intestazione della griglia fixture.
+**Branch:** `migration/phase-8-messaging-notifications`, HEAD finale `b32ff9d`
+
+**PR:** [#27 — Fase 8](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/27),
+merge squash `4f96864` alle 11:36 UTC, quattro check `SUCCESS` — Frontend,
+Frontend Next, Backend e `Supabase Preview`.
 
 Sono presenti schema additivo, RLS a colonne chiuse, RPC con `auth.uid()`,
 idempotenza/rate limit, Broadcast privati a payload di invalidazione, adapter
 Supabase/mock, route `/messaggi` e `/notifiche`, badge e lifecycle Realtime.
-Verifica: 166 test, typecheck, lint, build e smoke Browser verdi; quattro check
-della PR verdi. Sulla Preview: griglia statica 20/20, fixture 23/23, concorrenza
-5/5 e cleanup esteso con zero residui. Realtime sulla Preview è attivo con
-canali pubblici disabilitati; lo smoke autenticato ha consentito i due topic
-proprietari, respinto outsider e pubblico, ricevuto payload chiusi senza
-duplicati e ripulito dieci classi. Ready-for-review e squash merge sono
-autorizzati dopo i check finali; nessuna modifica diretta alla produzione lo è.
+Verifica: 166 test, typecheck, lint, build e smoke Browser verdi. Sulla Preview:
+griglia statica 20/20, fixture 23/23, concorrenza 5/5 e cleanup esteso con zero
+residui. Realtime sulla Preview era attivo con canali pubblici disabilitati; lo
+smoke autenticato ha consentito i due topic proprietari, respinto outsider e
+pubblico, ricevuto payload chiusi senza duplicati e ripulito dieci classi.
+
+**Il merge ha distribuito.** `20260806224517_phase_8_messaging_notifications` è
+la **ventesima riga del ledger di produzione**, riletta con `list_migrations` il
+9 agosto 2026: nessuno ha lanciato un comando, l'integrazione GitHub l'ha
+applicata al merge come per ogni fase dalla 7 in avanti.
+
+**Le prove della Fase 8 non sono più riverificabili dove sono state prese.** La
+Preview `jggjaqcdbcbxdxhnggio` era un ambiente effimero legato alla PR e non
+esiste più: `list_branches` sul progetto reale riporta il solo branch `main`. Le
+20/20, 23/23 e 5/5 restano il rapporto di quella fase, non uno stato riproducibile
+su richiesta — la stessa distinzione che vale per ogni griglia di questo progetto.
+
+## Fasi future
 
 ### Fase 9 — moderazione
 
