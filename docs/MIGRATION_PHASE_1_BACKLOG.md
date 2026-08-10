@@ -499,23 +499,35 @@ checkpoint.
 
 **Branch**: `migration/phase-8-messaging-notifications`
 
-**Stato 7 agosto 2026:** draft PR #27 aperta; branch pubblicato e Supabase
-Preview `jggjaqcdbcbxdxhnggio` verde. La migrazione additiva crea `conversations`,
+**Stato 9 agosto 2026: chiusa.** La PR #27 è stata integrata in `main` il 7
+agosto 2026 alle 11:36 UTC con lo squash `4f96864`, quattro check `SUCCESS`
+sull'HEAD finale `b32ff9d`. La migrazione additiva crea `conversations`,
 `conversation_participants`, `messages` e `notifications`; le scritture client
 passano soltanto da RPC con identità derivata da `auth.uid()`, idempotenza e rate
 limit. Realtime usa Broadcast privati a payload chiuso; il database resta la
 fonte canonica. Le route `/messaggi` e `/notifiche`, badge header, adapter
-Supabase/mock e lifecycle logout/reconnect sono presenti in `frontend-next/`.
+Supabase/mock e lifecycle logout/reconnect sono presenti in `frontend-next/`;
+`MIN_TESTS` nel job CI `frontend-next` sale a 166.
 
 Verifica: 166 test Bun, typecheck, lint e build Next.js superati; smoke Browser
-delle due route superata senza errori console. Sulla Preview la migrazione è
-applicata, la griglia statica dà 20/20, la griglia fixture 23/23 e le cinque
-prove concorrenti passano; il cleanup esteso dà zero residui in nove classi.
-Realtime sulla Preview è `private_only`: lo smoke autenticato consente i topic
-del partecipante e del destinatario, rifiuta outsider e pubblico, consegna
-payload chiusi una sola volta e lascia zero residui in dieci classi. Produzione
-non è stata modificata; ready-for-review e squash merge sono autorizzati dopo
-i check del commit finale.
+delle due route superata senza errori console. Sulla Preview
+`jggjaqcdbcbxdxhnggio` la migrazione era applicata, la griglia statica dava
+20/20, la griglia fixture 23/23 e le cinque prove concorrenti passavano; il
+cleanup esteso dava zero residui in nove classi. Realtime sulla Preview era
+`private_only`: lo smoke autenticato consentiva i topic del partecipante e del
+destinatario, rifiutava outsider e pubblico, consegnava payload chiusi una sola
+volta e lasciava zero residui in dieci classi.
+
+**Cosa il merge ha cambiato in produzione, e cosa no.**
+`20260806224517 phase_8_messaging_notifications` è la ventesima riga del ledger
+di produzione, riletta con `list_migrations` il 9 agosto 2026 e corrispondente ai
+venti file di `supabase/migrations/` su `main`: l'ha distribuita l'integrazione
+GitHub al merge, non un comando. La Preview era legata alla PR e **non esiste
+più** — `list_branches` riporta ora il solo branch `main` — quindi le griglie di
+quella fase sono un rapporto e non uno stato riproducibile. La restrizione
+Realtime `private_only` era stata configurata sulla sola Preview: sulla
+produzione non è verificata. Le tabelle della Fase 8 non sono state rilette dopo
+il merge.
 
 ## Fase 9 — ModerationService
 

@@ -1,16 +1,16 @@
 # Stato attuale verificato
 
-Fotografia del **7 agosto 2026**, al checkpoint Realtime pre-merge della PR #27.
+Fotografia del **9 agosto 2026**, dopo il merge della PR #27 e della Fase 8.
 
 ## Repository
 
 | Voce | Valore |
 | --- | --- |
 | Repository GitHub | [`enricopuntog-cpu/vinae-progetto-0`](https://github.com/enricopuntog-cpu/vinae-progetto-0) |
-| `origin/main` verificato | `f9c53e0` — merge squash della PR #26, Fase 7g |
-| Stati precedenti di `main` | `6b5b219` (PR #23, Fase 7e), `d8503af` (PR #24), `306952f` (PR #22, Fase 7d), `471b529` (PR #21, Fase 7c), `1782a1a` (PR #20, documentazione), `5e6b8e4` (PR #19, Fase 7b), `2a47952` (PR #18, Fase 7) |
-| Branch del checkpoint Fase 8 | `migration/phase-8-messaging-notifications`, pubblicato nella draft PR #27 |
-| Ultima fase integrata in `main` | Fase 7g — scheduler auto-rilascio, squash `f9c53e0` |
+| `origin/main` verificato | `4f96864` — merge squash della PR #27, Fase 8 |
+| Stati precedenti di `main` | `f9c53e0` (PR #26, Fase 7g), `491e10d` (PR #25, Fase 7f), `6b5b219` (PR #23, Fase 7e), `d8503af` (PR #24), `306952f` (PR #22, Fase 7d), `471b529` (PR #21, Fase 7c), `1782a1a` (PR #20, documentazione), `5e6b8e4` (PR #19, Fase 7b), `2a47952` (PR #18, Fase 7) |
+| Branch della Fase 8 | `migration/phase-8-messaging-notifications`, HEAD finale `b32ff9d`, integrato con squash `4f96864` |
+| Ultima fase integrata in `main` | Fase 8 — messaggistica privata e notifiche persistenti, squash `4f96864` |
 | PR della 6d-1 | [#14](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/14) — merged |
 | PR di riconciliazione | [#15](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/15) — merged |
 | PR di verifica post-merge 6d-1 | [#16](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/16) — merged il 30 luglio 2026 |
@@ -23,6 +23,7 @@ Fotografia del **7 agosto 2026**, al checkpoint Realtime pre-merge della PR #27.
 | PR della Fase 7e | [#23](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/23) — merged il 5 agosto 2026, squash `6b5b219`; CI verde su tutti e quattro i controlli, `Supabase Preview` **`SUCCESS`** |
 | PR della Fase 7f | [#25](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/25) — merged il 5 agosto 2026, squash `491e10d` |
 | PR della Fase 7g | [#26](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/26) — merged il 6 agosto 2026, squash `f9c53e0` |
+| PR della Fase 8 | [#27](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/27) — merged il 7 agosto 2026 alle 11:36 UTC, squash `4f96864`; quattro check `SUCCESS` sull'HEAD finale `b32ff9d`, `Supabase Preview` compreso |
 
 Dalla PR #25 in avanti il merge su `main` non richiede più il click manuale del
 committente: è autorizzato in sessione, **solo in squash**, e ogni PR deve portare
@@ -80,16 +81,21 @@ verifier repair storico resta 13/13 e il controllo finale dei residui fixture
 restituisce zero in tutte le categorie registrate. Il rapporto corrente è
 [`../docs/PHASE_6D1_POST_MERGE_VERIFICATION.md`](../docs/PHASE_6D1_POST_MERGE_VERIFICATION.md).
 
-Il ledger delle migrazioni remote è a **diciannove righe**, letto con
-`list_migrations` il 5 agosto 2026. Le ultime quattro sono
+Il ledger delle migrazioni remote è a **venti righe**, riletto con
+`list_migrations` il 9 agosto 2026. Le ultime cinque sono
 `20260731135455 phase_7_order_payment_service`,
 `20260803150000 phase_7b_stripe_connect_marketplace`,
-`20260804160000 phase_7c_delivery_packaging` e
-`20260805160250 phase_7f_fix_contestazione_enum_cast`.
+`20260804160000 phase_7c_delivery_packaging`,
+`20260805160250 phase_7f_fix_contestazione_enum_cast` e
+`20260806224517 phase_8_messaging_notifications`. Le venti righe coincidono con i
+venti file di `supabase/migrations/` su `main`. La ventesima è stata distribuita
+dal merge della PR #27, non da un comando: `list_branches` sullo stesso progetto
+riporta ora il solo branch `main`, quindi la Preview `jggjaqcdbcbxdxhnggio` non
+esiste più.
 
-Le prime diciotto hanno versione a ledger uguale al nome del file, perché a
-distribuirle è l'integrazione GitHub partendo dal repository. La diciannovesima è
-l'unica eccezione: appartiene alla **Fase 7f** ed è stata applicata per via diretta
+Le prime diciotto e la ventesima hanno versione a ledger uguale al nome del file,
+perché a distribuirle è l'integrazione GitHub partendo dal repository. La
+diciannovesima resta l'unica eccezione: appartiene alla **Fase 7f** ed è stata applicata per via diretta
 e non dal merge, quindi è la sola per cui il riallineamento del filename alla
 versione assegnata dal server serve davvero. Nasceva `20260805120000_…` ed è stata
 rinominata mentre il file non era ancora stato pushato: la regola 11 non era in
@@ -126,7 +132,7 @@ Fase 11 e richiede una decisione esplicita.
 | Chiusura debiti 7b/7c: griglia 7c eseguita, smoke Storage chiuso | Fase 7e, PR #23 al merge squash `6b5b219` — quattro difetti della griglia corretti, **21 PASSA / 1 FALLISCE** con causa nota rimandata alla 7f, smoke `cantina` chiuso in dieci passi, residui a zero |
 | Contestazione risolvibile a favore del venditore, e fondi che si sbloccano | Fase 7f, PR #25 al merge squash `491e10d` — `42804` corretto con quattro cast all'enum; griglia 7c rieseguita **22 PASSA / 0 FALLISCE**, residui a zero su 26 controlli |
 | Scheduler auto-rilascio e sanità backlog | Fase 7g, PR #26 integrata con squash `f9c53e0`; configurazione secret e prima invocazione restano separate |
-| Messaggi e notifiche | PR #27 al checkpoint pre-merge; Preview privata con migrazione applicata, griglie 20/20 e 23/23, concorrenza 5/5, smoke Realtime autenticato e residui zero; produzione invariata |
+| Messaggi e notifiche | Integrati in `main` — Fase 8, PR #27 al merge squash `4f96864`; migrazione `20260806224517` distribuita in produzione dal merge, ventesima riga del ledger |
 | Moderazione e audit persistente | Non migrati — Fase 9 |
 | AI reale | Non migrata — Fase 10 |
 | Cutover | Non iniziato — Fase 11 |
@@ -418,6 +424,44 @@ eseguiti; `PAYMENTS_ENABLED=false` resta invariato.
   invocare la function reale. Rapporto in
   [`../docs/PHASE_7G_OPERATIONAL_CLOSEOUT.md`](../docs/PHASE_7G_OPERATIONAL_CLOSEOUT.md).
 
+**Lo scheduler consegnato dalla 7g gira e fallisce a ogni esecuzione.** Il
+workflow `Phase 7 - auto-release payouts` è schedulato da `main` dal merge della
+#26 e ha totalizzato **11 run, tutte `failure`**, dalla prima del 7 agosto 2026
+alle 01:53 UTC su `f9c53e0` fino a quella del 9 agosto alle 14:06 UTC su
+`4f96864`. La causa è la stessa in tutte: `Configurazione mancante: SUPABASE_URL`
+— `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `PAYOUTS_JOB_TOKEN` arrivano al runner
+vuoti perché variabili e secret GitHub non sono mai stati configurati, che è
+esattamente il gate che la 7g aveva dichiarato fuori dal merge. Il runner è
+fail-closed e si ferma prima di qualunque rete, quindi nessuna chiamata è mai
+partita verso Supabase o Stripe; il costo è che la decisione **1e** — scheduler
+acceso e verificato prima di `PAYMENTS_ENABLED` — non è ancora soddisfatta.
+
+## Fase 8 — messaggistica privata e notifiche persistenti
+
+**Stato:** integrata in `main` il 7 agosto 2026 con la PR
+[#27](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/27), merge squash
+`4f96864`, quattro check `SUCCESS` sull'HEAD finale `b32ff9d`.
+
+- la migrazione `20260806224517_phase_8_messaging_notifications.sql` è la
+  **ventesima riga del ledger di produzione**, distribuita dal merge e non da un
+  comando: `conversations`, `conversation_participants`, `messages` e
+  `notifications`, con letture RLS a colonne chiuse e scritture client soltanto
+  via RPC a identità derivata da `auth.uid()`, idempotenza e rate limit;
+- Realtime usa **Broadcast privati** — topic `conversation:<uuid>` e
+  `user:<uuid>:notifications` — con payload di sola invalidazione; il database
+  resta la fonte canonica e il client ricarica la riga tramite gli adapter RPC;
+- in `frontend-next/` arrivano le route `/messaggi` e `/notifiche`, il badge di
+  header, l'apertura conversazione dagli annunci, gli adapter Supabase/mock, la
+  keyset pagination e il lifecycle logout/riconnessione;
+- `MIN_TESTS` nel job CI `frontend-next` sale a **166**;
+- le prove eseguite sulla Preview `jggjaqcdbcbxdxhnggio` — griglia statica 20/20,
+  griglia fixture 23/23, cinque prove concorrenti, smoke Realtime autenticato,
+  residui zero — restano il rapporto di quella fase. **La Preview non esiste
+  più**: `list_branches` sul progetto reale riporta il solo branch `main`, quindi
+  quelle misure non sono più riverificabili là dove sono state prese. Sul
+  progetto di produzione le tabelle della Fase 8 non sono state rilette dopo il
+  merge: lo schema è distribuito, il suo stato dati non è verificato.
+
 ## Gate chiusi senza essere stati autorizzati
 
 Due dei gate che questo documento elencava come aperti non lo sono più, e non
@@ -428,10 +472,13 @@ perché le versioni a ledger sono già quelle dei file.
 
 ## Gate aperti, in ordine
 
-1. pubblicare il commit documentale finale della PR #27 e attendere i quattro
-   check sul nuovo HEAD;
-2. con i check verdi, eseguire ready-for-review e squash merge già autorizzati,
-   poi verificare `origin/main`, ledger di produzione e assenza di fixture;
+1. configurare variabili e secret GitHub dello scheduler di auto-rilascio —
+   `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `PAYOUTS_JOB_TOKEN` — e ottenere una run
+   verde di `Phase 7 - auto-release payouts`. Oggi sono **11 run su 11 in
+   `failure`** per configurazione mancante: finché resta così la decisione **1e**
+   non è soddisfatta e `PAYMENTS_ENABLED` non può essere acceso;
+2. approvare l'avvio della Fase 9 — moderazione e audit persistente — che è la
+   fase successiva nell'ordine di dipendenza e **non è iniziata**;
 3. autorizzare separatamente l'esecuzione delle griglie
    [`7_ordini_pagamenti.sql`](../supabase/tests/7_ordini_pagamenti.sql) — 16
    casi — e [`7b_connect_marketplace.sql`](../supabase/tests/7b_connect_marketplace.sql)

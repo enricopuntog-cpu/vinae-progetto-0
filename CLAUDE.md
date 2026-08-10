@@ -240,31 +240,36 @@ variable/secret configuration, token rotation, the first real `workflow_dispatch
 and payment activation outside the merge. The PR merged on 6 August 2026 as squash `f9c53e0`;
 those remote operations remain separate gates.
 
-### Phase 8 messaging and notifications — PR #27 pre-merge
+### Phase 8 messaging and notifications — PR #27 merged
 
-The branch is `migration/phase-8-messaging-notifications`, based on `f9c53e0`. Its published
-history is split into `d4eb981` (schema/spec/tests), `9a270f1` (frontend/Realtime), `059becc`
-(documentation/handoff), `4e97139` (remove the redundant RLS enable on the Supabase-managed
-`realtime.messages` table and correct the fixture-grid header to 23 cases) and `6ea0fe6`
-(reconciled local handoff). It adds the additive
-messaging/notification migration, closed-column RLS and RPC ports,
+PR #27 merged into `main` on 7 August 2026 at 11:36 UTC as squash `4f96864`, with all four checks
+`SUCCESS` — Frontend, Frontend Next, Backend and `Supabase Preview` — on the branch's final head
+`b32ff9d`. It adds the additive messaging/notification migration, closed-column RLS and RPC ports,
 private Realtime Broadcast invalidations, TypeScript adapters, mock parity and the `/messaggi` and
 `/notifiche` routes. Browser channels call `realtime.setAuth()` before subscribing, use only
 `config.private = true`, treat payloads as closed invalidations and reload canonical rows through
 the RPC adapters. Logout or user change removes every channel and invalidates stale callbacks.
+`MIN_TESTS` in the `frontend-next` CI job is now **166**.
 
-Draft PR #27 created the isolated Supabase Preview `jggjaqcdbcbxdxhnggio`, where migration
-`20260806224517` applied successfully. The static grid passed 20/20, the fixture grid passed 23/23,
-all five concurrent cases passed, and the extended cleanup found zero rows in nine fixture classes.
-The corrected migration SHA-256 is
-`277ee13c6d40e4355660dedf9179d083c50a7fe6ea9326d730b3d0f446900eb6`. Production remains at 19
-migrations with no Phase 8 SQL before merge. Preview Realtime is enabled with public channels
-disabled. The authenticated smoke allowed a participant on the conversation topic and the recipient
-on the notification topic, denied an outsider on both topics, denied an anonymous public channel,
-delivered exactly one closed-column message invalidation and one notification invalidation, and left
-zero fixture rows in ten checked classes. Ready-for-review and squash merge are explicitly authorized
-after the final documentation commit receives the same four green checks. Manual production SQL,
-fixtures and direct production configuration remain forbidden; only automatic merge effects are in scope.
+The merge distributed the migration: `20260806224517 phase_8_messaging_notifications` is the
+**twentieth row of the production ledger**, re-read with `list_migrations` on 9 August 2026, and it
+matches the twenty files in `supabase/migrations/` on `main`. Nobody ran a command — the GitHub
+integration applied it, as it has for every phase since Phase 7.
+
+The Phase 8 proofs — static grid 20/20, fixture grid 23/23, five concurrent cases, authenticated
+Realtime smoke, zero residues in ten classes — were taken on the isolated Supabase Preview
+`jggjaqcdbcbxdxhnggio`, which was tied to the PR. **That Preview no longer exists**: `list_branches`
+on the real project now reports only the `main` branch. Those numbers are a report of that phase,
+not a state that can be re-measured on demand — the same distinction that applies to every grid in
+this project. In particular, the `private_only` Realtime restriction was configured on the Preview,
+never on production: whether production Realtime allows public channels is unverified.
+
+Two production facts that outlive the merge: the Phase 8 tables have not been re-read since, so the
+schema is distributed but its data state is unverified; and the Phase 7g scheduled workflow
+`Phase 7 - auto-release payouts` has run 11 times from `main` and **failed every time** with
+`Configurazione mancante: SUPABASE_URL`, because the GitHub variables and secrets were never
+configured. The runner is fail-closed and never reached the network, but decision 1e — scheduler
+switched on and verified *before* `PAYMENTS_ENABLED` — is not satisfied.
 
 ### Postgres exposure rules (binding since Phase 6d-1)
 
