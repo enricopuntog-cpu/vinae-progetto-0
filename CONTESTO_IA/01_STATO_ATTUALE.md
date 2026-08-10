@@ -465,9 +465,11 @@ acceso e verificato prima di `PAYMENTS_ENABLED` — non è ancora soddisfatta.
 ## Fase 9 — decisioni organizzative
 
 **Stato:** avviata il 10 agosto 2026 nel branch `migration/phase-9-moderation-service`,
-creato da `origin/main` aggiornato. Checkpoint **9a chiuso in tre commit**; il 9b
-non è cominciato. Nessuna PR aperta, nessuna migrazione applicata al progetto
-reale.
+creato da `origin/main` aggiornato. Checkpoint **9a chiuso in tre commit di
+contenuto** — `1b7cabd` schema e griglia, `1ea1b2e` adapter, `91407c6` rotte —
+seguiti da `b0a3733`, che è la consegna documentale del checkpoint e non tocca
+codice né SQL. Il 9b non è cominciato. Nessuna PR aperta, nessuna migrazione
+applicata al progetto reale.
 
 La sessione organizzativa del 10 agosto 2026 ha chiuso le nove decisioni aperte
 della specifica più il gate del percorso di autorizzazione. **Sono vincolanti e
