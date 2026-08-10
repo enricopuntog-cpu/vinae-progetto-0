@@ -373,3 +373,75 @@ sequenziale. Il 7 agosto 2026 la Preview isolata `jggjaqcdbcbxdxhnggio` della
 draft PR #27 ha eseguito la griglia statica 20/20, la griglia fixture 23/23 e
 tutte le cinque prove concorrenti; il cleanup esteso ha trovato zero residui.
 Produzione non è stata usata e resta priva della migrazione di Fase 8.
+
+## Fase 9a — moderazione, audit persistente e code in lettura
+
+| # | File | Fixture | Esito atteso |
+|---|---|---|---|
+| 1 | `supabase/migrations/20260810152000_phase_9a_moderation_schema.sql` | — | migrazione applicata e registrata |
+| 2 | `supabase/migrations/20260810152500_phase_9a_drop_public_bottle_units.sql` | — | migrazione applicata e registrata |
+| 3 | [`9a_moderazione_statica.sql`](9a_moderazione_statica.sql) | No | 28 `PASSA`, 0 `FALLISCE` |
+
+La griglia è **statica**: non inserisce e non cancella nulla, quindi non
+richiede un'autorizzazione fixture. Richiede comunque l'autorizzazione a
+eseguirla sul progetto reale, che **non è stata chiesta né concessa**: sul
+progetto `pijnmcllmfgjmgsvtcej` questa griglia non ha mai girato.
+
+### Dove è stata eseguita davvero, e che cosa questo prova
+
+A differenza delle griglie 7, 7b e 6d-2a, questa **non arriva senza esito**.
+È stata eseguita su un Postgres 17.10 in container usa-e-getta, sopra
+un'impalcatura di stub che riproduce i soli oggetti referenziati dai due file
+della fase e, soprattutto, **i privilegi reali dei tre ruoli client letti dal
+progetto vero** con `has_schema_privilege`, `has_table_privilege` e
+`has_function_privilege`. Prima esecuzione **27 PASSA / 1 FALLISCE**; il caso 26
+era un difetto della griglia — confrontava `search_path=` mentre `proconfig`
+conserva `search_path=""` — e non della migrazione. Dopo la correzione:
+**28 PASSA / 0 FALLISCE**.
+
+Oltre alla griglia sono state eseguite due sonde comportamentali, che non sono
+versionate perché provano la stessa cosa dei casi statici da un altro lato:
+ventidue controlli sulla logica (priorità derivata, elenco chiuso dei motivi,
+doppioni, bersaglio inesistente, autosegnalazione, append-only contro `UPDATE`,
+`DELETE` e `TRUNCATE` **anche da superuser**) e dieci sui privilegi impersonando
+`authenticated` e `anon` con `set role`.
+
+**Che cosa questo non prova.** Un'impalcatura di stub non è il progetto reale:
+prova che i file compilano, che gli invarianti reggono sulla forma e che i
+predicati si comportano come dichiarato sotto i privilegi replicati. Non prova
+lo stato del progetto `pijnmcllmfgjmgsvtcej`, dove nessuno dei due file è stato
+applicato.
+
+### Il difetto che l'esecuzione ha trovato, e che la lettura non aveva trovato
+
+Le sei proiezioni della fase filtravano con `public.has_role((select auth.uid()),
+'admin')`, che è la forma ovvia e sarebbe stata sbagliata. `has_role` è
+`SECURITY INVOKER` dalla 6d-1, legge `public.user_roles`, e su questo progetto
+**`authenticated` non ha `SELECT` su `user_roles`**: il pianificatore non la
+inlina, quindi esegue come il chiamante e restituisce `permission denied for
+table user_roles`. Non una coda vuota — un errore a ogni lettura, per ogni
+moderatore.
+
+Provata anche l'alternativa di un helper in `private` con `SECURITY DEFINER`:
+non funziona, perché il privilegio `EXECUTE` di una funzione è verificato sul
+chiamante e non sul proprietario della vista, quindi andrebbe concesso ad
+`authenticated`. La forma adottata è il predicato scritto dentro il corpo della
+vista, dove con `security_invoker = off` il riferimento a `user_roles` è
+verificato con i privilegi del proprietario: nessuna concessione nuova, nessuna
+funzione nuova. Il caso 25 della griglia impedisce la regressione.
+
+**Conseguenza fuori dalla Fase 9, non corretta qui.** `public.has_role` resta
+inservibile per un chiamante `authenticated` anche altrove: le policy
+`wines_insert_staff`, `wines_update_staff` e `wines_delete_staff` la usano e
+falliscono allo stesso modo. Fallisce chiusa, quindi non è un buco di sicurezza;
+è un difetto di funzionalità di un dominio diverso e la sua correzione è una
+decisione, non manutenzione.
+
+### Conseguenza del drop di `public_bottle_units` sulle griglie 6d-1
+
+`6d-1_invarianti_sicurezza.sql` (casi alle righe 296-312 e 433) e
+`6d-1_verifica.sql` (188-242) interrogano `public.public_bottle_units` e da
+questa fase in avanti **non sono più eseguibili come scritte**. Non sono state
+modificate: sono il verbale di un'esecuzione avvenuta, e riscriverle
+significherebbe riscrivere un verbale. La perdita è dichiarata qui invece di
+essere nascosta in una modifica silenziosa.
