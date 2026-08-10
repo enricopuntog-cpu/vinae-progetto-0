@@ -462,6 +462,91 @@ acceso e verificato prima di `PAYMENTS_ENABLED` — non è ancora soddisfatta.
   progetto di produzione le tabelle della Fase 8 non sono state rilette dopo il
   merge: lo schema è distribuito, il suo stato dati non è verificato.
 
+## Fase 9 — decisioni organizzative
+
+**Stato:** avviata il 10 agosto 2026 nel branch `migration/phase-9-moderation-service`,
+creato da `origin/main` aggiornato. Checkpoint **9a chiuso in tre commit**; il 9b
+non è cominciato. Nessuna PR aperta, nessuna migrazione applicata al progetto
+reale.
+
+La sessione organizzativa del 10 agosto 2026 ha chiuso le nove decisioni aperte
+della specifica più il gate del percorso di autorizzazione. **Sono vincolanti e
+non si riaprono senza tornare in sessione organizzativa.**
+
+| # | Decisione | Risposta |
+| --- | --- | --- |
+| 7.1 | Chi può moderare | Riuso di `admin`; nessun ruolo `moderator`; ambito club rinviato |
+| 7.2 | Chi assegna il ruolo | Fuori banda; nessuna nuova RPC di assegnazione in Fase 9 |
+| 7.3 | Retention `audit_log` | Nessuna cancellazione, mai |
+| 7.4 | Segnalazioni anonime o tracciate | Tracciata verso il moderatore; mai visibile al segnalato |
+| 7.5 | Assegnazione delle pratiche | Nessuna; coda condivisa fra tutti i moderatori |
+| 7.6a | Bersagli `post`/`commento` | Esclusi finché non esiste schema club: restano 5 tipi di bersaglio |
+| 7.6b | Enforcement sospensione utente | Due livelli: primo blocca le sole scritture social, secondo rimuove anche la visione |
+| 7.7 | `public_bottle_units` | Rimuoverla, con il concetto di cantina pubblica per singola bottiglia |
+| 7.8a | SLA sulla priorità | Nessuno SLA |
+| 7.8b | Campo `ricorso` | Non portarlo; resta dichiaratamente non scritto |
+| 7.9 | Gate di autorizzazione | Una sola conferma esplicita copre insieme merge della PR e applicazione della migrazione, nella stessa sessione |
+
+### Che cosa il checkpoint 9a ha prodotto
+
+- `20260810152000_phase_9a_moderation_schema.sql`: `reports`, `report_events`,
+  `report_reasons`, `audit_log`, cinque enum, sei proiezioni
+  `security_invoker = off` a colonne chiuse e la porta `public.segnalazione_invia`
+  con rate limit 10/ora. Le tre tabelle di dominio **non hanno alcun grant
+  client, nemmeno di colonna**: ogni lettura passa da una vista. `audit_log` è
+  append-only per trigger e non per soli `GRANT`, quindi rifiuta `UPDATE`,
+  `DELETE` e `TRUNCATE` anche a `service_role`;
+- `20260810152500_phase_9a_drop_public_bottle_units.sql`, file separato perché è
+  una decisione separata;
+- `supabase/tests/9a_moderazione_statica.sql`, 28 casi;
+- adapter Supabase dietro `ModerationService` e le rotte `/admin` e
+  `/segnalazioni` in sola lettura; `MIN_TESTS` da 166 a **189**.
+
+### Il difetto che l'esecuzione ha trovato, e la sua coda fuori dalla Fase 9
+
+Le sei proiezioni filtravano con `public.has_role((select auth.uid()), 'admin')`,
+che è la forma ovvia ed è sbagliata. `has_role` è `SECURITY INVOKER` dalla 6d-1,
+legge `public.user_roles`, e **`authenticated` non ha `SELECT` su quella
+tabella**: il pianificatore non la inlina, quindi esegue come il chiamante e dà
+`permission denied for table user_roles`. Non una coda vuota — un errore a ogni
+lettura, per ogni moderatore. Anche un helper in `private` con `SECURITY DEFINER`
+è stato provato e non regge: `EXECUTE` è verificato sul chiamante, quindi
+andrebbe concesso ad `authenticated`. La forma adottata è il predicato scritto
+dentro il corpo della vista, dove `security_invoker = off` fa verificare
+`user_roles` con i privilegi del proprietario.
+
+**`public.has_role` resta però inservibile per un chiamante `authenticated` anche
+fuori da questa fase**: le policy `wines_insert_staff`, `wines_update_staff` e
+`wines_delete_staff` la usano e falliscono allo stesso modo. Fallisce chiusa,
+quindi non è un buco di sicurezza; è un difetto di funzionalità di un dominio
+diverso e correggerlo è una decisione, non manutenzione. **Non è stato corretto.**
+
+### Perimetro ristretto della decisione 7.7, dichiarato
+
+Il drop tocca la **vista** e non la colonna `bottle_units.visibilita` né l'enum
+`bottle_unit_visibilita`. Letto da `pg_policy` prima di decidere: `bottle_units`
+ha solo policy di proprietario — quella `cantina_pubblica` della 6c-1 era già
+stata eliminata dalla 6d-1 — quindi la vista era **l'unico percorso** per cui un
+non proprietario potesse leggere una bottiglia, e rimuoverla elimina davvero la
+capacità. La colonna sopravvive perché è un parametro di `public.bottiglia_crea`
+ed è scritta da `frontend-next` e da `frontend`, congelati fino alla Fase 11:
+**è un residuo inerte e appartiene alla lista di cutover**, come la voce
+«protezione» della 7d.
+
+Conseguenza registrata e non nascosta: `supabase/tests/6d-1_invarianti_sicurezza.sql`
+e `6d-1_verifica.sql` interrogano quella vista e **non sono più eseguibili come
+scritte**. Non sono state modificate: sono il verbale di un'esecuzione avvenuta.
+
+### Tensione dichiarata sulla decisione 7.6b
+
+L'enforcement della sospensione **non esiste in `frontend/`**: la specifica lo
+dice (§7.6, «nessun percorso di `frontend/` mostra cosa succede a un utente
+sospeso»), e la regola di fase vieta funzionalità che `frontend/` non ha. La
+decisione 7.6b è stata comunque presa in sessione organizzativa ed è vincolante;
+senza di essa «sospendi» scriverebbe una riga di audit e non farebbe nulla. La
+tensione è registrata qui perché la scelta sia visibile, non perché vada
+riaperta.
+
 ## Gate chiusi senza essere stati autorizzati
 
 Due dei gate che questo documento elencava come aperti non lo sono più, e non
