@@ -445,3 +445,75 @@ questa fase in avanti **non sono più eseguibili come scritte**. Non sono state
 modificate: sono il verbale di un'esecuzione avvenuta, e riscriverle
 significherebbe riscrivere un verbale. La perdita è dichiarata qui invece di
 essere nascosta in una modifica silenziosa.
+
+## Fase 9b — azioni di moderazione e sospensione utente a due livelli
+
+| # | File | Fixture | Esito atteso |
+|---|---|---|---|
+| 1 | `supabase/migrations/20260810180000_phase_9b_moderation_actions.sql` | — | migrazione applicata e registrata |
+| 2 | [`9b_moderazione_azioni_statica.sql`](9b_moderazione_azioni_statica.sql) | No | 26 `PASSA`, 0 `FALLISCE` |
+
+Come la 9a: griglia **statica**, nessun dato inserito o cancellato, nessuna
+autorizzazione fixture necessaria. Resta necessaria l'autorizzazione a eseguirla
+sul progetto reale, che **non è stata chiesta né concessa**: su
+`pijnmcllmfgjmgsvtcej` non ha mai girato.
+
+### Dove è stata eseguita, e con che esito
+
+Stesso Postgres 17.10 in container usa-e-getta della 9a, con l'impalcatura di
+stub estesa a `listings`, `wines`, `bottle_units`, `conversations`, `messages`,
+`conversation_participants`, `notifications` e `public_listings` nella forma
+della 7c. Prima esecuzione **23 PASSA / 3 FALLISCE**, e tutti e tre i fallimenti
+erano difetti della griglia, non della migrazione:
+
+1. un conteggio di colonne di `public_listings` sbagliato a mano (31 invece di 30);
+2. un `like '%has_role%'` su `pg_get_functiondef` che leggeva il commento con cui
+   `private.moderazione_attore()` spiega **perché non** usa `has_role`;
+3. un confronto su `proargtypes`, che è un `oidvector` con estremo inferiore 0 e
+   quindi non è mai uguale a un array letterale, per quanto il contenuto coincida.
+
+Dopo le correzioni: **26 PASSA / 0 FALLISCE**.
+
+### Le 61 sonde comportamentali
+
+Accanto alla griglia statica è stata eseguita, sullo stesso Postgres, una
+batteria di **61 sonde comportamentali**, esito finale **61 PASSA / 0 FALLISCE**.
+Non sono versionate qui perché dipendono da fixture, e l'autorizzazione fixture è
+per griglia e non per progetto. Che cosa misurano:
+
+- il gate di moderazione, impersonando `authenticated` senza ruolo e `anon`;
+- le cinque transizioni sugli annunci, il rifiuto di `riservato` e `venduto`, e
+  la riga di audit che ciascuna lascia;
+- i **due livelli della decisione 7.6b in entrambe le direzioni**: al primo
+  livello annunci e profilo restano nel catalogo e l'utente legge ancora, ma non
+  pubblica e non scrive messaggi; al secondo i suoi annunci escono dal catalogo e
+  le sue letture si fermano;
+- che il contatore dei provvedimenti non si azzera con il ripristino, quindi il
+  provvedimento successivo resta di secondo livello;
+- che **nemmeno `service_role`** scrive `profiles.stato_utente`;
+- che ordini e pagamenti restano scrivibili in entrambi i livelli — il confine
+  dichiarato nella migrazione, misurato invece che asserito;
+- che gli invarianti della 9a (append-only dell'audit, note interne invisibili al
+  segnalante, coda vuota e non in errore per un non moderatore) reggono dopo la 9b.
+
+Le prime due esecuzioni hanno dato 34/27 e 59/1. **Nessuno dei 28 fallimenti era
+un difetto della migrazione**: erano tre difetti delle sonde — un nome di
+variabile `psql` che `\gset` ricava dalla colonna e quindi ripiega in minuscolo,
+e due sonde che consumavano l'ultimo annuncio attivo del catalogo prima di
+misurarlo — più la loro cascata.
+
+**Che cosa questo non prova.** Le stesse due righe della 9a: l'impalcatura prova
+che i file compilano, che gli invarianti reggono sulla forma e che i predicati si
+comportano come dichiarato sotto i privilegi replicati. Non prova lo stato di
+`pijnmcllmfgjmgsvtcej`, dove la migrazione della 9b non è stata applicata.
+
+### Il confine dichiarato del secondo livello
+
+La decisione 7.6b dice «rimozione completa, incluso l'accesso in visione». La
+migrazione la applica alla superficie sociale — catalogo pubblico, conversazioni,
+messaggi, notifiche, proprie segnalazioni — e **non** alla superficie
+contrattuale: un utente rimosso continua a poter leggere e scrivere ordini e
+pagamenti. La ragione è che la stessa decisione toglie la compravendita
+dall'enforcement al primo livello, e un ordine in corso che diventa illeggibile a
+metà strada non è una rimozione, è un pagamento sospeso che nessuno ha deciso.
+La sonda 62 misura esattamente questo confine, invece di lasciarlo asserito.
