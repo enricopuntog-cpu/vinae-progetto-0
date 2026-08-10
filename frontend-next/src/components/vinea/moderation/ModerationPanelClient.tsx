@@ -1,19 +1,42 @@
 "use client";
 
-// Fase 9a - pannello di moderazione, SOLA LETTURA.
+// Fase 9a/9b - pannello di moderazione.
 //
 // Tre schede come in frontend/src/routes/admin.tsx:158-168 — coda segnalazioni,
-// controversie ordini, audit log. Nessun comando: i sette bottoni di azione e
-// il dialogo di conferma sono il checkpoint 9b. La scheda contestazioni non ha
-// il selettore d'ambito piattaforma/club del mock, perche l'ambito club non e
-// esprimibile: user_roles e (user_id, role) senza colonna d'ambito, e la
-// decisione 7.1 ha rinviato il moderatore di club.
+// controversie ordini, audit log. La scheda contestazioni non ha il selettore
+// d'ambito piattaforma/club del mock, perche l'ambito club non e esprimibile:
+// user_roles e (user_id, role) senza colonna d'ambito, e la decisione 7.1 ha
+// rinviato il moderatore di club.
+//
+// Il 9b aggiunge i comandi. Due differenze dichiarate rispetto al mock:
+//  * niente «Prendi in carico» — decisione 7.5, la coda e condivisa e la
+//    colonna di assegnazione non esiste nemmeno a database;
+//  * la motivazione e obbligatoria anche per il ripristino, che nel mock ne
+//    faceva a meno (frontend/src/routes/admin.tsx:486). A database
+//    audit_log.motivazione e NOT NULL con CHECK: l'eccezione del mock non e
+//    riproducibile, e non e una regressione ma un vincolo che il mock non aveva.
 
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
   EmptyState,
   ErrorState,
@@ -26,12 +49,34 @@ import { usePhase9Moderation } from "@/lib/phase9/use-phase9-moderation";
 import { useVinea } from "@/lib/vinea-store";
 import {
   modActionLabel,
+  modActionTone,
   reportStatusLabel,
   reportStatusTone,
   reportTargetLabel,
 } from "@/data/moderation";
-import type { AuditEntry, Priorita, Report } from "@/data/moderation";
-import type { DisputeQueueRow } from "@/services/phase9/supabase-moderation-service";
+import type { AuditEntry, ModAction, Priorita, Report } from "@/data/moderation";
+import type {
+  AzionePraticaInput,
+  DisputeQueueRow,
+  TransizioneAnnuncio,
+} from "@/services/phase9/supabase-moderation-service";
+
+// Le sette azioni della decisione, nell'ordine in cui il mock le presenta.
+const AZIONI: ModAction[] = [
+  "info_richieste",
+  "richiesta_modifiche",
+  "ammonizione",
+  "sospensione",
+  "rimozione",
+  "ripristino",
+  "chiusura",
+];
+
+const DURATE = ["24 ore", "7 giorni", "30 giorni", "Indefinita"];
+
+// Una pratica chiusa non si rilavora: le RPC la rifiutano con P0001, e mostrare
+// comandi che il database respinge sarebbe un invito a un errore.
+const chiusa = (report: Report) => report.stato === "risolta" || report.stato === "respinta";
 
 const prioritaTono: Record<Priorita, string> = {
   alta: "bg-bordeaux/10 text-bordeaux",
@@ -45,7 +90,160 @@ const data = (iso: string) =>
 const euro = (cents: number) =>
   new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(cents / 100);
 
-const RigaSegnalazione = ({ report }: { report: Report }) => (
+// ---------------------------------------------------------------------------
+// Il dialogo delle azioni
+// ---------------------------------------------------------------------------
+
+// Montato solo quando una pratica e aperta, e con `key` sull'id: lo stato del
+// modulo e locale, e un dialogo che sopravvive al cambio di pratica porterebbe
+// la motivazione scritta per una sulla successiva.
+type DialogoProps = {
+  report: Report;
+  inCorso: string | null;
+  onChiudi: () => void;
+  onAzione: (input: AzionePraticaInput) => Promise<void>;
+  onTransizione: (
+    listingId: string,
+    transizione: TransizioneAnnuncio,
+    motivazione: string,
+  ) => Promise<void>;
+};
+
+const DialogoAzioni = ({
+  report,
+  inCorso,
+  onChiudi,
+  onAzione,
+  onTransizione,
+}: DialogoProps) => {
+  const [motivazione, setMotivazione] = useState("");
+  const [durata, setDurata] = useState(DURATE[1]);
+  const [notaInterna, setNotaInterna] = useState("");
+
+  const pronta = motivazione.trim().length > 0;
+  const occupato = inCorso !== null;
+  const suAnnuncio = report.targetType === "annuncio" && report.targetId.length > 0;
+
+  const esegui = async (azione: ModAction) => {
+    try {
+      await onAzione({
+        reportId: report.id,
+        azione,
+        motivazione,
+        durata: azione === "sospensione" ? durata : undefined,
+        notaInterna: notaInterna || undefined,
+      });
+      onChiudi();
+    } catch {
+      // L'errore e gia nello stato del controller e la pagina lo mostra: qui
+      // conta solo non chiudere il dialogo, cosi il testo scritto non si perde.
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(aperto) => !aperto && onChiudi()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-xl">{report.targetLabel}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3 text-sm">
+          <p className="text-muted-foreground">
+            {reportTargetLabel[report.targetType]} · {report.reason}
+          </p>
+          {report.descrizione ? <p>{report.descrizione}</p> : null}
+
+          <div>
+            <Label htmlFor="mod-motivazione" className="text-xs uppercase">
+              Motivazione (obbligatoria)
+            </Label>
+            <Textarea
+              id="mod-motivazione"
+              rows={3}
+              value={motivazione}
+              onChange={(e) => setMotivazione(e.target.value)}
+              placeholder="Perche stai eseguendo questa azione?"
+              className="mt-1"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="mod-durata" className="text-xs uppercase">
+              Durata (solo per la sospensione)
+            </Label>
+            <Select value={durata} onValueChange={setDurata}>
+              <SelectTrigger id="mod-durata" className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DURATE.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="mod-nota" className="text-xs uppercase">
+              Nota interna (facoltativa, mai visibile al segnalante)
+            </Label>
+            <Textarea
+              id="mod-nota"
+              rows={2}
+              value={notaInterna}
+              onChange={(e) => setNotaInterna(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+
+          {suAnnuncio ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!pronta || occupato}
+              onClick={() => {
+                void onTransizione(report.targetId, "in_revisione", motivazione).then(
+                  onChiudi,
+                  () => {},
+                );
+              }}
+            >
+              Metti l&apos;annuncio in revisione
+            </Button>
+          ) : null}
+        </div>
+
+        <DialogFooter className="flex-wrap gap-2">
+          {AZIONI.map((azione) => (
+            <Button
+              key={azione}
+              variant="outline"
+              size="sm"
+              className={modActionTone[azione]}
+              disabled={!pronta || occupato}
+              onClick={() => void esegui(azione)}
+            >
+              {modActionLabel[azione]}
+            </Button>
+          ))}
+          <Button variant="ghost" size="sm" onClick={onChiudi}>
+            Chiudi
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const RigaSegnalazione = ({
+  report,
+  onApri,
+}: {
+  report: Report;
+  onApri: ((report: Report) => void) | null;
+}) => (
   <Card className="space-y-3 p-4">
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div>
@@ -86,6 +284,12 @@ const RigaSegnalazione = ({ report }: { report: Report }) => (
           ))}
         </ol>
       </div>
+    ) : null}
+
+    {onApri && !chiusa(report) ? (
+      <Button variant="outline" size="sm" onClick={() => onApri(report)}>
+        Azioni di moderazione
+      </Button>
     ) : null}
   </Card>
 );
@@ -133,10 +337,20 @@ export const ModerationPanelClient = () => {
   const { ruolo } = useVinea();
   const online = useOnline();
   const [tab, setTab] = useState("coda");
+  const [aperta, setAperta] = useState<Report | null>(null);
   const moderatore = ruolo === "admin";
-  const { mode, coda, audit, contestazioni, loading, error, reload } = usePhase9Moderation({
-    moderatore,
-  });
+  const {
+    mode,
+    coda,
+    audit,
+    contestazioni,
+    loading,
+    error,
+    reload,
+    agisci,
+    transizioneAnnuncio,
+    inCorso,
+  } = usePhase9Moderation({ moderatore });
 
   // Stesso cancello di frontend/src/routes/admin.tsx:73-84. Il gate vero resta
   // comunque nel database: senza il ruolo admin le proiezioni non restituiscono
@@ -164,12 +378,20 @@ export const ModerationPanelClient = () => {
         </Button>
       </header>
 
-      {/* Il checkpoint 9a e dichiaratamente in sola lettura: dirlo in pagina
-          evita che l'assenza dei comandi sembri un guasto. */}
-      <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-        Sola lettura. Le azioni di moderazione arrivano con il checkpoint 9b.
-        {mode === "mock" ? " Dati dimostrativi: Supabase non e configurato." : ""}
-      </p>
+      {/* In modalita mock i comandi non esistono: dirlo evita che la loro
+          assenza sembri un guasto. */}
+      {mode === "mock" ? (
+        <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+          Dati dimostrativi: Supabase non e configurato, quindi le azioni di
+          moderazione non sono disponibili.
+        </p>
+      ) : null}
+
+      {error ? (
+        <p className="rounded-md border border-bordeaux/40 bg-bordeaux/5 p-3 text-sm text-bordeaux">
+          {error}
+        </p>
+      ) : null}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
@@ -182,7 +404,13 @@ export const ModerationPanelClient = () => {
           {coda.length === 0 ? (
             <EmptyState title="Nessuna segnalazione" message="La coda e vuota." />
           ) : (
-            coda.map((report) => <RigaSegnalazione key={report.id} report={report} />)
+            coda.map((report) => (
+              <RigaSegnalazione
+                key={report.id}
+                report={report}
+                onApri={agisci ? setAperta : null}
+              />
+            ))
           )}
         </TabsContent>
 
@@ -202,6 +430,17 @@ export const ModerationPanelClient = () => {
           )}
         </TabsContent>
       </Tabs>
+
+      {agisci && transizioneAnnuncio && aperta ? (
+        <DialogoAzioni
+          key={aperta.id}
+          report={aperta}
+          inCorso={inCorso}
+          onChiudi={() => setAperta(null)}
+          onAzione={agisci}
+          onTransizione={transizioneAnnuncio}
+        />
+      ) : null}
     </div>
   );
 };

@@ -1,24 +1,28 @@
 "use client";
 
-// Fase 9a - controller di sola lettura della moderazione.
+// Fase 9a/9b - controller della moderazione.
 //
 // Stessa forma del controller di Fase 8: se il client Supabase e configurato si
 // legge dalle proiezioni reali, altrimenti si resta sui dati del mock, che nel
 // frontend-next continuano a guidare i domini non ancora migrati. Non e un
 // ripiego silenzioso: `mode` dice quale delle due sorgenti e in uso.
 //
-// Qui non esiste alcuna azione. Le sette azioni di moderazione sono il
-// checkpoint 9b; questo controller non le espone nemmeno come funzioni
-// disabilitate, perche un comando che non esiste e piu onesto di un comando
-// che non fa nulla.
+// Dal 9b il controller espone anche le azioni. In modalita mock non esistono:
+// un comando che scrive in memoria e sparisce al ricaricamento sarebbe piu
+// fuorviante della sua assenza, e la sorgente mock qui e un ripiego di
+// configurazione, non un ambiente di prova.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useVinea } from "@/lib/vinea-store";
 import {
+  azioneAnnuncio,
+  azionePratica,
   codaContestazioni,
   createSupabaseModerationService,
+  type AzionePraticaInput,
   type DisputeQueueRow,
+  type TransizioneAnnuncio,
 } from "@/services/phase9/supabase-moderation-service";
 import type { AuditEntry, Report } from "@/data/moderation";
 
@@ -31,6 +35,12 @@ export type Phase9ModerationState = {
   loading: boolean;
   error: string | null;
   reload: () => Promise<void>;
+  // Null in modalita mock: le azioni non esistono, non sono disabilitate.
+  agisci: ((input: AzionePraticaInput) => Promise<void>) | null;
+  transizioneAnnuncio:
+    | ((listingId: string, transizione: TransizioneAnnuncio, motivazione: string) => Promise<void>)
+    | null;
+  inCorso: string | null;
 };
 
 const messaggio = (e: unknown) =>
@@ -52,6 +62,9 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
   const [mieSegnalazioni, setMie] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // L'azione in corso, per bloccare il doppio invio. Non e un booleano: la coda
+  // ha piu righe e un flag globale spegnerebbe tutti i comandi insieme.
+  const [inCorso, setInCorso] = useState<string | null>(null);
   // Stesso accorgimento del controller di Fase 8: una risposta che arriva dopo
   // un cambio di utente non deve scrivere nello stato del nuovo utente.
   const epoch = useRef(0);
@@ -87,6 +100,46 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
     }
   }, [authUserId, client, moderatore, service]);
 
+  // Dopo un'azione si rilegge tutto invece di aggiornare lo stato in memoria:
+  // una sola azione tocca la pratica, la sua storia, il registro di audit e
+  // spesso lo stato del bersaglio. Ricostruire quel risultato dal client
+  // significherebbe riscrivere la logica delle RPC, e sbagliarla.
+  const agisci = useCallback(
+    async (input: AzionePraticaInput) => {
+      if (!service) return;
+      setInCorso(`${input.reportId}:${input.azione}`);
+      try {
+        await azionePratica(client, input);
+        setError(null);
+        await reload();
+      } catch (e) {
+        setError(messaggio(e));
+        throw e;
+      } finally {
+        setInCorso(null);
+      }
+    },
+    [client, reload, service],
+  );
+
+  const transizioneAnnuncio = useCallback(
+    async (listingId: string, transizione: TransizioneAnnuncio, motivazione: string) => {
+      if (!service) return;
+      setInCorso(`${listingId}:${transizione}`);
+      try {
+        await azioneAnnuncio(client, listingId, transizione, motivazione);
+        setError(null);
+        await reload();
+      } catch (e) {
+        setError(messaggio(e));
+        throw e;
+      } finally {
+        setInCorso(null);
+      }
+    },
+    [client, reload, service],
+  );
+
   useEffect(() => {
     const richiesta = ++epoch.current;
     queueMicrotask(() => {
@@ -118,6 +171,9 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
         loading: false,
         error: null,
         reload: async () => {},
+        agisci: null,
+        transizioneAnnuncio: null,
+        inCorso: null,
       };
     }
     return {
@@ -129,17 +185,23 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
       loading,
       error,
       reload,
+      agisci,
+      transizioneAnnuncio,
+      inCorso,
     };
   }, [
+    agisci,
     audit,
     auditMock,
     coda,
     contestazioni,
     error,
+    inCorso,
     loading,
     mieSegnalazioni,
     reload,
     reportsMock,
     service,
+    transizioneAnnuncio,
   ]);
 };
