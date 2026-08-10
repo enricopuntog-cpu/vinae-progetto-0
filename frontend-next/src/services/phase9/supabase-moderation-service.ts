@@ -1,4 +1,4 @@
-// Fase 9a - adapter Supabase in sola lettura dietro ModerationService.
+// Fase 9a/9b - adapter Supabase dietro ModerationService.
 //
 // Le quattro letture del checkpoint 9a passano tutte da una proiezione, mai da
 // una tabella: moderation_report_queue, moderation_report_events,
@@ -7,23 +7,29 @@
 // quindi una `.from("reports")` qui non fallirebbe per una svista di codice ma
 // con un permission denied dal database.
 //
-// L'unica scrittura di questo checkpoint e `segnala`, che chiama la RPC
-// public.segnalazione_invia: identita da auth.uid(), priorita derivata sul
-// server, motivo vincolato all'elenco chiuso, rate limit 10/ora.
-// `aggiornaStato` ed `eseguiAzione` sono azioni di moderazione e appartengono
-// al 9b: esistono perche l'interfaccia le dichiara, e sollevano.
+// La scrittura del 9a e `segnala`, che chiama la RPC public.segnalazione_invia:
+// identita da auth.uid(), priorita derivata sul server, motivo vincolato
+// all'elenco chiuso, rate limit 10/ora.
+//
+// IL 9B E LE DUE FIRME CHE L'INTERFACCIA GIA AVEVA.
+// ModerationService dichiara `aggiornaStato(id, stato, nota)` e
+// `eseguiAzione(target, azione, motivo)` — due firme scritte per un mock in cui
+// lo stato di una pratica era una leva indipendente. A database non lo e: uno
+// stato e la conseguenza di un'azione, e le sette RPC sono per pratica, non per
+// stato. Le due firme restano quelle e non vengono riscritte; sono implementate
+// per la parte che sanno esprimere e sollevano, con un messaggio che dice
+// perche, per la parte che non sanno. Il resto vive accanto all'interfaccia,
+// esportato a parte — la stessa scelta gia fatta nel 9a per `codaContestazioni`
+// e `motiviAmmessi`, che ModerationService non contempla.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  noPhase9Client,
-  nonAncoraDisponibile,
-  phase9Throw,
-} from "@/services/phase9/shared";
+import { noPhase9Client, phase9Throw } from "@/services/phase9/shared";
 import type { ModerationService } from "@/services/types";
 // types.ts importa questi tipi da @/data/moderation senza riesportarli: la
 // fonte e quella, e prenderli da li tiene una definizione sola.
 import type {
   AuditEntry,
+  ModAction,
   Priorita,
   Report,
   ReportHistoryEntry,
@@ -338,9 +344,219 @@ export const createSupabaseModerationService = (
   },
 
   // ---- checkpoint 9b -------------------------------------------------------
-  aggiornaStato: async () => nonAncoraDisponibile("aggiornaStato"),
-  eseguiAzione: async () => nonAncoraDisponibile("eseguiAzione"),
+
+  // Solo i due stati che un'azione produce davvero. `in_revisione` e `risolta`
+  // non hanno una porta propria: sono l'effetto di richiesta_modifiche e delle
+  // quattro azioni che chiudono la pratica, e sceglierne una qui significherebbe
+  // decidere al posto del moderatore quale provvedimento ha preso. `inviata` e
+  // lo stato iniziale e non si torna indietro.
+  aggiornaStato: async (id, stato, nota) => {
+    const azione = AZIONE_PER_STATO[stato];
+    if (!azione) {
+      return phase9Throw("aggiornaStato", {
+        code: "22023",
+        message:
+          "Lo stato di una pratica e la conseguenza di un'azione: usa l'azione di moderazione corrispondente.",
+      });
+    }
+    await azionePratica(client, { reportId: id, azione, motivazione: nota ?? "" });
+  },
+
+  // L'interfaccia passa il bersaglio e non la pratica, quindi qui si arriva
+  // alle porte per annuncio, che sono per bersaglio. Le azioni che vivono sulla
+  // pratica (ammonizione, chiusura, info_richieste) non hanno un equivalente
+  // per bersaglio e non se ne inventa uno.
+  eseguiAzione: async (target, azione, motivo) => {
+    if (target.tipo !== "annuncio") {
+      return phase9Throw("eseguiAzione", {
+        code: "22023",
+        message: "Per questo bersaglio l'azione passa dalla pratica di segnalazione.",
+      });
+    }
+    const transizione = TRANSIZIONE_PER_AZIONE[azione];
+    if (!transizione) {
+      return phase9Throw("eseguiAzione", {
+        code: "22023",
+        message: "Questa azione non ha un effetto sullo stato di un annuncio.",
+      });
+    }
+    return azioneAnnuncio(client, target.id, transizione, motivo);
+  },
 });
+
+// ---------------------------------------------------------------------------
+// Le sette azioni sulla pratica
+// ---------------------------------------------------------------------------
+// Sette RPC distinte a database, sette voci qui: la mappa non e una funzione
+// parametrica travestita, e il nome della RPC che il client invoca cambia con
+// l'azione. Se domani una delle sette venisse revocata ad `authenticated`, il
+// fallimento sarebbe di quella sola azione.
+
+const RPC_PRATICA: Record<ModAction, string> = {
+  info_richieste: "moderazione_info_richieste",
+  richiesta_modifiche: "moderazione_richiesta_modifiche",
+  ammonizione: "moderazione_ammonizione",
+  sospensione: "moderazione_sospensione",
+  rimozione: "moderazione_rimozione",
+  ripristino: "moderazione_ripristino",
+  chiusura: "moderazione_chiusura",
+};
+
+const AZIONE_PER_STATO: Partial<Record<ReportStatus, ModAction>> = {
+  info_richieste: "info_richieste",
+  respinta: "chiusura",
+};
+
+export type AzionePraticaInput = {
+  reportId: string;
+  azione: ModAction;
+  motivazione: string;
+  // Solo `sospensione` la accetta: audit_log ha un CHECK che rifiuta una durata
+  // su qualunque altra azione, quindi passarla altrove sarebbe un errore di
+  // database e non un campo ignorato.
+  durata?: string;
+  notaInterna?: string;
+};
+
+export const azionePratica = async (
+  client: SupabaseClient | null,
+  input: AzionePraticaInput,
+): Promise<void> => {
+  if (!client) return noPhase9Client("azionePratica");
+  // La motivazione e obbligatoria a database (NOT NULL con CHECK su
+  // audit_log.motivazione, piu il controllo in testa a ogni RPC). Fermarla qui
+  // risparmia un giro di rete; il vincolo autoritativo resta quello.
+  if (input.motivazione.trim().length === 0) {
+    return phase9Throw("azionePratica", {
+      code: "22023",
+      message: "Una motivazione e obbligatoria.",
+    });
+  }
+
+  const nome = RPC_PRATICA[input.azione];
+  const parametri: Record<string, string | null> = {
+    p_report_id: input.reportId,
+    p_motivazione: input.motivazione.trim(),
+    p_nota_interna: input.notaInterna?.trim() || null,
+  };
+  if (input.azione === "sospensione") {
+    parametri.p_durata = input.durata?.trim() || null;
+  }
+
+  const { error } = await client.rpc(nome, parametri);
+  if (error) phase9Throw(nome, error);
+};
+
+// ---------------------------------------------------------------------------
+// Le transizioni di moderazione su un annuncio
+// ---------------------------------------------------------------------------
+
+export type TransizioneAnnuncio =
+  | "in_revisione"
+  | "modifiche_richieste"
+  | "rifiutato"
+  | "sospeso"
+  | "attivo";
+
+const RPC_ANNUNCIO: Record<TransizioneAnnuncio, string> = {
+  in_revisione: "moderazione_annuncio_in_revisione",
+  modifiche_richieste: "moderazione_annuncio_modifiche_richieste",
+  rifiutato: "moderazione_annuncio_rifiuta",
+  sospeso: "moderazione_annuncio_sospendi",
+  attivo: "moderazione_annuncio_ripristina",
+};
+
+// Le tre azioni che restano fuori — ammonizione, chiusura, info_richieste — non
+// spostano lo stato di un annuncio: appartengono alla pratica.
+const TRANSIZIONE_PER_AZIONE: Partial<Record<ModAction, TransizioneAnnuncio>> = {
+  richiesta_modifiche: "modifiche_richieste",
+  sospensione: "sospeso",
+  rimozione: "rifiutato",
+  ripristino: "attivo",
+};
+
+export const azioneAnnuncio = async (
+  client: SupabaseClient | null,
+  listingId: string,
+  transizione: TransizioneAnnuncio,
+  motivazione: string,
+): Promise<AuditEntry> => {
+  if (!client) return noPhase9Client("azioneAnnuncio");
+  if (motivazione.trim().length === 0) {
+    return phase9Throw("azioneAnnuncio", {
+      code: "22023",
+      message: "Una motivazione e obbligatoria.",
+    });
+  }
+
+  const nome = RPC_ANNUNCIO[transizione];
+  const { error } = await client.rpc(nome, {
+    p_listing_id: listingId,
+    p_motivazione: motivazione.trim(),
+  });
+  if (error) return phase9Throw(nome, error);
+
+  // La RPC non restituisce nulla: la riga di audit e la sola prova dell'azione
+  // e si rilegge dalla proiezione, dove attore_username e l'istantanea che il
+  // registro conserva. Ricostruirla qui significherebbe inventare l'attore.
+  const { data, error: erroreAudit } = await client
+    .from("moderation_audit_log")
+    .select("*")
+    .eq("target_id", listingId)
+    .order("ts", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (erroreAudit) return phase9Throw("moderation_audit_log", erroreAudit);
+  if (!data) {
+    return phase9Throw("moderation_audit_log", {
+      code: "P0001",
+      message: "Azione eseguita ma non rileggibile dal registro.",
+    });
+  }
+  return mapAuditEntry(data as AuditRow);
+};
+
+// ---------------------------------------------------------------------------
+// Il motivo dell'ultima transizione, per i propri annunci
+// ---------------------------------------------------------------------------
+// `listings.stato_motivo` non e nel GRANT di colonna di nessun ruolo client,
+// proprietario compreso: senza questa proiezione un venditore vede il proprio
+// annuncio passare a `rifiutato` e non puo sapere perche. La schermata che la
+// mostra non e in questo checkpoint — frontend/src/components/vinea/States.tsx:474
+// ha «Leggi motivazione» fra le azioni di un annuncio rifiutato, quindi il posto
+// dove metterla esiste gia nella versione servita — ma la porta di lettura si.
+
+export type MotivoModerazioneAnnuncio = {
+  listingId: string;
+  slug: string;
+  stato: string;
+  motivo: string;
+  aggiornatoAt: string | null;
+};
+
+export const motiviModerazioneAnnunci = async (
+  client: SupabaseClient | null,
+): Promise<MotivoModerazioneAnnuncio[]> => {
+  if (!client) return noPhase9Client("motiviModerazioneAnnunci");
+  const { data, error } = await client
+    .from("my_listing_moderation")
+    .select("*")
+    .order("stato_aggiornato_at", { ascending: false });
+  if (error) return phase9Throw("my_listing_moderation", error);
+  return ((data ?? []) as {
+    listing_id: string;
+    slug: string;
+    stato: string;
+    stato_motivo: string;
+    stato_aggiornato_at: string | null;
+  }[]).map((riga) => ({
+    listingId: riga.listing_id,
+    slug: riga.slug,
+    stato: riga.stato,
+    motivo: riga.stato_motivo,
+    aggiornatoAt: riga.stato_aggiornato_at,
+  }));
+};
 
 // La coda contestazioni non appartiene a ModerationService: quell'interfaccia
 // descrive le segnalazioni. Contestazioni e segnalazioni restano due code

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  azioneAnnuncio,
+  azionePratica,
   codaContestazioni,
   createSupabaseModerationService,
   mapAuditEntry,
@@ -8,9 +10,12 @@ import {
   mapMyReport,
   mapQueueReport,
   motiviAmmessi,
+  motiviModerazioneAnnunci,
+  type TransizioneAnnuncio,
 } from "@/services/phase9/supabase-moderation-service";
 import { Phase9Error } from "@/services/phase9/shared";
 import { priorityFromReason, reportReasons } from "@/data/moderation";
+import type { ModAction } from "@/data/moderation";
 
 // ---------------------------------------------------------------------------
 // Doppio del client: registra le tabelle interrogate, cosi un test puo provare
@@ -316,14 +321,6 @@ describe("Fase 9a - scrittura e limiti dichiarati", () => {
     ]);
   });
 
-  it("le due azioni di moderazione dichiarano di appartenere al 9b", async () => {
-    const service = createSupabaseModerationService(fakeClient({}).client);
-    expect(service.aggiornaStato("r1", "risolta")).rejects.toThrow("checkpoint 9b");
-    expect(
-      service.eseguiAzione({ tipo: "annuncio", id: "l1" }, "ammonizione", "motivo"),
-    ).rejects.toThrow("checkpoint 9b");
-  });
-
   it("senza client configurato solleva un errore leggibile", async () => {
     const service = createSupabaseModerationService(null);
     expect(service.coda()).rejects.toThrow("Supabase non configurata");
@@ -399,5 +396,248 @@ describe("Fase 9a - parita con il mock legacy", () => {
     // della griglia statica verifica a database.
     expect(totale).toBe(21);
     expect(reportReasons.post.length + reportReasons.commento.length).toBe(7);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Checkpoint 9b
+// ---------------------------------------------------------------------------
+
+describe("Fase 9b - le sette azioni sulla pratica", () => {
+  const nomi: Record<string, string> = {
+    info_richieste: "moderazione_info_richieste",
+    richiesta_modifiche: "moderazione_richiesta_modifiche",
+    ammonizione: "moderazione_ammonizione",
+    sospensione: "moderazione_sospensione",
+    rimozione: "moderazione_rimozione",
+    ripristino: "moderazione_ripristino",
+    chiusura: "moderazione_chiusura",
+  };
+
+  it("ogni azione invoca una RPC diversa, e nessuna tocca una tabella", async () => {
+    for (const [azione, nome] of Object.entries(nomi)) {
+      const { client, rpcChiamate, tabelleLette } = fakeClient({});
+      await azionePratica(client, {
+        reportId: "r1",
+        azione: azione as ModAction,
+        motivazione: "motivo",
+      });
+      expect(rpcChiamate).toHaveLength(1);
+      expect(rpcChiamate[0]?.nome).toBe(nome);
+      expect(tabelleLette).toEqual([]);
+    }
+  });
+
+  it("la durata viaggia solo con la sospensione", async () => {
+    const sosp = fakeClient({});
+    await azionePratica(sosp.client, {
+      reportId: "r1",
+      azione: "sospensione",
+      motivazione: "motivo",
+      durata: "7 giorni",
+    });
+    expect((sosp.rpcChiamate[0]?.args as Record<string, unknown>).p_durata).toBe("7 giorni");
+
+    // audit_log ha un CHECK che rifiuta una durata su un'azione diversa dalla
+    // sospensione: mandarla comunque sarebbe un errore di database.
+    const amm = fakeClient({});
+    await azionePratica(amm.client, {
+      reportId: "r1",
+      azione: "ammonizione",
+      motivazione: "motivo",
+      durata: "7 giorni",
+    });
+    expect((amm.rpcChiamate[0]?.args as Record<string, unknown>).p_durata).toBeUndefined();
+  });
+
+  it("una motivazione vuota non arriva nemmeno alla rete", async () => {
+    const { client, rpcChiamate } = fakeClient({});
+    await expect(
+      azionePratica(client, { reportId: "r1", azione: "chiusura", motivazione: "   " }),
+    ).rejects.toThrow("motivazione");
+    expect(rpcChiamate).toHaveLength(0);
+  });
+
+  it("la nota interna assente viaggia come null, non come stringa vuota", async () => {
+    const { client, rpcChiamate } = fakeClient({});
+    await azionePratica(client, { reportId: "r1", azione: "chiusura", motivazione: "motivo" });
+    expect((rpcChiamate[0]?.args as Record<string, unknown>).p_nota_interna).toBeNull();
+  });
+
+  it("il rifiuto del gate di moderazione resta leggibile", async () => {
+    const { client } = fakeClient(
+      {},
+      { error: { code: "42501", message: "Azione riservata alla moderazione." } },
+    );
+    await expect(
+      azionePratica(client, { reportId: "r1", azione: "chiusura", motivazione: "motivo" }),
+    ).rejects.toThrow("Azione riservata alla moderazione.");
+  });
+});
+
+describe("Fase 9b - le transizioni sugli annunci", () => {
+  const nomi: Record<string, string> = {
+    in_revisione: "moderazione_annuncio_in_revisione",
+    modifiche_richieste: "moderazione_annuncio_modifiche_richieste",
+    rifiutato: "moderazione_annuncio_rifiuta",
+    sospeso: "moderazione_annuncio_sospendi",
+    attivo: "moderazione_annuncio_ripristina",
+  };
+
+  it("ogni transizione ha la sua RPC", async () => {
+    for (const [transizione, nome] of Object.entries(nomi)) {
+      const { client, rpcChiamate } = fakeClient({
+        moderation_audit_log: { data: auditRow },
+      });
+      await azioneAnnuncio(client, "l1", transizione as TransizioneAnnuncio, "motivo");
+      expect(rpcChiamate[0]?.nome).toBe(nome);
+    }
+  });
+
+  it("la voce di audit si rilegge dalla proiezione e non si ricostruisce", async () => {
+    const { client, tabelleLette } = fakeClient({
+      moderation_audit_log: { data: auditRow },
+    });
+    const voce = await azioneAnnuncio(client, "l1", "sospeso", "motivo");
+    // L'attore e l'istantanea che il registro conserva: il client non lo sa e
+    // non deve inventarlo.
+    expect(voce.attore).toBe(auditRow.attore_username);
+    expect(tabelleLette).toEqual(["moderation_audit_log"]);
+  });
+
+  it("non si scrive mai su listings", async () => {
+    const { client, tabelleLette } = fakeClient({
+      moderation_audit_log: { data: auditRow },
+    });
+    await azioneAnnuncio(client, "l1", "rifiutato", "motivo");
+    expect(tabelleLette).not.toContain("listings");
+  });
+
+  it("una motivazione vuota non arriva alla rete", async () => {
+    const { client, rpcChiamate } = fakeClient({});
+    await expect(azioneAnnuncio(client, "l1", "sospeso", "")).rejects.toThrow("motivazione");
+    expect(rpcChiamate).toHaveLength(0);
+  });
+});
+
+describe("Fase 9b - le due firme che ModerationService aveva gia", () => {
+  it("aggiornaStato copre i due stati che un'azione produce", async () => {
+    const info = fakeClient({});
+    await createSupabaseModerationService(info.client).aggiornaStato(
+      "r1",
+      "info_richieste",
+      "servono foto",
+    );
+    expect(info.rpcChiamate[0]?.nome).toBe("moderazione_info_richieste");
+
+    const chiusa = fakeClient({});
+    await createSupabaseModerationService(chiusa.client).aggiornaStato(
+      "r1",
+      "respinta",
+      "nessuna violazione",
+    );
+    expect(chiusa.rpcChiamate[0]?.nome).toBe("moderazione_chiusura");
+  });
+
+  it("aggiornaStato rifiuta gli stati che nessuna azione produce da sola", async () => {
+    for (const stato of ["inviata", "in_revisione", "risolta"] as const) {
+      const { client, rpcChiamate } = fakeClient({});
+      await expect(
+        createSupabaseModerationService(client).aggiornaStato("r1", stato, "motivo"),
+      ).rejects.toThrow("conseguenza di un");
+      expect(rpcChiamate).toHaveLength(0);
+    }
+  });
+
+  it("eseguiAzione mappa le quattro azioni che spostano un annuncio", async () => {
+    const attesi: Record<string, string> = {
+      richiesta_modifiche: "moderazione_annuncio_modifiche_richieste",
+      sospensione: "moderazione_annuncio_sospendi",
+      rimozione: "moderazione_annuncio_rifiuta",
+      ripristino: "moderazione_annuncio_ripristina",
+    };
+    for (const [azione, nome] of Object.entries(attesi)) {
+      const { client, rpcChiamate } = fakeClient({
+        moderation_audit_log: { data: auditRow },
+      });
+      await createSupabaseModerationService(client).eseguiAzione(
+        { tipo: "annuncio", id: "l1" },
+        azione as ModAction,
+        "motivo",
+      );
+      expect(rpcChiamate[0]?.nome).toBe(nome);
+    }
+  });
+
+  it("eseguiAzione rifiuta un bersaglio che non e un annuncio", async () => {
+    const { client, rpcChiamate } = fakeClient({});
+    await expect(
+      createSupabaseModerationService(client).eseguiAzione(
+        { tipo: "profilo", id: "p1" },
+        "sospensione",
+        "motivo",
+      ),
+    ).rejects.toThrow("pratica di segnalazione");
+    expect(rpcChiamate).toHaveLength(0);
+  });
+
+  it("eseguiAzione rifiuta le tre azioni che non spostano un annuncio", async () => {
+    for (const azione of ["ammonizione", "chiusura", "info_richieste"] as const) {
+      const { client, rpcChiamate } = fakeClient({});
+      await expect(
+        createSupabaseModerationService(client).eseguiAzione(
+          { tipo: "annuncio", id: "l1" },
+          azione,
+          "motivo",
+        ),
+      ).rejects.toThrow("effetto sullo stato di un annuncio");
+      expect(rpcChiamate).toHaveLength(0);
+    }
+  });
+});
+
+describe("Fase 9b - il motivo del rifiuto a righe proprie", () => {
+  it("si legge solo da my_listing_moderation, mai da listings", async () => {
+    const { client, tabelleLette } = fakeClient({
+      my_listing_moderation: {
+        data: [
+          {
+            listing_id: "l1",
+            slug: "barolo-2015",
+            stato: "rifiutato",
+            stato_motivo: "Foto non corrispondenti",
+            stato_aggiornato_at: "2026-08-10T10:00:00.000Z",
+          },
+        ],
+      },
+    });
+    const righe = await motiviModerazioneAnnunci(client);
+    expect(tabelleLette).toEqual(["my_listing_moderation"]);
+    expect(righe[0]?.motivo).toBe("Foto non corrispondenti");
+    expect(righe[0]?.listingId).toBe("l1");
+  });
+
+  it("stato_aggiornato_da non e fra i campi mappati: e dato di moderazione", async () => {
+    const { client } = fakeClient({
+      my_listing_moderation: {
+        data: [
+          {
+            listing_id: "l1",
+            slug: "barolo-2015",
+            stato: "sospeso",
+            stato_motivo: "In verifica",
+            stato_aggiornato_at: null,
+          },
+        ],
+      },
+    });
+    const righe = await motiviModerazioneAnnunci(client);
+    expect(Object.keys(righe[0] ?? {}).sort()).toEqual([
+      "aggiornatoAt",
+      "listingId",
+      "motivo",
+      "slug",
+      "stato",
+    ]);
   });
 });

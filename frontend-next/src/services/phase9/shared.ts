@@ -39,13 +39,3 @@ export const noPhase9Client = (operation: string): never => {
     message: "Connessione a Supabase non configurata.",
   });
 };
-
-// Le azioni di moderazione sono il checkpoint 9b. Finche non esistono, i due
-// metodi di scrittura dell'interfaccia devono esserci — l'interfaccia li
-// dichiara — ma non devono fingere di funzionare.
-export const nonAncoraDisponibile = (operazione: string): never => {
-  throw new Phase9Error(operazione, {
-    code: "P0001",
-    message: "Questa azione arriva con il checkpoint 9b.",
-  });
-};
