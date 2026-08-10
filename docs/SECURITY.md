@@ -37,12 +37,15 @@ sembri sbagliata. Sono vincolanti dalla Fase 6d-1 e ripetute in `CLAUDE.md`.
   raggiungere righe non proprie. Dove una policy espone righe a `anon` o a un
   `authenticated` non proprietario, il `GRANT SELECT` è per colonna o non c'è.
 - **Le letture pubbliche passano da viste `security_invoker = off` a elenco chiuso
-  di colonne** (`public_listings`, `public_bottle_units`), mai da una policy sulla
-  tabella. Il filtro è scritto dentro la vista e nessun client può allargarlo; una
-  colonna aggiunta in seguito resta privata finché qualcuno non la elenca.
+  di colonne** (`public_listings`; `my_reports` e `my_listing_moderation` hanno la
+  stessa forma per le righe proprie), mai da una policy sulla tabella. Il filtro è
+  scritto dentro la vista e nessun client può allargarlo; una colonna aggiunta in
+  seguito resta privata finché qualcuno non la elenca. `public_bottle_units` era il
+  secondo esempio finché la Fase 9a non l'ha rimossa — decisione 7.7.
 - **Le colonne con una regola di dominio dietro non sono scrivibili dal client.**
   Escono dal `GRANT` di colonna e ricevono una funzione `SECURITY DEFINER` come
-  unica porta: `listings.stato`, `bottle_units.stato`, `bottle_units.deleted_at`.
+  unica porta: `listings.stato`, `bottle_units.stato`, `bottle_units.deleted_at`,
+  `profiles.stato_utente` e le tre colonne che l'accompagnano (9b).
   Gli invarianti fra tabelle, che un indice o un `CHECK` non sanno esprimere,
   hanno anche un trigger, così vincolano pure `service_role`.
 

@@ -468,8 +468,10 @@ acceso e verificato prima di `PAYMENTS_ENABLED` — non è ancora soddisfatta.
 creato da `origin/main` aggiornato. Checkpoint **9a chiuso in tre commit di
 contenuto** — `1b7cabd` schema e griglia, `1ea1b2e` adapter, `91407c6` rotte —
 seguiti da `b0a3733`, che è la consegna documentale del checkpoint e non tocca
-codice né SQL. Il 9b non è cominciato. Nessuna PR aperta, nessuna migrazione
-applicata al progetto reale.
+codice né SQL. Checkpoint **9b chiuso in quattro commit** — `2b83901` migrazione,
+`d5cf026` griglia e README, `05ed66b` adapter di scrittura, `19ee240` comandi del
+pannello. **Nessuna PR aperta, nessuna migrazione applicata al progetto reale**:
+la conferma unica della decisione 7.9 non è ancora stata chiesta.
 
 La sessione organizzativa del 10 agosto 2026 ha chiuso le nove decisioni aperte
 della specifica più il gate del percorso di autorizzazione. **Sono vincolanti e
@@ -503,6 +505,48 @@ non si riaprono senza tornare in sessione organizzativa.**
 - `supabase/tests/9a_moderazione_statica.sql`, 28 casi;
 - adapter Supabase dietro `ModerationService` e le rotte `/admin` e
   `/segnalazioni` in sola lettura; `MIN_TESTS` da 166 a **189**.
+
+### Che cosa il checkpoint 9b ha prodotto
+
+- `20260810180000_phase_9b_moderation_actions.sql`: **sette RPC distinte**, una
+  per azione, e non una funzione con parametro azione — un solo `GRANT` su una
+  funzione parametrica concederebbe insieme l'ammonizione e la rimozione;
+  **cinque porte separate** per le transizioni di moderazione sugli annunci
+  (`in_revisione`, `modifiche_richieste`, `rifiutato`, `sospeso`, ripristino ad
+  `attivo`), senza aggiungere label a `listing_stato` e senza allargare
+  `public.listing_sospendi`, che resta del venditore e del solo stato `attivo`;
+  `riservato` e `venduto` restano intoccabili perché c'è un ordine sopra;
+- **enforcement della decisione 7.6b**: `public.utente_stato` a tre valori su
+  `profiles`, più un contatore cumulativo di provvedimenti. Lo storico non è una
+  tabella nuova: è `audit_log`, che è già append-only. Il primo provvedimento
+  blocca le sole scritture social con un **trigger** su `listings`, `messages` e
+  `conversations` — un trigger vincola la tabella e non solo la RPC che oggi la
+  scrive, `service_role` compreso, e non obbliga a riscrivere per intero quattro
+  funzioni grandi di altre fasi. Il secondo toglie anche la lettura, in entrambe
+  le direzioni;
+- il `GRANT` di `UPDATE` su `profiles` passa da **tabella intera a elenco di
+  colonne**. Senza, un sospeso si toglieva la sospensione da solo con un `UPDATE`
+  sulla propria riga, che `profiles_update_own` consente. Il trigger di guardia
+  chiude anche `service_role`, che i `GRANT` del client non vincolano;
+- `public.my_listing_moderation`, proiezione a righe proprie perché il venditore
+  legga il motivo del rifiuto: `listings.stato_motivo` non è nel `GRANT` di
+  colonna di nessun ruolo client, proprietario compreso;
+- `supabase/tests/9b_moderazione_azioni_statica.sql`, 26 casi;
+- adapter di scrittura dietro `ModerationService` e i comandi del pannello
+  `/admin`; `MIN_TESTS` da 189 a **204**.
+
+### Il confine dichiarato del secondo livello
+
+La decisione 7.6b dice «rimozione completa, incluso l'accesso in visione». La
+migrazione la applica alla **superficie sociale** — catalogo pubblico,
+conversazioni, messaggi, notifiche, proprie segnalazioni — e **non** a quella
+contrattuale: un utente rimosso continua a poter leggere e scrivere ordini e
+pagamenti. La ragione è che la stessa decisione toglie la compravendita
+dall'enforcement al primo livello, e un ordine in corso che diventa illeggibile a
+metà strada non è una rimozione, è un pagamento sospeso che nessuno ha deciso.
+La lettura è dichiarata nel file di migrazione e misurata dalla sonda 62, invece
+di restare asserita. **Se la sessione organizzativa la intendeva più larga, è
+questo il punto da riaprire.**
 
 ### Il difetto che l'esecuzione ha trovato, e la sua coda fuori dalla Fase 9
 
