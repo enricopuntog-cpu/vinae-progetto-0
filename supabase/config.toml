@@ -406,6 +406,10 @@ verify_jwt = true
 [functions.ai-catalogo]
 verify_jwt = true
 
+# Fase 10b — l'unica che fa streaming e l'unica che scrive.
+[functions.ai-sommelier]
+verify_jwt = true
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
