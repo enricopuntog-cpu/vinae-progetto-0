@@ -1027,6 +1027,57 @@ delle proposte e chiusi nella stessa sessione:
   apertura del pannello**. Richiede una migrazione: è **la seconda**, oltre a
   quella dello storico Sommelier.
 
+### Che cosa il checkpoint 10a + 10b ha prodotto
+
+Branch `migration/phase-10-ai-service`, aperto da `main` dopo il merge in squash
+della PR #34 (`537c57a`, 11 agosto 2026, 15:34:38 UTC). Quindici file, **nessuno
+in `backend/` o `frontend/`**: la versione servita non è toccata.
+
+**10a — la porta senza stato.** `_shared/ai-cors.ts` legge `AI_ALLOWED_ORIGINS`
+replicando il pattern di `_shared/cors.ts` invece di importarlo, e quel file ha
+**diff vuoto** sul branch: è la 7.6 applicata alla lettera. `_shared/ai-provider.ts`
+è il gemello Deno di `backend/ai_provider.py`, con il modello scelto per compito
+e un `requestId` **opaco**, che chiude un debito del legacy invece di
+trasportarlo — lì il campo inoltrato al fornitore contiene l'uuid utente
+(`backend/ai_routes.py:77`). `_shared/ai-gate.ts` applica origine, metodo, flag,
+bearer, identità, stato utente e bucket in quest'ordine, con il flag **prima**
+dell'autenticazione. Poi `ai-pairing`, che risolve il catalogo da
+`public_listings` con `limit 60` e riceve dal client la sola `query`, e
+`ai-catalogo`, che è l'unica delle tre funzionalità a non cambiare niente.
+
+**10b — lo storico.** Migrazione `20260811160000_phase_10b_sommelier_storico.sql`:
+tabella chiusa a ogni ruolo client (RLS accesa **senza policy**), vista
+`my_sommelier_messages` a colonne chiuse con `security_invoker = off`, tre porte
+`SECURITY DEFINER` come unica via — scrittura e lettura di contesto per
+`service_role`, cancellazione per `authenticated`. Il filtro della vista è su
+**(owner_id, session_id)**. Poi `ai-sommelier`, SSE con `EdgeRuntime.waitUntil()`
+sull'inoltro e salvataggio solo a stream concluso e non vuoto.
+
+**Un difetto della migrazione trovato eseguendo, non leggendo.** Il tetto
+messaggi ordinava per `(created_at, id)`. Le due righe di uno scambio nascono
+nella stessa istruzione e condividono `now()`; in un caso che scriveva sessanta
+scambi in una transazione sola **tutte e centoventi** le righe avevano lo stesso
+istante, e il pareggio veniva spezzato dall'uuid casuale della chiave primaria.
+Le venti righe cancellate erano un sottoinsieme arbitrario invece delle venti più
+vecchie, e uno scambio poteva restare monco — la risposta senza la sua domanda.
+Correzione: colonna `ordinale` identity, monotona per costruzione, usata dal
+tetto, dalla porta di contesto, dalla vista e dall'adapter.
+
+**La griglia è stata eseguita.** `supabase/tests/10b_sommelier_storico.sql`, 32
+casi, su Postgres 17.10 in container con **tutte e venticinque** le migrazioni
+applicate sopra `9c_bootstrap_postgres_locale.sql`. Quattro esecuzioni — non
+partita, 27/3, 31/1, **32 PASSA / 0 FALLISCE** — e i cinque difetti di griglia
+sono elencati nell'intestazione del file. Nessuna esecuzione sul progetto reale.
+
+**Che cosa non è provato.** Le Edge Function non hanno test automatici, come le
+tre già in produzione: nessun job di CI copre `supabase/**`, e ciò che la griglia
+prova sono le porte SQL che quelle function chiamano, non il codice Deno che le
+chiama. Nessuna schermata è stata aperta contro questo database: il ripristino UI
+è la 10c. E **la migrazione non è applicata**: il ledger di produzione resta a
+ventiquattro righe contro venticinque file.
+
+`MIN_TESTS` sale da 204 a **234**.
+
 ### Un residuo che la 7.13 chiude invece di rimandare
 
 `SfondoIAPanel` promette all'utente uno sfondo che non viene mai applicato — è un

@@ -59,7 +59,7 @@ bun run test         # Bun's native test runner — run in CI behind a minimum-c
 bun run build
 ```
 CI runs these tests and **enforces a floor**: the `Test` step of the `frontend-next` job sets
-`MIN_TESTS` (204 today) and fails when fewer cases pass than that. The floor is there because
+`MIN_TESTS` (234 today) and fails when fewer cases pass than that. The floor is there because
 `bun test` exits 0 when the test files exist but contain no cases — without it a suite that
 silently empties itself would still be green. Raise it deliberately when tests are added;
 lowering it is a decision, not housekeeping. These tests are type-checked as well: `tsconfig.json`
@@ -249,7 +249,8 @@ private Realtime Broadcast invalidations, TypeScript adapters, mock parity and t
 `/notifiche` routes. Browser channels call `realtime.setAuth()` before subscribing, use only
 `config.private = true`, treat payloads as closed invalidations and reload canonical rows through
 the RPC adapters. Logout or user change removes every channel and invalidates stale callbacks.
-`MIN_TESTS` in the `frontend-next` CI job was **166** at that merge; Phase 9 raises it to **204**.
+`MIN_TESTS` in the `frontend-next` CI job was **166** at that merge; Phase 9 raised it to **204**
+and the Phase 10 10a+10b checkpoint to **234**.
 
 The merge distributed the migration: `20260806224517 phase_8_messaging_notifications` is the
 **twentieth row of the production ledger**, re-read with `list_migrations` on 9 August 2026, and it
@@ -446,11 +447,38 @@ production since Phase 7: `public.rate_limit_consume` is granted to `service_rol
 else (`supabase/migrations/20260731135455_phase_7_order_payment_service.sql:157-160`), so an Edge
 Function holding a service client can consume a bucket via `rpc()` **without any new migration**.
 
-Nothing exists on the target side: no `AiService` interface (`frontend-next/src/services/types.ts`
-is 996 lines and ends at `ModerationService`, `:970`), no adapter, no `phase10/` directory, no AI
-environment variable, and exactly one `/api/ai` occurrence in all of `frontend-next/src` — a
-comment deferring to Phase 10 (`frontend-next/src/hooks/useSellWizard.ts:72`). Phase 9 started with
-its interface already declared; this one starts from zero on three levels.
+One correction to that inventory, found when the code was written: **an `AiService` interface did
+already exist**, at `frontend-next/src/services/types.ts:987` — after `ModerationService`, not
+instead of it — with `identificaBottiglia`, `miglioraSfondo` and `suggerisciAbbinamento`, no
+implementation of any kind, and the same three methods duplicated in `frontend/src/services/types.ts:153`.
+It did not describe the migrated perimeter: two of its three methods are features the legacy does
+not have, and the two that exist — Sommelier chat and cataloguing suggestion — were missing. The
+10a checkpoint replaces it with the real contract. What remains true: no adapter and no `phase10/`
+directory before that branch, no AI environment variable, and exactly one `/api/ai` occurrence in
+`frontend-next/src`, a comment deferring to Phase 10 (`frontend-next/src/hooks/useSellWizard.ts:72`).
+
+### Phase 10 checkpoint 10a + 10b — what the code now fixes in place
+
+- **`supabase/functions/_shared/cors.ts` has an empty diff and must keep it.** The AI functions read
+  `AI_ALLOWED_ORIGINS` through `_shared/ai-cors.ts`, a separate module that replicates the pattern
+  rather than importing it. Editing the shared file would put the payments path back into
+  production on every later merge.
+- **The four rate-limit numbers live in one place**, `supabase/functions/_shared/ai-gate.ts`. `ai:chat`
+  at `10 / 3600` is an order of magnitude tighter than the legacy's `20 / 60`
+  (`backend/.env.example:44-45`) and a real conversation is five to fifteen turns, so the bucket
+  empties inside one conversation. The decision fixed the *shape*; that number is the one to
+  reconfirm before `AI_ENABLED` goes true.
+- **`sommelier_messaggi.ordinale`, not `created_at`, orders a conversation.** Both rows of one
+  exchange are inserted by the same statement and share `now()`; ordering by time left it
+  indeterminate whether the question precedes the answer, and made the message-cap delete pick an
+  arbitrary subset — an exchange could survive with the answer and lose the question. Running the
+  grid found this; reading it had not. The cap, the context read, the view and the adapter all use
+  `ordinale`.
+- **The read view filters on `(owner_id, session_id)` and never on `session_id` alone.** The client
+  picks the `session_id` with `Math.random()`; `owner_id` comes from `auth.uid()` inside the view.
+- **Expired history rows are not deleted.** The view filters on `expires_at` and v0 has no physical
+  cleanup — stated in the table comment, in the migration and in grid case 09 rather than left
+  implicit.
 
 Two constraints that were never open decisions and that 7.9 does not relax. Reading `stato_utente`
 inside an AI function must not make the **payment machine** react to it — the same rule fixed for
