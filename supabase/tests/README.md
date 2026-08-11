@@ -507,13 +507,103 @@ che i file compilano, che gli invarianti reggono sulla forma e che i predicati s
 comportano come dichiarato sotto i privilegi replicati. Non prova lo stato di
 `pijnmcllmfgjmgsvtcej`, dove la migrazione della 9b non è stata applicata.
 
-### Il confine dichiarato del secondo livello
+### Il confine dichiarato del secondo livello — **riaperto e chiuso il 10 agosto 2026**
 
 La decisione 7.6b dice «rimozione completa, incluso l'accesso in visione». La
-migrazione la applica alla superficie sociale — catalogo pubblico, conversazioni,
-messaggi, notifiche, proprie segnalazioni — e **non** alla superficie
-contrattuale: un utente rimosso continua a poter leggere e scrivere ordini e
-pagamenti. La ragione è che la stessa decisione toglie la compravendita
+migrazione della 9b la applica alla superficie sociale — catalogo pubblico,
+conversazioni, messaggi, notifiche, proprie segnalazioni — e **non** alla
+superficie contrattuale: un utente rimosso continuava a poter leggere e scrivere
+ordini e pagamenti. La ragione era che la stessa decisione toglie la compravendita
 dall'enforcement al primo livello, e un ordine in corso che diventa illeggibile a
 metà strada non è una rimozione, è un pagamento sospeso che nessuno ha deciso.
 La sonda 62 misura esattamente questo confine, invece di lasciarlo asserito.
+
+**Quella lettura era più stretta della decisione, ed è stata corretta.** La
+sessione organizzativa, rivedendo il 9b riga per riga, ha stabilito che il
+secondo provvedimento deve bloccare anche ordini e pagamenti. Il primo
+provvedimento resta invariato. Vedi la sezione 9c qui sotto: la sonda 62 della
+9b resta valida come verbale di quello che il 9b faceva, non come descrizione
+del comportamento attuale.
+
+## Fase 9c — `rimosso` blocca anche il commercio
+
+| file | che cos'è |
+| --- | --- |
+| `9c_bootstrap_postgres_locale.sql` | ciò che Supabase fornisce **prima** della prima migrazione: i tre ruoli client, `auth.uid()`, `storage`, `realtime`, le estensioni. Non è uno stub del dominio. |
+| `9c_rimosso_commercio.sql` | 44 casi — 37 comportamentali, 7 strutturali — con la propria fixture. |
+
+### Dove è stata eseguita, e con che esito
+
+Postgres 17.10 in un container usa e getta, su cui sono state applicate in
+ordine **tutte e ventiquattro le migrazioni del progetto**, non uno stub. È la
+differenza con le griglie 9a e 9b: le funzioni di rilascio che il gruppo [4]
+esercita — `ordine_auto_rilascio_esegui`, `payout_coda`, `payout_prepara`,
+`payout_registra_esito`, `payment_apply_provider_event`,
+`ordine_contestazione_risolvi` — sono quelle vere della 7b/7c/7f, non
+riscritture.
+
+    prima esecuzione:   37 PASSA /  7 FALLISCE
+    seconda:            36 PASSA /  1 FALLISCE
+    terza e definitiva: 44 PASSA /  0 FALLISCE
+
+Gli otto fallimenti erano **tutti difetti della griglia, nessuno della
+migrazione**, e sono elencati nel cappello del file. Vale la pena tenerne due:
+
+* `20260729234000_rls_auto_enable_bootstrap.sql` accende la RLS su ogni tabella
+  nuova di `public`. La tabella di appoggio `tag -> id` della fixture era quindi
+  invisibile ad `authenticated`, l'id arrivava `null` e tre RPC rispondevano
+  «Ordine non trovato». Tre sonde fallivano per una ragione che non c'entrava
+  nulla con ciò che misuravano.
+* `public.ordine_contestazione_risolvi` vuole l'id dell'**ordine**, non quello
+  della contestazione, e `public.payment_outcome` non ha una label `paid` — ha
+  `settled`. Due errori che nessuna rilettura del file avrebbe trovato.
+
+### La prova che la macchina di pagamento non è stata toccata
+
+È il punto su cui la decisione insiste, e non è affidato all'assenza di quei
+nomi dalla migrazione. Casi 26–37, eseguiti:
+
+* l'auto-rilascio raccoglie **sia** l'ordine del compratore rimosso **sia**
+  quello del venditore rimosso, e li porta entrambi a `completato` /
+  `in_attesa`;
+* `payout_coda` include l'ordine del venditore rimosso, `payout_prepara`
+  restituisce `da_trasferire` con le coordinate, e dopo `payout_registra_esito`
+  il payout è `trasferito` per 4500 cent — **il venditore rimosso è stato
+  pagato**;
+* il webhook `payment_apply_provider_event` incassa un checkout aperto verso un
+  venditore rimosso: `checkout_pending → paid`, ordine `pagato`. È il caso
+  reale, perché dopo la rimozione un checkout nuovo non nasce più ma quelli già
+  aperti devono chiudersi;
+* una contestazione di un utente rimosso si chiude comunque;
+* `service_role` — il ruolo con cui `payouts-release` legge — continua a vedere
+  tutti gli ordini, rimossi compresi.
+
+Il caso 41 lo verifica anche staticamente: nessuna delle sei funzioni di
+rilascio nomina `stato_utente`, con i commenti rimossi prima del confronto (nel
+9b un `like` su `pg_get_functiondef` trovò il commento invece del codice).
+
+### Che cosa questa griglia non prova
+
+* Non prova nulla su `pijnmcllmfgjmgsvtcej`: **non ci è mai girata, e non deve
+  girarci** — scrive ordini, pagamenti e provvedimenti di moderazione, e vuole
+  un database usa e getta. L'autorizzazione a eseguire una griglia è per
+  griglia, non per progetto.
+* Non esercita `public.order_checkout_reserve`, che dipende da Stripe e dalla
+  Edge Function. Il guard è un trigger sulla tabella, quindi il caso 05 — «nemmeno
+  `postgres` crea un ordine per un rimosso» — copre a valle ogni percorso di
+  creazione presente e futuro; il percorso di checkout completo resta però non
+  esercitato.
+* Non prova l'interfaccia: nessuna schermata è stata aperta contro questo
+  database.
+
+### Il confine che la 9c non attraversa
+
+`public.proposals` resta leggibile e scrivibile da un utente rimosso. La
+decisione dice «ordini e pagamenti», e una proposta non è né l'uno né l'altro:
+è la trattativa che li precede. Non è un buco — una proposta di un rimosso non
+può diventare un ordine, perché il guard rifiuta il checkout che ne seguirebbe;
+`proposal_invia` non manda messaggi, non apre conversazioni e non genera
+notifiche, quindi non è un canale verso la controparte; e un rimosso non vede il
+catalogo, quindi per arrivarci deve già conoscere l'id di un annuncio. Il caso
+12 **misura** questo confine invece di asserirlo. Se «commercio» va inteso fino
+alla trattativa, è questo il punto da riaprire.
