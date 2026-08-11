@@ -248,13 +248,33 @@ cade con loro, perché le versioni a ledger coincidono già con i nomi dei file.
    l'autorizzazione data per la griglia 7c non le copre, perché è per griglia e
    non per progetto;
 2. decidere dove sta il gate di autorizzazione, dato che la regola scritta
-   presidia `supabase db push` e il percorso reale è il merge su `main`;
+   presidia `supabase db push` e il percorso reale è il merge su `main`. Dall'11
+   agosto 2026 si sa che **il merge distribuisce anche le Edge Function**, tutte
+   insieme e anche quando la PR non ne tocca nessuna: la PR #33, tre file di sola
+   documentazione, ha ridistribuito tutte e tre le function in produzione. Il
+   gate quindi è uno solo per migrazioni e function — ma l'ambiente di una
+   function va configurato **prima** del merge, perché dopo è già in risposta;
 3. configurare variabili e secret GitHub dello scheduler di auto-rilascio e
-   ottenere una run verde di `Phase 7 - auto-release payouts`, oggi a 11 run su
-   11 in `failure`. È il gate che la 7g ha dichiarato fuori dal merge, ed è la
-   precondizione della decisione 1e;
-4. approvare l'avvio della Fase 9 — moderazione e audit persistente — nel branch
-   `migration/phase-9-moderation-service` previsto dal backlog.
+   ottenere una run verde di `Phase 7 - auto-release payouts`, oggi a **18 run
+   su 18** in `failure` con `gh variable list` e `gh secret list` entrambi
+   vuoti, verificato l'11 agosto 2026. È il gate che la 7g ha dichiarato fuori
+   dal merge, ed è la precondizione della decisione 1e;
+4. **configurare chiave e budget dei provider AI entro lunedì 18 agosto 2026**,
+   impegno assunto da Enrico nella decisione 7.11 della Fase 10, e **eseguire le
+   prove empiriche della 7.1** — 5-6 conversazioni reali per la chat, foto vere
+   di etichette per le funzionalità di visione. Le tredici decisioni della fase
+   sono **tutte chiuse** dalla sessione dell'11 agosto 2026
+   ([`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md),
+   sezione 7), e con esse i due punti conseguenti: il TTL dello storico si applica
+   **in lettura** e l'esito del triage è una **colonna persistita su `reports`**.
+   Finché la configurazione manca la fase resta distribuibile ma **spenta**:
+   `AI_ENABLED` fallisce chiuso per costruzione. Finché le prove non sono state
+   fatte **la fase non ha un provider confermato**, e nessuna riga di codice può
+   chiudere quel prerequisito.
+
+La voce che questo elenco portava come quarta — approvare l'avvio della Fase 9 —
+è chiusa: la fase è mersa con la PR #32 (squash `cd81df6`) l'11 agosto 2026 e le
+quattro migrazioni sono applicate al progetto reale.
 
 Lo smoke Storage del bucket `cantina`, che questo elenco portava come terza voce,
 è stato eseguito e chiuso il 5 agosto 2026; la sua registrazione arriva con la

@@ -139,8 +139,8 @@ Fase 11 e richiede una decisione esplicita.
 | Contestazione risolvibile a favore del venditore, e fondi che si sbloccano | Fase 7f, PR #25 al merge squash `491e10d` — `42804` corretto con quattro cast all'enum; griglia 7c rieseguita **22 PASSA / 0 FALLISCE**, residui a zero su 26 controlli |
 | Scheduler auto-rilascio e sanità backlog | Fase 7g, PR #26 integrata con squash `f9c53e0`; configurazione secret e prima invocazione restano separate |
 | Messaggi e notifiche | Integrati in `main` — Fase 8, PR #27 al merge squash `4f96864`; migrazione `20260806224517` distribuita in produzione dal merge, ventesima riga del ledger |
-| Moderazione e audit persistente | Non migrati — Fase 9 |
-| AI reale | Non migrata — Fase 10 |
+| Moderazione e audit persistente | Integrati in `main` — Fase 9, PR #32 al merge squash `cd81df6`; le quattro migrazioni distribuite in produzione dal merge, righe 21-24 del ledger. Verifica post-merge in PR #33, squash `8dd56c0` |
+| AI reale | Non migrata — Fase 10. **Specifica organizzativa scritta** ([`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md)), **tredici decisioni su tredici chiuse** l'11 agosto 2026, implementazione al primo checkpoint. La fase scrive SQL (7.2 = A) e porta quattro funzionalità nuove ammesse per eccezione, tutte fuori dal primo checkpoint |
 | Cutover | Non iniziato — Fase 11 |
 
 ## Fase 6d-1 integrata
@@ -770,6 +770,302 @@ senza di essa «sospendi» scriverebbe una riga di audit e non farebbe nulla. La
 tensione è registrata qui perché la scelta sia visibile, non perché vada
 riaperta.
 
+## Fase 10 — specifica scritta, tredici decisioni chiuse su tredici
+
+La specifica organizzativa è
+[`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md),
+scritta l'11 agosto 2026 con lo stesso standard di quella della Fase 9: ogni
+affermazione con fonte `file:riga`, numeri di riga fissati su `8dd56c0`, e ciò
+che non ha fonte marcato **decisione aperta**. Le 80 citazioni assolute sono
+state verificate a macchina — file esistente, riga esistente — e ognuna è stata
+letta prima di essere scritta.
+
+La sessione organizzativa dello stesso giorno l'ha letta in due tempi. Prima ha
+chiuso cinque decisioni, aggiungendone due che la prima stesura non aveva
+previsto: il conto è passato da undici a **tredici**. Poi, letto il resoconto
+delle otto proposte, ha chiuso **anche quelle e i due punti conseguenti che
+nessuna decisione copriva** — il TTL dello storico e dove finisce l'esito del
+triage. Tutte e tredici sono registrate qui sotto nella sezione «Fase 10 —
+decisioni organizzative», con la data e la risposta, e dove la risposta corregge
+la proposta la correzione è scritta accanto.
+
+Il branch di implementazione `migration/phase-10-ai-service` **si apre ora**, cioè
+dopo la chiusura, ed è una differenza deliberata rispetto alla Fase 9, la cui
+specifica (PR #28) fu scritta direttamente sul branch di fase: qui la spec ha
+vissuto su `docs/fase-10-specifica-ai` (PR #34) per tutta la durata delle
+decisioni aperte.
+
+### Che cosa l'inventario ha smentito
+
+Il backlog dedica alla Fase 10 due righe
+(`docs/MIGRATION_PHASE_1_BACKLOG.md:544-546`). L'inventario del codice reale ne
+smentisce tre punti, e sono correzioni di perimetro, non dettagli.
+
+- **`ai-identify-bottle` non esiste.** Non è uno stub vuoto: non c'è né in
+  `supabase/functions/` — solo `_shared/`, `connect-onboarding/`,
+  `payments-checkout/`, `payouts-release/` e `deno.json` — né sul progetto
+  reale, dove `list_edge_functions` su `pijnmcllmfgjmgsvtcej`, letto l'11 agosto
+  2026, riporta le sole tre function già note.
+- **L'identificazione bottiglia da fotografia non esiste nemmeno nel legacy.**
+  Il backend accetta `ocr_text` (`backend/ai_routes.py:228`) ma nessun chiamante
+  di `frontend/` lo invia mai: l'unico punto di consumo manda solo `hint`, testo
+  scritto a mano (`frontend/src/hooks/useSellWizard.ts:66`). In tutto
+  `frontend/src` non esiste nessun percorso di acquisizione immagine. Portarla
+  non sarebbe una migrazione ma una **funzionalità nuova**, vietata dalla regola
+  di fase. Se entri comunque nel perimetro è la decisione aperta 7.3.
+- **Il perimetro reale è cinque rotte su tre funzionalità**
+  (`backend/ai_routes.py:16`), non una: chat Sommelier con storico persistente,
+  abbinamento cibo-vino, suggerimento di catalogazione.
+
+### Il nodo che decideva la forma della fase — deciso
+
+Delle tre funzionalità migrabili solo la chat ha dati da spostare; le altre due
+sono richieste senza stato. Lo storico Sommelier realizza oggi i tre requisiti
+elencati in `CLAUDE.md` — ownership, tetto messaggi, TTL — in tre righe precise
+di `backend/repositories.py`: indice unico `(owner_id, session_id)` a `:194`,
+`$slice: -max_messages` a `:223`, indice TTL `expireAfterSeconds=0` a `:195`.
+
+La decisione 7.2 ha risposto **A, tabella Postgres**: quindi **la Fase 10 scrive
+SQL**, e cade l'ipotesi di una fase senza migrazioni e interamente reversibile
+che la spec aveva contemplato.
+
+**Quello che la 7.2 non chiude è il TTL**, ed è il punto scomodo: Mongo lo
+ottiene con un indice, Postgres no, e `pg_cron` è **escluso** dalla decisione 1a
+della Fase 7d, non rinviato. Le tre alternative hanno ciascuna un difetto che
+non si risolve scrivendo meglio: la cancellazione opportunistica alla scrittura
+non scade mai le conversazioni abbandonate — cioè proprio quelle che il TTL
+dovrebbe coprire; un secondo job GitHub Actions aggiunge uno schedulatore a uno
+che è a 18 run su 18 in `failure`; la scadenza applicata in lettura nasconde
+senza cancellare. Le tre producono schemi diversi, quindi va risolto **prima**
+della migrazione.
+
+### La fase non ha più tre funzionalità, ne ha sette
+
+È l'effetto delle decisioni 7.3, 7.12 e 7.13 messe insieme, e va letto come un
+dato di dimensione: alle tre migrate — chat, abbinamento, suggerimento da testo —
+se ne aggiungono **quattro nuove ammesse per eccezione esplicita**: autofill da
+foto (7.3a), spunta di completezza (7.3b), triage di moderazione (7.12), ritaglio
+e sfondo reale (7.13).
+
+Sono le prime funzionalità nuove autorizzate dall'inizio della migrazione. La
+regola «no new features during migration» **non è decaduta**: continua a valere
+per tutto ciò che una sessione non ha voluto per nome. Ma la conseguenza va
+detta senza addolcirla — **la Fase 10 è la più grande da quando la migrazione è
+cominciata**, ed è la prima che aggiunge prodotto invece di spostarlo.
+
+### Che cosa esiste già e non va ricostruito
+
+- **L'astrazione del provider.** `AIProvider` è un Protocol a due metodi
+  (`backend/ai_provider.py:14-16`), con `DisabledAIProvider` che fallisce chiuso
+  (`:19-27`) e ogni eccezione del provider collassata in un `AIProviderError`
+  generico (`:56-57`, `:71-72`). L'invariante «il provider è astratto e
+  sostituibile» non è un obiettivo della fase: è la forma da riprodurre.
+- **Il rate limit lato server.** `public.rate_limit_consume` è concessa a
+  `service_role` e a nessun altro
+  (`supabase/migrations/20260731135455_phase_7_order_payment_service.sql:157-160`):
+  una Edge Function con client di servizio può già consumare un bucket via
+  `rpc()` **senza nessuna nuova migrazione**. La Fase 9 ha introdotto la prima
+  finestra oraria — `report:submit`, 10/3600 s — che è il precedente più vicino
+  a un budget AI.
+
+Lato target invece non esiste niente: nessuna interfaccia `AiService`
+(`frontend-next/src/services/types.ts` è lungo 996 righe e l'ultima interfaccia
+è `ModerationService` a `:970`), nessun adapter, nessuna cartella `phase10/`,
+nessuna variabile d'ambiente AI, e una sola occorrenza di `/api/ai` in tutto
+`frontend-next/src` — un commento che rinvia alla Fase 10
+(`frontend-next/src/hooks/useSellWizard.ts:72`). La Fase 9 partiva con
+l'interfaccia già dichiarata; questa parte da zero su tre livelli.
+
+### Due vincoli che non sono decisioni aperte
+
+1. **Niente nella Fase 10 deve far reagire la macchina dei pagamenti a
+   `stato_utente`.** È la stessa regola fissata per la 9c, e la classe di
+   difetto 7c/7f che protegge — un pagamento congelato senza uscita — non cambia
+   natura perché il predicato lo aggiunge una fase successiva.
+2. **La chiave AI vive nell'ambiente della Edge Function**, mai nel repository e
+   mai nel browser (`docs/MIGRATION_PHASE_1_BACKLOG.md:545-546`;
+   `02_STORIA_FASI.md`, sezione «Fase 10»). Introdurla significa aggiornare
+   `docs/ENVIRONMENT.md` e il `.env.example` pertinente nello stesso cambiamento.
+   Con la 7.1 e la 7.13 le chiavi non sono più una: sono almeno quattro.
+
+## Fase 10 — decisioni organizzative
+
+**Stato:** sessione dell'11 agosto 2026, seguito alla lettura di
+[`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md).
+La sessione si è svolta in due tempi: prima ha chiuso cinque decisioni e ne ha
+aggiunte due che la spec non aveva previsto, poi — letto il resoconto delle otto
+proposte — ha chiuso **anche quelle e i due punti che nessuna decisione copriva**.
+Il conto finale è **tredici decisioni più due punti conseguenti, tutti chiusi**, e
+il branch `migration/phase-10-ai-service` si apre.
+
+- **7.1, DECISA** — **non un solo fornitore, uno per compito.** Chat Sommelier:
+  GPT-5, preferenza esplicita **da confermare con 5-6 conversazioni reali** prima
+  di fissarla. Foto (7.3a e 7.3b): Claude o Gemini, **da provare su foto vere di
+  etichette** — vetro, curvatura, luce non perfetta — non su un benchmark di
+  documenti puliti. Triage di moderazione (7.12): il livello più economico
+  disponibile (Haiku, GPT-5-mini, Gemini Flash o equivalente), perché lì il volume
+  conta più della qualità. L'astrazione `AIProvider` già esistente nel legacy
+  (`backend/ai_provider.py:14-16`) regge nativamente più di un provider e non va
+  forzata a uno solo. **Finché le prove non sono state fatte, la fase non ha un
+  provider**: è l'unico prerequisito che non si chiude scrivendo codice.
+- **7.2, DECISA** — **A, tabella Postgres** per lo storico Sommelier. Motivazione
+  registrata: un consulente a cui si torna a parlare deve ricordare la
+  conversazione, e nessuna persistenza sarebbe un peggioramento rispetto a ciò
+  che `frontend/` fa oggi. **Il TTL resta da risolvere** e non è un dettaglio
+  implementativo.
+- **7.3, DECISA** — **identificazione da foto dentro il perimetro, come eccezione
+  esplicita**, e sdoppiata in due funzionalità. **7.3a**: il venditore fotografa
+  l'etichetta e l'AI propone i campi del catalogo — erede diretto del suggerimento
+  di catalogazione del legacy, con la foto al posto di `ocr_text`/`hint`.
+  **7.3b**: alla pubblicazione l'AI verifica che le foto coprano il prodotto per
+  intero (etichetta, livello, tappo) e l'annuncio mostra una **spunta di
+  completezza**. Stessa chiamata di visione, output diverso: condividono la Edge
+  Function. **Vincolo di onestà, parte della decisione**: la spunta va etichettata
+  come completezza documentale e **mai** come autenticità certificata — nessuna AI
+  può certificare l'autenticità di una bottiglia da una fotografia.
+- **7.12, DECISA (nuova)** — **moderazione AI solo triage/filtro per il lancio v0,
+  nessuna azione autonoma.** L'AI classifica e ordina dentro il pannello della
+  Fase 9 già esistente; un moderatore umano preme sempre il bottone finale.
+  Nessuna nuova RPC di esecuzione, **nessuna identità «attore AI» nell'`audit_log`**
+  in questa fase: non serve, perché l'AI non scrive niente di moderazione.
+  L'autonomia parziale discussa in una sessione precedente — tutto tranne la
+  rimozione, escalation umana alla seconda riapertura — è **rinviata
+  esplicitamente, non decisa**: gli obblighi di trasparenza dell'AI Act, in vigore
+  dal 2 agosto 2026, e del DSA sulle decisioni automatizzate rendono quella forma
+  più rischiosa e richiedono prima una revisione legale che questa fase non fa.
+- **7.13, DECISA (nuova)** — **ritaglio e sfondo dentro il perimetro, come
+  eccezione esplicita.** PhotoRoom come opzione tecnica preferita, per il
+  compositing su sfondo nativo e non il solo cutout. Il **catalogo di sfondi è
+  curato a mano da Enrico, non generato al volo**: un piccolo insieme di immagini
+  caricate una volta, e il venditore sceglie se usarne una o tenere la propria
+  foto. PhotoRoom non è un provider di modelli linguistici: non passa
+  dall'astrazione `AIProvider` e porta una chiave di natura diversa.
+
+Le otto restanti sono state chiuse nello stesso giorno, dopo il resoconto delle
+proposte. **Quelle che seguono sono risposte della sessione, non proposte**: dove
+la risposta differisce dalla proposta la differenza è segnalata, perché la
+proposta è ciò che l'IA aveva suggerito e la risposta è ciò che vale.
+
+- **7.4, DECISA** — **un bucket di rate limit per funzionalità** (chat,
+  abbinamento, catalogazione, e le foto quando entreranno), **non uno condiviso**
+  come nel legacy. **Finestra oraria**, sul modello di `report:submit`
+  (10 / 3600 s) introdotto dalla Fase 9
+  (`supabase/migrations/20260810152000_phase_9a_moderation_schema.sql:524`), **non
+  al minuto** come il checkout. **Nessun tetto aggiuntivo oltre al rate limit** per
+  il lancio v0: un budget mensile è rimandabile a dopo il lancio, se emerge la
+  necessità. Il limite **vale anche per un ruolo `admin`**, nessuna eccezione.
+  *Due correzioni rispetto alla proposta*: la proposta metteva chat, abbinamento e
+  catalogazione su finestra al minuto e teneva l'oraria per le sole chiamate di
+  visione — la sessione ha esteso l'oraria a tutto; e la proposta aggiungeva un
+  secondo bucket `ai:giorno` 100 / 86400 s consumato da tutte le funzionalità —
+  **respinto**, non c'è un secondo tetto nostro.
+- **7.5, DECISA** — **si mantiene la mappatura del legacy**: provider giù → 503,
+  risposta in formato inatteso → 502 (`backend/ai_routes.py:197-200`), errore
+  generico nello stream e nella risposta, **mai il messaggio del provider al
+  client**. **`AI_ENABLED` come gemello di `PAYMENTS_ENABLED`**: fallisce chiuso se
+  la variabile è assente, il che permette di distribuire la fase spenta. **Timeout
+  applicativo vincolato al limite di durata proprio della Edge Function, non
+  oltre.** Un fallimento va **loggato**, e per il v0 il log della function basta:
+  **nessuna tabella dedicata**.
+- **7.6, DECISA** — **nessun rename.** `PAYMENT_ALLOWED_ORIGINS` resta intatta e
+  **non viene toccata**: zero rischio sul codice dei pagamenti in produzione. Le
+  function AI leggono una variabile propria, **`AI_ALLOWED_ORIGINS`**, con lo
+  stesso pattern di `supabase/functions/_shared/cors.ts` — origini complete e non
+  sottostringhe, `Vary: Origin`. Sulla forma: **una function per funzionalità, non
+  una parametrica**, seguendo il precedente delle sette RPC distinte della Fase 9.
+  *Correzione rispetto alla proposta*: la proposta era una lista sola rinominata
+  `ALLOWED_ORIGINS` con una catena di fallback temporanea — **respinta**, perché
+  toccare `_shared/cors.ts` significa toccare il percorso dei pagamenti al
+  merge successivo, e il guadagno non vale quel rischio.
+- **7.7, DECISA** — **lo streaming SSE si mantiene** per la chat Sommelier.
+  Vincolo esplicito, da scrivere **nel codice e nella spec di implementazione**:
+  una Edge Function che inoltra uno stream **può essere troncata** se il worker
+  viene ritirato a metà risposta — comportamento documentato da Supabase — e **il
+  client deve trattare un troncamento parziale come caso atteso**, non come errore
+  raro.
+- **7.8, DECISA** — **il catalogo dell'abbinamento si risolve lato server**, da
+  `public_listings` / `wines`, non dal client. È una **deviazione dichiarata**
+  rispetto a `frontend/`, che oggi manda un catalogo statico di diciotto voci
+  dimostrative da `@/data/wines` (`frontend/src/routes/esplora.tsx:14`, `:102-105`):
+  la Fase 10 porta l'AI a ragionare su dati reali invece che su dati finti. Costa
+  una query in più per chiamata — **accettato**.
+- **7.9, DECISA** — **l'accesso all'AI segue i due livelli di sospensione già
+  stabiliti dalla 9b/9c.** Primo livello (blocca le sole scritture social): **non
+  tocca** l'accesso AI. Secondo livello (blocca anche la visione): **blocca anche
+  l'AI**, stessa superficie delle altre funzioni sociali. Il pannello Sommelier
+  **resta montato anche per gli anonimi** come oggi: chi non ha sessione riceve un
+  401 dalla Edge Function, che è parità di comportamento con `frontend/`.
+- **7.10, DECISA** — **il gate di distribuzione delle Edge Function è il merge**,
+  lo stesso delle migrazioni: confermato dalla verifica registrata più sotto.
+  **Nessuna azione di deploy separata da autorizzare.** Resta in vigore la regola
+  già scritta: **l'applicazione al progetto reale — sia migrazione sia function —
+  richiede una conferma esplicita e distinta per perimetro** nella sessione
+  organizzativa, come per la Fase 9.
+- **7.11, DECISA** — **Enrico si assume la configurazione di chiave e budget del o
+  dei provider, entro lunedì 18 agosto 2026.** È un impegno con nome e data, non
+  solo un vincolo tecnico. Il vincolo tecnico resta comunque: **nessun merge di
+  Fase 10 con `AI_ENABLED` implicitamente vero** se le variabili non sono leggibili
+  nell'ambiente — stessa logica di `PAYMENTS_ENABLED`, **fail-closed by design, non
+  affidata alla disciplina di chi fa il merge**. *Sfumatura rispetto alla
+  proposta*: la proposta era «non si merga finché le variabili non ci sono»; la
+  decisione sposta il presidio dal comportamento di chi merga alla forma del
+  codice, che è l'unico dei due che non si dimentica.
+
+Due punti che nessuna delle tredici decisioni copriva, scoperti dal resoconto
+delle proposte e chiusi nella stessa sessione:
+
+- **TTL dello storico Sommelier, DECISO** (conseguenza della 7.2 = A) —
+  **scadenza applicata in lettura**: la vista di lettura filtra su `expires_at`,
+  e **nessuna cancellazione fisica è pianificata per il v0**. Va scritto
+  esplicitamente nella spec di implementazione che **le righe scadute restano a
+  tabella** finché non arriva una pulizia futura: è una decisione consapevole, non
+  un buco lasciato aperto. Questo chiude la strada che la spec elencava come terza
+  in 5.1 e scarta le altre due — cancellazione opportunistica e secondo job
+  Actions.
+- **Esito del triage di moderazione, DECISO** (conseguenza della 7.12) — **colonna
+  persistita su `reports`** (o su una tabella collegata), **non ricalcolato a ogni
+  apertura del pannello**. Richiede una migrazione: è **la seconda**, oltre a
+  quella dello storico Sommelier.
+
+### Un residuo che la 7.13 chiude invece di rimandare
+
+`SfondoIAPanel` promette all'utente uno sfondo che non viene mai applicato — è un
+`setTimeout` di 1100 ms e un toast «Sfondo applicato (demo)»
+(`frontend/src/routes/vendi.tsx:569-579`). Era registrato come materiale per la
+lista di cutover della Fase 11, accanto a `bottle_units.visibilita`. **Con la
+7.13 non è più così**: si chiude in Fase 10, e in un senso o nell'altro — o lo
+sfondo viene applicato davvero, o il pannello va tolto. La terza via, lasciarlo lì
+a promettere, è quella che la decisione ha scartato.
+
+### Le Edge Function le distribuisce il merge, tutte insieme
+
+Fatto verificato l'11 agosto 2026 e prima non registrato da nessuna parte, che
+**smentisce quanto la prima stesura della spec affermava nella decisione 7.10**
+(«distribuire una Edge Function non è un merge, è un `deploy` separato»).
+
+`list_edge_functions` sul progetto reale dà per le tre function un `created_at`
+che segue di **35-37 secondi** il merge della PR che le introduceva (#18 e #19),
+e un `updated_at` **identico per tutte e tre** che segue di **49 secondi** il
+merge della **PR #33** — che tocca tre soli file di documentazione e nessuna riga
+di function. In `.github/workflows/` ci sono due soli file, `ci.yml` e
+`payouts-auto-release.yml`, e nessuno dei due esegue un deploy di function.
+Nessuno ha mai lanciato `supabase functions deploy`. (I timestamp dell'API
+portano uno scarto costante di un'ora rispetto ai tempi di merge; il residuo è la
+latenza vera, e le conclusioni non dipendono da come si spiega l'ora.)
+
+Tre conseguenze operative:
+
+1. **Il gate di distribuzione delle function è lo stesso delle migrazioni**: il
+   merge. Non serve una decisione separata, serve saperlo.
+2. **Ogni merge in `main` ridistribuisce tutte le function**, comprese quelle che
+   la PR non tocca. Una PR di sola documentazione ha rimesso in produzione tutto
+   il codice delle Edge Function.
+3. Quindi **l'ambiente di una function si configura prima del merge, mai dopo**, e
+   la function deve avere un flag che la tiene spenta se l'ambiente manca. È la
+   stessa forma della decisione 1e della Fase 7d, e la ragione per ripeterla è che
+   nel caso 7g non è stata rispettata. Con le Edge Function l'errore non aspetta
+   uno scheduler: si manifesta al primo utente.
+
 ## Gate chiusi senza essere stati autorizzati
 
 Due dei gate che questo documento elencava come aperti non lo sono più, e non
@@ -782,17 +1078,35 @@ perché le versioni a ledger sono già quelle dei file.
 
 1. configurare variabili e secret GitHub dello scheduler di auto-rilascio —
    `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `PAYOUTS_JOB_TOKEN` — e ottenere una run
-   verde di `Phase 7 - auto-release payouts`. Oggi sono **11 run su 11 in
-   `failure`** per configurazione mancante: finché resta così la decisione **1e**
-   non è soddisfatta e `PAYMENTS_ENABLED` non può essere acceso;
-2. approvare l'avvio della Fase 9 — moderazione e audit persistente — che è la
-   fase successiva nell'ordine di dipendenza e **non è iniziata**;
-3. autorizzare separatamente l'esecuzione delle griglie
+   verde di `Phase 7 - auto-release payouts`. Oggi sono **18 run su 18 in
+   `failure`** per configurazione mancante, e `gh variable list` e
+   `gh secret list` sul repository sono **entrambi vuoti**, verificato l'11
+   agosto 2026: finché resta così la decisione **1e** non è soddisfatta e
+   `PAYMENTS_ENABLED` non può essere acceso;
+2. **configurare chiave e budget dei provider AI entro lunedì 18 agosto 2026**,
+   impegno assunto da Enrico nella decisione 7.11. Finché non è fatto, la Fase 10
+   può essere scritta e anche mersa, ma va in produzione **spenta**: `AI_ENABLED`
+   fallisce chiuso quando la variabile manca, per costruzione e non per
+   disciplina. È lo stesso gate della riga 1 con il difetto tolto — lì la scadenza
+   era «prima di `PAYMENTS_ENABLED`», cioè prima di un evento mai accaduto;
+3. **eseguire le prove empiriche che la decisione 7.1 richiede**: 5-6
+   conversazioni realistiche su GPT-5 e su un'alternativa per la chat Sommelier,
+   e le funzionalità foto su fotografie vere di etichette. **Finché non sono
+   state fatte la fase non ha un provider confermato**, ed è l'unico prerequisito
+   che non si chiude scrivendo codice. Non blocca la 10a, che mette il provider
+   dietro un'astrazione sostituibile, ma blocca il dichiararlo definitivo;
+4. autorizzare separatamente l'esecuzione delle griglie
    [`7_ordini_pagamenti.sql`](../supabase/tests/7_ordini_pagamenti.sql) — 16
    casi — e [`7b_connect_marketplace.sql`](../supabase/tests/7b_connect_marketplace.sql)
    — 23 casi — che creano e cancellano fixture remote, ora su uno schema che
    esiste davvero. **Non autorizzate e non eseguite.** L'autorizzazione concessa
    per la griglia 7c non le copre: è per griglia, non per progetto;
-4. decidere dove sta il gate di autorizzazione, visto che la regola scritta
-   presidia `supabase db push` e il percorso reale è il merge. **Non deciso**, e
-   riguarda ogni fase successiva.
+5. dare la conferma esplicita e distinta per perimetro che la decisione 7.10
+   richiede per **ogni** applicazione al progetto reale della Fase 10 — la
+   migrazione dello storico Sommelier e le Edge Function nuove — sapendo che il
+   gate è il merge e che il merge distribuisce entrambe le cose insieme.
+
+Il gate «decidere dove sta il gate di autorizzazione» è **chiuso dalla decisione
+7.10**: sta nel merge, che è lo stesso posto delle migrazioni, e non serve
+un'azione di deploy separata da autorizzare. Resta la conferma per perimetro, che
+è la riga 5.

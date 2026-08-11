@@ -323,6 +323,144 @@ without going back to that session; they are recorded in `CONTESTO_IA/01_STATO_A
   `bottle_unit_visibilita` enum survive as a documented inert residue: the column is a
   `bottiglia_crea` parameter written by both frontends. It belongs on the Phase 11 cutover list.
 
+PR #33 carried the post-merge verification onto `main` — squash `8dd56c0`, 11 August 2026,
+documentation only. The production ledger was re-read on 11 August 2026 and is unchanged at
+twenty-four rows.
+
+### Phase 10 AI — all thirteen decisions closed, first checkpoint is 10a + 10b
+
+`docs/PHASE_10_AI_SERVICE_SPEC.md` is the organizational spec, same standard as Phase 9: every
+claim carries a `file:line` source, line numbers pinned to `8dd56c0`. The organizational session of
+**11 August 2026** ran in two passes — five decisions first (plus two the spec had not foreseen,
+taking the count from eleven to thirteen), then, after the report on the eight proposals, **the
+remaining eight plus the two consequent points no decision covered**. Nothing is open. The
+implementation branch `migration/phase-10-ai-service` opened after that, not before.
+
+**The first checkpoint is 10a + 10b, and deliberately not all seven features.** 10a is the
+stateless AI door — food-wine pairing and cataloguing suggestion from text — and 10b is the
+Sommelier history plus the SSE chat. The photo features (7.3a/7.3b), moderation triage (7.12) and
+real background compositing (7.13) stay out: they are less specified (Storage, MIME, PhotoRoom
+integration) and **each earns its own spec session before code**, on the model of Phase 9's
+separate 9a/9b/9c.
+
+All thirteen are recorded in full in `CONTESTO_IA/01_STATO_ATTUALE.md` under «Fase 10 —
+decisioni organizzative». What constrains code:
+
+- **7.1 — not one provider, one per task.** GPT-5 for the Sommelier chat (a preference, to be
+  confirmed against 5-6 real conversations first), Claude or Gemini for the photo features (to be
+  chosen on real label photos, not a clean-document benchmark), the cheapest tier available for the
+  moderation classifier. The legacy `AIProvider` abstraction already carries more than one provider
+  natively and must not be forced down to one. **Until those trials are run the phase has no
+  provider** — the one prerequisite that no amount of code closes.
+- **7.2 — A, a Postgres table** for the Sommelier history, so **Phase 10 writes SQL**. The
+  consequent TTL question was closed with it: **expiry is applied at read**, the read view filters
+  on `expires_at`, and **no physical deletion is planned for v0** — expired rows stay in the table
+  until a future cleanup, which must be stated in code and spec rather than left implicit.
+  `pg_cron` remains excluded by Phase 7d decision 1a; opportunistic cleanup was rejected because it
+  never expires an abandoned conversation, and a second Actions job because it would add a
+  scheduler to one sitting at 18 failed runs out of 18.
+- **7.3, 7.12, 7.13 — four new features admitted by explicit exception**: photo autofill (7.3a),
+  a documentary-completeness badge (7.3b), moderation triage (7.12), real background compositing
+  (7.13). These are the first new features authorized since the migration began, and they take the
+  perimeter from three features to seven. «No new features during migration» **has not lapsed** —
+  it still governs everything a session has not asked for by name. Two riders: the 7.3b badge must
+  be labelled documentary completeness and **never** certified authenticity, and 7.12 gives the AI
+  **no autonomous action and no «AI actor» identity in `audit_log`** — it classifies and ranks, a
+  human presses the button. The triage result is a **persisted column on `reports`**, not recomputed
+  on each panel opening — that is the phase's **second** migration, after the Sommelier history.
+- **7.4 — one rate-limit bucket per feature, hourly window, no second cap of ours.** Not one shared
+  bucket like the legacy's `ai:user:{id}`. The window is `report:submit`'s
+  (`supabase/migrations/20260810152000_phase_9a_moderation_schema.sql:524` — `10, 3600`), **not the
+  checkout's per-minute one**. No extra ceiling beyond the rate limit for v0; a monthly budget is
+  deferrable to after launch. The limit **applies to `admin` too** — an exemption is a privileged
+  path in exactly the scenario the cap exists for.
+- **7.5 — legacy error mapping unchanged**: provider down → 503, unusable response shape → 502,
+  a generic error in the stream and in the response, and **never the provider's message to the
+  client**. `AI_ENABLED` is the twin of `PAYMENTS_ENABLED` — **fail-closed when absent**, which is
+  what makes it safe to merge the phase before the keys exist. The application timeout is bound by
+  the Edge Function's own duration limit and never beyond it. Failures are logged to the function
+  log; **no dedicated table** (a new table is a new migration and a new exposure surface, and
+  `audit_log` is for moderation decisions).
+- **7.6 — no rename, and one function per feature.** `PAYMENT_ALLOWED_ORIGINS` **stays untouched**:
+  the AI functions read their own `AI_ALLOWED_ORIGINS`, replicating the `_shared/cors.ts` pattern
+  (full origins, never substrings, `Vary: Origin`) in a **separate module**, so the payments path's
+  shared file has an empty diff in every Phase 10 PR. This matters because the merge redeploys
+  *all* functions: editing `_shared/cors.ts` puts the payments path back into production on every
+  later merge, whoever makes it and for whatever reason. Surface follows Phase 9's seven distinct
+  RPCs — one door per operation, no `action` field in the body.
+- **7.7 — SSE stays**, and the truncation constraint is written in the code, not discovered in
+  production: an Edge Function forwarding a stream **can be cut off** when the worker is withdrawn,
+  so the function keeps the isolate alive for the whole relay and **the client treats a partial
+  truncation as an expected case, not a rare error**.
+- **7.8 — the pairing catalog is resolved server-side** from `public_listings`/`wines`, not sent by
+  the client. This is a **declared deviation** from `frontend/`, which today sends a static
+  eighteen-entry demo file (`frontend/src/routes/esplora.tsx:14`, `:102-105`): parity here would
+  preserve the mechanism and lose the meaning. It costs one extra query per call — accepted.
+- **7.9 — AI access follows the two suspension levels of 9b/9c.** First level (social writes only)
+  does **not** touch AI access; second level (which also removes read access) blocks AI too, same
+  surface as the other social features. The Sommelier panel **stays mounted for anonymous users**
+  as today — no session means a 401 from the Edge Function, which is parity with `frontend/`.
+- **7.10 — the deploy gate is the merge**, the same one as migrations; there is no separate deploy
+  action to authorize. Applying anything to the real project — migration or function — still needs
+  an **explicit, per-perimeter confirmation** in the organizational session, as in Phase 9.
+- **7.11 — Enrico configures provider keys and budget by Monday 18 August 2026**, a commitment with
+  a name and a date. The technical guard is independent of it: **no Phase 10 merge with `AI_ENABLED`
+  implicitly true** when the variables aren't readable in the environment — fail-closed by design,
+  not entrusted to the discipline of whoever merges. That distinction is what failed in the 7g case.
+
+**Edge Functions are deployed by the merge, all of them, every time.** Verified 11 August 2026 and
+previously unrecorded: `list_edge_functions` gives the three functions a `created_at` 35-37 seconds
+after the merge of the PR that introduced them, and an `updated_at` identical across all three,
+49 seconds after the merge of **PR #33** — a three-file documentation PR touching no function code.
+No workflow in `.github/workflows/` deploys functions and nobody has ever run `supabase functions
+deploy`. Consequences: the deployment gate is the same one as for migrations, a merge redeploys
+functions the PR never touched, and therefore **a function's environment is configured before the
+merge, never after**, with a flag that keeps it off when the environment is missing. This corrects
+the spec's own first draft, which claimed a separate `deploy` step no decision covered.
+
+The inventory contradicts the two-line backlog entry on three points, and those corrections are
+what future work must start from rather than the backlog:
+
+- **`ai-identify-bottle` does not exist**, in the repository or on the real project.
+  `supabase/functions/` holds only `_shared/`, `connect-onboarding/`, `payments-checkout/`,
+  `payouts-release/`; `list_edge_functions` on `pijnmcllmfgjmgsvtcej` reports the same three
+  deployed functions and no other. The name in the backlog is an intention, not a contract.
+- **Bottle identification from a photograph does not exist in the legacy either.** The backend
+  accepts an `ocr_text` field (`backend/ai_routes.py:228`) but no caller in `frontend/` ever sends
+  it — the single call site sends only `hint` (`frontend/src/hooks/useSellWizard.ts:66`) — and
+  there is no image-capture path anywhere in `frontend/src`. Building it is a **new feature**, and
+  decision 7.3 admitted it anyway as an explicit exception — the analysis stands, the conclusion
+  was overridden by a session that wanted it by name.
+- **The real perimeter of what is *migrated* is five routes over three features**, not one:
+  Sommelier chat with persistent history, food pairing, and cataloguing suggestion
+  (`backend/ai_routes.py:16`). Only the chat has data to move. With 7.2 answered A and four new
+  features admitted, the phase's total perimeter is seven features and **at least three migrations**
+  — the history, the 7.3b badge (an attribute of a listing, therefore a column the exposure rules
+  keep out of the client's `GRANT`), and the persisted triage result on `reports`.
+
+Two things already exist and must not be rebuilt. The `AIProvider` abstraction the security
+invariants call for is **already implemented** in `backend/ai_provider.py:14-16`, with a
+fail-closed `DisabledAIProvider` (`:19-27`) and every provider exception collapsed into a generic
+`AIProviderError` (`:56-57`, `:71-72`). And the server-side rate limit the backlog asks for is in
+production since Phase 7: `public.rate_limit_consume` is granted to `service_role` and to nobody
+else (`supabase/migrations/20260731135455_phase_7_order_payment_service.sql:157-160`), so an Edge
+Function holding a service client can consume a bucket via `rpc()` **without any new migration**.
+
+Nothing exists on the target side: no `AiService` interface (`frontend-next/src/services/types.ts`
+is 996 lines and ends at `ModerationService`, `:970`), no adapter, no `phase10/` directory, no AI
+environment variable, and exactly one `/api/ai` occurrence in all of `frontend-next/src` — a
+comment deferring to Phase 10 (`frontend-next/src/hooks/useSellWizard.ts:72`). Phase 9 started with
+its interface already declared; this one starts from zero on three levels.
+
+Two constraints that were never open decisions and that 7.9 does not relax. Reading `stato_utente`
+inside an AI function must not make the **payment machine** react to it — the same rule fixed for
+9c, and the 7c/7f defect class it protects against does not change nature because a later phase
+adds the predicate. That is precisely why 7.9's check lives in the Edge Function and in the history
+table's own RLS, and nowhere near an order. And the AI key lives in the Edge Function's own
+environment, never in the repository and never in the browser
+(`docs/MIGRATION_PHASE_1_BACKLOG.md:545-546`); adding it means updating `docs/ENVIRONMENT.md` and
+the relevant `.env.example` in the same change.
+
 ### Postgres exposure rules (binding since Phase 6d-1)
 
 RLS filters rows, never columns. These three rules are what keeps that gap closed — breaking

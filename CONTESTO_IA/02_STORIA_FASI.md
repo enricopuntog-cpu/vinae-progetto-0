@@ -690,21 +690,72 @@ esiste più: `list_branches` sul progetto reale riporta il solo branch `main`. L
 20/20, 23/23 e 5/5 restano il rapporto di quella fase, non uno stato riproducibile
 su richiesta — la stessa distinzione che vale per ogni griglia di questo progetto.
 
+## Fase 9 — moderazione e audit persistente
+
+**Stato:** chiusa e distribuita.
+
+PR #32 mersa in squash come `cd81df6` l'11 agosto 2026; le quattro migrazioni
+sono le righe 21-24 del ledger di produzione, distribuite dall'integrazione
+GitHub e non da un comando. `ModerationService` ha un'implementazione reale,
+l'audit è append-only per trigger, e le proiezioni sono viste
+`security_invoker = off` a colonne chiuse — nessuna colonna privata riaperta.
+La verifica successiva al merge è in PR #33, squash `8dd56c0`. Dettaglio in
+`01_STATO_ATTUALE.md`, sezioni «Fase 9 — decisioni organizzative» ed
+«Estensione 9c».
+
 ## Fasi future
-
-### Fase 9 — moderazione
-
-**Stato:** non iniziata.
-
-Previsti `ModerationService`, audit persistente e proiezioni dedicate per i
-motivi di moderazione, senza riaprire le colonne private delle tabelle.
 
 ### Fase 10 — AI reale
 
-**Stato:** non iniziata.
+**Stato:** specifica organizzativa scritta, implementazione non iniziata.
 
 Previsto `AiService` dietro Edge Function/provider astratto. Nessuna chiave
 segreta deve raggiungere il browser.
+
+La specifica è [`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md),
+scritta l'11 agosto 2026 su un branch di sola documentazione (PR #34): il branch
+di fase `migration/phase-10-ai-service` si è aperto **solo dopo** che tutte le
+decisioni sono state chiuse in sessione organizzativa, lo stesso giorno.
+
+Tre correzioni di perimetro che l'inventario ha imposto al backlog, e che vanno
+lette prima di riprendere la fase: `ai-identify-bottle` non esiste né nel
+repository né sul progetto reale; l'identificazione bottiglia da fotografia non
+esiste nemmeno nel legacy, quindi portarla sarebbe una funzionalità nuova e non
+una migrazione; il perimetro reale è cinque rotte su tre funzionalità — chat
+Sommelier con storico, abbinamento cibo-vino, suggerimento di catalogazione — di
+cui solo la prima ha dati da spostare.
+
+**La sessione organizzativa dell'11 agosto 2026 ha chiuso tutte e tredici le
+decisioni** (le undici della spec più due nuove) e i due punti conseguenti che
+nessuna decisione copriva, registrati in
+[`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md), sezione «Fase 10 — decisioni
+organizzative». Le due che cambiano la forma della fase:
+
+- **7.2 = A**, tabella Postgres per lo storico Sommelier: **la fase scrive SQL**,
+  e non è la fase reversibile senza migrazioni che la spec aveva contemplato come
+  possibile;
+- **7.3, 7.12 e 7.13** ammettono **quattro funzionalità nuove per eccezione
+  esplicita** — autofill da foto, spunta di completezza, triage di moderazione,
+  ritaglio e sfondo reale. Sono le prime dall'inizio della migrazione, e portano
+  il perimetro da tre funzionalità a sette. La regola «no new features during
+  migration» non è decaduta: vale per tutto ciò che una sessione non ha voluto
+  per nome.
+
+Le otto restanti sono state chiuse nella stessa giornata, dopo il resoconto delle
+proposte, insieme ai due punti che nessuna decisione copriva: il **TTL** dello
+storico si applica **in lettura** — la vista filtra su `expires_at` e nel v0 non
+esiste cancellazione fisica, cosa che va dichiarata invece che nascosta — e
+l'**esito del triage** è una **colonna persistita su `reports`**, quindi una
+seconda migrazione. Delle otto, due hanno corretto la proposta: la 7.4 ha esteso
+la finestra oraria a tutte le funzionalità e respinto il secondo tetto
+giornaliero, la 7.6 ha respinto il rename dell'allowlist CORS perché toccare
+`_shared/cors.ts` significa rimettere in produzione il percorso dei pagamenti a
+ogni merge successivo.
+
+Il primo checkpoint è **10a + 10b**: la porta AI senza stato — abbinamento e
+suggerimento di catalogazione da testo — e lo storico Sommelier con la chat SSE.
+Le quattro funzionalità nuove restano fuori, perché sono meno specificate e
+ciascuna merita la propria sessione di spec, sul modello dei 9a/9b/9c separati.
 
 ### Fase 11 — cutover
 

@@ -545,6 +545,15 @@ Provider AI reale via Edge Function proxy (`ai-identify-bottle` e
 equivalenti), rate-limit lato server, chiave e budget configurati fuori
 dal repository.
 
+La specifica organizzativa è
+[`PHASE_10_AI_SERVICE_SPEC.md`](PHASE_10_AI_SERVICE_SPEC.md). **L'inventario
+del codice smentisce tre punti del paragrafo qui sopra** — `ai-identify-bottle`
+non esiste da nessuna parte, l'identificazione bottiglia da fotografia non
+esiste nemmeno nel legacy, e il perimetro reale è cinque rotte su tre
+funzionalità — con le fonti `file:riga` nella sezione 0 di quel documento.
+Correggere questo testo è la **decisione aperta 7.3**, non ancora presa: resta
+qui com'è finché la sessione organizzativa non risponde.
+
 ## Fase 11 — Cutover finale
 
 **Branch**: `migration/phase-11-cutover`
