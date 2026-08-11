@@ -81,17 +81,22 @@ verifier repair storico resta 13/13 e il controllo finale dei residui fixture
 restituisce zero in tutte le categorie registrate. Il rapporto corrente è
 [`../docs/PHASE_6D1_POST_MERGE_VERIFICATION.md`](../docs/PHASE_6D1_POST_MERGE_VERIFICATION.md).
 
-Il ledger delle migrazioni remote è a **venti righe**, riletto con
-`list_migrations` il 9 agosto 2026. Le ultime cinque sono
+Il ledger delle migrazioni remote era a **venti righe** all'ultima lettura con
+`list_migrations`, il 9 agosto 2026; il merge della PR #32 vi aggiunge le
+**quattro della Fase 9** e lo porta a ventiquattro, con
+`20260810210000_phase_9_rimosso_blocca_commercio` come ultima. Le venti righe di
+quella lettura sono le seguenti — le ultime cinque sono
 `20260731135455 phase_7_order_payment_service`,
 `20260803150000 phase_7b_stripe_connect_marketplace`,
 `20260804160000 phase_7c_delivery_packaging`,
 `20260805160250 phase_7f_fix_contestazione_enum_cast` e
-`20260806224517 phase_8_messaging_notifications`. Le venti righe coincidono con i
-venti file di `supabase/migrations/` su `main`. La ventesima è stata distribuita
-dal merge della PR #27, non da un comando: `list_branches` sullo stesso progetto
+`20260806224517 phase_8_messaging_notifications`. Coincidevano con i venti file
+di `supabase/migrations/` su `main`; dopo il merge della PR #32 i file sono
+ventiquattro e il ledger deve seguirli. La ventesima è stata distribuita dal
+merge della PR #27, non da un comando: `list_branches` sullo stesso progetto
 riporta ora il solo branch `main`, quindi la Preview `jggjaqcdbcbxdxhnggio` non
-esiste più.
+esiste più — e la stessa sorte tocca a `fomwzziqrajwmqfuzqaz`, la Preview della
+PR #32, che sparisce insieme alla PR.
 
 Le prime diciotto e la ventesima hanno versione a ledger uguale al nome del file,
 perché a distribuirle è l'integrazione GitHub partendo dal repository. La
@@ -461,6 +466,260 @@ acceso e verificato prima di `PAYMENTS_ENABLED` — non è ancora soddisfatta.
   quelle misure non sono più riverificabili là dove sono state prese. Sul
   progetto di produzione le tabelle della Fase 8 non sono state rilette dopo il
   merge: lo schema è distribuito, il suo stato dati non è verificato.
+
+## Fase 9 — decisioni organizzative
+
+**Stato:** avviata il 10 agosto 2026 nel branch `migration/phase-9-moderation-service`,
+creato da `origin/main` aggiornato. Checkpoint **9a chiuso in tre commit di
+contenuto** — `1b7cabd` schema e griglia, `1ea1b2e` adapter, `91407c6` rotte —
+seguiti da `b0a3733`, che è la consegna documentale del checkpoint e non tocca
+codice né SQL. Checkpoint **9b chiuso in quattro commit** — `2b83901` migrazione,
+`d5cf026` griglia e README, `05ed66b` adapter di scrittura, `19ee240` comandi del
+pannello. Estensione **9c chiusa in un commit di contenuto** — `4e70d78` — più
+`0243d4e` di consegna.
+
+**La fase è chiusa.** Il branch è stato pushato l'11 agosto 2026 e aperto come
+**PR #32** verso `main`, con un titolo che copre l'intera fase e non il solo
+ultimo pezzo. I quattro controlli sono verdi: `Frontend`, `Frontend Next`,
+`Backend` e `Supabase Preview` — quest'ultimo ha creato la Preview isolata
+`fomwzziqrajwmqfuzqaz` e vi ha applicato **le quattro migrazioni della Fase 9**,
+prima volta che girano su un ambiente gestito da Supabase e non su un container
+locale. La sessione organizzativa dell'**11 agosto 2026** ha revisionato le tre
+consegne riga per riga sul diff reale e ha dato la **conferma unica della
+decisione 7.9**, che copre insieme il merge in squash e l'applicazione delle
+quattro migrazioni al progetto reale. Il «confermo» precedente copriva le tre
+migrazioni verificate allora: con la 9c il perimetro era cambiato, e la conferma
+è stata richiesta di nuovo e ottenuta, non presunta.
+
+Ad applicare le quattro migrazioni è il merge, non un comando: dalla Fase 7 in
+poi è sempre stata l'integrazione GitHub a distribuirle. La rilettura del ledger
+di produzione — attese ventiquattro righe, ultima
+`20260810210000_phase_9_rimosso_blocca_commercio` — è la verifica che segue il
+merge, non un fatto già misurato nel momento in cui questa riga viene scritta. Se
+l'integrazione non scatta, il passo è fermarsi e riportarlo, non forzare
+`apply_migration` o `db push` come aggiramento.
+
+**I due confini della 9c sono stati accettati così, senza altro lavoro**, nella
+stessa sessione: `public.proposals` fuori dal blocco `rimosso`, e lo stallo
+possibile di un ordine già pagato di un venditore poi rimosso, coperto dalle vie
+d'uscita esistenti — conferma del compratore, contestazione. Restano confini
+dichiarati e riapribili, non difetti aperti.
+
+La sessione organizzativa del 10 agosto 2026 ha chiuso le nove decisioni aperte
+della specifica più il gate del percorso di autorizzazione. **Sono vincolanti e
+non si riaprono senza tornare in sessione organizzativa.**
+
+| # | Decisione | Risposta |
+| --- | --- | --- |
+| 7.1 | Chi può moderare | Riuso di `admin`; nessun ruolo `moderator`; ambito club rinviato |
+| 7.2 | Chi assegna il ruolo | Fuori banda; nessuna nuova RPC di assegnazione in Fase 9 |
+| 7.3 | Retention `audit_log` | Nessuna cancellazione, mai |
+| 7.4 | Segnalazioni anonime o tracciate | Tracciata verso il moderatore; mai visibile al segnalato |
+| 7.5 | Assegnazione delle pratiche | Nessuna; coda condivisa fra tutti i moderatori |
+| 7.6a | Bersagli `post`/`commento` | Esclusi finché non esiste schema club: restano 5 tipi di bersaglio |
+| 7.6b | Enforcement sospensione utente | Due livelli: primo blocca le sole scritture social, secondo rimuove anche la visione |
+| 7.7 | `public_bottle_units` | Rimuoverla, con il concetto di cantina pubblica per singola bottiglia |
+| 7.8a | SLA sulla priorità | Nessuno SLA |
+| 7.8b | Campo `ricorso` | Non portarlo; resta dichiaratamente non scritto |
+| 7.9 | Gate di autorizzazione | Una sola conferma esplicita copre insieme merge della PR e applicazione della migrazione, nella stessa sessione |
+
+### Che cosa il checkpoint 9a ha prodotto
+
+- `20260810152000_phase_9a_moderation_schema.sql`: `reports`, `report_events`,
+  `report_reasons`, `audit_log`, cinque enum, sei proiezioni
+  `security_invoker = off` a colonne chiuse e la porta `public.segnalazione_invia`
+  con rate limit 10/ora. Le tre tabelle di dominio **non hanno alcun grant
+  client, nemmeno di colonna**: ogni lettura passa da una vista. `audit_log` è
+  append-only per trigger e non per soli `GRANT`, quindi rifiuta `UPDATE`,
+  `DELETE` e `TRUNCATE` anche a `service_role`;
+- `20260810152500_phase_9a_drop_public_bottle_units.sql`, file separato perché è
+  una decisione separata;
+- `supabase/tests/9a_moderazione_statica.sql`, 28 casi;
+- adapter Supabase dietro `ModerationService` e le rotte `/admin` e
+  `/segnalazioni` in sola lettura; `MIN_TESTS` da 166 a **189**.
+
+### Che cosa il checkpoint 9b ha prodotto
+
+- `20260810180000_phase_9b_moderation_actions.sql`: **sette RPC distinte**, una
+  per azione, e non una funzione con parametro azione — un solo `GRANT` su una
+  funzione parametrica concederebbe insieme l'ammonizione e la rimozione;
+  **cinque porte separate** per le transizioni di moderazione sugli annunci
+  (`in_revisione`, `modifiche_richieste`, `rifiutato`, `sospeso`, ripristino ad
+  `attivo`), senza aggiungere label a `listing_stato` e senza allargare
+  `public.listing_sospendi`, che resta del venditore e del solo stato `attivo`;
+  `riservato` e `venduto` restano intoccabili perché c'è un ordine sopra;
+- **enforcement della decisione 7.6b**: `public.utente_stato` a tre valori su
+  `profiles`, più un contatore cumulativo di provvedimenti. Lo storico non è una
+  tabella nuova: è `audit_log`, che è già append-only. Il primo provvedimento
+  blocca le sole scritture social con un **trigger** su `listings`, `messages` e
+  `conversations` — un trigger vincola la tabella e non solo la RPC che oggi la
+  scrive, `service_role` compreso, e non obbliga a riscrivere per intero quattro
+  funzioni grandi di altre fasi. Il secondo toglie anche la lettura, in entrambe
+  le direzioni;
+- il `GRANT` di `UPDATE` su `profiles` passa da **tabella intera a elenco di
+  colonne**. Senza, un sospeso si toglieva la sospensione da solo con un `UPDATE`
+  sulla propria riga, che `profiles_update_own` consente. Il trigger di guardia
+  chiude anche `service_role`, che i `GRANT` del client non vincolano;
+- `public.my_listing_moderation`, proiezione a righe proprie perché il venditore
+  legga il motivo del rifiuto: `listings.stato_motivo` non è nel `GRANT` di
+  colonna di nessun ruolo client, proprietario compreso;
+- `supabase/tests/9b_moderazione_azioni_statica.sql`, 26 casi;
+- adapter di scrittura dietro `ModerationService` e i comandi del pannello
+  `/admin`; `MIN_TESTS` da 189 a **204**.
+
+### Il confine del secondo livello — riaperto e chiuso
+
+La decisione 7.6b dice «rimozione completa, incluso l'accesso in visione». Il 9b
+la applicava alla **superficie sociale** — catalogo pubblico, conversazioni,
+messaggi, notifiche, proprie segnalazioni — e **non** a quella contrattuale: un
+utente rimosso continuava a poter leggere e scrivere ordini e pagamenti, perché
+la stessa decisione toglie la compravendita dall'enforcement al primo livello e
+un ordine in corso che diventa illeggibile a metà strada non è una rimozione, è
+un pagamento sospeso che nessuno ha deciso. La lettura era dichiarata nel file di
+migrazione e misurata dalla sonda 62, invece di restare asserita.
+
+**La sessione organizzativa l'ha riaperta e decisa diversamente.** Rivedendo il
+9b riga per riga sul diff reale, ha stabilito che il secondo provvedimento deve
+bloccare anche ordini e pagamenti. Il primo resta invariato. È l'estensione 9c
+qui sotto: la sonda 62 della 9b resta il verbale di ciò che il 9b faceva, non la
+descrizione del comportamento attuale.
+
+## Estensione 9c — `rimosso` blocca anche il commercio
+
+`20260810210000_phase_9_rimosso_blocca_commercio.sql`, commit `4e70d78`. File
+separato e non `create or replace` dentro il 9b: nulla della fase è stato
+pushato, quindi modificarlo in place sarebbe lecito per la regola del
+congelamento, ma un timestamp successivo rende visibile che questo è uno scarto
+di decisione preso **dopo** il 9b, non parte del disegno originale.
+
+**Tre pezzi.**
+
+- **Creazione.** Trigger `before insert` su `public.orders` che rifiuta se
+  l'acquirente o il venditore è rimosso. Trigger e non controllo dentro
+  `order_checkout_reserve`: quella funzione supera le duecento righe e
+  riscriverla per aggiungerne due significa riesporsi a idempotenza, lock
+  sull'annuncio e calcolo del margine senza bisogno. Il trigger vincola la
+  tabella, quindi vale per la Edge Function `payments-checkout`, per
+  `service_role`, per `postgres` e per ogni percorso di creazione futuro.
+  `sospeso` non è toccato.
+- **Lettura.** Il predicato di rimozione sulle sette policy `SELECT` del
+  commercio — `orders`, `payments`, `order_events`, `payouts`, `disputes`,
+  `order_reviews`, `seller_payout_accounts`. I percorsi di lettura sono letture
+  dirette via PostgREST (`order-service.ts:75`, `payment-service.ts:28`,
+  `seller-payout-service.ts:37`), non viste: non esiste una proiezione da
+  restringere, la restrizione va sulla policy. Il predicato non correla con la
+  riga esterna, quindi il planner lo estrae come InitPlan e lo valuta una volta
+  per query.
+- **Azione.** `conferma_ricezione` nega al chiamante rimosso, perché
+  l'auto-rilascio copre già il caso «il compratore non agisce»: negargliela non
+  lascia denaro fermo, lo instrada sul percorso che esiste per quel caso.
+
+**Che cosa non è stato negato, e perché conta.**
+`ordine_prepara_spedizione`, `ordine_segna_spedito`, `ordine_segna_consegnato`,
+`ordine_contesta`, `ordine_recensisci`, `ordine_imballaggio_punto_scegli` restano
+aperte. Sono i gesti con cui un ordine già aperto avanza fino al rilascio:
+negarle a un venditore rimosso impedirebbe a un ordine già pagato di arrivare a
+`consegnato`, che è lo stato da cui parte la finestra di verifica e quindi
+l'auto-rilascio. Sarebbe l'orfano che la decisione vieta esplicitamente di
+creare — la stessa classe di difetto della 7c/7f.
+
+**La macchina di pagamento lato sistema non è toccata**, e non è affidato
+all'assenza di quei nomi dal file. Vale per due ragioni indipendenti: le policy
+modificate sono `to authenticated`, e lo scheduler non è `authenticated`; e
+nessuna tabella del progetto ha `force row level security`, mentre le funzioni di
+rilascio sono `SECURITY DEFINER` di proprietà di `postgres`, che possiede le
+tabelle. Entrambe sono misurate dalla griglia.
+
+### La verifica, e in che cosa differisce da quelle del 9a e 9b
+
+44 casi — 37 comportamentali, 7 strutturali — su Postgres 17.10 usa e getta con
+**tutte e ventiquattro le migrazioni reali applicate in ordine**, non su uno
+stub del dominio. È la differenza che conta: le funzioni esercitate dal gruppo
+[4] sono `ordine_auto_rilascio_esegui`, `payout_coda`, `payout_prepara`,
+`payout_registra_esito`, `payment_apply_provider_event` e
+`ordine_contestazione_risolvi` **vere**, quelle della 7b/7c/7f.
+
+    prima esecuzione:   37 PASSA /  7 FALLISCE
+    seconda:            36 PASSA /  1 FALLISCE
+    terza e definitiva: 44 PASSA /  0 FALLISCE
+
+Gli otto fallimenti erano tutti difetti della griglia, nessuno della migrazione.
+Due meritano di sopravvivere al file: `rls_auto_enable_bootstrap` accende la RLS
+su ogni tabella nuova di `public`, quindi la tabella di appoggio della fixture
+era invisibile ad `authenticated` e tre RPC rispondevano «Ordine non trovato»
+per una ragione che non c'entrava con ciò che misuravano; e
+`ordine_contestazione_risolvi` vuole l'id dell'**ordine**, non quello della
+contestazione, mentre `payment_outcome` non ha una label `paid` ma `settled`.
+Nessuno dei due si vedeva rileggendo il file.
+
+Prova richiesta esplicitamente dalla decisione, eseguita: **il venditore rimosso
+viene pagato** — `payout_prepara` restituisce `da_trasferire`, e dopo
+`payout_registra_esito` il payout è `trasferito` per 4500 cent; l'auto-rilascio
+raccoglie sia l'ordine del compratore rimosso sia quello del venditore rimosso;
+il webhook incassa un checkout aperto **prima** della rimozione
+(`checkout_pending → paid`, ordine `pagato`), che è il caso reale perché dopo la
+rimozione un checkout nuovo non nasce più.
+
+`supabase/tests/9c_bootstrap_postgres_locale.sql` è versionato accanto alla
+griglia: senza di esso l'esecuzione non è riproducibile, e una griglia che
+nessun altro può eseguire è poco meglio di una mai eseguita.
+
+### Il confine che la 9c non attraversa
+
+`public.proposals` resta leggibile e scrivibile da un utente rimosso. La
+decisione dice «ordini e pagamenti», e una proposta non è né l'uno né l'altro: è
+la trattativa che li precede. Non è un buco — una proposta di un rimosso non può
+diventare un ordine perché il guard rifiuta il checkout che ne seguirebbe;
+`proposal_invia` scrive solo su `proposals`, quindi non manda messaggi, non apre
+conversazioni e non genera notifiche; e un rimosso non vede il catalogo, quindi
+per arrivarci deve già conoscere l'id di un annuncio. Il caso 12 **misura**
+questo confine invece di asserirlo. Se «commercio» va inteso fino alla
+trattativa, è questo il punto da riaprire.
+
+### Il difetto che l'esecuzione ha trovato, e la sua coda fuori dalla Fase 9
+
+Le sei proiezioni filtravano con `public.has_role((select auth.uid()), 'admin')`,
+che è la forma ovvia ed è sbagliata. `has_role` è `SECURITY INVOKER` dalla 6d-1,
+legge `public.user_roles`, e **`authenticated` non ha `SELECT` su quella
+tabella**: il pianificatore non la inlina, quindi esegue come il chiamante e dà
+`permission denied for table user_roles`. Non una coda vuota — un errore a ogni
+lettura, per ogni moderatore. Anche un helper in `private` con `SECURITY DEFINER`
+è stato provato e non regge: `EXECUTE` è verificato sul chiamante, quindi
+andrebbe concesso ad `authenticated`. La forma adottata è il predicato scritto
+dentro il corpo della vista, dove `security_invoker = off` fa verificare
+`user_roles` con i privilegi del proprietario.
+
+**`public.has_role` resta però inservibile per un chiamante `authenticated` anche
+fuori da questa fase**: le policy `wines_insert_staff`, `wines_update_staff` e
+`wines_delete_staff` la usano e falliscono allo stesso modo. Fallisce chiusa,
+quindi non è un buco di sicurezza; è un difetto di funzionalità di un dominio
+diverso e correggerlo è una decisione, non manutenzione. **Non è stato corretto.**
+
+### Perimetro ristretto della decisione 7.7, dichiarato
+
+Il drop tocca la **vista** e non la colonna `bottle_units.visibilita` né l'enum
+`bottle_unit_visibilita`. Letto da `pg_policy` prima di decidere: `bottle_units`
+ha solo policy di proprietario — quella `cantina_pubblica` della 6c-1 era già
+stata eliminata dalla 6d-1 — quindi la vista era **l'unico percorso** per cui un
+non proprietario potesse leggere una bottiglia, e rimuoverla elimina davvero la
+capacità. La colonna sopravvive perché è un parametro di `public.bottiglia_crea`
+ed è scritta da `frontend-next` e da `frontend`, congelati fino alla Fase 11:
+**è un residuo inerte e appartiene alla lista di cutover**, come la voce
+«protezione» della 7d.
+
+Conseguenza registrata e non nascosta: `supabase/tests/6d-1_invarianti_sicurezza.sql`
+e `6d-1_verifica.sql` interrogano quella vista e **non sono più eseguibili come
+scritte**. Non sono state modificate: sono il verbale di un'esecuzione avvenuta.
+
+### Tensione dichiarata sulla decisione 7.6b
+
+L'enforcement della sospensione **non esiste in `frontend/`**: la specifica lo
+dice (§7.6, «nessun percorso di `frontend/` mostra cosa succede a un utente
+sospeso»), e la regola di fase vieta funzionalità che `frontend/` non ha. La
+decisione 7.6b è stata comunque presa in sessione organizzativa ed è vincolante;
+senza di essa «sospendi» scriverebbe una riga di audit e non farebbe nulla. La
+tensione è registrata qui perché la scelta sia visibile, non perché vada
+riaperta.
 
 ## Gate chiusi senza essere stati autorizzati
 

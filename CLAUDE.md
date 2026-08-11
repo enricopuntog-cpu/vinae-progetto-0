@@ -59,7 +59,7 @@ bun run test         # Bun's native test runner — run in CI behind a minimum-c
 bun run build
 ```
 CI runs these tests and **enforces a floor**: the `Test` step of the `frontend-next` job sets
-`MIN_TESTS` (166 today) and fails when fewer cases pass than that. The floor is there because
+`MIN_TESTS` (204 today) and fails when fewer cases pass than that. The floor is there because
 `bun test` exits 0 when the test files exist but contain no cases — without it a suite that
 silently empties itself would still be green. Raise it deliberately when tests are added;
 lowering it is a decision, not housekeeping. These tests are type-checked as well: `tsconfig.json`
@@ -249,7 +249,7 @@ private Realtime Broadcast invalidations, TypeScript adapters, mock parity and t
 `/notifiche` routes. Browser channels call `realtime.setAuth()` before subscribing, use only
 `config.private = true`, treat payloads as closed invalidations and reload canonical rows through
 the RPC adapters. Logout or user change removes every channel and invalidates stale callbacks.
-`MIN_TESTS` in the `frontend-next` CI job is now **166**.
+`MIN_TESTS` in the `frontend-next` CI job was **166** at that merge; Phase 9 raises it to **204**.
 
 The merge distributed the migration: `20260806224517 phase_8_messaging_notifications` is the
 **twentieth row of the production ledger**, re-read with `list_migrations` on 9 August 2026, and it
@@ -271,6 +271,53 @@ schema is distributed but its data state is unverified; and the Phase 7g schedul
 configured. The runner is fail-closed and never reached the network, but decision 1e — scheduler
 switched on and verified *before* `PAYMENTS_ENABLED` — is not satisfied.
 
+### Phase 9 moderation — PR #32, merged and distributed
+
+Both checkpoints plus one extension shipped together on `migration/phase-9-moderation-service`: 9a
+is schema, append-only audit and read-only projections; 9b is the seven distinct moderation RPCs,
+the five listing transitions, and the two-level user suspension of decision 7.6b; 9c carries the
+second level onto commerce. PR #32 opened on 11 August 2026 with all four checks green — including
+`Supabase Preview`, which applied the four migrations to the isolated preview `fomwzziqrajwmqfuzqaz`
+before the merge. Decision 7.9 makes a single explicit in-session confirmation cover both the merge
+and the application; that confirmation was **asked again after 9c widened the perimeter, and
+obtained on 11 August 2026** — the earlier one covered only the three migrations verified then.
+The merge takes the production ledger from twenty rows to **twenty-four**, last row
+`20260810210000_phase_9_rimosso_blocca_commercio`, distributed by the GitHub integration rather
+than by a command. Two boundaries were accepted as they stand: `public.proposals` stays outside the
+`rimosso` block, and an already-paid order of a later-removed seller can stall before `consegnato`,
+covered by the existing exits (the buyer's `conferma_ricezione` from `pagato`, or `ordine_contesta`).
+Running any Phase 9 grid against the real project remains a **separate, per-grid** authorization
+that this confirmation does not grant.
+
+Ten decisions from the 10 August 2026 organizational session are binding and are not reopened
+without going back to that session; they are recorded in `CONTESTO_IA/01_STATO_ATTUALE.md` under
+«Fase 9 — decisioni organizzative». The ones that constrain future code:
+
+- The moderator is the existing `admin` role — no `moderator` role, club scope deferred (7.1).
+  The predicate is **written out as an `exists` on `public.user_roles`, never `public.has_role()`**:
+  that helper is `SECURITY INVOKER` and `authenticated` has no `SELECT` on `user_roles`, so it
+  raises `permission denied` for every caller. It stays broken for `wines_insert_staff` /
+  `wines_update_staff` / `wines_delete_staff` too — recorded, deliberately not fixed.
+- `audit_log` is never deleted (7.3), reports carry no assignment column (7.5), `post`/`commento`
+  are not reportable until clubs have a schema (7.6a), there is no SLA (7.8a) and no appeal field
+  (7.8b). Adding any of them is reopening a decision.
+- Suspension has two levels (7.6b): the first blocks social writes only — listings and messages —
+  and leaves commerce untouched; the second also removes read access. 9b applied the second level
+  to the social surface only; the organizational session **reopened that and widened it** — 9c adds
+  order creation, the seven commerce `SELECT` policies and `conferma_ricezione`. The first level is
+  unchanged: a suspended user still buys and sells.
+- **Nothing in 9c may make the payment machine react to `stato_utente`.** The scheduler,
+  `ordine_auto_rilascio_esegui`, `payout_coda`, `payout_prepara`, `payout_registra_esito`, the
+  Stripe webhook and `ordine_contestazione_risolvi` are untouched, and a grid case asserts that
+  their bodies never name the column. Adding a condition there is the 7c/7f defect class: a payment
+  frozen with no exit because one extra predicate stops existing logic from completing. For the
+  same reason the seller's manual transitions (`ordine_segna_spedito`, `ordine_segna_consegnato`, …)
+  stay open for a removed seller — they are what carries an already-paid order to `consegnato`,
+  which is where the verification window and therefore auto-release start.
+- `public_bottle_units` is gone (7.7), but `bottle_units.visibilita` and the
+  `bottle_unit_visibilita` enum survive as a documented inert residue: the column is a
+  `bottiglia_crea` parameter written by both frontends. It belongs on the Phase 11 cutover list.
+
 ### Postgres exposure rules (binding since Phase 6d-1)
 
 RLS filters rows, never columns. These three rules are what keeps that gap closed — breaking
@@ -282,13 +329,18 @@ one of them is how a private column ends up readable by strangers:
   table-level grant (`bottle_units` does) — the deciding question is which rows the role reaches,
   not which table it is.
 - **Public reads go through a `security_invoker = off` view with a closed column list**, never
-  through a policy on the base table. `public_listings` and `public_bottle_units` are the
-  pattern: the filter is written inside the view where no client can widen it, and a column
-  added to the base table later stays private until someone deliberately lists it.
+  through a policy on the base table. `public_listings` is the pattern (and `my_reports`,
+  `my_listing_moderation` are the same shape for own-row reads): the filter is written inside
+  the view where no client can widen it, and a column added to the base table later stays
+  private until someone deliberately lists it. `public_bottle_units` was the second example
+  until Phase 9a dropped it — decision 7.7.
 - **A column with a domain rule behind it is not writable by the client.** It leaves the
   column-level `GRANT` and gets a `SECURITY DEFINER` function as its only door — `listings.stato`
-  (6a), `bottle_units.stato` and `deleted_at` (6d-1). Cross-table invariants that an index or
-  `CHECK` cannot express get a trigger as well, so `service_role` is bound by them too.
+  (6a), `bottle_units.stato` and `deleted_at` (6d-1), `profiles.stato_utente` and its three
+  companion columns (9b). Cross-table invariants that an index or `CHECK` cannot express get a
+  trigger as well, so `service_role` is bound by them too. Note the 9b case: `profiles` had a
+  **whole-table** `UPDATE` grant, so adding a moderation column to it without narrowing that
+  grant would have let a suspended user lift their own suspension.
 
 Versioned SQL/RLS proofs live in `supabase/tests/` and are run by hand in the Supabase SQL
 Editor — see that directory's README. They are not migrations and CI does not run them yet.

@@ -373,3 +373,237 @@ sequenziale. Il 7 agosto 2026 la Preview isolata `jggjaqcdbcbxdxhnggio` della
 draft PR #27 ha eseguito la griglia statica 20/20, la griglia fixture 23/23 e
 tutte le cinque prove concorrenti; il cleanup esteso ha trovato zero residui.
 Produzione non è stata usata e resta priva della migrazione di Fase 8.
+
+## Fase 9a — moderazione, audit persistente e code in lettura
+
+| # | File | Fixture | Esito atteso |
+|---|---|---|---|
+| 1 | `supabase/migrations/20260810152000_phase_9a_moderation_schema.sql` | — | migrazione applicata e registrata |
+| 2 | `supabase/migrations/20260810152500_phase_9a_drop_public_bottle_units.sql` | — | migrazione applicata e registrata |
+| 3 | [`9a_moderazione_statica.sql`](9a_moderazione_statica.sql) | No | 28 `PASSA`, 0 `FALLISCE` |
+
+La griglia è **statica**: non inserisce e non cancella nulla, quindi non
+richiede un'autorizzazione fixture. Richiede comunque l'autorizzazione a
+eseguirla sul progetto reale, che **non è stata chiesta né concessa**: sul
+progetto `pijnmcllmfgjmgsvtcej` questa griglia non ha mai girato.
+
+### Dove è stata eseguita davvero, e che cosa questo prova
+
+A differenza delle griglie 7, 7b e 6d-2a, questa **non arriva senza esito**.
+È stata eseguita su un Postgres 17.10 in container usa-e-getta, sopra
+un'impalcatura di stub che riproduce i soli oggetti referenziati dai due file
+della fase e, soprattutto, **i privilegi reali dei tre ruoli client letti dal
+progetto vero** con `has_schema_privilege`, `has_table_privilege` e
+`has_function_privilege`. Prima esecuzione **27 PASSA / 1 FALLISCE**; il caso 26
+era un difetto della griglia — confrontava `search_path=` mentre `proconfig`
+conserva `search_path=""` — e non della migrazione. Dopo la correzione:
+**28 PASSA / 0 FALLISCE**.
+
+Oltre alla griglia sono state eseguite due sonde comportamentali, che non sono
+versionate perché provano la stessa cosa dei casi statici da un altro lato:
+ventidue controlli sulla logica (priorità derivata, elenco chiuso dei motivi,
+doppioni, bersaglio inesistente, autosegnalazione, append-only contro `UPDATE`,
+`DELETE` e `TRUNCATE` **anche da superuser**) e dieci sui privilegi impersonando
+`authenticated` e `anon` con `set role`.
+
+**Che cosa questo non prova.** Un'impalcatura di stub non è il progetto reale:
+prova che i file compilano, che gli invarianti reggono sulla forma e che i
+predicati si comportano come dichiarato sotto i privilegi replicati. Non prova
+lo stato del progetto `pijnmcllmfgjmgsvtcej`, dove nessuno dei due file è stato
+applicato.
+
+### Il difetto che l'esecuzione ha trovato, e che la lettura non aveva trovato
+
+Le sei proiezioni della fase filtravano con `public.has_role((select auth.uid()),
+'admin')`, che è la forma ovvia e sarebbe stata sbagliata. `has_role` è
+`SECURITY INVOKER` dalla 6d-1, legge `public.user_roles`, e su questo progetto
+**`authenticated` non ha `SELECT` su `user_roles`**: il pianificatore non la
+inlina, quindi esegue come il chiamante e restituisce `permission denied for
+table user_roles`. Non una coda vuota — un errore a ogni lettura, per ogni
+moderatore.
+
+Provata anche l'alternativa di un helper in `private` con `SECURITY DEFINER`:
+non funziona, perché il privilegio `EXECUTE` di una funzione è verificato sul
+chiamante e non sul proprietario della vista, quindi andrebbe concesso ad
+`authenticated`. La forma adottata è il predicato scritto dentro il corpo della
+vista, dove con `security_invoker = off` il riferimento a `user_roles` è
+verificato con i privilegi del proprietario: nessuna concessione nuova, nessuna
+funzione nuova. Il caso 25 della griglia impedisce la regressione.
+
+**Conseguenza fuori dalla Fase 9, non corretta qui.** `public.has_role` resta
+inservibile per un chiamante `authenticated` anche altrove: le policy
+`wines_insert_staff`, `wines_update_staff` e `wines_delete_staff` la usano e
+falliscono allo stesso modo. Fallisce chiusa, quindi non è un buco di sicurezza;
+è un difetto di funzionalità di un dominio diverso e la sua correzione è una
+decisione, non manutenzione.
+
+### Conseguenza del drop di `public_bottle_units` sulle griglie 6d-1
+
+`6d-1_invarianti_sicurezza.sql` (casi alle righe 296-312 e 433) e
+`6d-1_verifica.sql` (188-242) interrogano `public.public_bottle_units` e da
+questa fase in avanti **non sono più eseguibili come scritte**. Non sono state
+modificate: sono il verbale di un'esecuzione avvenuta, e riscriverle
+significherebbe riscrivere un verbale. La perdita è dichiarata qui invece di
+essere nascosta in una modifica silenziosa.
+
+## Fase 9b — azioni di moderazione e sospensione utente a due livelli
+
+| # | File | Fixture | Esito atteso |
+|---|---|---|---|
+| 1 | `supabase/migrations/20260810180000_phase_9b_moderation_actions.sql` | — | migrazione applicata e registrata |
+| 2 | [`9b_moderazione_azioni_statica.sql`](9b_moderazione_azioni_statica.sql) | No | 26 `PASSA`, 0 `FALLISCE` |
+
+Come la 9a: griglia **statica**, nessun dato inserito o cancellato, nessuna
+autorizzazione fixture necessaria. Resta necessaria l'autorizzazione a eseguirla
+sul progetto reale, che **non è stata chiesta né concessa**: su
+`pijnmcllmfgjmgsvtcej` non ha mai girato.
+
+### Dove è stata eseguita, e con che esito
+
+Stesso Postgres 17.10 in container usa-e-getta della 9a, con l'impalcatura di
+stub estesa a `listings`, `wines`, `bottle_units`, `conversations`, `messages`,
+`conversation_participants`, `notifications` e `public_listings` nella forma
+della 7c. Prima esecuzione **23 PASSA / 3 FALLISCE**, e tutti e tre i fallimenti
+erano difetti della griglia, non della migrazione:
+
+1. un conteggio di colonne di `public_listings` sbagliato a mano (31 invece di 30);
+2. un `like '%has_role%'` su `pg_get_functiondef` che leggeva il commento con cui
+   `private.moderazione_attore()` spiega **perché non** usa `has_role`;
+3. un confronto su `proargtypes`, che è un `oidvector` con estremo inferiore 0 e
+   quindi non è mai uguale a un array letterale, per quanto il contenuto coincida.
+
+Dopo le correzioni: **26 PASSA / 0 FALLISCE**.
+
+### Le 61 sonde comportamentali
+
+Accanto alla griglia statica è stata eseguita, sullo stesso Postgres, una
+batteria di **61 sonde comportamentali**, esito finale **61 PASSA / 0 FALLISCE**.
+Non sono versionate qui perché dipendono da fixture, e l'autorizzazione fixture è
+per griglia e non per progetto. Che cosa misurano:
+
+- il gate di moderazione, impersonando `authenticated` senza ruolo e `anon`;
+- le cinque transizioni sugli annunci, il rifiuto di `riservato` e `venduto`, e
+  la riga di audit che ciascuna lascia;
+- i **due livelli della decisione 7.6b in entrambe le direzioni**: al primo
+  livello annunci e profilo restano nel catalogo e l'utente legge ancora, ma non
+  pubblica e non scrive messaggi; al secondo i suoi annunci escono dal catalogo e
+  le sue letture si fermano;
+- che il contatore dei provvedimenti non si azzera con il ripristino, quindi il
+  provvedimento successivo resta di secondo livello;
+- che **nemmeno `service_role`** scrive `profiles.stato_utente`;
+- che ordini e pagamenti restano scrivibili in entrambi i livelli — il confine
+  dichiarato nella migrazione, misurato invece che asserito;
+- che gli invarianti della 9a (append-only dell'audit, note interne invisibili al
+  segnalante, coda vuota e non in errore per un non moderatore) reggono dopo la 9b.
+
+Le prime due esecuzioni hanno dato 34/27 e 59/1. **Nessuno dei 28 fallimenti era
+un difetto della migrazione**: erano tre difetti delle sonde — un nome di
+variabile `psql` che `\gset` ricava dalla colonna e quindi ripiega in minuscolo,
+e due sonde che consumavano l'ultimo annuncio attivo del catalogo prima di
+misurarlo — più la loro cascata.
+
+**Che cosa questo non prova.** Le stesse due righe della 9a: l'impalcatura prova
+che i file compilano, che gli invarianti reggono sulla forma e che i predicati si
+comportano come dichiarato sotto i privilegi replicati. Non prova lo stato di
+`pijnmcllmfgjmgsvtcej`, dove la migrazione della 9b non è stata applicata.
+
+### Il confine dichiarato del secondo livello — **riaperto e chiuso il 10 agosto 2026**
+
+La decisione 7.6b dice «rimozione completa, incluso l'accesso in visione». La
+migrazione della 9b la applica alla superficie sociale — catalogo pubblico,
+conversazioni, messaggi, notifiche, proprie segnalazioni — e **non** alla
+superficie contrattuale: un utente rimosso continuava a poter leggere e scrivere
+ordini e pagamenti. La ragione era che la stessa decisione toglie la compravendita
+dall'enforcement al primo livello, e un ordine in corso che diventa illeggibile a
+metà strada non è una rimozione, è un pagamento sospeso che nessuno ha deciso.
+La sonda 62 misura esattamente questo confine, invece di lasciarlo asserito.
+
+**Quella lettura era più stretta della decisione, ed è stata corretta.** La
+sessione organizzativa, rivedendo il 9b riga per riga, ha stabilito che il
+secondo provvedimento deve bloccare anche ordini e pagamenti. Il primo
+provvedimento resta invariato. Vedi la sezione 9c qui sotto: la sonda 62 della
+9b resta valida come verbale di quello che il 9b faceva, non come descrizione
+del comportamento attuale.
+
+## Fase 9c — `rimosso` blocca anche il commercio
+
+| file | che cos'è |
+| --- | --- |
+| `9c_bootstrap_postgres_locale.sql` | ciò che Supabase fornisce **prima** della prima migrazione: i tre ruoli client, `auth.uid()`, `storage`, `realtime`, le estensioni. Non è uno stub del dominio. |
+| `9c_rimosso_commercio.sql` | 44 casi — 37 comportamentali, 7 strutturali — con la propria fixture. |
+
+### Dove è stata eseguita, e con che esito
+
+Postgres 17.10 in un container usa e getta, su cui sono state applicate in
+ordine **tutte e ventiquattro le migrazioni del progetto**, non uno stub. È la
+differenza con le griglie 9a e 9b: le funzioni di rilascio che il gruppo [4]
+esercita — `ordine_auto_rilascio_esegui`, `payout_coda`, `payout_prepara`,
+`payout_registra_esito`, `payment_apply_provider_event`,
+`ordine_contestazione_risolvi` — sono quelle vere della 7b/7c/7f, non
+riscritture.
+
+    prima esecuzione:   37 PASSA /  7 FALLISCE
+    seconda:            36 PASSA /  1 FALLISCE
+    terza e definitiva: 44 PASSA /  0 FALLISCE
+
+Gli otto fallimenti erano **tutti difetti della griglia, nessuno della
+migrazione**, e sono elencati nel cappello del file. Vale la pena tenerne due:
+
+* `20260729234000_rls_auto_enable_bootstrap.sql` accende la RLS su ogni tabella
+  nuova di `public`. La tabella di appoggio `tag -> id` della fixture era quindi
+  invisibile ad `authenticated`, l'id arrivava `null` e tre RPC rispondevano
+  «Ordine non trovato». Tre sonde fallivano per una ragione che non c'entrava
+  nulla con ciò che misuravano.
+* `public.ordine_contestazione_risolvi` vuole l'id dell'**ordine**, non quello
+  della contestazione, e `public.payment_outcome` non ha una label `paid` — ha
+  `settled`. Due errori che nessuna rilettura del file avrebbe trovato.
+
+### La prova che la macchina di pagamento non è stata toccata
+
+È il punto su cui la decisione insiste, e non è affidato all'assenza di quei
+nomi dalla migrazione. Casi 26–37, eseguiti:
+
+* l'auto-rilascio raccoglie **sia** l'ordine del compratore rimosso **sia**
+  quello del venditore rimosso, e li porta entrambi a `completato` /
+  `in_attesa`;
+* `payout_coda` include l'ordine del venditore rimosso, `payout_prepara`
+  restituisce `da_trasferire` con le coordinate, e dopo `payout_registra_esito`
+  il payout è `trasferito` per 4500 cent — **il venditore rimosso è stato
+  pagato**;
+* il webhook `payment_apply_provider_event` incassa un checkout aperto verso un
+  venditore rimosso: `checkout_pending → paid`, ordine `pagato`. È il caso
+  reale, perché dopo la rimozione un checkout nuovo non nasce più ma quelli già
+  aperti devono chiudersi;
+* una contestazione di un utente rimosso si chiude comunque;
+* `service_role` — il ruolo con cui `payouts-release` legge — continua a vedere
+  tutti gli ordini, rimossi compresi.
+
+Il caso 41 lo verifica anche staticamente: nessuna delle sei funzioni di
+rilascio nomina `stato_utente`, con i commenti rimossi prima del confronto (nel
+9b un `like` su `pg_get_functiondef` trovò il commento invece del codice).
+
+### Che cosa questa griglia non prova
+
+* Non prova nulla su `pijnmcllmfgjmgsvtcej`: **non ci è mai girata, e non deve
+  girarci** — scrive ordini, pagamenti e provvedimenti di moderazione, e vuole
+  un database usa e getta. L'autorizzazione a eseguire una griglia è per
+  griglia, non per progetto.
+* Non esercita `public.order_checkout_reserve`, che dipende da Stripe e dalla
+  Edge Function. Il guard è un trigger sulla tabella, quindi il caso 05 — «nemmeno
+  `postgres` crea un ordine per un rimosso» — copre a valle ogni percorso di
+  creazione presente e futuro; il percorso di checkout completo resta però non
+  esercitato.
+* Non prova l'interfaccia: nessuna schermata è stata aperta contro questo
+  database.
+
+### Il confine che la 9c non attraversa
+
+`public.proposals` resta leggibile e scrivibile da un utente rimosso. La
+decisione dice «ordini e pagamenti», e una proposta non è né l'uno né l'altro:
+è la trattativa che li precede. Non è un buco — una proposta di un rimosso non
+può diventare un ordine, perché il guard rifiuta il checkout che ne seguirebbe;
+`proposal_invia` non manda messaggi, non apre conversazioni e non genera
+notifiche, quindi non è un canale verso la controparte; e un rimosso non vede il
+catalogo, quindi per arrivarci deve già conoscere l'id di un annuncio. Il caso
+12 **misura** questo confine invece di asserirlo. Se «commercio» va inteso fino
+alla trattativa, è questo il punto da riaprire.
