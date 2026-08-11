@@ -81,24 +81,25 @@ verifier repair storico resta 13/13 e il controllo finale dei residui fixture
 restituisce zero in tutte le categorie registrate. Il rapporto corrente è
 [`../docs/PHASE_6D1_POST_MERGE_VERIFICATION.md`](../docs/PHASE_6D1_POST_MERGE_VERIFICATION.md).
 
-Il ledger delle migrazioni remote era a **venti righe** all'ultima lettura con
-`list_migrations`, il 9 agosto 2026; il merge della PR #32 vi aggiunge le
-**quattro della Fase 9** e lo porta a ventiquattro, con
-`20260810210000_phase_9_rimosso_blocca_commercio` come ultima. Le venti righe di
-quella lettura sono le seguenti — le ultime cinque sono
+Il ledger delle migrazioni remote è a **ventiquattro righe**, riletto con
+`list_migrations` l'11 agosto 2026 subito dopo il merge della PR #32, che vi ha
+aggiunto le **quattro della Fase 9** — ultima
+`20260810210000 phase_9_rimosso_blocca_commercio`. Nella lettura precedente, del
+9 agosto 2026, erano venti, e le ultime cinque di allora erano
 `20260731135455 phase_7_order_payment_service`,
 `20260803150000 phase_7b_stripe_connect_marketplace`,
 `20260804160000 phase_7c_delivery_packaging`,
 `20260805160250 phase_7f_fix_contestazione_enum_cast` e
-`20260806224517 phase_8_messaging_notifications`. Coincidevano con i venti file
-di `supabase/migrations/` su `main`; dopo il merge della PR #32 i file sono
-ventiquattro e il ledger deve seguirli. La ventesima è stata distribuita dal
-merge della PR #27, non da un comando: `list_branches` sullo stesso progetto
-riporta ora il solo branch `main`, quindi la Preview `jggjaqcdbcbxdxhnggio` non
-esiste più — e la stessa sorte tocca a `fomwzziqrajwmqfuzqaz`, la Preview della
-PR #32, che sparisce insieme alla PR.
+`20260806224517 phase_8_messaging_notifications`. Le ventiquattro righe di oggi
+coincidono con i ventiquattro file di `supabase/migrations/` su `main`, e i
+quattro della Fase 9 hanno blob identici a quelli del branch: il merge non ne ha
+riscritto nessuno. La ventesima è stata distribuita dal merge della PR #27, non
+da un comando: `list_branches` sullo stesso progetto riporta ora il solo branch
+`main`, quindi la Preview `jggjaqcdbcbxdxhnggio` non esiste più — e la stessa
+sorte tocca a `fomwzziqrajwmqfuzqaz`, la Preview della PR #32, che sparisce
+insieme alla PR.
 
-Le prime diciotto e la ventesima hanno versione a ledger uguale al nome del file,
+Le prime diciotto e dalla ventesima in poi hanno versione a ledger uguale al nome del file,
 perché a distribuirle è l'integrazione GitHub partendo dal repository. La
 diciannovesima resta l'unica eccezione: appartiene alla **Fase 7f** ed è stata applicata per via diretta
 e non dal merge, quindi è la sola per cui il riallineamento del filename alla
@@ -491,19 +492,67 @@ quattro migrazioni al progetto reale. Il «confermo» precedente copriva le tre
 migrazioni verificate allora: con la 9c il perimetro era cambiato, e la conferma
 è stata richiesta di nuovo e ottenuta, non presunta.
 
-Ad applicare le quattro migrazioni è il merge, non un comando: dalla Fase 7 in
-poi è sempre stata l'integrazione GitHub a distribuirle. La rilettura del ledger
-di produzione — attese ventiquattro righe, ultima
-`20260810210000_phase_9_rimosso_blocca_commercio` — è la verifica che segue il
-merge, non un fatto già misurato nel momento in cui questa riga viene scritta. Se
-l'integrazione non scatta, il passo è fermarsi e riportarlo, non forzare
-`apply_migration` o `db push` come aggiramento.
+**La PR è mersa in squash come `cd81df6` l'11 agosto 2026 alle 07:43:53 UTC, e
+le quattro migrazioni sono applicate al progetto reale.** Ad applicarle è stato
+il merge e non un comando, come dalla Fase 7 in poi. Il ledger di produzione,
+riletto subito dopo, è a **ventiquattro righe**, ultima
+`20260810210000 phase_9_rimosso_blocca_commercio`; i quattro file su `main` hanno
+blob identici a quelli del branch, quindi il merge non ha riscritto nulla.
+
+Il controllo di sola lettura eseguito dopo l'applicazione — nessuna scrittura,
+nessuna fixture — dice che `reports`, `report_events` e `audit_log` esistono e
+sono vuote, che `report_reasons` ha le 21 righe di seed, che nessun profilo è
+fuori da `attivo` e nessun annuncio è in uno stato di moderazione, che
+`public_bottle_units` non esiste più, che il trigger
+`orders_commercio_rimosso_guard` c'è e che le sette policy `SELECT` del commercio
+filtrano su `stato_utente`. Reggono anche i due invarianti di esposizione che
+contano: su `profiles` `authenticated` ha `UPDATE` per colonna su otto colonne e
+**nessuna** delle quattro di moderazione, e le tre tabelle di dominio della 9a
+hanno **zero** grant per `anon` e `authenticated`.
+
+Quello che è stato letto sul progetto reale è schema, grant e conteggi. **Nessun
+comportamento della Fase 9 vi è mai stato esercitato**, e le tre griglie non
+devono girarci senza un'autorizzazione a parte: l'autorizzazione a eseguire una
+griglia è per griglia, non per progetto, e la conferma della 7.9 copriva merge e
+applicazione, non l'esecuzione di una griglia.
 
 **I due confini della 9c sono stati accettati così, senza altro lavoro**, nella
 stessa sessione: `public.proposals` fuori dal blocco `rimosso`, e lo stallo
 possibile di un ordine già pagato di un venditore poi rimosso, coperto dalle vie
 d'uscita esistenti — conferma del compratore, contestazione. Restano confini
 dichiarati e riapribili, non difetti aperti.
+
+### Gli Advisor Supabase dopo l'applicazione
+
+Riletti l'11 agosto 2026, per la prima volta dal merge della Fase 8. Non c'è
+nulla da correggere subito, ma vanno letti sapendo che cosa significano qui,
+perché due delle tre voci più rumorose **sono il disegno e non un difetto**.
+
+- **`authenticated_security_definer_function_executable`, `WARN`, 44 voci**, di
+  cui **13 nuove della Fase 9**: `segnalazione_invia`, le sette `moderazione_*`
+  e le cinque `moderazione_annuncio_*`. In questa architettura ogni porta di
+  scrittura è una `SECURITY DEFINER` con `EXECUTE` ad `authenticated` e il
+  controllo scritto nel corpo. Il linter segnala la forma, non un permesso
+  sbagliato.
+- **`security_definer_view`, `ERROR`, 10 voci**, di cui **7 della Fase 9** —
+  `moderation_report_queue`, `moderation_report_events`, `moderation_audit_log`,
+  `moderation_dispute_queue`, `my_reports`, `my_report_events`,
+  `my_listing_moderation`. Il linter classifica così ogni vista
+  `security_invoker = off`, che è **esattamente il pattern imposto dalle regole
+  di esposizione**: il filtro sta dentro la vista, dove nessun client lo allarga.
+  Fra le dieci **non compare più `public_bottle_units`**: il drop della decisione
+  7.7 si legge anche di qui.
+- **`rls_enabled_no_policy`, `INFO`, 8 voci**, tre della Fase 9 — `reports`,
+  `report_events`, `audit_log`. RLS accesa senza policy vuol dire chiusa a ogni
+  ruolo client, che è l'intento: nessuna di quelle tabelle ha un grant client.
+- `auth_leaked_password_protection` resta disabilitato, invariato.
+
+Su `performance` la Fase 9 porta solo `INFO`: **nove chiavi esterne senza indice
+di copertura** — sei su `reports`, due su `audit_log`, una su `report_events` —
+e sei indici mai usati sulle stesse tabelle, atteso a tabelle vuote. Le sei di
+`reports` sono invisibili finché la coda è vuota e diventano un costo su
+`DELETE`/`UPDATE` delle righe padre quando cresce. Registrate, non corrette:
+aggiungere indici è una decisione, non manutenzione.
 
 La sessione organizzativa del 10 agosto 2026 ha chiuso le nove decisioni aperte
 della specifica più il gate del percorso di autorizzazione. **Sono vincolanti e
