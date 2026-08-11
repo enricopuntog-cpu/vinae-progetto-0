@@ -6,7 +6,13 @@ import { firmaUploadFoto } from "@/app/vendi/actions";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { createCellarService } from "@/services/cellar-service";
 import { createListingService } from "@/services/listing-service";
-import type { DatiNuovaBottiglia, DatiVenditaDaCantina } from "@/services/types";
+import { createSupabaseAiService } from "@/services/phase10/supabase-ai-service";
+import { campiDaSuggerimento } from "@/lib/phase10/catalogazione";
+import type {
+  CatalogazioneSuggerimento,
+  DatiNuovaBottiglia,
+  DatiVenditaDaCantina,
+} from "@/services/types";
 import type { Wine } from "@/data/wines";
 
 export type Modalita = "privata" | "pubblica" | "vendita";
@@ -68,9 +74,14 @@ export const MAX_FOTO = 6;
  * Quattro differenze rispetto all'originale, tutte conseguenza del fatto che
  * qui la pubblicazione scrive davvero:
  *
- * 1. `askListingAI` / `applyAiSuggestion` non ci sono: chiamavano
- *    /api/ai/listing-suggestion sul backend FastAPI, e il dominio AI è Fase 10.
- *    Stessa esclusione già decisa per l'assistente Sommelier in Fase 3.
+ * 1. `chiediSuggerimento` / `applicaSuggerimento` sono i vecchi `askListingAI`
+ *    e `applyAiSuggestion`, rientrati con la Fase 10c: al posto della chiamata
+ *    a /api/ai/listing-suggestion sul backend FastAPI c'è `AiService`
+ *    sopra la Edge Function `ai-catalogo`. Il pannello manda solo `hint`; il
+ *    campo `ocr_text` che la function accetta resta senza chiamante anche qui,
+ *    esattamente come nel legacy (`backend/ai_routes.py:228` lo dichiara,
+ *    `frontend/src/hooks/useSellWizard.ts:66` non lo manda), perché la cattura
+ *    da fotografia è la 7.3a e ha una sessione di spec propria.
  * 2. Le fotografie si caricano sul serio: bucket privato `cantina` per la
  *    catalogazione, bucket pubblico `annunci` per la vendita.
  * 3. `pubblica` e `salvaBozza` sono asincroni e possono fallire: il messaggio
@@ -125,6 +136,40 @@ export function useSellWizard({
 
   const listingService = useMemo(() => createListingService(getSupabaseClient()), []);
   const cellarService = useMemo(() => createCellarService(getSupabaseClient()), []);
+  const aiService = useMemo(() => createSupabaseAiService(getSupabaseClient()), []);
+
+  // Assistente AI del passo Identificazione (10c).
+  const [aiHint, setAiHint] = useState("");
+  const [aiSuggerimento, setAiSuggerimento] = useState<CatalogazioneSuggerimento | null>(null);
+  const [aiInCorso, setAiInCorso] = useState(false);
+  const [aiErrore, setAiErrore] = useState<string | null>(null);
+
+  const chiediSuggerimento = useCallback(async () => {
+    const hint = aiHint.trim();
+    if (!hint || aiInCorso) return;
+    setAiInCorso(true);
+    setAiErrore(null);
+    try {
+      const esito = await aiService.catalogazione({ hint });
+      if (esito.ok) {
+        setAiSuggerimento(esito.data);
+      } else {
+        // Il messaggio arriva già mediato: la Edge Function non lascia mai
+        // uscire quello del fornitore (7.5), e l'adapter traduce gli stati che
+        // il gateway restituisce senza corpo.
+        setAiErrore(esito.error);
+        setAiSuggerimento(null);
+      }
+    } finally {
+      setAiInCorso(false);
+    }
+  }, [aiHint, aiInCorso, aiService]);
+
+  const applicaSuggerimento = useCallback(() => {
+    if (!aiSuggerimento) return;
+    setD((s) => ({ ...s, ...campiDaSuggerimento(aiSuggerimento, s) }));
+    toast.success("Suggerimenti AI applicati");
+  }, [aiSuggerimento]);
 
   const isVendita = modalita === "vendita";
   const steps = isVendita ? VENDITA_STEPS : CATALOGAZIONE_STEPS;
@@ -337,5 +382,12 @@ export function useSellWizard({
     bozzaId,
     pubblica,
     salvaBozza,
+    aiHint,
+    setAiHint,
+    aiSuggerimento,
+    aiInCorso,
+    aiErrore,
+    chiediSuggerimento,
+    applicaSuggerimento,
   };
 }
