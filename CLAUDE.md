@@ -281,9 +281,14 @@ second level onto commerce. PR #32 opened on 11 August 2026 with all four checks
 before the merge. Decision 7.9 makes a single explicit in-session confirmation cover both the merge
 and the application; that confirmation was **asked again after 9c widened the perimeter, and
 obtained on 11 August 2026** — the earlier one covered only the three migrations verified then.
-The merge takes the production ledger from twenty rows to **twenty-four**, last row
-`20260810210000_phase_9_rimosso_blocca_commercio`, distributed by the GitHub integration rather
-than by a command. Two boundaries were accepted as they stand: `public.proposals` stays outside the
+It merged as squash `cd81df6` on 11 August 2026, and the production ledger — re-read straight
+after — is at **twenty-four rows**, last one `20260810210000 phase_9_rimosso_blocca_commercio`,
+distributed by the GitHub integration rather than by a command. A read-only check confirms
+`reports`, `report_events` and `audit_log` exist and are empty, `public_bottle_units` is gone, the
+`orders_commercio_rimosso_guard` trigger is present and the seven commerce `SELECT` policies filter
+on `stato_utente`; `authenticated` has no whole-table `UPDATE` on `profiles` and none of the four
+moderation columns is writable. **No Phase 9 behaviour has ever been exercised there** — schema,
+grants and counts were read, not a transition run. Two boundaries were accepted as they stand: `public.proposals` stays outside the
 `rimosso` block, and an already-paid order of a later-removed seller can stall before `consegnato`,
 covered by the existing exits (the buyer's `conferma_ricezione` from `pagato`, or `ordine_contesta`).
 Running any Phase 9 grid against the real project remains a **separate, per-grid** authorization
