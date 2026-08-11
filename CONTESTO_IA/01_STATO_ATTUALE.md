@@ -1072,11 +1072,101 @@ sono elencati nell'intestazione del file. Nessuna esecuzione sul progetto reale.
 **Che cosa non è provato.** Le Edge Function non hanno test automatici, come le
 tre già in produzione: nessun job di CI copre `supabase/**`, e ciò che la griglia
 prova sono le porte SQL che quelle function chiamano, non il codice Deno che le
-chiama. Nessuna schermata è stata aperta contro questo database: il ripristino UI
-è la 10c. E **la migrazione non è applicata**: il ledger di produzione resta a
+chiama. E **la migrazione non è applicata**: il ledger di produzione resta a
 ventiquattro righe contro venticinque file.
 
 `MIN_TESTS` sale da 204 a **234**.
+
+### I tre limiti orari, corretti in sessione
+
+La prima stesura metteva `ai:chat`, `ai:pairing` e `ai:catalogo` tutti e tre a
+`10 / 3600`, copiando il modello che la 7.4 citava (`report:submit`). La forma era
+quella decisa, i numeri no: il legacy limita la chat a **20 per 60 secondi**
+(`backend/.env.example:44-45`) e una conversazione Sommelier reale è di
+cinque-quindici battute, quindi il bucket si esauriva **dentro la prima**.
+
+Fissati in sessione organizzativa l'**11 agosto 2026**, in
+`supabase/functions/_shared/ai-gate.ts`:
+
+- **`ai:chat` 40/ora** — regge circa tre conversazioni realistiche intere invece
+  di esaurirsi dentro la prima;
+- **`ai:pairing` 15/ora** — durante una sessione di navigazione si prova più di
+  una combinazione;
+- **`ai:catalogo` 10/ora** — invariato, perché è un'azione per annuncio e non per
+  sessione.
+
+Restano vincolanti e non sono parametri di quel file: **finestra oraria** per
+tutti e tre, **nessuna eccezione per `admin`**, **nessun tetto secondario** oltre
+al rate limit per la v0.
+
+### Che cosa il checkpoint 10c ha prodotto
+
+Tre superfici tornano al loro posto, sopra `AiService` invece del backend
+FastAPI. Nessuna funzionalità nuova: le quattro ammesse per eccezione restano
+fuori, ciascuna con la propria sessione di spec.
+
+**Il pannello Sommelier** (`frontend-next/src/components/vinea/SommelierChat.tsx`)
+è montato nel `Layout` con `next/dynamic`, dove stava il commento che ne rinviava
+la porta alla Fase 10. Resta montato **anche per gli anonimi** (7.9): il rifiuto
+arriva dal servizio e non dalla UI, che è parità con `frontend/`. Il troncamento
+è un **caso atteso** (7.7) e si segnala con una riga discreta sotto la risposta.
+Un cambio di utente azzera la conversazione a schermo.
+
+**Il pannello Assistente** del passo Identificazione (`hooks/useSellWizard.ts`,
+`app/vendi/page-client.tsx`) manda il solo `hint`, come il legacy: `ocr_text`
+resta senza chiamante anche qui, perché la cattura da fotografia è la 7.3a.
+
+**Il pannello abbinamento** in `app/esplora/page-client.tsx`. Senza di lui la
+function `ai-pairing` della 10a resterebbe senza chiamante e la 7.8 senza
+superficie. Il corpo non porta nessun catalogo.
+
+**Quattro cose che il codice fissa, e la ragione di ciascuna.**
+
+1. **Senza sessione lo storico non si legge affatto.** La vista filtra su
+   `owner_id = (select auth.uid())` al proprio interno, quindi per un client
+   anonimo la risposta è zero righe **con certezza**: chiedere lo stesso sarebbe
+   una richiesta di rete garantita inutile a ogni apertura del pannello.
+2. **Il segno «già chiesto» di una lettura asincrona sta in una `ref`, mai nello
+   stato.** Da stato il `setState` provoca un render, il render riesegue
+   l'effetto perché il segno è fra le sue dipendenze, e la pulizia annulla la
+   richiesta appena partita: il pannello si aprirebbe **sempre vuoto** su una
+   conversazione che nel database c'è. È il secondo difetto di questo genere
+   trovato in questa fase, e come il primo lo ha trovato l'esecuzione.
+3. **La risoluzione degli abbinamenti passa da `Wine.listingId`, non da
+   `Wine.id`.** Dopo la 7.8 la function propone `public_listings.id`, la chiave
+   primaria, mentre nel frontend `Wine.id` è lo **slug**
+   (`frontend-next/src/services/listing-service.ts:154-155`). `listingId ?? id`
+   è l'idioma già usato altrove per questa stessa distinzione.
+4. **L'azzeramento dei risultati è una derivazione, non un effetto.** La regola
+   `set-state-in-effect` della configurazione ESLint di Next 16 rifiuta un
+   `setState` sincrono dentro un effetto, e ha ragione: la versione di
+   `frontend/` fa un secondo render a ogni battuta digitata per cancellare
+   qualcosa che si può semplicemente non disegnare.
+
+**Una divergenza dichiarata da `frontend/`.** Una `tipologia` che non è fra i
+cinque valori ammessi non entra nei campi del wizard. Nel legacy la pubblicazione
+è un toast dimostrativo e un valore inventato al più svuota la tendina; qui il
+wizard scrive davvero e quel valore arriverebbe a `bottiglia_crea`.
+
+**Due difetti del lavoro precedente trovati aprendo lo schermo.** Tutta
+`services/phase10/` era scritta **senza lettere accentate**, in commenti e in
+stringhe, e quattro di quelle stringhe sono visibili all'utente: il pannello
+mostrava «Non e stato possibile completare l'operazione». Nessun test le
+asseriva, quindi la suite non se ne era accorta. Le Edge Function non ne sono
+affette, verificato. Il secondo è il punto 2 qui sopra.
+
+**Che cosa è stato eseguito davvero.** 255 test (da 234), typecheck, lint e build
+puliti. Nel browser, contro il progetto reale in sola lettura: pannello Sommelier
+montato e apribile da anonimo; identificativo di sessione coniato e depositato in
+`localStorage` nel formato che la migrazione impone (`s-8jvdwti0pto-msoytlzd`);
+invio senza sessione respinto dal servizio con «Sessione non valida: accedi per
+usare il Sommelier»; pannello abbinamento che compare in modalità abbinamento con
+una domanda e mostra il messaggio generico quando la function non risponde — e
+non risponde perché **non è distribuita**, il che è a sua volta una conferma che
+il gate di distribuzione è il merge. **Il pannello del wizard non è stato
+aperto**: `/vendi` richiede una sessione reale, e non ne esisteva una.
+
+`MIN_TESTS` sale da 234 a **255**.
 
 ### Un residuo che la 7.13 chiude invece di rimandare
 
