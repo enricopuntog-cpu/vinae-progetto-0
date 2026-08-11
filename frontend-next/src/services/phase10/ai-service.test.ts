@@ -10,8 +10,8 @@ import { dividiEventiSse, messaggioDaStatus } from "@/services/phase10/shared";
 
 // ---------------------------------------------------------------------------
 // Doppio del client: registra tabelle lette, function invocate e RPC chiamate,
-// cosi' un test puo' provare che l'adapter non tocca mai la tabella base dello
-// storico ne' invia mai `owner_id`.
+// così un test può provare che l'adapter non tocca mai la tabella base dello
+// storico né invia mai `owner_id`.
 // ---------------------------------------------------------------------------
 
 type Risposta = { data?: unknown; error?: { code?: string; message?: string } | null };
@@ -66,7 +66,7 @@ const fakeClient = (opzioni: {
 // ---------------------------------------------------------------------------
 
 describe("mapAbbinamento", () => {
-  it("rinomina wine_id in annuncioId, perche' con la 7.8 identifica un annuncio", () => {
+  it("rinomina wine_id in annuncioId, perché con la 7.8 identifica un annuncio", () => {
     const mappato = mapAbbinamento({
       intro: "Tre proposte",
       picks: [{ wine_id: "abc", reasoning: "Struttura adatta" }],
@@ -85,7 +85,7 @@ describe("mapAbbinamento", () => {
     expect(mappato).toBeNull();
   });
 
-  it("restituisce null quando picks non e' una lista", () => {
+  it("restituisce null quando picks non è una lista", () => {
     expect(mapAbbinamento({ intro: "x" })).toBeNull();
     expect(mapAbbinamento(null)).toBeNull();
   });
@@ -129,7 +129,7 @@ describe("mapCatalogazione", () => {
     expect(mapCatalogazione({ ...completo, annata: null })?.annata).toBeNull();
   });
 
-  it("confidence fuori da [0,1] vale 0: chi non sa quanto e' sicuro non e' sicuro", () => {
+  it("confidence fuori da [0,1] vale 0: chi non sa quanto è sicuro non è sicuro", () => {
     expect(mapCatalogazione({ ...completo, confidence: 1.4 })?.confidence).toBe(0);
     expect(mapCatalogazione({ ...completo, confidence: -0.2 })?.confidence).toBe(0);
     expect(mapCatalogazione({ ...completo, confidence: "alta" })?.confidence).toBe(0);
@@ -154,7 +154,7 @@ describe("mapStorico", () => {
     expect(mappato.map((m) => m.ruolo)).toEqual(["utente", "sommelier"]);
   });
 
-  it("una lista assente e' uno storico vuoto, non un errore", () => {
+  it("una lista assente è uno storico vuoto, non un errore", () => {
     expect(mapStorico(null)).toEqual([]);
   });
 });
@@ -184,12 +184,12 @@ describe("dividiEventiSse", () => {
 });
 
 describe("messaggioDaStatus", () => {
-  it("preferisce sempre il messaggio generico che la function ha gia' scritto", () => {
+  it("preferisce sempre il messaggio generico che la function ha già scritto", () => {
     expect(messaggioDaStatus(503, { error: "Funzioni AI non attive." }))
       .toBe("Funzioni AI non attive.");
   });
 
-  it("copre il caso senza corpo, che e' il gateway e non noi", () => {
+  it("copre il caso senza corpo, che è il gateway e non noi", () => {
     expect(messaggioDaStatus(504, null)).toBe("Il servizio AI non ha risposto in tempo.");
     expect(messaggioDaStatus(429, null)).toBe("Limite temporaneo delle funzioni AI raggiunto.");
     expect(messaggioDaStatus(401, null)).toContain("accedi");
@@ -231,13 +231,13 @@ describe("createSupabaseAiService — abbinamento", () => {
     expect(JSON.stringify(functionsInvocate[0].body)).not.toContain("catalog");
   });
 
-  it("una risposta senza scelte valide e' un fallimento, non un abbinamento vuoto", async () => {
+  it("una risposta senza scelte valide è un fallimento, non un abbinamento vuoto", async () => {
     const { client } = fakeClient({ functions: { "ai-pairing": { data: { intro: "i", picks: [] } } } });
     const esito = await createSupabaseAiService(client).abbinamento("x");
     expect(esito.ok).toBe(false);
   });
 
-  it("propaga il messaggio della function quando il codice e' leggibile", async () => {
+  it("propaga il messaggio della function quando il codice è leggibile", async () => {
     const { client } = fakeClient({
       functions: { "ai-pairing": { error: { code: "P0001", message: "Limite raggiunto." } } },
     });
@@ -246,7 +246,7 @@ describe("createSupabaseAiService — abbinamento", () => {
     if (!esito.ok) expect(esito.error).toBe("Limite raggiunto.");
   });
 
-  it("nasconde il dettaglio quando il codice non e' fra quelli leggibili", async () => {
+  it("nasconde il dettaglio quando il codice non è fra quelli leggibili", async () => {
     const { client } = fakeClient({
       functions: { "ai-pairing": { error: { code: "42P01", message: 'relation "x" does not exist' } } },
     });
@@ -272,7 +272,7 @@ describe("createSupabaseAiService — catalogazione", () => {
     expect(functionsInvocate[0].body).toEqual({ ocr_text: null, hint: "barolo 2016" });
   });
 
-  it("una risposta non oggetto e' un fallimento, non un suggerimento vuoto", async () => {
+  it("una risposta non oggetto è un fallimento, non un suggerimento vuoto", async () => {
     const { client } = fakeClient({ functions: { "ai-catalogo": { data: null } } });
     const esito = await createSupabaseAiService(client).catalogazione({ hint: "x" });
     expect(esito.ok).toBe(false);

@@ -1,15 +1,15 @@
 // Fase 10 — adapter reale di AiService.
 //
-// Tre percorsi diversi, e la differenza non e' stilistica:
+// Tre percorsi diversi, e la differenza non è stilistica:
 //
 //   * abbinamento e catalogazione passano da `functions.invoke`, come
 //     `payments-checkout` (`src/services/phase7/payment-service.ts:8`);
 //   * lo storico si legge da `my_sommelier_messages`, una vista a colonne
 //     chiuse, e si cancella con una RPC — nessuna delle due tocca una function,
-//     perche' non c'e' nessun fornitore da chiamare;
-//   * la chat usa `fetch` diretta e non `functions.invoke`, perche' invoke
+//     perché non c'è nessun fornitore da chiamare;
+//   * la chat usa `fetch` diretta e non `functions.invoke`, perché invoke
 //     legge la risposta per intero prima di restituirla e uno stream letto per
-//     intero non e' piu' uno stream.
+//     intero non è più uno stream.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiError, dividiEventiSse, messaggioDaStatus, noClient } from "@/services/phase10/shared";
@@ -23,7 +23,7 @@ import type {
 } from "@/services/types";
 
 // ---------------------------------------------------------------------------
-// Mappatori — esportati perche' sono la parte che i test possono provare senza
+// Mappatori — esportati perché sono la parte che i test possono provare senza
 // un client
 // ---------------------------------------------------------------------------
 
@@ -33,8 +33,8 @@ type RispostaAbbinamento = {
 };
 
 /**
- * Il JSON della function conserva `wine_id`, che e' il nome nel prompt di
- * sistema del legacy. Nel contratto TypeScript diventa `annuncioId`, perche'
+ * Il JSON della function conserva `wine_id`, che è il nome nel prompt di
+ * sistema del legacy. Nel contratto TypeScript diventa `annuncioId`, perché
  * con la decisione 7.8 identifica un annuncio di `public_listings` e non un
  * vino di un file statico: chiamarlo ancora `wineId` avrebbe nascosto proprio
  * la cosa che la decisione ha cambiato.
@@ -71,7 +71,7 @@ export const mapCatalogazione = (
     tipologia: stringa("tipologia"),
     noteDegustazione: stringa("note_degustazione"),
     condizioniSuggerite: stringa("condizioni_suggerite"),
-    // Difesa doppia rispetto alla function, che gia' vincola a [0,1]: qui non
+    // Difesa doppia rispetto alla function, che già vincola a [0,1]: qui non
     // costa niente e vale anche se un giorno risponde qualcos'altro.
     confidence: confidence >= 0 && confidence <= 1 ? confidence : 0,
   };
@@ -125,12 +125,12 @@ export const createSupabaseAiService = (client: SupabaseClient | null): AiServic
 
   sommelierStorico: async (sessionId) => {
     if (!client) return noClient();
-    // La vista filtra gia' su `owner_id = auth.uid()` al suo interno: qui si
-    // aggiunge la sola meta' che il client puo' fornire senza poterla falsare,
-    // e mai `owner_id`, che non e' nemmeno fra le colonne esposte.
-    // L'ordine e' `ordinale` e non `created_at`: le due righe di uno scambio
+    // La vista filtra già su `owner_id = auth.uid()` al suo interno: qui si
+    // aggiunge la sola metà che il client può fornire senza poterla falsare,
+    // e mai `owner_id`, che non è nemmeno fra le colonne esposte.
+    // L'ordine è `ordinale` e non `created_at`: le due righe di uno scambio
     // nascono nella stessa istruzione e condividono l'istante, quindi ordinare
-    // per tempo puo' mostrare la risposta prima della domanda.
+    // per tempo può mostrare la risposta prima della domanda.
     const { data, error } = await client
       .from("my_sommelier_messages")
       .select("ruolo,contenuto,created_at,ordinale")
@@ -174,7 +174,7 @@ export const createSupabaseAiService = (client: SupabaseClient | null): AiServic
         body: JSON.stringify({ session_id: input.sessionId, message: input.messaggio }),
       });
     } catch {
-      return { ok: false, error: "Il Sommelier non e al momento raggiungibile." };
+      return { ok: false, error: "Il Sommelier non è al momento raggiungibile." };
     }
 
     if (!risposta.ok || !risposta.body) {
@@ -182,7 +182,7 @@ export const createSupabaseAiService = (client: SupabaseClient | null): AiServic
       try {
         corpo = await risposta.json();
       } catch {
-        // Nessun corpo: e' il caso del gateway, coperto da messaggioDaStatus.
+        // Nessun corpo: è il caso del gateway, coperto da messaggioDaStatus.
       }
       console.error("[Phase10] ai-sommelier fallita", { status: risposta.status });
       return { ok: false, error: messaggioDaStatus(risposta.status, corpo) };
@@ -191,9 +191,9 @@ export const createSupabaseAiService = (client: SupabaseClient | null): AiServic
     const lettore = risposta.body.pipeThrough(new TextDecoderStream()).getReader();
     let buffer = "";
     let testo = "";
-    // Decisione 7.7: il troncamento e' un **caso atteso**, non un errore raro.
-    // Resta vero finche' non arriva l'evento `done`, e un troncamento con del
-    // testo gia' ricevuto e' un successo parziale — la risposta si tiene.
+    // Decisione 7.7: il troncamento è un **caso atteso**, non un errore raro.
+    // Resta vero finché non arriva l'evento `done`, e un troncamento con del
+    // testo già ricevuto è un successo parziale — la risposta si tiene.
     let troncato = true;
     try {
       while (true) {
@@ -216,9 +216,9 @@ export const createSupabaseAiService = (client: SupabaseClient | null): AiServic
         }
       }
     } catch {
-      // La connessione e' caduta a meta': se del testo e' arrivato vale come
-      // risposta troncata, altrimenti e' un fallimento.
-      if (!testo) return { ok: false, error: "Il Sommelier si e interrotto prima di rispondere." };
+      // La connessione è caduta a metà: se del testo è arrivato vale come
+      // risposta troncata, altrimenti è un fallimento.
+      if (!testo) return { ok: false, error: "Il Sommelier si è interrotto prima di rispondere." };
     }
 
     return testo

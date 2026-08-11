@@ -1,9 +1,9 @@
-// Fase 10 — utilita condivise dell'adapter AI.
+// Fase 10 — utilità condivise dell'adapter AI.
 //
 // AiService restituisce Result<T>, come ListingService, OrderService e le altre
 // interfacce successive alla convenzione Result. Non segue ModerationService,
 // che solleva: quella e piu vecchia della convenzione ed e stata implementata
-// cosi' com'era, non presa a modello.
+// così com'era, non presa a modello.
 
 import type { Result } from "@/services/types";
 
@@ -21,7 +21,7 @@ export const aiError = <T>(operation: string, error: ServiceError): Result<T> =>
     error:
       error.code && readableCodes.has(error.code) && error.message
         ? error.message
-        : "Non e stato possibile completare l'operazione. Riprova.",
+        : "Non è stato possibile completare l'operazione. Riprova.",
   };
 };
 
@@ -34,10 +34,10 @@ export const noClient = <T>(): Result<T> => ({
  * Messaggio da mostrare quando la Edge Function risponde con uno status noto.
  *
  * La decisione 7.5 tiene la mappatura del legacy — 503 fornitore giu', 502
- * risposta inutilizzabile — e il corpo che la function restituisce porta gia'
+ * risposta inutilizzabile — e il corpo che la function restituisce porta già
  * un `error` generico e mai il messaggio del fornitore. Qui non si riscrive
- * quel messaggio: si copre solo il caso in cui non ci sia corpo, che e' quello
- * che succede quando a rispondere e' il gateway e non noi.
+ * quel messaggio: si copre solo il caso in cui non ci sia corpo, che è quello
+ * che succede quando a rispondere è il gateway e non noi.
  */
 export const messaggioDaStatus = (status: number, corpo: unknown): string => {
   const dalCorpo = corpo && typeof corpo === "object" && "error" in corpo
@@ -47,11 +47,11 @@ export const messaggioDaStatus = (status: number, corpo: unknown): string => {
   if (status === 401) return "Sessione non valida: accedi per usare le funzioni AI.";
   if (status === 403) return "Accesso non consentito.";
   if (status === 429) return "Limite temporaneo delle funzioni AI raggiunto.";
-  if (status === 503) return "Il servizio AI non e al momento disponibile.";
+  if (status === 503) return "Il servizio AI non è al momento disponibile.";
   if (status === 502) return "Il servizio AI ha restituito un formato non valido.";
-  // 504 senza corpo e' il gateway della piattaforma, non noi: la 7.5 tiene il
+  // 504 senza corpo è il gateway della piattaforma, non noi: la 7.5 tiene il
   // timeout applicativo un ordine di grandezza sotto proprio per non finire
-  // qui, ma se ci si finisce va detto che non e' distinguibile.
+  // qui, ma se ci si finisce va detto che non è distinguibile.
   return "Il servizio AI non ha risposto in tempo.";
 };
 
@@ -66,7 +66,7 @@ export type SommelierEvento =
 
 /**
  * Divide un buffer SSE nei suoi eventi completi e restituisce il resto non
- * ancora terminato. Esportata perche' e' la parte che decide se un troncamento
+ * ancora terminato. Esportata perché è la parte che decide se un troncamento
  * viene visto come tale, e va provata senza rete.
  */
 export const dividiEventiSse = (
