@@ -81,17 +81,22 @@ verifier repair storico resta 13/13 e il controllo finale dei residui fixture
 restituisce zero in tutte le categorie registrate. Il rapporto corrente è
 [`../docs/PHASE_6D1_POST_MERGE_VERIFICATION.md`](../docs/PHASE_6D1_POST_MERGE_VERIFICATION.md).
 
-Il ledger delle migrazioni remote è a **venti righe**, riletto con
-`list_migrations` il 9 agosto 2026. Le ultime cinque sono
+Il ledger delle migrazioni remote era a **venti righe** all'ultima lettura con
+`list_migrations`, il 9 agosto 2026; il merge della PR #32 vi aggiunge le
+**quattro della Fase 9** e lo porta a ventiquattro, con
+`20260810210000_phase_9_rimosso_blocca_commercio` come ultima. Le venti righe di
+quella lettura sono le seguenti — le ultime cinque sono
 `20260731135455 phase_7_order_payment_service`,
 `20260803150000 phase_7b_stripe_connect_marketplace`,
 `20260804160000 phase_7c_delivery_packaging`,
 `20260805160250 phase_7f_fix_contestazione_enum_cast` e
-`20260806224517 phase_8_messaging_notifications`. Le venti righe coincidono con i
-venti file di `supabase/migrations/` su `main`. La ventesima è stata distribuita
-dal merge della PR #27, non da un comando: `list_branches` sullo stesso progetto
+`20260806224517 phase_8_messaging_notifications`. Coincidevano con i venti file
+di `supabase/migrations/` su `main`; dopo il merge della PR #32 i file sono
+ventiquattro e il ledger deve seguirli. La ventesima è stata distribuita dal
+merge della PR #27, non da un comando: `list_branches` sullo stesso progetto
 riporta ora il solo branch `main`, quindi la Preview `jggjaqcdbcbxdxhnggio` non
-esiste più.
+esiste più — e la stessa sorte tocca a `fomwzziqrajwmqfuzqaz`, la Preview della
+PR #32, che sparisce insieme alla PR.
 
 Le prime diciotto e la ventesima hanno versione a ledger uguale al nome del file,
 perché a distribuirle è l'integrazione GitHub partendo dal repository. La
@@ -470,8 +475,35 @@ contenuto** — `1b7cabd` schema e griglia, `1ea1b2e` adapter, `91407c6` rotte �
 seguiti da `b0a3733`, che è la consegna documentale del checkpoint e non tocca
 codice né SQL. Checkpoint **9b chiuso in quattro commit** — `2b83901` migrazione,
 `d5cf026` griglia e README, `05ed66b` adapter di scrittura, `19ee240` comandi del
-pannello. **Nessuna PR aperta, nessuna migrazione applicata al progetto reale**:
-la conferma unica della decisione 7.9 non è ancora stata chiesta.
+pannello. Estensione **9c chiusa in un commit di contenuto** — `4e70d78` — più
+`0243d4e` di consegna.
+
+**La fase è chiusa.** Il branch è stato pushato l'11 agosto 2026 e aperto come
+**PR #32** verso `main`, con un titolo che copre l'intera fase e non il solo
+ultimo pezzo. I quattro controlli sono verdi: `Frontend`, `Frontend Next`,
+`Backend` e `Supabase Preview` — quest'ultimo ha creato la Preview isolata
+`fomwzziqrajwmqfuzqaz` e vi ha applicato **le quattro migrazioni della Fase 9**,
+prima volta che girano su un ambiente gestito da Supabase e non su un container
+locale. La sessione organizzativa dell'**11 agosto 2026** ha revisionato le tre
+consegne riga per riga sul diff reale e ha dato la **conferma unica della
+decisione 7.9**, che copre insieme il merge in squash e l'applicazione delle
+quattro migrazioni al progetto reale. Il «confermo» precedente copriva le tre
+migrazioni verificate allora: con la 9c il perimetro era cambiato, e la conferma
+è stata richiesta di nuovo e ottenuta, non presunta.
+
+Ad applicare le quattro migrazioni è il merge, non un comando: dalla Fase 7 in
+poi è sempre stata l'integrazione GitHub a distribuirle. La rilettura del ledger
+di produzione — attese ventiquattro righe, ultima
+`20260810210000_phase_9_rimosso_blocca_commercio` — è la verifica che segue il
+merge, non un fatto già misurato nel momento in cui questa riga viene scritta. Se
+l'integrazione non scatta, il passo è fermarsi e riportarlo, non forzare
+`apply_migration` o `db push` come aggiramento.
+
+**I due confini della 9c sono stati accettati così, senza altro lavoro**, nella
+stessa sessione: `public.proposals` fuori dal blocco `rimosso`, e lo stallo
+possibile di un ordine già pagato di un venditore poi rimosso, coperto dalle vie
+d'uscita esistenti — conferma del compratore, contestazione. Restano confini
+dichiarati e riapribili, non difetti aperti.
 
 La sessione organizzativa del 10 agosto 2026 ha chiuso le nove decisioni aperte
 della specifica più il gate del percorso di autorizzazione. **Sono vincolanti e

@@ -271,16 +271,23 @@ schema is distributed but its data state is unverified; and the Phase 7g schedul
 configured. The runner is fail-closed and never reached the network, but decision 1e — scheduler
 switched on and verified *before* `PAYMENTS_ENABLED` — is not satisfied.
 
-### Phase 9 moderation — complete on a branch, not merged, not applied
+### Phase 9 moderation — PR #32, merged and distributed
 
-Both checkpoints plus one extension are closed on `migration/phase-9-moderation-service`: 9a is
-schema, append-only audit and read-only projections; 9b is the seven distinct moderation RPCs, the
-five listing transitions, and the two-level user suspension of decision 7.6b; 9c carries the second
-level onto commerce. **No PR is open and none of the four migrations has been applied** — the
-production ledger is still at twenty rows. Decision 7.9 makes a single explicit in-session
-confirmation cover both the merge and the application. A confirmation was given in session for the
-three migrations as verified then; **9c changed the perimeter, so it has to be asked again** after
-the extension is reviewed. It must be asked, not assumed.
+Both checkpoints plus one extension shipped together on `migration/phase-9-moderation-service`: 9a
+is schema, append-only audit and read-only projections; 9b is the seven distinct moderation RPCs,
+the five listing transitions, and the two-level user suspension of decision 7.6b; 9c carries the
+second level onto commerce. PR #32 opened on 11 August 2026 with all four checks green — including
+`Supabase Preview`, which applied the four migrations to the isolated preview `fomwzziqrajwmqfuzqaz`
+before the merge. Decision 7.9 makes a single explicit in-session confirmation cover both the merge
+and the application; that confirmation was **asked again after 9c widened the perimeter, and
+obtained on 11 August 2026** — the earlier one covered only the three migrations verified then.
+The merge takes the production ledger from twenty rows to **twenty-four**, last row
+`20260810210000_phase_9_rimosso_blocca_commercio`, distributed by the GitHub integration rather
+than by a command. Two boundaries were accepted as they stand: `public.proposals` stays outside the
+`rimosso` block, and an already-paid order of a later-removed seller can stall before `consegnato`,
+covered by the existing exits (the buyer's `conferma_ricezione` from `pagato`, or `ordine_contesta`).
+Running any Phase 9 grid against the real project remains a **separate, per-grid** authorization
+that this confirmation does not grant.
 
 Ten decisions from the 10 August 2026 organizational session are binding and are not reopened
 without going back to that session; they are recorded in `CONTESTO_IA/01_STATO_ATTUALE.md` under
