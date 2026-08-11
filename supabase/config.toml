@@ -395,6 +395,17 @@ verify_jwt = true
 [functions.payouts-release]
 verify_jwt = true
 
+# Fase 10a — la porta AI senza stato. `verify_jwt` resta attivo come per le
+# altre: il JWT del chiamante attraversa il gateway e non porta nessuna autorità
+# sul database, perché il client di servizio la function se lo costruisce dal
+# proprio ambiente. L'identità viene comunque risolta di nuovo con
+# `auth.getUser`, perché il gateway prova che il token è valido, non chi sia.
+[functions.ai-pairing]
+verify_jwt = true
+
+[functions.ai-catalogo]
+verify_jwt = true
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
