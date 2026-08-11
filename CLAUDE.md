@@ -273,12 +273,14 @@ switched on and verified *before* `PAYMENTS_ENABLED` — is not satisfied.
 
 ### Phase 9 moderation — complete on a branch, not merged, not applied
 
-Both checkpoints are closed on `migration/phase-9-moderation-service`: 9a is schema, append-only
-audit and read-only projections; 9b is the seven distinct moderation RPCs, the five listing
-transitions, and the two-level user suspension of decision 7.6b. **No PR is open and none of the
-three migrations has been applied** — the production ledger is still at twenty rows. Decision 7.9
-makes a single explicit in-session confirmation cover both the merge and the application; it has
-not been asked for yet, and it must be asked, not assumed.
+Both checkpoints plus one extension are closed on `migration/phase-9-moderation-service`: 9a is
+schema, append-only audit and read-only projections; 9b is the seven distinct moderation RPCs, the
+five listing transitions, and the two-level user suspension of decision 7.6b; 9c carries the second
+level onto commerce. **No PR is open and none of the four migrations has been applied** — the
+production ledger is still at twenty rows. Decision 7.9 makes a single explicit in-session
+confirmation cover both the merge and the application. A confirmation was given in session for the
+three migrations as verified then; **9c changed the perimeter, so it has to be asked again** after
+the extension is reviewed. It must be asked, not assumed.
 
 Ten decisions from the 10 August 2026 organizational session are binding and are not reopened
 without going back to that session; they are recorded in `CONTESTO_IA/01_STATO_ATTUALE.md` under
@@ -293,9 +295,18 @@ without going back to that session; they are recorded in `CONTESTO_IA/01_STATO_A
   are not reportable until clubs have a schema (7.6a), there is no SLA (7.8a) and no appeal field
   (7.8b). Adding any of them is reopening a decision.
 - Suspension has two levels (7.6b): the first blocks social writes only — listings and messages —
-  and leaves commerce untouched; the second also removes read access. The second level is applied
-  to the **social** surface and not the contractual one, which is a declared reading of the
-  decision, not the only possible one.
+  and leaves commerce untouched; the second also removes read access. 9b applied the second level
+  to the social surface only; the organizational session **reopened that and widened it** — 9c adds
+  order creation, the seven commerce `SELECT` policies and `conferma_ricezione`. The first level is
+  unchanged: a suspended user still buys and sells.
+- **Nothing in 9c may make the payment machine react to `stato_utente`.** The scheduler,
+  `ordine_auto_rilascio_esegui`, `payout_coda`, `payout_prepara`, `payout_registra_esito`, the
+  Stripe webhook and `ordine_contestazione_risolvi` are untouched, and a grid case asserts that
+  their bodies never name the column. Adding a condition there is the 7c/7f defect class: a payment
+  frozen with no exit because one extra predicate stops existing logic from completing. For the
+  same reason the seller's manual transitions (`ordine_segna_spedito`, `ordine_segna_consegnato`, …)
+  stay open for a removed seller — they are what carries an already-paid order to `consegnato`,
+  which is where the verification window and therefore auto-release start.
 - `public_bottle_units` is gone (7.7), but `bottle_units.visibilita` and the
   `bottle_unit_visibilita` enum survive as a documented inert residue: the column is a
   `bottiglia_crea` parameter written by both frontends. It belongs on the Phase 11 cutover list.

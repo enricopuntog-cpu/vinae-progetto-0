@@ -535,18 +535,114 @@ non si riaprono senza tornare in sessione organizzativa.**
 - adapter di scrittura dietro `ModerationService` e i comandi del pannello
   `/admin`; `MIN_TESTS` da 189 a **204**.
 
-### Il confine dichiarato del secondo livello
+### Il confine del secondo livello — riaperto e chiuso
 
-La decisione 7.6b dice «rimozione completa, incluso l'accesso in visione». La
-migrazione la applica alla **superficie sociale** — catalogo pubblico,
-conversazioni, messaggi, notifiche, proprie segnalazioni — e **non** a quella
-contrattuale: un utente rimosso continua a poter leggere e scrivere ordini e
-pagamenti. La ragione è che la stessa decisione toglie la compravendita
-dall'enforcement al primo livello, e un ordine in corso che diventa illeggibile a
-metà strada non è una rimozione, è un pagamento sospeso che nessuno ha deciso.
-La lettura è dichiarata nel file di migrazione e misurata dalla sonda 62, invece
-di restare asserita. **Se la sessione organizzativa la intendeva più larga, è
-questo il punto da riaprire.**
+La decisione 7.6b dice «rimozione completa, incluso l'accesso in visione». Il 9b
+la applicava alla **superficie sociale** — catalogo pubblico, conversazioni,
+messaggi, notifiche, proprie segnalazioni — e **non** a quella contrattuale: un
+utente rimosso continuava a poter leggere e scrivere ordini e pagamenti, perché
+la stessa decisione toglie la compravendita dall'enforcement al primo livello e
+un ordine in corso che diventa illeggibile a metà strada non è una rimozione, è
+un pagamento sospeso che nessuno ha deciso. La lettura era dichiarata nel file di
+migrazione e misurata dalla sonda 62, invece di restare asserita.
+
+**La sessione organizzativa l'ha riaperta e decisa diversamente.** Rivedendo il
+9b riga per riga sul diff reale, ha stabilito che il secondo provvedimento deve
+bloccare anche ordini e pagamenti. Il primo resta invariato. È l'estensione 9c
+qui sotto: la sonda 62 della 9b resta il verbale di ciò che il 9b faceva, non la
+descrizione del comportamento attuale.
+
+## Estensione 9c — `rimosso` blocca anche il commercio
+
+`20260810210000_phase_9_rimosso_blocca_commercio.sql`, commit `4e70d78`. File
+separato e non `create or replace` dentro il 9b: nulla della fase è stato
+pushato, quindi modificarlo in place sarebbe lecito per la regola del
+congelamento, ma un timestamp successivo rende visibile che questo è uno scarto
+di decisione preso **dopo** il 9b, non parte del disegno originale.
+
+**Tre pezzi.**
+
+- **Creazione.** Trigger `before insert` su `public.orders` che rifiuta se
+  l'acquirente o il venditore è rimosso. Trigger e non controllo dentro
+  `order_checkout_reserve`: quella funzione supera le duecento righe e
+  riscriverla per aggiungerne due significa riesporsi a idempotenza, lock
+  sull'annuncio e calcolo del margine senza bisogno. Il trigger vincola la
+  tabella, quindi vale per la Edge Function `payments-checkout`, per
+  `service_role`, per `postgres` e per ogni percorso di creazione futuro.
+  `sospeso` non è toccato.
+- **Lettura.** Il predicato di rimozione sulle sette policy `SELECT` del
+  commercio — `orders`, `payments`, `order_events`, `payouts`, `disputes`,
+  `order_reviews`, `seller_payout_accounts`. I percorsi di lettura sono letture
+  dirette via PostgREST (`order-service.ts:75`, `payment-service.ts:28`,
+  `seller-payout-service.ts:37`), non viste: non esiste una proiezione da
+  restringere, la restrizione va sulla policy. Il predicato non correla con la
+  riga esterna, quindi il planner lo estrae come InitPlan e lo valuta una volta
+  per query.
+- **Azione.** `conferma_ricezione` nega al chiamante rimosso, perché
+  l'auto-rilascio copre già il caso «il compratore non agisce»: negargliela non
+  lascia denaro fermo, lo instrada sul percorso che esiste per quel caso.
+
+**Che cosa non è stato negato, e perché conta.**
+`ordine_prepara_spedizione`, `ordine_segna_spedito`, `ordine_segna_consegnato`,
+`ordine_contesta`, `ordine_recensisci`, `ordine_imballaggio_punto_scegli` restano
+aperte. Sono i gesti con cui un ordine già aperto avanza fino al rilascio:
+negarle a un venditore rimosso impedirebbe a un ordine già pagato di arrivare a
+`consegnato`, che è lo stato da cui parte la finestra di verifica e quindi
+l'auto-rilascio. Sarebbe l'orfano che la decisione vieta esplicitamente di
+creare — la stessa classe di difetto della 7c/7f.
+
+**La macchina di pagamento lato sistema non è toccata**, e non è affidato
+all'assenza di quei nomi dal file. Vale per due ragioni indipendenti: le policy
+modificate sono `to authenticated`, e lo scheduler non è `authenticated`; e
+nessuna tabella del progetto ha `force row level security`, mentre le funzioni di
+rilascio sono `SECURITY DEFINER` di proprietà di `postgres`, che possiede le
+tabelle. Entrambe sono misurate dalla griglia.
+
+### La verifica, e in che cosa differisce da quelle del 9a e 9b
+
+44 casi — 37 comportamentali, 7 strutturali — su Postgres 17.10 usa e getta con
+**tutte e ventiquattro le migrazioni reali applicate in ordine**, non su uno
+stub del dominio. È la differenza che conta: le funzioni esercitate dal gruppo
+[4] sono `ordine_auto_rilascio_esegui`, `payout_coda`, `payout_prepara`,
+`payout_registra_esito`, `payment_apply_provider_event` e
+`ordine_contestazione_risolvi` **vere**, quelle della 7b/7c/7f.
+
+    prima esecuzione:   37 PASSA /  7 FALLISCE
+    seconda:            36 PASSA /  1 FALLISCE
+    terza e definitiva: 44 PASSA /  0 FALLISCE
+
+Gli otto fallimenti erano tutti difetti della griglia, nessuno della migrazione.
+Due meritano di sopravvivere al file: `rls_auto_enable_bootstrap` accende la RLS
+su ogni tabella nuova di `public`, quindi la tabella di appoggio della fixture
+era invisibile ad `authenticated` e tre RPC rispondevano «Ordine non trovato»
+per una ragione che non c'entrava con ciò che misuravano; e
+`ordine_contestazione_risolvi` vuole l'id dell'**ordine**, non quello della
+contestazione, mentre `payment_outcome` non ha una label `paid` ma `settled`.
+Nessuno dei due si vedeva rileggendo il file.
+
+Prova richiesta esplicitamente dalla decisione, eseguita: **il venditore rimosso
+viene pagato** — `payout_prepara` restituisce `da_trasferire`, e dopo
+`payout_registra_esito` il payout è `trasferito` per 4500 cent; l'auto-rilascio
+raccoglie sia l'ordine del compratore rimosso sia quello del venditore rimosso;
+il webhook incassa un checkout aperto **prima** della rimozione
+(`checkout_pending → paid`, ordine `pagato`), che è il caso reale perché dopo la
+rimozione un checkout nuovo non nasce più.
+
+`supabase/tests/9c_bootstrap_postgres_locale.sql` è versionato accanto alla
+griglia: senza di esso l'esecuzione non è riproducibile, e una griglia che
+nessun altro può eseguire è poco meglio di una mai eseguita.
+
+### Il confine che la 9c non attraversa
+
+`public.proposals` resta leggibile e scrivibile da un utente rimosso. La
+decisione dice «ordini e pagamenti», e una proposta non è né l'uno né l'altro: è
+la trattativa che li precede. Non è un buco — una proposta di un rimosso non può
+diventare un ordine perché il guard rifiuta il checkout che ne seguirebbe;
+`proposal_invia` scrive solo su `proposals`, quindi non manda messaggi, non apre
+conversazioni e non genera notifiche; e un rimosso non vede il catalogo, quindi
+per arrivarci deve già conoscere l'id di un annuncio. Il caso 12 **misura**
+questo confine invece di asserirlo. Se «commercio» va inteso fino alla
+trattativa, è questo il punto da riaprire.
 
 ### Il difetto che l'esecuzione ha trovato, e la sua coda fuori dalla Fase 9
 
