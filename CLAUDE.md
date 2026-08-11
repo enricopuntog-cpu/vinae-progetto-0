@@ -327,13 +327,46 @@ PR #33 carried the post-merge verification onto `main` — squash `8dd56c0`, 11 
 documentation only. The production ledger was re-read on 11 August 2026 and is unchanged at
 twenty-four rows.
 
-### Phase 10 AI — specification written, nothing decided
+### Phase 10 AI — five decisions closed of thirteen, branch still not opened
 
 `docs/PHASE_10_AI_SERVICE_SPEC.md` is the organizational spec, same standard as Phase 9: every
 claim carries a `file:line` source, line numbers pinned to `8dd56c0`, anything without a source is
-marked an open decision. **Eleven decisions are open and none of them is closed by the spec.** The
-implementation branch `migration/phase-10-ai-service` has deliberately **not** been opened — it
-opens only after those decisions are closed in an organizational session, as happened for Phase 9.
+marked an open decision. The organizational session of **11 August 2026** closed five of the
+eleven and added two the spec had not foreseen, so the count is **thirteen: five closed, eight
+open**. The eight now carry a **proposal** in the spec — motivated and anchored to a project
+precedent, and **not confirmed**. The implementation branch `migration/phase-10-ai-service` has
+deliberately **not** been opened: it opens only after the remaining eight are closed too.
+
+The closed ones are recorded in full in `CONTESTO_IA/01_STATO_ATTUALE.md` under «Fase 10 —
+decisioni organizzative». What constrains code:
+
+- **7.1 — not one provider, one per task.** GPT-5 for the Sommelier chat (a preference, to be
+  confirmed against 5-6 real conversations first), Claude or Gemini for the photo features (to be
+  chosen on real label photos, not a clean-document benchmark), the cheapest tier available for the
+  moderation classifier. The legacy `AIProvider` abstraction already carries more than one provider
+  natively and must not be forced down to one. **Until those trials are run the phase has no
+  provider** — the one prerequisite that no amount of code closes.
+- **7.2 — A, a Postgres table** for the Sommelier history, so **Phase 10 writes SQL**. It does not
+  close **how the TTL is applied**, and that is not an implementation detail: `pg_cron` is excluded
+  by Phase 7d decision 1a, and the three viable routes produce different schemas.
+- **7.3, 7.12, 7.13 — four new features admitted by explicit exception**: photo autofill (7.3a),
+  a documentary-completeness badge (7.3b), moderation triage (7.12), real background compositing
+  (7.13). These are the first new features authorized since the migration began, and they take the
+  perimeter from three features to seven. «No new features during migration» **has not lapsed** —
+  it still governs everything a session has not asked for by name. Two riders: the 7.3b badge must
+  be labelled documentary completeness and **never** certified authenticity, and 7.12 gives the AI
+  **no autonomous action and no «AI actor» identity in `audit_log`** — it classifies and ranks, a
+  human presses the button.
+
+**Edge Functions are deployed by the merge, all of them, every time.** Verified 11 August 2026 and
+previously unrecorded: `list_edge_functions` gives the three functions a `created_at` 35-37 seconds
+after the merge of the PR that introduced them, and an `updated_at` identical across all three,
+49 seconds after the merge of **PR #33** — a three-file documentation PR touching no function code.
+No workflow in `.github/workflows/` deploys functions and nobody has ever run `supabase functions
+deploy`. Consequences: the deployment gate is the same one as for migrations, a merge redeploys
+functions the PR never touched, and therefore **a function's environment is configured before the
+merge, never after**, with a flag that keeps it off when the environment is missing. This corrects
+the spec's own first draft, which claimed a separate `deploy` step no decision covered.
 
 The inventory contradicts the two-line backlog entry on three points, and those corrections are
 what future work must start from rather than the backlog:
@@ -345,13 +378,15 @@ what future work must start from rather than the backlog:
 - **Bottle identification from a photograph does not exist in the legacy either.** The backend
   accepts an `ocr_text` field (`backend/ai_routes.py:228`) but no caller in `frontend/` ever sends
   it — the single call site sends only `hint` (`frontend/src/hooks/useSellWizard.ts:66`) — and
-  there is no image-capture path anywhere in `frontend/src`. Building it would be a **new feature**,
-  which the migration forbids. Whether it enters the perimeter anyway is open decision 7.3.
-- **The real perimeter is five routes over three features**, not one: Sommelier chat with persistent
-  history, food pairing, and cataloguing suggestion (`backend/ai_routes.py:16`). Only the chat has
-  data to move, so it alone decides whether the phase contains SQL — open decision 7.2. If the
-  answer is "no persistence" or "not this phase", Phase 10 would be the first since Phase 5 with no
-  migration at all, and the first entirely reversible one.
+  there is no image-capture path anywhere in `frontend/src`. Building it is a **new feature**, and
+  decision 7.3 admitted it anyway as an explicit exception — the analysis stands, the conclusion
+  was overridden by a session that wanted it by name.
+- **The real perimeter of what is *migrated* is five routes over three features**, not one:
+  Sommelier chat with persistent history, food pairing, and cataloguing suggestion
+  (`backend/ai_routes.py:16`). Only the chat has data to move. With 7.2 answered A and four new
+  features admitted, the phase's total perimeter is seven features and **at least two migrations**
+  — the history and the 7.3b badge, which is an attribute of a listing and therefore a column that
+  the exposure rules keep out of the client's `GRANT`.
 
 Two things already exist and must not be rebuilt. The `AIProvider` abstraction the security
 invariants call for is **already implemented** in `backend/ai_provider.py:14-16`, with a

@@ -715,7 +715,7 @@ segreta deve raggiungere il browser.
 La specifica è [`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md),
 scritta l'11 agosto 2026 su un branch di sola documentazione: il branch di fase
 `migration/phase-10-ai-service` **non è stato aperto** e si apre solo dopo che
-le **undici decisioni aperte** sono chiuse in sessione organizzativa.
+anche le decisioni ancora aperte sono chiuse in sessione organizzativa.
 
 Tre correzioni di perimetro che l'inventario ha imposto al backlog, e che vanno
 lette prima di riprendere la fase: `ai-identify-bottle` non esiste né nel
@@ -723,8 +723,27 @@ repository né sul progetto reale; l'identificazione bottiglia da fotografia non
 esiste nemmeno nel legacy, quindi portarla sarebbe una funzionalità nuova e non
 una migrazione; il perimetro reale è cinque rotte su tre funzionalità — chat
 Sommelier con storico, abbinamento cibo-vino, suggerimento di catalogazione — di
-cui solo la prima ha dati da spostare. È quest'ultima a decidere se la fase
-contiene SQL.
+cui solo la prima ha dati da spostare.
+
+**La sessione organizzativa dell'11 agosto 2026 ha chiuso cinque decisioni su
+tredici** (le dieci elencate nella spec più due nuove), registrate in
+[`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md), sezione «Fase 10 — decisioni
+organizzative». Le due che cambiano la forma della fase:
+
+- **7.2 = A**, tabella Postgres per lo storico Sommelier: **la fase scrive SQL**,
+  e non è la fase reversibile senza migrazioni che la spec aveva contemplato come
+  possibile;
+- **7.3, 7.12 e 7.13** ammettono **quattro funzionalità nuove per eccezione
+  esplicita** — autofill da foto, spunta di completezza, triage di moderazione,
+  ritaglio e sfondo reale. Sono le prime dall'inizio della migrazione, e portano
+  il perimetro da tre funzionalità a sette. La regola «no new features during
+  migration» non è decaduta: vale per tutto ciò che una sessione non ha voluto
+  per nome.
+
+Le otto decisioni ancora aperte hanno nella spec una proposta motivata e non
+confermata. Due punti che nessuna decisione chiude ma che vanno risolti prima di
+scrivere: **come si applica il TTL** dello storico, dato che `pg_cron` è escluso,
+e **dove finisce l'esito del triage** di moderazione.
 
 ### Fase 11 — cutover
 
