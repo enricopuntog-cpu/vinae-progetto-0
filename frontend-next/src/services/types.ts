@@ -980,17 +980,91 @@ export interface ModerationService {
   auditLog(): Promise<AuditEntry[]>;
 }
 
-// ---- AI (demo-only) --------------------------------------------------------
+// ---- AI — Fase 10 ----------------------------------------------------------
+//
+// Questo blocco sostituisce un'interfaccia `AiService` dimostrativa che stava
+// qui da prima della Fase 10, con tre metodi — `identificaBottiglia`,
+// `miglioraSfondo`, `suggerisciAbbinamento` — e nessuna implementazione, né
+// mock né reale. Non descriveva il perimetro migrato: due dei tre metodi erano
+// funzionalità che nel legacy non esistono (identificazione da foto, sfondo
+// reale) e mancavano invece le due che esistono, la chat Sommelier e il
+// suggerimento di catalogazione. Era una dichiarazione di intenti, non un
+// contratto, e va corretta la nota che diceva il contrario: `AiService`
+// esisteva, semplicemente descriveva un'altra cosa.
+//
+// Ciò che segue è il perimetro del checkpoint 10a + 10b: le tre funzionalità
+// che il legacy ha davvero. `identificaBottiglia` e `miglioraSfondo` tornano
+// con la 7.3a e la 7.13, che hanno una sessione di spec propria.
 export type AiJobStatus =
   "in_attesa" | "in_elaborazione" | "completata" | "richiede_conferma" | "fallita";
 
+/** Un vino proposto dall'abbinamento. */
+export type AbbinamentoScelta = {
+  /**
+   * Identificativo di un annuncio di `public_listings`, non di un vino di
+   * catalogo: con la decisione 7.8 i candidati li risolve il server, quindi un
+   * identificativo proposto è dimostrabilmente un annuncio reale e pubblicato.
+   * Nel JSON che il modello produce il campo si chiama ancora `wine_id`, perché
+   * il prompt di sistema è quello del legacy e non è stato riscritto.
+   */
+  annuncioId: string;
+  motivazione: string;
+};
+
+export type Abbinamento = {
+  intro: string;
+  scelte: AbbinamentoScelta[];
+};
+
+/** I nove campi di `ListingResponse` (`backend/ai_routes.py:232-241`). */
+export type CatalogazioneSuggerimento = {
+  nome: string;
+  produttore: string;
+  annata: number | null;
+  denominazione: string;
+  regione: string;
+  tipologia: string;
+  noteDegustazione: string;
+  condizioniSuggerite: string;
+  /** Sempre in [0,1]: fuori intervallo o assente vale 0. */
+  confidence: number;
+};
+
+export type SommelierRuolo = "utente" | "sommelier";
+
+export type SommelierMessaggio = {
+  ruolo: SommelierRuolo;
+  contenuto: string;
+  createdAt: string;
+};
+
+export type SommelierEsito = {
+  testo: string;
+  /**
+   * Vero quando lo stream è finito senza l'evento di chiusura. La decisione 7.7
+   * lo tratta come **caso atteso** e non come errore raro: una Edge Function che
+   * inoltra uno stream può essere troncata quando il worker viene ritirato, e
+   * una risposta parziale è una risposta da tenere, non un guasto da mostrare.
+   */
+  troncato: boolean;
+};
+
 export interface AiService {
-  identificaBottiglia(
-    imageIds: string[],
-  ): Promise<{ status: AiJobStatus; suggerimenti?: unknown[] }>;
-  miglioraSfondo(
-    imageId: string,
-    stile: string,
-  ): Promise<{ status: AiJobStatus; anteprima?: string }>;
-  suggerisciAbbinamento(query: string): Promise<{ status: AiJobStatus; risultati?: unknown[] }>;
+  /** Abbinamento cibo-vino. Il catalogo lo risolve il server (7.8). */
+  abbinamento(query: string): Promise<Result<Abbinamento>>;
+  /** Suggerimento di catalogazione da testo. Almeno uno dei due campi. */
+  catalogazione(
+    input: { ocrText?: string; hint?: string },
+  ): Promise<Result<CatalogazioneSuggerimento>>;
+  /** Storico di una conversazione, già filtrato su (proprietario, sessione). */
+  sommelierStorico(sessionId: string): Promise<Result<SommelierMessaggio[]>>;
+  sommelierCancella(sessionId: string): Promise<Result<void>>;
+  /**
+   * Una battuta di conversazione. `onDelta` riceve i frammenti mano a mano;
+   * l'esito finale dice se lo stream è arrivato in fondo.
+   */
+  sommelierChat(
+    input: { sessionId: string; messaggio: string },
+    onDelta: (delta: string) => void,
+  ): Promise<Result<SommelierEsito>>;
 }

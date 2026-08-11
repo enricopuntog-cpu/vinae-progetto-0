@@ -582,7 +582,10 @@ autorizzazione serve davvero).
 Riscritta dopo le decisioni dell'11 agosto 2026, che hanno portato il perimetro
 da tre funzionalità a sette, e **confermata dalla sessione che ha chiuso le otto
 restanti**: il primo checkpoint è **10a + 10b insieme**, e le quattro
-funzionalità nuove restano fuori. La ragione registrata è che sono meno
+funzionalità nuove restano fuori. La sessione dell'11 agosto 2026 vi ha poi
+aggiunto la **10c** — stesso branch, stessa PR, sul modello della Fase 9, dove
+9a/9b/9c sono stati tre checkpoint dentro un solo PR mersato una volta a fine
+fase. La ragione registrata è che sono meno
 specificate — Storage, MIME, integrazione PhotoRoom, forma esatta dell'esito del
 triage sono decisioni di dettaglio non ancora scritte — e **ciascuna merita la
 propria sessione di spec prima del codice**, sul modello dei 9a/9b/9c separati
@@ -592,7 +595,7 @@ della Fase 9.
 | --- | --- | --- | --- |
 | **10a** | La porta: una Edge Function proxy sul pattern di 4.1 — origine, metodo, flag, bearer, `auth.getUser`, bucket via `public.rate_limit_consume`, provider dietro adapter, risposta validata. Copre abbinamento e suggerimento da testo. Porta l'interfaccia `AiService` in `frontend-next/src/services/types.ts` e l'adapter | No | 7.4, 7.5, 7.6, 7.8, 7.9, 7.11 |
 | **10b** | Lo storico e la chat: migrazione, RLS, vista a colonne chiuse, `SECURITY DEFINER` di append con il tetto messaggi, scadenza applicata in lettura (5.1), rotta chat SSE | **Sì** | 10a, più la 7.7 |
-| **10c** | Il ripristino UI: pannello Assistente nel wizard di vendita, pannello Sommelier nel Layout | No | 10a + 10b |
+| **10c** | Il ripristino UI: pannello Assistente nel wizard di vendita, pannello Sommelier nel Layout, pannello abbinamento in `/esplora` — senza quest'ultimo `ai-pairing` resta senza chiamante e la 7.8 senza superficie | No | 10a + 10b |
 | **10d** | La visione: autofill da foto (7.3a) e spunta di completezza (7.3b). La spunta è un attributo dell'annuncio, quindi **una seconda migrazione** | **Sì** | sessione di spec propria, più la scelta del provider di visione (7.1) |
 | **10e** | Lo sfondo (7.13): relay verso PhotoRoom, bucket Storage per gli sfondi curati, e la sostituzione del `setTimeout` di `SfondoIAPanel` | Probabile — policy di Storage | sessione di spec propria |
 | **10f** | Il triage di moderazione (7.12): classificatore, e la **colonna persistita su `reports`** decisa insieme alla 7.12 — quindi una migrazione | **Sì** | sessione di spec propria, e il pannello della Fase 9 esercitato almeno una volta su una sessione reale |
@@ -821,6 +824,22 @@ a `3600` ovunque:
 | `ai:catalogo` | 10 / 3600 s | |
 | `ai:visione` | 10 / 3600 s | Non entra nella 10a: arriva con le funzionalità foto |
 | `ai:sfondo` | 10 / 3600 s | Non entra nella 10a: arriva con la 7.13 |
+
+**Quello che vale davvero, dopo la riconferma numerica dell'11 agosto 2026.** La
+riga «numero da riconfermare» qui sopra è stata riconfermata, e la risposta ha
+cambiato due valori su tre. I limiti in vigore in
+`supabase/functions/_shared/ai-gate.ts` sono:
+
+| Scope | Limite / finestra | Perché quel numero |
+| --- | --- | --- |
+| `ai:chat` | **40** / 3600 s | Circa tre conversazioni realistiche intere (5-15 battute l'una) invece di esaurirsi dentro la prima |
+| `ai:pairing` | **15** / 3600 s | Durante una sessione di navigazione si prova più di una combinazione |
+| `ai:catalogo` | **10** / 3600 s | Invariato: è un'azione per annuncio, non per sessione |
+
+Restano vincolanti e non sono parametri di quel file: finestra oraria per tutti e
+tre, nessuna eccezione per `admin`, nessun tetto secondario oltre al rate limit
+per la v0. `ai:visione` e `ai:sfondo` non hanno ancora un numero perché non hanno
+ancora una funzionalità: si fissano nelle sessioni di spec della 10d e della 10e.
 
 **Proposta respinta — un secondo tetto, sulla stessa meccanica.** La domanda «esiste un
 tetto oltre al rate limit» ha una risposta che non costa niente:

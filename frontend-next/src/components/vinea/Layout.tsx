@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import {
   Home,
@@ -16,9 +17,23 @@ import { Badge } from "@/components/ui/badge";
 import { HeaderInboxActions } from "@/components/vinea/notifications/HeaderInboxActions";
 import { useVinea, type DemoRuolo } from "@/lib/vinea-store";
 
-// SommelierChat (assistente AI) non è ancora portato: dipende dal layer
-// servizi (@/services/api-client) che richiede un backend reale, fuori
-// scope per questa fase. Vedi rapporto di Fase 3.
+// Fase 10c. Il pannello Sommelier era rimasto fuori dalla Fase 3 perché
+// dipendeva da `@/services/api-client`, cioè dal backend FastAPI; ora la sua
+// controparte è `AiService` sopra le Edge Function, e rientra.
+//
+// Si carica con `next/dynamic` come la vista 3D della cantina
+// (`frontend-next/src/app/cantina/page-client.tsx:5`), che è l'equivalente App
+// Router del `lazy` + `Suspense` di `frontend/`
+// (`frontend/src/components/vinea/Layout.tsx:19`, `:254-256`): il pannello è in
+// fondo a ogni pagina ma lo apre una minoranza dei visitatori, e non ha motivo
+// di stare nel bundle iniziale.
+//
+// `ssr: false` è lecito qui perché questo file è già un componente client, e
+// dice la verità sul componente: la conversazione ha un identificativo che vive
+// in `localStorage`, che sul server non esiste.
+const SommelierChat = dynamic(() => import("@/components/vinea/SommelierChat"), {
+  ssr: false,
+});
 
 const nav = [
   { to: "/", label: "Home", icon: Home, exact: true },
@@ -195,6 +210,8 @@ export function VineaLayout({ children }: { children: ReactNode }) {
       </nav>
 
       <Toaster position="top-center" richColors />
+
+      <SommelierChat />
     </div>
   );
 }

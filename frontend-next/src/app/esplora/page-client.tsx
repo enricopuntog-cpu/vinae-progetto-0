@@ -1,9 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Search, SlidersHorizontal, LayoutGrid, List, PackageOpen, UtensilsCrossed } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  Search,
+  SlidersHorizontal,
+  LayoutGrid,
+  List,
+  Loader2,
+  PackageOpen,
+  RefreshCw,
+  Sparkles,
+  UtensilsCrossed,
+} from "lucide-react";
 import type { Wine } from "@/data/wines";
 import { useCercaMeta } from "@/lib/wine-meta-context";
+import { getSupabaseClient } from "@/lib/supabase/client";
+import { createSupabaseAiService } from "@/services/phase10/supabase-ai-service";
+import { risolviScelte, type SceltaRisolta } from "@/lib/phase10/abbinamento";
 import { WineCard } from "@/components/vinea/WineCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -58,6 +72,52 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
   const [sort, setSort] = useState("recenti");
   const [view, setView] = useState<"grid" | "list">("grid");
   const cercaMeta = useCercaMeta();
+
+  // Abbinamento AI (10c). Il filtro per parola chiave qui sopra resta: è quello
+  // che risponde mentre si digita, senza rete e senza costo. Il pannello è un
+  // secondo strumento sulla stessa domanda, e si aziona solo se richiesto —
+  // com'è in `frontend/`, dove nessuna battuta parte da sola.
+  const aiService = useMemo(() => createSupabaseAiService(getSupabaseClient()), []);
+  const [aiScelte, setAiScelte] = useState<SceltaRisolta[]>([]);
+  const [aiIntro, setAiIntro] = useState("");
+  const [aiInCorso, setAiInCorso] = useState(false);
+  const [aiErrore, setAiErrore] = useState<string | null>(null);
+  const [aiPerQuery, setAiPerQuery] = useState("");
+
+  const chiediAbbinamento = useCallback(async () => {
+    const query = q.trim();
+    if (!query || aiInCorso) return;
+    setAiInCorso(true);
+    setAiErrore(null);
+    setAiPerQuery(query);
+    try {
+      // Nessun catalogo nel corpo: con la decisione 7.8 lo risolve la function
+      // da `public_listings`. È la differenza dichiarata rispetto a
+      // `frontend/src/routes/esplora.tsx:101-110`, che manda diciotto voci di
+      // un file statico e fa ragionare il modello su dati finti.
+      const esito = await aiService.abbinamento(query);
+      if (esito.ok) {
+        setAiIntro(esito.data.intro);
+        setAiScelte(risolviScelte(esito.data.scelte, annunci));
+      } else {
+        setAiErrore(esito.error);
+        setAiScelte([]);
+      }
+    } finally {
+      setAiInCorso(false);
+    }
+  }, [aiInCorso, aiService, annunci, q]);
+
+  // I risultati valgono per la domanda che li ha prodotti: cambiata quella, o
+  // uscita la modalità abbinamento, non si mostrano più.
+  //
+  // `frontend/` lo ottiene con un effetto che azzera tre stati
+  // (`frontend/src/routes/esplora.tsx:122-129`). Qui la stessa cosa è una
+  // derivazione, e non per gusto: la regola `set-state-in-effect` della
+  // configurazione ESLint di Next 16 rifiuta un `setState` sincrono dentro un
+  // effetto, e ha ragione — quell'effetto fa un secondo render a ogni battuta
+  // digitata per cancellare qualcosa che si può semplicemente non disegnare.
+  const risultatiValidi = mode === "abbinamento" && q.trim() === aiPerQuery;
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -273,6 +333,98 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
               </button>
             );
           })}
+        </div>
+      )}
+
+      {mode === "abbinamento" && q.trim() && (
+        <div
+          className="rounded-2xl border border-bordeaux/20 bg-gradient-to-br from-bordeaux/5 via-oro/10 to-transparent p-4"
+          data-testid="ai-pairing-panel"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-bordeaux text-crema">
+                <Sparkles className="h-4 w-4 text-oro" />
+              </span>
+              <div>
+                <p className="font-serif text-lg leading-tight">
+                  Sommelier <span className="gold-shimmer">AI</span>
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Chiedi 3 abbinamenti dal catalogo in un attimo
+                </p>
+              </div>
+            </div>
+            <Button
+              data-testid="ai-pairing-ask-btn"
+              size="sm"
+              onClick={() => void chiediAbbinamento()}
+              disabled={aiInCorso || !q.trim()}
+              className="rounded-full bg-bordeaux hover:bg-bordeaux/90"
+            >
+              {aiInCorso ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisi…
+                </>
+              ) : risultatiValidi && aiScelte.length ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5" /> Rigenera
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3.5 w-3.5" /> Chiedi al sommelier
+                </>
+              )}
+            </Button>
+          </div>
+
+          {risultatiValidi && aiErrore && (
+            <p
+              className="mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive"
+              data-testid="ai-pairing-error"
+            >
+              {aiErrore}
+            </p>
+          )}
+
+          {risultatiValidi && aiScelte.length > 0 && (
+            <div className="mt-4 space-y-3" data-testid="ai-pairing-results">
+              {aiIntro && <p className="text-sm italic text-antracite/85">{aiIntro}</p>}
+              <div className="grid gap-3 md:grid-cols-3">
+                {aiScelte.map((scelta, indice) => (
+                  <div
+                    key={scelta.annuncio.id}
+                    className="rounded-xl border border-border bg-card p-3 card-lift"
+                    data-testid={`ai-pairing-pick-${indice}`}
+                  >
+                    <div className="flex gap-3">
+                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-oro text-[10px] font-bold text-antracite">
+                        {indice + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-serif text-sm font-semibold leading-tight">
+                          {scelta.annuncio.produttore}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {scelta.annuncio.nome} {scelta.annuncio.annata}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs leading-relaxed text-antracite/85">
+                      {scelta.motivazione}
+                    </p>
+                    <Link
+                      href={scelta.annuncio.detailHref ?? `/annuncio/${scelta.annuncio.id}`}
+                      data-testid={`ai-pairing-pick-link-${indice}`}
+                      className="mt-2 inline-flex text-xs font-semibold text-bordeaux hover:underline"
+                    >
+                      Vedi annuncio →
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

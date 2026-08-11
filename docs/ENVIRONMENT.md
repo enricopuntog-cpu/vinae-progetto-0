@@ -54,10 +54,45 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `PAYOUTS_BATCH_LIMIT` | Edge Function | Ordini rilasciati per esecuzione, default `50`, massimo `500`. |
 | `PACKAGING_ENABLED` | solo server | Gate della selezione imballaggio (Fase 7c). Indipendente da `PAYMENTS_ENABLED`. |
 | `NEXT_PUBLIC_PACKAGING_ENABLED` | client | Visibilità UI dell'imballaggio soltanto; non autorizza operazioni. |
+| `AI_ENABLED` | Edge Function | Kill switch delle funzioni AI (Fase 10). **Fallisce chiuso**: assente o diverso da `true` significa spento. |
+| `AI_ALLOWED_ORIGINS` | Edge Function | Allowlist CORS delle sole function AI, origini complete separate da virgole. **Non sostituisce `PAYMENT_ALLOWED_ORIGINS`**: le due convivono. |
+| `OPENAI_API_KEY` | Edge Function | Chiave del fornitore di prova. Assente, il provider è quello disabilitato e ogni chiamata dà 503. |
+| `AI_MODEL_DEFAULT` | Edge Function | Modello usato quando quello del compito non è impostato. Default `gpt-4.1-mini`. |
+| `AI_MODEL_CHAT` | Edge Function | Modello della chat Sommelier. La decisione 7.1 vuole un modello **per compito**. |
+| `AI_MODEL_PAIRING` | Edge Function | Modello dell'abbinamento cibo-vino. |
+| `AI_MODEL_CATALOGO` | Edge Function | Modello del suggerimento di catalogazione. |
+| `AI_MAX_OUTPUT_TOKENS` | Edge Function | Tetto di token in uscita per chiamata, default `800`. |
+| `AI_TIMEOUT_SECONDS` | Edge Function | Timeout applicativo verso il fornitore, default `30`, tetto `120`. |
 
 I segreti della Edge Function vanno impostati nell'ambiente Supabase; quelli del
 Route Handler nell'ambiente server Next.js. Non copiare la `service_role` in un
 file `.env` versionato.
+
+### Fase 10 — perché `AI_ENABLED` è diverso dagli altri flag
+
+Il merge distribuisce **tutte** le Edge Function insieme, entro un minuto, con
+l'ambiente che trovano in quel momento: verificato l'11 agosto 2026 e registrato
+nella decisione 7.10 di `PHASE_10_AI_SERVICE_SPEC.md`. Ne segue che l'ambiente
+di una function si configura **prima** del merge che la introduce, mai dopo — e
+che il flag non è una comodità operativa ma l'unica cosa che rende sicuro
+mergiare la fase prima che le chiavi esistano.
+
+`AI_ENABLED` è quindi **fail-closed per costruzione**: la function controlla
+`!== "true"` e risponde 503. Non c'è nessun default permissivo, e nessun ramo in
+cui l'assenza della variabile significhi «accesa». La decisione 7.11 assegna a
+Enrico la configurazione di chiavi e budget entro il **18 agosto 2026**; il flag
+esiste perché la fase resti innocua anche se quella data non viene rispettata.
+
+Il timeout applicativo va tenuto **un ordine di grandezza sotto** il limite di
+piattaforma: Supabase chiude una richiesta ferma da 150 s con un 504 di gateway,
+che non ha corpo, non porta il nostro messaggio generico e non è distinguibile da
+un guasto nostro. Alzare `AI_TIMEOUT_SECONDS` verso quel limite significa
+scambiare un fallimento descrivibile con uno che non lo è.
+
+Il tetto di spesa **non** sta in queste variabili: sta sul conto del fornitore
+(decisione 7.11). Un tetto applicato da noi ferma i nostri utenti; un limite di
+spesa configurato sul provider ferma anche una chiave che è uscita, che è il caso
+in cui il denaro si perde davvero.
 
 `PACKAGING_ENABLED` è **scollegata** da `PAYMENTS_ENABLED`, ed è un requisito
 della Fase 7c e non una svista: l'imballaggio deve poter restare visibile con i

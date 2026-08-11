@@ -59,7 +59,7 @@ bun run test         # Bun's native test runner — run in CI behind a minimum-c
 bun run build
 ```
 CI runs these tests and **enforces a floor**: the `Test` step of the `frontend-next` job sets
-`MIN_TESTS` (204 today) and fails when fewer cases pass than that. The floor is there because
+`MIN_TESTS` (255 today) and fails when fewer cases pass than that. The floor is there because
 `bun test` exits 0 when the test files exist but contain no cases — without it a suite that
 silently empties itself would still be green. Raise it deliberately when tests are added;
 lowering it is a decision, not housekeeping. These tests are type-checked as well: `tsconfig.json`
@@ -249,7 +249,8 @@ private Realtime Broadcast invalidations, TypeScript adapters, mock parity and t
 `/notifiche` routes. Browser channels call `realtime.setAuth()` before subscribing, use only
 `config.private = true`, treat payloads as closed invalidations and reload canonical rows through
 the RPC adapters. Logout or user change removes every channel and invalidates stale callbacks.
-`MIN_TESTS` in the `frontend-next` CI job was **166** at that merge; Phase 9 raises it to **204**.
+`MIN_TESTS` in the `frontend-next` CI job was **166** at that merge; Phase 9 raised it to **204**
+and the Phase 10 10a+10b checkpoint to **234**, then 10c to **255**.
 
 The merge distributed the migration: `20260806224517 phase_8_messaging_notifications` is the
 **twentieth row of the production ledger**, re-read with `list_migrations` on 9 August 2026, and it
@@ -327,7 +328,7 @@ PR #33 carried the post-merge verification onto `main` — squash `8dd56c0`, 11 
 documentation only. The production ledger was re-read on 11 August 2026 and is unchanged at
 twenty-four rows.
 
-### Phase 10 AI — all thirteen decisions closed, first checkpoint is 10a + 10b
+### Phase 10 AI — all thirteen decisions closed, first checkpoint is 10a + 10b + 10c
 
 `docs/PHASE_10_AI_SERVICE_SPEC.md` is the organizational spec, same standard as Phase 9: every
 claim carries a `file:line` source, line numbers pinned to `8dd56c0`. The organizational session of
@@ -336,9 +337,11 @@ taking the count from eleven to thirteen), then, after the report on the eight p
 remaining eight plus the two consequent points no decision covered**. Nothing is open. The
 implementation branch `migration/phase-10-ai-service` opened after that, not before.
 
-**The first checkpoint is 10a + 10b, and deliberately not all seven features.** 10a is the
-stateless AI door — food-wine pairing and cataloguing suggestion from text — and 10b is the
-Sommelier history plus the SSE chat. The photo features (7.3a/7.3b), moderation triage (7.12) and
+**The first checkpoint is 10a + 10b + 10c, and deliberately not all seven features.** 10a is the
+stateless AI door — food-wine pairing and cataloguing suggestion from text — 10b is the
+Sommelier history plus the SSE chat, and 10c puts the three UI surfaces back on top of them: the
+Sommelier panel in the Layout, the Assistant panel in the sell wizard's Identification step, and
+the pairing panel in `/esplora`. The photo features (7.3a/7.3b), moderation triage (7.12) and
 real background compositing (7.13) stay out: they are less specified (Storage, MIME, PhotoRoom
 integration) and **each earns its own spec session before code**, on the model of Phase 9's
 separate 9a/9b/9c.
@@ -446,11 +449,62 @@ production since Phase 7: `public.rate_limit_consume` is granted to `service_rol
 else (`supabase/migrations/20260731135455_phase_7_order_payment_service.sql:157-160`), so an Edge
 Function holding a service client can consume a bucket via `rpc()` **without any new migration**.
 
-Nothing exists on the target side: no `AiService` interface (`frontend-next/src/services/types.ts`
-is 996 lines and ends at `ModerationService`, `:970`), no adapter, no `phase10/` directory, no AI
-environment variable, and exactly one `/api/ai` occurrence in all of `frontend-next/src` — a
-comment deferring to Phase 10 (`frontend-next/src/hooks/useSellWizard.ts:72`). Phase 9 started with
-its interface already declared; this one starts from zero on three levels.
+One correction to that inventory, found when the code was written: **an `AiService` interface did
+already exist**, at `frontend-next/src/services/types.ts:987` — after `ModerationService`, not
+instead of it — with `identificaBottiglia`, `miglioraSfondo` and `suggerisciAbbinamento`, no
+implementation of any kind, and the same three methods duplicated in `frontend/src/services/types.ts:153`.
+It did not describe the migrated perimeter: two of its three methods are features the legacy does
+not have, and the two that exist — Sommelier chat and cataloguing suggestion — were missing. The
+10a checkpoint replaces it with the real contract. What remains true: no adapter and no `phase10/`
+directory before that branch, no AI environment variable, and exactly one `/api/ai` occurrence in
+`frontend-next/src`, a comment deferring to Phase 10 (`frontend-next/src/hooks/useSellWizard.ts:72`).
+
+### Phase 10 checkpoint 10a + 10b + 10c — what the code now fixes in place
+
+- **`supabase/functions/_shared/cors.ts` has an empty diff and must keep it.** The AI functions read
+  `AI_ALLOWED_ORIGINS` through `_shared/ai-cors.ts`, a separate module that replicates the pattern
+  rather than importing it. Editing the shared file would put the payments path back into
+  production on every later merge.
+- **The rate-limit numbers live in one place**, `supabase/functions/_shared/ai-gate.ts`, and were
+  fixed in session on 11 August 2026: `ai:chat` **40/hour**, `ai:pairing` **15/hour**,
+  `ai:catalogo` **10/hour**. The first draft put all three at 10, copying the `report:submit` model
+  the decision cited; a real Sommelier conversation is five to fifteen turns, so `ai:chat` at 10
+  emptied inside the first one. Still binding and not parameters of that file: hourly window for
+  all three, no `admin` exemption, no secondary cap beyond the rate limit for v0.
+- **`sommelier_messaggi.ordinale`, not `created_at`, orders a conversation.** Both rows of one
+  exchange are inserted by the same statement and share `now()`; ordering by time left it
+  indeterminate whether the question precedes the answer, and made the message-cap delete pick an
+  arbitrary subset — an exchange could survive with the answer and lose the question. Running the
+  grid found this; reading it had not. The cap, the context read, the view and the adapter all use
+  `ordinale`.
+- **The read view filters on `(owner_id, session_id)` and never on `session_id` alone.** The client
+  picks the `session_id` with `Math.random()`; `owner_id` comes from `auth.uid()` inside the view.
+- **Expired history rows are not deleted.** The view filters on `expires_at` and v0 has no physical
+  cleanup — stated in the table comment, in the migration and in grid case 09 rather than left
+  implicit.
+
+10c restores the three UI surfaces on top of `AiService`, and fixes four more things in place:
+
+- **The Sommelier panel stays mounted for anonymous visitors** (7.9) — the refusal comes from the
+  service, not from the UI, which is parity with `frontend/`. But **the history is not read at all
+  without a session**: `my_sommelier_messages` filters on `auth.uid()` inside the view, so for an
+  anonymous client the answer is zero rows with certainty and the request is guaranteed useless.
+- **A "already requested" marker for an async read belongs in a `ref`, never in state.** In state the
+  `setState` causes a render, the render re-runs the effect because the marker is among its
+  dependencies, and the cleanup aborts the request that just started — the panel would always open
+  empty on a conversation that exists in the database.
+- **The pairing panel resolves the AI's identifiers through `Wine.listingId`, not `Wine.id`.** After
+  7.8 the function proposes `public_listings.id`, the primary key, while the frontend's `Wine.id` is
+  the slug (`frontend-next/src/services/listing-service.ts:154-155`). `listingId ?? id` is the idiom
+  already used for this same distinction.
+- **Clearing derived results belongs in a derivation, not in an effect.** Next 16's
+  `set-state-in-effect` ESLint rule rejects a synchronous `setState` inside an effect and is right:
+  `frontend/`'s version re-renders on every keystroke to erase something that can simply not be
+  drawn.
+
+One divergence from `frontend/` declared in 10c: a `tipologia` outside the five allowed values does
+not reach the wizard's fields. In `frontend/` publishing is a demo toast, so an invented type at
+worst blanks a dropdown; here the wizard really writes and that value would reach `bottiglia_crea`.
 
 Two constraints that were never open decisions and that 7.9 does not relax. Reading `stato_utente`
 inside an AI function must not make the **payment machine** react to it — the same rule fixed for

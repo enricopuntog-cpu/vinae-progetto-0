@@ -752,10 +752,13 @@ giornaliero, la 7.6 ha respinto il rename dell'allowlist CORS perché toccare
 `_shared/cors.ts` significa rimettere in produzione il percorso dei pagamenti a
 ogni merge successivo.
 
-Il primo checkpoint è **10a + 10b**: la porta AI senza stato — abbinamento e
-suggerimento di catalogazione da testo — e lo storico Sommelier con la chat SSE.
-Le quattro funzionalità nuove restano fuori, perché sono meno specificate e
-ciascuna merita la propria sessione di spec, sul modello dei 9a/9b/9c separati.
+Il primo checkpoint è **10a + 10b + 10c**: la porta AI senza stato — abbinamento e
+suggerimento di catalogazione da testo — lo storico Sommelier con la chat SSE, e
+il ripristino delle tre superfici UI che li usano (pannello Sommelier nel Layout,
+Assistente nel wizard, abbinamento in `/esplora`). I tre pezzi stanno sullo
+stesso branch e nella stessa PR, come 9a/9b/9c stavano nella #32. Le quattro
+funzionalità nuove restano fuori, perché sono meno specificate e ciascuna merita
+la propria sessione di spec, sul modello dei 9a/9b/9c separati.
 
 ### Fase 11 — cutover
 

@@ -1027,6 +1027,147 @@ delle proposte e chiusi nella stessa sessione:
   apertura del pannello**. Richiede una migrazione: è **la seconda**, oltre a
   quella dello storico Sommelier.
 
+### Che cosa il checkpoint 10a + 10b ha prodotto
+
+Branch `migration/phase-10-ai-service`, aperto da `main` dopo il merge in squash
+della PR #34 (`537c57a`, 11 agosto 2026, 15:34:38 UTC). Quindici file, **nessuno
+in `backend/` o `frontend/`**: la versione servita non è toccata.
+
+**10a — la porta senza stato.** `_shared/ai-cors.ts` legge `AI_ALLOWED_ORIGINS`
+replicando il pattern di `_shared/cors.ts` invece di importarlo, e quel file ha
+**diff vuoto** sul branch: è la 7.6 applicata alla lettera. `_shared/ai-provider.ts`
+è il gemello Deno di `backend/ai_provider.py`, con il modello scelto per compito
+e un `requestId` **opaco**, che chiude un debito del legacy invece di
+trasportarlo — lì il campo inoltrato al fornitore contiene l'uuid utente
+(`backend/ai_routes.py:77`). `_shared/ai-gate.ts` applica origine, metodo, flag,
+bearer, identità, stato utente e bucket in quest'ordine, con il flag **prima**
+dell'autenticazione. Poi `ai-pairing`, che risolve il catalogo da
+`public_listings` con `limit 60` e riceve dal client la sola `query`, e
+`ai-catalogo`, che è l'unica delle tre funzionalità a non cambiare niente.
+
+**10b — lo storico.** Migrazione `20260811160000_phase_10b_sommelier_storico.sql`:
+tabella chiusa a ogni ruolo client (RLS accesa **senza policy**), vista
+`my_sommelier_messages` a colonne chiuse con `security_invoker = off`, tre porte
+`SECURITY DEFINER` come unica via — scrittura e lettura di contesto per
+`service_role`, cancellazione per `authenticated`. Il filtro della vista è su
+**(owner_id, session_id)**. Poi `ai-sommelier`, SSE con `EdgeRuntime.waitUntil()`
+sull'inoltro e salvataggio solo a stream concluso e non vuoto.
+
+**Un difetto della migrazione trovato eseguendo, non leggendo.** Il tetto
+messaggi ordinava per `(created_at, id)`. Le due righe di uno scambio nascono
+nella stessa istruzione e condividono `now()`; in un caso che scriveva sessanta
+scambi in una transazione sola **tutte e centoventi** le righe avevano lo stesso
+istante, e il pareggio veniva spezzato dall'uuid casuale della chiave primaria.
+Le venti righe cancellate erano un sottoinsieme arbitrario invece delle venti più
+vecchie, e uno scambio poteva restare monco — la risposta senza la sua domanda.
+Correzione: colonna `ordinale` identity, monotona per costruzione, usata dal
+tetto, dalla porta di contesto, dalla vista e dall'adapter.
+
+**La griglia è stata eseguita.** `supabase/tests/10b_sommelier_storico.sql`, 32
+casi, su Postgres 17.10 in container con **tutte e venticinque** le migrazioni
+applicate sopra `9c_bootstrap_postgres_locale.sql`. Quattro esecuzioni — non
+partita, 27/3, 31/1, **32 PASSA / 0 FALLISCE** — e i cinque difetti di griglia
+sono elencati nell'intestazione del file. Nessuna esecuzione sul progetto reale.
+
+**Che cosa non è provato.** Le Edge Function non hanno test automatici, come le
+tre già in produzione: nessun job di CI copre `supabase/**`, e ciò che la griglia
+prova sono le porte SQL che quelle function chiamano, non il codice Deno che le
+chiama. E **la migrazione non è applicata**: il ledger di produzione resta a
+ventiquattro righe contro venticinque file.
+
+`MIN_TESTS` sale da 204 a **234**.
+
+### I tre limiti orari, corretti in sessione
+
+La prima stesura metteva `ai:chat`, `ai:pairing` e `ai:catalogo` tutti e tre a
+`10 / 3600`, copiando il modello che la 7.4 citava (`report:submit`). La forma era
+quella decisa, i numeri no: il legacy limita la chat a **20 per 60 secondi**
+(`backend/.env.example:44-45`) e una conversazione Sommelier reale è di
+cinque-quindici battute, quindi il bucket si esauriva **dentro la prima**.
+
+Fissati in sessione organizzativa l'**11 agosto 2026**, in
+`supabase/functions/_shared/ai-gate.ts`:
+
+- **`ai:chat` 40/ora** — regge circa tre conversazioni realistiche intere invece
+  di esaurirsi dentro la prima;
+- **`ai:pairing` 15/ora** — durante una sessione di navigazione si prova più di
+  una combinazione;
+- **`ai:catalogo` 10/ora** — invariato, perché è un'azione per annuncio e non per
+  sessione.
+
+Restano vincolanti e non sono parametri di quel file: **finestra oraria** per
+tutti e tre, **nessuna eccezione per `admin`**, **nessun tetto secondario** oltre
+al rate limit per la v0.
+
+### Che cosa il checkpoint 10c ha prodotto
+
+Tre superfici tornano al loro posto, sopra `AiService` invece del backend
+FastAPI. Nessuna funzionalità nuova: le quattro ammesse per eccezione restano
+fuori, ciascuna con la propria sessione di spec.
+
+**Il pannello Sommelier** (`frontend-next/src/components/vinea/SommelierChat.tsx`)
+è montato nel `Layout` con `next/dynamic`, dove stava il commento che ne rinviava
+la porta alla Fase 10. Resta montato **anche per gli anonimi** (7.9): il rifiuto
+arriva dal servizio e non dalla UI, che è parità con `frontend/`. Il troncamento
+è un **caso atteso** (7.7) e si segnala con una riga discreta sotto la risposta.
+Un cambio di utente azzera la conversazione a schermo.
+
+**Il pannello Assistente** del passo Identificazione (`hooks/useSellWizard.ts`,
+`app/vendi/page-client.tsx`) manda il solo `hint`, come il legacy: `ocr_text`
+resta senza chiamante anche qui, perché la cattura da fotografia è la 7.3a.
+
+**Il pannello abbinamento** in `app/esplora/page-client.tsx`. Senza di lui la
+function `ai-pairing` della 10a resterebbe senza chiamante e la 7.8 senza
+superficie. Il corpo non porta nessun catalogo.
+
+**Quattro cose che il codice fissa, e la ragione di ciascuna.**
+
+1. **Senza sessione lo storico non si legge affatto.** La vista filtra su
+   `owner_id = (select auth.uid())` al proprio interno, quindi per un client
+   anonimo la risposta è zero righe **con certezza**: chiedere lo stesso sarebbe
+   una richiesta di rete garantita inutile a ogni apertura del pannello.
+2. **Il segno «già chiesto» di una lettura asincrona sta in una `ref`, mai nello
+   stato.** Da stato il `setState` provoca un render, il render riesegue
+   l'effetto perché il segno è fra le sue dipendenze, e la pulizia annulla la
+   richiesta appena partita: il pannello si aprirebbe **sempre vuoto** su una
+   conversazione che nel database c'è. È il secondo difetto di questo genere
+   trovato in questa fase, e come il primo lo ha trovato l'esecuzione.
+3. **La risoluzione degli abbinamenti passa da `Wine.listingId`, non da
+   `Wine.id`.** Dopo la 7.8 la function propone `public_listings.id`, la chiave
+   primaria, mentre nel frontend `Wine.id` è lo **slug**
+   (`frontend-next/src/services/listing-service.ts:154-155`). `listingId ?? id`
+   è l'idioma già usato altrove per questa stessa distinzione.
+4. **L'azzeramento dei risultati è una derivazione, non un effetto.** La regola
+   `set-state-in-effect` della configurazione ESLint di Next 16 rifiuta un
+   `setState` sincrono dentro un effetto, e ha ragione: la versione di
+   `frontend/` fa un secondo render a ogni battuta digitata per cancellare
+   qualcosa che si può semplicemente non disegnare.
+
+**Una divergenza dichiarata da `frontend/`.** Una `tipologia` che non è fra i
+cinque valori ammessi non entra nei campi del wizard. Nel legacy la pubblicazione
+è un toast dimostrativo e un valore inventato al più svuota la tendina; qui il
+wizard scrive davvero e quel valore arriverebbe a `bottiglia_crea`.
+
+**Due difetti del lavoro precedente trovati aprendo lo schermo.** Tutta
+`services/phase10/` era scritta **senza lettere accentate**, in commenti e in
+stringhe, e quattro di quelle stringhe sono visibili all'utente: il pannello
+mostrava «Non e stato possibile completare l'operazione». Nessun test le
+asseriva, quindi la suite non se ne era accorta. Le Edge Function non ne sono
+affette, verificato. Il secondo è il punto 2 qui sopra.
+
+**Che cosa è stato eseguito davvero.** 255 test (da 234), typecheck, lint e build
+puliti. Nel browser, contro il progetto reale in sola lettura: pannello Sommelier
+montato e apribile da anonimo; identificativo di sessione coniato e depositato in
+`localStorage` nel formato che la migrazione impone (`s-8jvdwti0pto-msoytlzd`);
+invio senza sessione respinto dal servizio con «Sessione non valida: accedi per
+usare il Sommelier»; pannello abbinamento che compare in modalità abbinamento con
+una domanda e mostra il messaggio generico quando la function non risponde — e
+non risponde perché **non è distribuita**, il che è a sua volta una conferma che
+il gate di distribuzione è il merge. **Il pannello del wizard non è stato
+aperto**: `/vendi` richiede una sessione reale, e non ne esisteva una.
+
+`MIN_TESTS` sale da 234 a **255**.
+
 ### Un residuo che la 7.13 chiude invece di rimandare
 
 `SfondoIAPanel` promette all'utente uno sfondo che non viene mai applicato — è un

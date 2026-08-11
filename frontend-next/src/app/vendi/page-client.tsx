@@ -34,6 +34,7 @@ import { Progress } from "@/components/ui/progress";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
 import { wineImages } from "@/lib/wine-images";
 import { useSellWizard, MAX_FOTO, type Modalita } from "@/hooks/useSellWizard";
+import { confidenzaPercento } from "@/lib/phase10/catalogazione";
 import { BottleSelector } from "@/app/vendi/bottle-selector";
 
 /**
@@ -42,8 +43,9 @@ import { BottleSelector } from "@/app/vendi/bottle-selector";
  * Le differenze rispetto all'originale sono tutte dichiarate nel rapporto di
  * fase; le tre visibili qui:
  *
- * - il pannello "Assistente AI" del passo Identificazione non è portato,
- *   perché chiama il backend FastAPI (dominio AI, Fase 10);
+ * - il pannello "Assistente AI" del passo Identificazione è rientrato con la
+ *   Fase 10c: chiama `ai-catalogo` tramite `AiService` invece del backend
+ *   FastAPI, e manda il solo `hint` come faceva il legacy;
  * - il passo Foto carica davvero su Supabase Storage invece di mostrare un
  *   toast di demo;
  * - il campo "Bottiglie disponibili" è visibile ma disabilitato: un annuncio
@@ -92,6 +94,13 @@ export default function VendiPageClient() {
     inviando,
     pubblica,
     salvaBozza,
+    aiHint,
+    setAiHint,
+    aiSuggerimento,
+    aiInCorso,
+    aiErrore,
+    chiediSuggerimento,
+    applicaSuggerimento,
   } = useSellWizard({
     initialMode,
     onNavigate: (path) => router.push(path),
@@ -313,8 +322,115 @@ export default function VendiPageClient() {
           <div className="space-y-4">
             <h2 className="font-serif text-2xl">Identificazione</h2>
             <p className="text-sm text-muted-foreground">
-              Compila i campi che descrivono la bottiglia.
+              Compila i campi che descrivono la bottiglia. Puoi modificare manualmente ogni campo.
             </p>
+
+            <div
+              className="rounded-2xl border border-bordeaux/20 bg-gradient-to-br from-bordeaux/5 via-oro/10 to-transparent p-4"
+              data-testid="ai-listing-panel"
+            >
+              <div className="flex items-center gap-2">
+                <span className="grid h-9 w-9 place-items-center rounded-full bg-bordeaux text-crema">
+                  <Sparkles className="h-4 w-4 text-oro" />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-serif text-base leading-tight">
+                    Assistente <span className="gold-shimmer">AI</span>
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Descrivi la bottiglia o incolla il testo dell&apos;etichetta
+                  </p>
+                </div>
+              </div>
+              <textarea
+                value={aiHint}
+                onChange={(e) => setAiHint(e.target.value)}
+                data-testid="ai-listing-hint-input"
+                rows={2}
+                // Stesso tetto del legacy e della function: `hint` ≤ 500
+                // caratteri (`backend/ai_routes.py:229`).
+                maxLength={500}
+                placeholder="Es. 'Antinori Tignanello 2019, Toscana IGT, capsula intatta'"
+                className="mt-3 w-full resize-y rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:border-bordeaux focus:ring-2 focus:ring-bordeaux/30"
+              />
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  data-testid="ai-listing-ask-btn"
+                  onClick={() => void chiediSuggerimento()}
+                  disabled={aiInCorso || !aiHint.trim()}
+                  className="rounded-full bg-bordeaux hover:bg-bordeaux/90"
+                >
+                  {aiInCorso ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analisi…
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-3.5 w-3.5" /> Suggerisci con l&apos;AI
+                    </>
+                  )}
+                </Button>
+                {aiSuggerimento && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    data-testid="ai-listing-apply-btn"
+                    onClick={applicaSuggerimento}
+                  >
+                    Applica ai campi
+                  </Button>
+                )}
+                {aiSuggerimento && (
+                  <span
+                    className="text-[11px] text-muted-foreground"
+                    data-testid="ai-listing-confidence"
+                  >
+                    Confidence: {confidenzaPercento(aiSuggerimento.confidence)}%
+                  </span>
+                )}
+              </div>
+              {aiErrore && (
+                <p
+                  className="mt-2 rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                  data-testid="ai-listing-error"
+                >
+                  {aiErrore}
+                </p>
+              )}
+              {aiSuggerimento && (
+                <div
+                  className="mt-3 grid gap-2 rounded-xl border border-border bg-card p-3 text-xs md:grid-cols-2"
+                  data-testid="ai-listing-preview"
+                >
+                  <p>
+                    <b>Produttore:</b> {aiSuggerimento.produttore || "—"}
+                  </p>
+                  <p>
+                    <b>Nome:</b> {aiSuggerimento.nome || "—"}
+                  </p>
+                  <p>
+                    <b>Annata:</b> {aiSuggerimento.annata ?? "—"}
+                  </p>
+                  <p>
+                    <b>Regione:</b> {aiSuggerimento.regione || "—"}
+                  </p>
+                  <p>
+                    <b>Tipologia:</b> {aiSuggerimento.tipologia || "—"}
+                  </p>
+                  <p>
+                    <b>Denominazione:</b> {aiSuggerimento.denominazione || "—"}
+                  </p>
+                  {aiSuggerimento.noteDegustazione && (
+                    <p className="md:col-span-2">
+                      <b>Note:</b> {aiSuggerimento.noteDegustazione}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
 
             <div className="grid gap-3 md:grid-cols-2">
               <Field label="Produttore">
