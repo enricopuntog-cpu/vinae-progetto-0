@@ -713,9 +713,9 @@ Previsto `AiService` dietro Edge Function/provider astratto. Nessuna chiave
 segreta deve raggiungere il browser.
 
 La specifica è [`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md),
-scritta l'11 agosto 2026 su un branch di sola documentazione: il branch di fase
-`migration/phase-10-ai-service` **non è stato aperto** e si apre solo dopo che
-anche le decisioni ancora aperte sono chiuse in sessione organizzativa.
+scritta l'11 agosto 2026 su un branch di sola documentazione (PR #34): il branch
+di fase `migration/phase-10-ai-service` si è aperto **solo dopo** che tutte le
+decisioni sono state chiuse in sessione organizzativa, lo stesso giorno.
 
 Tre correzioni di perimetro che l'inventario ha imposto al backlog, e che vanno
 lette prima di riprendere la fase: `ai-identify-bottle` non esiste né nel
@@ -725,8 +725,9 @@ una migrazione; il perimetro reale è cinque rotte su tre funzionalità — chat
 Sommelier con storico, abbinamento cibo-vino, suggerimento di catalogazione — di
 cui solo la prima ha dati da spostare.
 
-**La sessione organizzativa dell'11 agosto 2026 ha chiuso cinque decisioni su
-tredici** (le dieci elencate nella spec più due nuove), registrate in
+**La sessione organizzativa dell'11 agosto 2026 ha chiuso tutte e tredici le
+decisioni** (le undici della spec più due nuove) e i due punti conseguenti che
+nessuna decisione copriva, registrati in
 [`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md), sezione «Fase 10 — decisioni
 organizzative». Le due che cambiano la forma della fase:
 
@@ -740,10 +741,21 @@ organizzative». Le due che cambiano la forma della fase:
   migration» non è decaduta: vale per tutto ciò che una sessione non ha voluto
   per nome.
 
-Le otto decisioni ancora aperte hanno nella spec una proposta motivata e non
-confermata. Due punti che nessuna decisione chiude ma che vanno risolti prima di
-scrivere: **come si applica il TTL** dello storico, dato che `pg_cron` è escluso,
-e **dove finisce l'esito del triage** di moderazione.
+Le otto restanti sono state chiuse nella stessa giornata, dopo il resoconto delle
+proposte, insieme ai due punti che nessuna decisione copriva: il **TTL** dello
+storico si applica **in lettura** — la vista filtra su `expires_at` e nel v0 non
+esiste cancellazione fisica, cosa che va dichiarata invece che nascosta — e
+l'**esito del triage** è una **colonna persistita su `reports`**, quindi una
+seconda migrazione. Delle otto, due hanno corretto la proposta: la 7.4 ha esteso
+la finestra oraria a tutte le funzionalità e respinto il secondo tetto
+giornaliero, la 7.6 ha respinto il rename dell'allowlist CORS perché toccare
+`_shared/cors.ts` significa rimettere in produzione il percorso dei pagamenti a
+ogni merge successivo.
+
+Il primo checkpoint è **10a + 10b**: la porta AI senza stato — abbinamento e
+suggerimento di catalogazione da testo — e lo storico Sommelier con la chat SSE.
+Le quattro funzionalità nuove restano fuori, perché sono meno specificate e
+ciascuna merita la propria sessione di spec, sul modello dei 9a/9b/9c separati.
 
 ### Fase 11 — cutover
 

@@ -259,15 +259,18 @@ cade con loro, perché le versioni a ledger coincidono già con i nomi dei file.
    su 18** in `failure` con `gh variable list` e `gh secret list` entrambi
    vuoti, verificato l'11 agosto 2026. È il gate che la 7g ha dichiarato fuori
    dal merge, ed è la precondizione della decisione 1e;
-4. chiudere le **otto decisioni ancora aperte** della specifica della Fase 10
-   ([`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md)),
-   confermando o correggendo la proposta che ciascuna porta. Cinque sono chiuse
-   dalla sessione dell'11 agosto 2026: la 7.2 ha risposto **A**, quindi la fase
-   **scrive SQL**, e la 7.3, la 7.12 e la 7.13 hanno ammesso quattro funzionalità
-   nuove per eccezione esplicita. Restano da risolvere anche due punti che
-   nessuna decisione chiude: **come si applica il TTL** dello storico e **dove
-   finisce l'esito del triage** di moderazione. Il branch
-   `migration/phase-10-ai-service` **non è aperto** e non va aperto prima.
+4. **configurare chiave e budget dei provider AI entro lunedì 18 agosto 2026**,
+   impegno assunto da Enrico nella decisione 7.11 della Fase 10, e **eseguire le
+   prove empiriche della 7.1** — 5-6 conversazioni reali per la chat, foto vere
+   di etichette per le funzionalità di visione. Le tredici decisioni della fase
+   sono **tutte chiuse** dalla sessione dell'11 agosto 2026
+   ([`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md),
+   sezione 7), e con esse i due punti conseguenti: il TTL dello storico si applica
+   **in lettura** e l'esito del triage è una **colonna persistita su `reports`**.
+   Finché la configurazione manca la fase resta distribuibile ma **spenta**:
+   `AI_ENABLED` fallisce chiuso per costruzione. Finché le prove non sono state
+   fatte **la fase non ha un provider confermato**, e nessuna riga di codice può
+   chiudere quel prerequisito.
 
 La voce che questo elenco portava come quarta — approvare l'avvio della Fase 9 —
 è chiusa: la fase è mersa con la PR #32 (squash `cd81df6`) l'11 agosto 2026 e le
