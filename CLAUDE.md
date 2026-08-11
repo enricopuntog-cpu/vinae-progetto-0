@@ -123,10 +123,21 @@ The full picture is in `docs/ROADMAP_V1.md`, `docs/MIGRATION_PHASE_1_BACKLOG.md`
   Supabase, the FastAPI/MongoDB path for that domain stops being the writable source of truth.
   Legacy reads may remain only if explicitly planned for that phase.
 - **`frontend/` + `backend/` stay the served version** until `frontend-next/` reaches verified
-  functional parity across all migrated domains — cutover (Phase 11) is a separate, explicit
+  functional parity across all migrated domains — cutover (Phase 12) is a separate, explicit
   decision, never automatic.
 - Domain migration order follows dependency, not convenience: Auth (5) → Listings/Catalog (6) →
-  Orders/Payments (7) → Messaging/Notifications (8) → Moderation (9) → AI (10) → Cutover (11).
+  Orders/Payments (7) → Messaging/Notifications (8) → Moderation (9) → AI (10) →
+  AI extensions admitted by exception (11) → Cutover (12).
+  **The phases were renumbered on 11 August 2026**, when Phase 10 closed: the cutover was
+  Phase 11 and is now Phase 12, and the four features decisions 7.3/7.12/7.13 admitted by
+  exception became the new Phase 11 — they are not Phase 10 and had no phase of their own, so
+  they belonged nowhere. Two classes of file keep the old number on purpose, because editing
+  them is forbidden or meaningless: the two `supabase/migrations/*.sql` that mention it in a
+  comment — a pushed migration is frozen, and one of those four occurrences is inside a
+  `comment on column`, so "Fase 11" is live text in the production catalog on
+  `bottle_units.visibilita` — and
+  `docs/superpowers/plans/2026-08-05-phase-7d-decisioni-economiche.md`, which is the minutes of
+  one day and not a live plan.
 - `frontend-next/src/services/types.ts` defines the service interfaces
   (`AuthService`, `ListingService`, etc.) that both mock and real (Supabase) implementations
   satisfy — these interfaces map ~1:1 to the 8 domain slices already split out of
@@ -219,7 +230,7 @@ Phase 7d wrote no SQL. It closed decisions that constrain what later phases may 
   whose `payout_stato='trattenuto'`; it does not claim orders or call Stripe. This is the safe
   precondition for verifying the scheduler before payments are enabled.
 - **The "protezione" (3%) line is out of the Supabase model** (decision 3a). It stays untouched in
-  `frontend/` until the Phase 11 cutover, where its removal has to be on the cutover list. It was
+  `frontend/` until the Phase 12 cutover, where its removal has to be on the cutover list. It was
   measured at 0.59–0.60× the net margin Phase 7b already withholds, and in the real Stripe path it
   was never actually charged.
 - **A fee-reconciliation retry cap must never be a new value of `public.payment_stato`** (decision
@@ -322,13 +333,46 @@ without going back to that session; they are recorded in `CONTESTO_IA/01_STATO_A
   which is where the verification window and therefore auto-release start.
 - `public_bottle_units` is gone (7.7), but `bottle_units.visibilita` and the
   `bottle_unit_visibilita` enum survive as a documented inert residue: the column is a
-  `bottiglia_crea` parameter written by both frontends. It belongs on the Phase 11 cutover list.
+  `bottiglia_crea` parameter written by both frontends. It belongs on the Phase 12 cutover list.
 
 PR #33 carried the post-merge verification onto `main` — squash `8dd56c0`, 11 August 2026,
 documentation only. The production ledger was re-read on 11 August 2026 and is unchanged at
 twenty-four rows.
 
-### Phase 10 AI — all thirteen decisions closed, first checkpoint is 10a + 10b + 10c
+### Phase 10 AI — CLOSED, merged and distributed off
+
+**Phase 10 is closed at its single checkpoint.** PR #35 merged as squash `442c98c` on
+11 August 2026 at 18:53:14 UTC, four checks green on the final head `c5034a6`. The closed
+perimeter is **the three migrated features**: Sommelier chat with Postgres history, food-wine
+pairing, cataloguing suggestion from text. Do not describe this phase as "in progress".
+
+Measured straight after the merge, not declared:
+
+- **The production ledger is at twenty-five rows**, last one
+  `20260811160000 phase_10b_sommelier_storico` — the GitHub integration distributed it, as for
+  every phase since Phase 7. `public.sommelier_messaggi` exists with RLS on and **zero rows**,
+  `my_sommelier_messages` is `security_invoker = off`, and the three `SECURITY DEFINER` doors
+  carry the exact grants declared: `sommelier_contesto_leggi` and `sommelier_scambio_registra`
+  to `service_role` only, `sommelier_storico_cancella` also to `authenticated`. No `anon`
+  anywhere. **No Phase 10 behaviour has ever been exercised there** — schema and grants were
+  read, not a conversation run; running the `10b_sommelier_storico.sql` grid on the real project
+  is still a **separate, per-grid** authorization.
+- **Six Edge Functions are `ACTIVE`**: the three existing ones plus `ai-pairing`, `ai-catalogo`,
+  `ai-sommelier`, all `verify_jwt=true`. The three new ones were created 38 seconds after the
+  merge and all six share one `updated_at` 43 seconds after it — the three pre-existing
+  functions went to version 15/14/14 with new bundle hashes although the PR touched none of
+  their source. That is decision 7.10 measured a second time: the merge is the deploy gate, and
+  it redeploys everything.
+
+**`AI_ENABLED` stays off** until Enrico configures the provider key and budget — decision 7.11,
+committed deadline **Monday 18 August 2026**. The phase is distributed **off, by construction**:
+the flag fails closed, which is exactly what made it safe to merge before the keys existed. This
+is not an unfinished edge of the phase; it is the phase's designed end state until that date.
+
+The four features admitted by exception are **not** Phase 10 and are **not** started: they are
+the new Phase 11, with no branch. See the renumbering note in the migration rules above.
+
+#### How it got there — all thirteen decisions closed first
 
 `docs/PHASE_10_AI_SERVICE_SPEC.md` is the organizational spec, same standard as Phase 9: every
 claim carries a `file:line` source, line numbers pinned to `8dd56c0`. The organizational session of
@@ -512,8 +556,29 @@ inside an AI function must not make the **payment machine** react to it — the 
 adds the predicate. That is precisely why 7.9's check lives in the Edge Function and in the history
 table's own RLS, and nowhere near an order. And the AI key lives in the Edge Function's own
 environment, never in the repository and never in the browser
-(`docs/MIGRATION_PHASE_1_BACKLOG.md:545-546`); adding it means updating `docs/ENVIRONMENT.md` and
+(`docs/MIGRATION_PHASE_1_BACKLOG.md:567-570`); adding it means updating `docs/ENVIRONMENT.md` and
 the relevant `.env.example` in the same change.
+
+### Phase 11 — AI extensions admitted by exception. Not started, no branch.
+
+The four features decisions **7.3, 7.12 and 7.13** admitted by explicit exception during Phase 10
+and that its single checkpoint left out: photo autofill (7.3a), documentary-completeness badge
+(7.3b), moderation triage (7.12), real crop and background (7.13). They are the first new
+features authorized since the migration began, and they were authorized **by name** — "no new
+features during migration" still governs everything else.
+
+The four decisions describing them are **already closed**, in section 7 of
+`docs/PHASE_10_AI_SERVICE_SPEC.md`. Everything else is missing and has to be decided before code:
+Storage (which bucket, public or private, what lifecycle for a photo uploaded only to autofill a
+form), file-size limits, allowed MIME types, and the PhotoRoom integration for 7.13 — one more
+external provider with its own key, cost and contract. The triage result already has its answer,
+and it is a **persisted column**, not a recomputation on each panel opening; that means a
+migration. Two of the four carry a migration each.
+
+**Each feature earns its own spec session before code**, on the model of Phase 9's separate
+9a/9b/9c. Two riders carried over from the decisions: 7.3b's badge is **documentary
+completeness** and never certified authenticity, and 7.12 gives the AI **no autonomous action
+and no "AI actor" identity in `audit_log`** — it classifies and ranks, a human presses the button.
 
 ### Postgres exposure rules (binding since Phase 6d-1)
 

@@ -541,27 +541,76 @@ mock attuale.
 
 **Branch**: `migration/phase-10-ai-service`
 
-Provider AI reale via Edge Function proxy (`ai-identify-bottle` e
-equivalenti), rate-limit lato server, chiave e budget configurati fuori
-dal repository.
+**Stato 11 agosto 2026: chiusa.** PR #35 mersa in squash come `442c98c` alle
+18:53:14 UTC, con i quattro check verdi sull'HEAD finale `c5034a6`. Un
+checkpoint solo — 10a + 10b + 10c — sul modello dei 9a/9b/9c dentro la #32.
 
-La specifica organizzativa è
-[`PHASE_10_AI_SERVICE_SPEC.md`](PHASE_10_AI_SERVICE_SPEC.md). **L'inventario
-del codice smentisce tre punti del paragrafo qui sopra** — `ai-identify-bottle`
-non esiste da nessuna parte, l'identificazione bottiglia da fotografia non
-esiste nemmeno nel legacy, e il perimetro reale è cinque rotte su tre
-funzionalità — con le fonti `file:riga` nella sezione 0 di quel documento.
-Correggere questo testo è la **decisione aperta 7.3**, non ancora presa: resta
-qui com'è finché la sessione organizzativa non risponde.
+Il testo che stava qui prometteva «`ai-identify-bottle` e equivalenti».
+Quel nome era un'intenzione e non un contratto: **la function non è mai
+esistita**, né nel repository né sul progetto reale, e l'identificazione della
+bottiglia da fotografia non esiste nemmeno nel legacy. Le fonti `file:riga` sono
+nella sezione 0 di [`PHASE_10_AI_SERVICE_SPEC.md`](PHASE_10_AI_SERVICE_SPEC.md).
+La decisione **7.3** che teneva aperta la correzione di questo paragrafo è stata
+chiusa l'11 agosto 2026, ed è per questo che il paragrafo ora è riscritto invece
+di essere lasciato com'era.
 
-## Fase 11 — Cutover finale
+**Il perimetro chiuso è le tre funzionalità migrate**: chat Sommelier con
+storico su Postgres, abbinamento cibo-vino, suggerimento di catalogazione da
+testo. Tre Edge Function nuove (`ai-pairing`, `ai-catalogo`, `ai-sommelier`)
+dietro un'unica porta con rate limit orario per funzionalità — `ai:chat` 40,
+`ai:pairing` 15, `ai:catalogo` 10 — e una migrazione,
+`20260811160000_phase_10b_sommelier_storico`, venticinquesima riga del ledger di
+produzione. Il rate limit lato server che questo backlog chiedeva non è stato
+costruito: `public.rate_limit_consume` esisteva dalla Fase 7 e si consuma da una
+Edge Function con client di servizio, senza nessuna migrazione nuova.
 
-**Branch**: `migration/phase-11-cutover`
+Chiave e budget del provider **restano da configurare fuori dal repository**, ed
+è la sola parte di questa voce ancora aperta: `AI_ENABLED` è assente e fallisce
+chiuso, quindi la fase è distribuita e spenta. Decisione 7.11, con un nome e una
+data — Enrico, entro il 18 agosto 2026.
+
+## Fase 11 — Estensioni AI ammesse per eccezione
+
+**Branch**: nessuno. **Stato: non iniziata.**
+
+Le quattro funzionalità che le decisioni **7.3, 7.12 e 7.13** hanno ammesso per
+eccezione esplicita dentro la Fase 10 e che il suo unico checkpoint ha lasciato
+fuori: autofill da foto (**7.3a**), spunta di completezza documentale
+(**7.3b**), triage di moderazione (**7.12**), ritaglio e sfondo reale
+(**7.13**). Non sono Fase 10 e non avevano una fase propria: senza questo numero
+non stavano in nessun posto.
+
+Le quattro decisioni che le descrivono sono **già chiuse** e stanno nella
+[sezione 7 di `PHASE_10_AI_SERVICE_SPEC.md`](PHASE_10_AI_SERVICE_SPEC.md).
+Manca tutto il resto, e va detto per nome:
+
+- **Storage** — quale bucket, pubblico o privato, con quale ciclo di vita per
+  foto che l'utente carica solo per farsi suggerire dei campi;
+- **limiti di dimensione dei file** e **tipi MIME ammessi** per le foto, che
+  oggi non esistono da nessuna parte perché nessun percorso di acquisizione
+  immagine esiste in `frontend/`;
+- **dove vive l'esito del triage**: qui la decisione c'è già — **colonna
+  persistita**, non ricalcolata a ogni apertura del pannello — e implica una
+  migrazione;
+- **l'integrazione PhotoRoom** per la 7.13, che è un fornitore esterno in più
+  con la sua chiave, il suo costo e il suo contratto.
+
+Due delle quattro portano una migrazione ciascuna. Ciascuna funzionalità **ha la
+propria sessione di spec prima del codice**, sul modello dei 9a/9b/9c separati.
+Due riserve che le decisioni portano con sé e che il codice dovrà rispettare: la
+spunta della 7.3b si chiama **completezza documentale** e mai autenticità
+certificata, e la 7.12 dà all'AI **nessuna azione autonoma e nessuna identità di
+«attore AI» in `audit_log`** — classifica e ordina, il pulsante lo preme una
+persona.
+
+## Fase 12 — Cutover finale
+
+**Branch**: `migration/phase-12-cutover`. Era la Fase 11 fino all'11 agosto 2026.
 
 Solo dopo parità funzionale verificata su tutti i domini precedenti e
 approvazione esplicita separata: dismissione di `frontend/` (TanStack
 Start) e `backend/` (FastAPI/MongoDB). Non è una conseguenza automatica
-del completamento delle fasi 2–10.
+del completamento delle fasi 2–11.
 
 ## Debito dichiarato dalla Fase 6d-1
 

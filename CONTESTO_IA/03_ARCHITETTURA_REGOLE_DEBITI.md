@@ -33,7 +33,9 @@ CONTESTO_IA/    handoff sintetico per nuove IA/chat
 2. Nessuna fase successiva senza approvazione esplicita.
 3. Nessuna nuova funzionalità durante la migrazione: cercare parità.
 4. Un solo writer autorevole per dominio.
-5. `frontend/` + `backend/` restano serviti fino alla Fase 11.
+5. `frontend/` + `backend/` restano serviti fino alla Fase 12 (era la Fase 11
+   fino all'11 agosto 2026: alla chiusura della Fase 10 il cutover è diventato
+   la 12 e le quattro estensioni AI ammesse per eccezione sono diventate la 11).
 6. Non lavorare direttamente su `main` e non force-pushare mai. Il merge su
    `main` è consentito **solo dopo approvazione esplicita data in sessione** e
    **solo in squash**: l'autorizzazione del 5 agosto 2026 sostituisce il click
@@ -158,7 +160,7 @@ successive possono costruire.
   responsabilità di Enrico / `enricopuntog-cpu`; rotazione ogni 90 giorni e
   immediata dopo sospetta esposizione. Nessuna integrazione esterna in 7g.
 - **3a — la voce «protezione» (3%) esce dal modello Supabase**; in `frontend/`
-  resta fino al cutover di Fase 11, dove la sua rimozione va scritta nella lista
+  resta fino al cutover di Fase 12, dove la sua rimozione va scritta nella lista
   di cutover o nessuno se ne ricorderà.
 - **2c — un tetto ai tentativi di riconciliazione della fee non deve mai essere
   un valore nuovo di `public.payment_stato`.** `payout_prepara`,

@@ -38,6 +38,7 @@
 | [#32](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/32) | 11-08-2026 | merged | Fase 9 — moderazione: schema, sette RPC, cinque transizioni sugli annunci e il secondo provvedimento che blocca il commercio (9a + 9b + 9c); quattro check verdi, Preview `fomwzziqrajwmqfuzqaz` con le quattro migrazioni applicate prima del merge; squash `cd81df6` alle 07:43:53 UTC; ledger di produzione portato a 24 righe dall'integrazione GitHub |
 | [#33](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/33) | 11-08-2026 | merged | Verifica post-merge della Fase 9 sul progetto reale, sola documentazione: ledger riletto, tabelle vuote, invarianti di esposizione misurati, Advisor riletti; squash `8dd56c0` alle 09:18:54 UTC, tre check verdi e `Supabase Preview` in `skipping` |
 | [#34](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/34) | 11-08-2026 | mersa | Fase 10 — specifica organizzativa e registrazione delle decisioni, **sola documentazione**: nessun file `.sql`, `.ts`, `.tsx`, `.py`, `.toml` o `.yml` toccato. Branch `docs/fase-10-specifica-ai`, **non** `migration/phase-10-ai-service`, che si è aperto solo dopo questo merge. Porta l'inventario dell'AI legacy, **tutte e tredici le decisioni chiuse** dalla sessione dell'11 agosto 2026 più i due punti conseguenti, e la verifica che le Edge Function le distribuisce il merge |
+| [#35](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/35) | 11-08-2026 | merged | **Fase 10 — chiusa**: porta AI senza stato, storico Sommelier e ripristino UI (10a + 10b + 10c in un solo checkpoint, come i 9a/9b/9c nella #32). Trentadue file, nessuno in `backend/` o `frontend/`; `_shared/cors.ts` con diff vuoto. Quattro check verdi sull'HEAD finale `c5034a6`, Preview `fvwffmenrwzwbfygqzpq`; squash `442c98c` alle **18:53:14 UTC**. Il merge porta il ledger a **25 righe** e le Edge Function `ACTIVE` da tre a **sei**. `AI_ENABLED` assente: distribuita spenta |
 
 La PR #26 parte dal commit funzionale `90f99fa` ed è stata integrata in `main`
 con lo squash `f9c53e0`. La Fase 8 usa la sola PR #27, integrata in `main` il
@@ -108,7 +109,8 @@ percorso UI, `PAYMENTS_ENABLED=false`, nessuna chiamata Stripe.
   sessione organizzativa le decisioni **1a** (scheduler esterno su GitHub Actions,
   non `pg_cron`), **1e** (scheduler acceso e verificato prima di
   `PAYMENTS_ENABLED`) e **3a** (la voce «protezione» esce dal modello Supabase e
-  resta in `frontend/` fino alla Fase 11). La **2c** ha design approvato — tetto a
+  resta in `frontend/` fino alla Fase 12, che allora si chiamava Fase 11). La
+  **2c** ha design approvato — tetto a
   5 tentativi con colonne contatore su `payments` — e **schema non scritto**. La
   **3e** resta aperta ed è una domanda commerciale, non tecnica.
 

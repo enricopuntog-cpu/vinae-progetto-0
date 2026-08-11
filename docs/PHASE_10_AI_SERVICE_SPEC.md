@@ -6,6 +6,15 @@ fonte da cui l'implementazione discende. Il branch previsto dal backlog è
 `migration/phase-10-ai-service` (`docs/MIGRATION_PHASE_1_BACKLOG.md:542`) e si
 apre a decisioni chiuse, cioè adesso.
 
+> **La Fase 10 è chiusa dall'11 agosto 2026** — PR #35, squash `442c98c` alle
+> 18:53:14 UTC — al suo unico checkpoint **10a + 10b + 10c**, con perimetro le
+> tre funzionalità migrate. **Le quattro ammesse per eccezione (7.3a, 7.3b, 7.12,
+> 7.13) non sono state costruite e non sono più Fase 10: sono la Fase 11**, non
+> iniziata e senza branch, e il cutover è diventato la Fase 12. Le sotto-fasi
+> 10d/10e/10f della sezione 6 vanno lette con quella rinumerazione. La sezione 7
+> resta la fonte delle decisioni che le descrivono: sono già chiuse, ed è per
+> questo che la Fase 11 parte da lì e non da zero.
+
 Ogni affermazione di questo documento porta la fonte `file:riga` da cui viene.
 Ciò che non aveva una fonte era marcato **decisione aperta**; non ne resta
 nessuna.
@@ -141,9 +150,10 @@ che questa fase eredita.
 
 ### 1.3 Fuori perimetro, dichiarato
 
-- **Il cutover (Fase 11).** Anche a Fase 10 completa, `frontend/` + `backend/`
-  restano la versione servita: la dismissione è una decisione separata
-  (`docs/MIGRATION_PHASE_1_BACKLOG.md:552-555`).
+- **Il cutover (Fase 12, era la Fase 11 fino all'11 agosto 2026).** Anche a Fase
+  10 completa, `frontend/` + `backend/` restano la versione servita: la
+  dismissione è una decisione separata
+  (`docs/MIGRATION_PHASE_1_BACKLOG.md:606-612`).
 - **Lo spegnimento delle rotte `/ai` del backend FastAPI.** Finché `frontend/` è
   servito, `SommelierChat.tsx`, `useSellWizard.ts` ed `esplora.tsx` continuano a
   chiamarle. La regola «un solo scrittore autorevole per dominio»
@@ -328,8 +338,9 @@ interamente simulato e non chiama nessun servizio»
 
 **La decisione 7.13 lo fa entrare nella Fase 10**, e con una conseguenza che va
 detta qui perché è il contrario di ciò che questa sezione concludeva nella prima
-stesura: il debito non va sulla lista di cutover della Fase 11 accanto a
-`bottle_units.visibilita`, **si chiude in questa fase**. Oggi la UI promette
+stesura: il debito non va sulla lista di cutover accanto a
+`bottle_units.visibilita`, **si chiude con la 7.13** — che il checkpoint unico
+della Fase 10 ha lasciato fuori, quindi si chiude nella Fase 11. Oggi la UI promette
 all'utente uno sfondo che non viene mai applicato; dalla 7.13 in poi o viene
 applicato davvero, o il pannello va tolto. La terza via — lasciarlo lì a
 promettere — è quella che la decisione ha scartato.
@@ -591,14 +602,14 @@ triage sono decisioni di dettaglio non ancora scritte — e **ciascuna merita la
 propria sessione di spec prima del codice**, sul modello dei 9a/9b/9c separati
 della Fase 9.
 
-| | Contenuto | SQL? | Che cosa serve prima |
-| --- | --- | --- | --- |
-| **10a** | La porta: una Edge Function proxy sul pattern di 4.1 — origine, metodo, flag, bearer, `auth.getUser`, bucket via `public.rate_limit_consume`, provider dietro adapter, risposta validata. Copre abbinamento e suggerimento da testo. Porta l'interfaccia `AiService` in `frontend-next/src/services/types.ts` e l'adapter | No | 7.4, 7.5, 7.6, 7.8, 7.9, 7.11 |
-| **10b** | Lo storico e la chat: migrazione, RLS, vista a colonne chiuse, `SECURITY DEFINER` di append con il tetto messaggi, scadenza applicata in lettura (5.1), rotta chat SSE | **Sì** | 10a, più la 7.7 |
-| **10c** | Il ripristino UI: pannello Assistente nel wizard di vendita, pannello Sommelier nel Layout, pannello abbinamento in `/esplora` — senza quest'ultimo `ai-pairing` resta senza chiamante e la 7.8 senza superficie | No | 10a + 10b |
-| **10d** | La visione: autofill da foto (7.3a) e spunta di completezza (7.3b). La spunta è un attributo dell'annuncio, quindi **una seconda migrazione** | **Sì** | sessione di spec propria, più la scelta del provider di visione (7.1) |
-| **10e** | Lo sfondo (7.13): relay verso PhotoRoom, bucket Storage per gli sfondi curati, e la sostituzione del `setTimeout` di `SfondoIAPanel` | Probabile — policy di Storage | sessione di spec propria |
-| **10f** | Il triage di moderazione (7.12): classificatore, e la **colonna persistita su `reports`** decisa insieme alla 7.12 — quindi una migrazione | **Sì** | sessione di spec propria, e il pannello della Fase 9 esercitato almeno una volta su una sessione reale |
+| | Contenuto | SQL? | Che cosa serve prima | Stato |
+| --- | --- | --- | --- | --- |
+| **10a** | La porta: una Edge Function proxy sul pattern di 4.1 — origine, metodo, flag, bearer, `auth.getUser`, bucket via `public.rate_limit_consume`, provider dietro adapter, risposta validata. Copre abbinamento e suggerimento da testo. Porta l'interfaccia `AiService` in `frontend-next/src/services/types.ts` e l'adapter | No | 7.4, 7.5, 7.6, 7.8, 7.9, 7.11 | **Consegnata** — PR #35 |
+| **10b** | Lo storico e la chat: migrazione, RLS, vista a colonne chiuse, `SECURITY DEFINER` di append con il tetto messaggi, scadenza applicata in lettura (5.1), rotta chat SSE | **Sì** | 10a, più la 7.7 | **Consegnata** — PR #35, migrazione applicata |
+| **10c** | Il ripristino UI: pannello Assistente nel wizard di vendita, pannello Sommelier nel Layout, pannello abbinamento in `/esplora` — senza quest'ultimo `ai-pairing` resta senza chiamante e la 7.8 senza superficie | No | 10a + 10b | **Consegnata** — PR #35 |
+| ~~10d~~ → **Fase 11** | La visione: autofill da foto (7.3a) e spunta di completezza (7.3b). La spunta è un attributo dell'annuncio, quindi **una seconda migrazione** | **Sì** | sessione di spec propria, più la scelta del provider di visione (7.1) | Non iniziata |
+| ~~10e~~ → **Fase 11** | Lo sfondo (7.13): relay verso PhotoRoom, bucket Storage per gli sfondi curati, e la sostituzione del `setTimeout` di `SfondoIAPanel` | Probabile — policy di Storage | sessione di spec propria | Non iniziata |
+| ~~10f~~ → **Fase 11** | Il triage di moderazione (7.12): classificatore, e la **colonna persistita su `reports`** decisa insieme alla 7.12 — quindi una migrazione | **Sì** | sessione di spec propria, e il pannello della Fase 9 esercitato almeno una volta su una sessione reale | Non iniziata |
 
 **Perché in quest'ordine, e non per interesse.** 10a stabilisce il contratto e il
 costo reale di una chiamata al provider senza toccare lo schema: è la parte
@@ -617,8 +628,17 @@ esercitato** (`CONTESTO_IA/01_STATO_ATTUALE.md`, sezione «Fase 9 — decisioni
 organizzative»). Aggiungere un classificatore che ordina una coda che nessuno ha
 ancora visto funzionare è costruire sul non verificato.
 
-`MIN_TESTS` in CI è a **204** (`.github/workflows/ci.yml:99`): come in ogni fase
+`MIN_TESTS` in CI era a **204** quando questa sezione è stata scritta ed è a
+**255** dal merge della PR #35 (`.github/workflows/ci.yml:99`): come in ogni fase
 precedente va alzato deliberatamente quando i test aumentano.
+
+**Come è andata a finire.** I primi tre checkpoint sono stati consegnati insieme
+nella PR #35 e la fase si è chiusa lì. Gli ultimi tre non sono stati costruiti e
+**non sono più Fase 10**: sono diventati la **Fase 11 — estensioni AI ammesse per
+eccezione**, non iniziata e senza branch, e il cutover è diventato la Fase 12. La
+ragione registrata qui sopra — sono meno specificate, e ciascuna merita la propria
+sessione di spec — è la stessa che ha portato a separarle anche di numero invece
+di lasciarle come coda aperta di una fase dichiarata chiusa.
 
 ---
 
@@ -756,8 +776,9 @@ Questa decisione fa entrare nella fase il pannello `SfondoIAPanel`, che la prima
 stesura di questa spec dichiarava fuori perimetro (1.3 e 2.6) perché oggi è
 interamente simulato — un `setTimeout` di 1100 ms e un toast «Sfondo applicato
 (demo)» (`frontend/src/routes/vendi.tsx:569-579`). L'effetto collaterale è che il
-debito «la UI promette una cosa che non accade» **non va sulla lista di cutover
-della Fase 11: si chiude qui**, in un senso o nell'altro.
+debito «la UI promette una cosa che non accade» **non va sulla lista di cutover:
+si chiude con la 7.13**, in un senso o nell'altro — e la 7.13 è restata fuori dal
+checkpoint unico, quindi si chiude nella Fase 11.
 
 Quello che la decisione non nomina e serve: il bucket Storage dove vivono gli
 sfondi curati, con le sue policy; il limite di dimensione e il tipo MIME
@@ -969,7 +990,7 @@ non su una. Proposta operativa, in quest'ordine:
 2. il commit che rinomina legge `ALLOWED_ORIGINS ?? PAYMENT_ALLOWED_ORIGINS ??`
    il default, così il merge è sicuro anche se il passo 1 è stato dimenticato;
 3. la rimozione di `PAYMENT_ALLOWED_ORIGINS` dalla catena è una riga sulla lista
-   di cutover della Fase 11, con la sua data.
+   di cutover della Fase 12, con la sua data.
 
 Il passo 2 è una scorciatoia temporanea e va scritta come tale: senza il passo 3
 diventa un residuo, esattamente come `bottle_units.visibilita`.
@@ -1139,7 +1160,7 @@ usata dalla 9c — `not exists (select 1 from public.profiles me where me.id =
 **Proposta accolta — il pannello resta montato per gli anonimi.** Oggi chiunque lo apre e
 prende un 401 dall'API (`frontend/src/components/vinea/Layout.tsx:19`, `:255`,
 2.5). È brutto, ma è il comportamento servito, e cambiarlo qui sarebbe migliorare
-il prodotto durante una migrazione. Va sulla lista di cutover della Fase 11.
+il prodotto durante una migrazione. Va sulla lista di cutover della Fase 12.
 
 **Nota vincolante, che non è una decisione aperta**: qualunque risposta si dia
 sul sospeso/rimosso, **non deve toccare la macchina dei pagamenti**. È la regola
