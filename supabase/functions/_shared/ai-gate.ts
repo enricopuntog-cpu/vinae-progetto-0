@@ -39,19 +39,27 @@ const env = (name: string): string => {
 // nostro: il tetto complessivo è il limite di spesa configurato sul conto del
 // provider (7.11), che è l'unico che protegge anche da una chiave uscita.
 //
-// ATTENZIONE, e il motivo per cui questi numeri stanno qui e non sparsi: il
-// legacy limita la chat a 20 per 60 s (`backend/.env.example:44-45`), mentre una
-// conversazione Sommelier realistica è di cinque-quindici battute. `ai:chat` a
-// 10/ora si esaurisce **dentro una conversazione sola**. La decisione ha fissato
-// la forma — bucket per funzionalità, finestra oraria — citando `10 / 3600` come
-// modello; il valore di `ai:chat` è quello da riconfermare prima di accendere
-// `AI_ENABLED`, ed è una riga.
+// I tre valori sono stati fissati in sessione l'11 agosto 2026, dopo che la
+// prima stesura li aveva messi tutti e tre a `10` copiando il modello:
+//
+// - `ai:chat` a **40/ora** regge circa tre conversazioni realistiche intere
+//   (cinque-quindici battute l'una) invece di esaurirsi dentro la prima. È il
+//   difetto che il valore precedente aveva: il legacy sta a 20 per 60 s
+//   (`backend/.env.example:44-45`), e 10/ora non arrivava in fondo a uno scambio.
+// - `ai:pairing` a **15/ora** perché durante una sessione di navigazione si
+//   prova più di una combinazione.
+// - `ai:catalogo` resta a **10/ora** perché è un'azione per annuncio, non per
+//   sessione: chi ne pubblica dieci in un'ora sta facendo un'altra cosa.
+//
+// Restano vincolanti e non sono parametri di questo file: finestra oraria per
+// tutti e tre, nessuna eccezione per `admin`, nessun tetto secondario nostro
+// oltre al rate limit per la v0.
 
 export const FINESTRA_SECONDI = 3600;
 
 export const LIMITI: Record<AiScope, number> = {
-  "ai:chat": 10,
-  "ai:pairing": 10,
+  "ai:chat": 40,
+  "ai:pairing": 15,
   "ai:catalogo": 10,
 };
 
