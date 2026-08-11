@@ -250,11 +250,19 @@ cade con loro, perché le versioni a ledger coincidono già con i nomi dei file.
 2. decidere dove sta il gate di autorizzazione, dato che la regola scritta
    presidia `supabase db push` e il percorso reale è il merge su `main`;
 3. configurare variabili e secret GitHub dello scheduler di auto-rilascio e
-   ottenere una run verde di `Phase 7 - auto-release payouts`, oggi a 11 run su
-   11 in `failure`. È il gate che la 7g ha dichiarato fuori dal merge, ed è la
-   precondizione della decisione 1e;
-4. approvare l'avvio della Fase 9 — moderazione e audit persistente — nel branch
-   `migration/phase-9-moderation-service` previsto dal backlog.
+   ottenere una run verde di `Phase 7 - auto-release payouts`, oggi a **18 run
+   su 18** in `failure` con `gh variable list` e `gh secret list` entrambi
+   vuoti, verificato l'11 agosto 2026. È il gate che la 7g ha dichiarato fuori
+   dal merge, ed è la precondizione della decisione 1e;
+4. chiudere le **undici decisioni aperte** della specifica della Fase 10
+   ([`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md)),
+   prima fra tutte la 7.2 — dove vive lo storico Sommelier — che determina se la
+   fase contiene SQL. Il branch `migration/phase-10-ai-service` **non è aperto**
+   e non va aperto prima.
+
+La voce che questo elenco portava come quarta — approvare l'avvio della Fase 9 —
+è chiusa: la fase è mersa con la PR #32 (squash `cd81df6`) l'11 agosto 2026 e le
+quattro migrazioni sono applicate al progetto reale.
 
 Lo smoke Storage del bucket `cantina`, che questo elenco portava come terza voce,
 è stato eseguito e chiuso il 5 agosto 2026; la sua registrazione arriva con la

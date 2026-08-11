@@ -31,6 +31,12 @@
 | [#25](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/25) | 05-08-2026 | merged | Fase 7f — `ordine_contestazione_risolvi`: cast dei letterali all'enum, griglia 7c rieseguita 22/0, residui zero |
 | [#26](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/26) | 06-08-2026 | merged | Fase 7g — quattro check verdi, scheduler GitHub Actions, runner fail-closed e sanità backlog con `PAYMENTS_ENABLED=false`; squash `f9c53e0`; secret e prima invocazione reale esclusi |
 | [#27](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/27) | 07-08-2026 | merged | Fase 8 — messaggistica, notifiche e Realtime privato; Preview 20/20 + 23/23 + 5/5 concorrenti, smoke autenticato, residui zero; squash `4f96864`, quattro check `SUCCESS` sull'HEAD finale `b32ff9d` |
+| [#28](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/28) | 08-08-2026 | merged | Fase 9 — specifica organizzativa, sola documentazione: `ModerationService` e audit persistente, nove decisioni aperte; squash `696e538` |
+| [#29](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/29) | 08-08-2026 | merged | Contesto, `CLAUDE.md` e backlog allineati al merge della Fase 8; squash `552bac2` |
+| [#30](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/30) | 09-08-2026 | merged | `CHANGES.log` registra il merge delle PR #28 e #29 su `main`; squash `8646f06` |
+| [#31](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/31) | 10-08-2026 | merged | `CHANGES.log` allineato all'HEAD reale e alla pulizia dei branch; squash `73ea845` |
+| [#32](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/32) | 11-08-2026 | merged | Fase 9 — moderazione: schema, sette RPC, cinque transizioni sugli annunci e il secondo provvedimento che blocca il commercio (9a + 9b + 9c); quattro check verdi, Preview `fomwzziqrajwmqfuzqaz` con le quattro migrazioni applicate prima del merge; squash `cd81df6` alle 07:43:53 UTC; ledger di produzione portato a 24 righe dall'integrazione GitHub |
+| [#33](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/33) | 11-08-2026 | merged | Verifica post-merge della Fase 9 sul progetto reale, sola documentazione: ledger riletto, tabelle vuote, invarianti di esposizione misurati, Advisor riletti; squash `8dd56c0` alle 09:18:54 UTC, tre check verdi e `Supabase Preview` in `skipping` |
 
 La PR #26 parte dal commit funzionale `90f99fa` ed è stata integrata in `main`
 con lo squash `f9c53e0`. La Fase 8 usa la sola PR #27, integrata in `main` il
@@ -151,6 +157,9 @@ delle regole di migrazione.
 | [`../docs/PHASE_7E_DEBT_CLOSURE.md`](../docs/PHASE_7E_DEBT_CLOSURE.md) | Rapporto della 7e: i quattro difetti della griglia 7c, l'esito riga per riga dell'esecuzione reale con i valori misurati, i dieci passi dello smoke Storage, i residui |
 | [`../docs/PHASE_7F_FIX_VERIFICATION.md`](../docs/PHASE_7F_FIX_VERIFICATION.md) | Rapporto della 7f: il difetto `42804`, la sua conseguenza sui fondi del venditore, la correzione, la griglia 7c rieseguita 22/0 riga per riga, i 26 controlli sui residui, e come funziona davvero l'impalcatura della griglia |
 | [`../docs/PHASE_7G_OPERATIONAL_CLOSEOUT.md`](../docs/PHASE_7G_OPERATIONAL_CLOSEOUT.md) | Decisioni 1c/1d, workflow auto-rilascio, sanità oltre 24 ore, verifiche locali e gate remoto ancora chiuso |
+| [`../docs/PHASE_8_MESSAGING_NOTIFICATIONS_SPEC.md`](../docs/PHASE_8_MESSAGING_NOTIFICATIONS_SPEC.md) | Specifica della Fase 8: messaggistica, notifiche, Realtime privato |
+| [`../docs/PHASE_9_MODERATION_SERVICE_SPEC.md`](../docs/PHASE_9_MODERATION_SERVICE_SPEC.md) | Specifica della Fase 9: `ModerationService`, audit persistente, le nove decisioni poi chiuse in sessione organizzativa |
+| [`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md) | Specifica della Fase 10: inventario dell'AI legacy con fonte `file:riga`, ciò che esiste già lato Supabase, e **undici decisioni aperte** — nessuna chiusa. Registra le tre smentite al backlog: `ai-identify-bottle` non esiste, l'identificazione da foto non esiste nemmeno nel legacy, il perimetro è cinque rotte su tre funzionalità |
 | [`../supabase/repair/README.md`](../supabase/repair/README.md) | Riparazione del ledger delle migrazioni e replay misurato |
 | [`../supabase/tests/README.md`](../supabase/tests/README.md) | Ordine e scopo dei test SQL |
 | [`../frontend-next/src/services/types.ts`](../frontend-next/src/services/types.ts) | Contratti dei servizi target |

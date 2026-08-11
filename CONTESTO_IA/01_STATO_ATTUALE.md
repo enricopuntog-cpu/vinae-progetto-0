@@ -139,8 +139,8 @@ Fase 11 e richiede una decisione esplicita.
 | Contestazione risolvibile a favore del venditore, e fondi che si sbloccano | Fase 7f, PR #25 al merge squash `491e10d` — `42804` corretto con quattro cast all'enum; griglia 7c rieseguita **22 PASSA / 0 FALLISCE**, residui a zero su 26 controlli |
 | Scheduler auto-rilascio e sanità backlog | Fase 7g, PR #26 integrata con squash `f9c53e0`; configurazione secret e prima invocazione restano separate |
 | Messaggi e notifiche | Integrati in `main` — Fase 8, PR #27 al merge squash `4f96864`; migrazione `20260806224517` distribuita in produzione dal merge, ventesima riga del ledger |
-| Moderazione e audit persistente | Non migrati — Fase 9 |
-| AI reale | Non migrata — Fase 10 |
+| Moderazione e audit persistente | Integrati in `main` — Fase 9, PR #32 al merge squash `cd81df6`; le quattro migrazioni distribuite in produzione dal merge, righe 21-24 del ledger. Verifica post-merge in PR #33, squash `8dd56c0` |
+| AI reale | Non migrata — Fase 10. **Specifica organizzativa scritta** ([`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md)), undici decisioni aperte, nessuna implementazione |
 | Cutover | Non iniziato — Fase 11 |
 
 ## Fase 6d-1 integrata
@@ -770,6 +770,95 @@ senza di essa «sospendi» scriverebbe una riga di audit e non farebbe nulla. La
 tensione è registrata qui perché la scelta sia visibile, non perché vada
 riaperta.
 
+## Fase 10 — specifica scritta, nessuna decisione chiusa
+
+La specifica organizzativa è
+[`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md),
+scritta l'11 agosto 2026 con lo stesso standard di quella della Fase 9: ogni
+affermazione con fonte `file:riga`, numeri di riga fissati su `8dd56c0`, e ciò
+che non ha fonte marcato **decisione aperta**. Le 72 citazioni assolute sono
+state verificate a macchina — file esistente, riga esistente — e ognuna è stata
+letta prima di essere scritta.
+
+Il branch di implementazione `migration/phase-10-ai-service` **non è stato
+aperto**. È una differenza deliberata rispetto alla Fase 9, la cui specifica (PR
+#28) fu scritta direttamente sul branch di fase: qui la spec vive su
+`docs/fase-10-specifica-ai` e il branch di fase si apre solo dopo che le
+decisioni sono chiuse in sessione organizzativa.
+
+### Che cosa l'inventario ha smentito
+
+Il backlog dedica alla Fase 10 due righe
+(`docs/MIGRATION_PHASE_1_BACKLOG.md:544-546`). L'inventario del codice reale ne
+smentisce tre punti, e sono correzioni di perimetro, non dettagli.
+
+- **`ai-identify-bottle` non esiste.** Non è uno stub vuoto: non c'è né in
+  `supabase/functions/` — solo `_shared/`, `connect-onboarding/`,
+  `payments-checkout/`, `payouts-release/` e `deno.json` — né sul progetto
+  reale, dove `list_edge_functions` su `pijnmcllmfgjmgsvtcej`, letto l'11 agosto
+  2026, riporta le sole tre function già note.
+- **L'identificazione bottiglia da fotografia non esiste nemmeno nel legacy.**
+  Il backend accetta `ocr_text` (`backend/ai_routes.py:228`) ma nessun chiamante
+  di `frontend/` lo invia mai: l'unico punto di consumo manda solo `hint`, testo
+  scritto a mano (`frontend/src/hooks/useSellWizard.ts:66`). In tutto
+  `frontend/src` non esiste nessun percorso di acquisizione immagine. Portarla
+  non sarebbe una migrazione ma una **funzionalità nuova**, vietata dalla regola
+  di fase. Se entri comunque nel perimetro è la decisione aperta 7.3.
+- **Il perimetro reale è cinque rotte su tre funzionalità**
+  (`backend/ai_routes.py:16`), non una: chat Sommelier con storico persistente,
+  abbinamento cibo-vino, suggerimento di catalogazione.
+
+### Il nodo che decide la forma della fase
+
+Delle tre funzionalità solo la chat ha dati da spostare; le altre due sono
+richieste senza stato. Lo storico Sommelier realizza oggi i tre requisiti
+elencati in `CLAUDE.md` — ownership, tetto messaggi, TTL — in tre righe precise
+di `backend/repositories.py`: indice unico `(owner_id, session_id)` a `:194`,
+`$slice: -max_messages` a `:223`, indice TTL `expireAfterSeconds=0` a `:195`.
+
+Rifarlo su Postgres è la decisione aperta 7.2, e il punto scomodo è il TTL:
+Mongo lo ottiene con un indice, Postgres no, e `pg_cron` è **escluso** dalla
+decisione 1a della Fase 7d, non rinviato. Le alternative sono la cancellazione
+opportunistica sul modello di `rate_limit_consume`, un secondo job GitHub
+Actions sul modello della 7g, o una scadenza applicata in lettura. Se la
+risposta alla 7.2 fosse «nessuna persistenza» o «non in questa fase», la Fase 10
+sarebbe la prima dalla 5 in poi **senza migrazioni**, e la prima interamente
+reversibile.
+
+### Che cosa esiste già e non va ricostruito
+
+- **L'astrazione del provider.** `AIProvider` è un Protocol a due metodi
+  (`backend/ai_provider.py:14-16`), con `DisabledAIProvider` che fallisce chiuso
+  (`:19-27`) e ogni eccezione del provider collassata in un `AIProviderError`
+  generico (`:56-57`, `:71-72`). L'invariante «il provider è astratto e
+  sostituibile» non è un obiettivo della fase: è la forma da riprodurre.
+- **Il rate limit lato server.** `public.rate_limit_consume` è concessa a
+  `service_role` e a nessun altro
+  (`supabase/migrations/20260731135455_phase_7_order_payment_service.sql:157-160`):
+  una Edge Function con client di servizio può già consumare un bucket via
+  `rpc()` **senza nessuna nuova migrazione**. La Fase 9 ha introdotto la prima
+  finestra oraria — `report:submit`, 10/3600 s — che è il precedente più vicino
+  a un budget AI.
+
+Lato target invece non esiste niente: nessuna interfaccia `AiService`
+(`frontend-next/src/services/types.ts` è lungo 996 righe e l'ultima interfaccia
+è `ModerationService` a `:970`), nessun adapter, nessuna cartella `phase10/`,
+nessuna variabile d'ambiente AI, e una sola occorrenza di `/api/ai` in tutto
+`frontend-next/src` — un commento che rinvia alla Fase 10
+(`frontend-next/src/hooks/useSellWizard.ts:72`). La Fase 9 partiva con
+l'interfaccia già dichiarata; questa parte da zero su tre livelli.
+
+### Due vincoli che non sono decisioni aperte
+
+1. **Niente nella Fase 10 deve far reagire la macchina dei pagamenti a
+   `stato_utente`.** È la stessa regola fissata per la 9c, e la classe di
+   difetto 7c/7f che protegge — un pagamento congelato senza uscita — non cambia
+   natura perché il predicato lo aggiunge una fase successiva.
+2. **La chiave AI vive nell'ambiente della Edge Function**, mai nel repository e
+   mai nel browser (`docs/MIGRATION_PHASE_1_BACKLOG.md:545-546`;
+   `02_STORIA_FASI.md`, sezione «Fase 10»). Introdurla significa aggiornare
+   `docs/ENVIRONMENT.md` e il `.env.example` pertinente nello stesso cambiamento.
+
 ## Gate chiusi senza essere stati autorizzati
 
 Due dei gate che questo documento elencava come aperti non lo sono più, e non
@@ -782,11 +871,18 @@ perché le versioni a ledger sono già quelle dei file.
 
 1. configurare variabili e secret GitHub dello scheduler di auto-rilascio —
    `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `PAYOUTS_JOB_TOKEN` — e ottenere una run
-   verde di `Phase 7 - auto-release payouts`. Oggi sono **11 run su 11 in
-   `failure`** per configurazione mancante: finché resta così la decisione **1e**
-   non è soddisfatta e `PAYMENTS_ENABLED` non può essere acceso;
-2. approvare l'avvio della Fase 9 — moderazione e audit persistente — che è la
-   fase successiva nell'ordine di dipendenza e **non è iniziata**;
+   verde di `Phase 7 - auto-release payouts`. Oggi sono **18 run su 18 in
+   `failure`** per configurazione mancante, e `gh variable list` e
+   `gh secret list` sul repository sono **entrambi vuoti**, verificato l'11
+   agosto 2026: finché resta così la decisione **1e** non è soddisfatta e
+   `PAYMENTS_ENABLED` non può essere acceso;
+2. chiudere in sessione organizzativa le **undici decisioni aperte** della
+   specifica della Fase 10
+   ([`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md)),
+   a partire dalla 7.2 — dove vive lo storico Sommelier — che determina se la
+   fase contiene SQL, e dalla 7.3, che decide se l'identificazione bottiglia
+   entra nel perimetro pur essendo una funzionalità nuova. Il branch
+   `migration/phase-10-ai-service` **non è aperto** e non va aperto prima;
 3. autorizzare separatamente l'esecuzione delle griglie
    [`7_ordini_pagamenti.sql`](../supabase/tests/7_ordini_pagamenti.sql) — 16
    casi — e [`7b_connect_marketplace.sql`](../supabase/tests/7b_connect_marketplace.sql)

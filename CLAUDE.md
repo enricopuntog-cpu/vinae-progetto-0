@@ -323,6 +323,57 @@ without going back to that session; they are recorded in `CONTESTO_IA/01_STATO_A
   `bottle_unit_visibilita` enum survive as a documented inert residue: the column is a
   `bottiglia_crea` parameter written by both frontends. It belongs on the Phase 11 cutover list.
 
+PR #33 carried the post-merge verification onto `main` — squash `8dd56c0`, 11 August 2026,
+documentation only. The production ledger was re-read on 11 August 2026 and is unchanged at
+twenty-four rows.
+
+### Phase 10 AI — specification written, nothing decided
+
+`docs/PHASE_10_AI_SERVICE_SPEC.md` is the organizational spec, same standard as Phase 9: every
+claim carries a `file:line` source, line numbers pinned to `8dd56c0`, anything without a source is
+marked an open decision. **Eleven decisions are open and none of them is closed by the spec.** The
+implementation branch `migration/phase-10-ai-service` has deliberately **not** been opened — it
+opens only after those decisions are closed in an organizational session, as happened for Phase 9.
+
+The inventory contradicts the two-line backlog entry on three points, and those corrections are
+what future work must start from rather than the backlog:
+
+- **`ai-identify-bottle` does not exist**, in the repository or on the real project.
+  `supabase/functions/` holds only `_shared/`, `connect-onboarding/`, `payments-checkout/`,
+  `payouts-release/`; `list_edge_functions` on `pijnmcllmfgjmgsvtcej` reports the same three
+  deployed functions and no other. The name in the backlog is an intention, not a contract.
+- **Bottle identification from a photograph does not exist in the legacy either.** The backend
+  accepts an `ocr_text` field (`backend/ai_routes.py:228`) but no caller in `frontend/` ever sends
+  it — the single call site sends only `hint` (`frontend/src/hooks/useSellWizard.ts:66`) — and
+  there is no image-capture path anywhere in `frontend/src`. Building it would be a **new feature**,
+  which the migration forbids. Whether it enters the perimeter anyway is open decision 7.3.
+- **The real perimeter is five routes over three features**, not one: Sommelier chat with persistent
+  history, food pairing, and cataloguing suggestion (`backend/ai_routes.py:16`). Only the chat has
+  data to move, so it alone decides whether the phase contains SQL — open decision 7.2. If the
+  answer is "no persistence" or "not this phase", Phase 10 would be the first since Phase 5 with no
+  migration at all, and the first entirely reversible one.
+
+Two things already exist and must not be rebuilt. The `AIProvider` abstraction the security
+invariants call for is **already implemented** in `backend/ai_provider.py:14-16`, with a
+fail-closed `DisabledAIProvider` (`:19-27`) and every provider exception collapsed into a generic
+`AIProviderError` (`:56-57`, `:71-72`). And the server-side rate limit the backlog asks for is in
+production since Phase 7: `public.rate_limit_consume` is granted to `service_role` and to nobody
+else (`supabase/migrations/20260731135455_phase_7_order_payment_service.sql:157-160`), so an Edge
+Function holding a service client can consume a bucket via `rpc()` **without any new migration**.
+
+Nothing exists on the target side: no `AiService` interface (`frontend-next/src/services/types.ts`
+is 996 lines and ends at `ModerationService`, `:970`), no adapter, no `phase10/` directory, no AI
+environment variable, and exactly one `/api/ai` occurrence in all of `frontend-next/src` — a
+comment deferring to Phase 10 (`frontend-next/src/hooks/useSellWizard.ts:72`). Phase 9 started with
+its interface already declared; this one starts from zero on three levels.
+
+Two constraints that are **not** open decisions. Whatever is decided about suspended or removed
+users and the AI, it must not make the payment machine react to `stato_utente` — the same rule
+fixed for 9c, and the 7c/7f defect class it protects against does not change nature because a later
+phase adds the predicate. And the AI key lives in the Edge Function's own environment, never in the
+repository and never in the browser (`docs/MIGRATION_PHASE_1_BACKLOG.md:545-546`); adding it means
+updating `docs/ENVIRONMENT.md` and the relevant `.env.example` in the same change.
+
 ### Postgres exposure rules (binding since Phase 6d-1)
 
 RLS filters rows, never columns. These three rules are what keeps that gap closed — breaking

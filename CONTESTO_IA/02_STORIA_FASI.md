@@ -690,21 +690,41 @@ esiste più: `list_branches` sul progetto reale riporta il solo branch `main`. L
 20/20, 23/23 e 5/5 restano il rapporto di quella fase, non uno stato riproducibile
 su richiesta — la stessa distinzione che vale per ogni griglia di questo progetto.
 
+## Fase 9 — moderazione e audit persistente
+
+**Stato:** chiusa e distribuita.
+
+PR #32 mersa in squash come `cd81df6` l'11 agosto 2026; le quattro migrazioni
+sono le righe 21-24 del ledger di produzione, distribuite dall'integrazione
+GitHub e non da un comando. `ModerationService` ha un'implementazione reale,
+l'audit è append-only per trigger, e le proiezioni sono viste
+`security_invoker = off` a colonne chiuse — nessuna colonna privata riaperta.
+La verifica successiva al merge è in PR #33, squash `8dd56c0`. Dettaglio in
+`01_STATO_ATTUALE.md`, sezioni «Fase 9 — decisioni organizzative» ed
+«Estensione 9c».
+
 ## Fasi future
-
-### Fase 9 — moderazione
-
-**Stato:** non iniziata.
-
-Previsti `ModerationService`, audit persistente e proiezioni dedicate per i
-motivi di moderazione, senza riaprire le colonne private delle tabelle.
 
 ### Fase 10 — AI reale
 
-**Stato:** non iniziata.
+**Stato:** specifica organizzativa scritta, implementazione non iniziata.
 
 Previsto `AiService` dietro Edge Function/provider astratto. Nessuna chiave
 segreta deve raggiungere il browser.
+
+La specifica è [`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md),
+scritta l'11 agosto 2026 su un branch di sola documentazione: il branch di fase
+`migration/phase-10-ai-service` **non è stato aperto** e si apre solo dopo che
+le **undici decisioni aperte** sono chiuse in sessione organizzativa.
+
+Tre correzioni di perimetro che l'inventario ha imposto al backlog, e che vanno
+lette prima di riprendere la fase: `ai-identify-bottle` non esiste né nel
+repository né sul progetto reale; l'identificazione bottiglia da fotografia non
+esiste nemmeno nel legacy, quindi portarla sarebbe una funzionalità nuova e non
+una migrazione; il perimetro reale è cinque rotte su tre funzionalità — chat
+Sommelier con storico, abbinamento cibo-vino, suggerimento di catalogazione — di
+cui solo la prima ha dati da spostare. È quest'ultima a decidere se la fase
+contiene SQL.
 
 ### Fase 11 — cutover
 
