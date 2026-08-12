@@ -758,12 +758,23 @@ automatizzate rendono quella forma più rischiosa, e che richiede prima una
 revisione legale che questa fase non fa — coerente con la 1.3, che tiene la
 revisione legale fuori da ogni fase di migrazione.
 
-**Quello che la decisione non chiude:** dove vive l'esito della classificazione.
-Se è calcolato a ogni apertura del pannello, la fase non scrive SQL per la 7.12
-ma paga una chiamata al provider per ogni visualizzazione; se è persistito
-accanto alla segnalazione, è una colonna su `reports` e quindi **una migrazione**,
-con la 4.3 che ne governa i grant. La decisione 7.12 vincola che cosa l'AI può
-fare, non dove finisce ciò che produce. Va risolto prima della 10e.
+**Il punto conseguente che la 7.12 apriva è chiuso, non aperto.** La decisione
+7.12 vincola che cosa l'AI può fare, non dove finisce ciò che produce; dove
+finisce lo ha deciso la stessa sessione dell'11 agosto 2026, ed è **persistito
+accanto alla segnalazione, non ricalcolato a ogni apertura del pannello**: una
+colonna su `reports` (o una tabella collegata), quindi **una migrazione**, con la
+4.3 a governarne i grant. L'alternativa scartata era il ricalcolo a ogni
+apertura — nessun SQL per la 7.12, ma una chiamata al provider per ogni
+visualizzazione della coda. Registrato nella tabella di stato in testa a questo
+documento e in `CONTESTO_IA/01_STATO_ATTUALE.md`, sezione «Fase 10 — decisioni
+organizzative».
+
+**La Fase 11 lo eredita chiuso**, e ci ha trovato dentro una domanda che nel
+momento della decisione nessuno aveva misurato: `reports.priorita` **esiste già**,
+è derivata da una regola di dominio deterministica e la coda è **già** ordinata su
+di essa. Che rapporto abbia l'esito del triage con quella colonna — convivenza,
+sostituzione, o un'altra cosa — è aperto e si decide lì, non qui:
+`docs/PHASE_11_AI_EXTENSIONS_SPEC.md`.
 
 ### 7.13 Ritaglio e sfondo — CHIUSA (11 agosto 2026): dentro, per eccezione
 

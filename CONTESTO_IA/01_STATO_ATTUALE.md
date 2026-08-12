@@ -852,6 +852,64 @@ della 7.3b si chiama completezza **documentale** e mai autenticità certificata,
 e la 7.12 non dà all'AI nessuna azione autonoma né identità di «attore AI» in
 `audit_log`.
 
+### La specifica organizzativa esiste
+
+[`../docs/PHASE_11_AI_EXTENSIONS_SPEC.md`](../docs/PHASE_11_AI_EXTENSIONS_SPEC.md),
+stesso standard delle spec della Fase 9 e della Fase 10: ogni affermazione con
+fonte `file:riga`, numeri di riga fissati su **`271c7dc`** — lo squash della PR
+#36 — e **38 citazioni assolute verificate a macchina**, file esistente e riga
+esistente. Il documento presenta le decisioni ancora aperte con opzioni e
+implicazioni, non con un «va deciso».
+
+**Tre affermazioni ereditate sono state riverificate sul progetto reale e
+corrette.** Sono il punto di partenza per chi lavorerà la fase, non il backlog:
+
+- **Il percorso di caricamento delle foto esiste già ed è fatto bene**: upload
+  firmato con il percorso costruito lato server
+  (`../frontend-next/src/app/vendi/actions.ts:43-79`,
+  `../frontend-next/src/hooks/useSellWizard.ts:192-216`). Dimensione massima e
+  tipi MIME non sono domande vergini: hanno già una risposta replicata in **tre
+  punti allineati**, e un bucket nuovo ne aggiunge un quarto.
+- **Un solo adapter di provider è implementato, ed è OpenAI.** Scegliere Claude o
+  Gemini per le foto (7.1) **non è configurare una variabile**: è scrivere un
+  adapter, allargare l'unione dei compiti e aggiungere una firma che accetti
+  un'immagine. Lavoro di implementazione, da contare nell'effort.
+- **`reports.priorita` esiste già**, è un `enum` a tre valori scritto solo dal
+  server dentro `segnalazione_invia`, deriva da una regola di dominio
+  deterministica, e la coda del moderatore è **già ordinata** su di essa con il
+  suo indice. Il triage della 7.12 non arriva su un terreno vuoto: la domanda
+  aperta non è più «dove metto l'esito» ma **che rapporto ha con `priorita`** —
+  convivenza, sostituzione, o un'altra cosa.
+
+### Fase 11 — decisioni organizzative
+
+Chiuse in sessione il **12 agosto 2026**, leggendo la specifica. Non si riaprono
+senza tornare a quella sessione.
+
+- **Storage, DECISO — bucket dedicato**, non riuso di `annunci` o `cantina`. Il
+  motivo registrato è che **`annunci` è pubblico**: una foto caricata solo per
+  l'autofill e poi abbandonata resterebbe leggibile per sempre da chiunque ne
+  conosca l'URL. **Restano aperti** nome del bucket, pubblico o privato, ciclo di
+  vita e pulizia degli orfani, dimensione massima e tipi MIME — «dedicato» non
+  decide «privato».
+- **7.3a e 7.3b, DECISO — due Edge Function distinte**, non una condivisa, sul
+  pattern «una porta per operazione» delle sette RPC della Fase 9 e delle tre
+  function della Fase 10. Con essa è accettato il contro: se una sola chiamata di
+  visione bastasse per entrambe, due function significano due chiamate e costo
+  doppio. Ne segue che la tabella della 7.6, che le metteva entrambe dentro
+  `ai-catalogo`, **è superata su questo punto**, e che le Edge Function nuove
+  della fase diventano **tre**, non due.
+- **Processo, DECISO** — la specifica della Fase 11 vive in una **PR propria**,
+  separata dalla #36, «così da non fare confusione». Stessa forma della Fase 10,
+  dove la specifica (#34) precedette l'implementazione (#35).
+- **PR #36, via libera CONDIZIONATO** e non incondizionato: «se quella PR è
+  completa sì, se no la completiamo e mergiamo». La condizione è stata verificata
+  prima del merge e **una incompletezza è stata trovata e sanata**: la #36 non
+  registrava il proprio numero, che `CLAUDE.md` impone come ultimo commit di ogni
+  PR. Registrare la forma condizionale e non «approvata» è deliberato: un
+  registro che archivia i «sì, se» come «sì» insegna che le PR si mergiano su
+  richiesta.
+
 ### La rinumerazione delle fasi, e dove il vecchio numero sopravvive
 
 Decisa in sessione organizzativa l'11 agosto 2026, alla chiusura della Fase 10:
