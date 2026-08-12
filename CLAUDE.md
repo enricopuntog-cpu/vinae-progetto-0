@@ -128,8 +128,8 @@ The full picture is in `docs/ROADMAP_V1.md`, `docs/MIGRATION_PHASE_1_BACKLOG.md`
 - Domain migration order follows dependency, not convenience: Auth (5) → Listings/Catalog (6) →
   Orders/Payments (7) → Messaging/Notifications (8) → Moderation (9) → AI (10) →
   AI extensions admitted by exception (11) → Cutover (12).
-  **The phases were renumbered on 11 August 2026**, when Phase 10 closed: the cutover was
-  Phase 11 and is now Phase 12, and the four features decisions 7.3/7.12/7.13 admitted by
+  **The phases were renumbered on 11 August 2026 by PR #36**, when Phase 10 closed: the cutover
+  was Phase 11 and is now Phase 12, and the four features decisions 7.3/7.12/7.13 admitted by
   exception became the new Phase 11 — they are not Phase 10 and had no phase of their own, so
   they belonged nowhere. Two classes of file keep the old number on purpose, because editing
   them is forbidden or meaningless: the two `supabase/migrations/*.sql` that mention it in a
