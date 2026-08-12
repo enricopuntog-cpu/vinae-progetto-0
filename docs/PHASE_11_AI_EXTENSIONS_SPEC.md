@@ -6,6 +6,14 @@
 > Enrico, sul modello dei 9a/9b/9c della Fase 9 e dei 10a/10b/10c della Fase 10 —
 > non prima.
 >
+> **Aggiornamento del 12 agosto 2026, secondo tempo: la sezione 6 è chiusa per
+> intero.** Tutte e sei le aree hanno una risposta registrata con data e
+> motivazione (§2.5 per il verbale, §6 per il dettaglio). **Il branch resta
+> comunque non aperto**, e non per prudenza: tutti e quattro i checkpoint della
+> §5 sono bloccati da dipendenze esterne che nessuna quantità di codice chiude, e
+> una di esse — la prova 6.6 **prima** di `11a` — è stata decisa in questa stessa
+> sessione. Aprire `11a` adesso contraddirebbe una decisione presa un'ora prima.
+>
 > Le quattro funzionalità sono ammesse **per eccezione esplicita e per nome**
 > dalle decisioni 7.3, 7.12 e 7.13 della Fase 10. «Niente funzionalità nuove
 > durante la migrazione» **non è decaduta**: continua a valere per tutto ciò che
@@ -83,10 +91,15 @@ inventario, pattern riusabili, decisioni aperte, sotto-fasi, effort.
 
 | | Funzionalità | Origine | SQL? | Provider esterno |
 | --- | --- | --- | --- | --- |
-| **7.3a** | Autofill dei campi catalogo da foto dell'etichetta | Decisione 7.3 | No | Modello di visione (7.1) |
-| **7.3b** | Spunta di completezza documentale sull'annuncio | Decisione 7.3 | **Sì** — una colonna su `listings` | Stesso della 7.3a |
-| **7.12** | Triage di moderazione: classifica e ordina la coda | Decisione 7.12 | **Sì** — esito persistito | Livello più economico (7.1) |
-| **7.13** | Ritaglio e sfondo reale al posto della demo | Decisione 7.13 | Probabile — policy di Storage | **PhotoRoom**, non un LLM |
+| **7.3a** | Autofill dei campi catalogo da foto dell'etichetta | Decisione 7.3 | **Sì** — il bucket `foto-ai` e le sue policy (6.1) | Modello di visione (7.1) |
+| **7.3b** | Spunta di completezza documentale sull'annuncio | Decisione 7.3 | **Sì** — un `enum` e una colonna su `listings` (6.4a) | Stesso della 7.3a |
+| **7.12** | Triage di moderazione: classifica e ordina la coda | Decisione 7.12 | **Sì** — tabella `report_triage` (6.4b) | Livello più economico (7.1) |
+| **7.13** | Ritaglio e sfondo reale al posto della demo | Decisione 7.13 | **Sì** — il bucket `sfondi` e le sue policy (6.3c) | **PhotoRoom**, non un LLM |
+
+La colonna «SQL?» era a due `Sì` e due incerte nella prima stesura. Dopo le
+decisioni del 12 agosto (secondo tempo) **sono quattro `Sì`**: ogni funzionalità
+di questa fase porta una migrazione, e il conto della §7 si aggiorna di
+conseguenza.
 
 Sono le stesse che la Fase 10 aveva numerato **10d** (7.3a + 7.3b), **10e**
 (7.13) e **10f** (7.12) nella sua sezione 6, e che il suo unico checkpoint ha
@@ -106,6 +119,11 @@ sessione di spec prima del codice.
 - **La revisione legale della spunta 7.3b.** Il vincolo di etichettatura è già
   deciso (sezione 2.1); una validazione legale di come è formulata non è compito
   di questa fase.
+
+> **La revisione legale resta fuori, ma non resta senza materiale.** La §9
+> registra la **prima proposta** che questa fase le consegna — un'informativa su
+> privacy e uso dell'IA alla registrazione — come proposta e non come chiusura.
+> Il blocco che ne dipende non si sposta.
 
 ---
 
@@ -160,10 +178,11 @@ fatta.**
 - **7.10 — il deploy è il merge.** Non esiste un passo di deploy separato da
   autorizzare: il merge su `main` distribuisce migrazioni **e ridistribuisce
   tutte le Edge Function, comprese quelle che la PR non ha toccato**. Misurato
-  due volte, l'ultima l'11 agosto 2026: le tre function nuove della Fase 10
-  create 38 secondi dopo il merge, e tutte e sei con lo stesso `updated_at` 43
-  secondi dopo, con le tre preesistenti passate a versione 15/14/14 e hash di
-  bundle nuovi. **Conseguenza operativa per questa fase: l'ambiente di una
+  **tre volte**, l'ultima il 12 agosto 2026 (§2.5): le tre function nuove della
+  Fase 10 create 38 secondi dopo il merge, e tutte e sei con lo stesso
+  `updated_at` 43 secondi dopo, con le tre preesistenti passate a versione
+  15/14/14 e hash di bundle nuovi; poi di nuovo dopo la #37, che è sola
+  documentazione. **Conseguenza operativa per questa fase: l'ambiente di una
   function si configura prima del merge, mai dopo.**
 - **`_shared/cors.ts` ha diff vuoto e deve mantenerlo** (7.6). Le function AI
   leggono `AI_ALLOWED_ORIGINS` da `_shared/ai-cors.ts`, un modulo separato che
@@ -261,6 +280,68 @@ squash `271c7dc`, il 12 agosto 2026 alle 09:48:00 UTC.
 > così, ed è il genere di erosione che la regola del «via libera esplicito per PR»
 > esiste per impedire.
 
+### 2.5 Il secondo tempo del 12 agosto 2026 — la sezione 6 è chiusa per intero
+
+La stessa giornata ha avuto due sessioni, come l'11 agosto ne aveva avute due per
+la Fase 10. La prima ha chiuso le quattro decisioni del 2.4 leggendo la prima
+stesura di questo documento; la seconda ha preso **tutte e sei le aree della
+sezione 6**, una per una, nell'ordine in cui il documento le pone. Il dettaglio,
+le tabelle di ciò che è stato pesato e le motivazioni stanno nella sezione 6; qui
+c'è il verbale in forma breve, perché un elenco che si legge in un minuto è ciò
+che serve fra tre mesi.
+
+| | Area | Risposta |
+| --- | --- | --- |
+| **6.1** | Storage | Bucket **`foto-ai`**, **privato**, **nessuna pulizia**, **5 MB**, MIME **`image/jpeg`, `image/png`, `image/webp`** — senza `image/avif` |
+| **6.2** | Function per 7.3a/7.3b | *(già chiusa al 2.4)* — due distinte |
+| **6.3** | PhotoRoom | Modulo proprio sul pattern di `payment-provider.ts`; chiave con **data propria** legata all'apertura di `11c`; **sceglie il venditore** con «solo ritaglio» preselezionato; sfondi in un quarto bucket **pubblico `sfondi`**; anteprima con conferma esplicita; **riga in `docs/SECURITY.md`, punto EXIF compreso** |
+| **6.4a** | Spunta di completezza | **`enum` a tre valori**; **scade** al cambio foto con **ricalcolo esplicito**; **visibile anche all'anonimo**; calcolata **alla pubblicazione** |
+| **6.4b** | Esito del triage | **Convive** con `priorita`, in una **tabella collegata `report_triage`**; ordinamento `priorita` primario e triage **dentro il gruppo**; contenuto **punteggio + motivazione breve**; **non** esposto in `my_reports` |
+| **6.5** | Numeri | `ai:autofill` **30/ora**, `ai:completezza` **10/ora**, `ai:sfondo` **15/ora**; triage **senza scope nuovo**; **5 MB invariato**; tetto mensile **fissato alla configurazione della chiave** |
+| **6.6** | Prova del provider | **Enrico**, **sei foto** della sua cantina con due volutamente difficili, criterio **campi corretti su nove + campi inventati**, **prima di aprire `11a`** |
+| **7.11** | Perimetro della scadenza | PhotoRoom **esce** dal 18 agosto 2026 |
+
+**Tre motivazioni valgono più delle risposte, e sono riportate con le parole di
+chi le ha date.** Sul tetto mensile: *«nessun consumo reale è mai stato osservato
+per nessun fornitore AI in questo progetto, e un numero scelto senza dati sarebbe
+esattamente il tipo di valore inventato che il resto della fase ha sempre
+evitato»*. Sul criterio della prova: contare i campi corretti **e** i campi
+inventati, perché il solo conteggio dei corretti *«premia un modello che riempie
+tutti e nove i campi tirando a indovinare rispetto a uno che ne lascia quattro
+onestamente vuoti»*. Sul percorso del triage, che è la ragione per cui
+`segnalazione_invia` non viene toccata: *«l'opzione 2 lega l'invio di una
+segnalazione — un'azione critica già esistente — alla riuscita di una chiamata a
+un fornitore esterno. È il contrario del principio che regge tutta questa fase:
+`AI_ENABLED` fallisce chiuso proprio perché una funzionalità AI non deve mai
+diventare un blocco per qualcosa che già funziona»*.
+
+**Due domande che la sezione 6 non poneva sono state poste e chiuse lo stesso**,
+perché sono emerse dalle risposte e lasciarle implicite sarebbe stato inventarle
+dopo: **dove vivono gli sfondi curati a mano** della 7.13 (§6.3c), che la sezione
+5 nominava di sfuggita e la sezione 6 non chiedeva; e **da dove parte la
+chiamata al triage** ora che è un percorso proprio (§6.4b).
+
+#### La 7.10 misurata una terza volta, sulla #37
+
+`list_edge_functions` su `pijnmcllmfgjmgsvtcej`, letto il 12 agosto 2026 dopo il
+merge della **#37** — che è **sola documentazione**, quattro file di prosa e
+nessuna riga di function:
+
+| | Versione all'11 agosto | Versione dopo la #37 |
+| --- | --- | --- |
+| `payments-checkout` | 15 | **17** |
+| `connect-onboarding` | 14 | **16** |
+| `payouts-release` | 14 | **16** |
+| `ai-catalogo`, `ai-pairing`, `ai-sommelier` | 1 | **3** |
+
+Tutte e sei condividono un `updated_at` di `2026-08-12T13:28:54Z`, **43 secondi
+dopo** il merge della #37 (13:28:11 UTC) — lo stesso scarto misurato la volta
+precedente. Non è una curiosità: è la 7.10 confermata per la terza volta su una
+PR che non tocca nemmeno un file di function, e con essa il vincolo operativo di
+questa fase. **L'ambiente di una Edge Function si configura prima del merge**, e
+una chiave che manca al momento del merge non è un ritardo recuperabile dopo: è
+una function che comincia a rispondere entro un minuto con l'ambiente che trova.
+
 ---
 
 ## 3. Inventario verificato sul progetto reale
@@ -278,6 +359,12 @@ incomplete: sono corrette qui sotto.
 **Sei Edge Function `ACTIVE`**, tutte `verify_jwt=true`: `payments-checkout`
 (v15), `connect-onboarding` (v14), `payouts-release` (v14), `ai-catalogo` (v1),
 `ai-pairing` (v1), `ai-sommelier` (v1).
+
+> **Le versioni sono quelle lette prima del merge della #37 e non lo sono più.**
+> Dopo quel merge sono 17 / 16 / 16 e 3 / 3 / 3, misurate lo stesso giorno: il
+> dettaglio e ciò che dimostra stanno al §2.5. Il ledger e l'elenco delle
+> function, invece, non sono cambiati — le migrazioni restano venticinque e le
+> function restano sei.
 
 **Nessuna settima function esiste.** In particolare **`ai-sfondo` non esiste**,
 né distribuita né nel repository (`supabase/functions/` contiene `_shared/`,
@@ -519,12 +606,25 @@ function e nello stesso momento, `11a` e `11b` sarebbero stati un checkpoint sol
 — e **la 6.2 l'ha chiusa nel senso opposto**: due function distinte, quindi
 `11a` e `11b` restano due.
 
+Con la sezione 6 chiusa, la colonna «SQL?» non ha più incertezze e la colonna
+«che cosa serve prima» non contiene più decisioni da prendere, **solo dipendenze
+esterne**:
+
 | | Contenuto | SQL? | Che cosa serve prima |
 | --- | --- | --- | --- |
-| **11a** | Visione: una function propria che accetta un'immagine, autofill 7.3a. Nessuna colonna nuova | No | Adapter del provider di visione (3.7), prova 7.1, decisioni 6.1 residue e 6.5 |
-| **11b** | Spunta 7.3b: **function propria** (6.2), colonna su `listings`, `SECURITY DEFINER`, esposizione | **Sì** | 11a, decisione 6.4 |
-| **11c** | Sfondo 7.13: `ai-sfondo`, relay PhotoRoom, bucket degli sfondi curati, sostituzione del `setTimeout` | Probabile | Decisione 6.3, chiave PhotoRoom configurata |
-| **11d** | Triage 7.12: classificatore, esito persistito, colonna nella vista di coda | **Sì** | Decisione 6.4, e il pannello della Fase 9 esercitato almeno una volta |
+| **11a** | Visione: `ai-autofill`, una function propria che accetta un'immagine, autofill 7.3a. Bucket **`foto-ai`** e le sue policy | **Sì** — bucket e policy | **Prova 6.6 eseguita** (che a sua volta richiede le chiavi della 7.11), e l'adapter di visione da scrivere (3.7) |
+| **11b** | Spunta 7.3b: `ai-completezza` (6.2), `enum` e colonna su `listings`, `SECURITY DEFINER`, esposizione in `public_listings` | **Sì** | `11a` |
+| **11c** | Sfondo 7.13: `ai-sfondo`, relay PhotoRoom, bucket **`sfondi`**, sostituzione del `setTimeout` di `SfondoIAPanel` | **Sì** — bucket e policy | **Chiave PhotoRoom configurata** — che per la 6.3(b) ha una data legata all'apertura di questo stesso checkpoint |
+| **11d** | Triage 7.12: `ai-triage`, tabella `report_triage`, `JOIN` e ordinamento nella vista di coda | **Sì** | Il pannello della Fase 9 **esercitato almeno una volta** su una sessione reale |
+
+> **Nessuno dei quattro è apribile al 12 agosto 2026, e non per prudenza.**
+> `11a` è bloccato dalla prova 6.6, che questa stessa sessione ha messo **prima**
+> del codice e che non è eseguibile finché non esistono le chiavi (7.11, scadenza
+> 18 agosto 2026); `11b` da `11a`; `11c` da una chiave la cui data è per
+> definizione l'apertura di `11c`; `11d` dal pannello della Fase 9, di cui su
+> `pijnmcllmfgjmgsvtcej` sono stati letti schema, grant e conteggi ma **nessun
+> comportamento è mai stato esercitato**. Aprire un branch adesso significherebbe
+> contraddire una decisione presa lo stesso giorno.
 
 **Perché il triage è ultimo, e non per comodità.** Il pannello di moderazione
 della Fase 9 esiste in produzione ma **nessun suo comportamento vi è mai stato
@@ -543,33 +643,42 @@ precedeva la 10b.
 ## 6. Decisioni — che cosa è chiuso e che cosa serve prima di qualunque codice
 
 **Niente è risolto per default in questo documento.** Ciò che è chiuso porta la
-data della sessione che l'ha chiuso; ciò che è aperto è marcato aperto anche
-quando la risposta sembra ovvia. Dove è indicata una preferenza, è segnalata come
-tale e resta una proposta.
+data della sessione che l'ha chiuso; ciò che era aperto era marcato aperto anche
+quando la risposta sembrava ovvia. Dove era indicata una preferenza, era segnalata
+come tale e restava una proposta.
 
-**Nessun valore numerico è proposto.** Limiti, dimensioni, budget e finestre si
-fissano in sessione: sotto sono elencati come domande, non come tabelle da
-approvare.
+**Nessun valore numerico era proposto** nella prima stesura: limiti, dimensioni,
+budget e finestre erano elencati come domande, non come tabelle da approvare, e
+sono stati fissati in sessione. Le domande restano scritte sotto le risposte,
+perché una risposta senza la domanda che l'ha prodotta non si può rileggere.
+
+**Stato al 12 agosto 2026, secondo tempo: tutte le aree sono chiuse.**
 
 | | Area | Stato |
 | --- | --- | --- |
-| **6.1** | Storage: bucket, ciclo di vita, dimensione, MIME | **Parzialmente chiusa** — bucket dedicato deciso il 12 agosto 2026; nome, pubblico/privato, ciclo di vita, dimensione e MIME **aperti** |
-| **6.2** | Una Edge Function o due per 7.3a e 7.3b | **Chiusa** il 12 agosto 2026 — **due**, una porta per operazione |
-| **6.3** | PhotoRoom: chiave, budget, modalità | **Aperta** — cinque punti, nessuno risolto |
-| **6.4** | Le due migrazioni: forma, RLS, grant | **Aperta** — e la 6.4(b) è cambiata di natura dopo il 3.6 |
-| **6.5** | Limite di frequenza e valori numerici | **Aperta** — elencata come domande, senza numeri proposti |
-| **6.6** | La prova del provider fotografico | **Aperta** — chi, con quali foto, quando |
+| **6.1** | Storage: bucket, ciclo di vita, dimensione, MIME | **Chiusa** — dedicato (primo tempo) + `foto-ai`, privato, nessuna pulizia, 5 MB, tre MIME (secondo tempo) |
+| **6.2** | Una Edge Function o due per 7.3a e 7.3b | **Chiusa** — **due**, una porta per operazione |
+| **6.3** | PhotoRoom: chiave, budget, modalità | **Chiusa** — cinque punti più due che la sezione non poneva |
+| **6.4** | Le due migrazioni: forma, RLS, grant | **Chiusa** — `enum` a tre valori; convivenza in `report_triage` |
+| **6.5** | Limite di frequenza e valori numerici | **Chiusa** — tre scope con tre numeri, nessuno ereditato |
+| **6.6** | La prova del provider fotografico | **Chiusa** — Enrico, sei foto, criterio a due conteggi, prima di `11a` |
+| **6.7** | *(nuova)* Il guardiano di `ai-triage` | **Chiusa** — derivata dalla 6.4b, con enforcement esplicito |
 
-Due domande **nuove** sono nate dalle decisioni del 12 agosto e sono aperte anche
-loro: se il bucket dedicato sia privato e come si chiami (6.1 a-bis). Una
-decisione che ne apre altre non è una decisione mal presa — è il motivo per cui
+Le due domande **nuove** che le decisioni del primo tempo avevano aperto — nome
+e visibilità del bucket (6.1 a-bis) — sono chiuse dal secondo tempo. Il secondo
+tempo ne ha aperte altre due, e le ha chiuse nella stessa sessione: dove vivono
+gli sfondi curati (6.3c) e da dove parte la chiamata al triage (6.4b). **Una
+decisione che ne apre altre non è una decisione mal presa** — è il motivo per cui
 questa sezione ha una tabella di stato invece di un elenco.
 
-### 6.1 Storage: dove vivono le foto, e per quanto
+### 6.1 Storage: dove vivono le foto, e per quanto — CHIUSA (12 agosto 2026)
 
-**Parzialmente chiusa.** La prima delle quattro domande ha risposta dal 12 agosto
-2026; le altre tre restano aperte, e con esse due domande **nuove** che la
-risposta apre.
+**Chiusa in due tempi nella stessa giornata.** Il primo tempo ha risposto alla
+domanda (a) — bucket dedicato — e ne ha aperte due nuove; il secondo tempo ha
+chiuso quelle due e le restanti (b), (c), (d).
+
+**Il risultato, in una riga:** bucket **`foto-ai`**, **privato**, **nessuna
+pulizia**, **5 MB**, MIME `image/jpeg`, `image/png`, `image/webp`.
 
 **(a) Bucket dedicato o riuso — CHIUSA (12 agosto 2026): bucket dedicato.**
 Registrata al 2.4 con la motivazione originale. La tabella di ciò che è stato
@@ -582,19 +691,29 @@ sola risposta — è la stessa convenzione della sezione 7 della spec Fase 10:
 | **Riuso di `annunci`** (pubblico) | Naturale se la foto diventa comunque quella dell'annuncio. **Ma è pubblico**: una foto caricata solo per l'autofill e poi scartata resta leggibile per sempre da chi ne conosce l'URL (3.2) | **Scartata, ed è questo il motivo registrato della decisione** |
 | **Terzo bucket dedicato**, privato, es. `ai-input` | Semantica pulita, ciclo di vita proprio, e un unico posto da svuotare. Costa una migrazione con le sue policy, e **un quarto punto** in cui tenere allineati MIME e dimensione (3.3) | **SCELTA** |
 
-**(a-bis) Due domande nuove, aperte, che la decisione apre e non chiude.**
+**(a-bis) Le due domande nuove — CHIUSE (12 agosto 2026, secondo tempo).**
 
-- **Come si chiama.** Il nome è pubblico: compare negli URL e nei percorsi, e
-  cambiarlo dopo significa migrare oggetti. `ai-input` è un segnaposto usato qui
-  per parlarne, non una proposta.
-- **Pubblico o privato.** Sono proprietà diverse da «dedicato», e la decisione ha
-  chiuso solo la seconda. Il motivo che ha scartato `annunci` è un argomento
-  forte perché il nuovo bucket sia **privato** — se il problema era la leggibilità
-  perpetua da URL, un bucket dedicato ma pubblico la riproduce identica — ma
-  resta da dire in sessione. Se privato, ogni lettura passa da un URL firmato con
-  scadenza, e va deciso **chi lo firma e per quanto**: la function che inoltra a
-  PhotoRoom ha bisogno di leggere l'oggetto, e con un bucket privato non basta
-  passargli l'URL pubblico.
+- **Come si chiama: `foto-ai`.** Non `ai-input`, che era il segnaposto usato per
+  parlarne. Il nome è pubblico — compare negli URL e nei percorsi, e cambiarlo
+  dopo significa migrare oggetti — quindi è stato scelto per dire che cosa
+  contiene, non da dove viene. Sta accanto ad `annunci` e `cantina`, che sono
+  nomi di dominio in italiano e non sigle tecniche.
+- **Pubblico o privato: privato.** È la risposta che chiude davvero il problema
+  per cui `annunci` era stato scartato. Un bucket dedicato ma pubblico avrebbe
+  riprodotto identica la leggibilità perpetua da URL: la decisione (a) sceglieva
+  *dove*, questa sceglie *se qualcuno può leggerlo*, e senza la seconda la prima
+  non serviva a niente. **Da qui discende la risposta al ciclo di vita (b)**: se
+  l'oggetto non è raggiungibile senza una firma, un orfano è inerte, e la pulizia
+  smette di essere un requisito di riservatezza per diventare solo igiene di
+  spazio.
+- **Conseguenza operativa: chi firma la lettura, e per quanto.** Con un bucket
+  privato la function che inoltra a PhotoRoom non può ricevere un URL pubblico.
+  La risposta arriva dalla 6.3(e) e non è una firma: **la function scarica i byte
+  e li inoltra come `imageFile`**, perché deve comunque spogliare i metadati EXIF
+  prima di mandarli a un terzo, e togliere metadati significa riscrivere il file.
+  Un URL firmato non sarebbe bastato in nessun caso. **Il bucket privato quindi
+  non costa niente in più** rispetto a uno pubblico: il percorso di lettura della
+  function è lo stesso.
 
 **(a-ter) Una conseguenza da mettere a bilancio.** Il bucket dedicato è la terza
 riga della tabella, quindi ne eredita il costo: **un quarto punto in cui tenere
@@ -602,26 +721,61 @@ allineati MIME e dimensione** (3.3), oltre ai tre di oggi. Non è un argomento
 contro la decisione — è la manutenzione che la decisione compra, e va scritta
 adesso perché al momento del codice si vede solo se qualcuno l'ha scritta.
 
-**(b) Ciclo di vita.** Che ne è di una foto caricata **solo** per compilare un
-modulo? Il debito degli orfani è già accettato per il caso del ripensamento
-(3.4), ma la 7.3a lo rende il caso normale. Opzioni: nessuna pulizia (coerente con
-oggi, e con la 7.2 che ha scelto la stessa strada per le righe scadute dello
-storico Sommelier); cancellazione esplicita quando il wizard si chiude senza
-pubblicare; oppure un bucket dedicato che si possa svuotare in blocco. **Va
-osservato che `pg_cron` resta escluso dalla decisione 1a della Fase 7d**, e che un
-secondo job GitHub Actions è già stato scartato una volta nella 7.2 perché
-aggiungerebbe uno scheduler a uno che è a 18 run falliti su 18.
+**(b) Ciclo di vita — CHIUSA: nessuna pulizia.** Le opzioni pesate erano tre:
+nessuna pulizia (coerente con oggi, e con la 7.2 che ha scelto la stessa strada
+per le righe scadute dello storico Sommelier); cancellazione esplicita quando il
+wizard si chiude senza pubblicare; svuotamento in blocco del bucket dedicato.
 
-**(c) Limite di dimensione.** Oggi 5 MB in tre punti allineati (3.3). Domande: 5
-MB è giusto anche per un'immagine che viene **inoltrata a un terzo** e pagata a
-chiamata? Serve un limite più basso lato client **prima** della compressione, e in
-quel caso chi comprime — il browser o la function?
+La scelta è la prima, e **la ragione non è l'inerzia: è che la privatezza del
+bucket ha già chiuso il problema che la pulizia doveva chiudere.** Il debito degli
+orfani era accettato al 3.4 con l'argomento «un file mai referenziato non è
+raggiungibile se non da chi ne conosce già l'URL» — argomento che il 3.2 indeboliva
+per `annunci`, che è pubblico. Su `foto-ai`, che è privato, l'argomento torna
+valido nella sua forma forte: **senza firma non è raggiungibile da nessuno**. Ciò
+che resta è consumo di spazio, che è manutenzione e non riservatezza.
 
-**(d) Tipi MIME.** In ingresso i quattro dei bucket. Ma **che cosa restituisce
-PhotoRoom**, e in quale formato viene ripubblicato il risultato? Se restituisse un
-formato fuori dai quattro, o l'`allowed_mime_types` cambia o la function converte.
-**Da verificare sulla documentazione del fornitore prima di decidere**, non da
-assumere.
+Vale anche il vincolo di contesto che il documento registrava: `pg_cron` resta
+escluso dalla decisione 1a della Fase 7d, e un secondo job GitHub Actions è già
+stato scartato una volta nella 7.2 perché aggiungerebbe uno scheduler a uno che è
+a 18 run falliti su 18. **Una pulizia periodica non aveva quindi neppure un
+meccanismo disponibile** senza riaprire una decisione di un'altra fase.
+
+> **Da scrivere, non da lasciare implicito** — stessa disciplina del TTL dello
+> storico Sommelier, dove «le righe scadute restano a tabella» è finita nel
+> commento di tabella, nella migrazione e in un caso di griglia: **`foto-ai`
+> accumula oggetti orfani per costruzione, e nel v0 nessuno li rimuove.** Va
+> detto nel commento del bucket e nella migrazione che lo crea. Il costo è
+> monetario e cresce con l'uso; la riservatezza no.
+
+**(c) Limite di dimensione — CHIUSA: 5 MB, invariato.** È il numero già in vigore
+nei tre punti allineati del 3.3, e questa è la scelta di **non** cambiarlo per il
+caso nuovo. La domanda era legittima — un'immagine inoltrata a un terzo e pagata
+a chiamata non è la stessa cosa di una che resta in piattaforma — ma abbassare il
+limite qui avrebbe prodotto la situazione peggiore: **una foto accettata dal
+wizard e rifiutata dall'autofill**, cioè due soglie diverse che l'utente non può
+distinguere. Il costo per chiamata si governa con il limite di frequenza (6.5),
+che è lo strumento previsto, non con la dimensione del file.
+
+Conseguenza già a bilancio dal 6.1(a-ter): **`foto-ai` è il quarto punto** in cui
+i 5 MB vanno tenuti allineati. Sono quattro perché il numero è lo stesso; sarebbero
+stati quattro **e divergenti** se fosse cambiato.
+
+**(d) Tipi MIME — CHIUSA: `image/jpeg`, `image/png`, `image/webp`.** Tre, non i
+quattro dei bucket esistenti: **`image/avif` esce**, ed è l'unica divergenza
+deliberata di `foto-ai` dai bucket che lo precedono.
+
+Il motivo è un fatto verificato sulla documentazione del fornitore, non una
+preferenza — che è esattamente ciò che il punto (d) chiedeva prima di decidere:
+**PhotoRoom non accetta AVIF in ingresso.** Accetta PNG, JPEG e WEBP (più HEIC
+sulla sola rimozione dello sfondo), e AVIF compare **solo in uscita**, fra i
+formati di `export.format`. Ammettere AVIF nel bucket avrebbe quindi significato
+accettare un file che la 7.13 non può lavorare, e scoprirlo alla prima chiamata
+invece che alla configurazione.
+
+Ne segue la risposta all'altra metà della domanda — che cosa si ripubblica: il
+risultato di PhotoRoom torna in un formato **scelto da noi** via `export.format`,
+quindi non c'è nessun formato imprevisto da accogliere. Si sceglie fra i tre
+ammessi e l'`allowed_mime_types` non deve inseguire il fornitore.
 
 ### 6.2 Una Edge Function o due per 7.3a e 7.3b — CHIUSA (12 agosto 2026): due
 
@@ -644,116 +798,208 @@ accettato, non eliminato: **la tabella della 7.6 è superata su questo punto**, 
 `ai-catalogo` non ospiterà la 7.3b. Restano due conseguenze da tenere in conto
 quando si scriverà il codice, e nessuna delle due riapre la decisione.
 
-- **Il costo doppio è possibile ma non certo, e dipende da una domanda ancora
-  aperta:** la spunta 7.3b si calcola **alla pubblicazione** (7.3 dice «alla
-  pubblicazione») o **durante il wizard**, insieme all'autofill? Se i due momenti
-  sono diversi, non c'è nessuna chiamata da condividere e il contro sparisce da
-  sé. Se sono lo stesso momento, il costo doppio è reale e va messo a bilancio
-  nella 6.5. **Prima questa domanda decideva l'architettura; adesso ne misura il
-  prezzo** — ed è per questo che resta aperta invece di chiudersi con la 6.2.
+- **Il costo doppio non c'è, ed è la 6.4a ad averlo escluso.** La domanda era se
+  la spunta 7.3b si calcolasse **alla pubblicazione** o **durante il wizard**,
+  insieme all'autofill: momenti diversi significano nessuna chiamata da
+  condividere e quindi nessun costo doppio; stesso momento significa costo doppio
+  reale, da mettere a bilancio nella 6.5. **La 6.4a ha risposto «alla
+  pubblicazione»**, quindi i momenti sono diversi e il contro della riga scelta
+  sparisce da sé. Restava aperta perché «prima questa domanda decideva
+  l'architettura, adesso ne misura il prezzo»: il prezzo misurato è **zero**.
 - **Due function significano due nomi, due `AI_ALLOWED_ORIGINS` da leggere con lo
   stesso modulo, due scope di frequenza e due voci in `docs/ENVIRONMENT.md`.**
   Non è nuovo lavoro di progetto: è il costo per funzionalità che la Fase 10 ha
   già pagato tre volte.
 
-### 6.3 PhotoRoom: chiave, budget, e quale delle due modalità
+### 6.3 PhotoRoom: chiave, budget, e quale delle due modalità — CHIUSA (12 agosto 2026)
 
-**Aperta.** Il fornitore non è integrato in nessuna forma (3.8).
+**Chiusa in tutti e cinque i punti, più uno che la sezione non poneva** (6.3c-bis:
+dove vivono gli sfondi curati a mano). Il fornitore resta non integrato in nessuna
+forma (3.8): queste sono decisioni su come lo si integrerà.
 
-**(a) Dove vive la chiave, e dietro quale modulo.** Una parte è già vincolata e
+**(a) Dove vive la chiave, e dietro quale modulo — CHIUSA: modulo proprio, sul
+pattern di `payment-provider.ts`.** La seconda riga della tabella qui sotto. È il
+precedente esistente per «un fornitore esterno che non è un LLM», ed è la forma
+coerente con ciò che la 7.13 già dichiarava — PhotoRoom **non passa
+dall'astrazione `AIProvider`**. La commissione che ha prodotto la prima stesura
+proponeva «lo stesso pattern di `ai-provider.ts`»: era la proposta sbagliata, per
+il motivo scritto nella prima riga, e la decisione l'ha corretta.
+
+**(a) Le opzioni pesate.** Una parte era già vincolata e
 non è in discussione: la chiave sta **nell'ambiente della Edge Function** — mai
 nel repository, mai nel browser — con il vincolo di piattaforma che le variabili
 non possono iniziare per `SUPABASE_`, e va aggiunta a `docs/ENVIRONMENT.md` e al
-`.env.example` pertinente **nello stesso cambiamento che la introduce**. Quello
-che è aperto è **la forma del modulo**, e la commissione proponeva «lo stesso
-pattern di `ai-provider.ts`». È il punto da correggere prima di decidere:
+`.env.example` pertinente **nello stesso cambiamento che la introduce**. Ciò che
+era aperto è **la forma del modulo**:
 
-| Opzione | Implicazione |
-| --- | --- |
-| **Dentro `_shared/ai-provider.ts`** | Nessun file nuovo. Ma PhotoRoom **non fa completamento di testo** e non entra nell'interfaccia `AiProvider`, che ha due sole firme, `completeText` e `streamText` (`supabase/functions/_shared/ai-provider.ts:46-50`). Entrarci significa allargare un'interfaccia per un fornitore che non ne condivide la semantica — e quel file è il punto unico di cambio per i modelli linguistici, non per i servizi di immagine |
-| **Modulo proprio, sul pattern di `payment-provider.ts`** | È il precedente esistente per «un fornitore esterno che non è un LLM»: un modulo con la propria interfaccia e i propri tipi (`supabase/functions/_shared/payment-provider.ts:82`, `:139`, `:172` — tre interfacce distinte per tre capacità dello stesso fornitore). Un file nuovo, ma la separazione è quella che la 7.13 già dichiara quando dice che PhotoRoom **non passa dall'astrazione `AIProvider`** |
-| **Nessuna astrazione: chiamata diretta dentro la function** | La più corta. Ma nessun punto unico da cambiare se il fornitore cambia, e il fallimento non ha una forma tipizzata — cioè il contrario di quello che le due astrazioni esistenti hanno comprato |
-
-**La ragione per cui questa non è una scelta di stile.** La 7.13 dice già che
-PhotoRoom non passa da `AIProvider`; la domanda vera è se meriti un'astrazione
-**sua** o nessuna. Il precedente utile è che entrambe le astrazioni esistenti sono
-nate quando un fornitore era **uno solo** — e sono servite quando è diventato più
-d'uno.
-
-**(b) L'impegno della 7.11 copre PhotoRoom?** La commissione chiedeva di
-verificarlo. **La risposta letterale è sì, e va comunque riconfermata.** La 7.11
-enumera fra le variabili necessarie «la chiave PhotoRoom (7.13)»
-(`271c7dc:1293-1296`) e apre osservando che «i provider sono almeno tre, più
-PhotoRoom (7.13). Non è una chiave, sono quattro» (`:1249`). Ma quella scadenza —
-lunedì 18 agosto 2026 — era stata costruita come **precondizione di merge della
-Fase 10**, e la Fase 10 è mersa **spenta** senza PhotoRoom. La funzionalità che
-usa quella chiave non ha branch. **Domanda per la sessione:** la chiave PhotoRoom
-resta agganciata al 18 agosto insieme alle altre, oppure prende una data propria
-legata all'apertura di `11c`? Lasciarla implicitamente al 18 agosto significa
-farla scadere senza che serva a niente — e «una scadenza che non scade non è una
-scadenza» è la lezione che la 7.11 stessa trae dal caso 7g.
-
-**(c) Cutout puro o compositing, e con quale criterio si sceglie.** La 7.13 ha
-deciso **che il catalogo di sfondi è curato a mano** e che il compositing su
-sfondo nativo è l'opzione tecnica preferita; non ha deciso **come si sceglie fra
-le due modalità in ogni singola chiamata**. Tre criteri possibili, che sono tre
-prodotti diversi:
-
-| Criterio | Che cosa significa in interfaccia | Costo |
+| Opzione | Implicazione | Esito |
 | --- | --- | --- |
-| **Sceglie il venditore** | Vede il catalogo di sfondi, ne prende uno, oppure sceglie «solo ritaglio» (cutout su trasparenza o su fondo pieno) | Un passo in più nel wizard; il venditore deve capire una distinzione tecnica |
-| **Sempre compositing, con uno sfondo di default** | Nessuna scelta da fare: la foto esce già impaginata | Un default che decide l'estetica del catalogo al posto del venditore, e nessuna via d'uscita se lo sfondo non gli piace |
-| **Cutout sempre, sfondo solo se lo chiede** | Il ritaglio è il servizio; lo sfondo è un extra | Se il compositing è la parte che vale, la si nasconde dietro un'azione che pochi troveranno |
+| **Dentro `_shared/ai-provider.ts`** | Nessun file nuovo. Ma PhotoRoom **non fa completamento di testo** e non entra nell'interfaccia `AiProvider`, che ha due sole firme, `completeText` e `streamText` (`supabase/functions/_shared/ai-provider.ts:46-50`). Entrarci significa allargare un'interfaccia per un fornitore che non ne condivide la semantica — e quel file è il punto unico di cambio per i modelli linguistici, non per i servizi di immagine | Scartata |
+| **Modulo proprio, sul pattern di `payment-provider.ts`** | È il precedente esistente per «un fornitore esterno che non è un LLM»: un modulo con la propria interfaccia e i propri tipi (`supabase/functions/_shared/payment-provider.ts:82`, `:139`, `:172` — tre interfacce distinte per tre capacità dello stesso fornitore). Un file nuovo, ma la separazione è quella che la 7.13 già dichiara quando dice che PhotoRoom **non passa dall'astrazione `AIProvider`** | **SCELTA** |
+| **Nessuna astrazione: chiamata diretta dentro la function** | La più corta. Ma nessun punto unico da cambiare se il fornitore cambia, e il fallimento non ha una forma tipizzata — cioè il contrario di quello che le due astrazioni esistenti hanno comprato | Scartata |
 
-Restano due domande che nessuno dei tre criteri risolve da solo, e vanno risposte
-insieme a esso:
+**La ragione per cui questa non era una scelta di stile.** La 7.13 dice già che
+PhotoRoom non passa da `AIProvider`; la domanda vera era se meritasse
+un'astrazione **sua** o nessuna. Il precedente utile è che entrambe le astrazioni
+esistenti sono nate quando un fornitore era **uno solo** — e sono servite quando è
+diventato più d'uno.
 
-- **Esiste un default**, e se sì quale? Un catalogo curato a mano ha un primo
-  elemento, e il primo elemento diventa il default per omissione se nessuno lo
-  decide.
-- **Se il ritaglio riesce male, che cosa vede l'utente** — la foto originale
-  intatta, un errore, o il risultato brutto con la possibilità di annullare? È la
-  stessa domanda che la 7.5 ha già risposto per i fallimenti del provider AI
-  (errore generico, mai il messaggio del fornitore), ma qui il fallimento è
-  **silenzioso**: PhotoRoom risponde `200` con un'immagine sbagliata, non un 503.
+**(b) L'impegno della 7.11 copre PhotoRoom? — CHIUSA: no, PhotoRoom esce dal 18
+agosto e prende una data propria, legata all'apertura di `11c`.**
 
-**(d) Il budget.** PhotoRoom si paga a immagine. Vale il principio della 7.11 —
-il tetto sta **sul conto del fornitore**, perché è l'unico che ferma anche una
-chiave uscita — e vale il rifiuto della 7.4 a un secondo tetto nostro. Da
-confermare che valga anche per un fornitore a consumo per immagine.
+La risposta letterale della 7.11 era sì: enumera fra le variabili necessarie «la
+chiave PhotoRoom (7.13)» (`271c7dc:1293-1296`) e apre osservando che «i provider
+sono almeno tre, più PhotoRoom (7.13). Non è una chiave, sono quattro» (`:1249`).
+La decisione **la corregge deliberatamente**, e per la ragione che la 7.11 stessa
+enuncia: quella scadenza era stata costruita come **precondizione di merge della
+Fase 10**, e la Fase 10 è mersa **spenta** senza PhotoRoom. La funzionalità che usa
+quella chiave non ha branch e non lo avrà finché `11c` non si apre. Lasciarla
+implicitamente al 18 agosto significava **farla scadere senza che servisse a
+niente** — cioè fabbricare esattamente la scadenza inerte che il caso 7g ha già
+insegnato a riconoscere: *«una scadenza che non scade non è una scadenza»*.
 
-**(e) Un dato di un utente esce verso un terzo nuovo.** Non è un modello
-linguistico e non è coperto da quanto già scritto sui fornitori AI. Da verificare
-se serve una riga in `docs/SECURITY.md`.
+Il 18 agosto resta quindi la data delle **chiavi dei modelli linguistici** (7.11
+al netto di PhotoRoom). La chiave PhotoRoom è una **precondizione di apertura di
+`11c`**, il che significa che `11c` non si apre senza, e che nessuna data
+calendariale la governa prima di allora.
 
-### 6.4 Le due migrazioni: forma delle colonne, RLS e grant
+**(c) Cutout puro o compositing — CHIUSA: sceglie il venditore, con «solo
+ritaglio» preselezionato.** La 7.13 aveva deciso che il catalogo di sfondi è
+curato a mano e che il compositing su sfondo nativo è l'opzione tecnica preferita;
+non aveva deciso **come si sceglie fra le due modalità in ogni singola chiamata**.
 
-**Aperta**, ed è la decisione con più conseguenze.
+| Criterio | Che cosa significa in interfaccia | Costo | Esito |
+| --- | --- | --- | --- |
+| **Sceglie il venditore** | Vede il catalogo di sfondi, ne prende uno, oppure sceglie «solo ritaglio» (cutout su trasparenza o su fondo pieno) | Un passo in più nel wizard; il venditore deve capire una distinzione tecnica | **SCELTA** |
+| **Sempre compositing, con uno sfondo di default** | Nessuna scelta da fare: la foto esce già impaginata | Un default che decide l'estetica del catalogo al posto del venditore, e nessuna via d'uscita se lo sfondo non gli piace | Scartata |
+| **Cutout sempre, sfondo solo se lo chiede** | Il ritaglio è il servizio; lo sfondo è un extra | Se il compositing è la parte che vale, la si nasconde dietro un'azione che pochi troveranno | Scartata |
 
-**(a) La spunta di completezza su `listings` — APERTA, tre forme possibili.**
-Nessuna è preferita qui. La colonna non esiste: verificato per interrogazione
-diretta al catalogo di produzione (3.5), `listings` non ha nulla che assomigli a
-una spunta di completezza, quindi il disegno è interamente da fare e nessun
-vincolo storico lo restringe.
+Le due domande che nessuno dei tre criteri risolveva da solo, chiuse insieme a
+esso:
 
-| Forma | Implicazione |
-| --- | --- |
-| `boolean` | Semplice. Ma non distingue «verificata e incompleta» da «mai verificata», e il default `false` mente su entrambe |
-| **`enum`** a tre valori (es. `non_verificata`, `incompleta`, `completa`) | Distingue i tre stati veri. Un tipo nuovo, e il vincolo della 7f: **castare esplicitamente ogni ramo di un `case`**, mai un letterale nudo |
-| Punteggio `smallint` + soglia | Più informativo, ma espone all'utente un numero che l'AI non sa produrre in modo stabile, e la soglia diventa una regola di prodotto nascosta |
+- **Il default è «solo ritaglio», non il primo sfondo del catalogo.** La domanda
+  era reale: un catalogo curato a mano ha un primo elemento, e quel primo elemento
+  diventa il default per omissione se nessuno decide. La scelta è l'opzione che
+  non impagina niente al posto del venditore — **ed è anche l'opzione che costa
+  meno**, il che qui non è una coincidenza ma un fatto misurato sul listino del
+  fornitore: **una chiamata di *Image Editing* vale cinque chiamate di *Remove
+  Background*.** Un default di compositing avrebbe quintuplicato il costo di ogni
+  foto per una scelta che nessuno ha fatto.
+- **Se il ritaglio riesce male, l'utente vede un'anteprima e conferma
+  esplicitamente.** Il risultato non sostituisce la foto finché il venditore non
+  lo accetta. È la risposta al caso che la 7.5 non copre: la 7.5 risolve il
+  fallimento **dichiarato** del provider (503, 502, errore generico e mai il
+  messaggio del fornitore), ma qui il fallimento è **silenzioso** — PhotoRoom
+  risponde `200` con un'immagine sbagliata. Nessun codice di stato lo intercetta,
+  e l'unico giudice disponibile è l'occhio di chi ha scattato la foto. **Ne segue
+  un vincolo di implementazione**: la foto originale non viene mai sovrascritta
+  dalla risposta del fornitore.
 
-Domande che la forma non risolve da sola: la spunta **scade** quando il venditore
-cambia le foto? Se sì, il ricalcolo è automatico (un trigger, e quindi una
-chiamata AI dentro una transazione — da evitare) o esplicito? E che cosa mostra
-`public_listings`, la vista pubblica a colonne chiuse: la spunta è visibile a un
-compratore anonimo? Se sì è **una promessa del prodotto verso un estraneo**, ed è
-lì che il vincolo di etichettatura della 7.3 conta davvero.
+**(c-bis) Dove vivono gli sfondi curati — CHIUSA: un quarto bucket, `sfondi`,
+pubblico.** Questa domanda **la sezione 6 non la poneva**: la §5 nominava «bucket
+degli sfondi curati» in una riga di tabella e nessuna decisione lo copriva. È
+stata posta e chiusa perché lasciarla implicita avrebbe significato inventarla
+durante `11c`.
 
-**(b) L'esito del triage.** La parte **decisa** è che l'esito è **persistito e non
-ricalcolato a ogni apertura del pannello**
+Pubblico, e per una ragione opposta a quella di `foto-ai`: **un catalogo di sfondi
+è materiale editoriale della piattaforma, non un dato di un utente.** Non c'è
+niente da proteggere, ogni venditore deve poterlo sfogliare, e servirlo dalla CDN
+senza RLS è ciò che `annunci` già fa bene. Le policy di scrittura non seguono il
+pattern «cartella dell'utente» degli altri tre bucket, perché **nessun utente ci
+scrive**: li carica Enrico una volta, come dice la 7.13.
+
+Conta per il conto delle migrazioni: **i bucket nuovi di questa fase sono due**,
+non uno — `foto-ai` in `11a` e `sfondi` in `11c` — e ciascuno sta nel checkpoint
+che lo usa.
+
+**(d) Il budget — CHIUSA: tetto sul conto del fornitore, valore fissato al momento
+in cui si configura la chiave.** Vale il principio della 7.11 — il tetto sta sul
+conto del fornitore, perché è l'unico che ferma anche una chiave uscita — e vale
+il rifiuto della 7.4 a un secondo tetto nostro; la conferma richiesta era che
+valesse anche per un fornitore a consumo per immagine, e vale.
+
+Ciò che la decisione aggiunge, ed è la parte che merita di sopravvivere, è
+**perché il numero non viene fissato adesso**, con le parole di chi ha deciso:
+*«nessun consumo reale è mai stato osservato per nessun fornitore AI in questo
+progetto, e un numero scelto senza dati sarebbe esattamente il tipo di valore
+inventato che il resto della fase ha sempre evitato»*. Il tetto si fissa quando si
+configura la chiave, che è il momento in cui esiste un pannello del fornitore
+davanti a chi lo decide. **Vale per tutti i fornitori nuovi, PhotoRoom compreso.**
+
+**(e) Un dato di un utente esce verso un terzo nuovo — CHIUSA: sì, serve una riga
+in `docs/SECURITY.md`, e include il punto EXIF.** I metadati vanno **spogliati
+prima dell'inoltro a un terzo**.
+
+Il punto EXIF non era nella domanda ed è la ragione per cui la risposta è sì e non
+«è già coperto». Una fotografia di bottiglia scattata in casa porta nei metadati
+**le coordinate GPS del luogo dello scatto**, più modello dell'apparecchio e ora
+esatta. Inoltrarla intatta a PhotoRoom — o a un modello di visione — significa
+**esportare l'indirizzo di casa del venditore** a un fornitore che non ha nessuna
+ragione di riceverlo e nessun contratto che lo nomini. Non è un rischio teorico:
+è il comportamento predefinito di ogni telefono, e nessun percorso attuale toglie
+i metadati, perché finora le foto non uscivano dalla piattaforma.
+
+> **Conseguenza tecnica, e non è piccola: spogliare l'EXIF costringe la function a
+> scaricare i byte.** Non basta passare al fornitore un URL — firmato o pubblico
+> — perché togliere metadati significa **riscrivere il file**. L'immagine si
+> carica in memoria nella function, si ripulisce e si inoltra come `imageFile`.
+> Questo è ciò che rende gratuito il bucket privato del 6.1(a-bis): il percorso di
+> lettura sarebbe stato identico anche con un bucket pubblico.
+
+### 6.4 Le due migrazioni: forma delle colonne, RLS e grant — CHIUSA (12 agosto 2026)
+
+**Chiusa**, ed è la decisione con più conseguenze.
+
+**(a) La spunta di completezza su `listings` — CHIUSA: `enum` a tre valori.** La
+colonna non esiste: verificato per interrogazione diretta al catalogo di
+produzione (3.5), `listings` non ha nulla che assomigli a una spunta di
+completezza, quindi il disegno era interamente da fare e nessun vincolo storico lo
+restringeva.
+
+| Forma | Implicazione | Esito |
+| --- | --- | --- |
+| `boolean` | Semplice. Ma non distingue «verificata e incompleta» da «mai verificata», e il default `false` mente su entrambe | Scartata |
+| **`enum`** a tre valori (`non_verificata`, `incompleta`, `completa`) | Distingue i tre stati veri. Un tipo nuovo, e il vincolo della 7f: **castare esplicitamente ogni ramo di un `case`**, mai un letterale nudo | **SCELTA** |
+| Punteggio `smallint` + soglia | Più informativo, ma espone all'utente un numero che l'AI non sa produrre in modo stabile, e la soglia diventa una regola di prodotto nascosta | Scartata |
+
+**Le tre domande che la forma non risolveva da sola, chiuse insieme a essa.**
+
+- **Quando si calcola: alla pubblicazione.** Non durante il wizard. Questo chiude
+  anche la domanda che la 6.2 aveva lasciato aperta di proposito — se autofill e
+  spunta condividano una chiamata di visione — e la chiude nel senso che
+  **elimina il costo doppio**: i due momenti sono diversi, quindi non c'è nessuna
+  chiamata da condividere e il contro registrato al 2.4 (11.B) **sparisce da sé**.
+  La 6.2 diceva «prima questa domanda decideva l'architettura; adesso ne misura il
+  prezzo»: il prezzo misurato è zero.
+- **Scade quando il venditore cambia le foto, e il ricalcolo è esplicito.** Non
+  automatico: un trigger significherebbe **una chiamata AI dentro una
+  transazione**, che il documento già segnalava da evitare e che resta esclusa. Il
+  cambio di foto riporta la colonna a `non_verificata`; tornare a `completa`
+  richiede che qualcuno chieda il ricalcolo. Il vantaggio dell'`enum` a tre valori
+  si vede qui: `non_verificata` è uno stato vero e dicibile, mentre un `boolean`
+  avrebbe dovuto mentire scegliendo fra `false` e `null`.
+- **È visibile anche al compratore anonimo**, quindi entra in `public_listings`,
+  la vista pubblica a colonne chiuse.
+
+> **La visibilità all'anonimo è la risposta che rende portante il vincolo di
+> etichettatura della 7.3, e va detto qui.** Finché la spunta fosse rimasta
+> visibile al solo venditore, «completezza documentale» e «autenticità
+> certificata» sarebbero state una sfumatura di linguaggio interno. Mostrata a un
+> estraneo che sta decidendo se comprare, la spunta diventa **una promessa del
+> prodotto verso di lui** — ed è esattamente il caso che l'invariante
+> «le risposte non certificano autenticità o valore» (`docs/SECURITY.md:189-197`)
+> non era stato scritto per coprire, perché finora riguardava testo generato e non
+> un elemento di interfaccia. Le parole scelte per quell'elemento **sono parte
+> della decisione 7.3**, non una nota di stile, e questa risposta le rende
+> vincolanti invece che consigliate.
+
+**(b) L'esito del triage — CHIUSA: convive con `priorita`, in una tabella
+collegata `report_triage`.** La parte già **decisa** dalla Fase 10 era che l'esito
+è **persistito e non ricalcolato a ogni apertura del pannello**
 (`CONTESTO_IA/01_STATO_ATTUALE.md:1132-1135`, e la tabella riassuntiva della spec
-Fase 10 a `271c7dc:50`). Restano aperte due cose, e la prima è quella scoperta
-al 3.6.
+Fase 10 a `271c7dc:50`). Restavano aperte due cose, e la prima è quella scoperta
+al 3.6. Il secondo tempo del 12 agosto le ha chiuse entrambe, e ne ha aperta e
+chiusa una terza che nessuna delle due poneva: **da dove parte la chiamata**.
 
 *Nota per chi legge le fonti, e una correzione fatta.* Su `271c7dc` il **corpo**
 di `§7.12` (`:761-766`) era rimasto alla formulazione precedente e diceva ancora
@@ -764,11 +1010,11 @@ aggiornata — e **la stessa PR che porta questo documento la aggiorna**, perch�
 frase falsa in una spec vigente non si segnala e si lascia: si corregge. È la sola
 modifica che questa PR fa a un file diverso da questo.
 
-**Prima domanda aperta — il rapporto con `priorita`, e non più «dove lo metto».**
+**Prima domanda — il rapporto con `priorita`, e non più «dove lo metto».**
 Il verbale dice «colonna persistita su `reports` **(o su una tabella collegata)**»:
-la persistenza è decisa, il posto no. Ma il 3.6 ha cambiato la domanda, e vale la
-pena dire come, perché la formulazione che arriva dalla Fase 10 non è più quella
-giusta.
+la persistenza era decisa, il posto no. Ma il 3.6 ha cambiato la domanda, e vale
+la pena dire come, perché la formulazione che arriva dalla Fase 10 non è più
+quella giusta.
 
 Quando la 7.12 è stata decisa, «l'AI classifica e ordina la coda» suonava come una
 capacità nuova su una coda che non ne aveva. **Non è così:** `reports.priorita`
@@ -783,114 +1029,192 @@ Da qui la domanda vera, che è **a tre vie e non a quattro opzioni**: l'esito de
 triage **convive** con `priorita`, la **sostituisce**, o **non è la stessa cosa**?
 Le quattro forme concrete sotto sono i modi di realizzare quelle tre risposte.
 
-| Risposta | Forma concreta | Implicazione |
+| Risposta | Forma concreta | Implicazione | Esito |
+| --- | --- | --- | --- |
+| **Convive** | **Colonna nuova accanto a `priorita`** | Le due classificazioni si possono confrontare — utile per misurare se l'AI batte la regola a 21 ingressi. Ma il pannello deve decidere **su quale delle due ordinare**, e una coda non può avere due ordinamenti insieme. Serve un secondo indice. Il confronto è il vero guadagno, e va voluto: se nessuno lo guarderà mai, questa è la colonna in più che non serve | Scartata |
+| **Convive** | **Tabella collegata** (`report_triage`) | `reports` resta intatta; ci stanno anche punteggio, motivazione, modello usato e data — cioè la tracciabilità di *quale* modello ha detto *cosa* e *quando*, che una colonna sola non porta. Costa una `JOIN` nella vista di coda e una tabella nuova con le sue policy | **SCELTA** |
+| **Sostituisce** | **L'AI scrive `priorita`** | Nessuna colonna nuova, ordinamento e indice già pronti, pannello invariato: la più economica di tutte. **Ma `priorita` è una colonna con una regola di dominio dietro** (`:222-225`), e sovrascriverla rende la regola deterministica non più verificabile — non si distingue più una priorità dedotta dal motivo da una dedotta dal modello. E assomiglia molto a «l'AI decide», che la 7.12 vieta per nome | Scartata |
+| **Non è la stessa cosa** | **L'esito non è una priorità** | L'AI produce categoria, sintesi e segnali che la regola non può vedere — per esempio «più segnalazioni sullo stesso bersaglio», che nessuna funzione del solo `motivo` potrà mai dedurre. **Non compete con `priorita`**: elimina il conflitto alla radice e sfrutta l'unica cosa che l'AI sa fare e la regola no. Ma cambia che cosa la 7.12 promette al moderatore, e la promessa era «classifica e ordina» | Scartata |
+
+**Come è stata affrontata, e la risposta alla domanda che la governava.** Non
+partendo dallo schema ma da *che cosa il moderatore non riesce a fare oggi con la
+coda ordinata per `priorita`*. La risposta data è **distinguere la gravità dentro
+le `alta`**: la regola a 21 ingressi mette nello stesso scaglione tutto ciò che
+contiene `truff`, `frod`, `pagament` o `molest`, e dentro quello scaglione la coda
+è ordinata per data e basta. È il caso che la sezione stessa indicava come
+tipicamente risolto dalla convivenza — e la convivenza è stata scelta nella forma
+della **tabella collegata**, non della colonna, perché una tabella porta anche
+quale modello ha prodotto l'esito e quando, che è ciò che rende l'affermazione
+dell'AI **verificabile invece che solo visibile**.
+
+**Ordinamento — CHIUSA: `priorita` resta primaria, il triage ordina dentro il
+gruppo.** Il conflitto che la tabella qui sopra segnalava («una coda non può avere
+due ordinamenti insieme») si scioglie ordinando in cascata invece che scegliendo:
+prima `priorita`, poi il punteggio del triage, poi la data. La regola deterministica
+resta il primo criterio — quindi **non è mai scavalcata da un modello**, che è la
+forma in cui la 7.12 «nessuna azione autonoma» si traduce in un `order by` — e
+l'AI ordina solo là dove oggi non c'è nessun ordine. **Costo da mettere a
+bilancio:** l'indice esistente `reports_stato_priorita_idx on public.reports
+(stato, priorita desc, created_at desc)` (`:231-232`) non copre più
+l'ordinamento; ne serve uno nuovo che tenga conto della colonna della tabella
+collegata.
+
+**Contenuto — CHIUSA: punteggio più motivazione breve. Nessun enum di categorie.**
+Questo chiude anche la (c) qui sotto: non c'è nessuna tassonomia da definire,
+quindi non c'è nessuna delle tre alternative da scegliere. Il punteggio è ciò che
+ordina dentro il gruppo; la motivazione breve è ciò che permette al moderatore di
+**non fidarsi** del punteggio senza aprire la segnalazione. Un numero da solo
+sarebbe un oracolo, e un oracolo che nessuno può controllare è precisamente la
+forma di «l'AI decide» che la 7.12 vieta anche quando il bottone lo preme un
+umano.
+
+**Seconda domanda — chi lo vede. CHIUSA: no, non compare in `my_reports`.** Una
+colonna su `reports` è invisibile finché non entra in `moderation_report_queue`
+(3.5), e la scelta è che entri **solo** lì. La proposta ovvia del documento è stata
+confermata: la valutazione automatica di una segnalazione è materiale di lavoro
+del moderatore, e la 9a aveva già cura di tenere fuori dalle proiezioni
+raggiungibili dal segnalante ciò che non le riguardava (`:218-221`). Ora è scritta.
+
+**Terza domanda, che nessuna delle due poneva — da dove parte la chiamata.
+CHIUSA: la chiama il client dopo l'RPC.** È emersa chiudendo il «quando»: il
+triage gira **all'invio della segnalazione**, ma `segnalazione_invia` è una
+funzione Postgres e **non può chiamare un fornitore esterno** — `pg_net` è escluso
+dalla decisione 1a della Fase 7d, non rinviato. Serviva quindi una Edge Function,
+e serviva decidere da dove viene invocata.
+
+| Opzione | Implicazione | Esito |
 | --- | --- | --- |
-| **Convive** | **Colonna nuova accanto a `priorita`** | Le due classificazioni si possono confrontare — utile per misurare se l'AI batte la regola a 21 ingressi. Ma il pannello deve decidere **su quale delle due ordinare**, e una coda non può avere due ordinamenti insieme. Serve un secondo indice. Il confronto è il vero guadagno, e va voluto: se nessuno lo guarderà mai, questa è la colonna in più che non serve |
-| **Convive** | **Tabella collegata** (es. `report_triage`) | `reports` resta intatta; ci stanno anche punteggio, categoria, modello usato e data — cioè la tracciabilità di *quale* modello ha detto *cosa* e *quando*, che una colonna sola non porta. Costa una `JOIN` nella vista di coda e una tabella nuova con le sue policy |
-| **Sostituisce** | **L'AI scrive `priorita`** | Nessuna colonna nuova, ordinamento e indice già pronti, pannello invariato: la più economica di tutte. **Ma `priorita` è una colonna con una regola di dominio dietro** (`:222-225`), e sovrascriverla rende la regola deterministica non più verificabile — non si distingue più una priorità dedotta dal motivo da una dedotta dal modello. E assomiglia molto a «l'AI decide», che la 7.12 vieta per nome |
-| **Non è la stessa cosa** | **L'esito non è una priorità** | L'AI produce categoria, sintesi e segnali che la regola non può vedere — per esempio «più segnalazioni sullo stesso bersaglio», che nessuna funzione del solo `motivo` potrà mai dedurre. **Non compete con `priorita`**: elimina il conflitto alla radice e sfrutta l'unica cosa che l'AI sa fare e la regola no. Ma cambia che cosa la 7.12 promette al moderatore, e la promessa era «classifica e ordina» |
+| **Il client chiama `ai-triage` dopo l'RPC** | `segnalazione_invia` resta intatta. Se il client non chiama, il triage non avviene: la valutazione è **facoltativa** | **SCELTA** |
+| **`segnalazione_invia` diventa una Edge Function che fa entrambe le cose** | Il triage è garantito. Ma modifica una superficie della Fase 9 **già distribuita**, e lega l'invio di una segnalazione alla riuscita di una chiamata a un terzo | Scartata |
 
-**Come conviene affrontarla in sessione.** Non partendo dallo schema, ma da una
-domanda sola: *che cosa il moderatore non riesce a fare oggi con la coda ordinata
-per `priorita`?* Se la risposta è «distinguere le segnalazioni gravi fra quelle
-`alta`», la risposta giusta è probabilmente la convivenza. Se è «vedere che tre
-segnalazioni diverse puntano allo stesso venditore», è la quarta riga. Se è
-«niente, funziona», allora la 7.12 va ridimensionata prima di scrivere una
-migrazione — ed è una conclusione legittima che questo documento non ha
-l'autorità per trarre.
+La motivazione, con le parole di chi ha deciso, perché è il principio e non il
+dettaglio a dover sopravvivere: *«`segnalazione_invia` è una superficie della Fase
+9 già distribuita e già verificata in questa stessa sessione — toccarla per farla
+diventare un'Edge Function è esattamente il tipo di modifica a un sistema già in
+produzione che questo progetto evita sistematicamente… l'opzione 2 lega l'invio di
+una segnalazione — un'azione critica già esistente — alla riuscita di una chiamata
+a un fornitore esterno. È il contrario del principio che regge tutta questa fase:
+`AI_ENABLED` fallisce chiuso proprio perché una funzionalità AI non deve mai
+diventare un blocco per qualcosa che già funziona»*. E sul costo accettato: *«il
+triage è facoltativo se il client non chiama la function — è reale ma
+esplicitamente non pericoloso: la coda ha comunque `priorita`, già deterministica e
+già in produzione, come rete di sicurezza. È un degradare bene, non un fallire
+silenzioso»*.
 
-**Seconda domanda aperta — chi lo vede.** Una colonna su `reports` è invisibile
-finché non entra in `moderation_report_queue` (3.5). E poiché `my_reports` è la
-proiezione del **segnalante**, va deciso esplicitamente se l'esito del triage vi
-compare. La proposta ovvia è **no** — la valutazione automatica di una
-segnalazione è materiale di lavoro del moderatore — ma non è mai stata scritta, e
-la 9a aveva già cura di tenere fuori dalle proiezioni raggiungibili dal segnalato
-ciò che non le riguardava (`:218-221`).
+**Questa risposta apre il guardiano della 6.7**, ed è per quello che la 6.7 esiste:
+una function chiamata dal browser, su un percorso che non è quello di
+`report:submit`, ha bisogno di un limite proprio — e la 6.5(4) ha deciso che quel
+limite **non è un bucket di frequenza**.
 
-**(c) Le categorie del triage.** La commissione chiedeva se valga il meccanismo di
-`report_reasons` — fonte unica in `frontend/src/data/moderation.ts` più vincolo
-referenziale in database, come dichiara il commento di tabella verificato in
-produzione. Sono due casi diversi e vanno decisi separatamente: quell'elenco è il
-**menu di un utente**, e deve coincidere con ciò che il database accetta; le
-categorie del triage sarebbero **l'uscita di un modello**, che nessun menu mostra.
-Opzioni: enum chiuso (il modello non può inventare, ma ogni categoria nuova è una
-migrazione); tabella di riferimento con vincolo (elenco modificabile senza
-migrazione, ma un'uscita fuori elenco va gestita); testo libero con validazione
-solo applicativa (flessibile, e la coda si riempie di varianti). **Se si sceglie
-un elenco chiuso, va deciso chi è la fonte** — il repository o il database.
+**(c) Le categorie del triage — CHIUSA per assorbimento: non esistono.** La
+domanda era se valesse il meccanismo di `report_reasons` — fonte unica in
+`frontend/src/data/moderation.ts` più vincolo referenziale in database — e la
+risposta è che **non c'è niente a cui applicarlo**: il contenuto deciso è
+punteggio e motivazione breve, non una categoria. Le tre opzioni che erano sul
+tavolo (enum chiuso, tabella di riferimento, testo libero) decadono tutte insieme.
 
-**(d) Entrambe le colonne** vanno scritte da una `SECURITY DEFINER` come unica
+Resta valida, e vale la pena conservarla per una fase futura che volesse
+riaprirla, la distinzione che rendeva la domanda non banale: `report_reasons` è il
+**menu di un utente** e deve coincidere con ciò che il database accetta; una
+tassonomia di triage sarebbe **l'uscita di un modello**, che nessun menu mostra, e
+i due casi non si governano con lo stesso meccanismo.
+
+**(d) La colonna e la tabella** vanno scritte da una `SECURITY DEFINER` come unica
 porta, restano fuori dal `GRANT` e non sono mai scrivibili dal client. Questo è
 già vincolato dalle tre regole di esposizione e **non è una decisione aperta**:
-è un requisito. Aperta è solo la forma.
+è un requisito. Aperta era solo la forma, e ora è chiusa.
 
-### 6.5 Limite di frequenza e valori numerici
+La forma scelta al (b) — una tabella collegata invece di una colonna — **non
+allenta il requisito, lo sposta**: `report_triage` nasce con RLS accesa e nessun
+grant client, come le tre tabelle di dominio della 9a, e le sue righe si leggono
+**solo** attraverso `moderation_report_queue` in `JOIN`. Vale in particolare la
+prima regola di esposizione: il moderatore raggiunge righe che non ha creato,
+quindi la tabella non prende un `GRANT SELECT` di tabella intera, e il filtro sta
+dentro la vista `security_invoker = off` dove nessun client può allargarlo.
+`listings`, invece, ha già grant **per colonna** (3.5): la colonna nuova
+semplicemente non entra nell'elenco, e nasce chiusa senza dover restringere niente.
 
-**Aperta nei numeri, chiusa nella forma.** La forma la fissa la 7.4 e non si
-riapre: **un bucket per funzionalità**, **finestra oraria**, **nessuna esenzione
-per `admin`**, **nessun secondo tetto nostro** oltre al limite di frequenza per il
-v0.
+### 6.5 Limite di frequenza e valori numerici — CHIUSA (12 agosto 2026)
 
-Con la 6.2 chiusa a **due function distinte**, il conto degli scope non è più
-condizionale: **7.3a e 7.3b ne hanno uno ciascuna**. Le domande, in forma diretta
-e senza numeri proposti:
+**La forma la fissava già la 7.4 e non si riapre:** **un bucket per funzionalità**,
+**finestra oraria**, **nessuna esenzione per `admin`**, **nessun secondo tetto
+nostro** oltre al limite di frequenza per il v0. Erano aperti i numeri, e sono
+chiusi.
 
-1. **Quante chiamate all'ora per l'autofill 7.3a?**
-2. **Quante per la spunta 7.3b?** Ha un bucket suo per costruzione, ora che è una
-   function sua. E la cadenza d'uso è diversa: l'autofill si invoca mentre si
-   compila, la spunta una volta per annuncio (o a ogni cambio di foto, se la 6.4a
-   decide che scade).
-3. **Quante per lo sfondo 7.13**, che è l'unica pagata **a immagine** a un
-   fornitore esterno e quindi l'unica in cui un limite troppo alto si traduce
-   direttamente in fattura?
-4. **Quante per il triage 7.12 — e ne serve uno?** Il triage **non è chiamato da
-   un browser**: se gira sul flusso di invio di una segnalazione, il limite che
-   conta è già `report:submit` a `10 / 3600 s`
-   (`supabase/migrations/20260810152000_phase_9a_moderation_schema.sql:524`), e un
-   secondo bucket sullo stesso percorso sarebbe il «secondo tetto» che la 7.4 ha
-   respinto. Se invece gira **su richiesta del moderatore**, allora è un percorso
-   diverso e la domanda si riapre per intero.
-5. **Come si chiamano gli scope.** La 7.4 proponeva `ai:visione` e `ai:sfondo`,
-   ma `ai:visione` è nato quando 7.3a e 7.3b erano una cosa sola: con due
-   function serve una risposta esplicita — due nomi per funzionalità (`ai:autofill`,
-   `ai:completezza`) oppure uno condiviso, che però rifarebbe per la porta di
-   servizio il bucket unico che la 6.2 ha appena separato.
-6. **Dimensione massima del file per il nuovo bucket.** Oggi sono 5 MB in tre
-   punti allineati (3.3), ma quel numero è nato per una foto che resta in
-   piattaforma. Qui l'immagine viene **inoltrata a un terzo e pagata a chiamata**:
-   il numero va confermato o cambiato per questo caso, non ereditato.
-7. **Tetto mensile di spesa sul conto di ciascun fornitore: quale, e chi lo
-   configura?** Vale il principio della 7.11 — il tetto sta sul conto del
-   fornitore, non nel nostro codice — ma il valore e il responsabile non sono
-   stati fissati per nessuno dei fornitori nuovi, PhotoRoom compreso.
+| Scope | Limite | Perché quel numero |
+| --- | --- | --- |
+| `ai:autofill` | **30 / ora** | È la cadenza dell'uso reale: si invoca **mentre si compila**, una volta per foto, e `MAX_FOTO = 6` (3.3). Trenta sono cinque annunci in un'ora, che è una sera di catalogazione, non un abuso |
+| `ai:completezza` | **10 / ora** | Si invoca **una volta per annuncio**, alla pubblicazione (6.4a), e di nuovo solo se il venditore cambia le foto e chiede il ricalcolo. Dieci annunci pubblicati in un'ora è già oltre l'uso plausibile |
+| `ai:sfondo` | **15 / ora** | L'unica pagata **a immagine** a un fornitore esterno, quindi l'unica in cui il limite si traduce direttamente in fattura. Sta in mezzo perché non tutte le foto passano dallo sfondo, ma più di una per annuncio sì |
+| *triage 7.12* | **nessuno scope nuovo** | Vedi il punto 4 e la 6.7 |
 
-Da tenere presente quando si scelgono i numeri: quelli della proposta 7.4 sono
-`10 / 3600 s` per entrambi, mai verificati contro un uso reale (3.9), e il
-precedente più recente è che la riconferma numerica **ha dovuto correggere due
-valori su tre** perché `10 / 3600` si esauriva dentro una sola conversazione.
-Un venditore che cataloga tre bottiglie in una sera scatta più di dieci foto.
+I tre numeri **non sono ereditati da nessuna proposta**. Quelli della 7.4 erano
+`10 / 3600 s` per entrambi gli scope allora previsti, mai verificati contro un uso
+reale (3.9), e il precedente più recente è che la riconferma numerica della Fase 10
+**ha dovuto correggere due valori su tre** perché `10 / 3600` si esauriva dentro
+una sola conversazione. Qui la stessa lezione è applicata prima e non dopo:
+ciascuno dei tre è tarato sulla cadenza della funzionalità che limita, e le tre
+cadenze sono diverse — il che è precisamente l'argomento per cui la 7.4 aveva
+rifiutato il bucket unico del legacy.
 
-### 6.6 La prova del provider fotografico
+**4. Il triage non prende uno scope, e questa è una risposta e non un'omissione.**
+La domanda originale aveva due rami: se il triage gira sul flusso di invio di una
+segnalazione, il limite che conta è già `report:submit` a `10 / 3600 s`
+(`supabase/migrations/20260810152000_phase_9a_moderation_schema.sql:524`) e un
+secondo bucket sullo stesso percorso sarebbe il «secondo tetto» che la 7.4 ha
+respinto; se invece gira su richiesta del moderatore, è un percorso diverso e la
+domanda si riapre. **La risposta è il primo ramo: gira all'invio della
+segnalazione.** Ma la 6.4b ha poi stabilito che la chiamata parte **dal client,
+dopo l'RPC** — quindi non è letteralmente lo stesso percorso, e il guardiano che
+rende vera la risposta «nessuno scope nuovo» va scritto. È la 6.7.
 
-**Aperta.** La 7.1 la impone e non è stata fatta.
+**5. I nomi degli scope: `ai:autofill`, `ai:completezza`, `ai:sfondo`.** La 7.4
+proponeva `ai:visione` e `ai:sfondo`, ma `ai:visione` era nato quando 7.3a e 7.3b
+erano una cosa sola: con due function un nome condiviso avrebbe rifatto, per la
+porta di servizio, il bucket unico che la 6.2 aveva appena separato. **`AiScope`
+passa da tre valori a sei** (`supabase/functions/_shared/ai-gate.ts:66`), e i
+numeri restano dove sono già — in quel file, punto unico (3.9).
 
-- **Chi la conduce.** Enrico è l'unica persona con accesso al progetto, e ha già
-  la 7.11 sulle spalle. Il confronto fra due uscite su una foto vera non richiede
-  però accesso al progetto: può essere fatto da chiunque, fuori da qualunque
-  migrazione, e portato in sessione come risultato.
-- **Con quali foto.** La 7.1 lo dice: vetro, curvatura, luce non perfetta, **non
-  documenti puliti**. Da fissare quante e quali — proposta: sei foto reali di
-  bottiglie della cantina di Enrico, comprese due volutamente difficili
-  (riflesso, etichetta parzialmente coperta).
-- **Con quale criterio.** Aperto, e serve prima di guardare le uscite. Proposta:
-  quanti dei nove campi di `ai-catalogo`
-  (`supabase/functions/ai-catalogo/index.ts:31-33`) sono corretti, e
-  quante volte il modello **inventa** un campo che non poteva dedurre — che è
-  l'errore peggiore, perché il `confidence` non lo cattura.
-- **Prima o dopo la chiusura di questo documento.** Proposta: **prima di aprire
-  `11a`, ma può avvenire dopo la sessione che chiude le altre decisioni.** È
-  l'unica delle sei che non blocca le altre, perché nessuna dipende da quale
-  fornitore vince — ma blocca il codice, esattamente come la 7.1 dichiara.
+**6. Dimensione massima del file: 5 MB, invariata.** Chiusa al 6.1(c), con il
+motivo per cui non è stata ereditata ma riconfermata per il caso nuovo.
+
+**7. Tetto mensile per fornitore: sul conto del fornitore, valore fissato al
+momento in cui si configura la chiave.** Chiusa al 6.3(d), con la motivazione
+sull'assenza di dati di consumo. Vale per tutti i fornitori nuovi, PhotoRoom
+compreso.
+
+### 6.6 La prova del provider fotografico — CHIUSA (12 agosto 2026)
+
+La 7.1 la impone e **non è ancora stata fatta**: qui è deciso come si fa, non che
+è fatta.
+
+- **Chi la conduce: Enrico.** L'osservazione che il confronto fra due uscite non
+  richiede accesso al progetto — e quindi potrebbe farlo chiunque — resta vera, ma
+  la prova richiede **foto vere di bottiglie vere**, e la 7.1 vieta per nome un
+  benchmark su documenti puliti. Chi ha la cantina è chi può produrre il materiale.
+- **Con quali foto: sei foto reali della cantina di Enrico, due volutamente
+  difficili** — riflesso sul vetro, etichetta parzialmente coperta. La proposta del
+  documento è stata confermata così com'era.
+- **Con quale criterio: campi corretti su nove, e campi inventati, contati
+  separatamente.** I nove sono quelli di `ai-catalogo`
+  (`supabase/functions/ai-catalogo/index.ts:31-33`). La ragione per cui i due
+  conteggi devono restare due, con le parole di chi ha deciso: contare solo i campi
+  corretti *«premia un modello che riempie tutti e nove i campi tirando a
+  indovinare rispetto a uno che ne lascia quattro onestamente vuoti»*. L'invenzione
+  è l'errore peggiore perché il `confidence` non la cattura — un modello sicuro di
+  un'annata che non ha letto restituisce un numero alto su un dato falso.
+- **Quando: prima di aprire `11a`.** Non «può avvenire dopo la sessione che chiude
+  le altre decisioni», che era la proposta più permissiva del documento. La ragione
+  è quella scritta due paragrafi più sotto e vale anche in senso pratico: la prova
+  non cambia *se* si scrive un adapter, cambia *quale*, e riscriverne uno dopo
+  averlo scritto costa più che aspettare sei fotografie.
+
+> **Conseguenza immediata, e non aggirabile.** La prova richiede due candidati
+> interrogabili, quindi **richiede le chiavi**, che al 12 agosto 2026 non esistono
+> per nessun fornitore (7.11, scadenza 18 agosto 2026). Mettendo la prova prima di
+> `11a`, questa decisione rende `11a` **non apribile finché la 7.11 non è
+> soddisfatta** — il che è la conclusione, non un effetto collaterale: era già
+> vero che il codice era bloccato dalla 7.1, e ora è scritto nell'ordine giusto.
 
 **Quello che la prova compra davvero, e che va detto prima di condurla.** La 7.1
 per le foto non è una decisione di configurazione: è la scelta di **quale adapter
@@ -918,28 +1242,96 @@ Ciò che invece **non** va rifatto: i modelli sono già per compito
 `AI_MODEL_DEFAULT`, `:209-216`), quindi lo schema delle variabili regge l'aggiunta
 senza cambiare forma.
 
+### 6.7 Il guardiano di `ai-triage` — CHIUSA (12 agosto 2026), derivata
+
+**Non è una decisione nuova: è ciò che rende vera una risposta già data**, e viene
+scritta perché una conseguenza lasciata implicita è una conseguenza che al momento
+del codice nessuno ritrova. Stessa disciplina applicata al TTL dello storico
+Sommelier, dove «le righe scadute restano a tabella» non è rimasto un ragionamento
+di sessione ma è finito nel commento di tabella, nella migrazione e in un caso di
+griglia.
+
+**Il problema.** La 6.5(4) risponde che il triage **non ha uno scope di
+frequenza**, con l'argomento che gira sul percorso dell'invio di una segnalazione,
+già limitato da `report:submit` a `10 / 3600 s`. La 6.4b però stabilisce che la
+chiamata parte **dal client, dopo l'RPC**. Le due risposte insieme lasciano una
+Edge Function invocabile da un browser su un percorso che `report:submit` **non
+copre**: chi ha già inviato una segnalazione può chiamare `ai-triage` quante volte
+vuole, e ogni chiamata è una chiamata a un fornitore a pagamento.
+
+**La risposta non è un bucket.** Aggiungerne uno sarebbe il «secondo tetto» che la
+7.4 ha respinto per nome, e sarebbe anche la soluzione sbagliata al problema
+giusto: il numero di valutazioni sensate **non è un numero all'ora**, è **una per
+segnalazione**. Il vincolo naturale è quello, e già limita il totale a ciò che
+`report:submit` consente di creare.
+
+**L'enforcement, esplicito e in tre punti.** «Una valutazione per segnalazione, e
+solo dal suo segnalante» non è un principio da ricordare: è un vincolo da
+scrivere, e sta scritto in tre posti perché ciascuno copre ciò che gli altri non
+coprono.
+
+1. **Vincolo di unicità su `report_triage.report_id`**, nella migrazione che crea
+   la tabella. È l'unico dei tre che regge anche contro una corsa fra due
+   richieste simultanee e contro un percorso futuro che nessuno ha previsto —
+   compreso `service_role`, che i `GRANT` del client non vincolano. Un `unique` è
+   anche l'indice della `JOIN` con la coda, quindi non costa niente in più.
+2. **Controllo *prima* della chiamata al fornitore**, dentro `ai-triage`: la
+   function verifica che la segnalazione esista, che il chiamante ne sia il
+   segnalante, e che **non abbia già una riga in `report_triage`** — e solo dopo
+   spende. Senza questo controllo il vincolo di unicità farebbe comunque il suo
+   lavoro, ma **fallendo all'`insert`, cioè dopo aver pagato la chiamata**: la
+   spesa che il guardiano esiste per evitare sarebbe già stata fatta.
+3. **Un caso di griglia che lo esercita**, come per il TTL: due chiamate sulla
+   stessa segnalazione, la seconda non produce una seconda riga. Una griglia
+   scritta e mai eseguita non è una prova, e questo caso serve proprio perché il
+   guardiano è la parte che nessuno guarda quando funziona.
+
+> **Il costo accettato, dichiarato qui e non altrove.** Se il client non chiama,
+> la valutazione non avviene: il triage è **facoltativo per costruzione**. La
+> 6.4b lo accetta esplicitamente, e la rete di sicurezza è che la coda ha comunque
+> `priorita` — deterministica, già in produzione, già l'ordinamento primario per
+> la 6.4b. È un degradare bene, non un fallire silenzioso, e l'alternativa
+> (garantire il triage legandolo a `segnalazione_invia`) è quella che è stata
+> scartata.
+
 ---
 
 ## 7. Effort e dipendenze
 
-**Dipendenze esterne alla fase, che nessuna quantità di codice chiude:**
+**Dipendenze esterne alla fase, che nessuna quantità di codice chiude.** Con la
+sezione 6 chiusa, **sono l'unica cosa che separa la fase dal suo primo branch** —
+e nessuna delle tre è soddisfatta al 12 agosto 2026:
 
-1. La configurazione di chiave e budget dei fornitori (7.11, 18 agosto 2026), e la
-   risposta al 6.3(b) su PhotoRoom.
-2. La prova su foto reali (6.6).
-3. Il pannello di moderazione della Fase 9 **esercitato almeno una volta** su una
+1. **Le chiavi dei fornitori di modelli** (7.11, 18 agosto 2026). La chiave
+   PhotoRoom **non è più in questa scadenza**: la 6.3(b) le ha dato una data
+   propria, che è l'apertura di `11c`.
+2. **La prova su foto reali** (6.6), che la sessione ha messo **prima** di `11a` e
+   che a sua volta dipende dal punto 1.
+3. **Il pannello di moderazione della Fase 9 esercitato almeno una volta** su una
    sessione reale, prima di `11d`.
 
-**Ordine di grandezza**, sapendo che l'adapter di visione è lavoro vero (3.7) e
-non configurazione:
+**Ordine di grandezza aggiornato alle decisioni del 12 agosto (secondo tempo)**,
+sapendo che l'adapter di visione è lavoro vero (3.7) e non configurazione. Ogni
+riga è cresciuta rispetto alla prima stesura, e il conto va letto prima di aprire
+un branch, non durante:
 
-| Voce | Stima |
-| --- | --- |
-| Migrazioni | **Due** — spunta 7.3b su `listings`, esito del triage — **più una terza** per il bucket dedicato deciso al 2.4 e le sue policy, che prima era condizionale e adesso non lo è |
-| Edge Function | **Tre nuove** dopo la 6.2: una per l'autofill 7.3a, **una per la spunta 7.3b** (che prima si sperava di ospitare in `ai-catalogo`), una per lo sfondo 7.13 — più il percorso del triage 7.12, la cui forma dipende dalla 6.5(4). Da tre distribuite si passa a sei o sette |
-| Adapter di provider | **Almeno uno nuovo** (visione), **più uno** per PhotoRoom, che non passa da `AiProvider` |
-| Superfici UI | Wizard `/vendi` (foto → autofill), badge di completezza sull'annuncio, `SfondoIAPanel` reale, pannello di moderazione |
-| Griglie SQL | Una per migrazione, **da eseguire almeno una volta** prima di chiamarle prove |
+| Voce | Stima | Era |
+| --- | --- | --- |
+| Migrazioni | **Quattro**, una per checkpoint: bucket `foto-ai` e policy (`11a`); `enum` e colonna di completezza su `listings` con la sua `SECURITY DEFINER` e l'aggiunta a `public_listings` (`11b`); bucket `sfondi` e policy (`11c`); tabella `report_triage`, `JOIN` e nuovo indice sulla coda (`11d`) | «Due più una terza» |
+| Edge Function | **Quattro nuove**: `ai-autofill`, `ai-completezza`, `ai-sfondo`, `ai-triage`. **Da sei distribuite si passa a dieci** | «Tre, da tre a sei o sette» |
+| Bucket di Storage | **Due nuovi**: `foto-ai` privato, `sfondi` pubblico. Da due si passa a quattro | Uno |
+| Scope di frequenza | **Tre nuovi**: `ai:autofill`, `ai:completezza`, `ai:sfondo`. `AiScope` da tre valori a sei | Due proposti |
+| Adapter di provider | **Due nuovi**: quello di visione (Claude o Gemini, entrambi da zero) e quello di PhotoRoom, che non passa da `AiProvider` e ha un modulo proprio (6.3a) | Idem |
+| Superfici UI | Wizard `/vendi` (foto → autofill; scelta sfondo con anteprima e conferma), badge di completezza sull'annuncio **e su `public_listings`**, `SfondoIAPanel` reale, pannello di moderazione | Idem, senza l'anteprima |
+| Griglie SQL | Una per migrazione — quindi **quattro** — **da eseguire almeno una volta** prima di chiamarle prove. Fra i casi obbligatori: l'unicità della 6.7 e la mancata pulizia di `foto-ai` della 6.1(b) | «Una per migrazione» |
+
+**Il conteggio delle Edge Function ha una conseguenza operativa, non solo
+contabile.** Ogni merge di questa fase ridistribuisce **tutte** le function
+esistenti (7.10, misurata tre volte — §2.5). A dieci function, un merge di `11d`
+rimette in produzione anche i tre percorsi dei pagamenti e i tre della Fase 10.
+È la ragione per cui `_shared/cors.ts` deve avere diff vuoto in ogni PR di questa
+fase, e per cui l'ambiente di ogni function nuova va configurato **prima** del
+merge che la introduce.
 
 **Il debito che questa fase eredita e deve chiudere.** La 7.13 ha tolto
 `SfondoIAPanel` dalla lista di cutover per chiuderlo «in questa fase», ma la 7.13
@@ -953,16 +1345,112 @@ sfondo che è un `setTimeout` di 1100 ms e un toast «Sfondo applicato (demo)».
 
 ## 8. Che cosa deve succedere prima che si apra un branch
 
-1. Una sessione organizzativa che chiude **ciò che della sezione 6 resta aperto**,
-   con la stessa disciplina della Fase 9 e della Fase 10: risposta registrata,
-   proposta conservata dove le due divergono. Al 12 agosto 2026 restano aperte la
-   **6.1 meno il punto (a)** — incluse le due domande nuove che la decisione sul
-   bucket ha aperto — e per intero **6.3, 6.4, 6.5 e 6.6**. La 6.2 è chiusa.
-2. Le risposte trascritte in `CONTESTO_IA/01_STATO_ATTUALE.md` e in questo
-   documento, con data — come è stato fatto per le quattro del 12 agosto (2.4).
-3. La prova della 6.6, se la sessione la mette prima del codice.
-4. Solo allora `migration/phase-11-…`, un checkpoint per volta.
+I primi due punti sono **fatti**; i due che restano non dipendono da questo
+documento e nessuno dei due si chiude scrivendo codice.
+
+1. ~~Una sessione organizzativa che chiude ciò che della sezione 6 resta
+   aperto~~ — **fatta il 12 agosto 2026, in due tempi.** Tutte e sei le aree hanno
+   una risposta registrata con data e motivazione; due domande che la sezione non
+   poneva sono state poste e chiuse (6.3c-bis, 6.4b terza domanda) e una
+   conseguenza è stata derivata e scritta (6.7).
+2. ~~Le risposte trascritte in `CONTESTO_IA/01_STATO_ATTUALE.md` e in questo
+   documento, con data~~ — **fatte dalla PR che porta questo aggiornamento**,
+   sola documentazione, sul modello della #34 e della #37.
+3. **La configurazione delle chiavi dei fornitori di modelli** (7.11, 18 agosto
+   2026). Senza, la prova della 6.6 non è eseguibile: non ci sono due candidati da
+   confrontare.
+4. **La prova della 6.6**, che la sessione ha messo **prima** di `11a`.
+5. Solo allora `migration/phase-11-…`, un checkpoint per volta — e `11c` non prima
+   che esista la chiave PhotoRoom, `11d` non prima che il pannello della Fase 9
+   sia stato esercitato almeno una volta.
+
+> **Perché il branch non si è aperto nella stessa sessione che ha chiuso le
+> decisioni.** Non per prudenza: perché la sessione ha deciso, un'ora prima, che
+> la prova 6.6 viene **prima** di `11a`, e quella prova richiede chiavi che al 12
+> agosto 2026 non esistono. Aprire `11a` subito dopo avrebbe contraddetto la
+> decisione appena presa. Gli altri tre checkpoint sono bloccati a loro volta —
+> `11b` da `11a`, `11c` da una chiave la cui data è l'apertura di `11c` stesso,
+> `11d` dal pannello mai esercitato. **Fermarsi a un checkpoint onesto non è un
+> fallimento; forzare tutto in una sessione per finire prima lo è.**
 
 Applicare qualunque cosa al progetto reale — migrazione, function, configurazione
 — resta **una conferma esplicita e distinta per perimetro**, data in sessione, e
 non è coperta da un'autorizzazione precedente che nominava un perimetro diverso.
+
+---
+
+## 9. La revisione legale — una proposta iniziale, non una chiusura
+
+> **APERTA.** Questa sezione registra una **proposta**, non una decisione, e non
+> fa parte della §6 — che resta chiusa per intero. Il blocco è quello scritto in
+> `CHANGES.log`: **«la Fase 11 non potrà essere chiusa prima di quella revisione
+> senza che qualcuno la dichiari»**, e nessuna riga di questo documento è quella
+> dichiarazione.
+
+**La proposta, del 12 agosto 2026.** Enrico propone **un'informativa su privacy e
+uso dell'IA mostrata in fase di registrazione**, perché ogni utente sappia,
+iscrivendosi, che il sito usa l'intelligenza artificiale.
+
+Sta scritta qui perché è **il primo materiale che questa fase consegna alla
+revisione legale**, e perché una proposta che resta in una conversazione non
+arriva a chi quella revisione dovrà farla.
+
+### 9.1 Che cosa copre ragionevolmente
+
+L'obbligo **generale di trasparenza**: chi interagisce con un sistema di IA deve
+saperlo (AI Act, art. 50, dal **2 agosto 2026** — la stessa data già citata in
+§1.2). Un'informativa alla registrazione è la forma consueta con cui quell'obbligo
+si assolve, e questa fase ne aumenta la rilevanza invece di lasciarla dov'era: da
+tre funzionalità AI si passa a sette, e due delle nuove — la spunta di completezza
+(7.3b) e il triage (7.12) — producono effetti che l'utente **vede o subisce**
+invece di richiedere.
+
+### 9.2 Che cosa **non** copre da solo
+
+L'obbligo del **DSA sulla dichiarazione dei motivi** per la singola decisione di
+moderazione che un utente subisce (art. 17). Quell'obbligo riguarda **quella
+decisione**: la sua motivazione specifica, e l'indicazione se nel prenderla siano
+stati usati mezzi automatizzati. Non si assolve con un'accettazione generica data
+mesi prima all'iscrizione. Un venditore a cui viene rimosso un annuncio ha diritto
+di sapere perché è stato preso **quel** provvedimento, e un'informativa di
+registrazione non risponde a quella domanda.
+
+È questa la ragione per cui la proposta è registrata come parziale invece di
+chiudere il blocco: **sono due obblighi diversi**, e la proposta ne indirizza uno.
+
+### 9.3 Che cosa riduce il rischio senza eliminarlo
+
+La **7.12 non dà all'IA nessuna azione autonoma**: classifica e ordina, il bottone
+lo preme un umano, e in `audit_log` non esiste un'identità «attore AI». Il DSA è
+più severo sulle decisioni **interamente automatizzate**, quindi quel vincolo —
+preso per altre ragioni — **riduce** l'esposizione. Non la elimina: la
+dichiarazione dei motivi è dovuta anche per una decisione umana, e resta dovuta
+anche quando l'automazione si è limitata a ordinare la coda che l'umano ha
+guardato.
+
+### 9.4 Che cosa la revisione deve ancora rispondere
+
+Domande, non risposte. Nessuna è decisa qui e nessuna va riempita in silenzio
+durante l'implementazione — è la stessa disciplina della §6, applicata a un'area
+che questa fase **non** chiude.
+
+1. **Se e in che misura il DSA si applichi** a una piattaforma di queste
+   dimensioni, e quali obblighi restino comunque. Viene prima delle altre tre, e
+   questo documento non la risponde.
+2. Se la dichiarazione dei motivi sia **già dovuta oggi** — la moderazione della
+   Fase 9 è distribuita e le sue sette RPC scrivono `audit_log` — o se lo diventi
+   con la Fase 11. Il triage non crea l'obbligo: sposta il momento in cui conviene
+   accorgersene.
+3. Se l'informativa alla registrazione basti per gli **utenti già iscritti**, che
+   alla registrazione non l'hanno vista.
+4. Se e come vada dichiarato che **la coda del moderatore è ordinata anche da un
+   modello**: la 6.4b lo mette dentro un `order by`, non dentro una decisione.
+5. Come si formulano le parole della spunta 7.3b, che la 6.4a ha reso **visibile
+   al compratore anonimo**. Il vincolo «completezza documentale, mai autenticità
+   certificata» è deciso (§2.1); la validazione legale di come è formulato no
+   (§1.2).
+
+> **Che cosa questa sezione non cambia.** Non modifica il perimetro della §1, non
+> aggiunge una quinta funzionalità, non tocca nessuna decisione della §6 e non
+> apre lavoro di implementazione. La revisione legale resta **fuori dalla fase**
+> (§1.2) e resta ciò senza cui la fase non si dichiara chiusa.
