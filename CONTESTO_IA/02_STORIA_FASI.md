@@ -473,7 +473,7 @@ l'addendum di progetto per il tetto ai tentativi.
   `PAYMENTS_ENABLED`, mai dopo. Era la sola difesa a costo zero contro il backlog
   storico, e valeva solo se presa prima.
 - **3a** — la voce «protezione» (3%) **si toglie** dal modello Supabase; in
-  `frontend/` resta invariata fino al cutover di Fase 11. Misurata con la formula
+  `frontend/` resta invariata fino al cutover di Fase 12. Misurata con la formula
   esatta: al 3% è 0,59–0,60× il margine netto che la 7b già trattiene a ogni
   punto di prezzo, e sommarle porterebbe il rincaro sul compratore al 9,6–12,2%.
   Nel percorso Stripe reale di `frontend/` le due voci non sono **mai** state
@@ -703,14 +703,34 @@ La verifica successiva al merge è in PR #33, squash `8dd56c0`. Dettaglio in
 `01_STATO_ATTUALE.md`, sezioni «Fase 9 — decisioni organizzative» ed
 «Estensione 9c».
 
-## Fasi future
+## Fase 10 — AI reale
 
-### Fase 10 — AI reale
+**Stato:** chiusa, distribuita e spenta.
 
-**Stato:** specifica organizzativa scritta, implementazione non iniziata.
+PR #35 mersa in squash come `442c98c` l'11 agosto 2026 alle 18:53:14 UTC, quattro
+check verdi sull'HEAD finale `c5034a6`. Un checkpoint solo — **10a + 10b + 10c**
+nella stessa PR, come 9a/9b/9c stavano nella #32 — e un perimetro chiuso che è
+**le tre funzionalità migrate**: chat Sommelier con storico su Postgres,
+abbinamento cibo-vino, suggerimento di catalogazione da testo.
 
-Previsto `AiService` dietro Edge Function/provider astratto. Nessuna chiave
-segreta deve raggiungere il browser.
+`20260811160000 phase_10b_sommelier_storico` è la **venticinquesima riga** del
+ledger di produzione, distribuita dall'integrazione GitHub e non da un comando.
+Le Edge Function `ACTIVE` passano da tre a **sei**: `ai-pairing`, `ai-catalogo` e
+`ai-sommelier` nascono 38 secondi dopo il merge, e le tre preesistenti vengono
+ridistribuite nello stesso momento pur non essendo state toccate dalla PR — la
+7.10 misurata una seconda volta.
+
+**Distribuita spenta, di proposito.** `AI_ENABLED` non esiste nell'ambiente delle
+function e la porta fallisce chiusa prima di guardare un token: è ciò che ha reso
+sicuro chiudere la fase prima che le chiavi esistessero. Chiave e budget li
+configura Enrico entro il 18 agosto 2026 (7.11), e le prove empiriche della 7.1 —
+5-6 conversazioni reali per scegliere il fornitore della chat — restano da fare.
+
+Dettaglio e misure post-merge in
+[`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md), sezione «Fase 10 — CHIUSA,
+distribuita e spenta».
+
+### Come ci si è arrivati
 
 La specifica è [`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md),
 scritta l'11 agosto 2026 su un branch di sola documentazione (PR #34): il branch
@@ -752,17 +772,41 @@ giornaliero, la 7.6 ha respinto il rename dell'allowlist CORS perché toccare
 `_shared/cors.ts` significa rimettere in produzione il percorso dei pagamenti a
 ogni merge successivo.
 
-Il primo checkpoint è **10a + 10b + 10c**: la porta AI senza stato — abbinamento e
-suggerimento di catalogazione da testo — lo storico Sommelier con la chat SSE, e
-il ripristino delle tre superfici UI che li usano (pannello Sommelier nel Layout,
-Assistente nel wizard, abbinamento in `/esplora`). I tre pezzi stanno sullo
-stesso branch e nella stessa PR, come 9a/9b/9c stavano nella #32. Le quattro
-funzionalità nuove restano fuori, perché sono meno specificate e ciascuna merita
-la propria sessione di spec, sul modello dei 9a/9b/9c separati.
+Il checkpoint è stato **10a + 10b + 10c**, ed è rimasto l'unico: la porta AI senza
+stato — abbinamento e suggerimento di catalogazione da testo — lo storico
+Sommelier con la chat SSE, e il ripristino delle tre superfici UI che li usano
+(pannello Sommelier nel Layout, Assistente nel wizard, abbinamento in
+`/esplora`). I tre pezzi stanno sullo stesso branch e nella stessa PR, come
+9a/9b/9c stavano nella #32. Le quattro funzionalità nuove sono restate fuori,
+perché sono meno specificate e ciascuna merita la propria sessione di spec: sono
+diventate la Fase 11.
 
-### Fase 11 — cutover
+## Fasi future
 
-**Stato:** non iniziata.
+### Fase 11 — estensioni AI ammesse per eccezione
+
+**Stato:** non iniziata. Nessun branch.
+
+Le quattro funzionalità che le decisioni 7.3, 7.12 e 7.13 hanno ammesso per
+eccezione esplicita dentro la Fase 10: autofill da foto (7.3a), spunta di
+completezza documentale (7.3b), triage di moderazione (7.12), ritaglio e sfondo
+reale (7.13). Non erano Fase 10 e non avevano una fase propria; questo numero
+è nato l'11 agosto 2026 perché non stessero in nessun posto.
+
+Le quattro decisioni sono chiuse — sezione 7 di
+[`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md) —
+e manca tutto il resto: Storage, limiti di dimensione dei file, tipi MIME per le
+foto, integrazione PhotoRoom. Sull'esito del triage la decisione c'è già ed è
+colonna persistita, quindi una migrazione; due delle quattro ne portano una
+ciascuna. Ciascuna funzionalità ha la propria sessione di spec prima del codice.
+
+Qui si chiude anche il debito di `SfondoIAPanel`, il pannello di `frontend/` che
+promette uno sfondo e fa un `setTimeout` con un toast: la 7.13 lo ha tolto dalla
+lista di cutover e o lo sfondo viene applicato davvero, o il pannello va tolto.
+
+### Fase 12 — cutover
+
+**Stato:** non iniziata. Era la Fase 11 fino all'11 agosto 2026.
 
 Solo dopo parità funzionale e verifiche complete si potrà decidere di
 dismettere `frontend/` e `backend/`. Non è una conseguenza automatica delle

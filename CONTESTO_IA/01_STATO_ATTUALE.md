@@ -116,7 +116,9 @@ versione già registrata e **non ha rieseguito il file** — comportamento volut
 - `supabase/` — PostgreSQL, Auth, RLS, Storage e migrazioni: **backend target**.
 
 `frontend-next/` non va descritto come produzione. Il cutover appartiene alla
-Fase 11 e richiede una decisione esplicita.
+**Fase 12** e richiede una decisione esplicita. Era la Fase 11 fino all'11
+agosto 2026: con la chiusura della Fase 10 le fasi sono state rinumerate, e la
+nuova Fase 11 sono le quattro estensioni AI ammesse per eccezione.
 
 ## Domini già migrati nello stack target
 
@@ -140,8 +142,9 @@ Fase 11 e richiede una decisione esplicita.
 | Scheduler auto-rilascio e sanità backlog | Fase 7g, PR #26 integrata con squash `f9c53e0`; configurazione secret e prima invocazione restano separate |
 | Messaggi e notifiche | Integrati in `main` — Fase 8, PR #27 al merge squash `4f96864`; migrazione `20260806224517` distribuita in produzione dal merge, ventesima riga del ledger |
 | Moderazione e audit persistente | Integrati in `main` — Fase 9, PR #32 al merge squash `cd81df6`; le quattro migrazioni distribuite in produzione dal merge, righe 21-24 del ledger. Verifica post-merge in PR #33, squash `8dd56c0` |
-| AI reale | Non migrata — Fase 10. **Specifica organizzativa scritta** ([`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md)), **tredici decisioni su tredici chiuse** l'11 agosto 2026, implementazione al primo checkpoint. La fase scrive SQL (7.2 = A) e porta quattro funzionalità nuove ammesse per eccezione, tutte fuori dal primo checkpoint |
-| Cutover | Non iniziato — Fase 11 |
+| AI reale: chat Sommelier con storico, abbinamento, catalogazione da testo | Integrate in `main` — **Fase 10 chiusa**, PR #35 al merge squash `442c98c`; migrazione `20260811160000` venticinquesima riga del ledger, tre Edge Function AI `ACTIVE`. **Distribuita spenta**: `AI_ENABLED` assente e fail-closed fino alla configurazione di chiave e budget (7.11, entro il 18 agosto 2026) |
+| Estensioni AI ammesse per eccezione: autofill da foto, spunta di completezza, triage, sfondo reale | Non iniziate — **Fase 11**, nessun branch. Le quattro decisioni (7.3, 7.12, 7.13) sono chiuse; Storage, limiti di dimensione, tipi MIME e PhotoRoom no |
+| Cutover | Non iniziato — **Fase 12** (era Fase 11 fino all'11 agosto 2026) |
 
 ## Fase 6d-1 integrata
 
@@ -299,7 +302,7 @@ applicativi, nessuna estensione Postgres abilitata, nessuna chiamata Stripe.
 - **1e, DECISA** — lo scheduler si accende e si verifica prima di
   `PAYMENTS_ENABLED`, mai dopo.
 - **3a, DECISA** — la voce «protezione» (3%) esce dal modello Supabase e resta in
-  `frontend/` fino al cutover di Fase 11. Al 3% valeva 0,59–0,60× il margine netto
+  `frontend/` fino al cutover di Fase 12. Al 3% valeva 0,59–0,60× il margine netto
   che la 7b già trattiene, e nel percorso Stripe reale non è mai stata addebitata.
 - **2c, design approvato e schema non scritto** — tetto a 5 tentativi di
   riconciliazione della fee, con contatore `fee_tentativi` su `payments`. Il
@@ -752,7 +755,7 @@ ha solo policy di proprietario — quella `cantina_pubblica` della 6c-1 era già
 stata eliminata dalla 6d-1 — quindi la vista era **l'unico percorso** per cui un
 non proprietario potesse leggere una bottiglia, e rimuoverla elimina davvero la
 capacità. La colonna sopravvive perché è un parametro di `public.bottiglia_crea`
-ed è scritta da `frontend-next` e da `frontend`, congelati fino alla Fase 11:
+ed è scritta da `frontend-next` e da `frontend`, congelati fino alla Fase 12:
 **è un residuo inerte e appartiene alla lista di cutover**, come la voce
 «protezione» della 7d.
 
@@ -769,6 +772,110 @@ decisione 7.6b è stata comunque presa in sessione organizzativa ed è vincolant
 senza di essa «sospendi» scriverebbe una riga di audit e non farebbe nulla. La
 tensione è registrata qui perché la scelta sia visibile, non perché vada
 riaperta.
+
+## Fase 10 — CHIUSA, distribuita e spenta
+
+**La Fase 10 è chiusa al suo unico checkpoint.** PR #35 mersa in squash come
+`442c98c` l'11 agosto 2026 alle **18:53:14 UTC**, quattro check verdi sull'HEAD
+finale `c5034a6`, dopo l'autorizzazione esplicita e distinta per perimetro data
+in sessione organizzativa: una per il merge, una per l'applicazione della
+migrazione al progetto reale. Non va più descritta come «in corso».
+
+**Il perimetro chiuso è le tre funzionalità migrate**: chat Sommelier con
+storico su Postgres, abbinamento cibo-vino, suggerimento di catalogazione da
+testo. Le quattro ammesse per eccezione non sono Fase 10: sono la **Fase 11**,
+non iniziata e senza branch.
+
+### Che cosa è stato misurato dopo il merge, e non dichiarato
+
+- **Il ledger di produzione è a venticinque righe**, riletto con
+  `list_migrations` su `pijnmcllmfgjmgsvtcej` subito dopo il merge. L'ultima è
+  `20260811160000 phase_10b_sommelier_storico`, distribuita **dall'integrazione
+  GitHub e non da un comando**, come per ogni fase dalla 7 in poi. Le
+  venticinque righe coincidono con i venticinque file di `supabase/migrations/`.
+- **Sei Edge Function `ACTIVE`**, tutte con `verify_jwt` attivo: le tre già note
+  più `ai-catalogo`, `ai-pairing` e `ai-sommelier`. Le tre nuove hanno
+  `created_at` a **38 secondi** dal merge e tutte e sei condividono un
+  `updated_at` a **43 secondi**. Le tre preesistenti sono passate a versione
+  15/14/14 con hash di bundle nuovi, benché la PR non ne toccasse una riga di
+  sorgente: è la 7.10 misurata una seconda volta — **il gate di distribuzione è
+  il merge, e il merge ridistribuisce tutto**.
+- **Controllo di sola lettura sul catalogo**, nessuna scrittura e nessuna
+  fixture: `public.sommelier_messaggi` esiste con RLS accesa e **zero righe**,
+  con le colonne `ordinale` (`bigint`), `expires_at`, `owner_id` e `session_id`;
+  **nessuna policy** su quella tabella, che è l'intento — chiusa a ogni ruolo
+  client; la vista `my_sommelier_messages` è `security_invoker = off`; le tre
+  porte sono `SECURITY DEFINER` con i `GRANT` esatti dichiarati —
+  `sommelier_contesto_leggi` e `sommelier_scambio_registra` al solo
+  `service_role`, `sommelier_storico_cancella` anche ad `authenticated`, e
+  `anon` da nessuna parte. La prima interrogazione non trovava la terza funzione
+  perché ne aveva presunto il nome: si chiama `sommelier_storico_cancella`, non
+  `sommelier_cancella`.
+- **Nessun comportamento della Fase 10 è mai stato esercitato lì.** Quello che è
+  stato letto è schema e grant, non una conversazione eseguita. L'esecuzione
+  della griglia `10b_sommelier_storico.sql` sul progetto reale resta
+  un'autorizzazione **a parte, per griglia e non per progetto**, e non è stata
+  data.
+
+### Perché «chiusa» e «spenta» stanno insieme
+
+`AI_ENABLED` **non esiste nell'ambiente** delle function, quindi la porta
+fallisce chiusa prima ancora di guardare un token. Chiave e budget del provider
+li configura Enrico **entro lunedì 18 agosto 2026** (decisione 7.11). Non è un
+lembo lasciato aperto per distrazione: è lo stato finale voluto della fase fino a
+quella data, ed è ciò che ha reso sicuro distribuirla prima che le chiavi
+esistessero. Resta aperto anche il prerequisito della 7.1 — le 5-6 conversazioni
+reali con cui scegliere il fornitore della chat — che non si chiude scrivendo
+codice.
+
+## Fase 11 — estensioni AI ammesse per eccezione. Non iniziata, nessun branch
+
+Le quattro funzionalità che le decisioni **7.3, 7.12 e 7.13** hanno ammesso per
+eccezione esplicita dentro la Fase 10 e che il suo unico checkpoint ha lasciato
+fuori: autofill da foto (7.3a), spunta di completezza documentale (7.3b), triage
+di moderazione (7.12), ritaglio e sfondo reale (7.13). Non erano Fase 10 e non
+avevano una fase propria: senza questo numero non stavano in nessun posto.
+
+Le quattro decisioni che le descrivono sono **già chiuse**, nella sezione 7 di
+[`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md).
+Manca tutto il resto, e va nominato invece che sottinteso: **Storage** (quale
+bucket, pubblico o privato, con quale ciclo di vita per una foto caricata solo
+per farsi compilare dei campi), **limiti di dimensione dei file**, **tipi MIME
+ammessi**, e **l'integrazione PhotoRoom** per la 7.13 — un fornitore esterno in
+più, con la sua chiave e il suo costo. Su dove viva l'esito del triage la
+decisione c'è già ed è **colonna persistita**, non ricalcolo a ogni apertura del
+pannello: quindi una migrazione. Due delle quattro ne portano una ciascuna.
+
+Ciascuna funzionalità **ha la propria sessione di spec prima del codice**, sul
+modello dei 9a/9b/9c separati. Restano vincolanti le due riserve: la spunta
+della 7.3b si chiama completezza **documentale** e mai autenticità certificata,
+e la 7.12 non dà all'AI nessuna azione autonoma né identità di «attore AI» in
+`audit_log`.
+
+### La rinumerazione delle fasi, e dove il vecchio numero sopravvive
+
+Decisa in sessione organizzativa l'11 agosto 2026, alla chiusura della Fase 10:
+il **cutover era la Fase 11 e diventa la Fase 12**; la **nuova Fase 11** sono le
+quattro estensioni qui sopra. Applicata in `docs/ROADMAP_V1.md`,
+`docs/MIGRATION_PHASE_1_BACKLOG.md`, `docs/adr/002-migration-strategy.md`,
+`docs/PHASE_10_AI_SERVICE_SPEC.md`, `CLAUDE.md`, `CHANGES.log` e in tutti i file
+di `CONTESTO_IA/`.
+
+Due classi di file conservano il numero vecchio **di proposito**, ed è
+registrato qui perché nessuno le legga come una svista:
+
+- i **due** file di `supabase/migrations/` che lo citano, in quattro punti
+  (`20260810152500_phase_9a_drop_public_bottle_units.sql:36`, `:40`, `:59` e
+  `20260810180000_phase_9b_moderation_actions.sql:16`) — **un file di migrazione
+  già pushato non si modifica in place**, nemmeno per un commento. Il terzo di
+  quei punti, `:59`, non è un commento di file: è la stringa di un
+  `comment on column`, quindi **«Fase 11» è testo vivo nel catalogo di
+  produzione** su `bottle_units.visibilita`. Cambiarlo richiederebbe una
+  migrazione nuova, cioè un'applicazione al progetto reale per correggere una
+  parola: non è stato fatto, ed è una scelta;
+- `docs/superpowers/plans/2026-08-05-phase-7d-decisioni-economiche.md`, che è il
+  verbale di una giornata e non un piano vigente: riscriverlo sarebbe riscrivere
+  che cosa fu detto allora.
 
 ## Fase 10 — specifica scritta, tredici decisioni chiuse su tredici
 
@@ -1173,8 +1280,8 @@ aperto**: `/vendi` richiede una sessione reale, e non ne esisteva una.
 `SfondoIAPanel` promette all'utente uno sfondo che non viene mai applicato — è un
 `setTimeout` di 1100 ms e un toast «Sfondo applicato (demo)»
 (`frontend/src/routes/vendi.tsx:569-579`). Era registrato come materiale per la
-lista di cutover della Fase 11, accanto a `bottle_units.visibilita`. **Con la
-7.13 non è più così**: si chiude in Fase 10, e in un senso o nell'altro — o lo
+lista di cutover della Fase 12, accanto a `bottle_units.visibilita`. **Con la
+7.13 non è più così**: si chiude in Fase 11, e in un senso o nell'altro — o lo
 sfondo viene applicato davvero, o il pannello va tolto. La terza via, lasciarlo lì
 a promettere, è quella che la decisione ha scartato.
 

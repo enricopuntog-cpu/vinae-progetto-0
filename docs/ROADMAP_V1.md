@@ -85,7 +85,19 @@ Il dettaglio di ogni ticket è in
 | 8 | `MessagingService` + `NotificationService` (Realtime) | Sì |
 | 9 | `ModerationService` + audit persistente | Sì |
 | 10 | `AiService` reale via Edge Function | Sì |
-| 11 | Cutover finale: dismissione `frontend/` + `backend/` | — |
+| 11 | Estensioni AI ammesse per eccezione: autofill da foto, spunta di completezza documentale, triage di moderazione, ritaglio e sfondo reale | Sì |
+| 12 | Cutover finale: dismissione `frontend/` + `backend/` | — |
+
+**Rinumerazione dell'11 agosto 2026.** Il cutover era la Fase 11 e diventa la
+**Fase 12**. La nuova **Fase 11** raccoglie le quattro funzionalità che le
+decisioni 7.3, 7.12 e 7.13 hanno ammesso per eccezione durante la Fase 10 e che
+il suo unico checkpoint ha lasciato fuori: non sono Fase 10 e non avevano una
+fase propria, quindi finivano in nessun posto. Dove il vecchio numero sopravvive
+è perché il file è congelato per regola — i due file di `supabase/migrations/`
+che lo citano in un commento (uno dei quali è un `comment on column`, quindi
+«Fase 11» resta testo vivo nel catalogo di produzione) e il verbale di sessione
+`docs/superpowers/plans/2026-08-05-phase-7d-decisioni-economiche.md`, che è il
+resoconto di una giornata e non un piano vigente.
 
 ## Correzioni apportate in Fase 1
 
@@ -448,15 +460,72 @@ Resta separato anche lo schema 2c per la fee reale: tetto futuro di 5 tentativi,
 marcatore derivato da `fee_tentativi >= 5` e nessun nuovo valore di
 `public.payment_stato`. Il codice è raggiungibile; nessun denaro lo ha mai percorso.
 
-La Fase 8 è nella draft PR #27 sulla branch
-`migration/phase-8-messaging-notifications`: schema/RLS/RPC, adapter, route e
-Realtime privato sono implementati. La Supabase Preview ha applicato la
-migrazione e superato la griglia statica 20/20, la griglia fixture 23/23 e le
-cinque prove concorrenti, con residui zero; i quattro check della PR sono verdi
-sul precedente HEAD. Realtime sulla Preview accetta soltanto canali privati e
-lo smoke autenticato ha verificato join autorizzati, rifiuti, payload chiusi e
-assenza di duplicati. Produzione resta a 19 migrazioni fino allo squash;
-ready-for-review e merge sono autorizzati dopo i check del commit finale.
+Fino all'11 agosto 2026 questo punto diceva che la Fase 8 era «nella draft
+PR #27»: era vero quando è stato scritto e da allora sono passate tre fasi. Lo
+stato aggiornato è nelle sezioni qui sotto.
+
+## Fase 8, Fase 9 e Fase 10 — integrate
+
+- **Fase 8**, messaggi e notifiche: PR #27 al merge squash `4f96864`, 7 agosto
+  2026. La migrazione `20260806224517` è la ventesima riga del ledger di
+  produzione.
+- **Fase 9**, moderazione e audit persistente: PR #32 al merge squash `cd81df6`,
+  11 agosto 2026, quattro migrazioni alle righe 21-24 del ledger. La verifica
+  successiva al merge è la PR #33, squash `8dd56c0`.
+- **Fase 10**, `AiService` reale via Edge Function: PR #35 al merge squash
+  `442c98c`, 11 agosto 2026 alle 18:53:14 UTC. Vedi la sezione dedicata.
+
+## Fase 10 — AiService reale via Edge Function
+
+**Stato: chiusa e distribuita, e distribuita spenta.**
+
+Un checkpoint solo, 10a + 10b + 10c dentro la PR #35, sul modello dei 9a/9b/9c
+dentro la #32. Il perimetro chiuso è **le tre funzionalità migrate**: chat
+Sommelier con storico su Postgres, abbinamento cibo-vino, suggerimento di
+catalogazione da testo. Tre Edge Function nuove — `ai-pairing`, `ai-catalogo`,
+`ai-sommelier` — dietro un'unica porta (`_shared/ai-gate.ts`) che applica in
+ordine origine, metodo, flag, bearer, identità, stato utente e bucket orario;
+una migrazione, `20260811160000_phase_10b_sommelier_storico`, venticinquesima
+riga del ledger.
+
+**`AI_ENABLED` resta spento** finché Enrico non configura chiave e budget del
+provider — decisione 7.11, scadenza impegnata **lunedì 18 agosto 2026**. Non è
+una dimenticanza da correggere prima di considerare la fase chiusa: il flag
+fallisce chiuso per costruzione, ed è ciò che ha reso sicuro distribuire la fase
+prima che le chiavi esistessero. Fino ad allora ogni chiamata risponde
+«funzionalità non disponibile» senza guardare un token.
+
+Restano fuori le quattro funzionalità ammesse per eccezione: sono la Fase 11.
+
+## Fase 11 — estensioni AI ammesse per eccezione
+
+**Stato: non iniziata. Nessun branch.**
+
+Le quattro funzionalità che le decisioni 7.3, 7.12 e 7.13 hanno ammesso per
+eccezione esplicita durante la Fase 10 — autofill da foto (7.3a), spunta di
+completezza documentale (7.3b), triage di moderazione (7.12), ritaglio e sfondo
+reale (7.13). Sono le prime funzionalità nuove autorizzate dall'inizio della
+migrazione, e sono state autorizzate per nome: la regola «nessuna funzionalità
+nuova» continua a valere per tutto il resto.
+
+Le quattro decisioni che le descrivono sono **già chiuse** e stanno nella
+sezione 7 di [`PHASE_10_AI_SERVICE_SPEC.md`](PHASE_10_AI_SERVICE_SPEC.md).
+Manca però tutto il resto, e non è poco: Storage (bucket, privacy, ciclo di
+vita), limiti di dimensione dei file, tipi MIME ammessi per le foto,
+l'integrazione PhotoRoom per la 7.13. Sull'esito del triage la decisione c'è già
+— **colonna persistita**, non ricalcolo a ogni apertura del pannello — e implica
+una migrazione. Due delle quattro portano una migrazione ciascuna.
+
+Ciascuna funzionalità **ha la propria sessione di spec prima del codice**, sul
+modello dei 9a/9b/9c separati, e non è chiaro che debbano stare tutte nella
+stessa PR.
+
+## Fase 12 — cutover finale
+
+**Stato: non iniziato.** Era la Fase 11 fino all'11 agosto 2026.
+
+Dismissione di `frontend/` (TanStack Start) e `backend/` (FastAPI/MongoDB) solo
+dopo parità funzionale verificata e approvazione esplicita separata.
 
 ## Cosa NON è ancora deciso
 

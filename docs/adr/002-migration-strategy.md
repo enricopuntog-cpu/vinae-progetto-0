@@ -34,10 +34,17 @@ branch e Pull Request dedicate (draft finché non diversamente indicato):
 4. **Il frontend TanStack Start attuale resta la versione servita** agli
    utenti finché la versione Next.js non raggiunge parità funzionale
    verificata end-to-end per tutti i domini migrati fino a quel punto.
-5. **Cutover finale** (Fase 11): dismissione di `frontend/` (TanStack
+5. **Cutover finale** (Fase 12): dismissione di `frontend/` (TanStack
    Start) e `backend/` (FastAPI/MongoDB) solo dopo parità verificata e
    approvazione esplicita separata — non è una conseguenza automatica
    del completamento delle fasi precedenti.
+
+Il cutover era la **Fase 11** in questa ADR fino all'11 agosto 2026, quando la
+chiusura della Fase 10 ha inserito prima di esso una **Fase 11 nuova**: le
+quattro funzionalità AI ammesse per eccezione esplicita dalle decisioni 7.3,
+7.12 e 7.13. Non sono un dominio migrato — sono funzionalità che il legacy non
+ha — quindi restano fuori dal punto 2 e non allargano il perimetro «un dominio
+alla volta collegato a Supabase», che si chiude con la Fase 10.
 
 ## Regole operative per ogni fase
 
