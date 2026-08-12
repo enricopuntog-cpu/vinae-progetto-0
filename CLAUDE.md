@@ -689,6 +689,15 @@ placed *before* it and which needs keys that do not exist (7.11, 18 August 2026)
 `11c` by a PhotoRoom key whose date is by definition `11c`'s own opening; `11d` by the Phase 9
 moderation panel, never exercised on the real project.
 
+**The legal review stays outside the phase, and the phase does not close without it.** §9 of the
+spec records the **first proposal** handed to that review — an AI/privacy notice shown at
+registration, proposed 12 August 2026. It is recorded as a **proposal, not a closed point**: it
+reasonably covers the AI Act's general transparency duty (art. 50), but not on its own the DSA's
+statement of reasons for the individual moderation decision a user suffers (art. 17), which
+attaches to *that* decision and is not discharged by a generic acceptance given months earlier.
+7.12's human-in-the-loop reduces the exposure — the DSA is stricter on fully automated decisions —
+without eliminating it. §9 is deliberately **not** part of section 6, which stays closed in full.
+
 ### Postgres exposure rules (binding since Phase 6d-1)
 
 RLS filters rows, never columns. These three rules are what keeps that gap closed — breaking

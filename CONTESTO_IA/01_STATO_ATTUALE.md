@@ -1040,6 +1040,32 @@ sono passate da 15/14/14 e 1/1/1 a **17/16/16 e 3/3/3**, tutte con lo stesso
 UTC). Stesso scarto della misura precedente. Il gate di distribuzione è il merge,
 e **l'ambiente di una function si configura prima**, mai dopo.
 
+#### Una proposta registrata, non una decisione: l'informativa AI alla registrazione
+
+Il **12 agosto 2026** Enrico ha proposto **un'informativa su privacy e uso
+dell'IA mostrata in fase di registrazione**, perché ogni utente sappia che il sito
+usa l'intelligenza artificiale. È registrata come **proposta iniziale per la
+revisione legale**, non come punto chiuso, ed è scritta per esteso nella
+**§9 di [`../docs/PHASE_11_AI_EXTENSIONS_SPEC.md`](../docs/PHASE_11_AI_EXTENSIONS_SPEC.md)** —
+fuori dalla sezione 6, che resta chiusa per intero e che questa non riapre.
+
+Perché non chiude il blocco: copre ragionevolmente l'obbligo **generale** di
+trasparenza (AI Act art. 50 — chi interagisce con un sistema di IA deve saperlo),
+ma **non copre da solo** l'obbligo del **DSA sulla dichiarazione dei motivi** per
+la singola decisione di moderazione che un utente subisce (art. 17), che riguarda
+**quella** decisione — motivazione specifica, e se siano stati usati mezzi
+automatizzati — e non si assolve con un'accettazione generica data mesi prima. Il
+fatto che nella 7.12 sia **sempre un umano a confermare** l'azione **riduce** il
+rischio, perché il DSA è più severo sulle decisioni interamente automatizzate, ma
+non lo elimina: la dichiarazione dei motivi è dovuta anche per una decisione
+umana.
+
+**Il blocco resta invariato**: «la Fase 11 non potrà essere chiusa prima di quella
+revisione senza che qualcuno la dichiari», e la sessione che ha registrato la
+proposta **non è quella dichiarazione**. La §9.4 elenca le cinque domande che la
+revisione deve ancora rispondere, a partire da **se e in che misura il DSA si
+applichi** a una piattaforma di queste dimensioni.
+
 ### La rinumerazione delle fasi, e dove il vecchio numero sopravvive
 
 Decisa in sessione organizzativa l'11 agosto 2026, alla chiusura della Fase 10:

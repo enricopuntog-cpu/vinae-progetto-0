@@ -120,6 +120,11 @@ sessione di spec prima del codice.
   deciso (sezione 2.1); una validazione legale di come è formulata non è compito
   di questa fase.
 
+> **La revisione legale resta fuori, ma non resta senza materiale.** La §9
+> registra la **prima proposta** che questa fase le consegna — un'informativa su
+> privacy e uso dell'IA alla registrazione — come proposta e non come chiusura.
+> Il blocco che ne dipende non si sposta.
+
 ---
 
 ## 2. Stato ereditato — chiuso, non si riapre qui
@@ -1371,3 +1376,81 @@ documento e nessuno dei due si chiude scrivendo codice.
 Applicare qualunque cosa al progetto reale — migrazione, function, configurazione
 — resta **una conferma esplicita e distinta per perimetro**, data in sessione, e
 non è coperta da un'autorizzazione precedente che nominava un perimetro diverso.
+
+---
+
+## 9. La revisione legale — una proposta iniziale, non una chiusura
+
+> **APERTA.** Questa sezione registra una **proposta**, non una decisione, e non
+> fa parte della §6 — che resta chiusa per intero. Il blocco è quello scritto in
+> `CHANGES.log`: **«la Fase 11 non potrà essere chiusa prima di quella revisione
+> senza che qualcuno la dichiari»**, e nessuna riga di questo documento è quella
+> dichiarazione.
+
+**La proposta, del 12 agosto 2026.** Enrico propone **un'informativa su privacy e
+uso dell'IA mostrata in fase di registrazione**, perché ogni utente sappia,
+iscrivendosi, che il sito usa l'intelligenza artificiale.
+
+Sta scritta qui perché è **il primo materiale che questa fase consegna alla
+revisione legale**, e perché una proposta che resta in una conversazione non
+arriva a chi quella revisione dovrà farla.
+
+### 9.1 Che cosa copre ragionevolmente
+
+L'obbligo **generale di trasparenza**: chi interagisce con un sistema di IA deve
+saperlo (AI Act, art. 50, dal **2 agosto 2026** — la stessa data già citata in
+§1.2). Un'informativa alla registrazione è la forma consueta con cui quell'obbligo
+si assolve, e questa fase ne aumenta la rilevanza invece di lasciarla dov'era: da
+tre funzionalità AI si passa a sette, e due delle nuove — la spunta di completezza
+(7.3b) e il triage (7.12) — producono effetti che l'utente **vede o subisce**
+invece di richiedere.
+
+### 9.2 Che cosa **non** copre da solo
+
+L'obbligo del **DSA sulla dichiarazione dei motivi** per la singola decisione di
+moderazione che un utente subisce (art. 17). Quell'obbligo riguarda **quella
+decisione**: la sua motivazione specifica, e l'indicazione se nel prenderla siano
+stati usati mezzi automatizzati. Non si assolve con un'accettazione generica data
+mesi prima all'iscrizione. Un venditore a cui viene rimosso un annuncio ha diritto
+di sapere perché è stato preso **quel** provvedimento, e un'informativa di
+registrazione non risponde a quella domanda.
+
+È questa la ragione per cui la proposta è registrata come parziale invece di
+chiudere il blocco: **sono due obblighi diversi**, e la proposta ne indirizza uno.
+
+### 9.3 Che cosa riduce il rischio senza eliminarlo
+
+La **7.12 non dà all'IA nessuna azione autonoma**: classifica e ordina, il bottone
+lo preme un umano, e in `audit_log` non esiste un'identità «attore AI». Il DSA è
+più severo sulle decisioni **interamente automatizzate**, quindi quel vincolo —
+preso per altre ragioni — **riduce** l'esposizione. Non la elimina: la
+dichiarazione dei motivi è dovuta anche per una decisione umana, e resta dovuta
+anche quando l'automazione si è limitata a ordinare la coda che l'umano ha
+guardato.
+
+### 9.4 Che cosa la revisione deve ancora rispondere
+
+Domande, non risposte. Nessuna è decisa qui e nessuna va riempita in silenzio
+durante l'implementazione — è la stessa disciplina della §6, applicata a un'area
+che questa fase **non** chiude.
+
+1. **Se e in che misura il DSA si applichi** a una piattaforma di queste
+   dimensioni, e quali obblighi restino comunque. Viene prima delle altre tre, e
+   questo documento non la risponde.
+2. Se la dichiarazione dei motivi sia **già dovuta oggi** — la moderazione della
+   Fase 9 è distribuita e le sue sette RPC scrivono `audit_log` — o se lo diventi
+   con la Fase 11. Il triage non crea l'obbligo: sposta il momento in cui conviene
+   accorgersene.
+3. Se l'informativa alla registrazione basti per gli **utenti già iscritti**, che
+   alla registrazione non l'hanno vista.
+4. Se e come vada dichiarato che **la coda del moderatore è ordinata anche da un
+   modello**: la 6.4b lo mette dentro un `order by`, non dentro una decisione.
+5. Come si formulano le parole della spunta 7.3b, che la 6.4a ha reso **visibile
+   al compratore anonimo**. Il vincolo «completezza documentale, mai autenticità
+   certificata» è deciso (§2.1); la validazione legale di come è formulato no
+   (§1.2).
+
+> **Che cosa questa sezione non cambia.** Non modifica il perimetro della §1, non
+> aggiunge una quinta funzionalità, non tocca nessuna decisione della §6 e non
+> apre lavoro di implementazione. La revisione legale resta **fuori dalla fase**
+> (§1.2) e resta ciò senza cui la fase non si dichiara chiusa.
