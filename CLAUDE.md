@@ -362,7 +362,9 @@ Measured straight after the merge, not declared:
   merge and all six share one `updated_at` 43 seconds after it — the three pre-existing
   functions went to version 15/14/14 with new bundle hashes although the PR touched none of
   their source. That is decision 7.10 measured a second time: the merge is the deploy gate, and
-  it redeploys everything.
+  it redeploys everything. **Measured a third time on 12 August 2026**, after the merge of PR #37
+  — documentation only: the six went to **17/16/16 and 3/3/3**, all sharing one `updated_at`
+  43 seconds after that merge. Same gap as the previous measurement.
 
 **`AI_ENABLED` stays off** until Enrico configures the provider key and budget — decision 7.11,
 committed deadline **Monday 18 August 2026**. The phase is distributed **off, by construction**:
@@ -568,12 +570,14 @@ features authorized since the migration began, and they were authorized **by nam
 features during migration" still governs everything else.
 
 The four decisions describing them are **already closed**, in section 7 of
-`docs/PHASE_10_AI_SERVICE_SPEC.md`. Everything else is missing and has to be decided before code:
-Storage (which bucket, public or private, what lifecycle for a photo uploaded only to autofill a
-form), file-size limits, allowed MIME types, and the PhotoRoom integration for 7.13 — one more
-external provider with its own key, cost and contract. The triage result already has its answer,
-and it is a **persisted column**, not a recomputation on each panel opening; that means a
-migration. Two of the four carry a migration each.
+`docs/PHASE_10_AI_SERVICE_SPEC.md`. **Everything else was closed on 12 August 2026**, in two
+sessions of the same day — Storage, PhotoRoom, the shape of the migrations, every numeric value
+and the photo-provider trial. **Section 6 of the spec has no open areas left.**
+
+The phase's size after those answers: **four migrations** (one per checkpoint), **four new Edge
+Functions** — deployed functions go from six to **ten** — **two Storage buckets**, **three rate
+scopes** and **two provider adapters**. It was "two migrations plus a third" and "three functions".
+All four features carry SQL, not two.
 
 **Each feature earns its own spec session before code**, on the model of Phase 9's separate
 9a/9b/9c. Two riders carried over from the decisions: 7.3b's badge is **documentary
@@ -597,29 +601,93 @@ the two-line backlog entry:
 - **`reports.priorita` already exists** — a three-value enum written only by the server inside
   `segnalazione_invia`, derived from a deterministic domain rule, with the moderator queue
   **already ordered** on it and its own index. 7.12's triage does not land on empty ground: the
-  open question is no longer "where does the result live" but **what relation it has to
-  `priorita`** — coexist, replace, or be a different thing altogether.
+  question was no longer "where does the result live" but **what relation it has to `priorita`**.
+  Answered 12 August 2026: **coexistence**, with `priorita` still the primary ordering.
 
-Four decisions closed in session on **12 August 2026**, recorded in full in
-`CONTESTO_IA/01_STATO_ATTUALE.md` under «Fase 11 — decisioni organizzative»:
+The decisions closed in session on **12 August 2026**, in two passes, recorded in full in
+`CONTESTO_IA/01_STATO_ATTUALE.md` under «Fase 11 — decisioni organizzative». First pass:
 
 - **Storage: a dedicated bucket**, not reuse of `annunci`/`cantina` — because `annunci` is public,
   so an autofill-only photo later abandoned would stay world-readable forever to anyone with the
-  URL. **Still open**: the bucket's name, public or private, lifecycle and orphan cleanup, size
-  limit, MIME types. "Dedicated" does not decide "private".
+  URL. "Dedicated" does not decide "private"; the second pass decided that too.
 - **7.3a and 7.3b are two distinct Edge Functions**, not one shared — "one door per operation",
   as in Phase 9's seven RPCs and Phase 10's three functions. This **supersedes the 7.6 table**,
-  which put both inside `ai-catalogo`, and takes the phase's new functions from two to **three**.
-  The accepted downside: if one vision call would serve both, two functions mean double cost.
+  which put both inside `ai-catalogo`. The downside accepted then — one vision call serving both
+  would mean double cost — **was cancelled by the second pass**: the badge is computed at
+  publication and the autofill during the wizard, so there is no call to share.
 - The spec lives in **its own PR**, separate from #36.
 - **PR #36's go-ahead was conditional**, not unconditional — "se quella PR è completa sì, se no la
   completiamo e mergiamo". The condition was verified and one incompleteness found and fixed
   before merge: #36 did not record its own number. Recording the conditional form rather than
   "approved" is deliberate.
 
-Everything else stays open and is presented with options in the spec's section 6: PhotoRoom (key,
-module shape, budget, cutout vs compositing), the two migrations (the completeness column's form,
-and the triage result's relation to `priorita`), every numeric limit, and the photo-provider trial.
+Second pass — what constrains code:
+
+- **Bucket `foto-ai`, private, no cleanup, 5 MB, three MIME types.** Private is what actually
+  closes the problem that disqualified `annunci`: a dedicated *public* bucket would reproduce the
+  perpetual URL-readability identically. Orphan cleanup is therefore hygiene, not confidentiality
+  — and **that `foto-ai` accumulates orphans that nothing removes in v0 must be written** in the
+  bucket comment and in the migration, same discipline as the Sommelier history TTL.
+  **`image/avif` is out** — the one deliberate divergence from the two existing buckets — because
+  **PhotoRoom does not accept AVIF as input** (verified on the provider's documentation, which is
+  what the question demanded before deciding). 5 MB is unchanged: lowering it here would produce a
+  photo the wizard accepts and the autofill rejects.
+- **PhotoRoom gets its own module** on the `payment-provider.ts` pattern, never inside
+  `ai-provider.ts` (two signatures, neither takes an image). **Its key leaves the 18 August
+  deadline** and gets a date tied to opening `11c` — leaving it on 18 August would make it expire
+  without being needed, the inert-deadline shape of the 7g case. **The seller chooses** crop vs
+  compositing, with **"cutout only" preselected**: one *Image Editing* call costs five *Remove
+  Background* calls, so a compositing default would quintuple the per-photo cost for a choice
+  nobody made. PhotoRoom's failure is **silent** (`200` with a wrong image, not a 503), so the
+  result goes through **a preview with explicit confirmation** and never overwrites the original.
+- **EXIF is stripped before forwarding to any third party**, and `docs/SECURITY.md` gets a line
+  saying so — a bottle photo taken at home carries the GPS coordinates of where it was shot.
+  **Consequence: the function must download the bytes**; stripping metadata means rewriting the
+  file, so a signed URL would never have sufficed and the image is uploaded as `imageFile`. That
+  is what makes the private bucket free.
+- **A fourth bucket `sfondi`, public**, for 7.13's hand-curated catalog — editorial material of
+  the platform, not a user's data, and no user writes to it. The phase's new buckets are **two**.
+- **The completeness badge is an `enum` of three values**, computed **at publication**, **expiring**
+  on photo change with **explicit recalculation** (never a trigger — that would be an AI call
+  inside a transaction), and **visible to anonymous buyers** in `public_listings`. That visibility
+  is what makes 7.3's labelling constraint load-bearing rather than a matter of internal wording.
+- **The triage result coexists with `priorita`, in a linked table `report_triage`.** The question
+  that decided it was not schema but *what the moderator cannot do today*, and the answer is
+  **telling apart severity inside the `alta` bucket**. Ordering is **cascaded**: `priorita` first,
+  triage score inside the group, then date — so a model never overrides the deterministic rule,
+  which is how "no autonomous action" becomes an `order by`. Content is **score plus a short
+  rationale**, no category enum. **Not exposed in `my_reports`.** The existing
+  `reports_stato_priorita_idx` no longer covers the ordering; a new index is needed.
+- **The client calls `ai-triage` after the RPC — `segnalazione_invia` is not touched.** It is a
+  Postgres function and cannot call an external provider (`pg_net` excluded by Phase 7d decision
+  1a), so an Edge Function was required; grafting it onto the existing RPC would tie a critical
+  existing action to a third party's availability, which is the opposite of why `AI_ENABLED` fails
+  closed. Accepted cost: triage is **optional** if the client does not call — degrading well, not
+  failing silently, because the queue still has `priorita` as its net.
+- **Rate limits: `ai:autofill` 30/hour, `ai:completezza` 10/hour, `ai:sfondo` 15/hour.** None
+  inherited — 7.4 proposed `10 / 3600` for everything, and Phase 10's numeric re-confirmation had
+  to correct two of three values. **No new scope for the triage.** `AiScope` goes from three values
+  to six. Unchanged: hourly window, no `admin` exemption, no second ceiling of ours for v0.
+- **Spend caps live on each provider's account**, value set **when the key is configured** — no
+  real consumption has ever been observed for any AI provider in this project, and a number chosen
+  without data would be exactly the invented value the rest of the phase has avoided.
+- **The photo-provider trial (6.6) comes before `11a`:** Enrico, six real photos of his own cellar
+  including two deliberately difficult, scored on **two separate counts** — correct fields out of
+  `ai-catalogo`'s nine **and** invented fields — because counting only correct ones rewards a model
+  that guesses all nine over one that honestly leaves four blank, and invention is the error
+  `confidence` does not catch.
+- **The `ai-triage` guard is enforced in three places, not left implicit** in checking who calls:
+  a **uniqueness constraint on `report_triage.report_id`** (the only one that holds against a race
+  between concurrent requests and against `service_role`), a **check before the provider call**
+  inside the function (without it the constraint fires at `insert`, i.e. *after* paying), and a
+  **grid case** exercising it. This is what makes "no new scope" true: the natural bound is one
+  evaluation per report, and the total is already capped by `report:submit`.
+
+**No implementation branch was opened, and that is a decision rather than caution.** All four
+checkpoints are blocked by external dependencies: `11a` by the 6.6 trial, which the same session
+placed *before* it and which needs keys that do not exist (7.11, 18 August 2026); `11b` by `11a`;
+`11c` by a PhotoRoom key whose date is by definition `11c`'s own opening; `11d` by the Phase 9
+moderation panel, never exercised on the real project.
 
 ### Postgres exposure rules (binding since Phase 6d-1)
 

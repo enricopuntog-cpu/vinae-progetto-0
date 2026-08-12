@@ -838,13 +838,19 @@ avevano una fase propria: senza questo numero non stavano in nessun posto.
 
 Le quattro decisioni che le descrivono sono **già chiuse**, nella sezione 7 di
 [`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md).
-Manca tutto il resto, e va nominato invece che sottinteso: **Storage** (quale
-bucket, pubblico o privato, con quale ciclo di vita per una foto caricata solo
-per farsi compilare dei campi), **limiti di dimensione dei file**, **tipi MIME
-ammessi**, e **l'integrazione PhotoRoom** per la 7.13 — un fornitore esterno in
-più, con la sua chiave e il suo costo. Su dove viva l'esito del triage la
-decisione c'è già ed è **colonna persistita**, non ricalcolo a ogni apertura del
-pannello: quindi una migrazione. Due delle quattro ne portano una ciascuna.
+**Tutto il resto è stato chiuso il 12 agosto 2026**, in due sessioni della stessa
+giornata, e sta nella sezione «Fase 11 — decisioni organizzative» qui sotto:
+Storage, PhotoRoom, la forma delle migrazioni, ogni valore numerico e la prova
+del provider fotografico. **La sezione 6 della specifica non ha più aree aperte.**
+
+Il conto della fase, dopo quelle risposte: **quattro migrazioni** (una per
+checkpoint), **quattro Edge Function nuove** — da sei distribuite si passa a
+dieci — **due bucket** di Storage, **tre scope** di frequenza e **due adapter** di
+fornitore. Era «due migrazioni più una terza» e «tre function».
+
+**Il branch resta comunque non aperto**, e la ragione è una decisione presa nella
+stessa sessione: la prova del provider fotografico va **prima** di `11a`, e non è
+eseguibile finché le chiavi della 7.11 non esistono.
 
 Ciascuna funzionalità **ha la propria sessione di spec prima del codice**, sul
 modello dei 9a/9b/9c separati. Restano vincolanti le due riserve: la spunta
@@ -858,8 +864,9 @@ e la 7.12 non dà all'AI nessuna azione autonoma né identità di «attore AI» 
 stesso standard delle spec della Fase 9 e della Fase 10: ogni affermazione con
 fonte `file:riga`, numeri di riga fissati su **`271c7dc`** — lo squash della PR
 #36 — e **38 citazioni assolute verificate a macchina**, file esistente e riga
-esistente. Il documento presenta le decisioni ancora aperte con opzioni e
-implicazioni, non con un «va deciso».
+esistente. Il documento presentava le decisioni allora aperte con opzioni e
+implicazioni, non con un «va deciso»; da lì sono state chiuse una per una, e ogni
+tabella di opzioni conserva l'esito accanto a ciò che è stato scartato.
 
 **Tre affermazioni ereditate sono state riverificate sul progetto reale e
 corrette.** Sono il punto di partenza per chi lavorerà la fase, non il backlog:
@@ -877,28 +884,35 @@ corrette.** Sono il punto di partenza per chi lavorerà la fase, non il backlog:
 - **`reports.priorita` esiste già**, è un `enum` a tre valori scritto solo dal
   server dentro `segnalazione_invia`, deriva da una regola di dominio
   deterministica, e la coda del moderatore è **già ordinata** su di essa con il
-  suo indice. Il triage della 7.12 non arriva su un terreno vuoto: la domanda
-  aperta non è più «dove metto l'esito» ma **che rapporto ha con `priorita`** —
-  convivenza, sostituzione, o un'altra cosa.
+  suo indice. Il triage della 7.12 non arriva su un terreno vuoto: la domanda non
+  era più «dove metto l'esito» ma **che rapporto ha con `priorita`** — convivenza,
+  sostituzione, o un'altra cosa. **Risposta del 12 agosto 2026: convivenza**, in
+  una tabella collegata, con `priorita` che resta il criterio di ordinamento
+  primario.
 
 ### Fase 11 — decisioni organizzative
 
-Chiuse in sessione il **12 agosto 2026**, leggendo la specifica. Non si riaprono
-senza tornare a quella sessione.
+Chiuse in sessione il **12 agosto 2026, in due tempi nella stessa giornata** —
+come l'11 agosto per la Fase 10. Il primo tempo ha chiuso quattro decisioni
+leggendo la specifica; il secondo ha preso **tutte e sei le aree della sezione 6**,
+una per una, e le ha chiuse. Non si riaprono senza tornare a quella sessione.
+
+#### Primo tempo — quattro decisioni
 
 - **Storage, DECISO — bucket dedicato**, non riuso di `annunci` o `cantina`. Il
   motivo registrato è che **`annunci` è pubblico**: una foto caricata solo per
   l'autofill e poi abbandonata resterebbe leggibile per sempre da chiunque ne
-  conosca l'URL. **Restano aperti** nome del bucket, pubblico o privato, ciclo di
+  conosca l'URL. Restavano aperti nome del bucket, pubblico o privato, ciclo di
   vita e pulizia degli orfani, dimensione massima e tipi MIME — «dedicato» non
-  decide «privato».
+  decide «privato» — e **li ha chiusi il secondo tempo**.
 - **7.3a e 7.3b, DECISO — due Edge Function distinte**, non una condivisa, sul
   pattern «una porta per operazione» delle sette RPC della Fase 9 e delle tre
-  function della Fase 10. Con essa è accettato il contro: se una sola chiamata di
+  function della Fase 10. Con essa era accettato il contro: se una sola chiamata di
   visione bastasse per entrambe, due function significano due chiamate e costo
-  doppio. Ne segue che la tabella della 7.6, che le metteva entrambe dentro
-  `ai-catalogo`, **è superata su questo punto**, e che le Edge Function nuove
-  della fase diventano **tre**, non due.
+  doppio. **Il secondo tempo lo ha annullato**: la spunta si calcola alla
+  pubblicazione e l'autofill durante il wizard, quindi non c'è nessuna chiamata da
+  condividere e il costo doppio è zero. Ne segue che la tabella della 7.6, che le
+  metteva entrambe dentro `ai-catalogo`, **è superata su questo punto**.
 - **Processo, DECISO** — la specifica della Fase 11 vive in una **PR propria**,
   separata dalla #36, «così da non fare confusione». Stessa forma della Fase 10,
   dove la specifica (#34) precedette l'implementazione (#35).
@@ -909,6 +923,122 @@ senza tornare a quella sessione.
   PR. Registrare la forma condizionale e non «approvata» è deliberato: un
   registro che archivia i «sì, se» come «sì» insegna che le PR si mergiano su
   richiesta.
+
+#### Secondo tempo — la sezione 6 chiusa per intero
+
+- **6.1 Storage, DECISO** — bucket **`foto-ai`**, **privato**, **nessuna
+  pulizia**, **5 MB**, MIME `image/jpeg`, `image/png`, `image/webp`. Il privato è
+  ciò che chiude davvero il problema per cui `annunci` era stato scartato: un
+  bucket dedicato ma pubblico avrebbe riprodotto identica la leggibilità perpetua
+  da URL. **Da qui discende la mancata pulizia**: se un orfano non è raggiungibile
+  senza firma, la pulizia non è più riservatezza ma igiene di spazio — e va
+  scritto nel commento del bucket e nella migrazione, non lasciato implicito,
+  come per il TTL dello storico Sommelier. **`image/avif` esce**, unica divergenza
+  deliberata dai due bucket esistenti: **PhotoRoom non lo accetta in ingresso**,
+  verificato sulla documentazione del fornitore. I 5 MB restano invariati perché
+  abbassarli qui avrebbe prodotto una foto accettata dal wizard e rifiutata
+  dall'autofill.
+- **6.3 PhotoRoom, DECISO** — **modulo proprio** sul pattern di
+  `payment-provider.ts`, non dentro `ai-provider.ts`, che ha due sole firme e
+  nessuna prende un'immagine. La **chiave esce dalla scadenza del 18 agosto** e
+  prende una data propria, legata all'apertura di `11c`: lasciarla al 18 agosto
+  significava farla scadere senza che servisse a niente, che è la scadenza inerte
+  del caso 7g. **Sceglie il venditore** fra ritaglio e compositing, con **«solo
+  ritaglio» preselezionato** — anche perché una chiamata di *Image Editing* vale
+  **cinque** *Remove Background*, quindi un default di compositing avrebbe
+  quintuplicato il costo per una scelta che nessuno ha fatto. Il fallimento di
+  PhotoRoom è **silenzioso** (risponde `200` con un'immagine sbagliata, non un
+  503), quindi **anteprima con conferma esplicita** e la foto originale mai
+  sovrascritta. Il **tetto di spesa sta sul conto del fornitore** e il valore si
+  fissa **quando si configura la chiave**: *«nessun consumo reale è mai stato
+  osservato per nessun fornitore AI in questo progetto, e un numero scelto senza
+  dati sarebbe esattamente il tipo di valore inventato che il resto della fase ha
+  sempre evitato»*. **Serve una riga in `docs/SECURITY.md`, e include l'EXIF**: i
+  metadati vanno spogliati **prima** dell'inoltro a un terzo, perché una foto di
+  bottiglia scattata in casa porta le coordinate GPS del luogo dello scatto.
+- **6.3c-bis, DECISO — un quarto bucket `sfondi`, pubblico**, per il catalogo
+  curato a mano della 7.13. La domanda non era nella sezione 6 ed è stata posta
+  perché lasciarla implicita significava inventarla durante `11c`. Pubblico per la
+  ragione opposta a `foto-ai`: è materiale editoriale della piattaforma, non un
+  dato di un utente, e nessun utente ci scrive. **I bucket nuovi della fase sono
+  due.**
+- **6.4a spunta di completezza, DECISO** — **`enum` a tre valori**
+  (`non_verificata`, `incompleta`, `completa`), calcolata **alla pubblicazione**,
+  **scade** al cambio delle foto con **ricalcolo esplicito** (mai un trigger: che
+  significherebbe una chiamata AI dentro una transazione), **visibile anche al
+  compratore anonimo** e quindi dentro `public_listings`. La visibilità
+  all'anonimo è ciò che rende **portante** il vincolo di etichettatura della 7.3:
+  mostrata a un estraneo che sta decidendo se comprare, la spunta è una promessa
+  del prodotto verso di lui, e le parole scelte sono parte della decisione.
+- **6.4b esito del triage, DECISO** — **convive** con `priorita`, in una **tabella
+  collegata `report_triage`**. La domanda che lo ha deciso non era di schema ma
+  *«che cosa il moderatore non riesce a fare oggi»*, e la risposta è **distinguere
+  la gravità dentro le `alta`**: la regola a 21 ingressi mette nello stesso
+  scaglione tutto ciò che contiene `truff`, `frod`, `pagament` o `molest`, e lì
+  dentro la coda è ordinata solo per data. **Ordinamento in cascata**: `priorita`
+  primaria, punteggio del triage dentro il gruppo, poi la data — così la regola
+  deterministica non è mai scavalcata da un modello, che è la forma in cui
+  «nessuna azione autonoma» si traduce in un `order by`. **Contenuto: punteggio più
+  motivazione breve**, nessun enum di categorie — il che assorbe e chiude la
+  domanda sulle categorie del triage. **Non compare in `my_reports`.** Costo a
+  bilancio: l'indice `reports_stato_priorita_idx` non copre più l'ordinamento e ne
+  serve uno nuovo.
+- **6.4b terza domanda, DECISO — il client chiama `ai-triage` dopo l'RPC.** È
+  emersa chiudendo il «quando»: il triage gira all'invio della segnalazione, ma
+  `segnalazione_invia` è una funzione Postgres e non può chiamare un fornitore
+  esterno (`pg_net` escluso dalla decisione 1a della Fase 7d). La motivazione, che
+  vale più della risposta: *«`segnalazione_invia` è una superficie della Fase 9 già
+  distribuita e già verificata in questa stessa sessione — toccarla per farla
+  diventare un'Edge Function è esattamente il tipo di modifica a un sistema già in
+  produzione che questo progetto evita sistematicamente… l'opzione 2 lega l'invio
+  di una segnalazione — un'azione critica già esistente — alla riuscita di una
+  chiamata a un fornitore esterno. È il contrario del principio che regge tutta
+  questa fase: `AI_ENABLED` fallisce chiuso proprio perché una funzionalità AI non
+  deve mai diventare un blocco per qualcosa che già funziona»*. Il costo accettato
+  — il triage è facoltativo se il client non chiama — è *«un degradare bene, non un
+  fallire silenzioso»*, perché la coda ha comunque `priorita` come rete.
+- **6.5 numeri, DECISO** — `ai:autofill` **30/ora**, `ai:completezza` **10/ora**,
+  `ai:sfondo` **15/ora**. Nessuno ereditato: la 7.4 proponeva `10 / 3600` per
+  tutto, e il precedente della Fase 10 è che la riconferma numerica **dovette
+  correggere due valori su tre**. **Nessuno scope nuovo per il triage.** `AiScope`
+  passa da tre valori a sei. Restano invariati: finestra oraria, nessuna esenzione
+  per `admin`, nessun secondo tetto nostro per il v0.
+- **6.6 prova del provider fotografico, DECISO** — la conduce **Enrico**, su **sei
+  foto reali** della sua cantina comprese **due volutamente difficili** (riflesso,
+  etichetta parzialmente coperta), con criterio a **due conteggi**: campi corretti
+  sui nove di `ai-catalogo` **e** campi inventati, separati — perché contare solo i
+  corretti *«premia un modello che riempie tutti e nove i campi tirando a
+  indovinare rispetto a uno che ne lascia quattro onestamente vuoti»*, e
+  l'invenzione è l'errore che il `confidence` non cattura. **Va fatta prima di
+  aprire `11a`**, non dopo.
+- **6.7 guardiano di `ai-triage`, DERIVATO e scritto** — «una valutazione per
+  segnalazione, e solo dal suo segnalante» non è un principio da ricordare ma un
+  vincolo da **applicare in tre punti**: un **vincolo di unicità su
+  `report_triage.report_id`** nella migrazione (l'unico che regge contro una corsa
+  fra richieste simultanee e contro `service_role`), un **controllo prima della
+  chiamata al fornitore** dentro la function (senza, l'unicità fallirebbe
+  all'`insert`, cioè **dopo aver pagato**), e un **caso di griglia** che lo
+  esercita. È ciò che rende vera la risposta «nessuno scope nuovo» della 6.5: il
+  vincolo naturale non è un numero all'ora, è uno per segnalazione, e il totale è
+  già limitato da `report:submit`.
+
+#### Il perimetro della 7.11 è cambiato
+
+La scadenza di **lunedì 18 agosto 2026** copre le **chiavi dei modelli
+linguistici** e non più PhotoRoom, che ha una data propria legata all'apertura di
+`11c`. La 7.11 letteralmente la includeva (`«i provider sono almeno tre, più
+PhotoRoom»`), e la decisione la corregge deliberatamente perché quella scadenza
+era nata come precondizione di merge della Fase 10 — mersa spenta e senza
+PhotoRoom.
+
+#### La 7.10 misurata una terza volta
+
+`list_edge_functions` su `pijnmcllmfgjmgsvtcej`, il 12 agosto 2026 dopo il merge
+della **#37** — **sola documentazione**, nessuna riga di function: le sei function
+sono passate da 15/14/14 e 1/1/1 a **17/16/16 e 3/3/3**, tutte con lo stesso
+`updated_at` di `2026-08-12T13:28:54Z`, **43 secondi dopo** il merge (13:28:11
+UTC). Stesso scarto della misura precedente. Il gate di distribuzione è il merge,
+e **l'ambiente di una function si configura prima**, mai dopo.
 
 ### La rinumerazione delle fasi, e dove il vecchio numero sopravvive
 
