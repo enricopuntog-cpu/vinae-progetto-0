@@ -580,6 +580,47 @@ migration. Two of the four carry a migration each.
 completeness** and never certified authenticity, and 7.12 gives the AI **no autonomous action
 and no "AI actor" identity in `audit_log`** — it classifies and ranks, a human presses the button.
 
+#### The organizational spec exists — `docs/PHASE_11_AI_EXTENSIONS_SPEC.md`
+
+Same standard as Phases 9 and 10: every claim carries a `file:line` source, line numbers pinned
+to **`271c7dc`** (the squash of PR #36), 38 absolute citations machine-verified. Three inherited
+claims were re-verified against the real project and **corrected** — start from these, not from
+the two-line backlog entry:
+
+- **The signed photo-upload path already exists and is well built**
+  (`frontend-next/src/app/vendi/actions.ts:43-79`, `frontend-next/src/hooks/useSellWizard.ts:192-216`).
+  Size limit and MIME types are not virgin questions: they already have an answer replicated in
+  **three aligned places**, and a new bucket adds a fourth.
+- **Only one provider adapter is implemented, and it is OpenAI.** Choosing Claude or Gemini for
+  the photos (7.1) is **not setting a variable**: it is writing an adapter, widening the task
+  union, and adding a signature that takes an image. Implementation work, to be counted.
+- **`reports.priorita` already exists** — a three-value enum written only by the server inside
+  `segnalazione_invia`, derived from a deterministic domain rule, with the moderator queue
+  **already ordered** on it and its own index. 7.12's triage does not land on empty ground: the
+  open question is no longer "where does the result live" but **what relation it has to
+  `priorita`** — coexist, replace, or be a different thing altogether.
+
+Four decisions closed in session on **12 August 2026**, recorded in full in
+`CONTESTO_IA/01_STATO_ATTUALE.md` under «Fase 11 — decisioni organizzative»:
+
+- **Storage: a dedicated bucket**, not reuse of `annunci`/`cantina` — because `annunci` is public,
+  so an autofill-only photo later abandoned would stay world-readable forever to anyone with the
+  URL. **Still open**: the bucket's name, public or private, lifecycle and orphan cleanup, size
+  limit, MIME types. "Dedicated" does not decide "private".
+- **7.3a and 7.3b are two distinct Edge Functions**, not one shared — "one door per operation",
+  as in Phase 9's seven RPCs and Phase 10's three functions. This **supersedes the 7.6 table**,
+  which put both inside `ai-catalogo`, and takes the phase's new functions from two to **three**.
+  The accepted downside: if one vision call would serve both, two functions mean double cost.
+- The spec lives in **its own PR**, separate from #36.
+- **PR #36's go-ahead was conditional**, not unconditional — "se quella PR è completa sì, se no la
+  completiamo e mergiamo". The condition was verified and one incompleteness found and fixed
+  before merge: #36 did not record its own number. Recording the conditional form rather than
+  "approved" is deliberate.
+
+Everything else stays open and is presented with options in the spec's section 6: PhotoRoom (key,
+module shape, budget, cutout vs compositing), the two migrations (the completeness column's form,
+and the triage result's relation to `priorita`), every numeric limit, and the photo-provider trial.
+
 ### Postgres exposure rules (binding since Phase 6d-1)
 
 RLS filters rows, never columns. These three rules are what keeps that gap closed — breaking
