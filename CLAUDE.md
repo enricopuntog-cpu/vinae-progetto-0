@@ -364,12 +364,15 @@ Measured straight after the merge, not declared:
   their source. That is decision 7.10 measured a second time: the merge is the deploy gate, and
   it redeploys everything. **Measured a third time on 12 August 2026**, after the merge of PR #37
   — documentation only: the six went to **17/16/16 and 3/3/3**, all sharing one `updated_at`
-  43 seconds after that merge. Same gap as the previous measurement. **A fourth and a fifth time on
-  13 August 2026**: after PR #39 (frontend code, no function line) the six were at 19/18/18 and
-  5/5/5, and after PR #40 (five documentation files, zero lines under `supabase/functions/`) they
-  are at **20/19/19 and 6/6/6**, again sharing one `updated_at`, 55.8 seconds after that merge.
-  Five measurements, three of them on documentation-only PRs; the gaps — 43, 43, 49, 59, 55.8
-  seconds — all sit around a minute. One precision correction, which changes no conclusion: those
+  43 seconds after that merge. Same gap as the previous measurement. **A fourth, fifth and sixth
+  time on 13 August 2026**: after PR #39 (frontend code, no function line) the six were at 19/18/18
+  and 5/5/5; after PR #40 (five documentation files, zero lines under `supabase/functions/`) at
+  20/19/19 and 6/6/6, 55.8 seconds after that merge; and after PR #41 (four documentation files,
+  same zero) they are at **21/20/20 and 7/7/7**, again sharing one `updated_at`, **55.3 seconds**
+  after it. Six measurements, **four of them on documentation-only PRs** (#33, #37, #40, #41); the
+  gaps — 43, 43, 49, 59, 55.8, 55.3 seconds — all sit around a minute. This is no longer a finding
+  but a measured constant, and it governs Phase 11's **four new functions**: they will be born with
+  whatever environment the merge finds. One precision correction, which changes no conclusion: those
   gaps are computed from the API's unambiguous epoch-milliseconds value and need **none** of the
   one-hour adjustment earlier readings noted as constant. That offset was a reading artefact, not a
   property of the API.
