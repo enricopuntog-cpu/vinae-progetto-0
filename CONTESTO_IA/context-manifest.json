@@ -1,6 +1,17 @@
 {
   "schema_version": 2,
-  "schema_version_note": "Da 1 a 2 il 2026-08-13. Nessuna chiave della v1 e' stata rimossa o rinominata; sono state aggiunte storage_buckets, phase_11, edge_function_deploy_gate, function_environment_flags, not_verifiable_from_here, real_project_read_only_snapshot e phase_status_legend. Il numero si muove perche' il file e' stato ricostruito leggendo il progetto reale, non aggiornato a toppe: la versione 1 era ferma alla Fase 8 e sbagliava tre fasi, il conteggio del ledger e il numero di Edge Function. Chi ne ricordasse la forma precedente rilegga, non presuma.",
+  "schema_version_note": "Da 1 a 2 il 2026-08-13. Il file e' stato RICOSTRUITO leggendo il progetto reale, non aggiornato a toppe: la v1 era ferma alla Fase 8 e sbagliava tre fasi, il conteggio del ledger e il numero di Edge Function. Chi ne ricordasse la forma precedente rilegga, non presuma - alcune chiavi non ci sono piu'.",
+  "schema_version_changes": {
+    "added": ["storage_buckets", "phase_status_legend", "phase_11", "edge_function_deploy_gate", "function_environment_flags", "not_verifiable_from_here", "real_project_read_only_snapshot", "enum_cast_rule", "mandatory_read_order_note", "schema_version_changes"],
+    "removed_or_replaced": [
+      "runtime_truth.payments_enabled: spostata in function_environment_flags.PAYMENTS_ENABLED. Non era una misura - un segreto d'ambiente di una Edge Function non si legge con gli strumenti disponibili, e un booleano lo faceva sembrare misurato.",
+      "runtime_truth.phase_7/7b/7c/7f/8_migration_applied_to_real_project: cinque booleani sostituiti da migrations_applied_to_real_project, perche' ora sono applicate tutte e venticinque e un elenco di booleani per fase invecchia a ogni merge.",
+      "runtime_truth.phase_8_migration_sha256 e i quattro campi phase_8_preview_*: rimossi perche' la Preview jggjaqcdbcbxdxhnggio NON ESISTE PIU'. I fatti sopravvivono in grid_status.8_messaging_notifications come resoconto di quella fase, e il loro limite in not_verifiable_from_here.",
+      "runtime_truth.edge_functions_deployed: booleano sostituito da edge_functions_count piu' l'elenco per function con versione, verify_jwt e created_at.",
+      "runtime_truth.ledger_filename_alignment_note: il fatto sopravvive in closed_gates, voce sul riallineamento dei filename.",
+      "runtime_truth.money_tables_row_count: conservata la chiave, riscritto il contenuto sui conteggi del 2026-08-13."
+    ]
+  },
   "updated_at": "2026-08-13",
   "language": "it",
   "project": {
@@ -51,6 +62,8 @@
     "edge_functions_source_dirs": ["_shared", "ai-catalogo", "ai-pairing", "ai-sommelier", "connect-onboarding", "payments-checkout", "payouts-release"],
     "deployment_mechanism": "Integrazione GitHub di Supabase: il merge su main distribuisce migrazioni ed Edge Function da solo, senza supabase db push ne' apply_migration. Nessun workflow in .github/workflows/ esegue un deploy e nessuno ha mai lanciato supabase functions deploy.",
     "stripe_api_ever_called": false,
+    "applied_content_is_guaranteed_net_formula": true,
+    "commission_note": "Rincaro a percentuale variabile con netto garantito, parametri 500 / 150 / 25 e 14 giorni, congelati sull'ordine insieme a commissione_cents. Trattenuta fondi con separate charges and transfers: il PaymentIntent non porta transfer_data ne' on_behalf_of e il Transfer nasce solo al rilascio, per il solo prezzo_cents.",
     "money_tables_row_count": "zero: orders e payments misurate a 0 il 2026-08-13. marketplace_config ha la sola riga di configurazione iniziale; packaging_options ha tre righe a prezzo_cents zero.",
     "ui_paths_to_checkout_or_onboarding_exist": false,
     "ui_paths_to_order_lifecycle_exist": true,
