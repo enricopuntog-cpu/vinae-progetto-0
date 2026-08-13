@@ -1066,6 +1066,77 @@ proposta **non è quella dichiarazione**. La §9.4 elenca le cinque domande che 
 revisione deve ancora rispondere, a partire da **se e in che misura il DSA si
 applichi** a una piattaforma di queste dimensioni.
 
+#### La prima azione concreta: le etichette di trasparenza — PR #39, 13 agosto 2026
+
+Le tre superfici IA che la Fase 10 ha messo in produzione dicevano già «AI», ma
+**nel titolo del pannello**: «Sommelier AI» è un'insegna, non una dichiarazione.
+Dal 13 agosto 2026 ciascuna porta un'etichetta visibile che dichiara l'IA **nel
+momento in cui l'utente la usa** — «Parla con il tuo sommelier IA» nel pannello
+del Layout, «Fatti suggerire i campi dall'assistente IA» nel passo
+Identificazione del wizard, «Chiedi gli abbinamenti al sommelier IA» in
+`/esplora`.
+
+**È codice vero, non documentazione**: la PR #39 tocca `frontend-next/` e passa
+dai check pieni — lint, typecheck, test, build — a differenza delle sole
+documentazioni #33-#38. Non è però lavoro della **Fase 11**: sono superfici della
+**Fase 10**, già mersate, e nessun branch `migration/phase-11-*` è stato aperto.
+
+Il testo vive in **un modulo solo**, `frontend-next/src/lib/phase10/etichette-ia.ts`,
+con cinque test. Due ragioni che non sono comodità: quando la revisione legale
+risponderà le parole si cambiano in **un punto**, e un test verifica che le
+superfici coperte siano esattamente quelle esistenti, così una **quarta**
+superficie IA — le quattro della Fase 11 lo saranno — non può essere aggiunta
+senza etichetta in silenzio. Stessa forma del vincolo `SESSION_ID_VALIDO` della
+10b: la regola sta accanto al valore. `MIN_TESTS` passa da 255 a **260**.
+
+Le tre righe descrivono ciò che la superficie fa **davvero**: la catalogazione
+*suggerisce* e non compila, perché applicare il suggerimento ai campi resta un
+secondo gesto del venditore, e un test lo fissa. Dicono «IA» e non «AI» di
+proposito — i pannelli tengono «AI» come parte del proprio nome, e un'etichetta
+scritta allo stesso modo si leggerebbe come un'altra insegna.
+
+**Che cosa non sposta, ed è scritto nella §9.5 e non solo qui**: la dichiarazione
+dei motivi del DSA riguarda **quella** decisione di moderazione, e un'etichetta su
+un pannello non la fornisce più di quanto la fornisse l'informativa alla
+registrazione. **Il blocco della revisione legale resta dov'era** e le cinque
+domande della §9.4 restano tutte e cinque senza risposta.
+
+Una verifica dichiarata mancante invece che aggirata: la terza etichetta **non è
+stata vista rendere**. `/vendi` richiede una sessione Supabase reale e in locale
+la pagina mostra «Accedi per catalogare o vendere»; il componente e la variante
+sono gli stessi verificati sull'abbinamento, e compilano e costruiscono, ma che
+quel pannello la mostri davvero non è stato osservato.
+
+#### Copy e flusso pronti per `11a` e `11c` — registrati, non costruiti
+
+La stessa PR aggiunge la **§10** dello spec: testo di interfaccia deciso in
+sessione e messo dove chi aprirà quei branch lo troverà, invece di lasciarlo
+reinventare. Il pulsante dell'autofill (7.3a) è **«Riempi i campi automaticamente
+con l'IA»** — dove «automaticamente» è esatto e va tenuto distinto dal «fatti
+suggerire» della catalogazione, perché sono due operazioni diverse nello stesso
+passo del wizard. Il flusso dello sfondo (7.13) è in quattro passi: scelta dello
+sfondo fra quelli curati, pressione di **«Passa al set fotografico IA»** che
+converte **tutte** le foto dell'annuncio, schermata a **rullino** con ogni foto
+accanto alla propria originale, e **conferma o rifiuto foto per foto**. Il quarto
+passo è la 6.3 resa interazione: l'anteprima con conferma esplicita esiste perché
+PhotoRoom fallisce **in silenzio** (`200` con un'immagine sbagliata), e il rullino
+affiancato è ciò che rende visibile un fallimento che nessun codice può accorgersi
+di aver subito.
+
+**Un conto che nessuno aveva fatto**, ricavato da due numeri già decisi e scritto
+nella §10.3: `MAX_FOTO = 6` e `ai:sfondo` a **15 chiamate l'ora** significano che
+una pressione su un annuncio pieno vale **sei** chiamate, quindi il limite copre
+**due conversioni complete l'ora** e alla terza restano tre gettoni per sei foto —
+il rullino si fermerebbe **a metà**. Tre punti restano registrati come **domande**
+per l'apertura di `11c` e non riempiti: se il pulsante rifiuti in partenza o si
+fermi a metà, se il 15/ora vada rivisto — che sarebbe **riaprire la 6.5**, quindi
+una decisione di sessione e non una scelta di chi implementa — e se la conferma
+possa essere anche cumulativa, che è comodo e riduce l'attenzione proprio dove la
+6.3 la voleva alta.
+
+`11a` e `11c` **restano bloccati esattamente come prima**: le chiavi non esistono
+e nessuna delle due prove empiriche è stata eseguita.
+
 ### La rinumerazione delle fasi, e dove il vecchio numero sopravvive
 
 Decisa in sessione organizzativa l'11 agosto 2026, alla chiusura della Fase 10:
