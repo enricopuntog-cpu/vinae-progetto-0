@@ -28,12 +28,14 @@ Il manifest è stato **ricostruito il 13 agosto 2026 leggendo il progetto reale*
 — `list_migrations`, `list_edge_functions`, `storage.buckets`, conteggi in sola
 lettura, `git` e `gh` — e non ricopiando gli altri file di questa cartella. Fino
 a quel giorno era fermo alla Fase 8 e sbagliava tre fasi, il conteggio del ledger
-e il numero di Edge Function. Porta `schema_version` a **2**: nessuna chiave
-della versione 1 è stata rimossa o rinominata, ma il file ha sezioni nuove
+e il numero di Edge Function. Porta `schema_version` a **2**: ha sezioni nuove
 (`storage_buckets`, `phase_11`, `edge_function_deploy_gate`,
 `function_environment_flags`, `not_verifiable_from_here`,
-`real_project_read_only_snapshot`). Chi ne ricordasse la forma precedente
-rilegga invece di presumere.
+`real_project_read_only_snapshot`) e **tredici chiavi della versione 1 non ci
+sono più**, tutte da `runtime_truth`. Il campo `schema_version_changes` le elenca
+una per una, con la ragione e con dove il fatto è finito — perché una chiave che
+sparisce senza lasciare traccia è un fatto perso in silenzio. Chi ne ricordasse
+la forma precedente **rilegga**, non presuma.
 
 Ha una sezione che merita di essere letta per prima:
 **`not_verifiable_from_here`** elenca ciò che con gli strumenti disponibili
