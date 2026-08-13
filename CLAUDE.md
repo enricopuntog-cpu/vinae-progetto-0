@@ -369,13 +369,21 @@ Measured straight after the merge, not declared:
   and 5/5/5; after PR #40 (five documentation files, zero lines under `supabase/functions/`) at
   20/19/19 and 6/6/6, 55.8 seconds after that merge; and after PR #41 (four documentation files,
   same zero) they are at **21/20/20 and 7/7/7**, again sharing one `updated_at`, **55.3 seconds**
-  after it. Six measurements, **four of them on documentation-only PRs** (#33, #37, #40, #41); the
-  gaps — 43, 43, 49, 59, 55.8, 55.3 seconds — all sit around a minute. This is no longer a finding
-  but a measured constant, and it governs Phase 11's **four new functions**: they will be born with
-  whatever environment the merge finds. One precision correction, which changes no conclusion: those
-  gaps are computed from the API's unambiguous epoch-milliseconds value and need **none** of the
-  one-hour adjustment earlier readings noted as constant. That offset was a reading artefact, not a
-  property of the API.
+  after it. **A seventh time on the merge of PR #42** — documentation only again: **22/21/21 and
+  8/8/8**, one shared `updated_at` of `2026-08-13T21:10:18.307Z`, **36.3 seconds** after it.
+  Seven measurements, **five of them on documentation-only PRs** (#33, #37, #40, #41, #42). The
+  gaps are 43, 43, 49, 59, 55.8, 55.3 and 36.3 seconds — and the seventh is **shorter than all six
+  before it**, so it *widens* the observed range rather than confirming the earlier "around a
+  minute". Recorded that way on purpose, not smoothed into the previous claim. What does not move
+  is the conclusion: the merge is the deploy gate and it redeploys everything, so Phase 11's **four
+  new functions** will be born with whatever environment the merge finds.
+  **One caveat for whoever measures the eighth**: `list_edge_functions` can serve a **stale**
+  `updated_at` for a few seconds after the redeploy. On PR #42 a read at +39.3 s still returned the
+  *previous* merge's value although the redeploy had already been stamped at +36.3 s — reporting
+  that read would have claimed the pattern had broken. Wait past a minute before concluding
+  anything. One precision correction, which changes no conclusion: those gaps are computed from the
+  API's unambiguous epoch-milliseconds value and need **none** of the one-hour adjustment earlier
+  readings noted as constant. That offset was a reading artefact, not a property of the API.
 
 **`AI_ENABLED` stays off** until Enrico configures the provider key and budget — decision 7.11,
 committed deadline **Monday 18 August 2026**. The phase is distributed **off, by construction**:
