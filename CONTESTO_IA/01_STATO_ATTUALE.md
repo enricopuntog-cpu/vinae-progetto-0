@@ -1079,6 +1079,70 @@ coerente con la Fase 10 distribuita spenta. **È un indizio, non una prova** che
 chiavi non esistano: zero righe è anche ciò che si vede se le chiavi ci sono e
 nessuno ha usato il pannello.
 
+#### La #40 è mersa la sera del 13 agosto 2026, con la condizione riverificata
+
+Il via libera di Enrico era **condizionato** — «procediamo solo se tutti gli step
+sono completi» — e una lettura fatta qualche ora prima in una sessione Cowork
+separata **non è stata considerata sufficiente**. La riverifica in sessione:
+`state=OPEN`, `MERGEABLE`, `CLEAN`, tre commit coerenti con la descrizione, cinque
+file di sola documentazione confermati con `git diff --name-only` contro
+`supabase/`, `backend/`, `frontend/`, `frontend-next/` e `.github/` — elenco
+vuoto.
+
+**La parte che conta è dove sono stati letti i check.** Non `gh pr checks`, che
+dice soltanto che dei check esistono per la PR, ma
+`repos/…/commits/beea3a52…/check-runs`, che li lega a un commit: tutti e quattro
+riportano `head_sha` uguale a `beea3a52c8e20cf348b533e0db90ed3112efef59`, cioè
+all'HEAD effettivo e non a un commit più vecchio della stessa PR. Tre `success`
+— Frontend, Frontend Next, Backend — più `Supabase Preview` in `skipped`, che è
+l'esito atteso quando nessuna migrazione cambia.
+
+Squash **`91f8d82`** alle **20:09:43 UTC**. Stessa forma della riverifica fatta
+per la #39 la mattina dello stesso giorno.
+
+#### E una quinta volta, sul merge della #40 — il caso più pulito finora
+
+`list_edge_functions` subito dopo: le sei function sono a **20/19/19 e 6/6/6**,
+`+1` ciascuna per questo solo merge, con un `updated_at` identico per tutte e sei
+(`2026-08-13T20:10:38.797Z`), **55,8 secondi dopo** il merge.
+
+È il caso più pulito perché la #40 è **cinque file di sola documentazione** e non
+tocca **zero righe** sotto `supabase/functions/`: nessuna spiegazione alternativa
+resta in piedi. La 7.10 è ora misurata **cinque volte**, di cui **tre su PR di
+sola documentazione** (#33, #37, #40) e due su PR che toccavano codice. Gli scarti
+osservati — 43, 43, 49, 59 e 55,8 secondi — stanno tutti attorno al minuto.
+
+Conseguenza invariata e ora sovradeterminata: **l'ambiente di una Edge Function si
+configura prima del merge, mai dopo**, perché il merge la rimette in produzione
+qualunque cosa la PR contenga.
+
+#### I quattro prerequisiti riletti dopo il merge — invariati
+
+Rifatti la sera del 13 agosto 2026, **non ereditati** dalla lettura del mattino, e
+l'esito è lo stesso: **nessuno soddisfatto**.
+
+- **Chiavi dei provider: ancora non verificabili da qui, e il limite ha ora una
+  ragione scritta.** Fra gli strumenti Supabase disponibili non esiste una lettura
+  dei segreti dell'ambiente di una function. L'unica prova conclusiva sarebbe
+  **invocare** una delle tre function AI e vedere se risponde 503, il che richiede
+  una sessione autenticata che non esiste **ed è comportamento della Fase 10
+  esercitato sul progetto reale** — un'autorizzazione a parte, per perimetro, che
+  nessuno ha dato. Quindi resta una dichiarazione di limite. Le zero righe di
+  `sommelier_messaggi`, rilette, **non** valgono come prova, per la ragione già
+  scritta sopra.
+- **Prove 6.6 e 7.1: non eseguite.** Nessuna issue aperta e nessuna PR nuova sul
+  repository fra le due sessioni: Enrico non ha lasciato materiale da raccogliere.
+  La 7.1 resta bloccata a valle delle chiavi, non da una scelta.
+- **Pannello della Fase 9: rimisurato, ancora mai esercitato.** `reports`,
+  `report_events`, `audit_log` **vuote**, nessun profilo con `stato_utente` diverso
+  da `attivo`. Nella stessa interrogazione: **9 annunci e 5 profili** — un progetto
+  con dati reali ma senza alcuna attività di moderazione, il che rende la coda
+  vuota un fatto sullo stato del prodotto e non un artefatto di database deserto.
+
+**Nessun branch `migration/phase-11-*`**, ricontato: zero. Aprire `11a` adesso
+significherebbe scrivere un adapter contro un candidato che nessuna prova ha
+scelto.
+
 #### Una proposta registrata, non una decisione: l'informativa AI alla registrazione
 
 Il **12 agosto 2026** Enrico ha proposto **un'informativa su privacy e uso

@@ -364,7 +364,15 @@ Measured straight after the merge, not declared:
   their source. That is decision 7.10 measured a second time: the merge is the deploy gate, and
   it redeploys everything. **Measured a third time on 12 August 2026**, after the merge of PR #37
   — documentation only: the six went to **17/16/16 and 3/3/3**, all sharing one `updated_at`
-  43 seconds after that merge. Same gap as the previous measurement.
+  43 seconds after that merge. Same gap as the previous measurement. **A fourth and a fifth time on
+  13 August 2026**: after PR #39 (frontend code, no function line) the six were at 19/18/18 and
+  5/5/5, and after PR #40 (five documentation files, zero lines under `supabase/functions/`) they
+  are at **20/19/19 and 6/6/6**, again sharing one `updated_at`, 55.8 seconds after that merge.
+  Five measurements, three of them on documentation-only PRs; the gaps — 43, 43, 49, 59, 55.8
+  seconds — all sit around a minute. One precision correction, which changes no conclusion: those
+  gaps are computed from the API's unambiguous epoch-milliseconds value and need **none** of the
+  one-hour adjustment earlier readings noted as constant. That offset was a reading artefact, not a
+  property of the API.
 
 **`AI_ENABLED` stays off** until Enrico configures the provider key and budget — decision 7.11,
 committed deadline **Monday 18 August 2026**. The phase is distributed **off, by construction**:
@@ -727,7 +735,10 @@ with a wrong image), and the side-by-side strip is what makes visible a failure 
 **two complete conversions per hour** and the third strip stops **halfway**. `11a` and `11c` remain
 blocked exactly as before.
 
-**§10.3 is now closed — three session decisions, 13 August 2026, PR #40.** They bind `11c` the same
+**§10.3 is now closed — three session decisions, 13 August 2026, PR #40**, merged as squash
+`91f8d82` at 20:09:43 UTC after its conditional go-ahead was re-verified in session rather than
+inherited from an earlier reading — including that all four checks were read on the exact
+`head_sha` `beea3a52…`, not merely "on the PR". They bind `11c` the same
 way §6 does; they are not an implementer's call. **(a) The strip stops halfway; the button does not
 disable itself upfront.** Already-converted photos stay ready, the rest keep their original until
 the hourly bucket refills. A total refusal for a constraint covering *part* of the listing throws
