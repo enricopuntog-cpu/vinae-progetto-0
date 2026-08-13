@@ -724,10 +724,26 @@ concrete — the preview with explicit confirmation exists because PhotoRoom fai
 with a wrong image), and the side-by-side strip is what makes visible a failure no code can notice.
 §10.3 derives an arithmetic nobody had done from two already-decided numbers: `MAX_FOTO = 6` and
 `ai:sfondo` at **15/hour** mean one press on a full listing costs **six** calls, so the limit covers
-**two complete conversions per hour** and the third strip stops **halfway**. Three points stay
-**questions** for when `11c` opens — refuse upfront or stop halfway, whether 15/hour needs revising
-(which is **reopening 6.5**, a session decision, not an implementer's choice), and whether the
-confirmation may also be bulk. `11a` and `11c` remain blocked exactly as before.
+**two complete conversions per hour** and the third strip stops **halfway**. `11a` and `11c` remain
+blocked exactly as before.
+
+**§10.3 is now closed — three session decisions, 13 August 2026, PR #40.** They bind `11c` the same
+way §6 does; they are not an implementer's call. **(a) The strip stops halfway; the button does not
+disable itself upfront.** Already-converted photos stay ready, the rest keep their original until
+the hourly bucket refills. A total refusal for a constraint covering *part* of the listing throws
+away work that could have been done — five photos and three tokens would convert none of the three
+possible — and the worry that kept the question open, a partial result nobody announced, dissolves:
+the side-by-side strip **is** how it is announced. **(b) `ai:sfondo` stays at 15/hour.** The
+arithmetic is a legitimate reason to reopen the number, but a reason is not data. The criterion is
+Enrico's, in his own words — **«prima di pagare»** — so it reopens on **real costs** and observed
+usage **after `11c` is live**, not on a theoretical count. It stays a **6.5 point to bring back to a
+session** then; whoever implements `11c` writes **15**. **(c) Confirmation is bulk with exceptions**
+— a quick "confirm all", but the seller can **exclude** or **redo** a single photo first. That one is
+written as an **interface constraint inside §10.2**, at step 4 of the sequence, not merely as a note,
+alongside two more: the original is never overwritten even after a bulk confirm, and **a mixed state
+is a legitimate state of the strip** — to be designed, not avoided. **None of the three reopens §6**:
+(b) touches a 6.5 value and **confirms** it, and a note at the end of 6.5 records that the number was
+looked at again and under what condition it returns to a session.
 
 ### Postgres exposure rules (binding since Phase 6d-1)
 

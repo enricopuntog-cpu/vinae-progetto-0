@@ -24,6 +24,14 @@
 > tre pannelli della **Fase 10** — codice vero, ma su superfici già mersate e
 > fuori da questa fase — e la **§10** registra il copy e il flusso pronti per
 > `11a` e `11c`, che restano bloccati. La §6 non è stata toccata.
+>
+> **Secondo passaggio dello stesso giorno: la §10.3 è chiusa.** I tre punti che
+> il flusso dello sfondo lasciava aperti sono ora **decisioni di sessione** — il
+> rullino si ferma a metà invece di rifiutare in partenza, `ai:sfondo` resta a
+> **15/ora** finché non ci sono costi reali da guardare, e la conferma è
+> **cumulativa con eccezioni**. Nessuna riapre la §6: la seconda **conferma** un
+> valore della 6.5 e registra a quale condizione tornerà in sessione. La fase
+> resta ferma dov'era.
 
 ---
 
@@ -1189,6 +1197,16 @@ momento in cui si configura la chiave.** Chiusa al 6.3(d), con la motivazione
 sull'assenza di dati di consumo. Vale per tutti i fornitori nuovi, PhotoRoom
 compreso.
 
+**Nota del 13 agosto 2026 — il 15/ora di `ai:sfondo` è stato riesaminato e
+confermato.** La §10.3 ha ricavato che una pressione sul pulsante dello sfondo
+vale **sei** chiamate e non una, quindi il limite copre due conversioni complete
+l'ora: un motivo legittimo per riaprire questo numero. La sessione lo ha
+**lasciato a 15**, con il criterio di Enrico — *«prima di pagare»* — e con la
+condizione di riapertura scritta: **costi reali e cadenza d'uso osservata dopo
+che `11c` è in produzione**, non un conto teorico. Questa riga registra che il
+numero è stato guardato di nuovo; la 6.5 non è riaperta, e chi implementa `11c`
+scrive **15**.
+
 ### 6.6 La prova del provider fotografico — CHIUSA (12 agosto 2026)
 
 La 7.1 la impone e **non è ancora stata fatta**: qui è deciso come si fa, non che
@@ -1506,6 +1524,12 @@ domande della §9.4 restano tutte e cinque senza risposta.
 > esattamente come li lascia la §8 — `11a` dalla prova 6.6 e dalle chiavi che non
 > esistono, `11c` da una chiave PhotoRoom la cui data è **per definizione**
 > l'apertura di `11c` (6.3b).
+>
+> **La §10.3 è chiusa nello stesso giorno**, in un secondo passaggio: i tre punti
+> che la prima stesura lasciava come domande sono ora **tre decisioni di
+> sessione**, con la stessa forza di quelle della §6. Una di esse riguarda un
+> valore della 6.5 e **lo conferma** — `ai:sfondo` resta a 15/ora — quindi non
+> riapre niente: registra a quale condizione quel numero tornerà in sessione.
 
 Sta scritta qui per la stessa ragione della §9: il testo di interfaccia deciso in
 una conversazione e non scritto da nessuna parte viene reinventato da chi apre il
@@ -1548,10 +1572,15 @@ La sequenza, per esteso:
 1. Il venditore **sceglie lo sfondo** fra quelli curati del bucket `sfondi`
    (6.3c-bis).
 2. Preme il pulsante, che avvia la conversione di **tutte le foto dell'annuncio**
-   con quello sfondo.
+   con quello sfondo. Se il limite orario si esaurisce a metà, la conversione
+   **si ferma lì** invece di essere rifiutata in partenza (§10.3a).
 3. Il risultato porta a una **schermata a rullino**: ogni foto convertita è
-   mostrata **accanto alla propria originale**.
-4. Il venditore **conferma o rifiuta la sostituzione**, foto per foto.
+   mostrata **accanto alla propria originale**. Le foto che la conversione non ha
+   raggiunto restano con la sola originale, e si vedono.
+4. Il venditore **conferma o rifiuta la sostituzione**. La conferma è
+   **cumulativa con eccezioni** (§10.3c): esiste un «conferma tutte» rapido, e
+   accanto a esso il venditore può **escludere** una singola foto o **farla
+   rifare** prima di confermare.
 
 **Il punto quattro è il punto.** Premere il pulsante non sostituisce niente: è la
 6.3 — anteprima con conferma esplicita, perché il fallimento di PhotoRoom è
@@ -1559,6 +1588,19 @@ La sequenza, per esteso:
 come interazione. Il rullino affiancato è ciò che rende visibile un fallimento
 che nessun codice può accorgersi di aver subito, e l'originale non viene mai
 sovrascritto.
+
+**I tre vincoli di interfaccia che il punto quattro porta con sé**, chiusi in
+sessione il 13 agosto 2026 (§10.3) e scritti qui perché è qui che chi implementa
+li legge:
+
+- **Il «conferma tutte» esiste, ma non è l'unico gesto disponibile.** Le due
+  eccezioni — escludere, far rifare — sono ciò che tiene aperta la via per il caso
+  che la 6.3 esiste per intercettare.
+- **L'originale non viene mai sovrascritto**, nemmeno dopo la conferma cumulativa:
+  è la condizione che rende innocuo fermarsi a metà.
+- **Uno stato misto è uno stato legittimo del rullino**, non un errore da
+  nascondere: un annuncio con tre foto convertite e tre no è ciò che il venditore
+  vede quando i gettoni finiscono, e va disegnato, non evitato.
 
 Da notare, perché è facile leggerlo al contrario: **questo pulsante è il percorso
 di compositing**, quello che costa cinque *Remove Background* a chiamata. La 6.3
@@ -1570,25 +1612,75 @@ Quando questo flusso esisterà, il pannello `SfondoIAPanel` di `frontend/`
 «Sfondo applicato (demo)») smette di essere una promessa non mantenuta. È l'esito
 che la 7.13 aveva scelto al posto di lasciarlo lì.
 
-### 10.3 Che cosa questo flusso lascia da sciogliere all'apertura di `11c`
+### 10.3 Il conto del rullino contro il limite orario — CHIUSA (13 agosto 2026)
 
-Non sono decisioni prese qui, e non vanno riempite in silenzio scrivendo il
-codice. Sono **conti**, e vengono dall'aver messo accanto due numeri già decisi:
+**Chiusa in tutti e tre i punti, in sessione con Enrico**, lo stesso giorno in
+cui il conto è stato fatto. Non sono scelte di chi implementa: sono **decisioni
+di sessione**, come tutte quelle della §6, e vanno lette insieme al flusso della
+§10.2 di cui vincolano i punti 2 e 4.
+
+Il conto da cui nascono, per intero. Vengono dall'aver messo accanto due numeri
+già decisi:
 
 - `MAX_FOTO = 6` (`frontend-next/src/hooks/useSellWizard.ts:69`);
 - `ai:sfondo` a **15 chiamate l'ora** (6.5).
 
-Una pressione su un annuncio pieno vale **sei** chiamate. Quindi il limite
-copre **due conversioni complete l'ora**, e alla terza restano tre gettoni per
-sei foto: il rullino si fermerebbe **a metà**.
+Una pressione su un annuncio pieno vale **sei** chiamate. Quindi il limite copre
+**due conversioni complete l'ora**, e alla terza restano tre gettoni per sei
+foto: il rullino si ferma **a metà**.
 
-1. Il pulsante **rifiuta in partenza** quando il secchiello non copre l'intero
-   annuncio, o parte e si ferma? Fermarsi a metà non rompe niente — gli originali
-   ci sono ancora — ma il venditore ha premuto una volta e ottiene un risultato
-   parziale senza che nessuno gliel'abbia detto.
-2. Se il conto è quello giusto: 15/ora è stato deciso (6.5) su una chiamata per
-   pressione, non su sei. Rivederlo è **riaprire la 6.5**, quindi è una decisione
-   di sessione e non una scelta di chi implementa.
-3. Se la conferma foto-per-foto del punto 4 possa essere anche cumulativa
-   («accetta tutte»), che è comodo e riduce l'attenzione proprio dove la 6.3 la
-   voleva alta.
+**(a) Rifiuto in partenza o arresto a metà — CHIUSA: si ferma a metà, il
+pulsante non si disabilita.**
+
+Le foto già convertite **restano pronte**; le altre restano con la propria
+originale finché il limite orario non si ricarica. Il venditore vede **quali
+sono già fatte e quali no** — un rullino a stati misti, non un rifiuto totale.
+
+| Opzione | Che cosa vede il venditore | Esito |
+| --- | --- | --- |
+| **Parte e si ferma a metà** | Un rullino in cui alcune foto hanno la conversione accanto all'originale e altre no. Il lavoro già fatto è utilizzabile subito; il resto si completa quando il secchiello si ricarica | **SCELTA** |
+| **Rifiuta in partenza se il secchiello non copre tutto l'annuncio** | Un pulsante che non fa niente, per un vincolo che riguarda **una parte** dell'annuncio. Un venditore con cinque foto e tre gettoni non converte nemmeno le tre che potrebbe | Scartata |
+
+La ragione è quella scritta nella colonna: **un rifiuto totale per un vincolo
+parziale butta via lavoro che si poteva fare.** Fermarsi a metà non rompe niente
+— gli originali non vengono mai sovrascritti (§10.2, punto 4) — e la
+preoccupazione registrata quando la domanda era aperta, cioè che il venditore
+ottenga un risultato parziale *senza che nessuno gliel'abbia detto*, non è più
+tale: il rullino affiancato **è** il modo in cui glielo si dice, perché una foto
+non convertita si vede a colpo d'occhio accanto a una convertita.
+
+Il criterio con cui Enrico l'ha decisa è lo stesso della (b), ed è suo:
+**«prima di pagare»**. Costruire un cancello preventivo — contare i gettoni,
+confrontarli con il numero di foto, disabilitare il pulsante — è codice scritto
+contro un costo che nessuno ha ancora osservato. La forma che degrada in modo
+visibile non ha bisogno di essere indovinata in anticipo.
+
+**(b) Il 15/ora va rivisto? — CHIUSA: resta 15/ora, per ora.**
+
+**Non si rialza a tavolino.** La 6.5 ha fissato quel numero su una chiamata per
+pressione, non su sei: il conto qui sopra è quindi un motivo legittimo per
+riaprirlo, ma un motivo non è ancora un dato. Enrico ha legato la revisione ai
+**costi reali** e non a un conto teorico — **«prima di pagare»** è la sua stessa
+formulazione — e il dato che serve è **quanti annunci un venditore converte per
+sessione**, che non esiste finché `11c` non è in produzione.
+
+Quindi: **si riapre con dati veri, dopo che `11c` è live, non prima.** Resta un
+punto della **6.5 da riportare in sessione** allora — non un valore che chi
+implementa può alzare in silenzio, e non un default che si sposta da sé. Chi
+apre `11c` scrive **15**, e se il numero si rivelerà sbagliato lo dirà l'uso.
+
+**(c) La conferma può essere cumulativa? — CHIUSA: cumulativa con eccezioni.**
+
+**Un «conferma tutte» rapido, ma il venditore può escludere o far rifare
+singolarmente una foto prima di confermare.** È un vincolo di interfaccia della
+§10.2, non una nota di comodità: sta scritto sotto, al punto 4 della sequenza,
+dove chi implementa lo legge.
+
+La preoccupazione che teneva la domanda aperta era che un «accetta tutte»
+riduca l'attenzione proprio dove la 6.3 la voleva alta. La forma scelta la
+risolve senza rinunciare alla comodità: il gesto rapido esiste, ma **non è
+l'unico gesto disponibile**, e le due eccezioni — escludere una foto, farla
+rifare — sono ciò che tiene aperta la via per il caso che la 6.3 esiste per
+intercettare, cioè la conversione sbagliata che PhotoRoom ha restituito con un
+`200`. Confermare tutto resta una scelta del venditore; **non è l'unica cosa che
+il rullino gli permette di fare.**
