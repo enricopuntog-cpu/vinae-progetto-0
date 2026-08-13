@@ -698,6 +698,37 @@ attaches to *that* decision and is not discharged by a generic acceptance given 
 7.12's human-in-the-loop reduces the exposure — the DSA is stricter on fully automated decisions —
 without eliminating it. §9 is deliberately **not** part of section 6, which stays closed in full.
 
+**The first concrete action toward that duty is shipped, and it is Phase 10 code, not Phase 11.**
+PR #39 (13 August 2026) puts a visible AI transparency label on each of the three AI surfaces
+Phase 10 put in production — the Sommelier panel, the sell wizard's Identification assistant, the
+`/esplora` pairing panel. They already said "AI", but in the **panel title**: "Sommelier AI" is a
+sign, not a statement. The copy lives in **one module**,
+`frontend-next/src/lib/phase10/etichette-ia.ts`, with five tests, for two load-bearing reasons: the
+wording changes in **one place** when the legal review answers, and a test asserts the covered
+surfaces are exactly the existing ones, so a **fourth** AI surface — Phase 11's four will be —
+cannot be added without a label in silence. Same shape as 10b's `SESSION_ID_VALIDO` constraint.
+`MIN_TESTS` went 255 → **260**. Each line describes what the surface actually does: cataloguing
+*suggests* and does not fill, because applying the suggestion is a second explicit gesture, and a
+test pins that. They say "IA", not "AI", deliberately — the panels keep "AI" as part of their own
+name, and a label written the same way would read as another sign. **This moves nothing in §9.2**:
+the DSA statement of reasons attaches to *that* moderation decision, the legal-review block stays
+where it was, and all five §9.4 questions stay unanswered.
+
+**§10 of the spec records copy and flow for `11a` and `11c` — registered, not built.** The autofill
+button (7.3a) is «Riempi i campi automaticamente con l'IA», kept verbally distinct from
+cataloguing's «fatti suggerire» because they are two different operations in the same wizard step.
+The background flow (7.13) is four steps: pick a curated background, press «Passa al set fotografico
+IA» which converts **every** photo of the listing, land on a **filmstrip** screen showing each
+converted photo beside its original, and **confirm or reject per photo**. Step four is 6.3 made
+concrete — the preview with explicit confirmation exists because PhotoRoom fails **silently** (`200`
+with a wrong image), and the side-by-side strip is what makes visible a failure no code can notice.
+§10.3 derives an arithmetic nobody had done from two already-decided numbers: `MAX_FOTO = 6` and
+`ai:sfondo` at **15/hour** mean one press on a full listing costs **six** calls, so the limit covers
+**two complete conversions per hour** and the third strip stops **halfway**. Three points stay
+**questions** for when `11c` opens — refuse upfront or stop halfway, whether 15/hour needs revising
+(which is **reopening 6.5**, a session decision, not an implementer's choice), and whether the
+confirmation may also be bulk. `11a` and `11c` remain blocked exactly as before.
+
 ### Postgres exposure rules (binding since Phase 6d-1)
 
 RLS filters rows, never columns. These three rules are what keeps that gap closed — breaking
