@@ -1143,6 +1143,74 @@ l'esito è lo stesso: **nessuno soddisfatto**.
 significherebbe scrivere un adapter contro un candidato che nessuna prova ha
 scelto.
 
+#### La #41 è mersa, con via libera nominato per numero — 13 agosto 2026
+
+Squash **`f040f93`** alle **20:57:28 UTC**. È la seconda PR mersa nella stessa
+giornata e la seconda con la condizione **riverificata sull'HEAD reale invece che
+ereditata**: `state=OPEN`, `MERGEABLE`, `CLEAN` su `fd6e363`, e i **quattro check
+letti su `repos/…/commits/fd6e363.../check-runs`** — tre `success` più
+`Supabase Preview` in `skipped`, tutti con `head_sha` uguale all'HEAD e non a un
+commit più vecchio della stessa PR. Il diff riverificato prima del merge:
+**quattro file di sola documentazione**, e il filtro su `supabase`, `backend`,
+`frontend`, `frontend-next`, `.github` e sulle estensioni di codice restituisce
+elenco vuoto.
+
+Il via libera era **esplicito e nominato per numero** per la #41. La #40 non lo
+copriva, come la #39 non copriva la #40: la regola è **per PR**, non per sessione,
+e vale anche quando la PR successiva è la conseguenza diretta di quella
+autorizzata. Questa sessione l'ha applicata due volte in un giorno.
+
+#### E una sesta volta, sul merge della #41 — sola documentazione, stesso esito
+
+`list_edge_functions` subito dopo: le sei function sono a **21/20/20 e 7/7/7**,
+`+1` ciascuna per questo solo merge, con un `updated_at` identico per tutte e sei
+(`2026-08-13T20:58:23.264Z`), **55,3 secondi dopo** il merge.
+
+La #41 è **quattro file di sola documentazione**, zero righe sotto
+`supabase/functions/`. La 7.10 è ora misurata **sei volte**, di cui **quattro su
+PR di sola documentazione** (#33, #37, #40, #41). Gli scarti osservati — 43, 43,
+49, 59, 55,8 e 55,3 secondi — stanno tutti attorno al minuto, e le ultime tre
+misure sono calcolate dal valore in **millisecondi epoch** dell'API, che non è
+ambiguo e non richiede lo scarto di un'ora che le prime letture annotavano.
+
+Non è più una scoperta ma una costante misurata: **l'ambiente di una Edge Function
+si configura prima del merge, mai dopo**. Vale in particolare per le **quattro
+function nuove della Fase 11**, che nasceranno con `AI_ENABLED` e le chiavi
+lette dall'ambiente che troveranno al merge.
+
+#### Due file di questa cartella sono fermi alla Fase 8 — rilevato, non corretto
+
+Trovato in questa sessione mentre si cercava dove scrivere l'handoff, e
+**deliberatamente non corretto**.
+
+- **`context-manifest.json`** dichiara `"updated_at": "2026-08-07"`,
+  `verification_pr: 27`, `documentation_branch:
+  migration/phase-8-messaging-notifications`, un ledger a **19 righe**, tre sole
+  Edge Function `ACTIVE`, e `phase_9`, `phase_10`, `phase_11` tutte a
+  `"not_started"`. Il suo `next_gate` è ancora «PR #27 verificata su Preview».
+- **`README.md`**, alla voce «In una frase», dice che «l'ultima fase integrata in
+  `main` è la **8**, PR #27 al merge squash `4f96864`».
+
+Nessuna di queste affermazioni è vera: le fasi 9 e 10 sono chiuse e mersate, il
+ledger è a **venticinque** righe, le function `ACTIVE` sono **sei**, e l'ultima PR
+mersa è la #41. Non sono file dimenticati in un angolo — sono i **primi due** che
+una nuova IA incontra, e il manifest sta nel proprio `mandatory_read_order`.
+
+Non sono stati riallineati qui perché il manifest è un inventario su una decina di
+sezioni (`runtime_truth`, `phase_status`, `closed_gates`, `open_gates_in_order`,
+`next_gate`, `grid_status`) che va ricostruito **leggendo il progetto reale**, non
+ricopiando `CHANGES.log`. Farlo di corsa dentro un handoff produrrebbe un secondo
+file autorevole e sbagliato invece di uno solo. È un lavoro con un perimetro
+proprio, ed è la ragione per cui compare fra i `NEXT STEPS`.
+
+Nel frattempo la `Regola di interpretazione` del `README.md` **regge lo stesso** e
+va usata: prevalgono le istruzioni correnti e `AGENTS.md`, poi **il codice e le
+migrazioni realmente presenti nel branch**, poi `ROADMAP_V1.md`, le ADR e la
+documentazione di sicurezza; questa cartella «aiuta a orientarsi e va aggiornata
+quando una fase cambia stato» — che è esattamente ciò che per questi due file non
+è avvenuto. In caso di contrasto con `CHANGES.log` o con questo file, **il
+manifest ha torto per costruzione**: è più vecchio di tre fasi.
+
 #### Una proposta registrata, non una decisione: l'informativa AI alla registrazione
 
 Il **12 agosto 2026** Enrico ha proposto **un'informativa su privacy e uso
