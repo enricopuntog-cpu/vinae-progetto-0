@@ -18,6 +18,12 @@
 > dalle decisioni 7.3, 7.12 e 7.13 della Fase 10. «Niente funzionalità nuove
 > durante la migrazione» **non è decaduta**: continua a valere per tutto ciò che
 > una sessione non ha chiesto per nome.
+>
+> **Aggiornamento del 13 agosto 2026.** Due sezioni nuove, nessuna delle quali
+> apre la fase: la **§9.5** registra le etichette di trasparenza IA aggiunte ai
+> tre pannelli della **Fase 10** — codice vero, ma su superfici già mersate e
+> fuori da questa fase — e la **§10** registra il copy e il flusso pronti per
+> `11a` e `11c`, che restano bloccati. La §6 non è stata toccata.
 
 ---
 
@@ -1450,7 +1456,139 @@ che questa fase **non** chiude.
    certificata» è deciso (§2.1); la validazione legale di come è formulato no
    (§1.2).
 
+### 9.5 La prima azione concreta: le etichette di trasparenza sui pannelli esistenti
+
+Il **13 agosto 2026** le tre superfici IA che la Fase 10 ha messo in produzione
+hanno ricevuto **un'etichetta visibile che dichiara l'IA nel momento in cui
+l'utente la usa**:
+
+| Superficie | Etichetta |
+| --- | --- |
+| Pannello Sommelier del Layout | «Parla con il tuo sommelier IA» |
+| Pannello Assistente del passo Identificazione | «Fatti suggerire i campi dall'assistente IA» |
+| Pannello di abbinamento in `/esplora` | «Chiedi gli abbinamenti al sommelier IA» |
+
+**Perché serviva, visto che i pannelli dicevano già «AI».** Lo dicevano nel
+titolo: «Sommelier AI» è il nome del pannello, cioè un'insegna. L'obbligo della
+§9.1 è che chi interagisce con un sistema di IA lo sappia, e saperlo per aver
+interpretato un nome non è la stessa cosa che leggerlo detto.
+
+Il testo vive in un modulo solo — `frontend-next/src/lib/phase10/etichette-ia.ts`
+— con i suoi test (`etichette-ia.test.ts`, cinque casi), per due ragioni che
+valgono più della comodità: quando la revisione legale risponderà, le parole si
+cambiano in **un punto**; e un test verifica che le superfici coperte siano
+esattamente quelle esistenti, così una **quarta** superficie IA — le quattro di
+questa fase lo saranno — non può essere aggiunta senza etichetta in silenzio. È
+la stessa forma del vincolo `SESSION_ID_VALIDO` della 10b: la regola sta accanto
+al valore, non nella memoria di chi lo modifica.
+
+**Che cosa questo non sposta.** Nulla della §9.2: la dichiarazione dei motivi del
+DSA riguarda **quella** decisione di moderazione, e un'etichetta su un pannello
+non la fornisce più di quanto la fornisse l'informativa alla registrazione.
+**Il blocco della revisione legale resta dov'era.** Questa è un'azione che
+indirizza l'obbligo **generale**, non la chiusura di un'area aperta, e le cinque
+domande della §9.4 restano tutte e cinque senza risposta.
+
 > **Che cosa questa sezione non cambia.** Non modifica il perimetro della §1, non
 > aggiunge una quinta funzionalità, non tocca nessuna decisione della §6 e non
-> apre lavoro di implementazione. La revisione legale resta **fuori dalla fase**
-> (§1.2) e resta ciò senza cui la fase non si dichiara chiusa.
+> apre nessun checkpoint della Fase 11: la §9.5 è testo di interfaccia su
+> superfici della **Fase 10**, già mersate, non lavoro di implementazione di
+> questa fase. La revisione legale resta **fuori dalla fase** (§1.2) e resta ciò
+> senza cui la fase non si dichiara chiusa.
+
+---
+
+## 10. Copy e flusso pronti per `11a` e `11c` — registrati, non costruiti
+
+> **NON APRE NIENTE.** Questa sezione registra **testo pronto** per quando i due
+> checkpoint apriranno, deciso in sessione il **13 agosto 2026**. Non riapre la
+> §6, non anticipa un branch e non è lavoro fatto: `11a` e `11c` restano bloccati
+> esattamente come li lascia la §8 — `11a` dalla prova 6.6 e dalle chiavi che non
+> esistono, `11c` da una chiave PhotoRoom la cui data è **per definizione**
+> l'apertura di `11c` (6.3b).
+
+Sta scritta qui per la stessa ragione della §9: il testo di interfaccia deciso in
+una conversazione e non scritto da nessuna parte viene reinventato da chi apre il
+branch. E le parole di queste due superfici non sono neutre — una promette
+un'azione automatica su campi che il venditore poi pubblica, l'altra sostituisce
+le fotografie di un annuncio.
+
+### 10.1 `11a` — il pulsante dell'autofill (7.3a)
+
+**«Riempi i campi automaticamente con l'IA».**
+
+«Automaticamente» è esatto e va tenuto: la 7.3a **riempie**, non suggerisce, e
+questo la distingue dal pannello di catalogazione della Fase 10, la cui etichetta
+dice apposta «fatti **suggerire** i campi» (§9.5) perché lì applicare il
+suggerimento è un secondo gesto. Le due superfici convivono nello stesso passo
+del wizard e non vanno descritte con le stesse parole.
+
+Il presidio non è nel verbo ma nel passo: i campi del wizard restano modificabili
+a mano — la pagina lo dice già in cima al passo Identificazione — e la
+pubblicazione resta un gesto successivo del venditore. Quello che «riempi
+automaticamente» promette è il risparmio di battitura, non l'assenza di
+controllo.
+
+**Due obblighi che si trascinano dietro**, entrambi già decisi altrove e citati
+qui perché è dove qualcuno li leggerà:
+
+- La 7.3a è **una quarta superficie IA**, quindi le serve la sua etichetta di
+  trasparenza, cioè una quarta voce in `frontend-next/src/lib/phase10/etichette-ia.ts`.
+  Il test di quel modulo fallisce se la superficie viene aggiunta senza (§9.5).
+- La foto che alimenta l'autofill esce dalla piattaforma, quindi vale la 6.3(e):
+  **EXIF spogliato prima dell'inoltro**, e la function scarica i byte invece di
+  passare un URL firmato.
+
+### 10.2 `11c` — il flusso dello sfondo (7.13)
+
+**Pulsante: «Passa al set fotografico IA».**
+
+La sequenza, per esteso:
+
+1. Il venditore **sceglie lo sfondo** fra quelli curati del bucket `sfondi`
+   (6.3c-bis).
+2. Preme il pulsante, che avvia la conversione di **tutte le foto dell'annuncio**
+   con quello sfondo.
+3. Il risultato porta a una **schermata a rullino**: ogni foto convertita è
+   mostrata **accanto alla propria originale**.
+4. Il venditore **conferma o rifiuta la sostituzione**, foto per foto.
+
+**Il punto quattro è il punto.** Premere il pulsante non sostituisce niente: è la
+6.3 — anteprima con conferma esplicita, perché il fallimento di PhotoRoom è
+**silenzioso** (`200` con un'immagine sbagliata, non un `503`) — resa concreta
+come interazione. Il rullino affiancato è ciò che rende visibile un fallimento
+che nessun codice può accorgersi di aver subito, e l'originale non viene mai
+sovrascritto.
+
+Da notare, perché è facile leggerlo al contrario: **questo pulsante è il percorso
+di compositing**, quello che costa cinque *Remove Background* a chiamata. La 6.3
+resta invariata — è il venditore a scegliere, con «solo ritaglio» **preselezionato**
+— e questo è il ramo che sceglie chi vuole lo sfondo, non il predefinito.
+
+Quando questo flusso esisterà, il pannello `SfondoIAPanel` di `frontend/`
+(`frontend/src/routes/vendi.tsx:569-577`, un `setTimeout` di 1100 ms e un toast
+«Sfondo applicato (demo)») smette di essere una promessa non mantenuta. È l'esito
+che la 7.13 aveva scelto al posto di lasciarlo lì.
+
+### 10.3 Che cosa questo flusso lascia da sciogliere all'apertura di `11c`
+
+Non sono decisioni prese qui, e non vanno riempite in silenzio scrivendo il
+codice. Sono **conti**, e vengono dall'aver messo accanto due numeri già decisi:
+
+- `MAX_FOTO = 6` (`frontend-next/src/hooks/useSellWizard.ts:69`);
+- `ai:sfondo` a **15 chiamate l'ora** (6.5).
+
+Una pressione su un annuncio pieno vale **sei** chiamate. Quindi il limite
+copre **due conversioni complete l'ora**, e alla terza restano tre gettoni per
+sei foto: il rullino si fermerebbe **a metà**.
+
+1. Il pulsante **rifiuta in partenza** quando il secchiello non copre l'intero
+   annuncio, o parte e si ferma? Fermarsi a metà non rompe niente — gli originali
+   ci sono ancora — ma il venditore ha premuto una volta e ottiene un risultato
+   parziale senza che nessuno gliel'abbia detto.
+2. Se il conto è quello giusto: 15/ora è stato deciso (6.5) su una chiamata per
+   pressione, non su sei. Rivederlo è **riaprire la 6.5**, quindi è una decisione
+   di sessione e non una scelta di chi implementa.
+3. Se la conferma foto-per-foto del punto 4 possa essere anche cumulativa
+   («accetta tutte»), che è comodo e riduce l'attenzione proprio dove la 6.3 la
+   voleva alta.
