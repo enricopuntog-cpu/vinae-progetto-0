@@ -35,6 +35,7 @@ import { useVinea, formatEUR } from "@/lib/vinea-store";
 import { wineImages } from "@/lib/wine-images";
 import { useSellWizard, MAX_FOTO, type Modalita } from "@/hooks/useSellWizard";
 import { confidenzaPercento } from "@/lib/phase10/catalogazione";
+import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
 import { BottleSelector } from "@/app/vendi/bottle-selector";
 
 /**
@@ -340,6 +341,7 @@ export default function VendiPageClient() {
                   <p className="text-[11px] text-muted-foreground">
                     Descrivi la bottiglia o incolla il testo dell&apos;etichetta
                   </p>
+                  <AiTransparencyLabel superficie="catalogazione" />
                 </div>
               </div>
               <textarea

@@ -18,6 +18,7 @@ import { useCercaMeta } from "@/lib/wine-meta-context";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { createSupabaseAiService } from "@/services/phase10/supabase-ai-service";
 import { risolviScelte, type SceltaRisolta } from "@/lib/phase10/abbinamento";
+import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
 import { WineCard } from "@/components/vinea/WineCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -353,6 +354,7 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
                 <p className="text-[11px] text-muted-foreground">
                   Chiedi 3 abbinamenti dal catalogo in un attimo
                 </p>
+                <AiTransparencyLabel superficie="abbinamento" />
               </div>
             </div>
             <Button

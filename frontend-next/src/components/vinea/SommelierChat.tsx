@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquareText, Send, Sparkles, X, Trash2, Loader2 } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
 import { createSupabaseAiService } from "@/services/phase10/supabase-ai-service";
 import {
   depositoBrowser,
@@ -227,6 +228,7 @@ export default function SommelierChat() {
                 Sommelier <span className="gold-shimmer">AI</span>
               </h2>
               <p className="text-[11px] text-crema/70">Assistente Vinea · risposte in italiano</p>
+              <AiTransparencyLabel superficie="sommelier" variante="scura" />
             </div>
             <button
               aria-label="Cancella conversazione"
