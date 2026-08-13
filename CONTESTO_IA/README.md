@@ -1,6 +1,6 @@
 # Contesto completo Vinea per IA e nuove chat
 
-Ultimo aggiornamento: **9 agosto 2026**
+Ultimo aggiornamento: **13 agosto 2026**
 
 Questa cartella è il punto di ingresso rapido per chi deve lavorare su Vinea
 senza conoscere le conversazioni precedenti. Riassume la cronologia delle fasi,
@@ -24,6 +24,25 @@ devono essere reinterpretati.
 7. [`context-manifest.json`](context-manifest.json) — riepilogo
    machine-readable per strumenti automatici.
 
+Il manifest è stato **ricostruito il 13 agosto 2026 leggendo il progetto reale**
+— `list_migrations`, `list_edge_functions`, `storage.buckets`, conteggi in sola
+lettura, `git` e `gh` — e non ricopiando gli altri file di questa cartella. Fino
+a quel giorno era fermo alla Fase 8 e sbagliava tre fasi, il conteggio del ledger
+e il numero di Edge Function. Porta `schema_version` a **2**: nessuna chiave
+della versione 1 è stata rimossa o rinominata, ma il file ha sezioni nuove
+(`storage_buckets`, `phase_11`, `edge_function_deploy_gate`,
+`function_environment_flags`, `not_verifiable_from_here`,
+`real_project_read_only_snapshot`). Chi ne ricordasse la forma precedente
+rilegga invece di presumere.
+
+Ha una sezione che merita di essere letta per prima:
+**`not_verifiable_from_here`** elenca ciò che con gli strumenti disponibili
+**non si misura** — in particolare i segreti d'ambiente delle Edge Function,
+quindi le chiavi dei provider AI e i flag `AI_ENABLED` e `PAYMENTS_ENABLED`. Per
+quelli il manifest riporta l'ultimo stato confermato e da chi, non una misura, e
+lo dice. Un campo pieno di un valore plausibile è peggio di un campo che dichiara
+il proprio limite.
+
 ## Regola di interpretazione
 
 Questa cartella è una **mappa**, non sostituisce le fonti vive. In caso di
@@ -37,16 +56,34 @@ contrasto:
 4. questa cartella aiuta a orientarsi e va aggiornata quando una fase cambia
    stato.
 
+Vale anche **dentro** la cartella, e non è una sfumatura: il
+`context-manifest.json` è un riassunto **fatto a una data**, mentre
+[`../CHANGES.log`](../CHANGES.log) e
+[`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md) si aggiornano a ogni sessione. Se
+il manifest contraddice uno dei due, **ha torto il manifest** — a meno che non
+sia stato aggiornato dopo, e la data in testa lo dice. È esattamente ciò che è
+successo fino al 13 agosto 2026, quando il manifest è rimasto fermo alla Fase 8
+per tre fasi intere mentre gli altri file avanzavano.
+
 ## In una frase
 
 Vinea sta migrando gradualmente dall'app servita `frontend/` + `backend/` verso
-`frontend-next/` + Supabase. L'ultima fase integrata in `main` è la **8**, PR #27
-al merge squash `4f96864` del 7 agosto 2026, con i quattro check `SUCCESS`
-sull'HEAD finale `b32ff9d` del branch `migration/phase-8-messaging-notifications`:
-schema/RPC/RLS di messaggistica e notifiche, UI `/messaggi` e `/notifiche` e
-Realtime privato sono in `main`, e il merge ha distribuito
-`20260806224517 phase_8_messaging_notifications` come ventesima riga del ledger
-di produzione. Le prove della fase — 20/20 statici, 23/23 fixture, 5/5 concorrenti,
-smoke Realtime autenticato, residui zero — erano state eseguite sulla Preview
-`jggjaqcdbcbxdxhnggio`, che era legata alla PR e non esiste più. Le fasi 9, 10 e
-11 non sono iniziate.
+`frontend-next/` + Supabase. L'ultima fase integrata in `main` è la **10**, chiusa
+con la PR #35 al merge squash `442c98c` dell'11 agosto 2026 e la chiusura
+documentale #36 (`271c7dc`): il ledger di produzione è a **venticinque righe** e
+le Edge Function `ACTIVE` sono **sei**. Le fasi 9 e 10 sono quindi distribuite,
+ma **nessun loro comportamento è mai stato esercitato sul progetto reale** — è
+stato letto schema, privilegi e conteggi, non una transizione di moderazione né
+una conversazione col Sommelier. La Fase 10 è distribuita **spenta per
+costruzione**: `AI_ENABLED` fallisce chiuso, ed è ciò che ha reso sicuro chiuderla
+prima che le chiavi esistessero.
+
+La fase corrente è la **11** — le quattro estensioni AI ammesse per eccezione — e
+sta in uno stato che non è nessuno dei due soliti: **decisioni chiuse,
+implementazione non iniziata**. La sezione 6 della sua specifica
+([`../docs/PHASE_11_AI_EXTENSIONS_SPEC.md`](../docs/PHASE_11_AI_EXTENSIONS_SPEC.md))
+è chiusa per intero, la §10.3 anche, e `migration/phase-11-*` è a **zero branch**
+di proposito: tutti e quattro i checkpoint sono bloccati da dipendenze esterne, e
+nessuno dei quattro prerequisiti è soddisfatto. La §9, revisione legale, resta
+aperta, e la fase non si dichiara chiusa senza. Il **cutover è la Fase 12**, dopo
+la rinumerazione dell'11 agosto 2026: non è iniziato.
