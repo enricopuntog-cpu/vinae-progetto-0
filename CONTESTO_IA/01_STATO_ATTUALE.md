@@ -1040,6 +1040,45 @@ sono passate da 15/14/14 e 1/1/1 a **17/16/16 e 3/3/3**, tutte con lo stesso
 UTC). Stesso scarto della misura precedente. Il gate di distribuzione è il merge,
 e **l'ambiente di una function si configura prima**, mai dopo.
 
+#### E una quarta volta, sul merge della #39
+
+`list_edge_functions` il **13 agosto 2026** dopo il merge della **#39** — che
+tocca `frontend-next/` e **nessuna riga di function**: le sei sono a **19/18/18 e
+5/5/5**, cioè `+1` ciascuna per ciascuno dei due merge intercorsi (#38 e #39),
+con un `updated_at` identico per tutte e sei, `2026-08-13T09:13:26.949Z`, **59
+secondi dopo** il merge (09:12:28 UTC). Quarta conferma della 7.10, e il fatto che
+la #38 e la #39 siano una documentale e una di frontend rende la conclusione più
+forte, non più debole: **il merge ridistribuisce tutto, qualunque cosa contenga.**
+
+**Una precisazione sulla misura, non sulla conclusione.** Questi 59 secondi sono
+calcolati dal valore in **millisecondi epoch** che l'API restituisce
+(`1786612406949`), che non è ambiguo, e **non hanno richiesto lo scarto di un'ora**
+che le misure precedenti annotavano come costante. Quello scarto era una proprietà
+di come il valore veniva letto, non dell'API. Nessuna conclusione della 7.10
+dipendeva da come lo si spiegava, e nessuna cambia.
+
+#### Lo stato dei quattro prerequisiti al 13 agosto 2026 — misurato dove si poteva
+
+Verifica fatta prima di decidere se aprire un checkpoint, e l'esito è **nessuno**:
+
+- **Chiavi dei provider: non verificabili da qui.** I segreti dell'ambiente di una
+  Edge Function non sono leggibili con gli strumenti disponibili. L'ultimo stato
+  confermato resta quello di Enrico del 12 agosto 2026 — non configurate — e la
+  scadenza della 7.11 è il 18 agosto. **Questa è una dichiarazione di limite, non
+  una misura**: chi lo sa è Enrico.
+- **Prova 6.6: non eseguita.** Richiede che Enrico scatti sei foto reali. Non
+  esiste artefatto di una sua esecuzione da nessuna parte.
+- **Prova 7.1: non eseguita**, e dipende dalle chiavi.
+- **Pannello della Fase 9 mai esercitato: misurato oggi.** Interrogazione di sola
+  lettura su `pijnmcllmfgjmgsvtcej`: `reports`, `report_events` e `audit_log` sono
+  **vuote**, e **nessun profilo** ha `stato_utente` diverso da `attivo`. Questo è
+  il prerequisito di `11d`, e non è soddisfatto.
+
+Nella stessa interrogazione `public.sommelier_messaggi` è a **zero righe**,
+coerente con la Fase 10 distribuita spenta. **È un indizio, non una prova** che le
+chiavi non esistano: zero righe è anche ciò che si vede se le chiavi ci sono e
+nessuno ha usato il pannello.
+
 #### Una proposta registrata, non una decisione: l'informativa AI alla registrazione
 
 Il **12 agosto 2026** Enrico ha proposto **un'informativa su privacy e uso
@@ -1127,15 +1166,62 @@ di aver subito.
 nella §10.3: `MAX_FOTO = 6` e `ai:sfondo` a **15 chiamate l'ora** significano che
 una pressione su un annuncio pieno vale **sei** chiamate, quindi il limite copre
 **due conversioni complete l'ora** e alla terza restano tre gettoni per sei foto —
-il rullino si fermerebbe **a metà**. Tre punti restano registrati come **domande**
-per l'apertura di `11c` e non riempiti: se il pulsante rifiuti in partenza o si
-fermi a metà, se il 15/ora vada rivisto — che sarebbe **riaprire la 6.5**, quindi
-una decisione di sessione e non una scelta di chi implementa — e se la conferma
-possa essere anche cumulativa, che è comodo e riduce l'attenzione proprio dove la
-6.3 la voleva alta.
+il rullino si fermerebbe **a metà**. Tre punti erano stati registrati come
+**domande** per l'apertura di `11c` e non riempiti: se il pulsante rifiuti in
+partenza o si fermi a metà, se il 15/ora vada rivisto — che sarebbe **riaprire la
+6.5**, quindi una decisione di sessione e non una scelta di chi implementa — e se
+la conferma possa essere anche cumulativa, che è comodo e riduce l'attenzione
+proprio dove la 6.3 la voleva alta.
 
 `11a` e `11c` **restano bloccati esattamente come prima**: le chiavi non esistono
 e nessuna delle due prove empiriche è stata eseguita.
+
+#### La §10.3 è chiusa — tre decisioni di sessione, PR #40, 13 agosto 2026
+
+Le tre domande qui sopra sono state poste a Enrico lo stesso giorno in cui il
+conto le aveva prodotte, e chiuse. **Sono decisioni di sessione, con la stessa
+forza di quelle della §6**, e vincolano `11c` quando aprirà.
+
+**(a) Il rullino si ferma a metà; il pulsante non si disabilita in partenza.** Le
+foto già convertite **restano pronte**, le altre restano con la propria originale
+finché il limite orario non si ricarica: il venditore vede quali sono fatte e
+quali no, cioè un rullino a stati misti e non un rifiuto totale. La ragione è che
+**un rifiuto totale per un vincolo che riguarda una parte dell'annuncio butta via
+lavoro che si poteva fare** — un venditore con cinque foto e tre gettoni non
+convertirebbe nemmeno le tre che può. E la preoccupazione che teneva aperta la
+domanda — ottenere un risultato parziale *senza che nessuno gliel'abbia detto* —
+decade da sé: il rullino affiancato **è** il modo in cui glielo si dice, perché
+una foto non convertita si vede a colpo d'occhio accanto a una convertita.
+
+**(b) `ai:sfondo` resta a 15/ora, per ora. Non si rialza a tavolino.** Il conto
+della §10.3 è un motivo legittimo per riaprire quel numero — la 6.5 lo aveva
+fissato su una chiamata per pressione, non su sei — ma **un motivo non è ancora un
+dato**. Il criterio con cui Enrico l'ha decisa è suo ed è riportato con le sue
+parole: **«prima di pagare»**. Il dato che serve è quanti annunci un venditore
+converte per sessione, e non esiste finché `11c` non è in produzione. Quindi si
+riapre **con dati veri, dopo che `11c` è live**, e resta un **punto della 6.5 da
+riportare in sessione** allora — non un default che si sposta da sé. Chi
+implementa `11c` scrive **15**.
+
+**(c) La conferma è cumulativa con eccezioni.** Un «conferma tutte» rapido, ma il
+venditore può **escludere** o **far rifare** singolarmente una foto prima di
+confermare. La preoccupazione che teneva aperta la domanda — un «accetta tutte»
+riduce l'attenzione proprio dove la 6.3 la voleva alta — è risolta dalla forma:
+il gesto rapido esiste ma **non è l'unico disponibile**, e le due eccezioni sono
+ciò che tiene aperta la via per il caso che la 6.3 esiste per intercettare, cioè
+la conversione sbagliata che PhotoRoom ha restituito con un `200`.
+
+**La (c) è scritta come vincolo di interfaccia dentro la §10.2**, al punto 4 della
+sequenza e non solo come nota nella §10.3, perché è lì che chi implementa la
+legge. Con essa altri due vincoli espliciti: l'originale non viene mai
+sovrascritto nemmeno dopo la conferma cumulativa — è la condizione che rende
+innocuo fermarsi a metà — e **uno stato misto è uno stato legittimo del rullino**,
+da disegnare e non da evitare.
+
+**Nessuna delle tre riapre la sezione 6.** La (b) tocca un valore della 6.5 e lo
+**conferma**: una nota in fondo alla 6.5 registra che il numero è stato riguardato
+il 13 agosto 2026 e a quale condizione tornerà in sessione. La §6 resta chiusa per
+intero, e la fase resta ferma dov'era.
 
 ### La rinumerazione delle fasi, e dove il vecchio numero sopravvive
 
