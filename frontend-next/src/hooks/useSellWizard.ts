@@ -8,7 +8,7 @@ import { createCellarService } from "@/services/cellar-service";
 import { createListingService } from "@/services/listing-service";
 import { createSupabaseAiService } from "@/services/phase10/supabase-ai-service";
 import { campiDaSuggerimento } from "@/lib/phase10/catalogazione";
-import { AI_UI } from "@/config/features";
+import { AI_UI, AZIONI_IA_ABILITATE } from "@/config/features";
 import type {
   CatalogazioneSuggerimento,
   DatiNuovaBottiglia,
@@ -138,7 +138,10 @@ export function useSellWizard({
   const listingService = useMemo(() => createListingService(getSupabaseClient()), []);
   const cellarService = useMemo(() => createCellarService(getSupabaseClient()), []);
   const aiService = useMemo(
-    () => (AI_UI.catalogazione ? createSupabaseAiService(getSupabaseClient()) : null),
+    () =>
+      AI_UI.catalogazione && AZIONI_IA_ABILITATE
+        ? createSupabaseAiService(getSupabaseClient())
+        : null,
     [],
   );
 
@@ -147,11 +150,24 @@ export function useSellWizard({
   const [aiSuggerimento, setAiSuggerimento] = useState<CatalogazioneSuggerimento | null>(null);
   const [aiInCorso, setAiInCorso] = useState(false);
   const [aiErrore, setAiErrore] = useState<string | null>(null);
+  const [aiBloccata, setAiBloccata] = useState(false);
+
+  const aggiornaAiHint = useCallback((valore: string) => {
+    setAiHint(valore);
+    setAiBloccata(false);
+    setAiErrore(null);
+  }, []);
 
   const chiediSuggerimento = useCallback(async () => {
     const hint = aiHint.trim();
-    if (!hint || aiInCorso || !aiService) return;
+    if (!hint || aiInCorso) return;
+    if (!AZIONI_IA_ABILITATE || !aiService) {
+      setAiBloccata(true);
+      setAiErrore(null);
+      return;
+    }
     setAiInCorso(true);
+    setAiBloccata(false);
     setAiErrore(null);
     try {
       const esito = await aiService.catalogazione({ hint });
@@ -387,10 +403,11 @@ export function useSellWizard({
     pubblica,
     salvaBozza,
     aiHint,
-    setAiHint,
+    setAiHint: aggiornaAiHint,
     aiSuggerimento,
     aiInCorso,
     aiErrore,
+    aiBloccata,
     chiediSuggerimento,
     applicaSuggerimento,
   };

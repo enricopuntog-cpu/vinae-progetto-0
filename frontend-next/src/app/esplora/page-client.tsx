@@ -19,7 +19,8 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { createSupabaseAiService } from "@/services/phase10/supabase-ai-service";
 import { risolviScelte, type SceltaRisolta } from "@/lib/phase10/abbinamento";
 import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
-import { AI_UI } from "@/config/features";
+import { BetaActionNotice } from "@/components/vinea/BetaActionNotice";
+import { AI_UI, AZIONI_IA_ABILITATE } from "@/config/features";
 import { WineCard } from "@/components/vinea/WineCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -81,7 +82,10 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
   // secondo strumento sulla stessa domanda, e si aziona solo se richiesto —
   // com'è in `frontend/`, dove nessuna battuta parte da sola.
   const aiService = useMemo(
-    () => (AI_UI.abbinamento ? createSupabaseAiService(getSupabaseClient()) : null),
+    () =>
+      AI_UI.abbinamento && AZIONI_IA_ABILITATE
+        ? createSupabaseAiService(getSupabaseClient())
+        : null,
     [],
   );
   const [aiScelte, setAiScelte] = useState<SceltaRisolta[]>([]);
@@ -89,11 +93,24 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
   const [aiInCorso, setAiInCorso] = useState(false);
   const [aiErrore, setAiErrore] = useState<string | null>(null);
   const [aiPerQuery, setAiPerQuery] = useState("");
+  const [aiBloccata, setAiBloccata] = useState(false);
+
+  const aggiornaQuery = (valore: string) => {
+    setQ(valore);
+    setAiBloccata(false);
+    setAiErrore(null);
+  };
 
   const chiediAbbinamento = useCallback(async () => {
     const query = q.trim();
-    if (!query || aiInCorso || !aiService) return;
+    if (!query || aiInCorso) return;
+    if (!AZIONI_IA_ABILITATE || !aiService) {
+      setAiBloccata(true);
+      setAiErrore(null);
+      return;
+    }
     setAiInCorso(true);
+    setAiBloccata(false);
     setAiErrore(null);
     setAiPerQuery(query);
     try {
@@ -196,7 +213,7 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
           )}
           <Input
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => aggiornaQuery(e.target.value)}
             data-testid="esplora-search-input"
             placeholder={
               abbinamentoAttivo
@@ -334,7 +351,7 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
             return (
               <button
                 key={s}
-                onClick={() => setQ(s.toLowerCase())}
+                onClick={() => aggiornaQuery(s.toLowerCase())}
                 className={`rounded-full border px-2.5 py-1 text-[11px] ${active ? "border-bordeaux bg-bordeaux text-crema" : "border-border bg-card hover:bg-secondary"}`}
               >
                 {s}
@@ -386,6 +403,8 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
               )}
             </Button>
           </div>
+
+          {aiBloccata && <BetaActionNotice tipo="ia" className="mt-3" />}
 
           {risultatiValidi && aiErrore && (
             <p

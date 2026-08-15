@@ -34,6 +34,8 @@ import { wineImages } from "@/lib/wine-images";
 import { useSellWizard, MAX_FOTO, type Modalita } from "@/hooks/useSellWizard";
 import { confidenzaPercento } from "@/lib/phase10/catalogazione";
 import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
+import { BetaActionNotice } from "@/components/vinea/BetaActionNotice";
+import { BetaBackgroundPanel } from "@/components/vinea/BetaBackgroundPanel";
 import { BottleSelector } from "@/app/vendi/bottle-selector";
 import { AI_UI } from "@/config/features";
 
@@ -99,6 +101,7 @@ export default function VendiPageClient() {
     aiSuggerimento,
     aiInCorso,
     aiErrore,
+    aiBloccata,
     chiediSuggerimento,
     applicaSuggerimento,
   } = useSellWizard({
@@ -265,6 +268,7 @@ export default function VendiPageClient() {
               onCarica={caricaFoto}
               onRimuovi={rimuoviFoto}
             />
+            {AI_UI.catalogazione && <BetaBackgroundPanel haFoto={foto.length > 0} />}
           </div>
         )}
 
@@ -401,6 +405,7 @@ export default function VendiPageClient() {
                   {aiErrore}
                 </p>
               )}
+              {aiBloccata && <BetaActionNotice tipo="ia" className="mt-3" />}
               {aiSuggerimento && (
                 <div
                   className="mt-3 grid gap-2 rounded-xl border border-border bg-card p-3 text-xs md:grid-cols-2"
@@ -524,8 +529,8 @@ export default function VendiPageClient() {
             <h2 className="font-serif text-2xl">Prezzo</h2>
             <div className="rounded-xl border border-oro/40 bg-oro/10 p-4">
               <p className="flex items-center gap-2 text-sm">
-                <Sparkles className="h-4 w-4 text-oro" /> Prezzo suggerito dall'IA in base al
-                mercato: <b>{formatEUR(suggerito)}</b>
+                <Tag className="h-4 w-4 text-oro" /> Riferimento beta locale basato sui dati
+                disponibili: <b>{formatEUR(suggerito)}</b>
               </p>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
