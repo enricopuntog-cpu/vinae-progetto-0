@@ -1,3 +1,5 @@
+import type { SuperficieIA } from "@/lib/phase10/etichette-ia";
+
 /**
  * Feature flag di dominio.
  *
@@ -13,13 +15,32 @@
  * cui è più facile dimenticarselo.
  */
 
-const acceso = (valore: string | undefined): boolean => valore === "true";
+export const valoreFlagEsattamenteTrue = (valore: string | undefined): boolean => valore === "true";
+
+/**
+ * Pre-lancio beta — sole superfici UI della Fase 10.
+ *
+ * Questa flag è pubblica e quindi modificabile da chi controlla il browser:
+ * decide esclusivamente se montare i pannelli, non autorizza una chiamata IA.
+ * Anche quando è `true`, restano autoritativi `AI_ENABLED`, autenticazione,
+ * stato utente e rate limit nelle Edge Function.
+ *
+ * L'inventario tipizzato evita che una delle tre superfici possa seguire un
+ * default diverso dalle altre. Solo la stringa esatta `true` le rende visibili.
+ */
+const aiUiAbilitata = valoreFlagEsattamenteTrue(process.env.NEXT_PUBLIC_AI_UI_ENABLED);
+
+export const AI_UI: Readonly<Record<SuperficieIA, boolean>> = Object.freeze({
+  sommelier: aiUiAbilitata,
+  catalogazione: aiUiAbilitata,
+  abbinamento: aiUiAbilitata,
+});
 
 /**
  * Fase 7 — pagamenti. Kill switch di **tutta** la verticale: checkout,
  * onboarding Connect e rilascio fondi.
  */
-export const PAGAMENTI_UI_ABILITATI = acceso(
+export const PAGAMENTI_UI_ABILITATI = valoreFlagEsattamenteTrue(
   process.env.NEXT_PUBLIC_PHASE_7_PAYMENTS_ENABLED,
 );
 
@@ -37,7 +58,9 @@ export const PAGAMENTI_UI_ABILITATI = acceso(
  * nessun addebito reale dietro. È coerente — nessun addebito reale esiste
  * comunque oggi — ma è uno stato che va conosciuto, non scoperto.
  */
-export const IMBALLAGGIO_UI_ABILITATO = acceso(process.env.NEXT_PUBLIC_PACKAGING_ENABLED);
+export const IMBALLAGGIO_UI_ABILITATO = valoreFlagEsattamenteTrue(
+  process.env.NEXT_PUBLIC_PACKAGING_ENABLED,
+);
 
 /**
  * Gate server-side dell'imballaggio. Da leggere solo in codice che gira sul
@@ -45,4 +68,5 @@ export const IMBALLAGGIO_UI_ABILITATO = acceso(process.env.NEXT_PUBLIC_PACKAGING
  * `undefined`, quindi risulterebbe spento e non acceso — il verso giusto in cui
  * sbagliare, ma comunque un errore.
  */
-export const imballaggioAbilitatoServer = (): boolean => acceso(process.env.PACKAGING_ENABLED);
+export const imballaggioAbilitatoServer = (): boolean =>
+  valoreFlagEsattamenteTrue(process.env.PACKAGING_ENABLED);

@@ -15,6 +15,7 @@ import { type ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
 import { HeaderInboxActions } from "@/components/vinea/notifications/HeaderInboxActions";
+import { AI_UI } from "@/config/features";
 import { useVinea, type DemoRuolo } from "@/lib/vinea-store";
 
 // Fase 10c. Il pannello Sommelier era rimasto fuori dalla Fase 3 perché
@@ -211,7 +212,7 @@ export function VineaLayout({ children }: { children: ReactNode }) {
 
       <Toaster position="top-center" richColors />
 
-      <SommelierChat />
+      {AI_UI.sommelier && <SommelierChat />}
     </div>
   );
 }

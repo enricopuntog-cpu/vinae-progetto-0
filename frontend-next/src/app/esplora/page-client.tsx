@@ -19,6 +19,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { createSupabaseAiService } from "@/services/phase10/supabase-ai-service";
 import { risolviScelte, type SceltaRisolta } from "@/lib/phase10/abbinamento";
 import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
+import { AI_UI } from "@/config/features";
 import { WineCard } from "@/components/vinea/WineCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -66,6 +67,7 @@ type Mode = "testo" | "abbinamento";
 
 export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
   const [mode, setMode] = useState<Mode>("testo");
+  const abbinamentoAttivo = AI_UI.abbinamento && mode === "abbinamento";
   const [q, setQ] = useState("");
   const [regione, setRegione] = useState("Tutte");
   const [tipo, setTipo] = useState("Tutti");
@@ -78,7 +80,10 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
   // che risponde mentre si digita, senza rete e senza costo. Il pannello è un
   // secondo strumento sulla stessa domanda, e si aziona solo se richiesto —
   // com'è in `frontend/`, dove nessuna battuta parte da sola.
-  const aiService = useMemo(() => createSupabaseAiService(getSupabaseClient()), []);
+  const aiService = useMemo(
+    () => (AI_UI.abbinamento ? createSupabaseAiService(getSupabaseClient()) : null),
+    [],
+  );
   const [aiScelte, setAiScelte] = useState<SceltaRisolta[]>([]);
   const [aiIntro, setAiIntro] = useState("");
   const [aiInCorso, setAiInCorso] = useState(false);
@@ -87,7 +92,7 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
 
   const chiediAbbinamento = useCallback(async () => {
     const query = q.trim();
-    if (!query || aiInCorso) return;
+    if (!query || aiInCorso || !aiService) return;
     setAiInCorso(true);
     setAiErrore(null);
     setAiPerQuery(query);
@@ -118,7 +123,7 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
   // configurazione ESLint di Next 16 rifiuta un `setState` sincrono dentro un
   // effetto, e ha ragione — quell'effetto fa un secondo render a ogni battuta
   // digitata per cancellare qualcosa che si può semplicemente non disegnare.
-  const risultatiValidi = mode === "abbinamento" && q.trim() === aiPerQuery;
+  const risultatiValidi = abbinamentoAttivo && q.trim() === aiPerQuery;
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -127,7 +132,7 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
       if (tipo !== "Tutti" && w.tipo !== tipo) return false;
       if (w.prezzo < prezzo[0] || w.prezzo > prezzo[1]) return false;
       if (term) {
-        if (mode === "testo") {
+        if (!abbinamentoAttivo) {
           if (!`${w.produttore} ${w.nome}`.toLowerCase().includes(term)) return false;
         } else {
           // I metadati di abbinamento sono indicizzati per vino, non per
@@ -148,7 +153,7 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
     if (sort === "prezzo-desc") r = [...r].sort((a, b) => b.prezzo - a.prezzo);
     if (sort === "annata") r = [...r].sort((a, b) => a.annata - b.annata);
     return r;
-  }, [annunci, q, mode, regione, tipo, prezzo, sort, cercaMeta]);
+  }, [annunci, q, abbinamentoAttivo, regione, tipo, prezzo, sort, cercaMeta]);
 
   const reset = () => {
     setQ("");
@@ -184,7 +189,7 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center">
         <div className="relative flex-1">
-          {mode === "abbinamento" ? (
+          {abbinamentoAttivo ? (
             <UtensilsCrossed className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-bordeaux" />
           ) : (
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -194,7 +199,7 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
             onChange={(e) => setQ(e.target.value)}
             data-testid="esplora-search-input"
             placeholder={
-              mode === "abbinamento"
+              abbinamentoAttivo
                 ? "Cosa stai preparando? es. brasato, ostriche, risotto…"
                 : "Cerca produttore, denominazione, annata…"
             }
@@ -202,18 +207,20 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={mode} onValueChange={(v) => setMode(v as Mode)}>
-            <SelectTrigger
-              className="h-11 w-full min-w-0 rounded-full bg-card sm:w-[190px]"
-              aria-label="Modalità di ricerca"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="testo">Ricerca per testo</SelectItem>
-              <SelectItem value="abbinamento">Per abbinamento cibo</SelectItem>
-            </SelectContent>
-          </Select>
+          {AI_UI.abbinamento && (
+            <Select value={mode} onValueChange={(v) => setMode(v as Mode)}>
+              <SelectTrigger
+                className="h-11 w-full min-w-0 rounded-full bg-card sm:w-[190px]"
+                aria-label="Modalità di ricerca"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="testo">Ricerca per testo</SelectItem>
+                <SelectItem value="abbinamento">Per abbinamento cibo</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
           <Select value={sort} onValueChange={setSort}>
             <SelectTrigger
               className="h-11 w-[calc(50%-0.5rem)] min-w-0 rounded-full bg-card sm:w-[170px]"
@@ -319,7 +326,7 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
         </div>
       </div>
 
-      {mode === "abbinamento" && (
+      {abbinamentoAttivo && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-xs text-muted-foreground">Suggerimenti:</span>
           {suggerimenti.map((s) => {
@@ -337,7 +344,7 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
         </div>
       )}
 
-      {mode === "abbinamento" && q.trim() && (
+      {abbinamentoAttivo && q.trim() && (
         <div
           className="rounded-2xl border border-bordeaux/20 bg-gradient-to-br from-bordeaux/5 via-oro/10 to-transparent p-4"
           data-testid="ai-pairing-panel"
@@ -432,7 +439,7 @@ export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <Badge variant="secondary">{filtered.length} risultati</Badge>
-        {mode === "abbinamento" && q.trim() && (
+        {abbinamentoAttivo && q.trim() && (
           <Badge className="bg-bordeaux text-crema">
             <UtensilsCrossed className="mr-1 h-3 w-3" /> Abbinamento: {q}
           </Badge>
