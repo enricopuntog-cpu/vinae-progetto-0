@@ -41,6 +41,7 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `SUPABASE_SERVICE_ROLE_KEY` | solo server | Bypassa RLS; mai nel browser o nei log. |
 | `PAYMENTS_ENABLED` | solo server | Kill switch del checkout e del webhook. |
 | `NEXT_PUBLIC_PHASE_7_PAYMENTS_ENABLED` | client | Visibilità UI soltanto; non autorizza operazioni. |
+| `NEXT_PUBLIC_PAYMENT_ACTIONS_ENABLED` | client | Permette alla UI di tentare il comando finale; soltanto `true` esatto. Non sostituisce `PAYMENTS_ENABLED`. |
 | `PAYMENT_ALLOWED_ORIGINS` | Edge Function | Allowlist CORS esatta, separata da virgole. |
 | `PAYMENT_REDIRECT_ALLOWED_ORIGINS` | Edge Function | Allowlist server-side dei ritorni Stripe. |
 | `PAYMENT_REDIRECT_ORIGIN` | Edge Function | Origin scelta dal server, appartenente all'allowlist. |
@@ -55,6 +56,8 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `PACKAGING_ENABLED` | solo server | Gate della selezione imballaggio (Fase 7c). Indipendente da `PAYMENTS_ENABLED`. |
 | `NEXT_PUBLIC_PACKAGING_ENABLED` | client | Visibilità UI dell'imballaggio soltanto; non autorizza operazioni. |
 | `NEXT_PUBLIC_AI_UI_ENABLED` | client | Visibilità delle tre superfici IA della Fase 10. **Fallisce chiusa**: soltanto la stringa esatta `true` monta la UI; non autorizza chiamate. |
+| `NEXT_PUBLIC_AI_ACTIONS_ENABLED` | client | Permette alla UI di tentare le chiamate IA; soltanto `true` esatto. Non sostituisce `AI_ENABLED`. |
+| `NEXT_PUBLIC_DEMO_UI_ENABLED` | client | Mostra il selettore locale Guest/User/Admin; assente o diverso da `true` usa sessione e ruolo reali. |
 | `AI_ENABLED` | Edge Function | Kill switch delle funzioni AI (Fase 10). **Fallisce chiuso**: assente o diverso da `true` significa spento. |
 | `AI_ALLOWED_ORIGINS` | Edge Function | Allowlist CORS delle sole function AI, origini complete separate da virgole. **Non sostituisce `PAYMENT_ALLOWED_ORIGINS`**: le due convivono. |
 | `OPENAI_API_KEY` | Edge Function | Chiave del fornitore di prova. Assente, il provider è quello disabilitato e ogni chiamata dà 503. |
@@ -69,12 +72,30 @@ I segreti della Edge Function vanno impostati nell'ambiente Supabase; quelli del
 Route Handler nell'ambiente server Next.js. Non copiare la `service_role` in un
 file `.env` versionato.
 
-`NEXT_PUBLIC_AI_UI_ENABLED` e `AI_ENABLED` non sono intercambiabili. La prima è
-leggibile e modificabile nel browser e controlla soltanto il montaggio di
-Sommelier, assistente di catalogazione e abbinamenti. La seconda resta privata
+`NEXT_PUBLIC_AI_UI_ENABLED`, `NEXT_PUBLIC_AI_ACTIONS_ENABLED` e `AI_ENABLED`
+non sono intercambiabili. Le prime due sono leggibili e modificabili nel
+browser e controllano soltanto il montaggio di Sommelier, assistente di
+catalogazione e abbinamenti e il tentativo locale di azione. L'ultima resta
+privata
 nell'ambiente delle Edge Function ed è il gate autoritativo: rendere visibile
 la UI non abilita il provider, non aggira autenticazione, stato utente o rate
 limit e non rende pubblica alcuna chiave.
+
+### Matrice prevista per la beta Netlify
+
+Questa tabella documenta valori futuri; non configura alcun ambiente remoto.
+I default versionati in `.env.example` restano tutti `false`.
+
+| Capacità | Flag UI futura | Flag azione futura | Gate server futuro | Esito beta |
+|---|---:|---:|---:|---|
+| IA | `NEXT_PUBLIC_AI_UI_ENABLED=true` | `NEXT_PUBLIC_AI_ACTIONS_ENABLED=false` | `AI_ENABLED=false` | Superfici visibili, comando bloccato prima del client IA. |
+| Checkout/pagamento | `NEXT_PUBLIC_PHASE_7_PAYMENTS_ENABLED=true` | `NEXT_PUBLIC_PAYMENT_ACTIONS_ENABLED=false` | `PAYMENTS_ENABLED=false` | Checkout completo fino al metodo, nessun ordine o addebito. |
+| Packaging/spedizione | `NEXT_PUBLIC_PACKAGING_ENABLED=true` | n/a | `PACKAGING_ENABLED=false` | Preferenze locali interattive, nessuna prenotazione provider. |
+| Ruolo demo | `NEXT_PUBLIC_DEMO_UI_ENABLED=false` | n/a | RLS e `user_roles` | Guest/User/Admin derivano dalla sessione reale. |
+
+La configurazione operativa, le URL Auth e i gate delle Edge Function devono
+essere applicati soltanto dopo autorizzazione separata. La procedura locale e
+la configurazione Netlify versionata sono in `docs/BETA_NETLIFY.md`.
 
 ### Fase 10 — perché `AI_ENABLED` è diverso dagli altri flag
 
