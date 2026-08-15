@@ -54,6 +54,7 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `PAYOUTS_BATCH_LIMIT` | Edge Function | Ordini rilasciati per esecuzione, default `50`, massimo `500`. |
 | `PACKAGING_ENABLED` | solo server | Gate della selezione imballaggio (Fase 7c). Indipendente da `PAYMENTS_ENABLED`. |
 | `NEXT_PUBLIC_PACKAGING_ENABLED` | client | Visibilità UI dell'imballaggio soltanto; non autorizza operazioni. |
+| `NEXT_PUBLIC_AI_UI_ENABLED` | client | Visibilità delle tre superfici IA della Fase 10. **Fallisce chiusa**: soltanto la stringa esatta `true` monta la UI; non autorizza chiamate. |
 | `AI_ENABLED` | Edge Function | Kill switch delle funzioni AI (Fase 10). **Fallisce chiuso**: assente o diverso da `true` significa spento. |
 | `AI_ALLOWED_ORIGINS` | Edge Function | Allowlist CORS delle sole function AI, origini complete separate da virgole. **Non sostituisce `PAYMENT_ALLOWED_ORIGINS`**: le due convivono. |
 | `OPENAI_API_KEY` | Edge Function | Chiave del fornitore di prova. Assente, il provider è quello disabilitato e ogni chiamata dà 503. |
@@ -67,6 +68,13 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 I segreti della Edge Function vanno impostati nell'ambiente Supabase; quelli del
 Route Handler nell'ambiente server Next.js. Non copiare la `service_role` in un
 file `.env` versionato.
+
+`NEXT_PUBLIC_AI_UI_ENABLED` e `AI_ENABLED` non sono intercambiabili. La prima è
+leggibile e modificabile nel browser e controlla soltanto il montaggio di
+Sommelier, assistente di catalogazione e abbinamenti. La seconda resta privata
+nell'ambiente delle Edge Function ed è il gate autoritativo: rendere visibile
+la UI non abilita il provider, non aggira autenticazione, stato utente o rate
+limit e non rende pubblica alcuna chiave.
 
 ### Fase 10 — perché `AI_ENABLED` è diverso dagli altri flag
 
