@@ -243,7 +243,7 @@ function Cantina() {
         <Kpi
           label="Salute cantina"
           value={saluteCantina(usoPct, nonCollocate.length)}
-          hint="Indicatore demo"
+          hint="Indicatore orientativo locale"
         />
       </div>
 

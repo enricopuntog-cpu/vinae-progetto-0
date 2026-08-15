@@ -289,7 +289,7 @@ export default function AnnuncioDetailPageClient({
             </Button>
             <ReportDialog
               targetType="annuncio"
-              targetId={wine.id}
+              targetId={wine.listingId ?? wine.id}
               targetLabel={`${wine.nome} ${wine.annata} — ${wine.venditore.nome}`}
               trigger={
                 <Button variant="ghost" className="text-muted-foreground hover:text-bordeaux">

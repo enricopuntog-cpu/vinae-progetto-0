@@ -1,21 +1,24 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { Flag, Camera, ChevronRight, CheckCircle2, AlertTriangle } from "lucide-react";
+import { CheckCircle2, ChevronRight, Flag } from "lucide-react";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
 import { reportReasons, reportTargetLabel, type ReportTargetType } from "@/data/moderation";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { useVinea } from "@/lib/vinea-store";
+import { createSupabaseModerationService } from "@/services/phase9/supabase-moderation-service";
 
 type Props = {
   targetType: ReportTargetType;
@@ -26,227 +29,161 @@ type Props = {
   variant?: "button" | "icon" | "menuitem";
 };
 
-export function ReportDialog({
+const TriggerPredefinito = ({ variant }: { variant: Props["variant"] }) =>
+  variant === "icon" ? (
+    <button className="rounded-full p-2 text-muted-foreground hover:bg-secondary" aria-label="Segnala">
+      <Flag className="h-4 w-4" />
+    </button>
+  ) : (
+    <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-bordeaux">
+      <Flag className="h-4 w-4" /> Segnala
+    </Button>
+  );
+
+const ReportSteps = ({
+  step,
+  reasons,
+  reason,
+  setReason,
+  descrizione,
+  setDescrizione,
+}: {
+  step: number;
+  reasons: readonly string[];
+  reason: string;
+  setReason: (value: string) => void;
+  descrizione: string;
+  setDescrizione: (value: string) => void;
+}) => (
+  <>
+    {step === 0 ? (
+      <RadioGroup value={reason} onValueChange={setReason} className="space-y-2">
+        {reasons.map((voce) => (
+          <Label key={voce} className="flex cursor-pointer gap-2 rounded-xl border p-3">
+            <RadioGroupItem value={voce} /> {voce}
+          </Label>
+        ))}
+      </RadioGroup>
+    ) : null}
+    {step === 1 ? (
+      <div className="space-y-2">
+        <Label htmlFor="report-description">Descrizione facoltativa</Label>
+        <Textarea id="report-description" maxLength={500} rows={5} value={descrizione} onChange={(e) => setDescrizione(e.target.value)} />
+        <p className="text-xs text-muted-foreground">
+          {descrizione.length}/500 caratteri. Gli allegati richiedono un percorso Storage non ancora disponibile e non vengono simulati.
+        </p>
+      </div>
+    ) : null}
+    {step === 2 ? (
+      <div className="text-center">
+        <CheckCircle2 className="mx-auto h-12 w-12 text-salvia" />
+        <p className="mt-2 text-sm">La segnalazione è stata registrata.</p>
+        <Link href="/segnalazioni" className="text-sm text-bordeaux underline">Segui lo stato</Link>
+      </div>
+    ) : null}
+  </>
+);
+
+const ReportFooter = ({ step, loading, close, back, next, send }: { step: number; loading: boolean; close: () => void; back: () => void; next: () => void; send: () => void }) => (
+  <DialogFooter className="gap-2 sm:justify-between">
+    {step < 2 ? <Button variant="ghost" onClick={step === 0 ? close : back}>{step === 0 ? "Annulla" : "Indietro"}</Button> : null}
+    {step === 0 ? <Button onClick={next} className="bg-bordeaux hover:bg-bordeaux/90">Continua <ChevronRight className="h-4 w-4" /></Button> : null}
+    {step === 1 ? <Button onClick={send} disabled={loading} className="bg-bordeaux hover:bg-bordeaux/90">{loading ? "Invio…" : "Invia segnalazione"}</Button> : null}
+    {step === 2 ? <Button onClick={close} className="ml-auto">Chiudi</Button> : null}
+  </DialogFooter>
+);
+
+export const ReportDialog = ({
   targetType,
   targetId,
   targetLabel,
   clubSlug,
   trigger,
   variant = "button",
-}: Props) {
-  const { submitReport } = useVinea();
+}: Props) => {
+  const { authUser } = useVinea();
+  const reasons = reportReasons[targetType];
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
-  const reasons = reportReasons[targetType];
-  const [reason, setReason] = useState<string>(reasons[0]);
-  const [descr, setDescr] = useState("");
-  const [foto, setFoto] = useState<string[]>([]);
+  const [reason, setReason] = useState(reasons[0]);
+  const [descrizione, setDescrizione] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errore, setErrore] = useState<string | null>(null);
 
-  function reset() {
+  const reset = () => {
     setStep(0);
     setReason(reasons[0]);
-    setDescr("");
-    setFoto([]);
+    setDescrizione("");
     setLoading(false);
-  }
+    setErrore(null);
+  };
 
-  function addPhotoMock() {
-    setFoto((p) => [...p, `mock-${p.length + 1}`]);
-  }
-
-  function invia() {
+  const invia = async () => {
+    if (!authUser) {
+      setErrore("Accedi prima di inviare una segnalazione.");
+      return;
+    }
     setLoading(true);
-    setTimeout(() => {
-      submitReport({
+    setErrore(null);
+    try {
+      await createSupabaseModerationService(getSupabaseClient()).segnala({
         targetType,
         targetId,
         targetLabel,
         reason,
-        descrizione: descr,
-        foto,
+        descrizione,
+        foto: [],
         clubSlug,
+        priorita: "bassa",
+        reporter: authUser.email ?? "Utente",
+        updatedAt: new Date().toISOString(),
+        storia: [],
+        noteInterne: [],
       });
+      setStep(2);
+    } catch (causa) {
+      setErrore(causa instanceof Error ? causa.message : "Invio non riuscito. Riprova.");
+    } finally {
       setLoading(false);
-      setStep(3);
-    }, 700);
-  }
-
-  const defaultTrigger =
-    variant === "icon" ? (
-      <button
-        className="rounded-full p-2 text-muted-foreground hover:bg-secondary hover:text-bordeaux"
-        aria-label="Segnala"
-      >
-        <Flag className="h-4 w-4" />
-      </button>
-    ) : variant === "menuitem" ? (
-      <button className="flex w-full items-center gap-2 px-2 py-1.5 text-sm hover:bg-secondary">
-        <Flag className="h-4 w-4" /> Segnala
-      </button>
-    ) : (
-      <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-bordeaux">
-        <Flag className="h-4 w-4" /> Segnala
-      </Button>
-    );
+    }
+  };
 
   return (
     <Dialog
       open={open}
-      onOpenChange={(v) => {
-        setOpen(v);
-        if (!v) setTimeout(reset, 200);
+      onOpenChange={(valore) => {
+        setOpen(valore);
+        if (!valore) reset();
       }}
     >
-      <DialogTrigger asChild>{trigger ?? defaultTrigger}</DialogTrigger>
+      <DialogTrigger asChild>{trigger ?? <TriggerPredefinito variant={variant} />}</DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="font-serif text-2xl">
-            {step === 3 ? "Segnalazione inviata" : "Segnala questo contenuto"}
+            {step === 2 ? "Segnalazione inviata" : "Segnala questo contenuto"}
           </DialogTitle>
         </DialogHeader>
-
-        <div className="rounded-xl border border-oro/40 bg-oro/10 p-3 text-xs">
-          <p className="flex items-center gap-1 font-semibold text-oro">
-            <AlertTriangle className="h-3.5 w-3.5" /> Modalità demo — non inviare dati reali
-          </p>
-          <p className="mt-1 text-antracite/80">Nessuna segnalazione viene trasmessa a terzi.</p>
-        </div>
-
-        <div className="mt-2 text-xs text-muted-foreground">
-          {reportTargetLabel[targetType]} · <span className="text-antracite">{targetLabel}</span>
-        </div>
-
-        {/* Progress dots */}
-        {step < 3 && (
-          <div className="mt-1 flex gap-1">
-            {[0, 1, 2].map((i) => (
-              <span
-                key={i}
-                className={`h-1.5 flex-1 rounded-full ${i <= step ? "bg-bordeaux" : "bg-secondary"}`}
-              />
-            ))}
-          </div>
-        )}
-
-        {step === 0 && (
-          <div className="mt-3 space-y-3">
-            <Label className="text-xs uppercase tracking-wide">Motivo</Label>
-            <RadioGroup value={reason} onValueChange={setReason} className="space-y-2">
-              {reasons.map((r) => (
-                <label
-                  key={r}
-                  className={`flex cursor-pointer items-start gap-2 rounded-xl border p-3 text-sm ${
-                    reason === r ? "border-bordeaux bg-bordeaux/5" : "border-border"
-                  }`}
-                >
-                  <RadioGroupItem value={r} className="mt-0.5" />
-                  <span>{r}</span>
-                </label>
-              ))}
-            </RadioGroup>
-          </div>
-        )}
-
-        {step === 1 && (
-          <div className="mt-3 space-y-2">
-            <Label className="text-xs uppercase tracking-wide">Descrizione (facoltativa)</Label>
-            <Textarea
-              value={descr}
-              onChange={(e) => setDescr(e.target.value)}
-              placeholder="Racconta cosa hai notato. Non condividere dati personali reali."
-              rows={4}
-            />
-            <p className="text-[11px] text-muted-foreground">Massimo 500 caratteri.</p>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="mt-3 space-y-3">
-            <Label className="text-xs uppercase tracking-wide">Prove (placeholder demo)</Label>
-            <p className="text-xs text-muted-foreground">
-              In demo non si caricano foto reali: aggiungi allegati fittizi per completare il
-              flusso.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {foto.map((f) => (
-                <div
-                  key={f}
-                  className="grid h-16 w-16 place-items-center rounded-lg border border-border bg-secondary text-[10px] text-muted-foreground"
-                >
-                  {f}
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={addPhotoMock}
-                className="grid h-16 w-16 place-items-center rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-bordeaux hover:text-bordeaux"
-                aria-label="Aggiungi allegato mock"
-              >
-                <Camera className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="mt-3 rounded-xl border border-border bg-secondary/40 p-3 text-xs">
-              <p className="font-semibold">Riepilogo</p>
-              <p className="mt-1">
-                Motivo: <b>{reason}</b>
-              </p>
-              {descr && <p className="mt-1">Descrizione: {descr}</p>}
-              <p className="mt-1">Allegati: {foto.length} (mock)</p>
-            </div>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="mt-3 space-y-2 text-center">
-            <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-salvia/15 text-salvia">
-              <CheckCircle2 className="h-7 w-7" />
-            </div>
-            <p className="font-serif text-lg">Segnalazione inviata (demo)</p>
-            <p className="text-sm text-muted-foreground">
-              Potrai seguirne lo stato in <b>Le mie segnalazioni</b>.
-            </p>
-          </div>
-        )}
-
-        <DialogFooter className="mt-2 flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-          {step < 3 ? (
-            <>
-              <Button
-                variant="ghost"
-                onClick={() => (step === 0 ? setOpen(false) : setStep((s) => s - 1))}
-                disabled={loading}
-              >
-                {step === 0 ? "Annulla" : "Indietro"}
-              </Button>
-              {step < 2 ? (
-                <Button
-                  className="bg-bordeaux hover:bg-bordeaux/90"
-                  onClick={() => setStep((s) => s + 1)}
-                >
-                  Continua <ChevronRight className="h-4 w-4" />
-                </Button>
-              ) : (
-                <Button
-                  className="bg-bordeaux hover:bg-bordeaux/90"
-                  onClick={invia}
-                  disabled={loading}
-                >
-                  {loading ? "Invio…" : "Invia segnalazione"}
-                </Button>
-              )}
-            </>
-          ) : (
-            <Button
-              className="ml-auto bg-bordeaux hover:bg-bordeaux/90"
-              onClick={() => setOpen(false)}
-            >
-              Chiudi
-            </Button>
-          )}
-        </DialogFooter>
+        <p className="text-xs text-muted-foreground">
+          {reportTargetLabel[targetType]} · {targetLabel}
+        </p>
+        <ReportSteps
+          step={step}
+          reasons={reasons}
+          reason={reason}
+          setReason={setReason}
+          descrizione={descrizione}
+          setDescrizione={setDescrizione}
+        />
+        {errore ? <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{errore}</p> : null}
+        <ReportFooter
+          step={step}
+          loading={loading}
+          close={() => setOpen(false)}
+          back={() => setStep(0)}
+          next={() => setStep(1)}
+          send={() => void invia()}
+        />
       </DialogContent>
     </Dialog>
   );
-}
+};

@@ -73,6 +73,8 @@ export interface AuthService {
   signInWithFacebook(): Promise<Result<void>>;
   logout(): Promise<void>;
   utenteCorrente(): Promise<{ userId: string; email: string | null } | null>;
+  /** Ruoli della sola riga corrente, filtrati dalla RLS su `user_roles`. */
+  ruoliProfilo(userId: string): Promise<Result<string[]>>;
   /**
    * Data di nascita dichiarata sul profilo, o null se non ancora fornita —
    * il caso di chi entra via Google/Facebook, che salta il form email e

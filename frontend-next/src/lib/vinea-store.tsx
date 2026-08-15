@@ -49,6 +49,7 @@ import {
   type StatoEta,
 } from "@/lib/store/real-auth-domain";
 import type { DatiNuovoAmbiente, OAuthProvider, Result } from "@/services/types";
+import { DEMO_UI_ABILITATA } from "@/config/features";
 
 export type { DrinkOverride, SfondoCantina } from "@/lib/store/cellar-domain";
 export type { DemoRuolo } from "@/lib/store/auth-domain";
@@ -240,9 +241,13 @@ export function VineaProvider({ children }: { children: ReactNode }) {
 
   const orderDomain = useOrderDomain({ pushNotifica, recordProposalPrice });
   const { resetForGuest, ...profileDomain } = useProfileDomain({ pushNotifica });
-  const authDomain = useAuthDomain({ onGuestSwitch: resetForGuest });
   const moderationDomain = useModerationDomain({ pushNotifica });
   const realAuthDomain = useRealAuthDomain();
+  const authDomain = useAuthDomain({
+    onGuestSwitch: resetForGuest,
+    ruoloReale: realAuthDomain.authRuolo,
+    demoAbilitata: DEMO_UI_ABILITATA,
+  });
 
   return (
     <Ctx.Provider

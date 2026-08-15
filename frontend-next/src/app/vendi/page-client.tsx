@@ -16,7 +16,6 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +35,7 @@ import { confidenzaPercento } from "@/lib/phase10/catalogazione";
 import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
 import { BetaActionNotice } from "@/components/vinea/BetaActionNotice";
 import { BetaBackgroundPanel } from "@/components/vinea/BetaBackgroundPanel";
+import { BetaDeliverySelector } from "@/components/vinea/BetaDeliverySelector";
 import { BottleSelector } from "@/app/vendi/bottle-selector";
 import { AI_UI } from "@/config/features";
 
@@ -556,18 +556,7 @@ export default function VendiPageClient() {
         {isVendita && step === 6 && (
           <div className="space-y-4">
             <h2 className="font-serif text-2xl">Consegna</h2>
-            <div className="grid gap-3 md:grid-cols-2">
-              {["Corriere assicurato", "Ritiro a mano", "Punto Vinea"].map((c) => (
-                <button
-                  key={c}
-                  onClick={() => toast(c + " selezionato (demo)")}
-                  className="rounded-xl border border-border p-3 text-left hover:border-bordeaux"
-                >
-                  <p className="font-serif text-base">{c}</p>
-                  <p className="text-xs text-muted-foreground">Simulato in demo</p>
-                </button>
-              ))}
-            </div>
+            <BetaDeliverySelector />
           </div>
         )}
 

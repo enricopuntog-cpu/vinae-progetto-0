@@ -138,6 +138,26 @@ export const supabaseAuthService: AuthService = {
     return { userId: data.session.user.id, email: data.session.user.email ?? null };
   },
 
+  async ruoliProfilo(userId) {
+    const supabase = getSupabaseClient();
+    if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };
+
+    // Niente select("*"): il grant espone soltanto user_id e role, e la RLS
+    // limita la lettura alla riga di auth.uid(). Il parametro serve solo a
+    // rendere esplicito quale sessione stiamo risolvendo; non amplia la policy.
+    const { data, error } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId);
+    if (error) return { ok: false, error: error.message };
+    return {
+      ok: true,
+      data: (data ?? [])
+        .map((riga) => riga.role)
+        .filter((ruolo): ruolo is string => typeof ruolo === "string"),
+    };
+  },
+
   async dataNascitaProfilo(userId) {
     const supabase = getSupabaseClient();
     if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };

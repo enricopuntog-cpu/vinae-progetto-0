@@ -114,13 +114,7 @@ export default function HomeUtentePageClient({ annunci }: { annunci: Wine[] }) {
       </section>
 
       <section>
-        <SectionTitle
-          action={
-            <Link href="/profilo" className="text-sm font-medium text-bordeaux hover:underline">
-              Gestisci seguiti →
-            </Link>
-          }
-        >
+        <SectionTitle>
           Nuovi annunci dai produttori che segui
         </SectionTitle>
         {nuoviSeguiti.length === 0 ? (

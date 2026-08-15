@@ -6,7 +6,6 @@ import { useMemo, useState } from "react";
 import {
   Users,
   ShieldCheck,
-  MessageSquare,
   ArrowLeft,
   Wine as WineIcon,
   Megaphone,
@@ -16,8 +15,6 @@ import { wines } from "@/data/wines";
 import { Button } from "@/components/ui/button";
 import { WineCard } from "@/components/vinea/WineCard";
 import { useVinea } from "@/lib/vinea-store";
-import { ReportDialog } from "@/components/vinea/ReportDialog";
-import { toast } from "sonner";
 import { formatInteger } from "@/lib/format";
 
 const tipoLabel: Record<PostTipo, string> = {
@@ -77,13 +74,6 @@ export default function CommunityDetailPageClient({ slug }: { slug: string }) {
               }
             >
               {followed ? "Segui già" : "Segui club"}
-            </Button>
-            <Button
-              variant="outline"
-              className="border-crema/40 bg-transparent text-crema hover:bg-crema/10"
-              onClick={() => toast("Editor post del club (demo)")}
-            >
-              <MessageSquare className="h-4 w-4" /> Crea un post
             </Button>
             <Button
               asChild
@@ -161,13 +151,6 @@ export default function CommunityDetailPageClient({ slug }: { slug: string }) {
                       <p className="text-xs text-muted-foreground">
                         {d.risposte} risposte • ♥ {d.mi_piace}
                       </p>
-                      <ReportDialog
-                        targetType="post"
-                        targetId={d.id}
-                        targetLabel={`${d.titolo} — ${d.autore}`}
-                        clubSlug={c.slug}
-                        variant="icon"
-                      />
                     </div>
                   </li>
                 );

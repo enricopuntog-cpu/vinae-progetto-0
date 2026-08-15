@@ -137,11 +137,11 @@ export default function HomePageClient({ annunci }: { annunci: Wine[] }) {
             <div className="min-w-0">
               <p className="font-serif text-xl md:text-2xl">Vuoi provare tutte le funzioni?</p>
               <p className="mt-1 text-sm text-antracite/80">
-                Registrati in modalità demo per accedere a cantina, preferiti, messaggi e vendita.
+                Registrati per accedere a cantina, preferiti, messaggi e vendita.
               </p>
             </div>
             <Button asChild className="bg-bordeaux hover:bg-bordeaux/90">
-              <Link href="/onboarding">Inizia l'onboarding</Link>
+              <Link href="/registrati">Crea il tuo account</Link>
             </Button>
           </div>
         </section>
@@ -259,13 +259,7 @@ export default function HomePageClient({ annunci }: { annunci: Wine[] }) {
 
       {/* I tuoi preferiti */}
       <section>
-        <SectionTitle
-          action={
-            <Link href="/profilo" className="text-sm font-medium text-bordeaux hover:underline">
-              Gestisci →
-            </Link>
-          }
-        >
+        <SectionTitle>
           <span className="inline-flex items-center gap-2">
             <Heart className="h-5 w-5 text-bordeaux" /> I tuoi preferiti
           </span>
