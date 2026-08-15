@@ -43,6 +43,7 @@ import { FoodPairingSection } from "@/components/vinea/FoodPairing";
 import { TrustBadge, TrustLegend } from "@/components/vinea/TrustBadge";
 import { ReportDialog } from "@/components/vinea/ReportDialog";
 import { listingStatusLabel, listingStatusTone } from "@/data/moderation";
+import { PAGAMENTI_UI_ABILITATI } from "@/config/features";
 
 export default function AnnuncioDetailPageClient({
   wine,
@@ -174,27 +175,31 @@ export default function AnnuncioDetailPageClient({
               {propostaAttiva.stato === "accettata" && (
                 <>
                   Proposta accettata a <b>{formatEUR(propostaAttiva.prezzoProposto)}</b>.{" "}
-                  <button
-                    className="text-bordeaux underline"
-                    onClick={() =>
-                      router.push(`/checkout/${wine.id}?prop=${propostaAttiva.id}`)
-                    }
-                  >
-                    Vai al checkout
-                  </button>
+                  {PAGAMENTI_UI_ABILITATI ? (
+                    <button
+                      className="text-bordeaux underline"
+                      onClick={() =>
+                        router.push(`/checkout/${wine.id}?prop=${propostaAttiva.id}`)
+                      }
+                    >
+                      Vai al checkout
+                    </button>
+                  ) : null}
                 </>
               )}
             </div>
           )}
 
-          <div className="mt-6 grid grid-cols-3 gap-2">
-            <Button
-              className="col-span-2 bg-bordeaux hover:bg-bordeaux/90"
-              disabled={azioniBloccate}
-              onClick={() => router.push(`/checkout/${wine.id}`)}
-            >
-              Compra ora
-            </Button>
+          <div className={`mt-6 grid gap-2 ${PAGAMENTI_UI_ABILITATI ? "grid-cols-3" : "grid-cols-1"}`}>
+            {PAGAMENTI_UI_ABILITATI ? (
+              <Button
+                className="col-span-2 bg-bordeaux hover:bg-bordeaux/90"
+                disabled={azioniBloccate}
+                onClick={() => router.push(`/checkout/${wine.id}`)}
+              >
+                Compra ora
+              </Button>
+            ) : null}
             <Dialog open={openProp} onOpenChange={setOpenProp}>
               <DialogTrigger asChild>
                 <Button
