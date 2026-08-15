@@ -4,17 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { supabaseAuthService } from "@/services/auth-service";
 import type { OAuthProvider, Result } from "@/services/types";
-import type { DemoRuolo } from "@/lib/store/auth-domain";
+import { ruoloDaSessione } from "@/lib/auth/role";
 
 export type AuthUser = { userId: string; email: string | null };
-
-export const ruoloDaSessione = (
-  authUser: AuthUser | null,
-  ruoli: readonly string[],
-): DemoRuolo => {
-  if (!authUser) return "guest";
-  return ruoli.includes("admin") ? "admin" : "user";
-};
 
 /**
  * Stato della dichiarazione di età sul profilo. Vale per qualunque metodo di

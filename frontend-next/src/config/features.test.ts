@@ -49,7 +49,10 @@ describe("flag pubblica delle superfici IA", () => {
       .map(([nome]) => nome)
       .filter((nome, indice, nomi) => nomi.indexOf(nome) === indice);
 
-    expect(pubblicheIa).toEqual(["NEXT_PUBLIC_AI_UI_ENABLED"]);
+    expect(pubblicheIa).toEqual([
+      "NEXT_PUBLIC_AI_UI_ENABLED",
+      "NEXT_PUBLIC_AI_ACTIONS_ENABLED",
+    ]);
     expect(envExample).toInclude("\nAI_ENABLED=false");
     expect(envExample).toInclude("\nOPENAI_API_KEY=");
   });
