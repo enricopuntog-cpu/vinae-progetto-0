@@ -37,11 +37,33 @@ export const AI_UI: Readonly<Record<SuperficieIA, boolean>> = Object.freeze({
 });
 
 /**
+ * Autorizza il client a tentare le azioni IA, mai il provider direttamente.
+ *
+ * La beta pubblica tiene questa flag spenta: i pannelli restano esplorabili,
+ * ma il comando finale si ferma nel browser. Se venisse accesa, le Edge
+ * Function continuerebbero comunque a imporre `AI_ENABLED`, autenticazione,
+ * stato utente e rate limit. Una variabile `NEXT_PUBLIC_*` non è una trust
+ * boundary.
+ */
+export const AZIONI_IA_ABILITATE = valoreFlagEsattamenteTrue(
+  process.env.NEXT_PUBLIC_AI_ACTIONS_ENABLED,
+);
+
+/**
  * Fase 7 — pagamenti. Kill switch di **tutta** la verticale: checkout,
  * onboarding Connect e rilascio fondi.
  */
 export const PAGAMENTI_UI_ABILITATI = valoreFlagEsattamenteTrue(
   process.env.NEXT_PUBLIC_PHASE_7_PAYMENTS_ENABLED,
+);
+
+/**
+ * Permette soltanto al browser di chiedere l'apertura del checkout. La beta
+ * pubblica la tiene spenta e blocca prima di `payments-checkout`; il gate
+ * autoritativo resta `PAYMENTS_ENABLED` nella Edge Function e nel webhook.
+ */
+export const AZIONI_PAGAMENTO_ABILITATE = valoreFlagEsattamenteTrue(
+  process.env.NEXT_PUBLIC_PAYMENT_ACTIONS_ENABLED,
 );
 
 /**
@@ -60,6 +82,11 @@ export const PAGAMENTI_UI_ABILITATI = valoreFlagEsattamenteTrue(
  */
 export const IMBALLAGGIO_UI_ABILITATO = valoreFlagEsattamenteTrue(
   process.env.NEXT_PUBLIC_PACKAGING_ENABLED,
+);
+
+/** Il selettore Guest/User/Admin è un ausilio locale, non un sistema di ruoli. */
+export const DEMO_UI_ABILITATA = valoreFlagEsattamenteTrue(
+  process.env.NEXT_PUBLIC_DEMO_UI_ENABLED,
 );
 
 /**
