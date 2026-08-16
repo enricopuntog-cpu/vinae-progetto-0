@@ -116,6 +116,19 @@ The full picture is in `docs/ROADMAP_V1.md`, `docs/MIGRATION_PHASE_1_BACKLOG.md`
 - **One phase = one branch = one draft PR.** Never work on two migration phases in parallel on
   the same domain. A phase does not start without explicit prior approval recorded in the
   organizational log referenced by those docs.
+- **A PR whose diff contains zero files under `supabase/migrations/` may be squash-merged by a
+  Claude Code session autonomously, without asking first** — admitted by name by Enrico on
+  **16 August 2026**. The boundary is that directory and nothing else: whatever else the diff
+  touches (`frontend-next/src/`, `backend/`, documentation, CI config) neither narrows nor widens
+  it. Three conditions hold together — the three CI jobs (`frontend`, `frontend-next`, `backend`)
+  all green, and GitHub reporting `mergeable: MERGEABLE` **and** `mergeStateStatus: CLEAN` **on
+  the head commit being merged**, not on an earlier one. **Any PR carrying even a single migration
+  file stays an explicit merge by Enrico, without exceptions.** The reason is that in this repo the
+  merge **is** the deploy gate for migrations (decision 7.10, recorded below): there is no separate
+  apply command, and a merged migration is distributed to the real Supabase project in the same
+  instant. This narrows the "explicit approval in-session" rule under "Process rules" below; it
+  does not abolish it, and it changes nothing about starting a phase, applying SQL or fixtures to
+  the real project, or the cutover — each stays its own separate authorization.
 - **No new features during migration** — the goal is behavioral parity with `frontend/`, not
   product improvement. If a page in `frontend-next/` seems to need functionality that doesn't
   exist yet in `frontend/`, that's a signal to stop and flag it, not to build it.
@@ -168,6 +181,11 @@ The full picture is in `docs/ROADMAP_V1.md`, `docs/MIGRATION_PHASE_1_BACKLOG.md`
 - Merging to `main` is allowed **only after explicit approval given in-session**, and only as a
   **squash merge**. Approval granted on 5 August 2026 replaces the manual click, it does not
   replace the approval itself: without an explicit go-ahead for that PR, do not merge.
+  **One exception, admitted by name on 16 August 2026**: a PR whose diff contains **zero files
+  under `supabase/migrations/`** may be squash-merged autonomously, with the three CI jobs green
+  and `mergeable: MERGEABLE` / `mergeStateStatus: CLEAN` read on the head commit being merged.
+  Exact boundary and reasoning in the "Migration architecture" bullet above. A PR with even one
+  migration file is still an explicit merge by Enrico.
 - **Before closing or merging any PR, update `CHANGES.log`, `CLAUDE.md` and `CONTESTO_IA/` with the
   state that PR actually produces** — its number, what it changes, what it leaves open — and commit
   that as the **last commit of the PR itself**, before the squash merge. Not afterwards: after the

@@ -89,6 +89,12 @@
   richiede ancora **l'approvazione esplicita in sessione**, è **solo squash**, e
   pretende come ultimo commit della PR l'aggiornamento di `CHANGES.log`,
   `CLAUDE.md` e di questa cartella allo stato che quella PR produce.
+  **Dal 16 agosto 2026 c'è una deroga, ammessa per nome**: se il diff della PR
+  contiene **zero file sotto `supabase/migrations/`**, la sessione può mergiare
+  da sé, con i tre job CI verdi e `mergeable: MERGEABLE` /
+  `mergeStateStatus: CLEAN` letti sull'head commit che sta per mergiare. Con
+  anche **un solo** file di migrazione si torna al merge esplicito di Enrico,
+  perché lì il merge è il gate di deploy verso il progetto reale.
 - «Distribuita» non significa «percorsa», ed è questa la distinzione da tenere:
   le tabelle di denaro sono a **zero righe**, `marketplace_config` ha la sola
   riga iniziale, nessun percorso UI raggiunge onboarding o checkout; conferma e
@@ -181,7 +187,10 @@ esplicita per le fixture remote.
 - Definire parità e fuori-scope prima di scrivere codice.
 - A ogni checkpoint eseguire lint/typecheck/test/build pertinenti.
 - Fare commit piccoli e descrittivi.
-- Aprire una PR draft; non fare merge autonomamente.
+- Aprire una PR draft. Il merge autonomo è ammesso **solo** se il diff non
+  contiene alcun file sotto `supabase/migrations/` (deroga del 16 agosto 2026);
+  una fase che scrive SQL non rientra mai in quel caso, quindi per una nuova
+  fase con migrazioni il merge resta esplicito di Enrico.
 
 ## Handoff specifico alla Fase 6d-2a
 
