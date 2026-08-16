@@ -118,9 +118,9 @@ The full picture is in `docs/ROADMAP_V1.md`, `docs/MIGRATION_PHASE_1_BACKLOG.md`
   organizational log referenced by those docs.
 - **A PR whose diff contains zero files under `supabase/migrations/` may be squash-merged by a
   Claude Code session autonomously, without asking first** — admitted by name by Enrico on
-  **16 August 2026** and recorded by **PR #47**. The boundary is that directory and nothing else: whatever else the diff
-  touches (`frontend-next/src/`, `backend/`, documentation, CI config) neither narrows nor widens
-  it. Three conditions hold together — the three CI jobs (`frontend`, `frontend-next`, `backend`)
+  **16 August 2026** and recorded by **PR #47**. The boundary is that directory and nothing else:
+  whatever else the diff touches (`frontend-next/src/`, `backend/`, documentation, CI config)
+  neither narrows nor widens it. Three conditions hold together — the three CI jobs (`frontend`, `frontend-next`, `backend`)
   all green, and GitHub reporting `mergeable: MERGEABLE` **and** `mergeStateStatus: CLEAN` **on
   the head commit being merged**, not on an earlier one. **Any PR carrying even a single migration
   file stays an explicit merge by Enrico, without exceptions.** The reason is that in this repo the
