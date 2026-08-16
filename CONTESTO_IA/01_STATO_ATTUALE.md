@@ -1862,15 +1862,16 @@ Il gate «decidere dove sta il gate di autorizzazione» è **chiuso dalla decisi
 un'azione di deploy separata da autorizzare. Resta la conferma per perimetro, che
 è la riga 5.
 
-## Beta `frontend-next` production-like — Deploy Preview del 16 agosto 2026
+## Beta `frontend-next` production-like — **mersa** il 16 agosto 2026
 
-La beta pubblica separata è nella PR
-[#44](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/44), pronta e
-non draft, base `f3f0155`. L'HEAD pre-documentazione `84b8767` ha CI #152 verde
-e un Deploy Preview Netlify pubblico, deploy `6a81acfbee2b64c77b28addc`:
-`https://deploy-preview-44--timely-lokum-43a12e.netlify.app`. La produzione
-Netlify non contiene ancora la PR e il legacy `frontend/` + `backend/` resta la
-versione servita: non è il cutover della Fase 12 e non apre la Fase 11.
+La PR [#44](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/44) **è
+mersa in squash come `8b003995`** il 16 agosto 2026 alle 12:04:44 UTC, e la
+produzione Netlify `https://timely-lokum-43a12e.netlify.app` è attiva. Il
+legacy `frontend/` + `backend/` **resta la versione servita**: la beta è un sito
+separato, non è il cutover della Fase 12 e non apre la Fase 11. La sezione qui
+sotto conserva lo stato del Deploy Preview perché è il verbale di come ci si è
+arrivati; l'HEAD pre-documentazione era `84b8767`, con CI #152 verde e il
+Deploy Preview `6a81acfbee2b64c77b28addc`.
 
 La matrice remota mantiene visibili le interfacce IA, checkout e packaging, ma
 blocca le azioni esterne: `NEXT_PUBLIC_AI_ACTIONS_ENABLED=false`,
@@ -1890,7 +1891,63 @@ i log Edge Function non registrano invocazioni `ai-*`, pagamenti o Stripe. Gli
 smoke che richiedono una sessione reale o il ruolo Admin sono `NON ESEGUITO`:
 non sono state create identità, fixture o assegnazioni di ruolo.
 
-Prima del merge squash della sola #44 restano il commit documentale finale, il
+Prima del merge squash della sola #44 restavano il commit documentale finale, il
 nuovo push, CI e preview verdi sul nuovo HEAD, la revisione completa del diff e
 la riverifica dei gate Supabase spenti. Nessun SQL, fixture, provider IA,
 Stripe, servizio logistico o deploy manuale Supabase è stato eseguito.
+
+## L'origine dei redirect Auth — PR #45, 16 agosto 2026
+
+La PR [#45](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/45)
+corregge il primo difetto trovato sulla beta pubblica dopo il merge della #44.
+`frontend-next/src/app/auth/callback/route.ts` costruiva ogni `Location` da
+`request.nextUrl.origin`, cioè da un dato che arriva **con la richiesta**. I
+cookie di sessione scritti da `exchangeCodeForSession` sono legati
+all'hostname: rispondere su un dominio diverso da quello su cui l'utente resta
+significa scriverli dove nessuno andrà a rileggerli.
+
+**Il sintomo è reale, ma non si trova dove era stato cercato, ed è la parte da
+non appianare.** Le prime sonde su
+`https://timely-lokum-43a12e.netlify.app/auth/callback` — cinque richieste, più
+il dominio immutabile del deploy e l'alias `main--` — hanno dato **tutte** il
+dominio pubblico corretto, e un `X-Forwarded-Host` falsificato non è passato.
+Su quella base il difetto sembrava non esistere. È stato riprodotto sulla
+Deploy Preview della #45, con una diagnostica temporanea che ha misurato che
+cosa la function vede davvero:
+
+- `request.nextUrl.origin` vale
+  `https://6a81e37c02c72a0008d060a4--timely-lokum-43a12e.netlify.app`, cioè il
+  **dominio immutabile del deploy** — esattamente il sintomo segnalato;
+- `Host` e `x-forwarded-host` valgono `deploy-preview-45--…`, cioè il dominio
+  **giusto**. Il dominio buono sopravvive **solo nell'intestazione**.
+
+In produzione i due valori coincidono, e per questo le sonde non mostravano
+niente: **il sintomo esiste dove divergono**.
+
+Nella stessa misura, un fatto che vincola tutto il resto: nella Next runtime di
+Netlify **esiste a runtime la sola `URL`**. `CONTEXT`, `DEPLOY_PRIME_URL` e
+`AUTH_REDIRECT_ORIGIN` sono variabili di *build* e non sono leggibili. Una
+regola che dipende dal solo `CONTEXT` non scatta mai: la prima stesura del
+modulo faceva così e mandava **in produzione** chi stava provando la preview,
+cioè la regressione opposta a quella che la PR correggeva. **Se ne è accorto
+l'header `X-Vinea-Origine-Sorgente`**, non il `Location`: dal solo `Location`
+il caso passava per corretto, perché il dominio pubblico è un valore
+plausibile. È la ragione per cui quell'header esiste.
+
+`frontend-next/src/lib/auth/origine-redirect.ts` decide ora l'origine lato
+server, in ordine di fiducia decrescente: `AUTH_REDIRECT_ORIGIN`, poi
+`DEPLOY_PRIME_URL` quando il contesto non è produzione, poi un **alias Netlify
+dello stesso sito** cercato **prima nell'host annunciato e poi in `nextUrl`**,
+poi `URL`, poi la richiesta se e solo se l'hostname è locale. L'alias non è
+fiducia indiscriminata nell'`Host`: il nome del sito viene da `URL`, la forma
+accettata è un elenco chiuso, e il dominio immutabile è escluso a parte per
+prefisso di ventiquattro cifre esadecimali. Un host falsificato vale al massimo
+un altro deploy nostro, mai un dominio di terzi.
+
+Corretto nello stesso passaggio `next`, che ammetteva ogni valore con
+`startsWith("/")`: `//host` e `/\host` sembrano relativi e i browser li leggono
+come assoluti verso un altro host.
+
+`MIN_TESTS` da 315 a **341**. Nessun SQL, migrazione, fixture o deploy manuale
+Supabase; nessuna chiamata IA, Stripe o logistica; `AI_ENABLED` e
+`PAYMENTS_ENABLED` invariati. Lo smoke autenticato reale resta **NON ESEGUITO**.

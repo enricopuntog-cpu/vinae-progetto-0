@@ -767,12 +767,15 @@ is a legitimate state of the strip** — to be designed, not avoided. **None of 
 (b) touches a 6.5 value and **confirms** it, and a note at the end of 6.5 records that the number was
 looked at again and under what condition it returns to a session.
 
-## Beta `frontend-next` production-like — preview pubblico del 16 agosto 2026
+## Beta `frontend-next` production-like — **in produzione** dal 16 agosto 2026
 
 La PR [#44](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/44) parte
-da `origin/main` `f3f0155` e prepara una beta separata senza cutover. L'HEAD
-pre-documentazione `84b8767` ha CI GitHub Actions verde — run `31946914430`,
-#152 — e Deploy Preview pubblico Netlify
+da `origin/main` `f3f0155` ed è **mersa in squash come `8b003995`** il 16 agosto
+2026 alle 12:04:44 UTC: la beta è pubblica su
+`https://timely-lokum-43a12e.netlify.app`. **Non è un cutover** — `frontend/` +
+`backend/` restano la versione servita e la beta è un sito separato — e non apre
+la Fase 11. L'HEAD pre-documentazione `84b8767` aveva CI GitHub Actions verde —
+run `31946914430`, #152 — e Deploy Preview pubblico
 `https://deploy-preview-44--timely-lokum-43a12e.netlify.app`, deploy
 `6a81acfbee2b64c77b28addc`. Il progetto Free `timely-lokum-43a12e` usa base
 `frontend-next`, build `bun run build`, publish `.next` e runtime `Next.js`.
@@ -794,11 +797,50 @@ blocchi IA senza chiamate Edge Function; i flussi autenticati reali restano
 `NON ESEGUITO` perché non sono state create credenziali o fixture. `frontend/`,
 `backend/`, migrazioni, function e Fase 11 restano invariati.
 
-Il merge della #44 resta condizionato a diff completo coerente, CI e preview
-verdi sul commit documentale finale e riverifica dei due gate Supabase spenti.
-Dopo lo squash vanno attesi CI e deploy di `main`, aggiunto il callback Auth di
-produzione, rimosso quello temporaneo e rieseguito lo smoke; il rollback è il
-ripristino del precedente deploy Netlify e non cancella dati Supabase.
+Dopo lo squash della #44 il callback Auth di produzione
+`https://timely-lokum-43a12e.netlify.app/auth/callback` è stato aggiunto e
+quello temporaneo del preview rimosso. Il rollback è il ripristino del
+precedente deploy Netlify e non cancella dati Supabase.
+
+### L'origine dei redirect Auth la decide il server — PR #45, binding
+
+**Nessun percorso può costruire un redirect da un dato che arriva con la
+richiesta.** `/auth/callback` lo faceva, da `request.nextUrl.origin`: i cookie
+di sessione scritti da `exchangeCodeForSession` sono legati all'hostname, quindi
+rispondere su un dominio diverso da quello su cui l'utente resta significa
+scriverli dove nessuno andrà a rileggerli. L'ordine di risoluzione completo è in
+`docs/ENVIRONMENT.md`; qui stanno i fatti che vincolano il codice futuro.
+
+- **Su Netlify, a runtime, esiste la sola `URL`.** `CONTEXT`,
+  `DEPLOY_PRIME_URL` e `AUTH_REDIRECT_ORIGIN` sono variabili di **build** e non
+  sono leggibili da una route. Misurato con un header diagnostico temporaneo
+  sulla Deploy Preview della #45, poi rimosso. Una regola che dipende dal solo
+  `CONTEXT` **non scatta mai**: la prima stesura del modulo faceva così e
+  mandava **in produzione** chi stava provando la preview — la regressione
+  opposta a quella che la PR correggeva.
+- **`request.nextUrl.origin` non è il dominio pubblico.** Sulla Deploy Preview
+  vale il **dominio immutabile del deploy**
+  (`6a81e37c…--timely-lokum-43a12e.netlify.app`), mentre `Host` e
+  `x-forwarded-host` portano quello giusto: **il dominio buono sopravvive solo
+  nell'intestazione**. In produzione i due coincidono, ed è la ragione per cui
+  cinque sonde sul callback pubblico non mostravano niente — **il sintomo
+  esiste dove i due valori divergono**, e va cercato lì.
+- **L'alias Netlify accettato è un elenco chiuso derivato da `URL`**, mai
+  dall'`Host` creduto sulla parola: forma `<qualcosa>--<nome-sito>.netlify.app`
+  con il nome del sito preso dal server, e **dominio immutabile escluso a
+  parte** per prefisso di ventiquattro cifre esadecimali. Un host falsificato
+  vale al massimo un altro deploy nostro, mai un dominio di terzi.
+- **`X-Vinea-Origine-Sorgente` nomina la regola che ha deciso, mai un valore di
+  ambiente.** Non è ornamento: su Netlify l'origine del server e quella della
+  richiesta coincidono, quindi dal solo `Location` una risoluzione sbagliata
+  passa per corretta. È l'header che ha reso visibile la regressione qui sopra.
+- **Un `next` filtrato con il solo `startsWith("/")` è un redirect aperto**:
+  `//host` e `/\host` sembrano relativi e i browser li leggono come assoluti
+  verso un altro host — il secondo perché negli schemi speciali la barra
+  rovesciata è normalizzata in barra.
+
+`AUTH_REDIRECT_ORIGIN` è **solo server**, non `NEXT_PUBLIC_*`, e su Netlify si
+lascia vuota. `MIN_TESTS` da 315 a **341**.
 
 ### Postgres exposure rules (binding since Phase 6d-1)
 
