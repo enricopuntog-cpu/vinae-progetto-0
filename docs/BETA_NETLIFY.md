@@ -39,6 +39,25 @@ ricadono su `http://localhost:3000` fuori dalla piattaforma.
 Le variabili `NEXT_PUBLIC_*` sono visibili nel browser e regolano soltanto
 l'esperienza utente. I gate server restano autoritativi e fail-closed.
 
+## Superfici pubbliche verificate localmente
+
+- Proposte: lettura e invio passano da `proposal-service` e dalle RPC Phase 7.
+- Richiesta foto: apre una conversazione Phase 8 e invia un messaggio reale;
+  la navigazione avviene soltanto dopo entrambi gli esiti positivi.
+- Home: nome, cantina, annunci e notifiche derivano dalla sessione e dai dati
+  canonici; nessuna identità o attività personale è precompilata.
+- Segnalazioni, ordini, cantina, messaggi e notifiche non hanno un fallback
+  pubblico su store locali.
+- Preferiti, follow venditore, Club/community, promemoria, preferenze e sfondi
+  cantina non persistiti e punti logistici dimostrativi sono rimossi o non
+  raggiungibili.
+
+Le tre interfacce IA restano visibili con il gate azioni spento e mostrano un
+avviso senza costruire il client IA. Il checkout conserva nel solo stato del
+flusso indirizzo, consegna, imballaggio e metodo scelti; il comando finale si
+ferma prima del servizio pagamenti. Le funzioni logistiche esterne mostrano il
+blocco beta e non producono etichette, prenotazioni o tracking.
+
 ## Configurazione remota futura
 
 Prima di qualsiasi deploy autorizzato servono, come gate distinti:

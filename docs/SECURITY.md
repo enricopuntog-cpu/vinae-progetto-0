@@ -26,6 +26,19 @@ professionale prima di transazioni reali o trattamento di documenti d’identit�
 L’adapter di autenticazione è sostituibile: collegare un nuovo provider non deve
 modificare le regole di dominio.
 
+## Confine della beta pubblica `frontend-next`
+
+- Le variabili `NEXT_PUBLIC_*` decidono visibilità o tentativi locali e non
+  autorizzano provider, pagamenti, logistica, ruoli o accesso ai dati.
+- Con le azioni IA e pagamento spente, il callback esterno non viene valutato:
+  nessun client provider o Edge Function viene costruito o invocato.
+- Messaggi e moderazione senza client configurato falliscono chiusi; i servizi
+  mock unitari non sono fallback del runtime pubblico.
+- Le azioni non persistite del prototipo sono rimosse dalle route pubbliche,
+  non sostituite con toast, notifiche o identità locali.
+- Il mock Supabase su loopback serve soltanto allo smoke locale e non dimostra
+  RLS, Auth, Realtime o comportamento dell'ambiente remoto.
+
 ## Supabase — confini di lettura e scrittura
 
 Valgono per lo stack di destinazione (`frontend-next/` + `supabase/`). Sono

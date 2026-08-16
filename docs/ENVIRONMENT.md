@@ -57,7 +57,7 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `NEXT_PUBLIC_PACKAGING_ENABLED` | client | Visibilità UI dell'imballaggio soltanto; non autorizza operazioni. |
 | `NEXT_PUBLIC_AI_UI_ENABLED` | client | Visibilità delle tre superfici IA della Fase 10. **Fallisce chiusa**: soltanto la stringa esatta `true` monta la UI; non autorizza chiamate. |
 | `NEXT_PUBLIC_AI_ACTIONS_ENABLED` | client | Permette alla UI di tentare le chiamate IA; soltanto `true` esatto. Non sostituisce `AI_ENABLED`. |
-| `NEXT_PUBLIC_DEMO_UI_ENABLED` | client | Mostra il selettore locale Guest/User/Admin; assente o diverso da `true` usa sessione e ruolo reali. |
+| `NEXT_PUBLIC_DEMO_UI_ENABLED` | client | Mostra soltanto il selettore locale Guest/User/Admin; non abilita fallback di dati mock. Assente o diverso da `true` usa sessione e ruolo reali. |
 | `AI_ENABLED` | Edge Function | Kill switch delle funzioni AI (Fase 10). **Fallisce chiuso**: assente o diverso da `true` significa spento. |
 | `AI_ALLOWED_ORIGINS` | Edge Function | Allowlist CORS delle sole function AI, origini complete separate da virgole. **Non sostituisce `PAYMENT_ALLOWED_ORIGINS`**: le due convivono. |
 | `OPENAI_API_KEY` | Edge Function | Chiave del fornitore di prova. Assente, il provider è quello disabilitato e ogni chiamata dà 503. |
@@ -96,6 +96,15 @@ I default versionati in `.env.example` restano tutti `false`.
 La configurazione operativa, le URL Auth e i gate delle Edge Function devono
 essere applicati soltanto dopo autorizzazione separata. La procedura locale e
 la configurazione Netlify versionata sono in `docs/BETA_NETLIFY.md`.
+
+### Dati visibili nella beta
+
+Le route pubbliche non ripiegano su store demo quando Supabase manca: messaggi,
+notifiche, moderazione, profilo e catalogo mostrano uno stato vuoto o un errore
+esplicito. Proposte e richiesta foto usano rispettivamente le RPC Phase 7 e i
+servizi Phase 8. Preferiti, follow, Club, promemoria, profilo dimostrativo,
+personalizzazioni della cantina non persistite e punti logistici inventati non
+sono montati. `NEXT_PUBLIC_DEMO_UI_ENABLED` non cambia questo confine.
 
 ### Fase 10 — perché `AI_ENABLED` è diverso dagli altri flag
 
