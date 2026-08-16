@@ -1384,7 +1384,7 @@ registrato qui perché nessuno le legga come una svista:
   verbale di una giornata e non un piano vigente: riscriverlo sarebbe riscrivere
   che cosa fu detto allora.
 
-### La seconda rinumerazione — 16 agosto 2026, il cutover passa alla Fase 13
+### La seconda rinumerazione — 16 agosto 2026, PR #46, il cutover passa alla Fase 13
 
 Il paragrafo qui sopra resta com'era scritto l'11 agosto 2026, perché è il
 resoconto di quel giorno. Quello che segue è un evento diverso e successivo.

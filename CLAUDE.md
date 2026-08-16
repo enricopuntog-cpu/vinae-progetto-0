@@ -128,7 +128,7 @@ The full picture is in `docs/ROADMAP_V1.md`, `docs/MIGRATION_PHASE_1_BACKLOG.md`
 - Domain migration order follows dependency, not convenience: Auth (5) → Listings/Catalog (6) →
   Orders/Payments (7) → Messaging/Notifications (8) → Moderation (9) → AI (10) →
   AI extensions admitted by exception (11) → Club/Community (12) → Cutover (13).
-  **The phases were renumbered again on 16 August 2026**: the cutover was Phase 12 and is now
+  **The phases were renumbered again on 16 August 2026 by PR #46**: the cutover was Phase 12 and is now
   **Phase 13**, and the new **Phase 12** is Club/Community, which takes that number because it
   follows Phase 11 directly in dependency order. Phase 12 is structured in three checkpoints
   **12a/12b/12c**, detailed in that phase's organizational document, **not yet written in this
@@ -778,7 +778,7 @@ looked at again and under what condition it returns to a session.
 
 ### Phase 12 — Club/Community. Not started, no branch.
 
-Renumbered in on **16 August 2026**, taking the number the cutover held: Club/Community follows
+Renumbered in on **16 August 2026 by PR #46**, taking the number the cutover held: Club/Community follows
 Phase 11 directly in dependency order, so the cutover moved to **Phase 13**. The phase is
 structured in **three checkpoints, 12a/12b/12c**, detailed in **that phase's organizational
 document, which is not yet written in this repo** — until it is, the content of those three
