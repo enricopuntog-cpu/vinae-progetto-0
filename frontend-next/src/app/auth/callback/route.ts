@@ -41,6 +41,17 @@ export async function GET(request: NextRequest) {
   const vaiA = (percorso: string) => {
     const risposta = NextResponse.redirect(`${origine}${percorso}`);
     risposta.headers.set("X-Vinea-Origine-Sorgente", sorgente);
+    // TEMPORANEO, da togliere prima del merge: che cosa vede la function come
+    // origine della richiesta. Sono URL pubblici, non segreti.
+    risposta.headers.set("X-Vinea-Diagnostica-Richiesta", request.nextUrl.origin);
+    risposta.headers.set(
+      "X-Vinea-Diagnostica-Host",
+      [
+        `host=${request.headers.get("host") ?? "-"}`,
+        `xfh=${request.headers.get("x-forwarded-host") ?? "-"}`,
+        `xfp=${request.headers.get("x-forwarded-proto") ?? "-"}`,
+      ].join(" "),
+    );
     return risposta;
   };
 
