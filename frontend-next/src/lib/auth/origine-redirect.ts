@@ -146,6 +146,7 @@ const origineDa = (valore: string | undefined): string | null => {
 export const risolviOriginePubblica = (
   richiesta: URL,
   ambiente: AmbienteOrigine,
+  hostAnnunciato?: string | undefined,
 ): OriginePubblica => {
   const override = origineDa(ambiente.AUTH_REDIRECT_ORIGIN);
   if (override) return { origine: override, sorgente: "override-esplicito" };
@@ -174,11 +175,33 @@ export const risolviOriginePubblica = (
   }
 
   if (produzione) {
-    // Ultima difesa della preview quando `DEPLOY_PRIME_URL` non è leggibile:
-    // se la richiesta arriva su un alias di *questo* sito, quello è il dominio
-    // su cui l'utente resterà, e i cookie vanno scritti lì.
-    if (eAliasDelloStessoSito(richiesta, produzione)) {
-      return { origine: richiesta.origin, sorgente: "netlify-alias-sito" };
+    /**
+     * Ultima difesa della preview quando `DEPLOY_PRIME_URL` non è leggibile.
+     *
+     * L'ordine dei due candidati non è indifferente, ed è una misura: sulla
+     * Deploy Preview della #45 `request.nextUrl.origin` vale il **dominio
+     * immutabile del deploy** (`6a81e37c…--timely-lokum-43a12e.netlify.app`),
+     * mentre l'host annunciato dal bordo è quello giusto
+     * (`deploy-preview-45--…`). È esattamente il difetto segnalato all'origine
+     * di questa PR, riprodotto: il dominio buono sopravvive solo
+     * nell'intestazione, e `nextUrl` porta quello sbagliato.
+     *
+     * Nessuno dei due viene creduto sulla parola: passano solo se sono alias di
+     * *questo* sito, e il dominio immutabile è escluso per forma anche quando
+     * lo è. Un host falsificato vale al massimo un altro deploy nostro, mai un
+     * dominio di terzi — non è un redirect aperto.
+     */
+    for (const candidato of [hostAnnunciato && `https://${hostAnnunciato}`, richiesta.href]) {
+      if (!candidato) continue;
+      let url: URL;
+      try {
+        url = new URL(candidato);
+      } catch {
+        continue;
+      }
+      if (eAliasDelloStessoSito(url, produzione)) {
+        return { origine: url.origin, sorgente: "netlify-alias-sito" };
+      }
     }
     return { origine: produzione, sorgente: "netlify-produzione" };
   }

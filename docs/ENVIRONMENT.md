@@ -91,8 +91,9 @@ in ordine di fiducia decrescente:
 1. `AUTH_REDIRECT_ORIGIN`, se è un URL assoluto `http`/`https`;
 2. `DEPLOY_PRIME_URL`, quando `CONTEXT` dice `deploy-preview` o `branch-deploy`,
    oppure — se `CONTEXT` manca — quando differisce da `URL`;
-3. l'origine della richiesta, se è un **alias Netlify dello stesso sito**
-   (`<qualcosa>--<nome-sito>.netlify.app`, con `<nome-sito>` ricavato da `URL`);
+3. un **alias Netlify dello stesso sito** (`<qualcosa>--<nome-sito>.netlify.app`,
+   con `<nome-sito>` ricavato da `URL`), cercato prima nell'host annunciato dal
+   bordo e poi nell'origine della richiesta;
 4. `URL`, il dominio pubblico stabile — è il caso della produzione Netlify;
 5. l'origine della richiesta, **solo** se l'hostname è `localhost`, `127.0.0.1`
    o `::1`, confrontati per intero e mai per suffisso;
@@ -111,6 +112,15 @@ runtime** — sono variabili di *build*. Conseguenze che vincolano il codice:
   prima versione di questo modulo faceva così e rispondeva `netlify-produzione`
   sulla preview, cioè rimandava in produzione chi stava provando la preview:
   la regressione opposta a quella che la PR correggeva;
+- **`request.nextUrl.origin` vale il dominio immutabile del deploy**
+  (`6a81e37c…--timely-lokum-43a12e.netlify.app`) mentre `Host` e
+  `x-forwarded-host` portano quello giusto (`deploy-preview-45--…`). È il
+  difetto segnalato all'origine della PR, riprodotto: il dominio buono
+  sopravvive **solo nell'intestazione**. Per questo la regola 3 guarda prima
+  l'host annunciato e poi `nextUrl`, e non il contrario;
+- l'host annunciato **non è creduto sulla parola**: passa solo se è un alias di
+  questo sito, quindi un valore falsificato vale al massimo un altro deploy
+  nostro e mai un dominio di terzi. Non è un redirect aperto;
 - dalle sole variabili di Netlify una preview è **indistinguibile** dalla
   produzione, perché `URL` vale il dominio pubblico in entrambi i casi. È la
   ragione della regola 3;

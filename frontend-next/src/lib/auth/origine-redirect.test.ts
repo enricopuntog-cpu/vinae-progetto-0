@@ -113,6 +113,51 @@ describe("origine pubblica dei redirect Auth", () => {
     }
   });
 
+  it("preferisce l'host annunciato quando nextUrl porta il dominio immutabile", () => {
+    // È il difetto segnalato all'origine di questa PR, riprodotto sulla Deploy
+    // Preview della #45: `request.nextUrl.origin` vale il dominio immutabile
+    // del deploy, mentre l'host annunciato dal bordo è quello giusto.
+    const risolta = risolviOriginePubblica(
+      richiesta(`${IMMUTABILE}/auth/callback`),
+      { URL: PRODUZIONE },
+      "deploy-preview-45--timely-lokum-43a12e.netlify.app",
+    );
+
+    expect(risolta.origine).toBe(ANTEPRIMA);
+    expect(risolta.sorgente).toBe("netlify-alias-sito");
+  });
+
+  it("un host annunciato falsificato non diventa mai un destinatario", () => {
+    for (const falsificato of [
+      "evil.example.com",
+      "timely-lokum-43a12e.netlify.app.evil.example",
+      "deploy-preview-1--altro-sito.netlify.app",
+      "localhost:3000",
+      "non un host",
+      "",
+    ]) {
+      const risolta = risolviOriginePubblica(
+        richiesta(`${PRODUZIONE}/auth/callback`),
+        { URL: PRODUZIONE },
+        falsificato,
+      );
+
+      expect(risolta.origine).toBe(PRODUZIONE);
+      expect(risolta.sorgente).toBe("netlify-produzione");
+    }
+  });
+
+  it("un host annunciato che è il dominio immutabile resta escluso", () => {
+    const risolta = risolviOriginePubblica(
+      richiesta(`${PRODUZIONE}/auth/callback`),
+      { URL: PRODUZIONE },
+      "6a81cfdc84aaf4000821392f--timely-lokum-43a12e.netlify.app",
+    );
+
+    expect(risolta.origine).toBe(PRODUZIONE);
+    expect(risolta.sorgente).toBe("netlify-produzione");
+  });
+
   it("sul dominio canonico non scambia la produzione per un alias", () => {
     const risolta = risolviOriginePubblica(richiesta(`${PRODUZIONE}/auth/callback`), {
       URL: PRODUZIONE,

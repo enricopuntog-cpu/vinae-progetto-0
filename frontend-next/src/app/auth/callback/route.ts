@@ -25,7 +25,16 @@ import {
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
-  const { origine, sorgente } = risolviOriginePubblica(request.nextUrl, ambienteCorrente());
+  // L'host annunciato dal bordo è l'unico posto in cui, su una Deploy Preview,
+  // sopravvive il dominio giusto: `request.nextUrl` porta quello immutabile del
+  // deploy. Non è creduto sulla parola — vale solo se è un alias di questo sito.
+  const hostAnnunciato =
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? undefined;
+  const { origine, sorgente } = risolviOriginePubblica(
+    request.nextUrl,
+    ambienteCorrente(),
+    hostAnnunciato,
+  );
   const code = searchParams.get("code");
   const errorDescription = searchParams.get("error_description") ?? searchParams.get("error");
   // `next` permette di tornare da dove si è partiti; accettiamo solo percorsi
@@ -41,17 +50,6 @@ export async function GET(request: NextRequest) {
   const vaiA = (percorso: string) => {
     const risposta = NextResponse.redirect(`${origine}${percorso}`);
     risposta.headers.set("X-Vinea-Origine-Sorgente", sorgente);
-    // TEMPORANEO, da togliere prima del merge: che cosa vede la function come
-    // origine della richiesta. Sono URL pubblici, non segreti.
-    risposta.headers.set("X-Vinea-Diagnostica-Richiesta", request.nextUrl.origin);
-    risposta.headers.set(
-      "X-Vinea-Diagnostica-Host",
-      [
-        `host=${request.headers.get("host") ?? "-"}`,
-        `xfh=${request.headers.get("x-forwarded-host") ?? "-"}`,
-        `xfp=${request.headers.get("x-forwarded-proto") ?? "-"}`,
-      ].join(" "),
-    );
     return risposta;
   };
 
