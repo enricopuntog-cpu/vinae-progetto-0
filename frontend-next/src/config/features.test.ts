@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { AI_UI, valoreFlagEsattamenteTrue } from "@/config/features";
 
@@ -59,6 +59,8 @@ describe("flag pubblica delle superfici IA", () => {
 
   it("rende irraggiungibile il pannello demo degli sfondi nel target", () => {
     const vendi = sorgentiSuperfici.catalogazione;
+    expect(existsSync(join(import.meta.dir, "../components/vinea/BetaBackgroundPanel.tsx"))).toBeFalse();
+    expect(vendi).not.toInclude("BetaBackgroundPanel");
     expect(vendi).not.toInclude("SfondoIAPanel");
     expect(vendi).not.toInclude("setTimeout(");
     expect(vendi).not.toInclude("Sfondo applicato (demo)");

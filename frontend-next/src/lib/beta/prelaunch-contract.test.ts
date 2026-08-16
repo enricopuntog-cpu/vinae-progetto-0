@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ruoloDaSessione } from "@/lib/auth/role";
 
@@ -60,15 +60,11 @@ describe("contratto di pre-lancio beta", () => {
     expect(leggi("src/components/vinea/Layout.tsx")).toInclude("AI_UI.sommelier && <SommelierChat");
     expect(leggi("src/app/vendi/page-client.tsx")).toInclude("AI_UI.catalogazione &&");
     expect(leggi("src/app/esplora/page-client.tsx")).toInclude("AI_UI.abbinamento &&");
-    expect(leggi("src/components/vinea/BetaBackgroundPanel.tsx")).toInclude('data-testid="ai-background-action"');
   });
 
-  it("non simula un risultato nello sfondo IA", () => {
-    const pannello = leggi("src/components/vinea/BetaBackgroundPanel.tsx");
-    expect(pannello).not.toInclude("setTimeout");
-    expect(pannello).not.toInclude("Sfondo applicato");
-    expect(pannello).not.toInclude("<img");
-    expect(pannello).toInclude('<BetaActionNotice tipo="ia"');
+  it("non rende raggiungibile il pannello sfondi della Fase 11", () => {
+    expect(existsSync(join(progetto, "src/components/vinea/BetaBackgroundPanel.tsx"))).toBeFalse();
+    expect(leggi("src/app/vendi/page-client.tsx")).not.toInclude("BetaBackgroundPanel");
   });
 
   it("collega il dettaglio alla rotta checkout reale", () => {
@@ -154,7 +150,7 @@ describe("contratto di pre-lancio beta", () => {
   });
 
   it("allinea MIN_TESTS al conteggio della suite estesa", () => {
-    expect(leggi("../.github/workflows/ci.yml")).toInclude('MIN_TESTS: "299"');
+    expect(leggi("../.github/workflows/ci.yml")).toInclude('MIN_TESTS: "315"');
   });
 
   it("non trasforma secret o gate server in variabili pubbliche", () => {
@@ -173,10 +169,10 @@ describe("contratto di pre-lancio beta", () => {
 
   it("non mantiene successi finti nelle superfici ripulite", () => {
     const report = leggi("src/components/vinea/ReportDialog.tsx");
-    const community = leggi("src/app/community/[slug]/page-client.tsx");
+    const community = leggi("src/app/community/[slug]/page.tsx");
     expect(report).not.toInclude("setTimeout");
     expect(report).not.toInclude("mock-");
     expect(report).toInclude("await createSupabaseModerationService");
-    expect(community).not.toInclude("Editor post del club (demo)");
+    expect(community).toInclude("notFound()");
   });
 });
