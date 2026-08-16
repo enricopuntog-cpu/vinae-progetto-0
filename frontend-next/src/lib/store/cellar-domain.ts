@@ -13,8 +13,6 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { createCellarService, leggiPosizione } from "@/services/cellar-service";
 import type { DatiNuovoAmbiente, Result } from "@/services/types";
 
-export type SfondoCantina = "moderna" | "rustica" | "pietra" | "premium" | "casse";
-
 export type DrinkOverride = {
   drinkWindowStart?: number;
   drinkWindowEnd?: number;
@@ -46,16 +44,11 @@ const VUOTO = {
  * Il precedente è `real-auth-domain.ts`, che dalla Fase 5a carica la sessione
  * con lo stesso schema.
  *
- * COSA RESTA IN MEMORIA. Regione e tipologia preferite, sfondo della cantina e
- * riduzione delle animazioni non hanno una tabella: non ce l'hanno nemmeno in
- * `frontend/`, dove sono `useState` che si perdono al ricaricamento. Migrarle
- * significherebbe aggiungere schema per una funzionalità che oggi non
- * persiste, cioè cambiare comportamento. Restano come sono.
+ * La riduzione delle animazioni resta una preferenza della vista corrente. Le
+ * preferenze di catalogo e lo sfondo personalizzato, che simulavano un
+ * salvataggio senza persistenza, non sono esposti nella beta pubblica.
  */
 export function useCellarDomain() {
-  const [regionePref, setRegionePref] = useState("Toscana");
-  const [tipologiaPref, setTipologiaPref] = useState("Rossi strutturati");
-  const [sfondoCantina, setSfondoCantina] = useState<SfondoCantina>("moderna");
   const [reduceMotion, setReduceMotion] = useState(false);
 
   const [dati, setDati] = useState(VUOTO);
@@ -157,12 +150,6 @@ export function useCellarDomain() {
     [bottiglieCantina],
   );
 
-  const setPreferenze = useCallback((regione: string, tipologia: string) => {
-    setRegionePref(regione);
-    setTipologiaPref(tipologia);
-    toast.success("Preferenze cantina aggiornate");
-  }, []);
-
   /** Esito comune: messaggio d'errore del database, oppure conferma e ricarica. */
   const applica = useCallback(
     async (esito: Result<void>, conferma: string): Promise<Result<void>> => {
@@ -250,11 +237,6 @@ export function useCellarDomain() {
   );
 
   return {
-    regionePref,
-    tipologiaPref,
-    setPreferenze,
-    sfondoCantina,
-    setSfondoCantina,
     inVendita,
     prezzoNascosto,
     togglePrezzoNascosto,

@@ -13,7 +13,7 @@ import type {
 } from "@/services/types";
 
 export type Phase8ContextValue = {
-  mode: "mock" | "supabase";
+  mode: "supabase" | "unavailable";
   conversations: ConversationSummary[];
   notifications: Notification[];
   messages: Record<string, Message[]>;

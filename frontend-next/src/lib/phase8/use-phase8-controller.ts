@@ -4,25 +4,49 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Phase8ContextValue } from "@/lib/phase8/phase8-context";
 import { useVinea } from "@/lib/vinea-store";
-import { createMockPhase8Services } from "@/services/phase8/mock-services";
 import { createPhase8RealtimeManager } from "@/services/phase8/realtime";
 import { createSupabaseMessagingService } from "@/services/phase8/supabase-messaging-service";
 import { createSupabaseNotificationService } from "@/services/phase8/supabase-notification-service";
 import type {
   ConversationSummary,
+  ConversationPage,
   Message,
+  MessagePage,
+  MessagingService,
   Notification,
+  NotificationPage,
+  NotificationService,
   OpenConversationInput,
   RealtimeState,
   Result,
   SendMessageInput,
 } from "@/services/types";
 
+const SERVIZIO_NON_CONFIGURATO = "Il servizio non e disponibile in questa configurazione.";
+
+const nonDisponibile = <T>(): Promise<Result<T>> =>
+  Promise.resolve({ ok: false, error: SERVIZIO_NON_CONFIGURATO });
+
+const serviziNonDisponibili = {
+  messaging: {
+    conversazioni: () => nonDisponibile<ConversationPage>(),
+    messaggi: () => nonDisponibile<MessagePage>(),
+    apri: () => nonDisponibile<{ conversationId: string }>(),
+    invia: () => nonDisponibile<Message>(),
+    segnaLetti: () => nonDisponibile<void>(),
+  } satisfies MessagingService,
+  notifications: {
+    elenco: () => nonDisponibile<NotificationPage>(),
+    nonLette: () => nonDisponibile<number>(),
+    segnaLetta: () => nonDisponibile<void>(),
+    segnaTutteLette: () => nonDisponibile<number>(),
+  } satisfies NotificationService,
+};
+
 export const usePhase8Controller = (): Phase8ContextValue => {
   const { authUser } = useVinea();
   const authUserId = authUser?.userId;
   const client = getSupabaseClient();
-  const [mock] = useState(createMockPhase8Services);
   const services = useMemo(
     () =>
       client
@@ -30,8 +54,8 @@ export const usePhase8Controller = (): Phase8ContextValue => {
             messaging: createSupabaseMessagingService(client),
             notifications: createSupabaseNotificationService(client),
           }
-        : mock,
-    [client, mock],
+        : serviziNonDisponibili,
+    [client],
   );
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -213,7 +237,7 @@ export const usePhase8Controller = (): Phase8ContextValue => {
 
   return useMemo(
     () => ({
-      mode: client ? "supabase" : "mock",
+      mode: client ? "supabase" : "unavailable",
       conversations,
       notifications,
       messages,

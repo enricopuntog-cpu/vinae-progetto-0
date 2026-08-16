@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Info, Sparkles, Pencil, Bell } from "lucide-react";
+import { Info, Sparkles, Pencil } from "lucide-react";
 import {
   computeDrinkPhase,
   phaseLabel,
@@ -25,7 +25,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
 import { useVinea } from "@/lib/vinea-store";
 
 const PHASES: DrinkPhase[] = ["attesa", "quasi", "pronto", "ideale", "presto"];
@@ -104,13 +103,6 @@ export function DrinkWindowSection({ wineId }: { wineId: string }) {
 
       <div className="mt-4 flex flex-wrap gap-2">
         <PersonalizeDialog wineId={wineId} meta={meta} />
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => toast.success("Ti ricorderemo quando questa bottiglia sarà pronta.")}
-        >
-          <Bell className="h-3.5 w-3.5" /> Ricordamelo
-        </Button>
       </div>
     </section>
   );

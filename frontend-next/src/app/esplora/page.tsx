@@ -26,7 +26,12 @@ export const metadata: Metadata = {
  * catalogo sarà abbastanza grande da rendere insostenibile il caricamento
  * completo, il passaggio non richiederà una migrazione.
  */
-export default async function Page() {
+const Page = async ({
+  searchParams,
+}: {
+  searchParams: Promise<{ regione?: string }>;
+}) => {
+  const { regione } = await searchParams;
   const client = await getSupabaseServerClient();
   const annunci = await createListingService(client).elenco();
 
@@ -41,7 +46,9 @@ export default async function Page() {
 
   return (
     <WineMetaProvider metaPerVino={metaPerVino}>
-      <EsploraPageClient annunci={annunci} />
+      <EsploraPageClient annunci={annunci} initialRegion={regione ?? "Tutte"} />
     </WineMetaProvider>
   );
-}
+};
+
+export default Page;

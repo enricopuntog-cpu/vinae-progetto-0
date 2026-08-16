@@ -34,7 +34,6 @@ import { useSellWizard, MAX_FOTO, type Modalita } from "@/hooks/useSellWizard";
 import { confidenzaPercento } from "@/lib/phase10/catalogazione";
 import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
 import { BetaActionNotice } from "@/components/vinea/BetaActionNotice";
-import { BetaBackgroundPanel } from "@/components/vinea/BetaBackgroundPanel";
 import { BetaDeliverySelector } from "@/components/vinea/BetaDeliverySelector";
 import { BottleSelector } from "@/app/vendi/bottle-selector";
 import { AI_UI } from "@/config/features";
@@ -268,7 +267,6 @@ export default function VendiPageClient() {
               onCarica={caricaFoto}
               onRimuovi={rimuoviFoto}
             />
-            {AI_UI.catalogazione && <BetaBackgroundPanel haFoto={foto.length > 0} />}
           </div>
         )}
 

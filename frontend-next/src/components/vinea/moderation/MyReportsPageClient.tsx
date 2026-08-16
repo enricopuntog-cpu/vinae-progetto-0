@@ -60,7 +60,7 @@ const Pratica = ({ report }: { report: Report }) => (
 
 export const MyReportsPageClient = () => {
   const online = useOnline();
-  const { mieSegnalazioni, loading, error, reload, mode } = usePhase9Moderation();
+  const { mieSegnalazioni, loading, error, reload } = usePhase9Moderation();
 
   if (!online && mieSegnalazioni.length === 0) return <OfflineState onRetry={() => void reload()} />;
   if (loading && mieSegnalazioni.length === 0) {
@@ -79,7 +79,6 @@ export const MyReportsPageClient = () => {
             {mieSegnalazioni.length === 1
               ? "1 pratica"
               : `${mieSegnalazioni.length} pratiche`}
-            {mode === "mock" ? " · dati dimostrativi" : ""}
           </p>
         </div>
         <Button variant="outline" onClick={() => void reload()} disabled={!online}>

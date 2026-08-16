@@ -340,7 +340,6 @@ export const ModerationPanelClient = () => {
   const [aperta, setAperta] = useState<Report | null>(null);
   const moderatore = ruolo === "admin";
   const {
-    mode,
     coda,
     audit,
     contestazioni,
@@ -377,15 +376,6 @@ export const ModerationPanelClient = () => {
           Aggiorna
         </Button>
       </header>
-
-      {/* In modalita mock i comandi non esistono: dirlo evita che la loro
-          assenza sembri un guasto. */}
-      {mode === "mock" ? (
-        <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-          Dati dimostrativi: Supabase non e configurato, quindi le azioni di
-          moderazione non sono disponibili.
-        </p>
-      ) : null}
 
       {error ? (
         <p className="rounded-md border border-bordeaux/40 bg-bordeaux/5 p-3 text-sm text-bordeaux">

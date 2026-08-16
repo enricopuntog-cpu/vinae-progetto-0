@@ -33,6 +33,10 @@ export const useRealAuthDomain = () => {
   // resettarlo con una setState sincrona quando la sessione cambia.
   const [dobLetta, setDobLetta] = useState<{ userId: string; dob: string | null } | null>(null);
   const [ruoliLetti, setRuoliLetti] = useState<{ userId: string; ruoli: string[] } | null>(null);
+  const [profiloLetto, setProfiloLetto] = useState<{
+    userId: string;
+    username: string | null;
+  } | null>(null);
 
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -89,6 +93,19 @@ export const useRealAuthDomain = () => {
 
     let active = true;
     const userId = authUser.userId;
+    supabaseAuthService.nomeProfilo(userId).then((esito) => {
+      if (active) setProfiloLetto({ userId, username: esito.ok ? esito.data : null });
+    });
+    return () => {
+      active = false;
+    };
+  }, [authUser]);
+
+  useEffect(() => {
+    if (!authUser) return;
+
+    let active = true;
+    const userId = authUser.userId;
     supabaseAuthService.ruoliProfilo(userId).then((esito) => {
       if (active && esito.ok) setRuoliLetti({ userId, ruoli: esito.data });
     });
@@ -108,6 +125,11 @@ export const useRealAuthDomain = () => {
   const ruoliCorrenti =
     authUser && ruoliLetti?.userId === authUser.userId ? ruoliLetti.ruoli : [];
   const authRuolo = ruoloDaSessione(authUser, ruoliCorrenti);
+  const authProfileLoading = Boolean(
+    authUser && profiloLetto?.userId !== authUser.userId,
+  );
+  const authProfileName =
+    authUser && profiloLetto?.userId === authUser.userId ? profiloLetto.username : null;
 
   const authClearError = useCallback(() => setAuthError(null), []);
 
@@ -167,11 +189,14 @@ export const useRealAuthDomain = () => {
     setAuthUser(null);
     setDobLetta(null);
     setRuoliLetti(null);
+    setProfiloLetto(null);
   }, []);
 
   return {
     authUser,
     authRuolo,
+    authProfileName,
+    authProfileLoading,
     authLoading,
     authError,
     authClearError,

@@ -66,11 +66,19 @@ const tipi = ["Tutti", "Rosso", "Bianco", "Bollicine", "Rosato", "Dolce"];
 
 type Mode = "testo" | "abbinamento";
 
-export default function EsploraPageClient({ annunci }: { annunci: Wine[] }) {
+export default function EsploraPageClient({
+  annunci,
+  initialRegion = "Tutte",
+}: {
+  annunci: Wine[];
+  initialRegion?: string;
+}) {
   const [mode, setMode] = useState<Mode>("testo");
   const abbinamentoAttivo = AI_UI.abbinamento && mode === "abbinamento";
   const [q, setQ] = useState("");
-  const [regione, setRegione] = useState("Tutte");
+  const [regione, setRegione] = useState(
+    regioni.includes(initialRegion) ? initialRegion : "Tutte",
+  );
   const [tipo, setTipo] = useState("Tutti");
   const [prezzo, setPrezzo] = useState<[number, number]>([0, 1500]);
   const [sort, setSort] = useState("recenti");

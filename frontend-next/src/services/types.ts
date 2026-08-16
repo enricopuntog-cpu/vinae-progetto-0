@@ -81,6 +81,7 @@ export interface AuthService {
    * quindi anche il banner di dichiarazione età.
    */
   dataNascitaProfilo(userId: string): Promise<Result<string | null>>;
+  nomeProfilo(userId: string): Promise<Result<string | null>>;
   salvaDataNascita(userId: string, dataNascita: string): Promise<Result<void>>;
 }
 

@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import {
   Home,
   PlusCircle,
-  Users,
   User,
   Search,
   Shield,
@@ -40,14 +39,12 @@ const nav = [
   { to: "/", label: "Home", icon: Home, exact: true },
   { to: "/esplora", label: "Ricerca", icon: Search, exact: false },
   { to: "/vendi", label: "Vendi", icon: PlusCircle, exact: false },
-  { to: "/community", label: "Club", icon: Users, exact: false },
   { to: "/accedi", label: "Account", icon: User, exact: false },
 ] as const;
 
 const desktopLinks = [
   { to: "/", label: "Home", exact: true },
   { to: "/esplora", label: "Ricerca", exact: false },
-  { to: "/community", label: "Club", exact: false },
   { to: "/cantina", label: "La mia cantina", exact: false },
   { to: "/vendi", label: "Vendi", exact: false },
   { to: "/accedi", label: "Account", exact: false },

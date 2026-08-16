@@ -171,6 +171,20 @@ export const supabaseAuthService: AuthService = {
     return { ok: true, data: (data?.dob as string | null) ?? null };
   },
 
+  async nomeProfilo(userId) {
+    const supabase = getSupabaseClient();
+    if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error) return { ok: false, error: error.message };
+    const username = typeof data?.username === "string" ? data.username.trim() : "";
+    return { ok: true, data: username || null };
+  },
+
   async salvaDataNascita(userId, dataNascita) {
     const supabase = getSupabaseClient();
     if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };

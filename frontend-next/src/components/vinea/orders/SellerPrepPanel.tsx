@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BetaActionNotice } from "@/components/vinea/BetaActionNotice";
 import {
   Select,
   SelectContent,
@@ -14,7 +15,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { puoSpedire } from "@/lib/orders/seller-status";
-import { PackagingPointPicker } from "@/components/vinea/orders/PackagingPointPicker";
 import type { OrderRecord, VoceChecklist } from "@/services/types";
 
 /** Le stesse quattro voci di frontend/, che qui vengono davvero salvate. */
@@ -32,7 +32,6 @@ type Props = {
   inCorso: boolean;
   onPrepara: (checklist: VoceChecklist[]) => Promise<string | null>;
   onSpedisci: (corriere: string, tracking: string) => Promise<string | null>;
-  onRicarica: () => void;
 };
 
 /**
@@ -44,7 +43,7 @@ type Props = {
  * la checklist, e il numero di tracking lo inserisce il venditore — nessuna
  * etichetta viene prodotta, perché era simulazione e resta tale.
  */
-export function SellerPrepPanel({ ordine, inCorso, onPrepara, onSpedisci, onRicarica }: Props) {
+export function SellerPrepPanel({ ordine, inCorso, onPrepara, onSpedisci }: Props) {
   const salvate = new Map(ordine.imballaggio_checklist.map((v) => [v.id, v.done]));
   const [spunte, setSpunte] = useState<Record<string, boolean>>(
     Object.fromEntries(VOCI.map((v) => [v.id, salvate.get(v.id) ?? false])),
@@ -95,7 +94,7 @@ export function SellerPrepPanel({ ordine, inCorso, onPrepara, onSpedisci, onRica
           </div>
         </div>
 
-        <PackagingPointPicker ordine={ordine} onScelto={onRicarica} />
+        {ordine.imballaggio_codice ? <BetaActionNotice tipo="spedizione" /> : null}
 
         <div className="grid gap-2 sm:grid-cols-2">
           <div>

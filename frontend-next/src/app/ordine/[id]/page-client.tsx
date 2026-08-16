@@ -80,7 +80,6 @@ export default function OrdineDetailPageClient({ orderId }: { orderId: string })
               inCorso={o.inCorso}
               onPrepara={o.preparaSpedizione}
               onSpedisci={o.segnaSpedito}
-              onRicarica={() => void o.ricarica()}
             />
           )}
 
