@@ -116,9 +116,12 @@ versione già registrata e **non ha rieseguito il file** — comportamento volut
 - `supabase/` — PostgreSQL, Auth, RLS, Storage e migrazioni: **backend target**.
 
 `frontend-next/` non va descritto come produzione. Il cutover appartiene alla
-**Fase 12** e richiede una decisione esplicita. Era la Fase 11 fino all'11
+**Fase 13** e richiede una decisione esplicita. Era la Fase 11 fino all'11
 agosto 2026: con la chiusura della Fase 10 le fasi sono state rinumerate, e la
-nuova Fase 11 sono le quattro estensioni AI ammesse per eccezione.
+nuova Fase 11 sono le quattro estensioni AI ammesse per eccezione. Era poi la
+Fase 12 fino al 16 agosto 2026, quando una seconda rinumerazione ha dato quel
+numero a **Club/Community**, che segue direttamente la Fase 11 nell'ordine di
+dipendenza.
 
 ## Domini già migrati nello stack target
 
@@ -144,7 +147,8 @@ nuova Fase 11 sono le quattro estensioni AI ammesse per eccezione.
 | Moderazione e audit persistente | Integrati in `main` — Fase 9, PR #32 al merge squash `cd81df6`; le quattro migrazioni distribuite in produzione dal merge, righe 21-24 del ledger. Verifica post-merge in PR #33, squash `8dd56c0` |
 | AI reale: chat Sommelier con storico, abbinamento, catalogazione da testo | Integrate in `main` — **Fase 10 chiusa**, PR #35 al merge squash `442c98c`; migrazione `20260811160000` venticinquesima riga del ledger, tre Edge Function AI `ACTIVE`. **Distribuita spenta**: `AI_ENABLED` assente e fail-closed fino alla configurazione di chiave e budget (7.11, entro il 18 agosto 2026) |
 | Estensioni AI ammesse per eccezione: autofill da foto, spunta di completezza, triage, sfondo reale | Non iniziate — **Fase 11**, nessun branch. Le quattro decisioni (7.3, 7.12, 7.13) sono chiuse; Storage, limiti di dimensione, tipi MIME e PhotoRoom no |
-| Cutover | Non iniziato — **Fase 12** (era Fase 11 fino all'11 agosto 2026) |
+| Club/Community | Non iniziata — **Fase 12**, nessun branch. Tre checkpoint 12a/12b/12c, dettagliati nel documento organizzativo della fase, non ancora scritto in questo repo |
+| Cutover | Non iniziato — **Fase 13** (era Fase 11 fino all'11 agosto 2026 e Fase 12 fino al 16 agosto 2026) |
 
 ## Fase 6d-1 integrata
 
@@ -302,7 +306,7 @@ applicativi, nessuna estensione Postgres abilitata, nessuna chiamata Stripe.
 - **1e, DECISA** — lo scheduler si accende e si verifica prima di
   `PAYMENTS_ENABLED`, mai dopo.
 - **3a, DECISA** — la voce «protezione» (3%) esce dal modello Supabase e resta in
-  `frontend/` fino al cutover di Fase 12. Al 3% valeva 0,59–0,60× il margine netto
+  `frontend/` fino al cutover di Fase 13. Al 3% valeva 0,59–0,60× il margine netto
   che la 7b già trattiene, e nel percorso Stripe reale non è mai stata addebitata.
 - **2c, design approvato e schema non scritto** — tetto a 5 tentativi di
   riconciliazione della fee, con contatore `fee_tentativi` su `payments`. Il
@@ -755,7 +759,7 @@ ha solo policy di proprietario — quella `cantina_pubblica` della 6c-1 era già
 stata eliminata dalla 6d-1 — quindi la vista era **l'unico percorso** per cui un
 non proprietario potesse leggere una bottiglia, e rimuoverla elimina davvero la
 capacità. La colonna sopravvive perché è un parametro di `public.bottiglia_crea`
-ed è scritta da `frontend-next` e da `frontend`, congelati fino alla Fase 12:
+ed è scritta da `frontend-next` e da `frontend`, congelati fino alla Fase 13:
 **è un residuo inerte e appartiene alla lista di cutover**, come la voce
 «protezione» della 7d.
 
@@ -1380,6 +1384,40 @@ registrato qui perché nessuno le legga come una svista:
   verbale di una giornata e non un piano vigente: riscriverlo sarebbe riscrivere
   che cosa fu detto allora.
 
+### La seconda rinumerazione — 16 agosto 2026, il cutover passa alla Fase 13
+
+Il paragrafo qui sopra resta com'era scritto l'11 agosto 2026, perché è il
+resoconto di quel giorno. Quello che segue è un evento diverso e successivo.
+
+Il **cutover era la Fase 12 e diventa la Fase 13**; la **nuova Fase 12** è
+**Club/Community**, che prende quel numero perché segue direttamente la Fase 11 —
+estensioni AI — nell'ordine di dipendenza. È strutturata in **tre checkpoint,
+12a/12b/12c**, dettagliati nel **documento organizzativo della fase**, che **non
+è ancora scritto in questo repo**: da qui il contenuto dei tre checkpoint non si
+deduce.
+
+Applicata nei **tredici file** che citavano «Fase 12»/«Phase 12»:
+`docs/ROADMAP_V1.md`, `docs/MIGRATION_PHASE_1_BACKLOG.md`,
+`docs/adr/002-migration-strategy.md`, `docs/PHASE_10_AI_SERVICE_SPEC.md`,
+`docs/PHASE_11_AI_EXTENSIONS_SPEC.md`, `CLAUDE.md`, `CHANGES.log` e i sei file di
+`CONTESTO_IA/` (`01_STATO_ATTUALE.md`, `02_STORIA_FASI.md`,
+`03_ARCHITETTURA_REGOLE_DEBITI.md`, `05_INDICE_PR_E_FONTI.md`, `README.md`,
+`context-manifest.json`). Solo documentazione: nessun file di codice, SQL,
+configurazione o workflow.
+
+**Questa volta nessun file congelato conserva il numero vecchio, ed è stato
+verificato invece che dedotto dalla regola**: la ricerca di «Fase 12»/«Phase 12»
+in `supabase/migrations/*.sql` e in `docs/superpowers/plans/` dà **zero
+risultati** in entrambi i casi. È la differenza con l'11 agosto 2026, dove il
+numero vecchio sopravvive in quattro punti di due migrazioni — uno dei quali
+dentro un `comment on column`, quindi testo vivo in produzione — e nel verbale
+della 7d.
+
+**Questa rinumerazione precede l'apertura della fase e non la apre.** È il
+prerequisito da mergiare prima del branch della Fase 12: nessuna funzionalità di
+quella fase è ammessa per nome qui, e l'ammissione appartiene alla sessione che
+apre davvero quel branch.
+
 ## Fase 10 — specifica scritta, tredici decisioni chiuse su tredici
 
 La specifica organizzativa è
@@ -1783,7 +1821,7 @@ aperto**: `/vendi` richiede una sessione reale, e non ne esisteva una.
 `SfondoIAPanel` promette all'utente uno sfondo che non viene mai applicato — è un
 `setTimeout` di 1100 ms e un toast «Sfondo applicato (demo)»
 (`frontend/src/routes/vendi.tsx:569-579`). Era registrato come materiale per la
-lista di cutover della Fase 12, accanto a `bottle_units.visibilita`. **Con la
+lista di cutover della Fase 13, accanto a `bottle_units.visibilita`. **Con la
 7.13 non è più così**: si chiude in Fase 11, e in un senso o nell'altro — o lo
 sfondo viene applicato davvero, o il pannello va tolto. La terza via, lasciarlo lì
 a promettere, è quella che la decisione ha scartato.
@@ -1868,7 +1906,7 @@ La PR [#44](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/44) **è
 mersa in squash come `8b003995`** il 16 agosto 2026 alle 12:04:44 UTC, e la
 produzione Netlify `https://timely-lokum-43a12e.netlify.app` è attiva. Il
 legacy `frontend/` + `backend/` **resta la versione servita**: la beta è un sito
-separato, non è il cutover della Fase 12 e non apre la Fase 11. La sezione qui
+separato, non è il cutover della Fase 13 e non apre la Fase 11. La sezione qui
 sotto conserva lo stato del Deploy Preview perché è il verbale di come ci si è
 arrivati; l'HEAD pre-documentazione era `84b8767`, con CI #152 verde e il
 Deploy Preview `6a81acfbee2b64c77b28addc`.

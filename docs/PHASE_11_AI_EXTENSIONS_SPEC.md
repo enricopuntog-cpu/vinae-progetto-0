@@ -52,6 +52,18 @@ un branch e non sul ramo principale. Quella PR è la **#36**, ed è ora mersa:
 l'avvertimento è decaduto e le righe sono state **ri-fissate misurando lo scarto
 file per file**, non ricalcolandolo a mente.
 
+**Rinumerazione del 16 agosto 2026 — la Fase 11 non si muove, il cutover sì.** Il
+cutover **non è più la Fase 12: è la Fase 13**, perché la **Fase 12** è ora
+Club/Community, che segue direttamente la Fase 11 nell'ordine di dipendenza. Le
+due frasi qui sopra che dicono «Fase 12 cutover» **restano com'erano di
+proposito**: la prima è il **titolo letterale del commit `271c7dc`**, che è un
+record Git e non si riscrive, la seconda è il racconto di com'era fissata la
+prima stesura. Sono resoconti, non l'indicazione del numero corrente. **Questa
+rinumerazione non tocca il numero di questa fase, il suo perimetro né alcuna
+delle sue decisioni**, e non sposta l'hash di riferimento: le righe restano
+fissate su `271c7dc`, quindi ogni `file:riga` di questo documento va letto lì e
+resta valido anche se i file citati cambiano su `main` dopo quella data.
+
 Lo scarto misurato fra `442c98c` e `271c7dc` — che serve a chiunque legga la
 prima stesura, o una citazione presa in prestito da un documento più vecchio:
 
@@ -126,7 +138,9 @@ sessione di spec prima del codice.
 - **L'autonomia parziale del moderatore AI.** Rinviata esplicitamente dalla 7.12,
   non decisa: richiede una revisione legale (AI Act, in vigore dal 2 agosto 2026,
   e DSA sulle decisioni automatizzate) che nessuna fase di migrazione fa.
-- **Il cutover**, che è la Fase 12.
+- **Il cutover**, che è la Fase 13.
+- **Club/Community, che è la Fase 12** — non iniziata, senza branch, e con il
+  proprio documento organizzativo non ancora scritto in questo repo.
 - **Qualunque quinta funzionalità.** L'eccezione della 7.3/7.12/7.13 è nominativa.
   Se durante l'implementazione emerge che ne servirebbe un'altra, quello è un
   segnale di fermarsi e segnalare, non di costruirla.

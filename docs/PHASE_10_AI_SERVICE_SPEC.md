@@ -15,6 +15,17 @@ apre a decisioni chiuse, cioè adesso.
 > resta la fonte delle decisioni che le descrivono: sono già chiuse, ed è per
 > questo che la Fase 11 parte da lì e non da zero.
 
+> **Rinumerazione del 16 agosto 2026, successiva a quella qui sopra.** Il cutover
+> **non è più la Fase 12: è la Fase 13**, perché la **Fase 12** è ora
+> Club/Community, che segue direttamente la Fase 11 nell'ordine di dipendenza.
+> Dove questo documento dice «il cutover è diventato la Fase 12» — nel riquadro
+> qui sopra e nel «Come è andata a finire» della sezione 6 — sta **raccontando la
+> rinumerazione dell'11 agosto 2026** e resta com'era scritto quel giorno: è un
+> resoconto, non l'indicazione del numero corrente. Il numero corrente del
+> cutover è **13**, ed è quello usato nei punti di questo documento che lo
+> nominano come fase viva: la 1.3 e le due voci di «lista di cutover» dentro la
+> sezione 7.
+
 Ogni affermazione di questo documento porta la fonte `file:riga` da cui viene.
 Ciò che non aveva una fonte era marcato **decisione aperta**; non ne resta
 nessuna.
@@ -150,7 +161,8 @@ che questa fase eredita.
 
 ### 1.3 Fuori perimetro, dichiarato
 
-- **Il cutover (Fase 12, era la Fase 11 fino all'11 agosto 2026).** Anche a Fase
+- **Il cutover (Fase 13, era la Fase 11 fino all'11 agosto 2026 e la Fase 12 fino
+  al 16 agosto 2026).** Anche a Fase
   10 completa, `frontend/` + `backend/` restano la versione servita: la
   dismissione è una decisione separata
   (`docs/MIGRATION_PHASE_1_BACKLOG.md:606-612`).
@@ -1001,7 +1013,7 @@ non su una. Proposta operativa, in quest'ordine:
 2. il commit che rinomina legge `ALLOWED_ORIGINS ?? PAYMENT_ALLOWED_ORIGINS ??`
    il default, così il merge è sicuro anche se il passo 1 è stato dimenticato;
 3. la rimozione di `PAYMENT_ALLOWED_ORIGINS` dalla catena è una riga sulla lista
-   di cutover della Fase 12, con la sua data.
+   di cutover della Fase 13, con la sua data.
 
 Il passo 2 è una scorciatoia temporanea e va scritta come tale: senza il passo 3
 diventa un residuo, esattamente come `bottle_units.visibilita`.
@@ -1171,7 +1183,7 @@ usata dalla 9c — `not exists (select 1 from public.profiles me where me.id =
 **Proposta accolta — il pannello resta montato per gli anonimi.** Oggi chiunque lo apre e
 prende un 401 dall'API (`frontend/src/components/vinea/Layout.tsx:19`, `:255`,
 2.5). È brutto, ma è il comportamento servito, e cambiarlo qui sarebbe migliorare
-il prodotto durante una migrazione. Va sulla lista di cutover della Fase 12.
+il prodotto durante una migrazione. Va sulla lista di cutover della Fase 13.
 
 **Nota vincolante, che non è una decisione aperta**: qualunque risposta si dia
 sul sospeso/rimosso, **non deve toccare la macchina dei pagamenti**. È la regola

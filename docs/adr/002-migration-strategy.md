@@ -34,10 +34,20 @@ branch e Pull Request dedicate (draft finché non diversamente indicato):
 4. **Il frontend TanStack Start attuale resta la versione servita** agli
    utenti finché la versione Next.js non raggiunge parità funzionale
    verificata end-to-end per tutti i domini migrati fino a quel punto.
-5. **Cutover finale** (Fase 12): dismissione di `frontend/` (TanStack
+5. **Cutover finale** (Fase 13): dismissione di `frontend/` (TanStack
    Start) e `backend/` (FastAPI/MongoDB) solo dopo parità verificata e
    approvazione esplicita separata — non è una conseguenza automatica
    del completamento delle fasi precedenti.
+
+Il cutover era la **Fase 12** in questa ADR fino al 16 agosto 2026, quando è
+stata inserita prima di esso una **Fase 12 nuova**: Club/Community, che prende
+quel numero perché segue direttamente la Fase 11 nell'ordine di dipendenza. È
+strutturata in tre checkpoint 12a/12b/12c, dettagliati nel documento
+organizzativo della fase, non ancora scritto in questo repo. Vale per essa la
+stessa osservazione fatta qui sotto per la Fase 11: **non è un dominio migrato**,
+quindi resta fuori dal punto 2 e non allarga il perimetro «un dominio alla volta
+collegato a Supabase», che si è chiuso con la Fase 10. Questa ADR ne registra il
+numero e non ne apre la fase.
 
 Il cutover era la **Fase 11** in questa ADR fino all'11 agosto 2026, quando la
 chiusura della Fase 10 ha inserito prima di esso una **Fase 11 nuova**: le

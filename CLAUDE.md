@@ -123,11 +123,20 @@ The full picture is in `docs/ROADMAP_V1.md`, `docs/MIGRATION_PHASE_1_BACKLOG.md`
   Supabase, the FastAPI/MongoDB path for that domain stops being the writable source of truth.
   Legacy reads may remain only if explicitly planned for that phase.
 - **`frontend/` + `backend/` stay the served version** until `frontend-next/` reaches verified
-  functional parity across all migrated domains — cutover (Phase 12) is a separate, explicit
+  functional parity across all migrated domains — cutover (Phase 13) is a separate, explicit
   decision, never automatic.
 - Domain migration order follows dependency, not convenience: Auth (5) → Listings/Catalog (6) →
   Orders/Payments (7) → Messaging/Notifications (8) → Moderation (9) → AI (10) →
-  AI extensions admitted by exception (11) → Cutover (12).
+  AI extensions admitted by exception (11) → Club/Community (12) → Cutover (13).
+  **The phases were renumbered again on 16 August 2026**: the cutover was Phase 12 and is now
+  **Phase 13**, and the new **Phase 12** is Club/Community, which takes that number because it
+  follows Phase 11 directly in dependency order. Phase 12 is structured in three checkpoints
+  **12a/12b/12c**, detailed in that phase's organizational document, **not yet written in this
+  repo**; it is not started and has no branch. That renumbering shipped **before** the phase
+  branch was opened — it is the prerequisite that frees the number, not the phase itself.
+  Unlike 11 August, **no frozen file keeps the old number**: searching "Fase 12"/"Phase 12" in
+  `supabase/migrations/*.sql` and `docs/superpowers/plans/` returns **zero results**, verified
+  rather than assumed from the rule.
   **The phases were renumbered on 11 August 2026 by PR #36**, when Phase 10 closed: the cutover
   was Phase 11 and is now Phase 12, and the four features decisions 7.3/7.12/7.13 admitted by
   exception became the new Phase 11 — they are not Phase 10 and had no phase of their own, so
@@ -230,7 +239,7 @@ Phase 7d wrote no SQL. It closed decisions that constrain what later phases may 
   whose `payout_stato='trattenuto'`; it does not claim orders or call Stripe. This is the safe
   precondition for verifying the scheduler before payments are enabled.
 - **The "protezione" (3%) line is out of the Supabase model** (decision 3a). It stays untouched in
-  `frontend/` until the Phase 12 cutover, where its removal has to be on the cutover list. It was
+  `frontend/` until the Phase 13 cutover, where its removal has to be on the cutover list. It was
   measured at 0.59–0.60× the net margin Phase 7b already withholds, and in the real Stripe path it
   was never actually charged.
 - **A fee-reconciliation retry cap must never be a new value of `public.payment_stato`** (decision
@@ -333,7 +342,7 @@ without going back to that session; they are recorded in `CONTESTO_IA/01_STATO_A
   which is where the verification window and therefore auto-release start.
 - `public_bottle_units` is gone (7.7), but `bottle_units.visibilita` and the
   `bottle_unit_visibilita` enum survive as a documented inert residue: the column is a
-  `bottiglia_crea` parameter written by both frontends. It belongs on the Phase 12 cutover list.
+  `bottiglia_crea` parameter written by both frontends. It belongs on the Phase 13 cutover list.
 
 PR #33 carried the post-merge verification onto `main` — squash `8dd56c0`, 11 August 2026,
 documentation only. The production ledger was re-read on 11 August 2026 and is unchanged at
@@ -766,6 +775,20 @@ alongside two more: the original is never overwritten even after a bulk confirm,
 is a legitimate state of the strip** — to be designed, not avoided. **None of the three reopens §6**:
 (b) touches a 6.5 value and **confirms** it, and a note at the end of 6.5 records that the number was
 looked at again and under what condition it returns to a session.
+
+### Phase 12 — Club/Community. Not started, no branch.
+
+Renumbered in on **16 August 2026**, taking the number the cutover held: Club/Community follows
+Phase 11 directly in dependency order, so the cutover moved to **Phase 13**. The phase is
+structured in **three checkpoints, 12a/12b/12c**, detailed in **that phase's organizational
+document, which is not yet written in this repo** — until it is, the content of those three
+checkpoints is not to be inferred from here.
+
+**This section records the number and the structure; it does not open the phase and decides
+nothing about its perimeter.** No feature of Phase 12 is admitted by name here: that admission
+belongs to the session that actually opens the phase branch, and «no new features during
+migration» keeps governing everything until then. Opening the phase stays a separate explicit
+approval, as for every phase.
 
 ## Beta `frontend-next` production-like — **in produzione** dal 16 agosto 2026
 
