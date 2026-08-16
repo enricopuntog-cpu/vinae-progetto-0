@@ -603,14 +603,30 @@ certificata, e la 7.12 dà all'AI **nessuna azione autonoma e nessuna identità 
 «attore AI» in `audit_log`** — classifica e ordina, il pulsante lo preme una
 persona.
 
-## Fase 12 — Cutover finale
+## Fase 12 — Club/Community
 
-**Branch**: `migration/phase-12-cutover`. Era la Fase 11 fino all'11 agosto 2026.
+**Stato**: non iniziata, nessun branch.
+
+Prende il numero 12 il 16 agosto 2026, perché segue direttamente la Fase 11
+nell'ordine di dipendenza; il cutover si è spostato alla 13. È strutturata in
+**tre checkpoint, 12a/12b/12c**, dettagliati nel **documento organizzativo della
+fase**, che **non è ancora scritto in questo repo**: il contenuto dei tre
+checkpoint non si deduce da questa voce.
+
+Questa voce registra numero e struttura e **non apre la fase**: nessuna
+funzionalità della Fase 12 è ammessa per nome qui, e l'ammissione appartiene alla
+sessione che apre davvero il branch della fase. Fino ad allora vale «nessuna
+funzionalità nuova durante la migrazione» come per tutto il resto.
+
+## Fase 13 — Cutover finale
+
+**Branch**: `migration/phase-13-cutover`. Era la Fase 11 fino all'11 agosto 2026
+e la Fase 12 fino al 16 agosto 2026.
 
 Solo dopo parità funzionale verificata su tutti i domini precedenti e
 approvazione esplicita separata: dismissione di `frontend/` (TanStack
 Start) e `backend/` (FastAPI/MongoDB). Non è una conseguenza automatica
-del completamento delle fasi 2–11.
+del completamento delle fasi 2–12.
 
 ## Debito dichiarato dalla Fase 6d-1
 

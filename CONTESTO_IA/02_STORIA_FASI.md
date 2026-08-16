@@ -473,7 +473,7 @@ l'addendum di progetto per il tetto ai tentativi.
   `PAYMENTS_ENABLED`, mai dopo. Era la sola difesa a costo zero contro il backlog
   storico, e valeva solo se presa prima.
 - **3a** — la voce «protezione» (3%) **si toglie** dal modello Supabase; in
-  `frontend/` resta invariata fino al cutover di Fase 12. Misurata con la formula
+  `frontend/` resta invariata fino al cutover di Fase 13. Misurata con la formula
   esatta: al 3% è 0,59–0,60× il margine netto che la 7b già trattiene a ogni
   punto di prezzo, e sommarle porterebbe il rincaro sul compratore al 9,6–12,2%.
   Nel percorso Stripe reale di `frontend/` le due voci non sono **mai** state
@@ -804,9 +804,24 @@ Qui si chiude anche il debito di `SfondoIAPanel`, il pannello di `frontend/` che
 promette uno sfondo e fa un `setTimeout` con un toast: la 7.13 lo ha tolto dalla
 lista di cutover e o lo sfondo viene applicato davvero, o il pannello va tolto.
 
-### Fase 12 — cutover
+### Fase 12 — Club/Community
 
-**Stato:** non iniziata. Era la Fase 11 fino all'11 agosto 2026.
+**Stato:** non iniziata. Nessun branch.
+
+Ha preso il numero 12 il **16 agosto 2026**, perché segue direttamente la Fase 11
+nell'ordine di dipendenza; il cutover si è spostato alla 13. È strutturata in
+**tre checkpoint, 12a/12b/12c**, dettagliati nel **documento organizzativo della
+fase**, che **non è ancora scritto in questo repo**: il contenuto dei tre
+checkpoint non si deduce da questa voce.
+
+La voce registra numero e struttura e **non apre la fase**: nessuna funzionalità
+della Fase 12 è ammessa per nome qui, e l'ammissione appartiene alla sessione che
+apre davvero il branch della fase.
+
+### Fase 13 — cutover
+
+**Stato:** non iniziata. Era la Fase 11 fino all'11 agosto 2026 e la Fase 12 fino
+al 16 agosto 2026.
 
 Solo dopo parità funzionale e verifiche complete si potrà decidere di
 dismettere `frontend/` e `backend/`. Non è una conseguenza automatica delle

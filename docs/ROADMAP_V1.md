@@ -86,7 +86,20 @@ Il dettaglio di ogni ticket è in
 | 9 | `ModerationService` + audit persistente | Sì |
 | 10 | `AiService` reale via Edge Function | Sì |
 | 11 | Estensioni AI ammesse per eccezione: autofill da foto, spunta di completezza documentale, triage di moderazione, ritaglio e sfondo reale | Sì |
-| 12 | Cutover finale: dismissione `frontend/` + `backend/` | — |
+| 12 | Club/Community: struttura in tre checkpoint 12a/12b/12c, dettagliati nel documento organizzativo della fase, non ancora scritto in questo repo | Sì |
+| 13 | Cutover finale: dismissione `frontend/` + `backend/` | — |
+
+**Rinumerazione del 16 agosto 2026.** Il cutover era la Fase 12 e diventa la
+**Fase 13**. La nuova **Fase 12** è Club/Community, e prende quel numero perché
+segue direttamente la Fase 11 — estensioni AI — nell'ordine di dipendenza. È
+strutturata in tre checkpoint **12a/12b/12c**, dettagliati nel documento
+organizzativo della fase, che **non è ancora scritto in questo repo**. Questa
+rinumerazione è il prerequisito da mergiare **prima** di aprire il branch della
+fase: non è la Fase 12, è ciò che le libera il numero. A differenza dell'11
+agosto 2026, **nessun file congelato conserva il numero vecchio**: la ricerca di
+«Fase 12»/«Phase 12» in `supabase/migrations/*.sql` e in
+`docs/superpowers/plans/` dà **zero risultati**, verificato e non presunto dalla
+regola.
 
 **Rinumerazione dell'11 agosto 2026.** Il cutover era la Fase 11 e diventa la
 **Fase 12**. La nuova **Fase 11** raccoglie le quattro funzionalità che le
@@ -520,9 +533,23 @@ Ciascuna funzionalità **ha la propria sessione di spec prima del codice**, sul
 modello dei 9a/9b/9c separati, e non è chiaro che debbano stare tutte nella
 stessa PR.
 
-## Fase 12 — cutover finale
+## Fase 12 — Club/Community
 
-**Stato: non iniziato.** Era la Fase 11 fino all'11 agosto 2026.
+**Stato: non iniziata. Nessun branch.**
+
+Prende il numero 12 perché segue direttamente la Fase 11 — estensioni AI —
+nell'ordine di dipendenza, e per questo il cutover si è spostato alla 13. È
+strutturata in **tre checkpoint, 12a/12b/12c**, dettagliati nel **documento
+organizzativo della fase**, che **non è ancora scritto in questo repo**: finché
+non lo è, il contenuto dei tre checkpoint non si deduce da qui.
+
+Questa voce registra il numero e la struttura, **non apre la fase**: l'apertura
+resta un'approvazione esplicita a parte, come per ogni fase.
+
+## Fase 13 — cutover finale
+
+**Stato: non iniziato.** Era la Fase 11 fino all'11 agosto 2026 e la Fase 12
+fino al 16 agosto 2026.
 
 Dismissione di `frontend/` (TanStack Start) e `backend/` (FastAPI/MongoDB) solo
 dopo parità funzionale verificata e approvazione esplicita separata.

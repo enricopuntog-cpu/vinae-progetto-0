@@ -95,5 +95,9 @@ implementazione non iniziata**. La sezione 6 della sua specifica
 è chiusa per intero, la §10.3 anche, e `migration/phase-11-*` è a **zero branch**
 di proposito: tutti e quattro i checkpoint sono bloccati da dipendenze esterne, e
 nessuno dei quattro prerequisiti è soddisfatto. La §9, revisione legale, resta
-aperta, e la fase non si dichiara chiusa senza. Il **cutover è la Fase 12**, dopo
-la rinumerazione dell'11 agosto 2026: non è iniziato.
+aperta, e la fase non si dichiara chiusa senza. Il **cutover è la Fase 13**, dopo
+due rinumerazioni — l'11 agosto 2026 da Fase 11 a Fase 12, il 16 agosto 2026 da
+Fase 12 a Fase 13 — e non è iniziato. La **Fase 12** è **Club/Community**, che ha
+preso quel numero perché segue direttamente la Fase 11 nell'ordine di dipendenza:
+non iniziata, nessun branch, tre checkpoint 12a/12b/12c dettagliati nel documento
+organizzativo della fase, non ancora scritto in questo repo.
