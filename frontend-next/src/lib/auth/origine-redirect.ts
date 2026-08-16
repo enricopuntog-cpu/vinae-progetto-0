@@ -31,6 +31,49 @@ const CONTESTI_NON_PRODUZIONE: ReadonlySet<string> = new Set(["deploy-preview", 
  */
 const HOSTNAME_LOCALI: ReadonlySet<string> = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
+/** Suffisso dei domini gestiti da Netlify. */
+const SUFFISSO_NETLIFY = ".netlify.app";
+
+/**
+ * Il dominio immutabile di un singolo deploy: ventiquattro cifre esadecimali.
+ * Non è mai un destinatario valido — è l'indirizzo di *quel* deploy, non del
+ * sito, e mandarci un utente lo legherebbe a un deploy che sarà sostituito.
+ */
+const PREFISSO_DEPLOY_IMMUTABILE = /^[0-9a-f]{24}$/;
+
+/**
+ * Riconosce un alias Netlify **dello stesso sito**, cioè
+ * `<qualcosa>--<nome-sito>.netlify.app`, dove `<nome-sito>` è ricavato dal
+ * dominio fidato e mai dalla richiesta.
+ *
+ * Serve perché la misura sulla Deploy Preview della #45 dice che a runtime
+ * esiste **soltanto** `URL`: `CONTEXT` e `DEPLOY_PRIME_URL` non ci sono, quindi
+ * dalle sole variabili di Netlify una preview è indistinguibile dalla
+ * produzione, e senza questa regola chi prova una preview verrebbe rimandato in
+ * produzione a metà del login.
+ *
+ * Non è fiducia indiscriminata nell'`Host`: è un elenco chiuso **derivato da un
+ * valore del server**. `evil.example`, `x--altro-sito.netlify.app` e
+ * `timely-lokum.netlify.app.evil.example` non passano, e i sottodomini
+ * `<qualcosa>--<sito>` sono riservati da Netlify ai deploy di quel sito, quindi
+ * non sono rivendicabili da terzi.
+ */
+const eAliasDelloStessoSito = (richiesta: URL, canonico: string): boolean => {
+  if (richiesta.protocol !== "https:") return false;
+
+  const hostCanonico = new URL(canonico).hostname;
+  if (!hostCanonico.endsWith(SUFFISSO_NETLIFY)) return false;
+
+  const nomeSito = hostCanonico.slice(0, -SUFFISSO_NETLIFY.length);
+  if (!nomeSito || nomeSito.includes(".")) return false;
+
+  const coda = `--${nomeSito}${SUFFISSO_NETLIFY}`;
+  if (!richiesta.hostname.endsWith(coda) || richiesta.hostname.length <= coda.length) return false;
+
+  const prefisso = richiesta.hostname.slice(0, -coda.length);
+  return !PREFISSO_DEPLOY_IMMUTABILE.test(prefisso);
+};
+
 /**
  * Quale regola ha prodotto l'origine. Serve a rendere la verifica **misurabile**
  * invece che dedotta: sul redirect giusto da solo non si distingue il caso in
@@ -41,6 +84,7 @@ const HOSTNAME_LOCALI: ReadonlySet<string> = new Set(["localhost", "127.0.0.1", 
 export type SorgenteOrigine =
   | "override-esplicito"
   | "netlify-non-produzione"
+  | "netlify-alias-sito"
   | "netlify-produzione"
   | "richiesta-locale"
   | "richiesta-non-attendibile";
@@ -129,7 +173,15 @@ export const risolviOriginePubblica = (
     return { origine: anteprima, sorgente: "netlify-non-produzione" };
   }
 
-  if (produzione) return { origine: produzione, sorgente: "netlify-produzione" };
+  if (produzione) {
+    // Ultima difesa della preview quando `DEPLOY_PRIME_URL` non è leggibile:
+    // se la richiesta arriva su un alias di *questo* sito, quello è il dominio
+    // su cui l'utente resterà, e i cookie vanno scritti lì.
+    if (eAliasDelloStessoSito(richiesta, produzione)) {
+      return { origine: richiesta.origin, sorgente: "netlify-alias-sito" };
+    }
+    return { origine: produzione, sorgente: "netlify-produzione" };
+  }
 
   if (HOSTNAME_LOCALI.has(richiesta.hostname)) {
     return { origine: richiesta.origin, sorgente: "richiesta-locale" };

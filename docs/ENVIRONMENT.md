@@ -89,19 +89,50 @@ L'origine è ora decisa dal server in `frontend-next/src/lib/auth/origine-redire
 in ordine di fiducia decrescente:
 
 1. `AUTH_REDIRECT_ORIGIN`, se è un URL assoluto `http`/`https`;
-2. `DEPLOY_PRIME_URL`, quando `CONTEXT` è `deploy-preview` o `branch-deploy`;
-3. `URL`, il dominio pubblico stabile — è il caso della produzione Netlify;
-4. l'origine della richiesta, **solo** se l'hostname è `localhost`, `127.0.0.1`
+2. `DEPLOY_PRIME_URL`, quando `CONTEXT` dice `deploy-preview` o `branch-deploy`,
+   oppure — se `CONTEXT` manca — quando differisce da `URL`;
+3. l'origine della richiesta, se è un **alias Netlify dello stesso sito**
+   (`<qualcosa>--<nome-sito>.netlify.app`, con `<nome-sito>` ricavato da `URL`);
+4. `URL`, il dominio pubblico stabile — è il caso della produzione Netlify;
+5. l'origine della richiesta, **solo** se l'hostname è `localhost`, `127.0.0.1`
    o `::1`, confrontati per intero e mai per suffisso;
-5. altrimenti l'origine della richiesta, che è il comportamento precedente alla
+6. altrimenti l'origine della richiesta, che è il comportamento precedente alla
    correzione: nessuna regressione, e su Netlify irraggiungibile perché `URL`
    esiste sempre.
+
+### Che cosa esiste davvero a runtime, misurato e non dedotto
+
+Sulla Deploy Preview della PR #45 la risposta di `/auth/callback` ha elencato
+le variabili presenti nella Next runtime di Netlify: **c'è soltanto `URL`**.
+`CONTEXT`, `DEPLOY_PRIME_URL` e `AUTH_REDIRECT_ORIGIN` **non sono leggibili a
+runtime** — sono variabili di *build*. Conseguenze che vincolano il codice:
+
+- una regola che dipende dal solo `CONTEXT` **non scatta mai** su Netlify. La
+  prima versione di questo modulo faceva così e rispondeva `netlify-produzione`
+  sulla preview, cioè rimandava in produzione chi stava provando la preview:
+  la regressione opposta a quella che la PR correggeva;
+- dalle sole variabili di Netlify una preview è **indistinguibile** dalla
+  produzione, perché `URL` vale il dominio pubblico in entrambi i casi. È la
+  ragione della regola 3;
+- la regola 3 **non è fiducia indiscriminata nell'`Host`**: il nome del sito
+  viene da `URL`, cioè da un valore del server, e la forma accettata è un
+  elenco chiuso. `evil.example`, `x--altro-sito.netlify.app` e
+  `timely-lokum-43a12e.netlify.app.evil.example` non passano; i sottodomini
+  `<qualcosa>--<sito>.netlify.app` sono riservati da Netlify ai deploy di quel
+  sito e non sono rivendicabili da terzi;
+- il **dominio immutabile del deploy** (`<24 cifre esadecimali>--<sito>`) è
+  escluso esplicitamente: ha la forma di un alias, ma è l'indirizzo di *quel*
+  deploy e non del sito;
+- con un **dominio personalizzato** nessun alias `.netlify.app` è riconosciuto e
+  vince il canonico, che è il comportamento voluto.
 
 `Host` e `X-Forwarded-Host` non vengono mai consultati direttamente. La
 risposta porta `X-Vinea-Origine-Sorgente` con il nome della regola che ha
 deciso — mai un valore di ambiente — perché su Netlify l'origine del server e
 quella della richiesta coincidono e dal solo `Location` non si distinguerebbe
-una risoluzione corretta da una coincidenza.
+una risoluzione corretta da una coincidenza. È l'header che ha reso visibile
+la regressione descritta sopra: il `Location` da solo la faceva passare per
+corretta, perché il dominio pubblico è un valore plausibile.
 
 È la stessa forma già usata dai pagamenti, dove `PAYMENT_REDIRECT_ORIGIN` è
 scelta dal server e deve appartenere a `PAYMENT_REDIRECT_ALLOWED_ORIGINS`.

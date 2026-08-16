@@ -67,6 +67,14 @@ describe("origine pubblica dei redirect Auth", () => {
       "https://evil.example.com/auth/callback?code=abc",
       "https://timely-lokum-43a12e.netlify.app.evil.example/auth/callback",
       "https://localhost.evil.example/auth/callback",
+      // Alias di un ALTRO sito Netlify: il nome del sito non coincide.
+      "https://deploy-preview-1--altro-sito.netlify.app/auth/callback",
+      // Coda giusta ma su un dominio altrui.
+      "https://x--timely-lokum-43a12e.netlify.app.evil.example/auth/callback",
+      // Alias senza prefisso: è il dominio canonico, non un alias.
+      "https://--timely-lokum-43a12e.netlify.app/auth/callback",
+      // In chiaro: un alias Netlify è sempre https.
+      "http://deploy-preview-45--timely-lokum-43a12e.netlify.app/auth/callback",
       `${IMMUTABILE}/auth/callback`,
     ]) {
       const risolta = risolviOriginePubblica(richiesta(inoltrato), ambienteProduzione);
@@ -74,6 +82,55 @@ describe("origine pubblica dei redirect Auth", () => {
       expect(risolta.origine).toBe(PRODUZIONE);
       expect(risolta.sorgente).toBe("netlify-produzione");
     }
+  });
+
+  it("il dominio immutabile del deploy non è mai un destinatario, nemmeno da alias", () => {
+    // Ha la forma di un alias del sito, ma il prefisso è l'id del deploy:
+    // mandarci un utente lo legherebbe a un deploy destinato a essere sostituito.
+    const risolta = risolviOriginePubblica(richiesta(`${IMMUTABILE}/auth/callback`), {
+      URL: PRODUZIONE,
+    });
+
+    expect(risolta.origine).toBe(PRODUZIONE);
+    expect(risolta.sorgente).toBe("netlify-produzione");
+  });
+
+  it("resta sulla Deploy Preview quando a runtime esiste il solo URL", () => {
+    // È la misura fatta sulla Deploy Preview della #45: `CONTEXT` e
+    // `DEPLOY_PRIME_URL` non sono leggibili a runtime, `URL` sì. Senza questa
+    // regola chi prova la preview verrebbe rimandato in produzione a metà login.
+    for (const alias of [
+      "https://deploy-preview-45--timely-lokum-43a12e.netlify.app",
+      "https://main--timely-lokum-43a12e.netlify.app",
+      "https://una-feature--timely-lokum-43a12e.netlify.app",
+    ]) {
+      const risolta = risolviOriginePubblica(richiesta(`${alias}/auth/callback`), {
+        URL: PRODUZIONE,
+      });
+
+      expect(risolta.origine).toBe(alias);
+      expect(risolta.sorgente).toBe("netlify-alias-sito");
+    }
+  });
+
+  it("sul dominio canonico non scambia la produzione per un alias", () => {
+    const risolta = risolviOriginePubblica(richiesta(`${PRODUZIONE}/auth/callback`), {
+      URL: PRODUZIONE,
+    });
+
+    expect(risolta.origine).toBe(PRODUZIONE);
+    expect(risolta.sorgente).toBe("netlify-produzione");
+  });
+
+  it("con un dominio personalizzato nessun alias è riconosciuto e vince il canonico", () => {
+    const personalizzato = "https://app.vinea.it";
+    const risolta = risolviOriginePubblica(
+      richiesta("https://deploy-preview-45--timely-lokum-43a12e.netlify.app/auth/callback"),
+      { URL: personalizzato },
+    );
+
+    expect(risolta.origine).toBe(personalizzato);
+    expect(risolta.sorgente).toBe("netlify-produzione");
   });
 
   it("non lascia che un hostname che finisce per localhost passi per locale", () => {
@@ -138,7 +195,10 @@ describe("origine pubblica dei redirect Auth", () => {
   });
 
   it("un CONTEXT esplicito comanda sul confronto fra i due domini", () => {
-    const risolta = risolviOriginePubblica(richiesta(`${ANTEPRIMA}/auth/callback`), {
+    // `CONTEXT=production` impedisce a `DEPLOY_PRIME_URL` di vincere anche
+    // quando differisce da `URL`. La richiesta arriva sul dominio canonico,
+    // così il caso isola questa regola dalla successiva sugli alias.
+    const risolta = risolviOriginePubblica(richiesta(`${PRODUZIONE}/auth/callback`), {
       CONTEXT: "production",
       DEPLOY_PRIME_URL: ANTEPRIMA,
       URL: PRODUZIONE,
@@ -148,11 +208,11 @@ describe("origine pubblica dei redirect Auth", () => {
     expect(risolta.sorgente).toBe("netlify-produzione");
   });
 
-  it("senza DEPLOY_PRIME_URL una preview ricade sul dominio di produzione, non sulla richiesta", () => {
-    const risolta = risolviOriginePubblica(richiesta(`${ANTEPRIMA}/auth/callback`), {
-      CONTEXT: "deploy-preview",
-      URL: PRODUZIONE,
-    });
+  it("senza DEPLOY_PRIME_URL non promuove a destinatario un host che non è un alias", () => {
+    const risolta = risolviOriginePubblica(
+      richiesta("https://qualcosa.example.com/auth/callback"),
+      { CONTEXT: "deploy-preview", URL: PRODUZIONE },
+    );
 
     expect(risolta.origine).toBe(PRODUZIONE);
     expect(risolta.sorgente).toBe("netlify-produzione");
