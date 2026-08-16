@@ -811,3 +811,34 @@ lista di cutover e o lo sfondo viene applicato davvero, o il pannello va tolto.
 Solo dopo parità funzionale e verifiche complete si potrà decidere di
 dismettere `frontend/` e `backend/`. Non è una conseguenza automatica delle
 fasi precedenti.
+
+## Checkpoint beta pubblico `frontend-next` — 16 agosto 2026
+
+Questo checkpoint è operativo e trasversale, non una nuova fase. Il branch
+`codex/prelaunch-beta-no-ai`, base `f3f0155`, ha portato la beta production-like
+nella PR [#44](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/44)
+senza toccare `frontend/`, `backend/` o `supabase/`. Ha separato i gate di
+visibilità dai gate di azione, rimosso le superfici dimostrative dal target,
+reso irraggiungibile `SfondoIAPanel`, collegato le superfici pubbliche ai servizi
+reali e fissato `MIN_TESTS` a 315.
+
+L'HEAD pre-documentazione `84b8767` ha superato CI #152 e il Deploy Preview
+Netlify `6a81acfbee2b64c77b28addc` sul sottodominio
+`deploy-preview-44--timely-lokum-43a12e.netlify.app`. Il primo tentativo aveva
+pubblicato la `.next` grezza e restituiva 404: la configurazione del runtime
+`Next.js` nelle Build settings e un retry senza cache hanno attivato l'adapter
+corretto. Il sito è pubblico, `noindex,nofollow`, e `/community` restituisce
+404.
+
+Supabase Auth ha ricevuto il callback temporaneo del preview; `AI_ENABLED` e
+`PAYMENTS_ENABLED` sono stati impostati a `false` prima del merge. Gli smoke
+desktop e mobile hanno verificato dati reali del catalogo, annuncio, callback,
+blocchi IA e protezioni anonime senza chiamate a provider, Stripe o logistica.
+I flussi autenticati reali non sono stati eseguiti perché il checkpoint non
+autorizza la creazione di identità, ruoli o fixture.
+
+Al momento di questo commit la PR #44 non è ancora mersa. Lo squash resta
+condizionato al commit documentale finale, alla seconda CI/preview verde, alla
+revisione completa del diff e alla riverifica dei gate server spenti. Dopo il
+merge vanno completati deploy e smoke di `main`, callback Auth di produzione,
+rimozione del callback temporaneo e cancellazione del solo branch remoto.

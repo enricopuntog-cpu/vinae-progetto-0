@@ -1861,3 +1861,36 @@ Il gate «decidere dove sta il gate di autorizzazione» è **chiuso dalla decisi
 7.10**: sta nel merge, che è lo stesso posto delle migrazioni, e non serve
 un'azione di deploy separata da autorizzare. Resta la conferma per perimetro, che
 è la riga 5.
+
+## Beta `frontend-next` production-like — Deploy Preview del 16 agosto 2026
+
+La beta pubblica separata è nella PR
+[#44](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/44), pronta e
+non draft, base `f3f0155`. L'HEAD pre-documentazione `84b8767` ha CI #152 verde
+e un Deploy Preview Netlify pubblico, deploy `6a81acfbee2b64c77b28addc`:
+`https://deploy-preview-44--timely-lokum-43a12e.netlify.app`. La produzione
+Netlify non contiene ancora la PR e il legacy `frontend/` + `backend/` resta la
+versione servita: non è il cutover della Fase 12 e non apre la Fase 11.
+
+La matrice remota mantiene visibili le interfacce IA, checkout e packaging, ma
+blocca le azioni esterne: `NEXT_PUBLIC_AI_ACTIONS_ENABLED=false`,
+`AI_ENABLED=false`, `NEXT_PUBLIC_PAYMENT_ACTIONS_ENABLED=false`,
+`PAYMENTS_ENABLED=false`, `PACKAGING_ENABLED=false` e
+`NEXT_PUBLIC_DEMO_UI_ENABLED=false`. Netlify non contiene service role, chiavi
+di provider IA o Stripe. Supabase Auth consente temporaneamente il callback
+esatto del preview oltre a `http://localhost:3000/**`; dopo il merge andrà
+aggiunto il callback `netlify.app` di produzione e rimosso quello temporaneo.
+
+Smoke desktop e 390×844: home, `/home`, `/esplora`, nove annunci reali,
+dettaglio reale, `/cantina`, `/vendi`, checkout anonimo, `/messaggi`,
+`/notifiche`, `/segnalazioni`, `/admin` e `/community` senza errori console
+bloccanti o overflow. Tutte le pagine sono `noindex,nofollow`; `/community` è
+HTTP 404. Sommelier e abbinamenti mostrano l'avviso beta prima del client IA e
+i log Edge Function non registrano invocazioni `ai-*`, pagamenti o Stripe. Gli
+smoke che richiedono una sessione reale o il ruolo Admin sono `NON ESEGUITO`:
+non sono state create identità, fixture o assegnazioni di ruolo.
+
+Prima del merge squash della sola #44 restano il commit documentale finale, il
+nuovo push, CI e preview verdi sul nuovo HEAD, la revisione completa del diff e
+la riverifica dei gate Supabase spenti. Nessun SQL, fixture, provider IA,
+Stripe, servizio logistico o deploy manuale Supabase è stato eseguito.

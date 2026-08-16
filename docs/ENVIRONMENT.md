@@ -81,10 +81,11 @@ nell'ambiente delle Edge Function ed è il gate autoritativo: rendere visibile
 la UI non abilita il provider, non aggira autenticazione, stato utente o rate
 limit e non rende pubblica alcuna chiave.
 
-### Matrice prevista per la beta Netlify
+### Matrice della beta Netlify
 
-Questa tabella documenta valori futuri; non configura alcun ambiente remoto.
-I default versionati in `.env.example` restano tutti `false`.
+I default versionati in `.env.example` restano tutti `false`. Il Deploy Preview
+della PR #44 applica invece la matrice seguente nell'ambiente Netlify; i valori
+pubblici Supabase non sono riportati in documentazione.
 
 | Capacità | Flag UI futura | Flag azione futura | Gate server futuro | Esito beta |
 |---|---:|---:|---:|---|
@@ -93,9 +94,11 @@ I default versionati in `.env.example` restano tutti `false`.
 | Packaging/spedizione | `NEXT_PUBLIC_PACKAGING_ENABLED=true` | n/a | `PACKAGING_ENABLED=false` | Preferenze locali interattive, nessuna prenotazione provider. |
 | Ruolo demo | `NEXT_PUBLIC_DEMO_UI_ENABLED=false` | n/a | RLS e `user_roles` | Guest/User/Admin derivano dalla sessione reale. |
 
-La configurazione operativa, le URL Auth e i gate delle Edge Function devono
-essere applicati soltanto dopo autorizzazione separata. La procedura locale e
-la configurazione Netlify versionata sono in `docs/BETA_NETLIFY.md`.
+La configurazione operativa del Deploy Preview è stata applicata il 16 agosto
+2026 con autorizzazioni distinte: callback Auth temporaneo, gate Edge Function
+`AI_ENABLED=false` e `PAYMENTS_ENABLED=false`, nessun service role e nessuna
+chiave IA o Stripe su Netlify. La procedura e gli identificativi non sensibili
+sono in `docs/BETA_NETLIFY.md`.
 
 ### Dati visibili nella beta
 
