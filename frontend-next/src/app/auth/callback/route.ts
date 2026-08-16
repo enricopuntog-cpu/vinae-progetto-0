@@ -25,7 +25,8 @@ import {
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
-  const { origine, sorgente } = risolviOriginePubblica(request.nextUrl, ambienteCorrente());
+  const ambiente = ambienteCorrente();
+  const { origine, sorgente } = risolviOriginePubblica(request.nextUrl, ambiente);
   const code = searchParams.get("code");
   const errorDescription = searchParams.get("error_description") ?? searchParams.get("error");
   // `next` permette di tornare da dove si è partiti; accettiamo solo percorsi
@@ -41,6 +42,17 @@ export async function GET(request: NextRequest) {
   const vaiA = (percorso: string) => {
     const risposta = NextResponse.redirect(`${origine}${percorso}`);
     risposta.headers.set("X-Vinea-Origine-Sorgente", sorgente);
+    // TEMPORANEO, da togliere prima del merge: dice quali delle quattro
+    // variabili esistono a runtime, non che cosa contengono. Serve a misurare
+    // in un solo deploy ciò che la prima Deploy Preview della #45 ha mostrato
+    // solo di riflesso — che `CONTEXT` a runtime non c'è.
+    risposta.headers.set(
+      "X-Vinea-Origine-Presenti",
+      Object.entries(ambiente)
+        .filter(([, valore]) => Boolean(valore))
+        .map(([nome]) => nome)
+        .join(",") || "nessuna",
+    );
     return risposta;
   };
 

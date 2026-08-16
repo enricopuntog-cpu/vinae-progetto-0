@@ -114,6 +114,40 @@ describe("origine pubblica dei redirect Auth", () => {
     expect(risolta.origine).toBe(PRODUZIONE);
   });
 
+  it("riconosce una preview anche senza CONTEXT, che a runtime su Netlify non c'è", () => {
+    // Misurato sulla Deploy Preview della #45: `URL` è leggibile a runtime,
+    // `CONTEXT` no. La prima versione mandava in produzione chi provava la
+    // preview proprio perché la regola dipendeva dal solo `CONTEXT`.
+    const risolta = risolviOriginePubblica(richiesta(`${ANTEPRIMA}/auth/callback`), {
+      DEPLOY_PRIME_URL: ANTEPRIMA,
+      URL: PRODUZIONE,
+    });
+
+    expect(risolta.origine).toBe(ANTEPRIMA);
+    expect(risolta.sorgente).toBe("netlify-non-produzione");
+  });
+
+  it("senza CONTEXT resta in produzione quando i due domini coincidono", () => {
+    const risolta = risolviOriginePubblica(richiesta(`${IMMUTABILE}/auth/callback`), {
+      DEPLOY_PRIME_URL: PRODUZIONE,
+      URL: PRODUZIONE,
+    });
+
+    expect(risolta.origine).toBe(PRODUZIONE);
+    expect(risolta.sorgente).toBe("netlify-produzione");
+  });
+
+  it("un CONTEXT esplicito comanda sul confronto fra i due domini", () => {
+    const risolta = risolviOriginePubblica(richiesta(`${ANTEPRIMA}/auth/callback`), {
+      CONTEXT: "production",
+      DEPLOY_PRIME_URL: ANTEPRIMA,
+      URL: PRODUZIONE,
+    });
+
+    expect(risolta.origine).toBe(PRODUZIONE);
+    expect(risolta.sorgente).toBe("netlify-produzione");
+  });
+
   it("senza DEPLOY_PRIME_URL una preview ricade sul dominio di produzione, non sulla richiesta", () => {
     const risolta = risolviOriginePubblica(richiesta(`${ANTEPRIMA}/auth/callback`), {
       CONTEXT: "deploy-preview",

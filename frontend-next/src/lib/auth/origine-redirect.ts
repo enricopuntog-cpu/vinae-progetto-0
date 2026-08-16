@@ -106,12 +106,29 @@ export const risolviOriginePubblica = (
   const override = origineDa(ambiente.AUTH_REDIRECT_ORIGIN);
   if (override) return { origine: override, sorgente: "override-esplicito" };
 
-  if (CONTESTI_NON_PRODUZIONE.has(ambiente.CONTEXT ?? "")) {
-    const anteprima = origineDa(ambiente.DEPLOY_PRIME_URL);
-    if (anteprima) return { origine: anteprima, sorgente: "netlify-non-produzione" };
+  const contesto = ambiente.CONTEXT ?? "";
+  const anteprima = origineDa(ambiente.DEPLOY_PRIME_URL);
+  const produzione = origineDa(ambiente.URL);
+
+  /**
+   * `CONTEXT` da solo non basta, ed è una misura e non una precauzione: sulla
+   * Deploy Preview della #45 la prima versione di questo modulo rispondeva
+   * `netlify-produzione`, cioè mandava in produzione chi stava provando la
+   * preview. Nella Next runtime di Netlify `URL` è leggibile a runtime e
+   * `CONTEXT` no, quindi la regola che dipendeva da `CONTEXT` non scattava mai.
+   *
+   * Quando `CONTEXT` c'è comanda lui, anche per dire `production`. Quando manca,
+   * la differenza fra `DEPLOY_PRIME_URL` e `URL` dice la stessa cosa: in
+   * produzione Netlify le tiene uguali, su una preview o un branch deploy no.
+   */
+  const nonProduzione = contesto
+    ? CONTESTI_NON_PRODUZIONE.has(contesto)
+    : anteprima !== null && anteprima !== produzione;
+
+  if (anteprima && nonProduzione) {
+    return { origine: anteprima, sorgente: "netlify-non-produzione" };
   }
 
-  const produzione = origineDa(ambiente.URL);
   if (produzione) return { origine: produzione, sorgente: "netlify-produzione" };
 
   if (HOSTNAME_LOCALI.has(richiesta.hostname)) {
