@@ -837,8 +837,36 @@ blocchi IA e protezioni anonime senza chiamate a provider, Stripe o logistica.
 I flussi autenticati reali non sono stati eseguiti perché il checkpoint non
 autorizza la creazione di identità, ruoli o fixture.
 
-Al momento di questo commit la PR #44 non è ancora mersa. Lo squash resta
-condizionato al commit documentale finale, alla seconda CI/preview verde, alla
-revisione completa del diff e alla riverifica dei gate server spenti. Dopo il
-merge vanno completati deploy e smoke di `main`, callback Auth di produzione,
-rimozione del callback temporaneo e cancellazione del solo branch remoto.
+La PR #44 **è mersa in squash come `8b003995`** il 16 agosto 2026 alle 12:04:44
+UTC e la produzione Netlify è attiva su
+`https://timely-lokum-43a12e.netlify.app`.
+
+## Correzione dell'origine dei redirect Auth — PR #45, 16 agosto 2026
+
+Primo difetto trovato sulla beta pubblica dopo il merge della #44, e
+trasversale come il checkpoint precedente: non è una fase e non ne apre una.
+Il branch `claude/beta-auth-canonical-origin`, base `8b003995`, toglie a
+`/auth/callback` la dipendenza da `request.nextUrl.origin` e fa decidere
+l'origine al server, in `frontend-next/src/lib/auth/origine-redirect.ts`.
+
+Il percorso conta quanto l'esito, perché due letture successive hanno detto
+cose diverse e la seconda ha corretto la prima:
+
+1. **Le sonde su produzione non mostravano il difetto.** Cinque richieste al
+   callback pubblico, più il dominio immutabile del deploy e l'alias `main--`,
+   davano tutte il dominio corretto. Registrato così, non come conferma del
+   sintomo atteso.
+2. **La Deploy Preview lo ha riprodotto**, con una diagnostica temporanea:
+   `request.nextUrl.origin` vale il **dominio immutabile del deploy**, mentre
+   `Host` e `x-forwarded-host` portano quello giusto. In produzione i due
+   coincidono, e per questo le sonde tacevano: il sintomo esiste dove divergono.
+3. **Nella stessa misura: a runtime su Netlify esiste la sola `URL`.**
+   `CONTEXT` e `DEPLOY_PRIME_URL` sono variabili di build. La prima stesura del
+   modulo dipendeva da `CONTEXT`, non scattava mai, e mandava in produzione chi
+   provava la preview — la regressione opposta. L'ha resa visibile l'header
+   `X-Vinea-Origine-Sorgente`, non il `Location`, che era plausibile.
+
+Esito: risoluzione a sei regole, alias Netlify dello stesso sito riconosciuto
+prima dall'host annunciato e poi da `nextUrl`, dominio immutabile escluso per
+forma, `next` chiuso alle forme `//host` e `/\host`. `MIN_TESTS` da 315 a 341.
+Nessun SQL, fixture, provider IA, Stripe, logistica o deploy manuale Supabase.

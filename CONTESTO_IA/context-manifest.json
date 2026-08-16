@@ -2,7 +2,18 @@
   "schema_version": 2,
   "schema_version_note": "Da 1 a 2 il 2026-08-13. Il file e' stato RICOSTRUITO leggendo il progetto reale, non aggiornato a toppe: la v1 era ferma alla Fase 8 e sbagliava tre fasi, il conteggio del ledger e il numero di Edge Function. Chi ne ricordasse la forma precedente rilegga, non presuma - alcune chiavi non ci sono piu'.",
   "schema_version_changes": {
-    "added": ["storage_buckets", "phase_status_legend", "phase_11", "edge_function_deploy_gate", "function_environment_flags", "not_verifiable_from_here", "real_project_read_only_snapshot", "enum_cast_rule", "mandatory_read_order_note", "schema_version_changes"],
+    "added": [
+      "storage_buckets",
+      "phase_status_legend",
+      "phase_11",
+      "edge_function_deploy_gate",
+      "function_environment_flags",
+      "not_verifiable_from_here",
+      "real_project_read_only_snapshot",
+      "enum_cast_rule",
+      "mandatory_read_order_note",
+      "schema_version_changes"
+    ],
     "removed_or_replaced": [
       "runtime_truth.payments_enabled: spostata in function_environment_flags.PAYMENTS_ENABLED. Non era una misura - un segreto d'ambiente di una Edge Function non si legge con gli strumenti disponibili, e un booleano lo faceva sembrare misurato.",
       "runtime_truth.phase_7/7b/7c/7f/8_migration_applied_to_real_project: cinque booleani sostituiti da migrations_applied_to_real_project, perche' ora sono applicate tutte e venticinque e un elenco di booleani per fase invecchia a ogni merge.",
@@ -21,17 +32,24 @@
     "supabase_project_ref": "pijnmcllmfgjmgsvtcej"
   },
   "beta_preview": {
-    "state": "PR aperta, Deploy Preview pubblico operativo, merge non ancora eseguito",
+    "state": "PR #44 MERSA e produzione Netlify attiva. La beta e' un sito separato: frontend/ + backend/ restano la versione servita, nessun cutover.",
     "pull_request": 44,
     "branch": "codex/prelaunch-beta-no-ai",
     "base_sha": "f3f0155a9f294210d2756c3169aa785c38395c97",
     "head_before_final_docs": "84b87677291be97c7b2f296def44d05a4de9139e",
-    "github_ci": { "run_id": 31946914430, "run_number": 152, "conclusion": "success" },
+    "merged_squash_sha": "8b0039959f5b09a413f8ee0d11af4295d852c611",
+    "merged_at": "2026-08-16T12:04:44Z",
+    "github_ci": {
+      "run_id": 31946914430,
+      "run_number": 152,
+      "conclusion": "success"
+    },
     "netlify": {
       "site": "timely-lokum-43a12e",
       "plan": "Free",
-      "preview_deploy_id": "6a81acfbee2b64c77b28addc",
-      "preview_url": "https://deploy-preview-44--timely-lokum-43a12e.netlify.app",
+      "production_url": "https://timely-lokum-43a12e.netlify.app",
+      "preview_deploy_id_pr_44": "6a81acfbee2b64c77b28addc",
+      "preview_url_pr_44": "https://deploy-preview-44--timely-lokum-43a12e.netlify.app",
       "base": "frontend-next",
       "build": "bun run build",
       "publish": ".next",
@@ -40,27 +58,35 @@
     },
     "auth_redirects": [
       "http://localhost:3000/**",
-      "https://deploy-preview-44--timely-lokum-43a12e.netlify.app/auth/callback"
+      "https://timely-lokum-43a12e.netlify.app/auth/callback"
     ],
-    "server_gates": { "AI_ENABLED": false, "PAYMENTS_ENABLED": false },
-    "netlify_secret_exclusions": ["service role", "provider AI keys", "Stripe keys"],
+    "auth_redirects_note": "Il callback temporaneo della Deploy Preview #44 e' stato RIMOSSO dopo il merge e quello definitivo di produzione e' configurato. Il callback di una preview si aggiunge per quella PR e si toglie dopo il merge; serve solo a un flusso Auth reale con credenziali, non alle sonde HTTP non autenticate.",
+    "server_gates": {
+      "AI_ENABLED": false,
+      "PAYMENTS_ENABLED": false
+    },
+    "netlify_secret_exclusions": [
+      "service role",
+      "provider AI keys",
+      "Stripe keys"
+    ],
     "smoke": "desktop e 390x844 verdi sulle route pubbliche; catalogo reale a 9 annunci; /community HTTP 404; noindex,nofollow; Sommelier e abbinamenti bloccati prima del client IA; nessun log Edge Function ai-*, pagamenti o Stripe",
     "authenticated_smoke": "NON ESEGUITO: nessuna credenziale, fixture o assegnazione di ruolo creata",
     "cutover": false,
     "phase_11_work": false
   },
   "verified_git_snapshot": {
-    "branch": "codex/prelaunch-beta-no-ai",
-    "head": "il commit documentale finale della PR #44; il suo predecessore verificato e' 84b87677291be97c7b2f296def44d05a4de9139e",
-    "origin_main": "f3f0155a9f294210d2756c3169aa785c38395c97",
-    "origin_main_pr": 43,
-    "origin_main_merged_at": "2026-08-13T21:54:47Z",
-    "snapshot_note": "Rilevato il 2026-08-16. main e' alla PR #43, mersa in squash f3f0155. La PR #44 parte esattamente da quella base; il branch e' pubblicato e traccia origin/codex/prelaunch-beta-no-ai. Prima del commit documentale finale l'HEAD e' 84b8767 e il worktree e' pulito. .wslconfig, frontend/, backend/ e supabase/ sono preservati.",
+    "branch": "claude/beta-auth-canonical-origin",
+    "head": "il commit documentale finale della PR #45; il suo predecessore verificato e' b3ce0c5",
+    "origin_main": "8b0039959f5b09a413f8ee0d11af4295d852c611",
+    "origin_main_pr": 44,
+    "origin_main_merged_at": "2026-08-16T12:04:44Z",
+    "snapshot_note": "Rilevato il 2026-08-16. main e' alla PR #44, mersa in squash 8b003995. La PR #45 parte esattamente da quella base. .wslconfig resta non tracciato e non e' stato committato; frontend/, backend/ e supabase/ sono preservati e hanno diff vuoto.",
     "implementation_branches_phase_11": 0,
     "implementation_branches_phase_11_verified_how": "git branch -r --list 'origin/migration/phase-11-*' restituisce zero righe, ricontato nel preflight del 2026-08-16"
   },
-  "documentation_branch": "codex/prelaunch-beta-no-ai",
-  "verification_pr": 44,
+  "documentation_branch": "claude/beta-auth-canonical-origin",
+  "verification_pr": 45,
   "merge_rule": "Il merge su main non richiede piu' il click manuale del committente, ma richiede l'approvazione esplicita in sessione, e' solo squash, mai force push. L'approvazione e' PER PR e nominata per numero, mai per sessione: il via libera dato alla #40 non copre la #41. Applicata tre volte il 13 agosto 2026 su #40, #41 e #42, ciascuna con un via libera proprio. La condizione va riverificata sull'HEAD reale della PR e non ereditata da una lettura precedente, e i check vanno letti su repos/OWNER/REPO/commits/SHA/check-runs, che li lega a quel commit, non con gh pr checks, che dice soltanto che dei check esistono per la PR. Ogni PR deve portare come ultimo commit l'aggiornamento di CHANGES.log, CLAUDE.md e CONTESTO_IA/ allo stato che quella PR produce davvero: numero, cosa cambia, cosa resta aperto. Prima dello squash, non dopo.",
   "runtime_truth": {
     "served_frontend": "frontend/",
@@ -79,16 +105,54 @@
     ],
     "migrations_applied_to_real_project": "tutte e venticinque, fino alla 10b compresa. Le fasi 7, 7b, 7c, 7f, 8, 9a, 9b, 9c e 10b sono a ledger.",
     "edge_functions_active": [
-      { "slug": "payments-checkout", "version": 24, "verify_jwt": true, "created_at": "2026-08-03T14:34:57.057Z" },
-      { "slug": "connect-onboarding", "version": 23, "verify_jwt": true, "created_at": "2026-08-04T10:19:22.774Z" },
-      { "slug": "payouts-release", "version": 23, "verify_jwt": true, "created_at": "2026-08-04T10:19:24.487Z" },
-      { "slug": "ai-catalogo", "version": 10, "verify_jwt": true, "created_at": "2026-08-11T18:53:52.233Z" },
-      { "slug": "ai-pairing", "version": 10, "verify_jwt": true, "created_at": "2026-08-11T18:53:54.093Z" },
-      { "slug": "ai-sommelier", "version": 10, "verify_jwt": true, "created_at": "2026-08-11T18:53:55.286Z" }
+      {
+        "slug": "payments-checkout",
+        "version": 25,
+        "verify_jwt": true,
+        "created_at": "2026-08-03T14:34:57.057Z"
+      },
+      {
+        "slug": "connect-onboarding",
+        "version": 24,
+        "verify_jwt": true,
+        "created_at": "2026-08-04T10:19:22.774Z"
+      },
+      {
+        "slug": "payouts-release",
+        "version": 24,
+        "verify_jwt": true,
+        "created_at": "2026-08-04T10:19:24.487Z"
+      },
+      {
+        "slug": "ai-catalogo",
+        "version": 11,
+        "verify_jwt": true,
+        "created_at": "2026-08-11T18:53:52.233Z"
+      },
+      {
+        "slug": "ai-pairing",
+        "version": 11,
+        "verify_jwt": true,
+        "created_at": "2026-08-11T18:53:54.093Z"
+      },
+      {
+        "slug": "ai-sommelier",
+        "version": 11,
+        "verify_jwt": true,
+        "created_at": "2026-08-11T18:53:55.286Z"
+      }
     ],
     "edge_functions_count": 6,
     "edge_functions_shared_updated_at": "2026-08-13T21:55:24.827Z",
-    "edge_functions_source_dirs": ["_shared", "ai-catalogo", "ai-pairing", "ai-sommelier", "connect-onboarding", "payments-checkout", "payouts-release"],
+    "edge_functions_source_dirs": [
+      "_shared",
+      "ai-catalogo",
+      "ai-pairing",
+      "ai-sommelier",
+      "connect-onboarding",
+      "payments-checkout",
+      "payouts-release"
+    ],
     "deployment_mechanism": "Integrazione GitHub di Supabase: il merge su main distribuisce migrazioni ed Edge Function da solo, senza supabase db push ne' apply_migration. Nessun workflow in .github/workflows/ esegue un deploy e nessuno ha mai lanciato supabase functions deploy.",
     "stripe_api_ever_called": false,
     "applied_content_is_guaranteed_net_formula": true,
@@ -99,16 +163,43 @@
     "ui_paths_note": "La 7c ha aggiunto percorsi UI reali per dettaglio ordine, preparazione, spedizione, consegna dichiarata, conferma di ricezione, contestazione e recensione sotto frontend-next/src/app/ordine/[id]/, /acquisti e /vendite. Onboarding Connect e checkout restano senza percorso: payments-checkout e connect-onboarding sono raggiunti solo dallo strato di servizio (frontend-next/src/services/phase7/payment-service.ts e seller-payout-service.ts), mai da una rotta. Attenzione a un falso positivo: frontend-next/src/app/page-client.tsx:144 contiene un <Link href=\"/onboarding\">, ma quella rotta non esiste sotto frontend-next/src/app/ - e' un collegamento morto di presentazione, non il percorso Connect.",
     "ai_surfaces_in_frontend_next": "Tre, tutte della Fase 10 e tutte con etichetta di trasparenza IA dal 2026-08-13 (PR #39): pannello Sommelier nel Layout, assistente del passo Identificazione nel wizard di vendita, pannello abbinamenti in /esplora. Il testo delle etichette sta in un modulo solo, frontend-next/src/lib/phase10/etichette-ia.ts, e un test verifica che le superfici coperte siano esattamente quelle esistenti, cosi' una quarta non puo' essere aggiunta senza etichetta in silenzio.",
     "ci_min_tests_frontend_next": 315,
-    "ci_jobs": ["frontend", "frontend-next", "backend"],
+    "ci_jobs": [
+      "frontend",
+      "frontend-next",
+      "backend"
+    ],
     "ci_covers_supabase_or_docs": false,
     "runtime_truth_verified_at": "2026-08-16",
-    "runtime_truth_verified_how": "list_edge_functions e get_logs sul progetto pijnmcllmfgjmgsvtcej; git per il repository; GitHub connector per PR e workflow; Browser per Netlify e configurazione Auth/secret Supabase. Nessun SQL, fixture o deploy manuale Supabase."
+    "runtime_truth_verified_how": "list_edge_functions e get_logs sul progetto pijnmcllmfgjmgsvtcej; git per il repository; GitHub connector per PR e workflow; Browser per Netlify e configurazione Auth/secret Supabase. Nessun SQL, fixture o deploy manuale Supabase.",
+    "edge_functions_versions_read_at": "2026-08-16, prima del merge della #45. Tutte e sei condividono updated_at 1786892288522 (epoch ms), il redeploy del merge della #44: e' la 7.10, il merge redistribuisce tutto."
   },
   "storage_buckets": {
     "count": 2,
     "buckets": [
-      { "id": "annunci", "public": true, "file_size_limit_bytes": 5242880, "allowed_mime_types": ["image/jpeg", "image/png", "image/webp", "image/avif"], "created_at": "2026-07-28T23:11:12Z" },
-      { "id": "cantina", "public": false, "file_size_limit_bytes": 5242880, "allowed_mime_types": ["image/jpeg", "image/png", "image/webp", "image/avif"], "created_at": "2026-07-31T12:03:40Z" }
+      {
+        "id": "annunci",
+        "public": true,
+        "file_size_limit_bytes": 5242880,
+        "allowed_mime_types": [
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "image/avif"
+        ],
+        "created_at": "2026-07-28T23:11:12Z"
+      },
+      {
+        "id": "cantina",
+        "public": false,
+        "file_size_limit_bytes": 5242880,
+        "allowed_mime_types": [
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "image/avif"
+        ],
+        "created_at": "2026-07-31T12:03:40Z"
+      }
     ],
     "planned_not_yet_created": [
       "foto-ai: privato, 5 MB, tre MIME senza image/avif perche' PhotoRoom non lo accetta in ingresso; nessuna pulizia degli orfani nel v0, e va scritto nel commento del bucket e nella migrazione. Decisione 6.1 della Fase 11, checkpoint 11a.",
@@ -166,33 +257,47 @@
       "provider_adapters": 2,
       "note": "Era 'due migrazioni piu' una terza' e 'tre function' prima delle risposte del 12 agosto. Tutte e quattro le funzionalita' portano SQL, non due."
     },
-    "checkpoints": ["11a", "11b", "11c", "11d"],
+    "checkpoints": [
+      "11a",
+      "11b",
+      "11c",
+      "11d"
+    ],
     "checkpoint_rule": "Ogni funzionalita' si guadagna la propria sessione di spec prima del codice, sul modello dei 9a/9b/9c separati della Fase 9. Un checkpoint per volta.",
     "prerequisites": [
       {
         "id": "chiavi_provider_linguistici",
-        "blocks": ["11a", "11b"],
+        "blocks": [
+          "11a",
+          "11b"
+        ],
         "state": "non soddisfatto",
         "detail": "Decisione 7.11: Enrico configura chiave e budget entro lunedi' 18 agosto 2026. Il perimetro di quella data e' cambiato il 12 agosto: copre i modelli linguistici e NON PIU' PhotoRoom, che ha una data propria.",
         "verified_how": "non verificabile con gli strumenti disponibili - vedi not_verifiable_from_here. Ultimo stato confermato: Enrico, 12 agosto 2026, non configurate."
       },
       {
         "id": "prova_6_6_fornitore_fotografico",
-        "blocks": ["11a"],
+        "blocks": [
+          "11a"
+        ],
         "state": "non eseguita",
         "detail": "Sei foto reali della cantina di Enrico, due volutamente difficili, valutate su DUE conteggi separati: campi corretti sui nove di ai-catalogo E campi inventati. Contare solo i corretti premierebbe un modello che tira a indovinare tutti e nove su uno che lascia onestamente quattro caselle vuote, e l'invenzione e' l'errore che confidence non intercetta. La sessione l'ha messa PRIMA di 11a.",
         "two_parts_note": "La prova ha due parti con dipendenze diverse: SCATTARE le sei foto non richiede nessuna chiave e dipende dal solo Enrico; solo il PUNTEGGIO aspetta il fornitore. E' l'unico pezzo dei quattro prerequisiti che oggi non e' bloccato da altro che dal tempo di scattarle."
       },
       {
         "id": "chiave_photoroom",
-        "blocks": ["11c"],
+        "blocks": [
+          "11c"
+        ],
         "state": "non soddisfatto",
         "detail": "Decisione 6.3b: la chiave esce dalla scadenza del 18 agosto e prende una data legata all'apertura di 11c. Lasciarla al 18 agosto l'avrebbe fatta scadere senza servire, cioe' avrebbe fabbricato un'altra scadenza inerte come quella della 7g.",
         "verified_how": "non verificabile con gli strumenti disponibili; nessun modulo PhotoRoom esiste nel repository"
       },
       {
         "id": "pannello_fase_9_mai_esercitato",
-        "blocks": ["11d"],
+        "blocks": [
+          "11d"
+        ],
         "state": "non soddisfatto",
         "detail": "11d non si apre prima che il pannello di moderazione della Fase 9 sia stato esercitato almeno una volta su una sessione reale.",
         "verified_how": "misurato in sola lettura il 2026-08-13: reports, report_events e audit_log a zero righe, nessun profilo con stato_utente diverso da attivo, su un progetto che ha comunque 9 annunci e 5 profili. La coda vuota e' un fatto sullo stato del prodotto, non l'artefatto di un database deserto."
@@ -206,7 +311,15 @@
     "consequence": "L'ambiente di una Edge Function si configura PRIMA del merge, mai dopo, con un flag che la tiene chiusa quando l'ambiente manca. Vincola le quattro function nuove della Fase 11: nasceranno con l'ambiente che il merge trovera'.",
     "measurements": 7,
     "measurements_on_documentation_only_prs": 5,
-    "measured_gaps_seconds": [43, 43, 49, 59, 55.8, 55.3, 36.3],
+    "measured_gaps_seconds": [
+      43,
+      43,
+      49,
+      59,
+      55.8,
+      55.3,
+      36.3
+    ],
     "measurement_detail": "Sette misure fra l'11 e il 13 agosto 2026, sui merge di #33, #35, #37, #39, #40, #41 e #42. Cinque delle sette sono su PR di sola documentazione con zero righe sotto supabase/functions/ (#33, #37, #40, #41, #42). L'ultima, sul merge della #42: sei function a 22/21/21 e 8/8/8, updated_at identico 2026-08-13T21:10:18.307Z, 36,3 secondi dopo il merge.",
     "range_note": "Lo scarto di 36,3 secondi e' PIU' BREVE di tutti e sei i precedenti: allarga l'intervallo osservato invece di confermare il 'circa un minuto' delle misure precedenti. Registrato cosi' e non appianato.",
     "reading_caveat": "list_edge_functions puo' restituire un updated_at STALE per qualche secondo dopo il redeploy. Sul merge della #42 una lettura a +39,3 secondi restituiva ancora il valore del merge precedente, benche' il redeploy fosse gia' avvenuto a +36,3. Chi misura l'ottava aspetti oltre il minuto prima di concludere che il pattern si e' rotto.",
@@ -319,7 +432,7 @@
     "revisione legale: le cinque domande della §9.4 dello spec Fase 11 sono tutte aperte. La Fase 11 non si dichiara chiusa senza.",
     "decisione 3e della 7d, spedizione: una fattura o due dal partner logistico. E' commerciale, non tecnica, e resta aperta."
   ],
-  "next_gate": "PR #44: commit e push documentale finale, CI e Deploy Preview verdi sul nuovo HEAD, revisione completa del diff e riverifica di AI_ENABLED=false e PAYMENTS_ENABLED=false; solo allora squash merge. Fase 11 resta fuori perimetro e migration/phase-11-* resta a zero.",
+  "next_gate": "PR #45 mersa: verificare il callback di produzione con richieste reali, rimuovere il solo callback temporaneo della preview #45 da Supabase, cancellare il branch remoto. Poi i tre NEXT STEPS di CHANGES.log. Fase 11 resta fuori perimetro e migration/phase-11-* resta a zero.",
   "grid_status": {
     "rule": "L'autorizzazione a eseguire una griglia sul progetto reale e' PER GRIGLIA e non per progetto. La conferma della 7.9 copre merge e applicazione, non l'esecuzione di una griglia. Il cleanup va garantito anche sul percorso d'errore, e i residui si rileggono e si riportano dopo l'esecuzione invece di dichiararli.",
     "7c_consegna_imballaggio": "eseguita due volte sul progetto reale il 2026-08-05. Prima (Fase 7e): 21 PASSA, 1 FALLISCE, e il caso 20 falliva per un difetto della migrazione 7c (42804), non della prova. Seconda (Fase 7f, con la correzione): 22 PASSA, 0 FALLISCE, residui zero su 26 controlli. E' l'unica griglia mai eseguita sul progetto reale.",
@@ -337,5 +450,37 @@
   },
   "remote_sql_rule": "Mostrare lo SQL esatto e ottenere approvazione esplicita in sessione prima di applicare qualunque migrazione al progetto Supabase reale. Attenzione: dal merge della Fase 7 questa regola non copre piu' il percorso reale di distribuzione, che e' il merge su main via integrazione GitHub e non passa da un comando esplicito. La 7.10 lo ha deciso e misurato: il gate e' il merge, lo stesso per migrazioni ed Edge Function. Resta la conferma esplicita e DISTINTA PER PERIMETRO prima di ogni applicazione al progetto reale.",
   "migration_file_rule": "A migration file that has been pushed at least once is frozen: every later correction is a new file with a more recent timestamp, in draft too and even if no real database ever ran the previous version. Supabase preview branches run migrations at PR open and compare version, not content. I file in supabase/tests/ NON sono migrazioni e non sono soggetti al congelamento.",
-  "enum_cast_rule": "Mai assegnare un case nudo a una colonna enum: un case fra due letterali risolve a text, e text->enum non ha cast implicito, quindi la statement non compila (42804). Vanno castati ENTRAMBI i rami. Leggere il nome esatto dell'enum da pg_type invece di presumerlo, e verificare che le label esistano: un cast a una label inesistente e' un 22P02 a runtime, lo stesso difetto spostato. La Fase 7c ha spedito questo bug in produzione in ordine_contestazione_risolvi, dove significava che nessuna contestazione poteva chiudersi a favore del venditore e i suoi fondi restavano congelati."
+  "enum_cast_rule": "Mai assegnare un case nudo a una colonna enum: un case fra due letterali risolve a text, e text->enum non ha cast implicito, quindi la statement non compila (42804). Vanno castati ENTRAMBI i rami. Leggere il nome esatto dell'enum da pg_type invece di presumerlo, e verificare che le label esistano: un cast a una label inesistente e' un 22P02 a runtime, lo stesso difetto spostato. La Fase 7c ha spedito questo bug in produzione in ordine_contestazione_risolvi, dove significava che nessuna contestazione poteva chiudersi a favore del venditore e i suoi fondi restavano congelati.",
+  "auth_redirect_origin": {
+    "pull_request": 45,
+    "problem": "frontend-next/src/app/auth/callback/route.ts costruiva ogni Location da request.nextUrl.origin, cioe da un dato che arriva con la richiesta. I cookie di sessione scritti da exchangeCodeForSession sono legati all'hostname: rispondere su un dominio diverso da quello su cui l'utente resta significa scriverli dove nessuno andra a rileggerli.",
+    "where_the_symptom_shows": "In produzione NO: cinque sonde al callback pubblico, piu il dominio immutabile del deploy e l'alias main--, davano tutte il dominio corretto, e un X-Forwarded-Host falsificato non passava. Sulla Deploy Preview SI: request.nextUrl.origin vale il dominio immutabile del deploy (6a81e37c02c72a0008d060a4--timely-lokum-43a12e.netlify.app) mentre Host e x-forwarded-host portano deploy-preview-45--..., cioe quello giusto. In produzione i due coincidono: il sintomo esiste dove divergono.",
+    "netlify_runtime_env_measured": {
+      "readable_at_runtime": [
+        "URL"
+      ],
+      "not_readable_at_runtime": [
+        "CONTEXT",
+        "DEPLOY_PRIME_URL",
+        "AUTH_REDIRECT_ORIGIN"
+      ],
+      "measured_how": "Header diagnostico temporaneo sulla Deploy Preview della #45, poi rimosso. CONTEXT e DEPLOY_PRIME_URL sono variabili di build, non di runtime.",
+      "consequence": "Una regola che dipende dal solo CONTEXT non scatta mai su Netlify. La prima stesura del modulo faceva cosi e mandava IN PRODUZIONE chi stava provando la preview: la regressione opposta a quella che la PR correggeva. L'ha vista l'header X-Vinea-Origine-Sorgente, non il Location, che era un valore plausibile."
+    },
+    "resolution_order": [
+      "AUTH_REDIRECT_ORIGIN, se e' un URL assoluto http/https",
+      "DEPLOY_PRIME_URL, quando CONTEXT dice deploy-preview o branch-deploy, oppure - se CONTEXT manca - quando differisce da URL",
+      "alias Netlify dello stesso sito (<qualcosa>--<nome-sito>.netlify.app), cercato PRIMA nell'host annunciato dal bordo e POI in nextUrl",
+      "URL, il dominio pubblico stabile",
+      "origine della richiesta, solo se l'hostname e' localhost, 127.0.0.1 o ::1, confrontati per intero",
+      "altrimenti origine della richiesta: e' il comportamento precedente, nessuna regressione, e su Netlify irraggiungibile perche URL esiste sempre"
+    ],
+    "alias_rule_is_not_blind_host_trust": "Il nome del sito viene da URL, cioe da un valore del server, e la forma accettata e' un elenco chiuso. Il dominio immutabile del deploy e' escluso a parte, per prefisso di ventiquattro cifre esadecimali. Un host falsificato vale al massimo un altro deploy nostro, mai un dominio di terzi: non e' un redirect aperto.",
+    "open_redirect_closed": "next ammetteva ogni valore con startsWith('/'), quindi //host e /\\host, che sembrano relativi e i browser leggono come assoluti verso un altro host.",
+    "response_header": "X-Vinea-Origine-Sorgente: nomina la regola che ha deciso, mai un valore di ambiente.",
+    "min_tests": 341,
+    "env_var_added": "AUTH_REDIRECT_ORIGIN, solo server, da lasciare VUOTA su Netlify",
+    "wrote_sql": false,
+    "called_providers": false
+  }
 }

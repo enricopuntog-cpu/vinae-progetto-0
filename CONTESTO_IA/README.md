@@ -80,6 +80,14 @@ una conversazione col Sommelier. La Fase 10 è distribuita **spenta per
 costruzione**: `AI_ENABLED` fallisce chiuso, ed è ciò che ha reso sicuro chiuderla
 prima che le chiavi esistessero.
 
+Dal **16 agosto 2026** esiste anche una **beta pubblica di `frontend-next` su
+Netlify**, `https://timely-lokum-43a12e.netlify.app`, mersa con la PR #44
+(squash `8b003995`). Non è un cutover e non è una fase: `frontend/` + `backend/`
+**restano la versione servita** e la beta è un sito separato, con IA, pagamenti
+e logistica visibili ma bloccati fail-closed. La PR #45 vi ha corretto il primo
+difetto trovato — l'origine dei redirect della callback Auth, che veniva dedotta
+dalla richiesta invece di essere decisa dal server.
+
 La fase corrente è la **11** — le quattro estensioni AI ammesse per eccezione — e
 sta in uno stato che non è nessuno dei due soliti: **decisioni chiuse,
 implementazione non iniziata**. La sezione 6 della sua specifica
