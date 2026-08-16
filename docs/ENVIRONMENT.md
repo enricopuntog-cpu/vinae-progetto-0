@@ -41,6 +41,7 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `SUPABASE_SERVICE_ROLE_KEY` | solo server | Bypassa RLS; mai nel browser o nei log. |
 | `PAYMENTS_ENABLED` | solo server | Kill switch del checkout e del webhook. |
 | `NEXT_PUBLIC_PHASE_7_PAYMENTS_ENABLED` | client | Visibilità UI soltanto; non autorizza operazioni. |
+| `NEXT_PUBLIC_PAYMENT_ACTIONS_ENABLED` | client | Permette alla UI di tentare il comando finale; soltanto `true` esatto. Non sostituisce `PAYMENTS_ENABLED`. |
 | `PAYMENT_ALLOWED_ORIGINS` | Edge Function | Allowlist CORS esatta, separata da virgole. |
 | `PAYMENT_REDIRECT_ALLOWED_ORIGINS` | Edge Function | Allowlist server-side dei ritorni Stripe. |
 | `PAYMENT_REDIRECT_ORIGIN` | Edge Function | Origin scelta dal server, appartenente all'allowlist. |
@@ -54,6 +55,9 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `PAYOUTS_BATCH_LIMIT` | Edge Function | Ordini rilasciati per esecuzione, default `50`, massimo `500`. |
 | `PACKAGING_ENABLED` | solo server | Gate della selezione imballaggio (Fase 7c). Indipendente da `PAYMENTS_ENABLED`. |
 | `NEXT_PUBLIC_PACKAGING_ENABLED` | client | Visibilità UI dell'imballaggio soltanto; non autorizza operazioni. |
+| `NEXT_PUBLIC_AI_UI_ENABLED` | client | Visibilità delle tre superfici IA della Fase 10. **Fallisce chiusa**: soltanto la stringa esatta `true` monta la UI; non autorizza chiamate. |
+| `NEXT_PUBLIC_AI_ACTIONS_ENABLED` | client | Permette alla UI di tentare le chiamate IA; soltanto `true` esatto. Non sostituisce `AI_ENABLED`. |
+| `NEXT_PUBLIC_DEMO_UI_ENABLED` | client | Mostra soltanto il selettore locale Guest/User/Admin; non abilita fallback di dati mock. Assente o diverso da `true` usa sessione e ruolo reali. |
 | `AI_ENABLED` | Edge Function | Kill switch delle funzioni AI (Fase 10). **Fallisce chiuso**: assente o diverso da `true` significa spento. |
 | `AI_ALLOWED_ORIGINS` | Edge Function | Allowlist CORS delle sole function AI, origini complete separate da virgole. **Non sostituisce `PAYMENT_ALLOWED_ORIGINS`**: le due convivono. |
 | `OPENAI_API_KEY` | Edge Function | Chiave del fornitore di prova. Assente, il provider è quello disabilitato e ogni chiamata dà 503. |
@@ -67,6 +71,43 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 I segreti della Edge Function vanno impostati nell'ambiente Supabase; quelli del
 Route Handler nell'ambiente server Next.js. Non copiare la `service_role` in un
 file `.env` versionato.
+
+`NEXT_PUBLIC_AI_UI_ENABLED`, `NEXT_PUBLIC_AI_ACTIONS_ENABLED` e `AI_ENABLED`
+non sono intercambiabili. Le prime due sono leggibili e modificabili nel
+browser e controllano soltanto il montaggio di Sommelier, assistente di
+catalogazione e abbinamenti e il tentativo locale di azione. L'ultima resta
+privata
+nell'ambiente delle Edge Function ed è il gate autoritativo: rendere visibile
+la UI non abilita il provider, non aggira autenticazione, stato utente o rate
+limit e non rende pubblica alcuna chiave.
+
+### Matrice della beta Netlify
+
+I default versionati in `.env.example` restano tutti `false`. Il Deploy Preview
+della PR #44 applica invece la matrice seguente nell'ambiente Netlify; i valori
+pubblici Supabase non sono riportati in documentazione.
+
+| Capacità | Flag UI futura | Flag azione futura | Gate server futuro | Esito beta |
+|---|---:|---:|---:|---|
+| IA | `NEXT_PUBLIC_AI_UI_ENABLED=true` | `NEXT_PUBLIC_AI_ACTIONS_ENABLED=false` | `AI_ENABLED=false` | Superfici visibili, comando bloccato prima del client IA. |
+| Checkout/pagamento | `NEXT_PUBLIC_PHASE_7_PAYMENTS_ENABLED=true` | `NEXT_PUBLIC_PAYMENT_ACTIONS_ENABLED=false` | `PAYMENTS_ENABLED=false` | Checkout completo fino al metodo, nessun ordine o addebito. |
+| Packaging/spedizione | `NEXT_PUBLIC_PACKAGING_ENABLED=true` | n/a | `PACKAGING_ENABLED=false` | Preferenze locali interattive, nessuna prenotazione provider. |
+| Ruolo demo | `NEXT_PUBLIC_DEMO_UI_ENABLED=false` | n/a | RLS e `user_roles` | Guest/User/Admin derivano dalla sessione reale. |
+
+La configurazione operativa del Deploy Preview è stata applicata il 16 agosto
+2026 con autorizzazioni distinte: callback Auth temporaneo, gate Edge Function
+`AI_ENABLED=false` e `PAYMENTS_ENABLED=false`, nessun service role e nessuna
+chiave IA o Stripe su Netlify. La procedura e gli identificativi non sensibili
+sono in `docs/BETA_NETLIFY.md`.
+
+### Dati visibili nella beta
+
+Le route pubbliche non ripiegano su store demo quando Supabase manca: messaggi,
+notifiche, moderazione, profilo e catalogo mostrano uno stato vuoto o un errore
+esplicito. Proposte e richiesta foto usano rispettivamente le RPC Phase 7 e i
+servizi Phase 8. Preferiti, follow, Club, promemoria, profilo dimostrativo,
+personalizzazioni della cantina non persistite e punti logistici inventati non
+sono montati. `NEXT_PUBLIC_DEMO_UI_ENABLED` non cambia questo confine.
 
 ### Fase 10 — perché `AI_ENABLED` è diverso dagli altri flag
 

@@ -2,29 +2,23 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   ArrowLeft,
-  Heart,
   MapPin,
   ShieldCheck,
   Star,
-  MessageCircle,
-  Share2,
   Truck,
   // Alias per non collidere con il tipo di dominio Wine, come già in
   // app/home/page-client.tsx.
   Wine as WineIcon,
   ThermometerSun,
   WineOff,
-  Clock,
-  Camera,
   Flag,
   type LucideIcon,
 } from "lucide-react";
 import type { Wine } from "@/data/wines";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
-import { usePhase8 } from "@/lib/phase8/phase8-context";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,12 +31,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { toast } from "sonner";
 import { DrinkWindowSection } from "@/components/vinea/DrinkWindow";
 import { FoodPairingSection } from "@/components/vinea/FoodPairing";
 import { TrustBadge, TrustLegend } from "@/components/vinea/TrustBadge";
 import { ReportDialog } from "@/components/vinea/ReportDialog";
-import { listingStatusLabel, listingStatusTone } from "@/data/moderation";
+import { ListingContactActions } from "@/components/vinea/ListingContactActions";
+import { ProposalAction } from "@/components/vinea/ProposalAction";
+import { PAGAMENTI_UI_ABILITATI } from "@/config/features";
 
 export default function AnnuncioDetailPageClient({
   wine,
@@ -52,32 +47,8 @@ export default function AnnuncioDetailPageClient({
   correlati: Wine[];
 }) {
   const router = useRouter();
-  const { openConversation } = usePhase8();
-  const {
-    favorites,
-    toggleFavorite,
-    follows,
-    toggleFollow,
-    createProposal,
-    proposals,
-    listingStatus,
-    richiediAltreFoto,
-  } = useVinea();
   const [attiva, setAttiva] = useState(0);
-  const [prezzoProposto, setPrezzoProposto] = useState(String(Math.round(wine.prezzo * 0.9)));
-  const [openProp, setOpenProp] = useState(false);
-  const fav = favorites.has(wine.id);
-  const seguito = follows.has(wine.venditore.nome);
-  const propostaAttiva = useMemo(
-    () =>
-      proposals.find(
-        (p) => p.wineId === wine.id && ["inviata", "controproposta", "accettata"].includes(p.stato),
-      ),
-    [proposals, wine.id],
-  );
-  const stato = listingStatus[wine.id] ?? "attivo";
-  const azioniBloccate =
-    stato === "sospeso" || stato === "rifiutato" || stato === "venduto" || stato === "scaduto";
+  const listingId = wine.listingId ?? wine.id;
 
   return (
     <div className="space-y-8">
@@ -113,14 +84,7 @@ export default function AnnuncioDetailPageClient({
 
         {/* Info */}
         <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-xs uppercase tracking-widest text-salvia">{wine.denominazione}</p>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${listingStatusTone[stato]}`}
-            >
-              {listingStatusLabel[stato]}
-            </span>
-          </div>
+          <p className="text-xs uppercase tracking-widest text-salvia">{wine.denominazione}</p>
           <h1 className="mt-1 font-serif text-4xl leading-tight">
             {wine.nome} <span className="text-antracite/70">{wine.annata}</span>
           </h1>
@@ -130,7 +94,6 @@ export default function AnnuncioDetailPageClient({
           <div className="mt-3 flex flex-wrap gap-1.5">
             {wine.venditore.verificato && <TrustBadge source="piattaforma" size="sm" />}
             <TrustBadge source="venditore" size="sm" />
-            <TrustBadge source="ia" size="sm" />
           </div>
 
           <div className="mt-4 flex items-baseline gap-3">
@@ -147,144 +110,23 @@ export default function AnnuncioDetailPageClient({
             {wine.disponibili} {wine.disponibili === 1 ? "bottiglia disponibile" : "bottiglie disponibili"} • Formato {wine.formato}
           </p>
 
-          {azioniBloccate && (
-            <div className="mt-3 rounded-xl border border-border bg-secondary/60 p-3 text-xs">
-              Questo annuncio è <b>{listingStatusLabel[stato].toLowerCase()}</b>: le azioni di
-              acquisto e proposta sono disabilitate.
-            </div>
-          )}
-
-          {propostaAttiva && (
-            <div className="mt-4 rounded-xl border border-oro/40 bg-oro/10 p-3 text-sm">
-              {propostaAttiva.stato === "inviata" && (
-                <>
-                  Proposta <b>{formatEUR(propostaAttiva.prezzoProposto)}</b> inviata. Scade il{" "}
-                  {new Date(propostaAttiva.scadenza).toLocaleDateString("it-IT")}.
-                </>
-              )}
-              {propostaAttiva.stato === "controproposta" && (
-                <>
-                  Il venditore risponde con <b>{formatEUR(propostaAttiva.controProposta!)}</b>.{" "}
-                  <Link href="/messaggi" className="text-bordeaux underline">
-                    Rispondi in chat
-                  </Link>
-                  .
-                </>
-              )}
-              {propostaAttiva.stato === "accettata" && (
-                <>
-                  Proposta accettata a <b>{formatEUR(propostaAttiva.prezzoProposto)}</b>.{" "}
-                  <button
-                    className="text-bordeaux underline"
-                    onClick={() =>
-                      router.push(`/checkout/${wine.id}?prop=${propostaAttiva.id}`)
-                    }
-                  >
-                    Vai al checkout
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-
-          <div className="mt-6 grid grid-cols-3 gap-2">
-            <Button
-              className="col-span-2 bg-bordeaux hover:bg-bordeaux/90"
-              disabled={azioniBloccate}
-              onClick={() => router.push(`/checkout/${wine.id}`)}
-            >
-              Compra ora
-            </Button>
-            <Dialog open={openProp} onOpenChange={setOpenProp}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  disabled={
-                    azioniBloccate || (!!propostaAttiva && propostaAttiva.stato !== "accettata")
-                  }
-                >
-                  {propostaAttiva ? "Proposta attiva" : "Proponi"}
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle className="font-serif text-2xl">Fai una proposta</DialogTitle>
-                </DialogHeader>
-                <p className="text-sm text-muted-foreground">
-                  Prezzo richiesto: <b>{formatEUR(wine.prezzo)}</b>. La tua offerta resterà valida 7
-                  giorni.
-                </p>
-                <Input
-                  type="number"
-                  value={prezzoProposto}
-                  onChange={(e) => setPrezzoProposto(e.target.value)}
-                  className="mt-4"
-                />
-                <p className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
-                  <Clock className="h-3 w-3" /> Riceverai una notifica alla risposta.
-                </p>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setOpenProp(false)}>
-                    Annulla
-                  </Button>
-                  <Button
-                    className="bg-bordeaux hover:bg-bordeaux/90"
-                    onClick={() => {
-                      const n = Number(prezzoProposto);
-                      if (!n || n <= 0) {
-                        toast.error("Inserisci un prezzo valido");
-                        return;
-                      }
-                      createProposal(wine.id, n);
-                      setOpenProp(false);
-                    }}
-                  >
-                    Invia proposta
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+          <div className={`mt-6 grid gap-2 ${PAGAMENTI_UI_ABILITATI ? "grid-cols-3" : "grid-cols-1"}`}>
+            {PAGAMENTI_UI_ABILITATI ? (
+              <Button
+                className="col-span-2 bg-bordeaux hover:bg-bordeaux/90"
+                onClick={() => router.push(`/checkout/${wine.id}`)}
+              >
+                Compra ora
+              </Button>
+            ) : null}
+            <ProposalAction listingId={listingId} listingSlug={wine.id} prezzo={wine.prezzo} />
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button variant="ghost" onClick={() => toggleFavorite(wine.id)}>
-              <Heart className={`h-4 w-4 ${fav ? "fill-bordeaux text-bordeaux" : ""}`} />{" "}
-              {fav ? "Preferito" : "Salva"}
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={async () => {
-                const result = await openConversation({ listingId: wine.listingId ?? wine.id });
-                if (!result.ok) {
-                  toast.error(result.error);
-                  return;
-                }
-                router.push(`/messaggi?conversation=${result.data}`);
-              }}
-            >
-              <MessageCircle className="h-4 w-4" /> Messaggio
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                richiediAltreFoto(wine.id, wine.venditore.nome);
-                router.push("/messaggi");
-              }}
-            >
-              <Camera className="h-4 w-4" /> Richiedi altre foto
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                navigator.clipboard?.writeText(window.location.href);
-                toast("Link copiato");
-              }}
-            >
-              <Share2 className="h-4 w-4" /> Condividi
-            </Button>
+          <ListingContactActions listingId={listingId} />
+          <div className="mt-2">
             <ReportDialog
               targetType="annuncio"
-              targetId={wine.id}
+              targetId={listingId}
               targetLabel={`${wine.nome} ${wine.annata} — ${wine.venditore.nome}`}
               trigger={
                 <Button variant="ghost" className="text-muted-foreground hover:text-bordeaux">
@@ -308,18 +150,16 @@ export default function AnnuncioDetailPageClient({
                   {wine.venditore.verificato && <ShieldCheck className="h-4 w-4 text-salvia" />}
                 </p>
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <MapPin className="h-3 w-3" /> {wine.venditore.citta} •{" "}
-                  <Star className="h-3 w-3 fill-oro text-oro" /> {wine.venditore.rating} (
-                  {wine.venditore.valutazioni})
+                  <MapPin className="h-3 w-3" /> {wine.venditore.citta}
+                  {wine.venditore.valutazioni > 0 ? (
+                    <>
+                      {" • "}
+                      <Star className="h-3 w-3 fill-oro text-oro" /> {wine.venditore.rating} (
+                      {wine.venditore.valutazioni})
+                    </>
+                  ) : null}
                 </p>
               </div>
-              <Button
-                size="sm"
-                variant={seguito ? "secondary" : "outline"}
-                onClick={() => toggleFollow(wine.venditore.nome)}
-              >
-                {seguito ? "Seguito" : "Segui"}
-              </Button>
             </div>
           </div>
 

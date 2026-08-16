@@ -4,8 +4,14 @@ import { Providers } from "./providers";
 import { VineaLayout } from "@/components/vinea/Layout";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.URL ?? "http://localhost:3000"),
   title: "Vinea Wine Club",
   description: "Vinea è una web app italiana per catalogare una cantina personale.",
+  robots: {
+    index: false,
+    follow: false,
+    googleBot: { index: false, follow: false },
+  },
 };
 
 export default function RootLayout({

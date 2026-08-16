@@ -767,6 +767,39 @@ is a legitimate state of the strip** — to be designed, not avoided. **None of 
 (b) touches a 6.5 value and **confirms** it, and a note at the end of 6.5 records that the number was
 looked at again and under what condition it returns to a session.
 
+## Beta `frontend-next` production-like — preview pubblico del 16 agosto 2026
+
+La PR [#44](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/44) parte
+da `origin/main` `f3f0155` e prepara una beta separata senza cutover. L'HEAD
+pre-documentazione `84b8767` ha CI GitHub Actions verde — run `31946914430`,
+#152 — e Deploy Preview pubblico Netlify
+`https://deploy-preview-44--timely-lokum-43a12e.netlify.app`, deploy
+`6a81acfbee2b64c77b28addc`. Il progetto Free `timely-lokum-43a12e` usa base
+`frontend-next`, build `bun run build`, publish `.next` e runtime `Next.js`.
+
+La beta separa visibilità e autorità. Le tre superfici IA sono visibili con
+`NEXT_PUBLIC_AI_UI_ENABLED=true`, ma `NEXT_PUBLIC_AI_ACTIONS_ENABLED=false` e
+`AI_ENABLED=false` fermano ogni azione prima del client/provider. Checkout e
+packaging sono visibili, mentre `NEXT_PUBLIC_PAYMENT_ACTIONS_ENABLED=false`,
+`PAYMENTS_ENABLED=false` e `PACKAGING_ENABLED=false` bloccano ordine, Stripe,
+prenotazioni, etichette e tracking. Solo la stringa esatta `true` abilita un
+gate; i valori `NEXT_PUBLIC_*` non sono autorizzazione server. Il pannello demo
+`SfondoIAPanel` non è raggiungibile nel target e `/community` restituisce 404.
+
+Supabase Auth consente temporaneamente il callback del Deploy Preview oltre al
+wildcard localhost. Netlify contiene le sole variabili pubbliche Supabase e i
+flag previsti, senza service role, provider IA o segreti Stripe. Gli smoke
+desktop e 390×844 hanno verificato catalogo e annuncio reali, noindex, 404 e i
+blocchi IA senza chiamate Edge Function; i flussi autenticati reali restano
+`NON ESEGUITO` perché non sono state create credenziali o fixture. `frontend/`,
+`backend/`, migrazioni, function e Fase 11 restano invariati.
+
+Il merge della #44 resta condizionato a diff completo coerente, CI e preview
+verdi sul commit documentale finale e riverifica dei due gate Supabase spenti.
+Dopo lo squash vanno attesi CI e deploy di `main`, aggiunto il callback Auth di
+produzione, rimosso quello temporaneo e rieseguito lo smoke; il rollback è il
+ripristino del precedente deploy Netlify e non cancella dati Supabase.
+
 ### Postgres exposure rules (binding since Phase 6d-1)
 
 RLS filters rows, never columns. These three rules are what keeps that gap closed — breaking

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { supabaseAuthService } from "@/services/auth-service";
 import type { OAuthProvider, Result } from "@/services/types";
+import { ruoloDaSessione } from "@/lib/auth/role";
 
 export type AuthUser = { userId: string; email: string | null };
 
@@ -18,14 +19,10 @@ export type AuthUser = { userId: string; email: string | null };
 export type StatoEta = "sconosciuto" | "da_completare" | "completo";
 
 /**
- * Sessione reale Supabase (Fase 5a), separata dal demo-switcher `ruolo` di
- * auth-domain.ts. Quel demo-switcher (Ospite/Utente/Admin) resta invariato:
- * serve ancora a mostrare le viste degli altri domini non ancora migrati
- * (moderazione, cantina, ecc.), che restano su dati mock. Le due cose
- * convivono senza sovrapporsi finché quei domini non vengono migrati a
- * loro volta.
+ * Sessione e ruolo effettivi Supabase. Il selettore dimostrativo può
+ * sostituirli soltanto quando la sua flag pubblica è esplicitamente attiva.
  */
-export function useRealAuthDomain() {
+export const useRealAuthDomain = () => {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   // Se Supabase non è configurato non c'è nulla da caricare: parte già a
   // false. Evita una setState sincrona nel corpo dell'effect sotto.
@@ -35,6 +32,11 @@ export function useRealAuthDomain() {
   // appartiene: così `statoEta` sotto è interamente derivato e non serve
   // resettarlo con una setState sincrona quando la sessione cambia.
   const [dobLetta, setDobLetta] = useState<{ userId: string; dob: string | null } | null>(null);
+  const [ruoliLetti, setRuoliLetti] = useState<{ userId: string; ruoli: string[] } | null>(null);
+  const [profiloLetto, setProfiloLetto] = useState<{
+    userId: string;
+    username: string | null;
+  } | null>(null);
 
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -86,6 +88,32 @@ export function useRealAuthDomain() {
     };
   }, [authUser]);
 
+  useEffect(() => {
+    if (!authUser) return;
+
+    let active = true;
+    const userId = authUser.userId;
+    supabaseAuthService.nomeProfilo(userId).then((esito) => {
+      if (active) setProfiloLetto({ userId, username: esito.ok ? esito.data : null });
+    });
+    return () => {
+      active = false;
+    };
+  }, [authUser]);
+
+  useEffect(() => {
+    if (!authUser) return;
+
+    let active = true;
+    const userId = authUser.userId;
+    supabaseAuthService.ruoliProfilo(userId).then((esito) => {
+      if (active && esito.ok) setRuoliLetti({ userId, ruoli: esito.data });
+    });
+    return () => {
+      active = false;
+    };
+  }, [authUser]);
+
   // Interamente derivato: nessuna sessione, oppure lettura non ancora
   // disponibile per *questo* utente, significano "sconosciuto".
   const statoEta: StatoEta =
@@ -94,6 +122,14 @@ export function useRealAuthDomain() {
       : dobLetta.dob
         ? "completo"
         : "da_completare";
+  const ruoliCorrenti =
+    authUser && ruoliLetti?.userId === authUser.userId ? ruoliLetti.ruoli : [];
+  const authRuolo = ruoloDaSessione(authUser, ruoliCorrenti);
+  const authProfileLoading = Boolean(
+    authUser && profiloLetto?.userId !== authUser.userId,
+  );
+  const authProfileName =
+    authUser && profiloLetto?.userId === authUser.userId ? profiloLetto.username : null;
 
   const authClearError = useCallback(() => setAuthError(null), []);
 
@@ -152,10 +188,15 @@ export function useRealAuthDomain() {
     await supabaseAuthService.logout();
     setAuthUser(null);
     setDobLetta(null);
+    setRuoliLetti(null);
+    setProfiloLetto(null);
   }, []);
 
   return {
     authUser,
+    authRuolo,
+    authProfileName,
+    authProfileLoading,
     authLoading,
     authError,
     authClearError,
@@ -168,4 +209,4 @@ export function useRealAuthDomain() {
     authSalvaDataNascita,
     authLogout,
   };
-}
+};

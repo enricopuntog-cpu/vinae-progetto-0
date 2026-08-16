@@ -3,14 +3,12 @@
 // Fase 9a/9b - controller della moderazione.
 //
 // Stessa forma del controller di Fase 8: se il client Supabase e configurato si
-// legge dalle proiezioni reali, altrimenti si resta sui dati del mock, che nel
-// frontend-next continuano a guidare i domini non ancora migrati. Non e un
-// ripiego silenzioso: `mode` dice quale delle due sorgenti e in uso.
+// legge dalle proiezioni reali. Senza configurazione la beta pubblica fallisce
+// chiusa e dichiara il servizio non disponibile, senza fallback mock.
 //
-// Dal 9b il controller espone anche le azioni. In modalita mock non esistono:
-// un comando che scrive in memoria e sparisce al ricaricamento sarebbe piu
-// fuorviante della sua assenza, e la sorgente mock qui e un ripiego di
-// configurazione, non un ambiente di prova.
+// Dal 9b il controller espone anche le azioni. Senza servizio le azioni sono
+// assenti: un comando che scrive soltanto in memoria e sparisce al
+// ricaricamento sarebbe piu fuorviante della sua indisponibilita.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -27,7 +25,7 @@ import {
 import type { AuditEntry, Report } from "@/data/moderation";
 
 export type Phase9ModerationState = {
-  mode: "supabase" | "mock";
+  mode: "supabase" | "unavailable";
   coda: Report[];
   audit: AuditEntry[];
   contestazioni: DisputeQueueRow[];
@@ -35,7 +33,7 @@ export type Phase9ModerationState = {
   loading: boolean;
   error: string | null;
   reload: () => Promise<void>;
-  // Null in modalita mock: le azioni non esistono, non sono disabilitate.
+  // Null quando il servizio non e disponibile: le azioni non esistono.
   agisci: ((input: AzionePraticaInput) => Promise<void>) | null;
   transizioneAnnuncio:
     | ((listingId: string, transizione: TransizioneAnnuncio, motivazione: string) => Promise<void>)
@@ -48,7 +46,7 @@ const messaggio = (e: unknown) =>
 
 export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9ModerationState => {
   const moderatore = opzioni?.moderatore ?? false;
-  const { authUser, reports: reportsMock, auditLog: auditMock } = useVinea();
+  const { authUser } = useVinea();
   const authUserId = authUser?.userId;
   const client = getSupabaseClient();
   const service = useMemo(
@@ -161,15 +159,14 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
 
   return useMemo(() => {
     if (!service) {
-      // Sorgente mock: nessuna chiamata di rete, nessun caricamento.
       return {
-        mode: "mock" as const,
-        coda: reportsMock,
-        audit: auditMock,
+        mode: "unavailable" as const,
+        coda: [],
+        audit: [],
         contestazioni: [],
-        mieSegnalazioni: reportsMock,
+        mieSegnalazioni: [],
         loading: false,
-        error: null,
+        error: "Il servizio non e disponibile in questa configurazione.",
         reload: async () => {},
         agisci: null,
         transizioneAnnuncio: null,
@@ -192,7 +189,6 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
   }, [
     agisci,
     audit,
-    auditMock,
     coda,
     contestazioni,
     error,
@@ -200,7 +196,6 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
     loading,
     mieSegnalazioni,
     reload,
-    reportsMock,
     service,
     transizioneAnnuncio,
   ]);

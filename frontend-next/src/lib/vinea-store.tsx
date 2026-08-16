@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useContext, type ReactNode } from "react";
-import { type Notifica } from "@/data/extra";
 import {
   type CellarBottle,
   type StorageEnvironment,
@@ -9,40 +8,12 @@ import {
   type WineVintageMeta,
 } from "@/data/cellar";
 import { type Wine } from "@/data/wines";
-import {
-  type Order,
-  type Proposal,
-  type BuyerOrderStatus,
-  type SellerOrderStatus,
-  type DeliveryMode,
-  type TrackingEvent,
-  type Dispute,
-  type OrderReview,
-} from "@/data/orders";
-import {
-  type Obiettivo,
-  type EmailStatus,
-  type AgeStatus,
-  type IdentityStatus,
-  type SellerStatus,
-  type ProfiloUtente,
-} from "@/data/onboarding";
-import {
-  type Report,
-  type ReportStatus,
-  type ReportTargetType,
-  type ListingStatus,
-  type ModAction,
-  type AuditEntry,
-} from "@/data/moderation";
-import { useOrderDomain } from "@/lib/store/order-domain";
-import { useCellarDomain, type DrinkOverride, type SfondoCantina } from "@/lib/store/cellar-domain";
-import { useClubsDomain } from "@/lib/store/clubs-domain";
-import { useMessagingDomain } from "@/lib/store/messaging-domain";
-import { useListingsDomain } from "@/lib/store/listings-domain";
-import { useProfileDomain } from "@/lib/store/profile-domain";
+import { DEMO_UI_ABILITATA } from "@/config/features";
 import { useAuthDomain, type DemoRuolo } from "@/lib/store/auth-domain";
-import { useModerationDomain } from "@/lib/store/moderation-domain";
+import {
+  useCellarDomain,
+  type DrinkOverride,
+} from "@/lib/store/cellar-domain";
 import {
   useRealAuthDomain,
   type AuthUser,
@@ -50,23 +21,16 @@ import {
 } from "@/lib/store/real-auth-domain";
 import type { DatiNuovoAmbiente, OAuthProvider, Result } from "@/services/types";
 
-export type { DrinkOverride, SfondoCantina } from "@/lib/store/cellar-domain";
+export type { DrinkOverride } from "@/lib/store/cellar-domain";
 export type { DemoRuolo } from "@/lib/store/auth-domain";
 
 type StoreState = {
-  favorites: Set<string>;
-  follows: Set<string>;
-  proposte: Record<string, number>;
-  toggleFavorite: (id: string) => void;
-  toggleFollow: (nome: string) => void;
-  proponi: (wineId: string, prezzo: number) => void;
-
   ruolo: DemoRuolo;
-  setRuolo: (r: DemoRuolo) => void;
-
-  // Autenticazione reale (Supabase, Fase 5a) — separata dal demo-switcher `ruolo` sopra.
+  setRuolo: (ruolo: DemoRuolo) => void;
   authUser: AuthUser | null;
   authLoading: boolean;
+  authProfileName: string | null;
+  authProfileLoading: boolean;
   authError: string | null;
   authClearError: () => void;
   authRegistra: (input: {
@@ -82,32 +46,10 @@ type StoreState = {
   authStatoEta: StatoEta;
   authSalvaDataNascita: (dataNascita: string) => Promise<Result<void>>;
   authLogout: () => Promise<void>;
-
-  notifiche: Notifica[];
-  nonLette: number;
-  segnaLetta: (id: string) => void;
-  segnaTutteLette: () => void;
-
-  communityFollows: Set<string>;
-  toggleCommunityFollow: (slug: string) => void;
-
-  regionePref: string;
-  tipologiaPref: string;
-  setPreferenze: (r: string, t: string) => void;
-  sfondoCantina: SfondoCantina;
-  setSfondoCantina: (s: SfondoCantina) => void;
-  /**
-   * Derivato dai dati reali (Fase 6c-2): "in vendita" è un annuncio attivo, non
-   * un flag. Il comando che lo cambia non vive più qui — mettere in vendita una
-   * bottiglia passa dal wizard /vendi, come in `frontend/`.
-   */
   inVendita: Set<string>;
   prezzoNascosto: Set<string>;
   togglePrezzoNascosto: (id: string) => Promise<Result<void>>;
-
-  // Cantina (dati reali su Supabase dalla Fase 6c-2)
   bottiglieCantina: CellarBottle[];
-  /** Un vino per scheda: le viste a griglia ed elenco mostrano vini, non unità. */
   viniCantina: Wine[];
   metaPerVino: Record<string, WineVintageMeta>;
   cantinaLoading: boolean;
@@ -115,158 +57,36 @@ type StoreState = {
   ambienti: StorageEnvironment[];
   moduli: StorageModule[];
   drinkWindowOverrides: Record<string, DrinkOverride>;
-  setDrinkWindowOverride: (wineId: string, o: DrinkOverride) => Promise<Result<void>>;
+  setDrinkWindowOverride: (wineId: string, override: DrinkOverride) => Promise<Result<void>>;
   openBottle: (bottleId: string, nota?: string) => Promise<Result<void>>;
   scheduleOpen: (bottleId: string, date: string) => Promise<Result<void>>;
   moveBottle: (bottleId: string, newSlotId: string) => Promise<Result<void>>;
   creaAmbiente: (dati: DatiNuovoAmbiente) => Promise<Result<void>>;
   reduceMotion: boolean;
-  setReduceMotion: (b: boolean) => void;
-
-  // Orders & proposals
-  orders: Order[];
-  sales: Order[];
-  proposals: Proposal[];
-  getOrder: (id: string) => Order | undefined;
-  createOrder: (input: {
-    wineId: string;
-    quantita: number;
-    deliveryMode: DeliveryMode;
-    metodoPagamento: "carta_demo" | "paypal_demo" | "bonifico_demo";
-    proposalId?: string;
-    prezzoUnitario?: number;
-  }) => Promise<Order>;
-  advanceOrder: (orderId: string, target: BuyerOrderStatus, side?: "buyer" | "sales") => void;
-  updateSellerOrder: (orderId: string, patch: Partial<Order>) => void;
-  addTracking: (
-    orderId: string,
-    ev: Omit<TrackingEvent, "id" | "ts"> & { ts?: string },
-    side?: "buyer" | "sales",
-  ) => void;
-  markShipped: (orderId: string, trackingNumber: string, courier: string) => void;
-  markDelivered: (orderId: string, side?: "buyer" | "sales") => void;
-  confirmOk: (orderId: string) => void;
-  openDispute: (
-    orderId: string,
-    d: { motivo: string; descrizione: string; foto: string[] },
-  ) => void;
-  resolveDispute: (
-    orderId: string,
-    esito: "rimborsata" | "risolta" | "respinta",
-    nota?: string,
-  ) => void;
-  submitReview: (orderId: string, r: OrderReview) => void;
-
-  // Proposte v2 (state machine)
-  createProposal: (wineId: string, prezzoProposto: number) => Proposal | null;
-  sellerCounter: (proposalId: string, controProposta: number) => void;
-  acceptProposal: (proposalId: string) => void;
-  rejectProposal: (proposalId: string) => void;
-
-  pushNotifica: (n: Omit<Notifica, "id" | "letta">) => void;
-
-  // Onboarding & verifica
-  registrato: boolean;
-  emailStatus: EmailStatus;
-  ageStatus: AgeStatus;
-  identityStatus: IdentityStatus;
-  sellerStatus: SellerStatus;
-  obiettivi: Set<Obiettivo>;
-  regioniPreferite: Set<string>;
-  tipologiePreferite: Set<string>;
-  fasciaPrezzo: string | null;
-  clubSuggeritiSalvati: boolean;
-  preferenzeSalvate: boolean;
-  profiloBase: boolean;
-  profilo: ProfiloUtente;
-  registerAccount: (p: {
-    username: string;
-    email: string;
-    dob: string;
-    maggiorenne: boolean;
-  }) => void;
-  verifyEmail: () => void;
-  toggleObiettivo: (o: Obiettivo) => void;
-  saveObiettivi: () => void;
-  toggleRegionePref: (r: string) => void;
-  toggleTipologiaPref: (t: string) => void;
-  setFasciaPrezzo: (id: string) => void;
-  savePreferenze: () => void;
-  saveProfilo: (p: Partial<ProfiloUtente>) => void;
-  startIdentityVerification: () => void;
-  completeIdentityVerification: (esito: "verificata" | "rifiutata") => void;
-  resetOnboarding: () => void;
-  profileCompletion: { perc: number; items: { label: string; done: boolean; to?: string }[] };
-
-  // Moderation
-  reports: Report[];
-  listingStatus: Record<string, ListingStatus>;
-  auditLog: AuditEntry[];
-  modScope: "piattaforma" | { club: string };
-  setModScope: (s: "piattaforma" | { club: string }) => void;
-  submitReport: (input: {
-    targetType: ReportTargetType;
-    targetId: string;
-    targetLabel: string;
-    reason: string;
-    descrizione: string;
-    foto: string[];
-    clubSlug?: string;
-  }) => void;
-  updateReportStatus: (id: string, stato: ReportStatus, nota?: string) => void;
-  assignReport: (id: string, assignee: string) => void;
-  addReportNote: (id: string, testo: string) => void;
-  setListingStatus: (wineId: string, s: ListingStatus) => void;
-  applyModAction: (input: {
-    action: ModAction;
-    target: string;
-    motivazione: string;
-    durata?: string;
-    scope?: "piattaforma" | "club";
-    clubSlug?: string;
-    reportId?: string;
-  }) => void;
-  richiediAltreFoto: (wineId: string, sellerName: string) => void;
+  setReduceMotion: (riduci: boolean) => void;
 };
 
 const Ctx = createContext<StoreState | null>(null);
 
-export function VineaProvider({ children }: { children: ReactNode }) {
+export const VineaProvider = ({ children }: { children: ReactNode }) => {
   const cellarDomain = useCellarDomain();
-  const clubsDomain = useClubsDomain();
-  const messagingDomain = useMessagingDomain();
-  const { pushNotifica } = messagingDomain;
-  const { recordProposalPrice, ...listingsDomain } = useListingsDomain();
-
-  const orderDomain = useOrderDomain({ pushNotifica, recordProposalPrice });
-  const { resetForGuest, ...profileDomain } = useProfileDomain({ pushNotifica });
-  const authDomain = useAuthDomain({ onGuestSwitch: resetForGuest });
-  const moderationDomain = useModerationDomain({ pushNotifica });
   const realAuthDomain = useRealAuthDomain();
+  const authDomain = useAuthDomain({
+    ruoloReale: realAuthDomain.authRuolo,
+    demoAbilitata: DEMO_UI_ABILITATA,
+  });
 
   return (
-    <Ctx.Provider
-      value={{
-        ...listingsDomain,
-        ...authDomain,
-        ...messagingDomain,
-        ...clubsDomain,
-        ...cellarDomain,
-        ...orderDomain,
-        ...profileDomain,
-        ...moderationDomain,
-        ...realAuthDomain,
-      }}
-    >
+    <Ctx.Provider value={{ ...authDomain, ...cellarDomain, ...realAuthDomain }}>
       {children}
     </Ctx.Provider>
   );
-}
+};
 
-export function useVinea() {
-  const ctx = useContext(Ctx);
-  if (!ctx) throw new Error("useVinea deve stare dentro VineaProvider");
-  return ctx;
-}
+export const useVinea = (): StoreState => {
+  const context = useContext(Ctx);
+  if (!context) throw new Error("useVinea deve stare dentro VineaProvider");
+  return context;
+};
 
 export { formatEUR } from "@/lib/format";

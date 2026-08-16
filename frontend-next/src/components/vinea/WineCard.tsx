@@ -2,11 +2,10 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Heart, MapPin, ShieldCheck, Tag, EyeOff } from "lucide-react";
+import { MapPin, ShieldCheck, Tag, EyeOff } from "lucide-react";
 import type { Wine } from "@/data/wines";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
 import { DrinkBadge } from "@/components/vinea/DrinkWindow";
-import { listingStatusLabel, listingStatusTone } from "@/data/moderation";
 import { SafeImage } from "@/components/vinea/States";
 
 const DetailLink = ({
@@ -41,14 +40,11 @@ export function WineCard({
   showSaleBadge?: boolean;
   hidePriceIfPrivate?: boolean;
 }) {
-  const { favorites, toggleFavorite, inVendita, prezzoNascosto, listingStatus } = useVinea();
-  const fav = favorites.has(wine.id);
+  const { inVendita, prezzoNascosto } = useVinea();
   const cellarKey = wine.wineSlug ?? wine.id;
   const sale = showSaleBadge && inVendita.has(cellarKey);
   const priceHidden = hidePriceIfPrivate && prezzoNascosto.has(cellarKey);
   const priceUnavailable = wine.detailHref === null && wine.prezzo === 0;
-  const stato = listingStatus[wine.id];
-  const mostraStato = stato && stato !== "attivo";
   const detailHref =
     wine.detailHref === undefined ? `/annuncio/${wine.id}` : wine.detailHref;
 
@@ -112,33 +108,12 @@ export function WineCard({
           <Tag className="h-3 w-3" /> In vendita
         </span>
       )}
-      {mostraStato && (
-        <span
-          className={`absolute right-3 bottom-3 z-10 rounded-full px-2 py-0.5 text-[10px] font-semibold shadow ${listingStatusTone[stato!]}`}
-          data-testid="wine-card-status"
-        >
-          {listingStatusLabel[stato!]}
-        </span>
-      )}
       <div className="absolute left-3 top-12 z-10">
         {/* I metadati della finestra di bevuta sono indicizzati per vino, non
             per annuncio: su dati reali `id` è lo slug dell'annuncio e
             servirebbe a nulla. Vedi il commento su Wine.wineSlug. */}
         <DrinkBadge wineId={wine.wineSlug ?? wine.id} />
       </div>
-      <button
-        onClick={(e) => {
-          e.preventDefault();
-          toggleFavorite(wine.id);
-        }}
-        aria-label={fav ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
-        data-testid={`wine-card-favorite-${wine.id}`}
-        className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-crema/90 backdrop-blur transition-transform duration-200 hover:scale-110 active:scale-95"
-      >
-        <Heart
-          className={`h-4 w-4 transition-colors ${fav ? "fill-bordeaux text-bordeaux" : "text-antracite"}`}
-        />
-      </button>
       <DetailLink
         href={detailHref}
         testId={`wine-card-link-${wine.id}`}

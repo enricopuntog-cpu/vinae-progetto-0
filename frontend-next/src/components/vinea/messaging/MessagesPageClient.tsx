@@ -5,7 +5,6 @@ import { ConversationList } from "@/components/vinea/messaging/ConversationList"
 import { ConversationPanel } from "@/components/vinea/messaging/ConversationPanel";
 import { RealtimeStatusBanner } from "@/components/vinea/notifications/RealtimeStatusBanner";
 import { EmptyState, ErrorState, LoadingBlock, OfflineState, useOnline } from "@/components/vinea/States";
-import { MOCK_PHASE8_USER_ID } from "@/services/phase8/mock-services";
 import { usePhase8 } from "@/lib/phase8/phase8-context";
 import { useVinea } from "@/lib/vinea-store";
 
@@ -84,7 +83,7 @@ export const MessagesPageClient = ({ initialConversationId }: { initialConversat
           <ConversationPanel
             conversation={selected}
             messages={messages[selected.id] ?? []}
-            ownUserId={authUser?.userId ?? MOCK_PHASE8_USER_ID}
+            ownUserId={authUser?.userId ?? ""}
             loading={messagesLoading}
             error={messageError}
             offline={!online}

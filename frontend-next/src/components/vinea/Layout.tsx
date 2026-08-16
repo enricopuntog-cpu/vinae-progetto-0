@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import {
   Home,
   PlusCircle,
-  Users,
   User,
   Search,
   Shield,
@@ -15,6 +14,7 @@ import { type ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
 import { HeaderInboxActions } from "@/components/vinea/notifications/HeaderInboxActions";
+import { AI_UI, DEMO_UI_ABILITATA } from "@/config/features";
 import { useVinea, type DemoRuolo } from "@/lib/vinea-store";
 
 // Fase 10c. Il pannello Sommelier era rimasto fuori dalla Fase 3 perché
@@ -39,17 +39,15 @@ const nav = [
   { to: "/", label: "Home", icon: Home, exact: true },
   { to: "/esplora", label: "Ricerca", icon: Search, exact: false },
   { to: "/vendi", label: "Vendi", icon: PlusCircle, exact: false },
-  { to: "/community", label: "Club", icon: Users, exact: false },
-  { to: "/profilo", label: "Profilo", icon: User, exact: false },
+  { to: "/accedi", label: "Account", icon: User, exact: false },
 ] as const;
 
 const desktopLinks = [
   { to: "/", label: "Home", exact: true },
   { to: "/esplora", label: "Ricerca", exact: false },
-  { to: "/community", label: "Club", exact: false },
   { to: "/cantina", label: "La mia cantina", exact: false },
   { to: "/vendi", label: "Vendi", exact: false },
-  { to: "/profilo", label: "Profilo", exact: false },
+  { to: "/accedi", label: "Account", exact: false },
 ] as const;
 
 export function VineaLayout({ children }: { children: ReactNode }) {
@@ -77,6 +75,12 @@ export function VineaLayout({ children }: { children: ReactNode }) {
               <span className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.35em] text-oro">
                 Wine Club
               </span>
+            </span>
+            <span
+              className="rounded-full border border-oro/50 bg-oro/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-bordeaux"
+              data-testid="beta-badge"
+            >
+              Beta
             </span>
           </Link>
 
@@ -135,7 +139,7 @@ export function VineaLayout({ children }: { children: ReactNode }) {
                 Registrati
               </Link>
             )}
-            <DemoSwitch ruolo={ruolo} setRuolo={setRuolo} />
+            {DEMO_UI_ABILITATA ? <DemoSwitch ruolo={ruolo} setRuolo={setRuolo} /> : null}
             <Link
               href="/esplora"
               aria-label="Ricerca"
@@ -211,7 +215,7 @@ export function VineaLayout({ children }: { children: ReactNode }) {
 
       <Toaster position="top-center" richColors />
 
-      <SommelierChat />
+      {AI_UI.sommelier && <SommelierChat />}
     </div>
   );
 }

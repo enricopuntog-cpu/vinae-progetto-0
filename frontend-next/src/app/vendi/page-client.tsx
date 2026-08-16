@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -10,15 +10,12 @@ import {
   Camera,
   Loader2,
   Sparkles,
-  WandSparkles,
-  Wine as WineIcon,
   Archive,
   Eye,
   Tag,
   X,
   type LucideIcon,
 } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,7 +33,10 @@ import { wineImages } from "@/lib/wine-images";
 import { useSellWizard, MAX_FOTO, type Modalita } from "@/hooks/useSellWizard";
 import { confidenzaPercento } from "@/lib/phase10/catalogazione";
 import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
+import { BetaActionNotice } from "@/components/vinea/BetaActionNotice";
+import { BetaDeliverySelector } from "@/components/vinea/BetaDeliverySelector";
 import { BottleSelector } from "@/app/vendi/bottle-selector";
+import { AI_UI } from "@/config/features";
 
 /**
  * /vendi portata da frontend/src/routes/vendi.tsx.
@@ -100,6 +100,7 @@ export default function VendiPageClient() {
     aiSuggerimento,
     aiInCorso,
     aiErrore,
+    aiBloccata,
     chiediSuggerimento,
     applicaSuggerimento,
   } = useSellWizard({
@@ -266,7 +267,6 @@ export default function VendiPageClient() {
               onCarica={caricaFoto}
               onRimuovi={rimuoviFoto}
             />
-            <SfondoIAPanel />
           </div>
         )}
 
@@ -326,10 +326,11 @@ export default function VendiPageClient() {
               Compila i campi che descrivono la bottiglia. Puoi modificare manualmente ogni campo.
             </p>
 
-            <div
-              className="rounded-2xl border border-bordeaux/20 bg-gradient-to-br from-bordeaux/5 via-oro/10 to-transparent p-4"
-              data-testid="ai-listing-panel"
-            >
+            {AI_UI.catalogazione && (
+              <div
+                className="rounded-2xl border border-bordeaux/20 bg-gradient-to-br from-bordeaux/5 via-oro/10 to-transparent p-4"
+                data-testid="ai-listing-panel"
+              >
               <div className="flex items-center gap-2">
                 <span className="grid h-9 w-9 place-items-center rounded-full bg-bordeaux text-crema">
                   <Sparkles className="h-4 w-4 text-oro" />
@@ -402,6 +403,7 @@ export default function VendiPageClient() {
                   {aiErrore}
                 </p>
               )}
+              {aiBloccata && <BetaActionNotice tipo="ia" className="mt-3" />}
               {aiSuggerimento && (
                 <div
                   className="mt-3 grid gap-2 rounded-xl border border-border bg-card p-3 text-xs md:grid-cols-2"
@@ -432,7 +434,8 @@ export default function VendiPageClient() {
                   )}
                 </div>
               )}
-            </div>
+              </div>
+            )}
 
             <div className="grid gap-3 md:grid-cols-2">
               <Field label="Produttore">
@@ -524,8 +527,8 @@ export default function VendiPageClient() {
             <h2 className="font-serif text-2xl">Prezzo</h2>
             <div className="rounded-xl border border-oro/40 bg-oro/10 p-4">
               <p className="flex items-center gap-2 text-sm">
-                <Sparkles className="h-4 w-4 text-oro" /> Prezzo suggerito dall'IA in base al
-                mercato: <b>{formatEUR(suggerito)}</b>
+                <Tag className="h-4 w-4 text-oro" /> Riferimento beta locale basato sui dati
+                disponibili: <b>{formatEUR(suggerito)}</b>
               </p>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
@@ -551,18 +554,7 @@ export default function VendiPageClient() {
         {isVendita && step === 6 && (
           <div className="space-y-4">
             <h2 className="font-serif text-2xl">Consegna</h2>
-            <div className="grid gap-3 md:grid-cols-2">
-              {["Corriere assicurato", "Ritiro a mano", "Punto Vinea"].map((c) => (
-                <button
-                  key={c}
-                  onClick={() => toast(c + " selezionato (demo)")}
-                  className="rounded-xl border border-border p-3 text-left hover:border-bordeaux"
-                >
-                  <p className="font-serif text-base">{c}</p>
-                  <p className="text-xs text-muted-foreground">Simulato in demo</p>
-                </button>
-              ))}
-            </div>
+            <BetaDeliverySelector />
           </div>
         )}
 
@@ -730,111 +722,6 @@ function ModeCard({
       </div>
       {active && <Check className="ml-auto h-5 w-5 text-bordeaux" />}
     </button>
-  );
-}
-
-const stili = [
-  { key: "casse", nome: "Casse italiane", img: wineImages.crate },
-  { key: "moderna", nome: "Cantina moderna", img: wineImages.cellar },
-  { key: "rustica", nome: "Cantina rustica", img: wineImages.vineyard },
-  { key: "premium", nome: "Esposizione premium", img: wineImages.champagne },
-];
-
-/**
- * Portato invariato: in frontend/ è già interamente simulato con un setTimeout
- * e non chiama nessun servizio. Nessuna delle sue scelte finisce nell'annuncio.
- */
-function SfondoIAPanel() {
-  const [stile, setStile] = useState<string>("casse");
-  const [stato, setStato] = useState<"idle" | "loading" | "done">("idle");
-  const applica = () => {
-    setStato("loading");
-    setTimeout(() => {
-      setStato("done");
-      toast.success("Sfondo applicato (demo)");
-    }, 1100);
-  };
-  const scelto = stili.find((s) => s.key === stile)!;
-  return (
-    <section className="rounded-2xl border border-oro/40 bg-oro/5 p-4">
-      <div className="mb-2 flex items-start gap-2">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-oro/25 text-antracite">
-          <WandSparkles className="h-4 w-4" />
-        </span>
-        <div>
-          <p className="font-serif text-lg font-semibold">Migliora lo sfondo con IA</p>
-          <p className="text-xs text-muted-foreground">
-            Opzione facoltativa: la bottiglia non viene modificata; vengono adattati solo sfondo e
-            illuminazione.
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <div>
-          <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Prima</p>
-          <div className="aspect-square overflow-hidden rounded-lg border border-border bg-secondary">
-            <div className="grid h-full w-full place-items-center">
-              <WineIcon className="h-14 w-14 text-bordeaux/70" />
-            </div>
-          </div>
-        </div>
-        <div>
-          <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Dopo</p>
-          <div className="relative aspect-square overflow-hidden rounded-lg border border-oro">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={scelto.img} alt="" className="h-full w-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-antracite/40 to-transparent" />
-            <div className="absolute inset-0 grid place-items-center">
-              <WineIcon className="h-14 w-14 text-crema drop-shadow" />
-            </div>
-            {stato === "loading" && (
-              <div className="absolute inset-0 grid place-items-center bg-antracite/50 text-crema text-xs">
-                Elaborazione IA…
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-3">
-        <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-          Scegli stile
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {stili.map((s) => (
-            <button
-              key={s.key}
-              onClick={() => setStile(s.key)}
-              className={`rounded-full border px-3 py-1 text-xs ${stile === s.key ? "border-bordeaux bg-bordeaux text-crema" : "border-border bg-card"}`}
-            >
-              {s.nome}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => {
-            setStato("idle");
-            toast("Foto originale mantenuta");
-          }}
-        >
-          Mantieni foto originale
-        </Button>
-        <Button
-          size="sm"
-          className="bg-oro text-antracite hover:bg-oro/90"
-          onClick={applica}
-          disabled={stato === "loading"}
-        >
-          <Sparkles className="h-3.5 w-3.5" /> Applica sfondo suggerito
-        </Button>
-      </div>
-    </section>
   );
 }
 

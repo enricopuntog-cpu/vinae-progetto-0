@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquareText, Send, Sparkles, X, Trash2, Loader2 } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
+import { BetaActionNotice } from "@/components/vinea/BetaActionNotice";
 import { createSupabaseAiService } from "@/services/phase10/supabase-ai-service";
 import {
   depositoBrowser,
   sessionIdPersistente,
 } from "@/lib/phase10/sommelier-session";
 import { useVinea } from "@/lib/vinea-store";
+import { AZIONI_IA_ABILITATE } from "@/config/features";
 
 /**
  * Pannello Sommelier, portato da `frontend/src/components/vinea/SommelierChat.tsx`.
@@ -56,11 +58,15 @@ export default function SommelierChat() {
   const [battute, setBattute] = useState<Battuta[]>([]);
   const [testo, setTesto] = useState("");
   const [inCorso, setInCorso] = useState(false);
+  const [azioneBloccata, setAzioneBloccata] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const storicoRichiesto = useRef<string | null>(null);
 
-  const aiService = useMemo(() => createSupabaseAiService(getSupabaseClient()), []);
+  const aiService = useMemo(
+    () => (AZIONI_IA_ABILITATE ? createSupabaseAiService(getSupabaseClient()) : null),
+    [],
+  );
   const utenteCorrente = authUser?.userId ?? null;
 
   // L'identificativo di sessione si legge dopo il montaggio e mai durante il
@@ -90,7 +96,7 @@ export default function SommelierChat() {
     aperto && sessionId && utenteCorrente ? `${utenteCorrente}:${sessionId}` : null;
 
   useEffect(() => {
-    if (!chiaveStorico || !sessionId) return;
+    if (!chiaveStorico || !sessionId || !aiService) return;
     if (storicoRichiesto.current === chiaveStorico) return;
     // Il segno «già chiesto» sta in una ref e non nello stato di proposito. Da
     // stato provocherebbe un render, il render rieseguirebbe questo effetto
@@ -127,7 +133,12 @@ export default function SommelierChat() {
     async (grezzo: string) => {
       const messaggio = grezzo.trim();
       if (!messaggio || inCorso || !sessionId) return;
+      if (!AZIONI_IA_ABILITATE || !aiService) {
+        setAzioneBloccata(true);
+        return;
+      }
 
+      setAzioneBloccata(false);
       setBattute((precedenti) => [
         ...precedenti,
         { ruolo: "utente", contenuto: messaggio },
@@ -168,8 +179,9 @@ export default function SommelierChat() {
   );
 
   const azzera = useCallback(async () => {
-    if (sessionId) await aiService.sommelierCancella(sessionId);
+    if (sessionId && aiService) await aiService.sommelierCancella(sessionId);
     setBattute([]);
+    setAzioneBloccata(false);
   }, [aiService, sessionId]);
 
   const conversazioneAperta = battute.length > 0;
@@ -312,6 +324,8 @@ export default function SommelierChat() {
           ))}
         </div>
 
+        {azioneBloccata ? <BetaActionNotice tipo="ia" className="mx-3 mb-3" /> : null}
+
         <form
           className="flex items-center gap-2 border-t border-border bg-crema/60 px-3 py-3"
           onSubmit={(e) => {
@@ -321,7 +335,10 @@ export default function SommelierChat() {
         >
           <input
             value={testo}
-            onChange={(e) => setTesto(e.target.value)}
+            onChange={(e) => {
+              setTesto(e.target.value);
+              setAzioneBloccata(false);
+            }}
             placeholder="Chiedi al sommelier…"
             data-testid="sommelier-input"
             className="min-w-0 flex-1 rounded-full border border-border bg-card px-4 py-2 text-sm outline-none focus:border-bordeaux focus:ring-2 focus:ring-bordeaux/30"

@@ -500,8 +500,8 @@ export const proposalEdgeCases = [
   },
   {
     id: "pagamento_ko",
-    label: "Pagamento simulato fallito",
-    desc: "Riprova con un altro metodo demo.",
+    label: "Pagamento non disponibile",
+    desc: "La beta non invia addebiti: riprova quando i pagamenti saranno attivi.",
   },
   {
     id: "etichetta_ko",
