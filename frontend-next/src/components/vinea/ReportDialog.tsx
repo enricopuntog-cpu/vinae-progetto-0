@@ -123,10 +123,15 @@ export const ReportDialog = ({
       setErrore("Accedi prima di inviare una segnalazione.");
       return;
     }
+    const client = getSupabaseClient();
+    if (!client) {
+      setErrore("Il servizio segnalazioni non e disponibile in questa configurazione.");
+      return;
+    }
     setLoading(true);
     setErrore(null);
     try {
-      await createSupabaseModerationService(getSupabaseClient()).segnala({
+      await createSupabaseModerationService(client).segnala({
         targetType,
         targetId,
         targetLabel,
