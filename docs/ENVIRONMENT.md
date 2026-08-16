@@ -67,10 +67,44 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `AI_MODEL_CATALOGO` | Edge Function | Modello del suggerimento di catalogazione. |
 | `AI_MAX_OUTPUT_TOKENS` | Edge Function | Tetto di token in uscita per chiamata, default `800`. |
 | `AI_TIMEOUT_SECONDS` | Edge Function | Timeout applicativo verso il fornitore, default `30`, tetto `120`. |
+| `AUTH_REDIRECT_ORIGIN` | solo server | Origine dei redirect della callback Auth. Override esplicito per gli ambienti che non sono Netlify; su Netlify si lascia vuota. Non è `NEXT_PUBLIC_*`: il dato serve al solo server. |
+| `URL` | solo server | **Riservata Netlify, non si imposta a mano.** Dominio pubblico stabile del sito; è l'origine dei redirect Auth in produzione ed è già la base canonica di `metadataBase`. |
+| `DEPLOY_PRIME_URL` | solo server | **Riservata Netlify, non si imposta a mano.** Dominio della Deploy Preview o del branch deploy corrente. |
+| `CONTEXT` | solo server | **Riservata Netlify, non si imposta a mano.** `production`, `deploy-preview`, `branch-deploy` o `dev`; sceglie fra le due precedenti. |
 
 I segreti della Edge Function vanno impostati nell'ambiente Supabase; quelli del
 Route Handler nell'ambiente server Next.js. Non copiare la `service_role` in un
 file `.env` versionato.
+
+### Origine dei redirect della callback Auth
+
+`frontend-next/src/app/auth/callback/route.ts` costruiva ogni `Location` da
+`request.nextUrl.origin`, cioè da un dato che arriva **con la richiesta**. I
+cookie di sessione scritti da `exchangeCodeForSession` sono legati
+all'hostname: rispondere su un dominio diverso da quello su cui l'utente resta
+significa scriverli dove nessuno andrà a rileggerli, e la sessione si perde in
+silenzio subito dopo essere stata creata.
+
+L'origine è ora decisa dal server in `frontend-next/src/lib/auth/origine-redirect.ts`,
+in ordine di fiducia decrescente:
+
+1. `AUTH_REDIRECT_ORIGIN`, se è un URL assoluto `http`/`https`;
+2. `DEPLOY_PRIME_URL`, quando `CONTEXT` è `deploy-preview` o `branch-deploy`;
+3. `URL`, il dominio pubblico stabile — è il caso della produzione Netlify;
+4. l'origine della richiesta, **solo** se l'hostname è `localhost`, `127.0.0.1`
+   o `::1`, confrontati per intero e mai per suffisso;
+5. altrimenti l'origine della richiesta, che è il comportamento precedente alla
+   correzione: nessuna regressione, e su Netlify irraggiungibile perché `URL`
+   esiste sempre.
+
+`Host` e `X-Forwarded-Host` non vengono mai consultati direttamente. La
+risposta porta `X-Vinea-Origine-Sorgente` con il nome della regola che ha
+deciso — mai un valore di ambiente — perché su Netlify l'origine del server e
+quella della richiesta coincidono e dal solo `Location` non si distinguerebbe
+una risoluzione corretta da una coincidenza.
+
+È la stessa forma già usata dai pagamenti, dove `PAYMENT_REDIRECT_ORIGIN` è
+scelta dal server e deve appartenere a `PAYMENT_REDIRECT_ALLOWED_ORIGINS`.
 
 `NEXT_PUBLIC_AI_UI_ENABLED`, `NEXT_PUBLIC_AI_ACTIONS_ENABLED` e `AI_ENABLED`
 non sono intercambiabili. Le prime due sono leggibili e modificabili nel

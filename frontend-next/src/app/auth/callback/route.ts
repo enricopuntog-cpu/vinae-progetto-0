@@ -1,5 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  ambienteCorrente,
+  percorsoRelativoSicuro,
+  risolviOriginePubblica,
+} from "@/lib/auth/origine-redirect";
 
 /**
  * Callback OAuth (Fase 5b) e, più in generale, punto di ritorno per i flussi
@@ -12,39 +17,52 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
  * In caso di errore il provider può invece rimandare `?error=...`: in quel
  * caso non c'è nessun code da scambiare e si torna su /accedi con il motivo,
  * invece di lasciare l'utente su una pagina bianca.
+ *
+ * L'origine dei redirect è **decisa dal server** (`lib/auth/origine-redirect`)
+ * e non dedotta dalla richiesta: i cookie di sessione sono legati all'hostname,
+ * quindi rispondere su un dominio diverso da quello su cui l'utente resterà
+ * significa scriverli dove nessuno andrà a rileggerli.
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = request.nextUrl;
+  const { searchParams } = request.nextUrl;
+  const { origine, sorgente } = risolviOriginePubblica(request.nextUrl, ambienteCorrente());
   const code = searchParams.get("code");
   const errorDescription = searchParams.get("error_description") ?? searchParams.get("error");
   // `next` permette di tornare da dove si è partiti; accettiamo solo percorsi
   // relativi per non trasformare questa route in un redirect aperto.
-  const nextParam = searchParams.get("next");
-  const destinazione = nextParam && nextParam.startsWith("/") ? nextParam : "/home";
+  const destinazione = percorsoRelativoSicuro(searchParams.get("next")) ?? "/home";
+
+  /**
+   * L'header nomina la regola che ha scelto l'origine, mai un valore di
+   * ambiente. Serve perché su Netlify l'origine del server e quella della
+   * richiesta coincidono: senza, dal solo `Location` non si distingue una
+   * risoluzione corretta da una coincidenza fortunata.
+   */
+  const vaiA = (percorso: string) => {
+    const risposta = NextResponse.redirect(`${origine}${percorso}`);
+    risposta.headers.set("X-Vinea-Origine-Sorgente", sorgente);
+    return risposta;
+  };
 
   if (errorDescription) {
-    return NextResponse.redirect(
-      `${origin}/accedi?errore=${encodeURIComponent(errorDescription)}`,
-    );
+    return vaiA(`/accedi?errore=${encodeURIComponent(errorDescription)}`);
   }
 
   if (!code) {
-    return NextResponse.redirect(
-      `${origin}/accedi?errore=${encodeURIComponent("Callback senza codice di autorizzazione.")}`,
-    );
+    return vaiA(`/accedi?errore=${encodeURIComponent("Callback senza codice di autorizzazione.")}`);
   }
 
   const supabase = await getSupabaseServerClient();
   if (!supabase) {
-    return NextResponse.redirect(
-      `${origin}/accedi?errore=${encodeURIComponent("Supabase non configurato su questo ambiente.")}`,
+    return vaiA(
+      `/accedi?errore=${encodeURIComponent("Supabase non configurato su questo ambiente.")}`,
     );
   }
 
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
-    return NextResponse.redirect(`${origin}/accedi?errore=${encodeURIComponent(error.message)}`);
+    return vaiA(`/accedi?errore=${encodeURIComponent(error.message)}`);
   }
 
-  return NextResponse.redirect(`${origin}${destinazione}`);
+  return vaiA(destinazione);
 }
