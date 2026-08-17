@@ -147,6 +147,104 @@ corretta, perché il dominio pubblico è un valore plausibile.
 È la stessa forma già usata dai pagamenti, dove `PAYMENT_REDIRECT_ORIGIN` è
 scelta dal server e deve appartenere a `PAYMENT_REDIRECT_ALLOWED_ORIGINS`.
 
+### Redirect URLs del progetto Supabase — stato misurato e proposta
+
+Il modulo qui sopra decide dove il **nostro server** risponde. Chi decide dove
+Supabase **rimanda** è un'altra cosa, e vive nella dashboard del progetto
+(Authentication → URL Configuration). Le due si incontrano così: qualunque
+valore l'app chieda come `emailRedirectTo`/`redirectTo` viene confrontato con
+l'elenco «Redirect URLs», e **se non corrisponde Supabase non rifiuta la
+richiesta — ricade in silenzio sul Site URL**. Un errore di configurazione qui
+non produce nessun messaggio: produce un utente su un dominio sbagliato.
+
+**Stato misurato il 17 agosto 2026, PRIMA della modifica** — interrogando
+`/auth/v1/verify` con un token non valido, una `GET` che non crea utenti, non
+scrive e non invia email:
+
+| `redirect_to` chiesto | risolto da Supabase |
+| --- | --- |
+| `https://timely-lokum-43a12e.netlify.app/auth/callback` | sé stesso — **ammesso** |
+| `https://timely-lokum-43a12e.netlify.app` | `http://localhost:3000` |
+| `https://timely-lokum-43a12e.netlify.app/qualsiasi` | `http://localhost:3000` |
+| `https://timely-lokum-43a12e.netlify.app/auth/callback?next=/home` | `http://localhost:3000` |
+| `https://timely-lokum-43a12e.netlify.app/auth/callback/` | `http://localhost:3000` |
+| `https://deploy-preview-50--timely-lokum-43a12e.netlify.app/auth/callback` | `http://localhost:3000` |
+| `http://localhost:3000/sonda-percorso` | sé stesso (wildcard `/**`) |
+| `https://evil.example.com` | `http://localhost:3000` |
+
+Se ne leggono tre fatti. Il **Site URL è `http://localhost:3000`**, ed è lui il
+ripiego di ogni valore non riconosciuto. La voce del dominio beta è **esatta e
+senza wildcard**: tollera `…/auth/callback` e nient'altro, nemmeno una query o
+una barra finale. Le **Deploy Preview non sono coperte**.
+
+**APPLICATA il 18 agosto 2026**, su autorizzazione esplicita di Enrico in
+sessione — modificare le impostazioni del progetto Supabase remoto è un
+cancello a sé, come l'SQL, e quell'autorizzazione è arrivata per nome:
+
+| Campo | Prima | Adesso |
+| --- | --- | --- |
+| Site URL | `http://localhost:3000` | `https://timely-lokum-43a12e.netlify.app` |
+| Redirect URLs | `http://localhost:3000/**`, `https://timely-lokum-43a12e.netlify.app/auth/callback` | le due di prima **+** `https://timely-lokum-43a12e.netlify.app/**` |
+
+La voce esatta `…/auth/callback` è stata **lasciata in elenco** benché il `/**`
+ora la copra: toglierla era una cancellazione che nessuno aveva chiesto, ed è
+la voce che oggi fa funzionare OAuth.
+
+Il **Site URL** è la voce che conta di più e non era cosmetica: è il ripiego di
+ogni valore non riconosciuto, quindi finché restava `localhost:3000` **ogni**
+errore futuro di configurazione avrebbe mandato gli utenti su una pagina
+irraggiungibile invece che sulla home del sito. È anche il valore che compare
+nelle email quando un template usa `{{ .SiteURL }}`.
+
+**Stato misurato il 18 agosto 2026, DOPO la modifica**, con la stessa sonda:
+
+| `redirect_to` chiesto | risolto da Supabase |
+| --- | --- |
+| `https://timely-lokum-43a12e.netlify.app/auth/callback` | sé stesso — ammesso |
+| `https://timely-lokum-43a12e.netlify.app` | sé stesso — **ora ammesso** |
+| `https://timely-lokum-43a12e.netlify.app/qualsiasi-percorso` | sé stesso — **ora ammesso** |
+| `https://deploy-preview-44--timely-lokum-43a12e.netlify.app/auth/callback` | `https://timely-lokum-43a12e.netlify.app` |
+| `https://evil.example.com` | `https://timely-lokum-43a12e.netlify.app` |
+| `http://localhost:3000/sonda-locale` | sé stesso (wildcard `/**`, invariato) |
+
+Tre cose che si leggono solo da questa seconda tabella. Il ripiego **non è più
+`localhost:3000`**: un valore non riconosciuto adesso finisce sulla home della
+beta, ed è esattamente ciò che le righe della preview e di `evil.example.com`
+dimostrano. Le **Deploy Preview restano fuori**, come deciso. E il jolly `/**`
+**copre anche l'origine nuda**, senza barra finale: era una domanda aperta che
+la sola lettura del carattere jolly non chiudeva, e adesso è misurata.
+
+Sulle **Deploy Preview** la scelta era fra due strade con un compromesso reale,
+e non andava presa per inerzia:
+
+- **niente wildcard**: si aggiunge a mano
+  `https://deploy-preview-<numero>--timely-lokum-43a12e.netlify.app/auth/callback`
+  quando serve provare un giro Auth su una PR, e lo si toglie dopo. È la
+  procedura già registrata per la #45. Costa un passaggio manuale per PR, non
+  allarga nulla in permanenza;
+- **wildcard** `https://deploy-preview-*--timely-lokum-43a12e.netlify.app/**`:
+  comodo, ma il carattere jolly di Supabase copre un segmento arbitrario, e
+  ogni Deploy Preview di **qualunque** PR — anche di un contributo esterno, se
+  un giorno ce ne fossero — diventa una destinazione valida per un token di
+  sessione. Un dominio nostro, ma con dentro codice che nessuno ha ancora
+  rivisto.
+
+**Deciso il 18 agosto 2026: nessun wildcard sulle preview**, ed è la strada
+applicata. Il vantaggio sarebbe stato la comodità di chi prova; il costo è che
+la superficie si allarga in permanenza per un bisogno occasionale. Per provare
+un giro Auth su una PR si aggiunge a mano la voce di quella preview e la si
+toglie dopo, come già fatto per la #45.
+
+Due conseguenze da non perdere di vista. Con `…netlify.app/**` in elenco, il
+vincolo «nessuna query string» di `lib/auth/ritorno-auth.ts` **è decaduto**:
+quel modulo continua a rispettarlo — non produce query né barra finale — ma per
+scelta, non più per necessità, e il suo commento dice ora quale delle due cose
+è. Descriveva uno stato misurato, non una legge di natura, ed è cambiato lo
+stato. E poiché le preview restano fuori, **un giro di conferma email va
+provato sul dominio di produzione**: sulla Deploy Preview di una PR fallirebbe
+per configurazione, non per un difetto del codice, e leggerlo al contrario
+manderebbe a caccia del bug sbagliato.
+
 `NEXT_PUBLIC_AI_UI_ENABLED`, `NEXT_PUBLIC_AI_ACTIONS_ENABLED` e `AI_ENABLED`
 non sono intercambiabili. Le prime due sono leggibili e modificabili nel
 browser e controllano soltanto il montaggio di Sommelier, assistente di

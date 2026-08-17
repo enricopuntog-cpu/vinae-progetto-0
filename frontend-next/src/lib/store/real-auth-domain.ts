@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { supabaseAuthService } from "@/services/auth-service";
-import type { OAuthProvider, Result } from "@/services/types";
+import { supabaseProfileService } from "@/services/profile-service";
+import type { OAuthProvider, ProfiloCorrente, ProfiloModifica, Result } from "@/services/types";
 import { ruoloDaSessione } from "@/lib/auth/role";
 
 export type AuthUser = { userId: string; email: string | null };
@@ -19,7 +20,19 @@ export type AuthUser = { userId: string; email: string | null };
 export type StatoEta = "sconosciuto" | "da_completare" | "completo";
 
 /**
- * Sessione e ruolo effettivi Supabase. Il selettore dimostrativo può
+ * Profilo letto, memorizzato insieme all'utente a cui appartiene: così tutto
+ * ciò che ne deriva è calcolato e non serve azzerarlo con una setState sincrona
+ * quando la sessione cambia.
+ *
+ * `letto` distingue «lettura riuscita» da «lettura fallita», che non è un
+ * dettaglio: un errore di rete non deve diventare un «questo profilo non ha la
+ * data di nascita» e mandare l'utente a /completa-profilo per un dato che non
+ * abbiamo potuto verificare.
+ */
+type ProfiloInMemoria = { userId: string; profilo: ProfiloCorrente | null; letto: boolean };
+
+/**
+ * Sessione, profilo e ruolo effettivi Supabase. Il selettore dimostrativo può
  * sostituirli soltanto quando la sua flag pubblica è esplicitamente attiva.
  */
 export const useRealAuthDomain = () => {
@@ -28,15 +41,8 @@ export const useRealAuthDomain = () => {
   // false. Evita una setState sincrona nel corpo dell'effect sotto.
   const [authLoading, setAuthLoading] = useState(() => getSupabaseClient() !== null);
   const [authError, setAuthError] = useState<string | null>(null);
-  // Data di nascita letta dal profilo, memorizzata insieme all'utente a cui
-  // appartiene: così `statoEta` sotto è interamente derivato e non serve
-  // resettarlo con una setState sincrona quando la sessione cambia.
-  const [dobLetta, setDobLetta] = useState<{ userId: string; dob: string | null } | null>(null);
+  const [profiloLetto, setProfiloLetto] = useState<ProfiloInMemoria | null>(null);
   const [ruoliLetti, setRuoliLetti] = useState<{ userId: string; ruoli: string[] } | null>(null);
-  const [profiloLetto, setProfiloLetto] = useState<{
-    userId: string;
-    username: string | null;
-  } | null>(null);
 
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -67,35 +73,26 @@ export const useRealAuthDomain = () => {
     };
   }, []);
 
-  // Legge la data di nascita dichiarata ogni volta che cambia l'utente,
-  // qualunque sia il metodo di accesso: un profilo senza `dob` va completato
-  // prima di poter usare il resto del sito (vedi AgeGate).
+  /**
+   * Una lettura sola per l'intero profilo, non una per campo. Prima erano due
+   * chiamate distinte — data di nascita e nome utente — che tornavano pezzi
+   * della stessa riga e potevano disallinearsi fra loro; ora la riga è una e la
+   * schermata /account la trova già pronta.
+   */
   useEffect(() => {
     if (!authUser) return;
 
     let active = true;
     const userId = authUser.userId;
-    supabaseAuthService.dataNascitaProfilo(userId).then((esito) => {
+    supabaseProfileService.leggiProfiloCorrente().then((esito) => {
       if (!active) return;
-      // In caso di errore di lettura non registriamo nulla: `statoEta` resta
-      // "sconosciuto" e la guardia non blocca l'utente su un dato che non
-      // abbiamo potuto verificare.
-      if (esito.ok) setDobLetta({ userId, dob: esito.data });
+      setProfiloLetto({
+        userId,
+        profilo: esito.ok ? esito.data : null,
+        letto: esito.ok,
+      });
     });
 
-    return () => {
-      active = false;
-    };
-  }, [authUser]);
-
-  useEffect(() => {
-    if (!authUser) return;
-
-    let active = true;
-    const userId = authUser.userId;
-    supabaseAuthService.nomeProfilo(userId).then((esito) => {
-      if (active) setProfiloLetto({ userId, username: esito.ok ? esito.data : null });
-    });
     return () => {
       active = false;
     };
@@ -116,20 +113,20 @@ export const useRealAuthDomain = () => {
 
   // Interamente derivato: nessuna sessione, oppure lettura non ancora
   // disponibile per *questo* utente, significano "sconosciuto".
+  const profiloCorrente =
+    authUser && profiloLetto?.userId === authUser.userId ? profiloLetto : null;
   const statoEta: StatoEta =
-    !authUser || dobLetta?.userId !== authUser.userId
+    !profiloCorrente || !profiloCorrente.letto
       ? "sconosciuto"
-      : dobLetta.dob
+      : profiloCorrente.profilo?.dob
         ? "completo"
         : "da_completare";
   const ruoliCorrenti =
     authUser && ruoliLetti?.userId === authUser.userId ? ruoliLetti.ruoli : [];
   const authRuolo = ruoloDaSessione(authUser, ruoliCorrenti);
-  const authProfileLoading = Boolean(
-    authUser && profiloLetto?.userId !== authUser.userId,
-  );
-  const authProfileName =
-    authUser && profiloLetto?.userId === authUser.userId ? profiloLetto.username : null;
+  const authProfileLoading = Boolean(authUser && !profiloCorrente);
+  const authProfileName = profiloCorrente?.profilo?.username || null;
+  const authProfilo = profiloCorrente?.profilo ?? null;
 
   const authClearError = useCallback(() => setAuthError(null), []);
 
@@ -169,16 +166,24 @@ export const useRealAuthDomain = () => {
     return result;
   }, []);
 
-  const authSalvaDataNascita = useCallback(
-    async (dataNascita: string): Promise<Result<void>> => {
+  /**
+   * Scrittura unica del profilo: chi la chiama passa i campi che cambia e li
+   * riceve indietro già riletti dalla stessa istruzione, così lo stato locale
+   * non è una copia ricostruita a mano di ciò che si spera sia stato scritto.
+   *
+   * Serve sia al completamento del profilo — nome utente e data di nascita
+   * insieme, mai in due scritture separate — sia alla schermata /account.
+   */
+  const authAggiornaProfilo = useCallback(
+    async (patch: ProfiloModifica): Promise<Result<ProfiloCorrente>> => {
       if (!authUser) return { ok: false, error: "Nessuna sessione attiva." };
       setAuthError(null);
-      const result = await supabaseAuthService.salvaDataNascita(authUser.userId, dataNascita);
+      const result = await supabaseProfileService.aggiornaProfiloCorrente(patch);
       if (!result.ok) {
         setAuthError(result.error);
         return result;
       }
-      setDobLetta({ userId: authUser.userId, dob: dataNascita });
+      setProfiloLetto({ userId: authUser.userId, profilo: result.data, letto: true });
       return result;
     },
     [authUser],
@@ -187,14 +192,14 @@ export const useRealAuthDomain = () => {
   const authLogout = useCallback(async () => {
     await supabaseAuthService.logout();
     setAuthUser(null);
-    setDobLetta(null);
-    setRuoliLetti(null);
     setProfiloLetto(null);
+    setRuoliLetti(null);
   }, []);
 
   return {
     authUser,
     authRuolo,
+    authProfilo,
     authProfileName,
     authProfileLoading,
     authLoading,
@@ -206,7 +211,7 @@ export const useRealAuthDomain = () => {
     authVerificaEmail,
     authAccediConOAuth,
     authStatoEta: statoEta,
-    authSalvaDataNascita,
+    authAggiornaProfilo,
     authLogout,
   };
 };

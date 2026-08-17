@@ -1,6 +1,7 @@
 "use client";
 
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { urlRitornoAuthDalBrowser } from "@/lib/auth/ritorno-auth";
 import type { AuthService, OAuthProvider, Result } from "./types";
 
 const NOT_CONFIGURED_ERROR =
@@ -28,15 +29,17 @@ export const supabaseAuthService: AuthService = {
       password,
       options: {
         data: { username, dob: dataNascita },
-        // Riporta la conferma all'origine da cui è partita la registrazione,
-        // invece di affidarsi al Site URL fisso del progetto. Senza questo, il
-        // link di conferma rimanda sempre a http://localhost:3000: aprendolo da
-        // un altro dispositivo (es. telefono sulla stessa rete) `localhost`
-        // punta al dispositivo stesso e il ritorno all'app fallisce con
-        // ERR_CONNECTION_FAILED, pur essendo la verifica del token già andata a
-        // buon fine lato server. Coerente con quanto fa già inviaMagicLink().
-        // L'origine usata deve essere fra i Redirect URLs consentiti su Supabase.
-        emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+        // Riporta la conferma sull'origine da cui è partita la registrazione, e
+        // sul percorso che sa scambiare il `code` per una sessione — non
+        // sull'origine nuda. Vedi lib/auth/ritorno-auth.ts: con il flusso PKCE
+        // il link di conferma torna con un `?code=` che solo /auth/callback
+        // scambia, e la voce in elenco su Supabase per il dominio beta è
+        // proprio `<origine>/auth/callback`. Mandare l'origine nuda non dava un
+        // errore: Supabase non trovava corrispondenza fra i Redirect URLs e
+        // ricadeva in silenzio sul Site URL, cioè http://localhost:3000, dove
+        // l'utente vedeva una pagina irraggiungibile e credeva che la
+        // registrazione fosse fallita — mentre la conferma era già avvenuta.
+        emailRedirectTo: urlRitornoAuthDalBrowser(),
       },
     });
     if (error) return { ok: false, error: error.message };
@@ -79,8 +82,10 @@ export const supabaseAuthService: AuthService = {
     const supabase = getSupabaseClient();
     if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };
 
-    const redirectTo =
-      typeof window !== "undefined" ? window.location.origin : undefined;
+    // Stessa destinazione della registrazione, e per la stessa ragione: il
+    // magic link rientra con un `code` da scambiare, non con una sessione
+    // pronta. Vedi lib/auth/ritorno-auth.ts.
+    const redirectTo = urlRitornoAuthDalBrowser();
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: redirectTo ? { emailRedirectTo: redirectTo } : undefined,
@@ -92,17 +97,20 @@ export const supabaseAuthService: AuthService = {
   async accediConOAuth(provider: OAuthProvider) {
     const supabase = getSupabaseClient();
     if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };
-    if (typeof window === "undefined") {
+
+    // origine dinamica e non un valore fisso, per la stessa ragione del bug
+    // mobile risolto in Fase 5a: un URL cablato su localhost non è
+    // raggiungibile da un altro dispositivo. Fuori dal browser non c'è
+    // un'origine dell'utente da cui partire, ed è l'unico caso in cui il
+    // modulo non risponde.
+    const redirectTo = urlRitornoAuthDalBrowser();
+    if (!redirectTo) {
       return { ok: false, error: "Il login social si avvia solo dal browser." };
     }
 
-    // origin dinamico e non un valore fisso, per la stessa ragione del bug
-    // mobile risolto in Fase 5a: un URL cablato su localhost non è
-    // raggiungibile da un altro dispositivo. L'origin usato deve comunque
-    // essere fra i Redirect URLs consentiti nel progetto Supabase.
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo },
     });
     if (error) return { ok: false, error: error.message };
 
@@ -158,47 +166,8 @@ export const supabaseAuthService: AuthService = {
     };
   },
 
-  async dataNascitaProfilo(userId) {
-    const supabase = getSupabaseClient();
-    if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("dob")
-      .eq("id", userId)
-      .maybeSingle();
-    if (error) return { ok: false, error: error.message };
-    return { ok: true, data: (data?.dob as string | null) ?? null };
-  },
-
-  async nomeProfilo(userId) {
-    const supabase = getSupabaseClient();
-    if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("username")
-      .eq("id", userId)
-      .maybeSingle();
-    if (error) return { ok: false, error: error.message };
-    const username = typeof data?.username === "string" ? data.username.trim() : "";
-    return { ok: true, data: username || null };
-  },
-
-  async salvaDataNascita(userId, dataNascita) {
-    const supabase = getSupabaseClient();
-    if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };
-
-    // La policy RLS profiles_update_own consente l'UPDATE solo sulla propria
-    // riga; il CHECK 18+ su profiles.dob resta la barriera autoritativa e
-    // respinge comunque una data che indichi un'età inferiore.
-    const { error } = await supabase
-      .from("profiles")
-      .update({ dob: dataNascita })
-      .eq("id", userId);
-    if (error) return { ok: false, error: error.message };
-    return { ok: true, data: undefined };
-  },
+  // Profilo: vedi services/profile-service.ts. Questo servizio si ferma
+  // all'autenticazione e ai ruoli.
 } satisfies AuthService;
 
 export type { Result };

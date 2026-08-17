@@ -2040,3 +2040,91 @@ come assoluti verso un altro host.
 `MIN_TESTS` da 315 a **341**. Nessun SQL, migrazione, fixture o deploy manuale
 Supabase; nessuna chiamata IA, Stripe o logistica; `AI_ENABLED` e
 `PAYMENTS_ENABLED` invariati. Lo smoke autenticato reale resta **NON ESEGUITO**.
+
+## Registrazione e profilo — PR #50, 18 agosto 2026
+
+**Non è una fase nuova**: è correzione e completamento delle Fasi **5a** e **5b**,
+chiuse il 28 luglio 2026 con le PR #6 e #7. Registrata come **nota**, non come
+numero di fase, sul precedente della **#45** — che corresse un difetto della beta
+senza aprirne uno — e della #39 per la Fase 10. Ventisei file, **zero sotto
+`supabase/migrations/`**. Base `3a6ba69`.
+
+**La causa del redirect è misurata ed è più precisa dell'ipotesi che apriva il
+lavoro.** Non «il dominio beta non è fra i Redirect URLs», ma: il dominio beta
+c'era, **nella sola forma esatta `…/auth/callback`**, mentre `registra()` e
+`inviaMagicLink()` mandavano `window.location.origin` **nudo**. Supabase confronta
+il valore con l'elenco e, non trovando corrispondenza, **non rifiuta** — ricade in
+silenzio sul Site URL, allora `http://localhost:3000`. È anche la destinazione
+sbagliata di per sé: il client è PKCE, quindi il link torna con un `?code=` che
+**solo `/auth/callback` scambia**. Questo spiega anche perché OAuth funzionava e
+la conferma email no: OAuth mandava già `${origin}/auth/callback`.
+
+La misura è una **sonda di sola lettura** — `GET /auth/v1/verify` con un token non
+valido, che non crea utenti, non scrive e non invia email. Prima della modifica il
+dominio beta si comportava **identicamente a `evil.example.com`** appena gli si
+aggiungeva qualcosa in coda, una query o perfino una barra finale.
+
+**La configurazione Auth del progetto reale è stata APPLICATA il 18 agosto 2026**,
+su autorizzazione esplicita e nominata: Site URL a
+`https://timely-lokum-43a12e.netlify.app`, più `…netlify.app/**` fra i Redirect
+URLs, che passano da due a tre voci. La voce esatta `/auth/callback` è stata
+**lasciata**: toglierla era una cancellazione che nessuno aveva chiesto ed è quella
+che oggi fa funzionare OAuth. **Nessun wildcard sulle Deploy Preview**, per
+decisione — il jolly copre un segmento arbitrario e ogni preview di qualunque PR
+diventerebbe una destinazione valida per un token di sessione.
+
+**Verificata rimisurando, non guardando la dashboard.** Dopo: origine nuda e
+percorso arbitrario risolvono in sé stessi; il callback di una preview e
+`evil.example.com` ricadono sulla **home della beta** e non più su localhost — che
+è la prova che il **ripiego** è cambiato, cioè il vero effetto del Site URL; il
+wildcard locale è invariato. Un fatto che la sola lettura del carattere jolly non
+dava: **`/**` copre anche l'origine nuda**, senza barra finale. Di conseguenza il
+vincolo «nessuna query string» di `lib/auth/ritorno-auth.ts` **è decaduto**, e il
+suo commento lo dice invece di descrivere uno stato che non c'è più.
+
+**Il canale per la configurazione Auth remota è la dashboard, e va saputo prima di
+cercarne un altro.** In questo ambiente non esistono la Supabase CLI né un
+`SUPABASE_ACCESS_TOKEN`, e **fra gli strumenti MCP non c'è una scrittura della
+configurazione Auth** — solo letture e migrazioni. Si tocca **una impostazione alla
+volta con rilettura**, e **mai con `supabase config push`**, che spingerebbe
+l'intero blocco `[auth]` di `config.toml` per cambiarne due voci. Quel file, fra
+l'altro, ha `site_url = "http://127.0.0.1:3000"`, **diverso** dal valore che la
+produzione aveva davvero: i due divergevano, ed è la prova che `config.toml` non è
+la leva del progetto reale.
+
+Il resto della PR: `/completa-profilo` chiede ora anche **nome utente e consenso a
+Termini e Privacy**, che chi entrava da Google o Facebook non aveva **mai** visto —
+con nome e data di nascita nella **stessa istruzione**, quindi senza stato
+intermedio; `/account` è la **prima pagina reale di modifica profilo** e la voce
+«Account» dell'header punta lì e non più a `/accedi`, che da autenticati mostrava
+una schermata di accesso a chi era già dentro; **nessuna migrazione**, verificato e
+non supposto, perché le cinque colonne toccate sono già nel `GRANT UPDATE` per
+colonna della 9b e `profiles_update_own` esiste dalla 5a; `ProfileService`
+sostituisce una versione dimostrativa mai implementata — come la Fase 10 fece con
+`AiService` — **senza `userId` in firma**, e lettura e scrittura del profilo
+**escono da `AuthService`** così che `profiles` abbia una porta sola. Gli **avatar
+sono un insieme curato servito da noi**, con `avatarSicuro()` a elenco chiuso in
+lettura: `avatar_url` è scrivibile dal client, quindi un URL esterno memorizzato lì
+renderebbe la scheda un tracciatore per chi la apre. `MIN_TESTS` 402 → **433**.
+
+**Il consenso ai termini non è registrato da nessuna parte, e non lo era già prima
+nemmeno per il percorso email.** La colonna è scritta per intero e **non applicata**
+in `supabase/queries/03_PROPOSTA_NON_ESEGUIRE_CONSENSO_TERMINI.sql`, in due
+varianti, **rinviata alla revisione legale per decisione esplicita del 18 agosto
+2026**: se basti l'istante o serva anche la versione del testo accettato è ciò che
+la §9 della spec Fase 11 deve dire, e le cinque domande della §9.4 sono ancora
+tutte senza risposta.
+
+**Mai provato: un giro di conferma email reale end-to-end.** Va fatto **sul dominio
+di produzione** — le preview restano fuori dai Redirect URLs, quindi lì fallirebbe
+per configurazione e non per un difetto, e leggerlo al contrario manderebbe a
+caccia del bug sbagliato. Limite noto e non una regressione: con PKCE il
+`code_verifier` sta nel browser da cui è partita la registrazione, quindi chi apre
+l'email su un **altro dispositivo** non completa lo scambio — vale identico per
+OAuth — e finisce su `/accedi?errore=…`, che è dove deve andare, visto che la
+conferma lato server è già avvenuta. Prima ne usciva una pagina irraggiungibile.
+
+Nessun SQL, migrazione, fixture o deploy manuale Supabase; nessuna chiamata IA,
+Stripe o logistica; `AI_ENABLED` e `PAYMENTS_ENABLED` invariati. **L'unica
+scrittura remota è la configurazione Auth qui sopra.** Nessun percorso autenticato
+è stato esercitato: resta **NON ESEGUITO**, non «passato».

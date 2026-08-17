@@ -15,10 +15,17 @@ import { isMaggiorenne } from "@/lib/age";
  * Completamento profilo dopo il primo accesso social (Fase 5b, punto 4).
  *
  * Chi entra con Google o Facebook non passa dal form di registrazione email e
- * quindi non vede il banner di dichiarazione età introdotto in Fase 5a: il
- * profilo esiste senza data di nascita. Questa schermata la richiede prima di
- * dare accesso al resto del sito, riusando la stessa logica e le stesse
- * parole del form email.
+ * quindi non vede né il banner di dichiarazione età né la richiesta di consenso
+ * introdotti in Fase 5a: il profilo esiste senza data di nascita, con un nome
+ * utente assegnato d'ufficio dal trigger `handle_new_user()` e senza che
+ * nessuno gli abbia mai chiesto di accettare Termini e Privacy. Questa
+ * schermata chiude tutti e tre i punti prima di dare accesso al resto del sito,
+ * riusando le stesse parole del form email.
+ *
+ * UNA SCRITTURA SOLA, non tre. Nome utente e data di nascita partono nella
+ * stessa istruzione (`authAggiornaProfilo`), così non esiste uno stato
+ * intermedio in cui l'età è dichiarata e il nome no — o viceversa, con l'utente
+ * rimandato qui da AgeGate a rifare metà lavoro.
  *
  * Come in Fase 5a: dichiarazione AUTO-RIFERITA, nessun documento richiesto o
  * caricato, e il CHECK su profiles.dob resta la barriera autoritativa lato
@@ -27,13 +34,28 @@ import { isMaggiorenne } from "@/lib/age";
  */
 export default function CompletaProfiloPageClient() {
   const router = useRouter();
-  const { authUser, authLoading, authError, authStatoEta, authSalvaDataNascita, authLogout } =
-    useVinea();
+  const {
+    authUser,
+    authLoading,
+    authError,
+    authStatoEta,
+    authProfilo,
+    authProfileLoading,
+    authAggiornaProfilo,
+    authLogout,
+  } = useVinea();
 
   const [dob, setDob] = useState("");
   const [dobError, setDobError] = useState<string | null>(null);
   const [maggiorenne, setMaggiorenne] = useState(false);
+  const [terms, setTerms] = useState(false);
   const [inCorso, setInCorso] = useState(false);
+  // Il nome di partenza è quello che il trigger ha assegnato; finché l'utente
+  // non tocca il campo si mostra quello. Derivato e non copiato in stato da un
+  // effect: una setState sincrona dentro un effect è ciò che la regola
+  // `set-state-in-effect` di Next 16 rifiuta, e qui non serve.
+  const [usernameModificato, setUsernameModificato] = useState<string | null>(null);
+  const username = usernameModificato ?? authProfilo?.username ?? "";
 
   const aggiornaDob = (value: string) => {
     setDob(value);
@@ -46,12 +68,16 @@ export default function CompletaProfiloPageClient() {
     );
   };
 
-  const valid = dob !== "" && dobError === null && maggiorenne;
+  const valid =
+    username.trim().length >= 3 && dob !== "" && dobError === null && maggiorenne && terms;
 
   const salva = async () => {
     if (!valid) return;
     setInCorso(true);
-    const esito = await authSalvaDataNascita(dob);
+    // Un'unica operazione coerente: se il nome utente è già preso, l'errore di
+    // unicità respinge l'intera istruzione e la data di nascita non viene
+    // scritta a metà.
+    const esito = await authAggiornaProfilo({ username: username.trim(), dob });
     setInCorso(false);
     if (esito.ok) router.push("/home");
   };
@@ -90,9 +116,14 @@ export default function CompletaProfiloPageClient() {
           <p className="mt-2 text-sm text-muted-foreground">
             La tua data di nascita è già stata dichiarata.
           </p>
-          <Button asChild className="mt-5 bg-bordeaux hover:bg-bordeaux/90">
-            <Link href="/home">Vai alla Home</Link>
-          </Button>
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+            <Button asChild className="bg-bordeaux hover:bg-bordeaux/90">
+              <Link href="/home">Vai alla Home</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/account">Modifica il profilo</Link>
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -103,17 +134,42 @@ export default function CompletaProfiloPageClient() {
       <div className="rounded-3xl border border-border bg-card p-5 md:p-8">
         <h1 className="font-serif text-2xl md:text-3xl">Ancora un passaggio</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Hai effettuato l&apos;accesso come <b>{authUser.email ?? authUser.userId}</b>. Vinea è
-          riservato ai maggiorenni: confermaci la tua data di nascita per continuare.
+          Hai effettuato l&apos;accesso come <b>{authUser.email ?? authUser.userId}</b>. Scegli
+          come vuoi farti chiamare e confermaci la tua data di nascita: Vinea è riservato ai
+          maggiorenni.
         </p>
 
         <div className="mt-5 space-y-4">
-          <div className="sm:max-w-xs">
-            <Label htmlFor="dob">Data di nascita</Label>
-            <Input id="dob" type="date" value={dob} onChange={(e) => aggiornaDob(e.target.value)} />
-            {dobError && <p className="mt-1 text-xs text-bordeaux">{dobError}</p>}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="username">Nome utente</Label>
+              <Input
+                id="username"
+                value={username}
+                onChange={(e) => setUsernameModificato(e.target.value)}
+                placeholder={authProfileLoading ? "Caricamento…" : "es. elena_r"}
+                autoComplete="username"
+                disabled={authProfileLoading}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Ne abbiamo scelto uno per te: puoi cambiarlo adesso o più avanti dal tuo profilo.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="dob">Data di nascita</Label>
+              <Input
+                id="dob"
+                type="date"
+                value={dob}
+                onChange={(e) => aggiornaDob(e.target.value)}
+              />
+              {dobError && <p className="mt-1 text-xs text-bordeaux">{dobError}</p>}
+            </div>
           </div>
 
+          <ConsentCheckbox checked={terms} onCheckedChange={setTerms} testId="consenso-termini">
+            Accetto i Termini e la Privacy di Vinea.
+          </ConsentCheckbox>
           <ConsentCheckbox
             checked={maggiorenne}
             onCheckedChange={setMaggiorenne}

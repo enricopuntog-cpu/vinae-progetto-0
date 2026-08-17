@@ -19,7 +19,13 @@ import {
   type AuthUser,
   type StatoEta,
 } from "@/lib/store/real-auth-domain";
-import type { DatiNuovoAmbiente, OAuthProvider, Result } from "@/services/types";
+import type {
+  DatiNuovoAmbiente,
+  OAuthProvider,
+  ProfiloCorrente,
+  ProfiloModifica,
+  Result,
+} from "@/services/types";
 
 export type { DrinkOverride } from "@/lib/store/cellar-domain";
 export type { DemoRuolo } from "@/lib/store/auth-domain";
@@ -29,6 +35,8 @@ type StoreState = {
   setRuolo: (ruolo: DemoRuolo) => void;
   authUser: AuthUser | null;
   authLoading: boolean;
+  /** Riga completa di `public.profiles` per l'utente collegato. */
+  authProfilo: ProfiloCorrente | null;
   authProfileName: string | null;
   authProfileLoading: boolean;
   authError: string | null;
@@ -44,7 +52,12 @@ type StoreState = {
   authVerificaEmail: (tokenHash: string) => Promise<Result<void>>;
   authAccediConOAuth: (provider: OAuthProvider) => Promise<Result<void>>;
   authStatoEta: StatoEta;
-  authSalvaDataNascita: (dataNascita: string) => Promise<Result<void>>;
+  /**
+   * Scrittura unica del proprio profilo. Nessun `userId` in firma: la riga è
+   * sempre quella di `auth.uid()`, risolta dal servizio a partire dalla
+   * sessione e imposta comunque da `profiles_update_own`.
+   */
+  authAggiornaProfilo: (patch: ProfiloModifica) => Promise<Result<ProfiloCorrente>>;
   authLogout: () => Promise<void>;
   inVendita: Set<string>;
   prezzoNascosto: Set<string>;
