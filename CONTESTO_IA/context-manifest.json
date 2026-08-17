@@ -94,19 +94,19 @@
     "target_frontend": "frontend-next/",
     "target_backend": "supabase/",
     "frontend_next_is_production": false,
-    "remote_migration_ledger_rows": 25,
-    "remote_migration_ledger_rows_note": "Venticinque e' l'ultima lettura REALE, del 2026-08-16 prima del merge della #45. NON e' stata riletta in questa sessione, e nel frattempo la #48 e' stata mersa: se la 7.10 vale come sempre il ledger reale e' a 26 righe, ma questo e' un ragionamento e non una misura, quindi il numero qui resta quello letto. Chi rilegge usi list_migrations e aggiorni entrambe le chiavi.",
+    "remote_migration_ledger_rows": 26,
+    "remote_migration_ledger_rows_note": "Ventisei, RILETTE con list_migrations su pijnmcllmfgjmgsvtcej il 2026-08-17 durante la PR #49, non dedotte. L'ultima riga e' 20260817090000 phase_12a_club_readonly: il merge della #48 ha distribuito la migrazione della 12a, che e' la 7.10 misurata un'ottava volta. Le TRE migrazioni della #49 NON sono nel ledger, il che e' la controprova che nessun SQL di questa PR e' stato applicato al progetto reale.",
     "local_migration_files": 29,
     "local_migration_files_note": "Ventinove sul branch migration/phase-12bc-club-content: ventisei su origin/main (venticinque piu' la 12a) e tre nuove non ancora merse - 20260817120000_phase_12b_club_content, 20260817120500_phase_12c_report_target_enum, 20260817121000_phase_12c_club_moderation. Contate con ls, non stimate.",
     "ledger_matches_local_files": false,
     "ledger_matches_local_files_note": "false perche' le tre migrazioni della PR #49 non sono merse e quindi non distribuite, e perche' il ledger reale non e' stato riletto. Non e' un disallineamento da correggere: e' lo stato normale di una PR con migrazioni aperta.",
     "remote_migration_ledger_last_four": [
-      "20260810152500 phase_9a_drop_public_bottle_units",
       "20260810180000 phase_9b_moderation_actions",
       "20260810210000 phase_9_rimosso_blocca_commercio",
-      "20260811160000 phase_10b_sommelier_storico"
+      "20260811160000 phase_10b_sommelier_storico",
+      "20260817090000 phase_12a_club_readonly"
     ],
-    "migrations_applied_to_real_project": "tutte e venticinque, fino alla 10b compresa. Le fasi 7, 7b, 7c, 7f, 8, 9a, 9b, 9c e 10b sono a ledger.",
+    "migrations_applied_to_real_project": "tutte e ventisei, fino alla 12a compresa. Le fasi 7, 7b, 7c, 7f, 8, 9a, 9b, 9c, 10b e 12a sono a ledger. Schema distribuito NON significa comportamento esercitato: di 9, 10 e 12a non e' mai stata eseguita una sola transizione sul progetto reale.",
     "edge_functions_active": [
       {
         "slug": "payments-checkout",
