@@ -147,6 +147,76 @@ corretta, perché il dominio pubblico è un valore plausibile.
 È la stessa forma già usata dai pagamenti, dove `PAYMENT_REDIRECT_ORIGIN` è
 scelta dal server e deve appartenere a `PAYMENT_REDIRECT_ALLOWED_ORIGINS`.
 
+### Redirect URLs del progetto Supabase — stato misurato e proposta
+
+Il modulo qui sopra decide dove il **nostro server** risponde. Chi decide dove
+Supabase **rimanda** è un'altra cosa, e vive nella dashboard del progetto
+(Authentication → URL Configuration). Le due si incontrano così: qualunque
+valore l'app chieda come `emailRedirectTo`/`redirectTo` viene confrontato con
+l'elenco «Redirect URLs», e **se non corrisponde Supabase non rifiuta la
+richiesta — ricade in silenzio sul Site URL**. Un errore di configurazione qui
+non produce nessun messaggio: produce un utente su un dominio sbagliato.
+
+**Stato misurato il 17 agosto 2026**, interrogando `/auth/v1/verify` con un
+token non valido — una `GET` che non crea utenti, non scrive e non invia email:
+
+| `redirect_to` chiesto | risolto da Supabase |
+| --- | --- |
+| `https://timely-lokum-43a12e.netlify.app/auth/callback` | sé stesso — **ammesso** |
+| `https://timely-lokum-43a12e.netlify.app` | `http://localhost:3000` |
+| `https://timely-lokum-43a12e.netlify.app/qualsiasi` | `http://localhost:3000` |
+| `https://timely-lokum-43a12e.netlify.app/auth/callback?next=/home` | `http://localhost:3000` |
+| `https://timely-lokum-43a12e.netlify.app/auth/callback/` | `http://localhost:3000` |
+| `https://deploy-preview-50--timely-lokum-43a12e.netlify.app/auth/callback` | `http://localhost:3000` |
+| `http://localhost:3000/sonda-percorso` | sé stesso (wildcard `/**`) |
+| `https://evil.example.com` | `http://localhost:3000` |
+
+Se ne leggono tre fatti. Il **Site URL è `http://localhost:3000`**, ed è lui il
+ripiego di ogni valore non riconosciuto. La voce del dominio beta è **esatta e
+senza wildcard**: tollera `…/auth/callback` e nient'altro, nemmeno una query o
+una barra finale. Le **Deploy Preview non sono coperte**.
+
+**Proposta, NON applicata** — modificare le impostazioni del progetto Supabase
+remoto è un cancello a sé, come l'SQL, e vuole un'autorizzazione esplicita in
+sessione:
+
+| Campo | Oggi | Proposto |
+| --- | --- | --- |
+| Site URL | `http://localhost:3000` | `https://timely-lokum-43a12e.netlify.app` |
+| Redirect URLs | `http://localhost:3000/**`, `https://timely-lokum-43a12e.netlify.app/auth/callback` | + `https://timely-lokum-43a12e.netlify.app/**` |
+
+Il **Site URL** è la voce che conta di più e non è cosmetica: è il ripiego di
+ogni valore non riconosciuto, quindi finché resta `localhost:3000` **ogni**
+errore futuro di configurazione manda gli utenti su una pagina irraggiungibile
+invece che sulla home del sito. È anche il valore che compare nelle email
+quando un template usa `{{ .SiteURL }}`.
+
+Sulle **Deploy Preview** la scelta è fra due strade con un compromesso reale,
+e non va presa per inerzia:
+
+- **niente wildcard**: si aggiunge a mano
+  `https://deploy-preview-<numero>--timely-lokum-43a12e.netlify.app/auth/callback`
+  quando serve provare un giro Auth su una PR, e lo si toglie dopo. È la
+  procedura già registrata per la #45. Costa un passaggio manuale per PR, non
+  allarga nulla in permanenza;
+- **wildcard** `https://deploy-preview-*--timely-lokum-43a12e.netlify.app/**`:
+  comodo, ma il carattere jolly di Supabase copre un segmento arbitrario, e
+  ogni Deploy Preview di **qualunque** PR — anche di un contributo esterno, se
+  un giorno ce ne fossero — diventa una destinazione valida per un token di
+  sessione. Un dominio nostro, ma con dentro codice che nessuno ha ancora
+  rivisto.
+
+**Raccomandazione: nessun wildcard sulle preview.** Il vantaggio è la comodità
+di chi prova; il costo è che la superficie si allarga in permanenza per un
+bisogno occasionale. La prima riga della tabella — Site URL e `/**` sul solo
+dominio di produzione — risolve il problema che gli utenti veri hanno oggi, e
+non dipende da questa seconda scelta.
+
+Da notare per chi applicherà: con `…netlify.app/**` in elenco, il vincolo
+«nessuna query string» di `lib/auth/ritorno-auth.ts` **decade** — quel modulo
+lo rispetta comunque, e il suo commento va aggiornato quando la configurazione
+cambia, perché descrive uno stato misurato e non una legge di natura.
+
 `NEXT_PUBLIC_AI_UI_ENABLED`, `NEXT_PUBLIC_AI_ACTIONS_ENABLED` e `AI_ENABLED`
 non sono intercambiabili. Le prime due sono leggibili e modificabili nel
 browser e controllano soltanto il montaggio di Sommelier, assistente di
