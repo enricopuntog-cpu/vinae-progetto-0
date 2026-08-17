@@ -8,28 +8,35 @@
 // client non e il posto in cui si stabilisce lo stato HTTP di una pagina.
 //
 // Rispetto a quella versione cadono il pannello moderatori, gli "utenti
-// attivi", le bottiglie collegate e l'elenco dei post con i suoi filtri per
-// tipo: i primi tre non sono colonne di 12a, l'ultimo e contenuto scritto
-// dagli utenti, cioe il 12b. Il pulsante "Crea un post" non torna: era un
-// toast dimostrativo, e in un ambiente che scrive davvero un pulsante che
-// finge e peggio di un pulsante assente.
+// attivi" e le bottiglie collegate: non sono colonne della 12a e non lo sono
+// diventate con la 12b. Il pulsante "Crea un post" del mock non torna con quel
+// nome ne con quel comportamento - era un toast dimostrativo. Torna la cosa
+// vera: «Apri una discussione», che scrive su club_posts.
 //
-// Restano il riquadro delle regole - che e una colonna vera - e i due tab
-// vuoti che dichiarano cosa manca.
+// I due tab non dicono piu "disponibile a breve". Mostrano le discussioni reali
+// del club, ciascuna con il proprio "Segnala": e la 12c, che non e una
+// rifinitura ma la condizione a cui la scrittura e stata ammessa.
 
 import Link from "next/link";
 import { useState } from "react";
 import { ArrowLeft, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ClubDiscussioni } from "@/components/vinea/ClubDiscussioni";
 import { ErrorState } from "@/components/vinea/States";
 import { formatInteger } from "@/lib/format";
 import { assiClub } from "@/lib/phase12/club-view";
+import { ordinaPerPopolarita } from "@/lib/phase12/club-post-view";
 import { useClubFollow } from "@/lib/phase12/use-club-follow";
-import type { Club } from "@/services/types";
-import { ClubProssimamente } from "../page-client";
+import type { Club, ClubPost } from "@/services/types";
 
-export default function CommunityDetailPageClient({ iniziale }: { iniziale: Club }) {
+export default function CommunityDetailPageClient({
+  iniziale,
+  discussioni,
+}: {
+  iniziale: Club;
+  discussioni: ClubPost[];
+}) {
   const [club, setClub] = useState<Club>(iniziale);
   const { cambiaFollow, inCorso, error } = useClubFollow();
   const attesa = inCorso === club.slug;
@@ -99,10 +106,17 @@ export default function CommunityDetailPageClient({ iniziale }: { iniziale: Club
             <TabsTrigger value="popolari">Post popolari</TabsTrigger>
           </TabsList>
           <TabsContent value="discussioni" className="mt-4">
-            <ClubProssimamente testo="Le discussioni del club" />
+            <ClubDiscussioni iniziali={discussioni} clubSlug={club.slug} />
           </TabsContent>
           <TabsContent value="popolari" className="mt-4">
-            <ClubProssimamente testo="I post popolari" />
+            {/* Stesse righe, altro ordine: `ordinaPerPopolarita` lavora su una
+                copia, cosi i due tab non si spostano l'ordine a vicenda. Non
+                c'e una seconda lettura, perche non c'e un secondo insieme. */}
+            <ClubDiscussioni
+              iniziali={discussioni}
+              clubSlug={club.slug}
+              ordina={ordinaPerPopolarita}
+            />
           </TabsContent>
         </Tabs>
 

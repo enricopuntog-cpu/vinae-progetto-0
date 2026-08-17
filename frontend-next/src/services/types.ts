@@ -1064,7 +1064,10 @@ export interface ClubService {
   // ragione delle quattro sopra: `autore_id` arriva da un DEFAULT del database
   // e non e nel grant di INSERT, quindi un parametro del genere non avrebbe
   // nemmeno un posto in cui finire.
-  discussioni(clubSlug: string): Promise<Result<ClubPost[]>>;
+  // Senza slug: le discussioni piu recenti di TUTTI i club, che e cosa mostrano
+  // i due tab di /community. Con lo slug: quelle di un club solo. Un parametro
+  // opzionale e non due metodi perche cambia un filtro, non la lettura.
+  discussioni(clubSlug?: string): Promise<Result<ClubPost[]>>;
   creaDiscussione(input: NuovoClubPost): Promise<Result<ClubPost>>;
   risposte(postId: string): Promise<Result<ClubPostRisposta[]>>;
   creaRisposta(postId: string, corpo: string): Promise<Result<ClubPostRisposta>>;

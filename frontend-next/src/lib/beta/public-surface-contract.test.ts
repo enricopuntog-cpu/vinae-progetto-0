@@ -81,23 +81,70 @@ describe("superfici pubbliche della beta", () => {
     expect(leggi("src/components/vinea/Layout.tsx")).toInclude('to: "/community"');
   });
 
-  it("non riapre la scrittura di contenuti insieme ai club", () => {
-    // Il 12a e in sola lettura piu il follow: post, risposte e reazioni sono
-    // il 12b. Nessuna delle due pagine deve avere una porta di scrittura, e
-    // nemmeno un pulsante dimostrativo come il "Crea un post" di prima della
-    // #44, che apriva un toast.
+  // Questo test diceva «non riapre la scrittura di contenuti insieme ai club»
+  // ed era giusto: era il confine della 12a, che era in sola lettura piu il
+  // follow. La 12b e il checkpoint che quel confine lo attraversa, per
+  // eccezione esplicita e per nome, quindi il test non viene cancellato ma
+  // riscritto sul confine NUOVO - che e piu stretto, non piu largo.
+  it("apre la scrittura di contenuti solo insieme al modo di segnalarli", () => {
     const pagine = senzaCommenti(
       [
         leggi("src/app/community/page-client.tsx"),
         leggi("src/app/community/[slug]/page-client.tsx"),
       ].join("\n"),
     );
+    // Il mock resta fuori: il "Crea un post" di prima della #44 apriva un
+    // toast, e un pulsante che finge in un ambiente che scrive davvero e
+    // peggio di un pulsante assente.
     expect(pagine).not.toMatch(/Crea un post|toast|discussions|communityPosts/);
-    // I due tab restano visibili e dichiarano cosa manca: il contratto e che
-    // ci siano, non che siano nascosti.
     expect(pagine).toInclude("Discussioni del club");
     expect(pagine).toInclude("Post popolari");
-    expect(pagine).toInclude("ClubProssimamente");
+    // "disponibile a breve" non c'e piu perche non c'e piu niente da
+    // rimandare.
+    expect(pagine).not.toInclude("ClubProssimamente");
+    expect(pagine).toInclude("ClubDiscussioni");
+  });
+
+  // IL CONTRATTO CHE TIENE INSIEME 12B E 12C, scritto come test e non come
+  // buona intenzione. La scrittura di contenuti pubblici e stata ammessa a una
+  // condizione: che esista un modo per segnalarli. Se domani qualcuno mostra
+  // testo scritto da un utente senza il suo "Segnala", questo test fallisce -
+  // che e l'unico modo perche quella condizione sopravviva a chi non ha letto
+  // la PR. Stessa forma della prova sulle etichette IA della Fase 10, che
+  // impedisce di aggiungere una quarta superficie IA senza etichetta.
+  it("ogni testo pubblico dei club ha il suo Segnala", () => {
+    const discussioni = leggi("src/components/vinea/ClubDiscussioni.tsx");
+    const codice = senzaCommenti(discussioni);
+    // Il componente che disegna post e risposte e lo stesso che importa il
+    // dialogo di segnalazione: non c'e un percorso in cui il testo compare e
+    // il pulsante no.
+    expect(codice).toInclude("ReportDialog");
+    // I due bersagli che la decisione 7.6a teneva sospesi «finche i club non
+    // hanno schema Supabase». Ora ce l'hanno, e sono cablati entrambi.
+    expect(codice).toInclude('targetType="post"');
+    expect(codice).toInclude('targetType="commento"');
+    // I due valori devono esistere davvero anche a database, o il dialogo
+    // manderebbe una segnalazione che la RPC rifiuta.
+    const enumMigrazione = leggi("../supabase/migrations/20260817120500_phase_12c_report_target_enum.sql");
+    expect(enumMigrazione).toInclude("add value if not exists 'post'");
+    expect(enumMigrazione).toInclude("add value if not exists 'commento'");
+    // E i motivi ammessi devono coincidere con quelli che il client propone:
+    // il controllo di elenco chiuso in segnalazione_invia confronta le
+    // stringhe, e una differenza di un accento sarebbe un rifiuto a ogni
+    // tentativo.
+    const moderazione = leggi("../supabase/migrations/20260817121000_phase_12c_club_moderation.sql");
+    const dati = leggi("src/data/moderation.ts");
+    for (const motivo of [
+      "Contenuto inappropriato",
+      "Off-topic per il club",
+      "Spam commerciale",
+      "Disinformazione",
+      "Insulti o linguaggio offensivo",
+      "Molestia mirata",
+    ]) {
+      expect(moderazione).toInclude(`'${motivo}'`);
+      expect(dati).toInclude(`"${motivo}"`);
+    }
   });
 
   it("non espone la tabella club ne un userId dal client", () => {

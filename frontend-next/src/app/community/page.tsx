@@ -23,15 +23,28 @@ export const metadata: Metadata = {
 
 export default async function Page() {
   const client = await getSupabaseServerClient();
-  // La lettura sta qui e non in un effetto del client: e una pagina pubblica,
-  // e il primo paint deve avere i club invece di uno scheletro. Il follow
-  // resta client, perche e l'unica cosa che scrive.
-  const esito = await createSupabaseClubService(client).elenco();
+  const servizio = createSupabaseClubService(client);
+  // Le letture stanno qui e non in un effetto del client: e una pagina
+  // pubblica, e il primo paint deve avere i club invece di uno scheletro. Le
+  // scritture - follow, like, risposte - restano client, perche sono le uniche
+  // cose che scrivono.
+  //
+  // Le due letture sono indipendenti e partono insieme: in serie la pagina
+  // aspetterebbe la somma di due andate e ritorno per mostrare cose che non si
+  // condizionano a vicenda.
+  const [esito, discussioni] = await Promise.all([
+    servizio.elenco(),
+    // Senza slug: le discussioni piu recenti di tutti i club.
+    servizio.discussioni(),
+  ]);
 
   return (
     <CommunityHubPageClient
       iniziali={esito.ok ? esito.data : []}
       erroreLettura={esito.ok ? null : esito.error}
+      // Un errore qui non e un errore della pagina: i club si leggono lo
+      // stesso, e i due tab mostrano il proprio vuoto.
+      discussioni={discussioni.ok ? discussioni.data : []}
     />
   );
 }

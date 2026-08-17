@@ -311,10 +311,10 @@ export const createSupabaseClubService = (client: SupabaseClient | null): ClubSe
 
     discussioni: async (clubSlug) => {
       if (!client) return noPhase12Client();
-      const { data, error } = await client
-        .from("public_club_posts")
-        .select(COLONNE_POST)
-        .eq("club_slug", clubSlug)
+      const base = client.from("public_club_posts").select(COLONNE_POST);
+      // Senza slug la lettura non e filtrata: sono le discussioni di tutti i
+      // club, che e cio che mostrano i due tab di /community.
+      const { data, error } = await (clubSlug ? base.eq("club_slug", clubSlug) : base)
         .order("created_at", { ascending: false })
         .limit(TETTO_POST);
       if (error) return phase12Error("public_club_posts elenco", error);
