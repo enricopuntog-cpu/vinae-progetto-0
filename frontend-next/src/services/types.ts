@@ -931,12 +931,50 @@ export interface MessagingService {
   segnaLetti(conversationId: string, messageId?: string): Promise<Result<void>>;
 }
 
-// ---- Club ------------------------------------------------------------------
+// ---- Club — Fase 12a -------------------------------------------------------
+//
+// Questo blocco sostituisce uno stub che stava qui da prima della Fase 12: gli
+// stessi quattro metodi, ma con `unknown[]`, `unknown | null` e `void`, cioe
+// senza un tipo di ritorno e senza un ramo d'errore. Era il segnaposto di un
+// dominio che viveva nello store demo, non un contratto.
+//
+// La forma e quella della convenzione Result delle Fasi 7 e 8, non le promesse
+// nude di ModerationService: quella e piu vecchia della convenzione, non un
+// modello da seguire.
+//
+// Nessun metodo prende un `userId`, in nessuna posizione. Non e una
+// preferenza di stile: `club_memberships.user_id` arriva da `DEFAULT
+// auth.uid()` e non e nel grant di INSERT, quindi un parametro del genere non
+// avrebbe nemmeno un posto in cui finire.
+
+export type Club = {
+  slug: string;
+  nome: string;
+  // I quattro assi di filtro sono opzionali: un club per tipologia non ha un
+  // territorio, uno per territorio non ha un produttore.
+  territorio: string | null;
+  denominazione: string | null;
+  produttore: string | null;
+  tipologia: string | null;
+  descrizione: string;
+  regole: string[];
+  // Conteggio calcolato dalla vista: `club_memberships` non e leggibile oltre
+  // le righe proprie, quindi il client non ha modo di derivarlo da se.
+  membri: number;
+  // Stato del solo chiamante. Per un visitatore anonimo e sempre `false`.
+  seguito: boolean;
+  createdAt: string;
+};
+
 export interface ClubService {
-  elenco(): Promise<unknown[]>;
-  dettaglio(slug: string): Promise<unknown | null>;
-  segui(slug: string): Promise<void>;
-  smettiSegui(slug: string): Promise<void>;
+  elenco(): Promise<Result<Club[]>>;
+  // `null` e una risposta legittima e non un errore: lo slug non esiste.
+  dettaglio(slug: string): Promise<Result<Club | null>>;
+  // Restituiscono il club riletto e non `void`: seguire cambia `membri`, che
+  // e un conteggio del server. Farlo indovinare al client significa mostrare
+  // un numero che diverge dal database al primo caso concorrente.
+  segui(slug: string): Promise<Result<Club>>;
+  smettiSegui(slug: string): Promise<Result<Club>>;
 }
 
 // ---- Notifiche -------------------------------------------------------------

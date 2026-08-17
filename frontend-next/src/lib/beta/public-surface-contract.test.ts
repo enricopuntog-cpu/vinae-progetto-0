@@ -5,6 +5,11 @@ import { join } from "node:path";
 const progetto = join(import.meta.dir, "../../..");
 const leggi = (percorso: string) => readFileSync(join(progetto, percorso), "utf8");
 const esiste = (percorso: string) => existsSync(join(progetto, percorso));
+// Un contratto che vieta una parola deve guardare il codice, non i commenti:
+// altrimenti spiegare perche quella cosa e vietata fa fallire la verifica che
+// e vietata, e la difesa diventa "non scriverne".
+const senzaCommenti = (sorgente: string) =>
+  sorgente.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 const fileRicorsivi = (directory: string): string[] =>
   readdirSync(directory, { withFileTypes: true }).flatMap((voce) => {
     const percorso = join(directory, voce.name);
@@ -49,11 +54,69 @@ describe("superfici pubbliche della beta", () => {
     expect(catalogo).toInclude("regioni.includes(initialRegion)");
   });
 
-  it("rende irraggiungibile la community dimostrativa", () => {
-    expect(leggi("src/app/community/page.tsx")).toInclude("notFound()");
-    expect(leggi("src/app/community/[slug]/page.tsx")).toInclude("notFound()");
-    expect(leggi("src/components/vinea/Layout.tsx")).not.toInclude('href: "/community"');
-    expect(esiste("src/app/community/page-client.tsx")).toBeFalse();
+  // Fase 12a. Questo blocco sostituisce "rende irraggiungibile la community
+  // dimostrativa", che asseriva il contrario: la #44 aveva reso /community un
+  // notFound() perche i suoi dati erano finti, e il 12a la riapre perche ora
+  // sono veri. Cio che quel test difendeva - nessun contenuto inventato nella
+  // beta pubblica - resta difeso qui, sulle fonti invece che sull'assenza
+  // della pagina.
+  it("apre i club su dati reali e non sul mock", () => {
+    for (const percorso of [
+      "src/app/community/page.tsx",
+      "src/app/community/[slug]/page.tsx",
+      "src/app/community/page-client.tsx",
+      "src/app/community/[slug]/page-client.tsx",
+    ]) {
+      expect(esiste(percorso)).toBeTrue();
+      expect(senzaCommenti(leggi(percorso))).not.toInclude("@/data/communities");
+    }
+    const elenco = senzaCommenti(leggi("src/app/community/page.tsx"));
+    const dettaglio = senzaCommenti(leggi("src/app/community/[slug]/page.tsx"));
+    expect(elenco).toInclude("createSupabaseClubService");
+    expect(dettaglio).toInclude("createSupabaseClubService");
+    // Il 404 del dettaglio resta, ma ora e una risposta a uno slug assente e
+    // non lo stub che rispondeva 404 a qualunque slug.
+    expect(dettaglio).toInclude("if (!club) notFound()");
+    expect(elenco).not.toInclude("notFound()");
+    expect(leggi("src/components/vinea/Layout.tsx")).toInclude('to: "/community"');
+  });
+
+  it("non riapre la scrittura di contenuti insieme ai club", () => {
+    // Il 12a e in sola lettura piu il follow: post, risposte e reazioni sono
+    // il 12b. Nessuna delle due pagine deve avere una porta di scrittura, e
+    // nemmeno un pulsante dimostrativo come il "Crea un post" di prima della
+    // #44, che apriva un toast.
+    const pagine = senzaCommenti(
+      [
+        leggi("src/app/community/page-client.tsx"),
+        leggi("src/app/community/[slug]/page-client.tsx"),
+      ].join("\n"),
+    );
+    expect(pagine).not.toMatch(/Crea un post|toast|discussions|communityPosts/);
+    // I due tab restano visibili e dichiarano cosa manca: il contratto e che
+    // ci siano, non che siano nascosti.
+    expect(pagine).toInclude("Discussioni del club");
+    expect(pagine).toInclude("Post popolari");
+    expect(pagine).toInclude("ClubProssimamente");
+  });
+
+  it("non espone la tabella club ne un userId dal client", () => {
+    const servizio = senzaCommenti(leggi("src/services/phase12/supabase-club-service.ts"));
+    // La lettura passa dalla vista: `clubs` non ha grant per i ruoli client.
+    expect(servizio).toInclude('.from("public_clubs")');
+    expect(servizio).not.toInclude('.from("clubs")');
+    // Il payload dell'insert e fissato per intero: user_id arriva dal DEFAULT
+    // del database, e se comparisse qui vorrebbe dire che lo sceglie il client.
+    expect(servizio).toInclude('.insert({ club_slug: slug })');
+    expect(servizio).toInclude('.delete().eq("club_slug", slug)');
+    expect(servizio).not.toMatch(/user_id|userId/);
+    // Nessuna delle quattro firme dell'interfaccia accetta un identificativo
+    // utente.
+    const tipi = leggi("src/services/types.ts");
+    const inizio = tipi.indexOf("export interface ClubService");
+    const contratto = tipi.slice(inizio, tipi.indexOf("}", inizio));
+    expect(inizio).toBeGreaterThan(-1);
+    expect(contratto).not.toMatch(/userId|user_id/);
   });
 
   it("usa il nome profilo autenticato senza identita personale hardcoded", () => {

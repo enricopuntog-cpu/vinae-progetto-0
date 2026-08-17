@@ -607,3 +607,44 @@ notifiche, quindi non è un canale verso la controparte; e un rimosso non vede i
 catalogo, quindi per arrivarci deve già conoscere l'id di un annuncio. Il caso
 12 **misura** questo confine invece di asserirlo. Se «commercio» va inteso fino
 alla trattativa, è questo il punto da riaprire.
+
+## Fase 12a — club in sola lettura
+
+[`12a_club_readonly_statica.sql`](12a_club_readonly_statica.sql) — 24 casi
+statici sullo schema introdotto da
+`20260817090000_phase_12a_club_readonly.sql`: struttura, privilegi, RLS, la
+vista pubblica, il guard della 7.6b e la controprova che la macchina di
+pagamento non è stata toccata. Non inserisce e non cancella nulla.
+
+**Questa griglia non è mai stata eseguita**, né sul progetto reale né su un
+Postgres locale: Docker non era disponibile nella sessione che l'ha scritta. Il
+«24 PASSA» dichiarato in testa al file è quindi una **previsione, non un
+risultato** — vale la regola generale di questo README, e vale contro chi l'ha
+scritta. Chi la esegue per primo si aspetti che qualche caso fallisca per un
+difetto della griglia, come è successo alla 7c (quattro difetti) e alla 9c
+(otto), e lo annoti qui.
+
+Rispetto alle griglie di Fase 7 e 9 è in sola lettura sul catalogo di sistema,
+quindi meno rischiosa; **non per questo è autorizzata**. L'autorizzazione a
+eseguire una griglia resta per griglia e non per progetto, e non è compresa
+nell'approvazione del merge della migrazione.
+
+### Quello che non misura
+
+* **Nessun comportamento.** Non inserisce righe, quindi «un utente non può
+  iscriverne un altro» è verificato sulla *forma* — grant a colonna più
+  predicato della policy — e non esercitato. Una griglia comportamentale con
+  fixture non esiste ancora ed è un'autorizzazione a parte.
+* **Nessuna interfaccia.** Nessuna schermata è stata aperta contro un database
+  con questa migrazione applicata.
+
+### Il fixture di seed è un cancello separato
+
+[`../queries/02_PROPOSTA_NON_ESEGUIRE_SEED_CLUB_FASE_12A.sql`](../queries/02_PROPOSTA_NON_ESEGUIRE_SEED_CLUB_FASE_12A.sql)
+propone i sette club iniziali. **Non è stato eseguito** e richiede
+un'autorizzazione esplicita **distinta** da quella della migrazione: la
+migrazione crea lo schema, il fixture scrive dati nel progetto reale. Non sta
+in `supabase/migrations/` perché lì il merge lo applicherebbe da solo
+(decisione 7.10), e non si chiama `supabase/seed.sql` perché `config.toml` ha
+`[db.seed]` abilitato su quel nome e lo caricherebbe a ogni `db reset` e sulle
+preview branch.

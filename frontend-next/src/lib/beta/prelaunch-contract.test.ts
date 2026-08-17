@@ -150,7 +150,7 @@ describe("contratto di pre-lancio beta", () => {
   });
 
   it("allinea MIN_TESTS al conteggio della suite estesa", () => {
-    expect(leggi("../.github/workflows/ci.yml")).toInclude('MIN_TESTS: "341"');
+    expect(leggi("../.github/workflows/ci.yml")).toInclude('MIN_TESTS: "367"');
   });
 
   it("non trasforma secret o gate server in variabili pubbliche", () => {
@@ -169,10 +169,19 @@ describe("contratto di pre-lancio beta", () => {
 
   it("non mantiene successi finti nelle superfici ripulite", () => {
     const report = leggi("src/components/vinea/ReportDialog.tsx");
-    const community = leggi("src/app/community/[slug]/page.tsx");
     expect(report).not.toInclude("setTimeout");
     expect(report).not.toInclude("mock-");
     expect(report).toInclude("await createSupabaseModerationService");
-    expect(community).toInclude("notFound()");
+    // La riga sul club diceva `toInclude("notFound()")`, cioe che /community
+    // era irraggiungibile. Dal 12a e raggiungibile e legge dati reali, quindi
+    // quella riga passerebbe ancora - il dettaglio ha un notFound() vero per
+    // lo slug assente - ma misurando un'altra cosa. Qui si asserisce cio che
+    // il test voleva davvero dire: nessun finto successo su quella superficie.
+    const club = [
+      leggi("src/app/community/page-client.tsx"),
+      leggi("src/app/community/[slug]/page-client.tsx"),
+    ].join("\n");
+    expect(club).not.toInclude("setTimeout");
+    expect(club).toInclude("useClubFollow");
   });
 });

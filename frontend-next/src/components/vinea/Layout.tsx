@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Home,
   PlusCircle,
+  Users,
   User,
   Search,
   Shield,
@@ -35,16 +36,23 @@ const SommelierChat = dynamic(() => import("@/components/vinea/SommelierChat"), 
   ssr: false,
 });
 
+// Fase 12a. La voce Club torna in entrambe le navigazioni, nella posizione che
+// aveva prima della #44: quella PR l'aveva tolta perche /community era una
+// community finta e diventava un notFound(), non perche la voce fosse di
+// troppo. La griglia mobile e rimasta `grid-cols-5` da allora con quattro sole
+// voci - questo la riporta a cinque, che e il numero per cui e scritta.
 const nav = [
   { to: "/", label: "Home", icon: Home, exact: true },
   { to: "/esplora", label: "Ricerca", icon: Search, exact: false },
   { to: "/vendi", label: "Vendi", icon: PlusCircle, exact: false },
+  { to: "/community", label: "Club", icon: Users, exact: false },
   { to: "/accedi", label: "Account", icon: User, exact: false },
 ] as const;
 
 const desktopLinks = [
   { to: "/", label: "Home", exact: true },
   { to: "/esplora", label: "Ricerca", exact: false },
+  { to: "/community", label: "Club", exact: false },
   { to: "/cantina", label: "La mia cantina", exact: false },
   { to: "/vendi", label: "Vendi", exact: false },
   { to: "/accedi", label: "Account", exact: false },
