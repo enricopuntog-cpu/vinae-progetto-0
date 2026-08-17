@@ -535,16 +535,44 @@ stessa PR.
 
 ## Fase 12 — Club/Community
 
-**Stato: non iniziata. Nessun branch.**
+**Stato: checkpoint 12a in corso. 12b e 12c non iniziati.**
 
 Prende il numero 12 perché segue direttamente la Fase 11 — estensioni AI —
 nell'ordine di dipendenza, e per questo il cutover si è spostato alla 13. È
 strutturata in **tre checkpoint, 12a/12b/12c**, dettagliati nel **documento
 organizzativo della fase**, che **non è ancora scritto in questo repo**: finché
-non lo è, il contenuto dei tre checkpoint non si deduce da qui.
+non lo è, il contenuto di 12b e 12c non si deduce da qui.
 
-Questa voce registra il numero e la struttura, **non apre la fase**: l'apertura
-resta un'approvazione esplicita a parte, come per ogni fase.
+### Checkpoint 12a — club in sola lettura, con follow reale
+
+Aperto il **17 agosto 2026** sul branch `migration/phase-12a-club-readonly`,
+draft [PR #48](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/48).
+
+Perimetro: `/community` e `/community/[slug]` tornano raggiungibili su righe
+reali, un utente autenticato segue e smette di seguire un club, e **nessun
+contenuto è scrivibile dagli utenti** — niente post, niente risposte, niente
+reazioni. Quelli sono il 12b, e il 12a non crea nemmeno una tabella vuota che
+li aspetti: la superficie esiste da quando esiste la tabella, non da quando la
+si popola. I due tab che li conterrebbero restano visibili e lo dichiarano.
+
+Contiene: la migrazione additiva `20260817090000_phase_12a_club_readonly.sql`
+(`clubs`, `club_memberships`, la vista `public_clubs`), `ClubService` reale con
+firma `Result<T,E>`, le due pagine ricostruite — la #44 le aveva cancellate — e
+il ritorno della voce **Club** nell'header.
+
+**Non contiene, ed è un cancello separato ciascuno:** l'applicazione dell'SQL
+al progetto Supabase reale; il fixture dei sette club iniziali, che è una
+*proposta* in `supabase/queries/` e non un file che qualcosa esegue da solo;
+l'esecuzione della griglia `supabase/tests/12a_club_readonly_statica.sql`, che
+**non è mai stata eseguita da nessuna parte**.
+
+Questa PR porta file sotto `supabase/migrations/`, quindi **non rientra
+nell'eccezione di merge autonomo** registrata dalla PR #47: il merge resta
+esplicito.
+
+**L'apertura di 12b e di 12c resta un'approvazione esplicita a parte**, come
+per ogni checkpoint, e «nessuna funzionalità nuova durante la migrazione»
+continua a valere su tutto ciò che nessuna delle due ha ammesso per nome.
 
 ## Fase 13 — cutover finale
 

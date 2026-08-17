@@ -132,7 +132,8 @@ The full picture is in `docs/ROADMAP_V1.md`, `docs/MIGRATION_PHASE_1_BACKLOG.md`
   **Phase 13**, and the new **Phase 12** is Club/Community, which takes that number because it
   follows Phase 11 directly in dependency order. Phase 12 is structured in three checkpoints
   **12a/12b/12c**, detailed in that phase's organizational document, **not yet written in this
-  repo**; it is not started and has no branch. That renumbering shipped **before** the phase
+  repo**; **checkpoint 12a opened on 17 August 2026** on `migration/phase-12a-club-readonly`
+  (draft PR #48), 12b and 12c are not started. That renumbering shipped **before** the phase
   branch was opened — it is the prerequisite that frees the number, not the phase itself.
   Unlike 11 August, **no frozen file keeps the old number**: searching "Fase 12"/"Phase 12" in
   `supabase/migrations/*.sql` and `docs/superpowers/plans/` returns **zero results**, verified
@@ -776,19 +777,58 @@ is a legitimate state of the strip** — to be designed, not avoided. **None of 
 (b) touches a 6.5 value and **confirms** it, and a note at the end of 6.5 records that the number was
 looked at again and under what condition it returns to a session.
 
-### Phase 12 — Club/Community. Not started, no branch.
+### Phase 12 — Club/Community. Checkpoint 12a in progress; 12b and 12c not started.
 
 Renumbered in on **16 August 2026 by PR #46**, taking the number the cutover held: Club/Community follows
 Phase 11 directly in dependency order, so the cutover moved to **Phase 13**. The phase is
 structured in **three checkpoints, 12a/12b/12c**, detailed in **that phase's organizational
-document, which is not yet written in this repo** — until it is, the content of those three
-checkpoints is not to be inferred from here.
+document, which is not yet written in this repo** — until it is, the content of 12b and 12c is
+not to be inferred from here.
 
-**This section records the number and the structure; it does not open the phase and decides
-nothing about its perimeter.** No feature of Phase 12 is admitted by name here: that admission
-belongs to the session that actually opens the phase branch, and «no new features during
-migration» keeps governing everything until then. Opening the phase stays a separate explicit
-approval, as for every phase.
+**Checkpoint 12a is open on branch `migration/phase-12a-club-readonly`, draft
+[PR #48](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/48), started 17 August 2026.**
+Its perimeter is **read-only plus a real follow**, and the boundary is what matters: `/community`
+and `/community/[slug]` come back on real rows, an authenticated user follows and unfollows a
+club, and **no user-writable content exists** — no posts, no replies, no reactions. Those belong
+to 12b, and 12a does not create an empty table waiting for them: the surface exists from the
+moment the table exists, not from the moment it is populated. The two tabs that would hold them
+stay visible and say so. **This does not admit content writing by name** — that admission belongs
+to the session that opens 12b — **and it does not close the phase.**
+
+What 12a fixes in place, and that later checkpoints inherit:
+
+- **`clubs` has no client write door at all, and that is measured rather than conservative.** The
+  expected shape would be an admin write policy with `public.has_role(auth.uid(), 'admin')`. An RLS
+  policy evaluates its predicate with the *caller's* privileges, and `authenticated` has no `SELECT`
+  on `public.user_roles` since 6d-1 — so neither `has_role()` nor its inlined `exists` works inside a
+  policy: both raise `permission denied for table user_roles` for everyone, admins included. It is the
+  same defect `wines_insert_staff` has carried since Phase 6a, recorded by 9a and deliberately not
+  fixed. The 9a trick — inlining the predicate in a `security_invoker = off` view — solves *reading*,
+  not writing. 12a has no screen that creates a club, so a door with no caller would be surface
+  without a user; when 12b or 12c want one it is a `SECURITY DEFINER` function (exposure rule 3),
+  never a policy.
+- **`club_memberships.user_id` comes from `DEFAULT auth.uid()` and is outside the `INSERT` grant**,
+  which is `grant insert (club_slug)` and nothing else. No service method takes a `userId` in any
+  position — not a style preference: such a parameter would have nowhere to land.
+- **Public reads go through `public_clubs`**, `security_invoker = off` with a closed column list,
+  which also publishes the two things the base table does not have: the member count (nobody may read
+  `club_memberships` beyond their own rows) and the caller's own `seguito`.
+- **Following a club is a social write** and takes the 9b guard unchanged — `private.scrittura_social_guard()`
+  already has the `else auth.uid()` branch for tables whose actor is not a row column. A `rimosso`
+  caller does not read `public_clubs`, same shape as `public_listings`. **No orders, payments,
+  disputes or payouts table is named anywhere in the migration**, so the 9c constraint holds by
+  construction.
+- **The seed fixture is a separate gate from the migration**, and lives in
+  `supabase/queries/02_PROPOSTA_NON_ESEGUIRE_SEED_CLUB_FASE_12A.sql` for two measured reasons: under
+  `supabase/migrations/` the merge would apply it to the real project by itself (decision 7.10), and
+  the name `supabase/seed.sql` is loaded on every `db reset` and on preview branches, because
+  `config.toml` has `[db.seed]` enabled on exactly that path.
+- Decision **7.6a** is not reopened: `report_target_tipo` keeps its five labels and gains neither
+  `post` nor `commento`. That decision deferred them «until clubs have a Supabase schema» — 12a gives
+  clubs a schema but gives posts none, so there is still nothing for those two targets to resolve to.
+
+**Opening 12b or 12c stays a separate explicit approval, as for every checkpoint**, and «no new
+features during migration» keeps governing everything neither has admitted by name.
 
 ## Beta `frontend-next` production-like — **in produzione** dal 16 agosto 2026
 
