@@ -47,6 +47,16 @@ CONTESTO_IA/    handoff sintetico per nuove IA/chat
    quella PR produce davvero — numero, cosa cambia, cosa resta aperto — come
    **ultimo commit della PR stessa**, prima dello squash e non dopo: dopo lo
    squash il branch non c'è più e l'aggiornamento richiederebbe una PR a parte.
+   **Una sola deroga, ammessa per nome da Enrico il 16 agosto 2026**: una PR il
+   cui diff contiene **zero file sotto `supabase/migrations/`** può essere mersa
+   autonomamente dalla sessione, senza chiedere prima, con i tre job CI verdi e
+   `mergeable: MERGEABLE` / `mergeStateStatus: CLEAN` letti **sull'head commit
+   che si sta per mergiare**. Il confine è quella cartella e nient'altro: cosa
+   tocchi il resto del diff non lo sposta. Con anche **un solo** file di
+   migrazione il merge resta esplicito di Enrico, perché qui **il merge è il
+   gate di deploy** (7.10) e una migrazione mersa arriva sul progetto reale
+   nello stesso istante. La deroga vale per il merge di una PR e per nient'altro:
+   i punti 2, 8 e 9 di questo elenco restano intatti.
 7. Non usare Lovable o Emergent per generare/modificare il codice.
 8. Le migrazioni sul progetto Supabase reale richiedono revisione dell'SQL e
    conferma esplicita in sessione prima di `supabase db push` o equivalenti.

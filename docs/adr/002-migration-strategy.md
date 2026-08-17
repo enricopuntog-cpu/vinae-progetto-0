@@ -71,6 +71,31 @@ alla volta collegato a Supabase», che si chiude con la Fase 10.
   organizzativa; nessuna fase successiva parte senza approvazione
   esplicita.
 
+### Deroga al merge autonomo — 16 agosto 2026
+
+Ammessa **per nome da Enrico il 16 agosto 2026**, ed è stretta. Una sessione
+Claude Code può mergiare da sé una Pull Request — senza chiedere prima — **se e
+solo se il suo diff contiene zero file sotto `supabase/migrations/`**,
+indipendentemente da cos'altro tocca (`frontend-next/src/`, `backend/`,
+documentazione, configurazione CI), e a condizione che i tre job CI —
+`frontend`, `frontend-next`, `backend` — siano **tutti verdi** e che GitHub
+riporti `mergeable: MERGEABLE` e `mergeStateStatus: CLEAN` **sull'head commit
+che sta per mergiare**, non su uno precedente.
+
+Qualunque PR con anche **un solo** file di migrazione resta un **merge esplicito
+di Enrico, senza eccezioni**. Il motivo è che in questo repository **il merge è
+il gate di deploy delle migrazioni** — decisione 7.10, già registrata in
+`CLAUDE.md`: non esiste un comando di applicazione separato, e una migrazione
+mersa si distribuisce al progetto Supabase reale **nello stesso istante**.
+
+La deroga riguarda **il merge di una PR e nient'altro**. In particolare **non
+abolisce** la regola qui sopra per cui nessuna fase successiva parte senza
+approvazione esplicita: aprire una fase e mergiare una PR sono due cancelli
+distinti, e questa deroga apre solo il secondo. Restano intatte anche
+l'autorizzazione separata per applicare SQL o fixture al progetto reale, quella
+per eseguire una griglia remota — che è **per griglia e non per progetto** — e
+quella del punto 5 per il cutover della Fase 13.
+
 ## Conseguenze
 
 - Il ritmo è più lento di una riscrittura "big bang", ma ogni fase è
