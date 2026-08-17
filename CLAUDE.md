@@ -795,7 +795,7 @@ is a legitimate state of the strip** — to be designed, not avoided. **None of 
 (b) touches a 6.5 value and **confirms** it, and a note at the end of 6.5 records that the number was
 looked at again and under what condition it returns to a session.
 
-### Phase 12 — Club/Community. Checkpoint 12a in progress; 12b and 12c not started.
+### Phase 12 — Club/Community. 12a merged; 12b + 12c open together in one PR.
 
 Renumbered in on **16 August 2026 by PR #46**, taking the number the cutover held: Club/Community follows
 Phase 11 directly in dependency order, so the cutover moved to **Phase 13**. The phase is
@@ -803,8 +803,8 @@ structured in **three checkpoints, 12a/12b/12c**, detailed in **that phase's org
 document, which is not yet written in this repo** — until it is, the content of 12b and 12c is
 not to be inferred from here.
 
-**Checkpoint 12a is open on branch `migration/phase-12a-club-readonly`, draft
-[PR #48](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/48), started 17 August 2026.**
+**Checkpoint 12a is merged** as squash `e2132ee`,
+[PR #48](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/48), 17 August 2026.
 Its perimeter is **read-only plus a real follow**, and the boundary is what matters: `/community`
 and `/community/[slug]` come back on real rows, an authenticated user follows and unfollows a
 club, and **no user-writable content exists** — no posts, no replies, no reactions. Those belong
@@ -845,8 +845,93 @@ What 12a fixes in place, and that later checkpoints inherit:
   `post` nor `commento`. That decision deferred them «until clubs have a Supabase schema» — 12a gives
   clubs a schema but gives posts none, so there is still nothing for those two targets to resolve to.
 
-**Opening 12b or 12c stays a separate explicit approval, as for every checkpoint**, and «no new
-features during migration» keeps governing everything neither has admitted by name.
+#### Checkpoint 12b + 12c — club content and its moderation. One PR, never two merges.
+
+Open on `migration/phase-12bc-club-content`, draft
+[PR #49](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/49), 17 August 2026.
+**12b and 12c never separate in merge.** 12b introduces user-writable public text; 12c
+introduces the way to report and remove it. Merging 12b alone would open a window — of a length
+decided by when 12c gets approved — in which anyone publishes on a public surface and nobody can
+report what they read. It is the same rule decision **7.6a** already applied in the other
+direction.
+
+**Fase 12b+12c — scrittura di contenuti nei club, ammessa per eccezione.** La scrittura di
+contenuti pubblici nei club (`club_posts`, `club_post_risposte`, `club_post_like`) è ammessa per
+eccezione esplicita e per nome da Enrico, in sessione di coordinamento della Fase 12. È la seconda
+funzionalità nuova autorizzata durante la migrazione dopo le quattro della Fase 11 — «niente
+funzionalità nuove durante la migrazione» non è decaduta: continua a valere per tutto ciò che una
+sessione non ha chiesto per nome. L'ammissione è condizionata e inseparabile dalla 12c: nessun
+contenuto pubblico scrivibile va in produzione senza un modo per segnalarlo, la stessa regola già
+valida per la 7.6a.
+
+**Decision 7.6a is fulfilled, not reopened.** It deferred `post` and `commento` «until clubs have a
+Supabase schema». 12a gave clubs a schema but gave posts none, so the condition still held; 12b
+gives posts and replies one, and with that the two labels finally have a table to resolve to. 12c
+adds them to `report_target_tipo`, which takes it from five values to **seven** — the seven of the
+mock.
+
+What 12b+12c fix in place, and that later work inherits:
+
+- **`report_target_tipo` is an enum, not a check constraint, and that forces THREE migration
+  files.** In PostgreSQL 12+ `alter type ... add value` may sit inside a transaction, but the new
+  value **cannot be used in the transaction that adds it**, and Supabase applies each file in its
+  own. Measured in session, not deduced: `ERROR: unsafe use of new value ... HINT: New enum values
+  must be committed before they can be used.` The middle file
+  (`20260817120500_phase_12c_report_target_enum.sql`) exists **only** to be that transaction — do
+  not fold it into either neighbour.
+- **Extending the enum would have opened a hole in 9a on its own.** `reports_target_coerente` is a
+  `case target_tipo ... end` with **no `else`**; a `case` with no match returns `NULL`, and a
+  `CHECK` whose predicate is `NULL` **passes**. The bare `add value` would therefore have let a
+  `post` report carry `target_listing_id`. Both constraints are redefined, and the new `else false`
+  makes an eighth label added tomorrow **fail closed** instead of silently passing. Same shape, but
+  benign, in `segnalazione_invia`'s `v_esiste`, which failed closed already.
+- **`listing_id` has two overlapping conditions, read off the mock rather than assumed.** Always:
+  the listing must be **publicly visible**, read from `public_listings` so "public" stays defined in
+  one place. Additionally, when `tipo = 'annuncio'`: it must be **the author's own** — the mock's
+  two `annuncio` posts are «**Vendo** Barolo Brunate 2018» and «**Vendo** Magnum Ornellaia 2017»
+  (`frontend/src/data/communities.ts:179`, `:265`), where the post's author *is* the seller.
+- **Removal is logical, never a physical DELETE**, and its only door is a `SECURITY DEFINER`
+  function — `rimosso_at`/`rimosso_da`/`rimosso_motivo` are outside every client grant. The two
+  actions are **new branches inside `moderazione_rimozione` and `moderazione_ripristino`**, not new
+  RPCs: those already branch on `target_tipo` and would otherwise write the audit row **without
+  removing anything**. No per-target "remove this post" door, because it would have no caller.
+  This produces the **first `audit_log` row with `scope = 'club'`** — 9a created that label noting
+  nothing could yet be born with it.
+- **`private.scrittura_social_guard()` is reused unchanged** on all three tables. It is the 9b
+  general guard, already mounted on `listings`, `messages`, `conversations` and (12a)
+  `club_memberships` — not something found only on club tables. It is **not redefined**.
+- **The rate limit lives in the same `SECURITY DEFINER` trigger as the cross-table checks**, so it
+  binds every path including `service_role`: `club:post` **10/hour**, `club:risposta` **30/hour**,
+  **no bucket for likes** (idempotent and reversible). Session values, reopenable on observed use,
+  like Phase 10's three.
+- **`rate_limit_exceeded` is now among the frontend's readable error codes** — but only in
+  `phase12`. Without it the user reads the generic «Riprova» exactly when retrying will fail for an
+  hour. Phases 7, 8 and 9 have the same gap and it is **not** closed here: their limits are
+  per-minute, where "retry" is nearly right.
+- **The grid was executed**: `supabase/tests/12bc_club_content_moderazione.sql`, **47 PASSA / 0
+  FALLISCE** on PostgreSQL 15.19, after applying all 29 migrations from empty, each in its own
+  transaction. Four runs — 25/42, 45/47, 46/47, 47/47 — and **none** of the failures was a
+  migration defect: five classes of grid defect, none visible by reading. The most insidious:
+  **SQL does not guarantee evaluation order of `and` operands**, so "write then verify" cases were
+  passing by luck. It has **never** run on the real project, and doing so is a separate per-grid
+  authorization — this one **writes**.
+- **A test now enforces the 12b/12c bond**: `public-surface-contract.test.ts` asserts that the
+  component rendering post and reply bodies is the one importing `ReportDialog`, with both
+  `targetType="post"` and `targetType="commento"`, and that the allowed reasons match
+  character-for-character between `data/moderation.ts` and the migration. The 12a test that
+  asserted content writing was *closed* was rewritten onto the new, narrower boundary rather than
+  deleted.
+- **Deliberately absent**: no author-side delete of one's own post (so self-reporting a post stays
+  possible and is an author's only route to review); no notifications on reply or like; no club
+  `moderatore` role (7.1 stays deferred); no nested threads; no real poll behind the `sondaggio`
+  type. `MIN_TESTS` 367 → **402**.
+- **A pre-existing Phase 9 defect, recorded and NOT fixed here**: `report_reasons` holds the reasons
+  **without accents** (`'Identita sospetta'`, 9a:107) while `data/moderation.ts:46` sends
+  `"Identità sospetta"`, so that report fails the closed-list check. It affects `profilo` and other
+  accented reasons, **not** `post`/`commento`, whose seven reasons are accent-free in both copies.
+
+**Opening any further checkpoint stays a separate explicit approval**, and «no new features during
+migration» keeps governing everything no session has admitted by name.
 
 ## Beta `frontend-next` production-like — **in produzione** dal 16 agosto 2026
 

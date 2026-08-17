@@ -86,7 +86,7 @@ Il dettaglio di ogni ticket è in
 | 9 | `ModerationService` + audit persistente | Sì |
 | 10 | `AiService` reale via Edge Function | Sì |
 | 11 | Estensioni AI ammesse per eccezione: autofill da foto, spunta di completezza documentale, triage di moderazione, ritaglio e sfondo reale | Sì |
-| 12 | Club/Community: struttura in tre checkpoint 12a/12b/12c, dettagliati nel documento organizzativo della fase, non ancora scritto in questo repo | Sì |
+| 12 | Club/Community: tre checkpoint 12a/12b/12c. 12a merso (PR #48); 12b+12c aperti insieme e non separabili in merge (PR #49) | Sì |
 | 13 | Cutover finale: dismissione `frontend/` + `backend/` | — |
 
 **Rinumerazione del 16 agosto 2026.** Il cutover era la Fase 12 e diventa la
@@ -535,7 +535,7 @@ stessa PR.
 
 ## Fase 12 — Club/Community
 
-**Stato: checkpoint 12a in corso. 12b e 12c non iniziati.**
+**Stato: checkpoint 12a merso. 12b + 12c in corso, in una PR sola.**
 
 Prende il numero 12 perché segue direttamente la Fase 11 — estensioni AI —
 nell'ordine di dipendenza, e per questo il cutover si è spostato alla 13. È
@@ -545,8 +545,8 @@ non lo è, il contenuto di 12b e 12c non si deduce da qui.
 
 ### Checkpoint 12a — club in sola lettura, con follow reale
 
-Aperto il **17 agosto 2026** sul branch `migration/phase-12a-club-readonly`,
-draft [PR #48](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/48).
+**Merso** come squash `e2132ee`, [PR #48](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/48),
+aperto il 17 agosto 2026 sul branch `migration/phase-12a-club-readonly`.
 
 Perimetro: `/community` e `/community/[slug]` tornano raggiungibili su righe
 reali, un utente autenticato segue e smette di seguire un club, e **nessun
@@ -570,9 +570,65 @@ Questa PR porta file sotto `supabase/migrations/`, quindi **non rientra
 nell'eccezione di merge autonomo** registrata dalla PR #47: il merge resta
 esplicito.
 
-**L'apertura di 12b e di 12c resta un'approvazione esplicita a parte**, come
-per ogni checkpoint, e «nessuna funzionalità nuova durante la migrazione»
-continua a valere su tutto ciò che nessuna delle due ha ammesso per nome.
+### Checkpoint 12b + 12c — contenuti dei club e loro moderazione
+
+Aperti **insieme** il 17 agosto 2026 sul branch `migration/phase-12bc-club-content`,
+draft [PR #49](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/49).
+
+**Non si separano in merge, in nessuna circostanza.** La 12b introduce testo
+pubblico scrivibile dagli utenti; la 12c introduce il modo di segnalarlo e
+rimuoverlo. Mergiare la 12b da sola aprirebbe una finestra — di durata decisa da
+quando la 12c viene approvata — in cui chiunque pubblica su una superficie
+pubblica e nessuno può segnalare ciò che legge. È la stessa regola che la
+decisione **7.6a** aveva già applicato al contrario, escludendo `post` e
+`commento` dai bersagli finché i club non avessero schema.
+
+#### Fase 12b+12c — scrittura di contenuti nei club, ammessa per eccezione
+
+La scrittura di contenuti pubblici nei club (`club_posts`, `club_post_risposte`,
+`club_post_like`) è ammessa per eccezione esplicita e per nome da Enrico, in
+sessione di coordinamento della Fase 12. È la seconda funzionalità nuova
+autorizzata durante la migrazione dopo le quattro della Fase 11 — «niente
+funzionalità nuove durante la migrazione» non è decaduta: continua a valere per
+tutto ciò che una sessione non ha chiesto per nome. L'ammissione è condizionata e
+inseparabile dalla 12c: nessun contenuto pubblico scrivibile va in produzione
+senza un modo per segnalarlo, la stessa regola già valida per la 7.6a.
+
+**La decisione 7.6a è adempiuta, non riaperta.** Rinviava `post` e `commento`
+«finché i club non hanno schema Supabase»: la 12a ha dato schema ai club ma non
+ai post, quindi la condizione reggeva ancora. La 12b dà schema a post e risposte,
+e con questo i due valori hanno finalmente una tabella in cui risolversi. La 12c
+li aggiunge a `report_target_tipo`.
+
+Contiene **tre** migrazioni additive, e il numero non è una preferenza:
+`report_target_tipo` è un **enum**, e in PostgreSQL un valore aggiunto a un enum
+non è utilizzabile nella transazione che lo aggiunge — Supabase applica ogni file
+nella propria. Il file di mezzo esiste solo per essere quella transazione.
+
+- `20260817120000_phase_12b_club_content.sql` — le tre tabelle, RLS a grant di
+  colonna, i guard, le viste `public_club_posts` e `public_club_post_risposte`
+- `20260817120500_phase_12c_report_target_enum.sql` — **solo** i due `add value`
+- `20260817121000_phase_12c_club_moderation.sql` — i motivi ammessi, le due
+  colonne di bersaglio, i vincoli ridefiniti, `segnalazione_invia` estesa, il
+  motore di rimozione logica e i due rami nuovi di `moderazione_rimozione` e
+  `moderazione_ripristino`
+
+Più il frontend: `ClubService` con sei metodi nuovi, il componente
+`ClubDiscussioni` condiviso dalle due pagine, e `ReportDialog` cablato su post e
+risposte con i due bersagli nuovi.
+
+**La griglia `supabase/tests/12bc_club_content_moderazione.sql` è stata
+eseguita** — 47 PASSA / 0 FALLISCE su PostgreSQL 15.19 locale, dopo aver
+applicato dal vuoto tutte e 29 le migrazioni ciascuna nella propria transazione.
+È la prima griglia di questo repository che non sia solo versionata. **Non è mai
+stata eseguita sul progetto reale**, e farlo resta un'autorizzazione separata per
+griglia: questa **scrive**.
+
+**Non contiene, ed è un cancello separato ciascuno:** l'applicazione dell'SQL al
+progetto Supabase reale; il fixture dei club, ancora una proposta in
+`supabase/queries/`; l'esecuzione della griglia sul progetto reale. Porta file
+sotto `supabase/migrations/`, quindi **non rientra nell'eccezione di merge
+autonomo** della PR #47: il merge resta esplicito di Enrico.
 
 ## Fase 13 — cutover finale
 
