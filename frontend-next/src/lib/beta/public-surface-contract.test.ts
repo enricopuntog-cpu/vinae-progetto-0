@@ -172,11 +172,59 @@ describe("superfici pubbliche della beta", () => {
     expect(home).not.toMatch(/Elena Rossi|preferiti|seguiti|communityPosts/);
   });
 
-  it("legge lo username dalla riga profiles canonica", () => {
+  /**
+   * L'invariante non è cambiato — il profilo si legge dalla riga canonica di
+   * `public.profiles` e non da un dato dimostrativo — ma ha cambiato casa: sta
+   * in `ProfileService`, non più in `AuthService`, che ora si ferma
+   * all'autenticazione e ai ruoli. Il caso è stato riscritto sul confine nuovo
+   * invece di essere cancellato, e ne difende **di più**: che l'identificativo
+   * non arrivi da fuori.
+   */
+  it("legge il profilo dalla riga profiles canonica, risolvendo l'utente dalla sessione", () => {
+    const profilo = leggi("src/services/profile-service.ts");
+    expect(profilo).toInclude('.from("profiles")');
+    expect(profilo).toInclude("auth.getSession()");
+    expect(profilo).toInclude('.eq("id", utente.id)');
+    // L'identificativo esce dalla sessione e non da un argomento: le due firme
+    // pubbliche non hanno parametri oltre al patch da scrivere. (`userId`
+    // compare come *campo restituito* di ProfiloCorrente, che è un'altra cosa,
+    // ed è il motivo per cui qui si guardano le firme e non la parola.)
+    expect(profilo).toInclude("async leggiProfiloCorrente()");
+    expect(profilo).toInclude("async aggiornaProfiloCorrente(patch: ProfiloModifica)");
+  });
+
+  it("auth-service non scrive piu su profiles: una sola porta per quella tabella", () => {
     const auth = leggi("src/services/auth-service.ts");
-    expect(auth).toInclude('.from("profiles")');
-    expect(auth).toInclude('.select("username")');
-    expect(auth).toInclude('.eq("id", userId)');
+    expect(auth).not.toInclude('.from("profiles")');
+  });
+
+  it("il contratto ProfileService non accetta un identificativo utente", () => {
+    const tipi = leggi("src/services/types.ts");
+    const inizio = tipi.indexOf("export interface ProfileService");
+    expect(inizio).toBeGreaterThan(-1);
+    const contratto = tipi.slice(inizio, tipi.indexOf("}", inizio));
+    expect(contratto).not.toMatch(/userId|user_id/);
+  });
+
+  /**
+   * L'avatar di produzione non arriva da un servizio esterno. La demo storica
+   * usava `pravatar.cc`: ogni apertura di un profilo sarebbe stata una
+   * richiesta a terzi con l'IP di chi guarda.
+   */
+  it("gli avatar sono serviti da noi, mai da un servizio placeholder esterno", () => {
+    // `senzaCommenti` non è un dettaglio: il modulo degli avatar **nomina**
+    // pravatar.cc nel commento che spiega perché non lo si usa più, e senza
+    // questo filtro spiegare il divieto farebbe fallire la verifica del
+    // divieto. Stessa forma già adottata dai contratti della 12a.
+    const avatar = senzaCommenti(leggi("src/lib/profilo/avatar.ts"));
+    const account = senzaCommenti(leggi("src/app/account/page-client.tsx"));
+    for (const sorgente of [avatar, account]) {
+      expect(sorgente).not.toMatch(/pravatar|gravatar|placeholder\.com|dicebear/i);
+      expect(sorgente).not.toMatch(/https?:\/\/[^\s"')]*avatar/i);
+    }
+    // La lettura passa dalla convalida, perche' `avatar_url` e' scrivibile dal
+    // client e il valore memorizzato non e' fidato.
+    expect(account).toInclude("avatarSicuro");
   });
 
   it("non mostra il promemoria non persistito", () => {

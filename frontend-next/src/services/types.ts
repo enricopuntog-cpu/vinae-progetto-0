@@ -17,14 +17,7 @@ import type {
   ModAction,
   AuditEntry,
 } from "@/data/moderation";
-import type {
-  ProfiloUtente,
-  Obiettivo,
-  EmailStatus,
-  AgeStatus,
-  IdentityStatus,
-  SellerStatus,
-} from "@/data/onboarding";
+import type { Esperienza } from "@/data/onboarding";
 import type {
   CellarBottle,
   StorageEnvironment,
@@ -75,27 +68,67 @@ export interface AuthService {
   utenteCorrente(): Promise<{ userId: string; email: string | null } | null>;
   /** Ruoli della sola riga corrente, filtrati dalla RLS su `user_roles`. */
   ruoliProfilo(userId: string): Promise<Result<string[]>>;
-  /**
-   * Data di nascita dichiarata sul profilo, o null se non ancora fornita —
-   * il caso di chi entra via Google/Facebook, che salta il form email e
-   * quindi anche il banner di dichiarazione età.
-   */
-  dataNascitaProfilo(userId: string): Promise<Result<string | null>>;
-  nomeProfilo(userId: string): Promise<Result<string | null>>;
-  salvaDataNascita(userId: string, dataNascita: string): Promise<Result<void>>;
+  // Lettura e scrittura del profilo NON stanno più qui: appartengono a
+  // `ProfileService`. Le tre firme precedenti — `dataNascitaProfilo`,
+  // `nomeProfilo`, `salvaDataNascita` — leggevano e scrivevano pezzi della
+  // stessa riga di `public.profiles` da un servizio il cui dominio è
+  // l'autenticazione, e prendevano un `userId` in ingresso. Tenerle avrebbe
+  // lasciato due porte sulla stessa tabella, che è esattamente ciò che la
+  // regola «un solo scrittore autorevole per dominio» esclude.
 }
 
 // ---- Profili ---------------------------------------------------------------
+/**
+ * Il profilo dell'utente collegato, come lo espone `public.profiles`.
+ *
+ * `dob` può essere `null`: è la finestra fra il primo accesso OAuth e la
+ * dichiarazione dell'età raccolta da /completa-profilo (migrazione
+ * 20260728073915_oauth_profile_without_dob.sql).
+ */
+export type ProfiloCorrente = {
+  userId: string;
+  email: string | null;
+  username: string;
+  bio: string;
+  citta: string;
+  provincia: string;
+  esperienza: Esperienza;
+  avatarUrl: string;
+  dob: string | null;
+};
+
+/** Solo i campi che l'utente può cambiare di sé. */
+export type ProfiloModifica = Partial<{
+  username: string;
+  bio: string;
+  citta: string;
+  provincia: string;
+  esperienza: Esperienza;
+  avatarUrl: string;
+  dob: string;
+}>;
+
+/**
+ * Lettura e scrittura del **proprio** profilo.
+ *
+ * NESSUN `userId` IN FIRMA, ed è un vincolo e non uno stile. La riga da leggere
+ * o scrivere è sempre quella di `auth.uid()`: l'identificativo viene risolto
+ * dentro l'implementazione a partire dalla sessione, e la policy
+ * `profiles_update_own` lo impone comunque lato database. Un parametro qui non
+ * allargherebbe niente — la RLS lo respingerebbe — ma suggerirebbe una capacità
+ * che non esiste, e prima o poi qualcuno proverebbe a usarla.
+ *
+ * Questa interfaccia SOSTITUISCE la versione dimostrativa precedente, che aveva
+ * `get(userId)`/`update(userId, …)` su `ProfiloUtente` di `data/onboarding.ts` e
+ * **nessuna implementazione di alcun tipo** — stessa situazione trovata dalla
+ * Fase 10 con `AiService`, e stessa soluzione: il contratto reale prende il
+ * posto della bozza invece di affiancarla. `stati()` e `aggiornaObiettivi()`
+ * descrivevano stati (identità, venditore) che nel percorso Supabase non
+ * esistono ancora: reggerli qui avrebbe promesso dati che nessuno scrive.
+ */
 export interface ProfileService {
-  get(userId: string): Promise<ProfiloUtente | null>;
-  update(userId: string, patch: Partial<ProfiloUtente>): Promise<ProfiloUtente>;
-  aggiornaObiettivi(userId: string, obiettivi: Obiettivo[]): Promise<void>;
-  stati(userId: string): Promise<{
-    email: EmailStatus;
-    eta: AgeStatus;
-    identita: IdentityStatus;
-    venditore: SellerStatus;
-  }>;
+  leggiProfiloCorrente(): Promise<Result<ProfiloCorrente | null>>;
+  aggiornaProfiloCorrente(patch: ProfiloModifica): Promise<Result<ProfiloCorrente>>;
 }
 
 // ---- Catalogo vini ---------------------------------------------------------

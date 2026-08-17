@@ -166,47 +166,8 @@ export const supabaseAuthService: AuthService = {
     };
   },
 
-  async dataNascitaProfilo(userId) {
-    const supabase = getSupabaseClient();
-    if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("dob")
-      .eq("id", userId)
-      .maybeSingle();
-    if (error) return { ok: false, error: error.message };
-    return { ok: true, data: (data?.dob as string | null) ?? null };
-  },
-
-  async nomeProfilo(userId) {
-    const supabase = getSupabaseClient();
-    if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("username")
-      .eq("id", userId)
-      .maybeSingle();
-    if (error) return { ok: false, error: error.message };
-    const username = typeof data?.username === "string" ? data.username.trim() : "";
-    return { ok: true, data: username || null };
-  },
-
-  async salvaDataNascita(userId, dataNascita) {
-    const supabase = getSupabaseClient();
-    if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };
-
-    // La policy RLS profiles_update_own consente l'UPDATE solo sulla propria
-    // riga; il CHECK 18+ su profiles.dob resta la barriera autoritativa e
-    // respinge comunque una data che indichi un'età inferiore.
-    const { error } = await supabase
-      .from("profiles")
-      .update({ dob: dataNascita })
-      .eq("id", userId);
-    if (error) return { ok: false, error: error.message };
-    return { ok: true, data: undefined };
-  },
+  // Profilo: vedi services/profile-service.ts. Questo servizio si ferma
+  // all'autenticazione e ai ruoli.
 } satisfies AuthService;
 
 export type { Result };

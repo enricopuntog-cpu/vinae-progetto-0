@@ -46,7 +46,12 @@ const nav = [
   { to: "/esplora", label: "Ricerca", icon: Search, exact: false },
   { to: "/vendi", label: "Vendi", icon: PlusCircle, exact: false },
   { to: "/community", label: "Club", icon: Users, exact: false },
-  { to: "/accedi", label: "Account", icon: User, exact: false },
+  // La voce Account porta al profilo e non piu a /accedi: da autenticati
+  // quest'ultima mostrava soltanto "Sei autenticato" ed "Esci", cioe una
+  // schermata di accesso a chi era gia dentro. /account rimanda a /accedi da
+  // solo quando la sessione manca, quindi la voce resta valida in entrambi gli
+  // stati e non serve una voce condizionale.
+  { to: "/account", label: "Account", icon: User, exact: false },
 ] as const;
 
 const desktopLinks = [
@@ -55,7 +60,7 @@ const desktopLinks = [
   { to: "/community", label: "Club", exact: false },
   { to: "/cantina", label: "La mia cantina", exact: false },
   { to: "/vendi", label: "Vendi", exact: false },
-  { to: "/accedi", label: "Account", exact: false },
+  { to: "/account", label: "Account", exact: false },
 ] as const;
 
 export function VineaLayout({ children }: { children: ReactNode }) {

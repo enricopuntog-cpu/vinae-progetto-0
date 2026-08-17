@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Decanter">
+  <circle cx="48" cy="48" r="48" fill="#202020"/>
+  <path d="M44 18h8v20l14 20a14 14 0 0 1-11 22H41a14 14 0 0 1-11-22l14-20z" fill="#f7f3ec"/>
+  <path d="M35 52h26a14 14 0 0 1 5 8 14 14 0 0 1-11 20H41a14 14 0 0 1-11-20 14 14 0 0 1 5-8z" fill="#6b2138"/>
+</svg>
