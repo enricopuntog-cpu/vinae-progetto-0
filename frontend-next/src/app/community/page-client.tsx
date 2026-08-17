@@ -14,11 +14,12 @@
 // Mostrarli avrebbe voluto dire inventare un dato o riesumare il mock, che e
 // esattamente cio che la #44 ha tolto dalla beta.
 //
-// I tab "Discussioni del club" e "Post popolari" restano al loro posto e
-// dichiarano di non essere ancora disponibili. Restano anche cliccabili, di
-// proposito: disabilitarli renderebbe irraggiungibile il messaggio che spiega
-// perche sono vuoti, e un tab spento senza spiegazione si legge come un
-// difetto. La scrittura arriva nel 12b, che qui non ha schema.
+// I tab "Discussioni del club" e "Post popolari" non dicono piu "disponibile a
+// breve": dalla 12b mostrano le discussioni reali, di TUTTI i club, ordinate
+// per data e per popolarita. Qui si legge, si mette like e si segnala; si
+// SCRIVE dentro la scheda di un club, perche una discussione ha bisogno di un
+// club in cui stare e un menu "in quale?" sarebbe una schermata che nessuno ha
+// chiesto.
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -26,6 +27,7 @@ import { Search, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ClubDiscussioni } from "@/components/vinea/ClubDiscussioni";
 import { SectionTitle } from "@/components/vinea/Layout";
 import { ErrorState } from "@/components/vinea/States";
 import { wineImages } from "@/lib/wine-images";
@@ -39,15 +41,18 @@ import {
   type CampoFiltro,
   type FiltriClub,
 } from "@/lib/phase12/club-view";
+import { ordinaPerPopolarita } from "@/lib/phase12/club-post-view";
 import { useClubFollow } from "@/lib/phase12/use-club-follow";
-import type { Club } from "@/services/types";
+import type { Club, ClubPost } from "@/services/types";
 
 export default function CommunityHubPageClient({
   iniziali,
   erroreLettura,
+  discussioni,
 }: {
   iniziali: Club[];
   erroreLettura: string | null;
+  discussioni: ClubPost[];
 }) {
   // I club arrivano gia letti dal componente server. Lo stato locale esiste
   // solo perche il follow ne sostituisce una riga: non e una seconda copia da
@@ -190,11 +195,17 @@ export default function CommunityHubPageClient({
             </TabsContent>
 
             <TabsContent value="discussioni" className="mt-4">
-              <ClubProssimamente testo="Le discussioni del club" />
+              {/* Nessuno `clubSlug`: qui non si compone, perche una discussione
+                  ha bisogno di un club in cui stare. */}
+              <ClubDiscussioni iniziali={discussioni} mostraClub />
             </TabsContent>
 
             <TabsContent value="popolari" className="mt-4">
-              <ClubProssimamente testo="I post popolari" />
+              <ClubDiscussioni
+                iniziali={discussioni}
+                mostraClub
+                ordina={ordinaPerPopolarita}
+              />
             </TabsContent>
           </Tabs>
         </>
@@ -203,20 +214,11 @@ export default function CommunityHubPageClient({
   );
 }
 
-export function ClubProssimamente({ testo }: { testo: string }) {
-  return (
-    <div
-      role="status"
-      data-testid="club-prossimamente"
-      className="rounded-2xl border border-dashed border-border bg-card p-10 text-center text-muted-foreground"
-    >
-      <p className="font-serif text-lg text-foreground">{testo} sono disponibili a breve</p>
-      <p className="mt-1 text-sm">
-        In questa versione i club si leggono e si seguono. Scrivere e rispondere arriva più avanti.
-      </p>
-    </div>
-  );
-}
+// `ClubProssimamente` viveva qui e diceva «disponibile a breve». Non c'e piu
+// perche non c'e piu niente da rimandare: i due tab mostrano le discussioni
+// vere. Il suo posto lo prende lo stato vuoto di ClubDiscussioni, che e una
+// cosa diversa - "non c'e ancora nessuna discussione" invece di "la funzione
+// non esiste ancora" - e che invita a scriverne una.
 
 export function ClubCard({
   club,

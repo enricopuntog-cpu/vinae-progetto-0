@@ -966,6 +966,89 @@ export type Club = {
   createdAt: string;
 };
 
+// ---- Contenuti dei club (12b) -----------------------------------------------
+//
+// I sette valori sono quelli di PostTipo del mock
+// (frontend/src/data/communities.ts:134-135), replicati qui perche il CHECK a
+// database e questa unione devono dire la stessa cosa. A database e un CHECK e
+// non un enum: sono etichette di filtro della UI, non gli stati di una
+// macchina.
+export type ClubPostTipo =
+  | "discussione"
+  | "domanda"
+  | "degustazione"
+  | "confronto"
+  | "consiglio"
+  | "sondaggio"
+  | "annuncio";
+
+// Il vino di cui un post parla, risolto dal server da `wine_id` oppure dalla
+// bottiglia collegata. La vista NON pubblica l'identificativo della bottiglia:
+// cio che l'autore rende pubblico e la bottiglia di cui parla, non la chiave
+// con cui la sua cantina la nomina.
+export type ClubPostVino = {
+  slug: string;
+  produttore: string;
+  nome: string;
+  annata: number;
+};
+
+// L'annuncio collegato, quando esiste ancora ed e ancora pubblico. E' `null`
+// anche per un post che ne aveva uno: se nel frattempo e stato sospeso o
+// venduto la vista non lo risolve piu, e il post resta leggibile senza.
+export type ClubPostAnnuncio = {
+  id: string;
+  slug: string;
+  prezzoCents: number;
+};
+
+export type ClubPost = {
+  id: string;
+  clubSlug: string;
+  tipo: ClubPostTipo;
+  titolo: string;
+  corpo: string;
+  autoreId: string;
+  autoreUsername: string;
+  autoreAvatarUrl: string | null;
+  vino: ClubPostVino | null;
+  annuncio: ClubPostAnnuncio | null;
+  risposte: number;
+  miPiace: number;
+  // Stato del solo chiamante, come `seguito` su Club. Per un anonimo e sempre
+  // `false`.
+  piaciuto: boolean;
+  // Se il post e del chiamante. La UI ci decide se offrire "Segnala": non si
+  // segnala se stessi.
+  mio: boolean;
+  createdAt: string;
+};
+
+export type ClubPostRisposta = {
+  id: string;
+  postId: string;
+  corpo: string;
+  autoreId: string;
+  autoreUsername: string;
+  autoreAvatarUrl: string | null;
+  mio: boolean;
+  createdAt: string;
+};
+
+// I tre allegati sono facoltativi e nessuno di essi e verificato dal client:
+// la bottiglia dev'essere dell'autore e l'annuncio dev'essere pubblico, e
+// entrambe le cose le stabilisce un trigger a database. Qui sono opzionali
+// perche la maggior parte dei post non ne ha.
+export type NuovoClubPost = {
+  clubSlug: string;
+  tipo: ClubPostTipo;
+  titolo: string;
+  corpo: string;
+  bottleUnitId?: string | null;
+  wineId?: string | null;
+  listingId?: string | null;
+};
+
 export interface ClubService {
   elenco(): Promise<Result<Club[]>>;
   // `null` e una risposta legittima e non un errore: lo slug non esiste.
@@ -975,6 +1058,24 @@ export interface ClubService {
   // un numero che diverge dal database al primo caso concorrente.
   segui(slug: string): Promise<Result<Club>>;
   smettiSegui(slug: string): Promise<Result<Club>>;
+
+  // ---- 12b: contenuti ------------------------------------------------------
+  // Nessuna di queste firme accetta un identificativo di utente, per la stessa
+  // ragione delle quattro sopra: `autore_id` arriva da un DEFAULT del database
+  // e non e nel grant di INSERT, quindi un parametro del genere non avrebbe
+  // nemmeno un posto in cui finire.
+  // Senza slug: le discussioni piu recenti di TUTTI i club, che e cosa mostrano
+  // i due tab di /community. Con lo slug: quelle di un club solo. Un parametro
+  // opzionale e non due metodi perche cambia un filtro, non la lettura.
+  discussioni(clubSlug?: string): Promise<Result<ClubPost[]>>;
+  creaDiscussione(input: NuovoClubPost): Promise<Result<ClubPost>>;
+  risposte(postId: string): Promise<Result<ClubPostRisposta[]>>;
+  creaRisposta(postId: string, corpo: string): Promise<Result<ClubPostRisposta>>;
+  // Restituiscono il post riletto, non `void`: `miPiace` e un conteggio del
+  // server, e farlo indovinare al client lo fa divergere al primo caso
+  // concorrente. Stessa scelta gia fatta per `segui`.
+  mettiLike(postId: string): Promise<Result<ClubPost>>;
+  togliLike(postId: string): Promise<Result<ClubPost>>;
 }
 
 // ---- Notifiche -------------------------------------------------------------

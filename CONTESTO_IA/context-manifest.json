@@ -23,7 +23,7 @@
       "runtime_truth.money_tables_row_count: conservata la chiave, riscritto il contenuto sui conteggi del 2026-08-13."
     ]
   },
-  "updated_at": "2026-08-16",
+  "updated_at": "2026-08-17",
   "language": "it",
   "project": {
     "name": "Vinea",
@@ -94,16 +94,19 @@
     "target_frontend": "frontend-next/",
     "target_backend": "supabase/",
     "frontend_next_is_production": false,
-    "remote_migration_ledger_rows": 25,
-    "local_migration_files": 25,
-    "ledger_matches_local_files": true,
+    "remote_migration_ledger_rows": 26,
+    "remote_migration_ledger_rows_note": "Ventisei, RILETTE con list_migrations su pijnmcllmfgjmgsvtcej il 2026-08-17 durante la PR #49, non dedotte. L'ultima riga e' 20260817090000 phase_12a_club_readonly: il merge della #48 ha distribuito la migrazione della 12a, che e' la 7.10 misurata un'ottava volta. Le TRE migrazioni della #49 NON sono nel ledger, il che e' la controprova che nessun SQL di questa PR e' stato applicato al progetto reale.",
+    "local_migration_files": 29,
+    "local_migration_files_note": "Ventinove sul branch migration/phase-12bc-club-content: ventisei su origin/main (venticinque piu' la 12a) e tre nuove non ancora merse - 20260817120000_phase_12b_club_content, 20260817120500_phase_12c_report_target_enum, 20260817121000_phase_12c_club_moderation. Contate con ls, non stimate.",
+    "ledger_matches_local_files": false,
+    "ledger_matches_local_files_note": "false perche' le tre migrazioni della PR #49 non sono merse e quindi non distribuite, e perche' il ledger reale non e' stato riletto. Non e' un disallineamento da correggere: e' lo stato normale di una PR con migrazioni aperta.",
     "remote_migration_ledger_last_four": [
-      "20260810152500 phase_9a_drop_public_bottle_units",
       "20260810180000 phase_9b_moderation_actions",
       "20260810210000 phase_9_rimosso_blocca_commercio",
-      "20260811160000 phase_10b_sommelier_storico"
+      "20260811160000 phase_10b_sommelier_storico",
+      "20260817090000 phase_12a_club_readonly"
     ],
-    "migrations_applied_to_real_project": "tutte e venticinque, fino alla 10b compresa. Le fasi 7, 7b, 7c, 7f, 8, 9a, 9b, 9c e 10b sono a ledger.",
+    "migrations_applied_to_real_project": "tutte e ventisei, fino alla 12a compresa. Le fasi 7, 7b, 7c, 7f, 8, 9a, 9b, 9c, 10b e 12a sono a ledger. Schema distribuito NON significa comportamento esercitato: di 9, 10 e 12a non e' mai stata eseguita una sola transizione sul progetto reale.",
     "edge_functions_active": [
       {
         "slug": "payments-checkout",
@@ -239,7 +242,7 @@
     "phase_9": "merged_pr_32_squash_cd81df6_on_2026_08_11_at_07_43_53_utc_9a_plus_9b_plus_9c_in_one_checkpoint_four_migrations_are_ledger_rows_21_to_24_post_merge_verification_carried_to_main_by_pr_33_squash_8dd56c0_no_phase_9_behaviour_has_ever_been_exercised_on_the_real_project",
     "phase_10": "merged_pr_35_squash_442c98c_on_2026_08_11_at_18_53_14_utc_four_checks_green_on_head_c5034a6_single_checkpoint_10a_plus_10b_plus_10c_migration_20260811160000_is_ledger_row_25_three_new_edge_functions_active_closed_perimeter_is_the_three_migrated_features_sommelier_chat_with_postgres_history_food_wine_pairing_and_cataloguing_suggestion_from_text_distributed_off_by_construction_because_ai_enabled_fails_closed_documentary_closure_and_phase_renumbering_by_pr_36_squash_271c7dc",
     "phase_11": "decisioni_chiuse_implementazione_non_iniziata",
-    "phase_12": "not_started",
+    "phase_12": "in_corso_12a_mersa_pr_48_squash_e2132ee_club_e_follow_in_sola_lettura_12b_e_12c_aperti_insieme_su_migration_phase_12bc_club_content_draft_pr_49_non_separabili_in_merge_perche_12b_introduce_testo_pubblico_scrivibile_e_12c_il_modo_di_segnalarlo_scrittura_contenuti_ammessa_per_eccezione_esplicita_e_per_nome_seconda_dopo_le_quattro_della_fase_11_decisione_7_6a_adempiuta_non_riaperta_report_target_tipo_da_cinque_a_sette_valori_tre_migrazioni_perche_un_valore_aggiunto_a_un_enum_non_e_usabile_nella_transazione_che_lo_aggiunge_griglia_12bc_eseguita_47_passa_0_fallisce_su_postgres_15_19_locale_mai_sul_progetto_reale_nessun_sql_applicato_al_remoto",
     "phase_13": "not_started"
   },
   "phase_12_e_13_note": "Rinumerazione del 2026-08-16, la seconda dopo quella dell'11 agosto 2026. phase_12 NON e' piu' il cutover: e' Club/Community, che prende quel numero perche' segue direttamente la Fase 11 nell'ordine di dipendenza. Il cutover e' phase_13. Club/Community e' strutturata in tre checkpoint 12a/12b/12c, dettagliati nel documento organizzativo della fase, che NON e' ancora scritto in questo repo: da qui il contenuto dei tre checkpoint non si deduce. Nessun branch, nessuna funzionalita' ammessa per nome: la rinumerazione precede l'apertura della fase e non la apre. A differenza dell'11 agosto 2026 nessun file congelato conserva il numero vecchio - la ricerca di 'Fase 12'/'Phase 12' in supabase/migrations/*.sql e in docs/superpowers/plans/ da' zero risultati, verificato e non dedotto dalla regola.",

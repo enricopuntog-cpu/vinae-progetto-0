@@ -18,6 +18,17 @@ async function leggiClub(slug: string) {
   return esito.ok ? esito.data : null;
 }
 
+// Le discussioni si leggono qui e non in un effetto del client, per la stessa
+// ragione del club: e una pagina pubblica, e il primo paint deve avere il
+// contenuto invece di uno scheletro. Un errore di lettura non fa 404 e non fa
+// cadere la pagina - la scheda del club resta, e le discussioni sono un elenco
+// vuoto: il club esiste anche quando la sua bacheca non si e potuta leggere.
+async function leggiDiscussioni(slug: string) {
+  const client = await getSupabaseServerClient();
+  const esito = await createSupabaseClubService(client).discussioni(slug);
+  return esito.ok ? esito.data : [];
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -44,5 +55,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
   const club = await leggiClub(slug);
   if (!club) notFound();
 
-  return <CommunityDetailPageClient iniziale={club} />;
+  const discussioni = await leggiDiscussioni(slug);
+
+  return <CommunityDetailPageClient iniziale={club} discussioni={discussioni} />;
 }

@@ -147,7 +147,7 @@ dipendenza.
 | Moderazione e audit persistente | Integrati in `main` — Fase 9, PR #32 al merge squash `cd81df6`; le quattro migrazioni distribuite in produzione dal merge, righe 21-24 del ledger. Verifica post-merge in PR #33, squash `8dd56c0` |
 | AI reale: chat Sommelier con storico, abbinamento, catalogazione da testo | Integrate in `main` — **Fase 10 chiusa**, PR #35 al merge squash `442c98c`; migrazione `20260811160000` venticinquesima riga del ledger, tre Edge Function AI `ACTIVE`. **Distribuita spenta**: `AI_ENABLED` assente e fail-closed fino alla configurazione di chiave e budget (7.11, entro il 18 agosto 2026) |
 | Estensioni AI ammesse per eccezione: autofill da foto, spunta di completezza, triage, sfondo reale | Non iniziate — **Fase 11**, nessun branch. Le quattro decisioni (7.3, 7.12, 7.13) sono chiuse; Storage, limiti di dimensione, tipi MIME e PhotoRoom no |
-| Club/Community | Non iniziata — **Fase 12**, nessun branch. Tre checkpoint 12a/12b/12c, dettagliati nel documento organizzativo della fase, non ancora scritto in questo repo |
+| Club/Community | In corso — **Fase 12**. **12a mersa** (PR #48, squash `e2132ee`): club e follow in sola lettura. **12b + 12c aperti insieme** su `migration/phase-12bc-club-content`, draft PR #49, **non separabili in merge**: contenuti scrivibili più la loro segnalazione e rimozione. Il documento organizzativo della fase resta non scritto |
 | Cutover | Non iniziato — **Fase 13** (era Fase 11 fino all'11 agosto 2026 e Fase 12 fino al 16 agosto 2026) |
 
 ## Fase 6d-1 integrata
@@ -831,6 +831,57 @@ quella data, ed è ciò che ha reso sicuro distribuirla prima che le chiavi
 esistessero. Resta aperto anche il prerequisito della 7.1 — le 5-6 conversazioni
 reali con cui scegliere il fornitore della chat — che non si chiude scrivendo
 codice.
+
+## Fase 12b + 12c — scrittura di contenuti nei club, ammessa per eccezione
+
+Registrata qui accanto alle quattro eccezioni della Fase 11 perché è della stessa
+natura: una funzionalità nuova autorizzata **per nome** durante una migrazione il
+cui principio è non aggiungerne.
+
+> **Fase 12b+12c — scrittura di contenuti nei club, ammessa per eccezione.** La
+> scrittura di contenuti pubblici nei club (`club_posts`, `club_post_risposte`,
+> `club_post_like`) è ammessa per eccezione esplicita e per nome da Enrico, in
+> sessione di coordinamento della Fase 12. È la seconda funzionalità nuova
+> autorizzata durante la migrazione dopo le quattro della Fase 11 — «niente
+> funzionalità nuove durante la migrazione» non è decaduta: continua a valere per
+> tutto ciò che una sessione non ha chiesto per nome. L'ammissione è condizionata
+> e inseparabile dalla 12c: nessun contenuto pubblico scrivibile va in produzione
+> senza un modo per segnalarlo, la stessa regola già valida per la 7.6a.
+
+**L'ammissione è condizionata, ed è la prima di questo progetto a esserlo.** Le
+quattro della Fase 11 sono incondizionate: 7.3a può esistere senza 7.3b. Questa no
+— la 12b senza la 12c non è una funzionalità a metà, è una superficie pubblica
+senza moderazione. Per questo i due checkpoint stanno in **una PR sola**
+([#49](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/49)) e non in due
+linkate, e per questo un test di contratto verifica che il componente che disegna
+post e risposte sia lo stesso che importa `ReportDialog`: una condizione affidata
+alla memoria di chi merge non è una condizione.
+
+**La decisione 7.6a è adempiuta, non riaperta.** Rinviava `post` e `commento`
+«finché i club non hanno schema Supabase». La 12a aveva dato schema ai club ma non
+ai post, quindi la condizione reggeva ancora; la 12b lo dà a post e risposte, e i
+due valori hanno finalmente una tabella in cui risolversi
+(`public.club_posts`, `public.club_post_risposte`). `report_target_tipo` passa da
+cinque a **sette** valori — i sette del mock.
+
+**La 7.1 invece resta rinviata**: nessun ruolo `moderatore` di club, e
+`club_ruolo` resta a un solo valore. Si modera con `admin`, come dal 10 agosto
+2026.
+
+Ciò che vincola il codice futuro è in `CLAUDE.md` sotto «Checkpoint 12b + 12c»; i
+tre fatti che non vanno persi:
+
+- **`report_target_tipo` è un enum e non un check constraint**, quindi servono
+  **tre** file di migrazione: un valore aggiunto a un enum non è utilizzabile
+  nella transazione che lo aggiunge, e Supabase applica ogni file nella propria.
+  Misurato, non dedotto.
+- **Estendere quell'enum apriva un buco nella 9a**: `reports_target_coerente` era
+  un `case` senza `else`, e un `CHECK` il cui predicato vale `NULL` passa. Ora ha
+  `else false` e un ottavo valore fallirebbe chiuso.
+- **La griglia è stata eseguita** — 47 PASSA / 0 FALLISCE su Postgres 15.19 —
+  ed è la prima di questo repository a non essere solo versionata. Quattro
+  esecuzioni, cinque classi di difetto **della griglia** e nessuna delle
+  migrazioni. Non è mai stata eseguita sul progetto reale.
 
 ## Fase 11 — estensioni AI ammesse per eccezione. Non iniziata, nessun branch
 
