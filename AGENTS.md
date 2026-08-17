@@ -36,7 +36,13 @@ considerarlo vincolante.
   remoti che inseriscono o cancellano fixture: richiedere conferma separata.
 - Dopo `apply_migration` via API/MCP, allineare subito il nome del file alla
   versione assegnata dal server e verificare la migration history.
-- Non eseguire merge automatici.
+- Non eseguire merge automatici, con **una sola eccezione ammessa per nome il 16
+  agosto 2026**: una PR il cui diff contiene **zero file sotto
+  `supabase/migrations/`** può essere mersa autonomamente, purché i tre job CI
+  siano verdi e GitHub riporti `mergeable: MERGEABLE` e
+  `mergeStateStatus: CLEAN` sull'head commit che si sta per mergiare. Con anche
+  un solo file di migrazione il merge resta esplicito di Enrico. Confine esatto
+  e motivazione in `CLAUDE.md`.
 - `frontend/` e `backend/` restano la versione servita.
 - `frontend-next/` e Supabase sono l'architettura di destinazione.
 
