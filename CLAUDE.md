@@ -1008,6 +1008,77 @@ scriverli dove nessuno andrà a rileggerli. L'ordine di risoluzione completo è 
 `AUTH_REDIRECT_ORIGIN` è **solo server**, non `NEXT_PUBLIC_*`, e su Netlify si
 lascia vuota. `MIN_TESTS` da 315 a **341**.
 
+### Registrazione e profilo: correzione delle Fasi 5a/5b — PR #50, mersa
+
+[PR #50](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/50), base
+`3a6ba69`, 18 agosto 2026. **Non è una fase nuova**: è correzione e
+completamento delle Fasi **5a** e **5b**, chiuse il 28 luglio 2026 con le PR #6
+e #7, e va registrata come nota e non come numero di fase — precedente la **#45**,
+che corresse un difetto della beta senza aprirne uno, e la #39 per la Fase 10.
+Aprire un numero avrebbe rotto la corrispondenza fra numero e dominio su cui
+poggia l'ordine di dipendenza, e promesso una sessione organizzativa che nessuno
+ha tenuto. Ventisei file, **zero sotto `supabase/migrations/`**.
+
+Cosa fissa in modo vincolante per il lavoro futuro:
+
+- **La destinazione di rientro Auth si compone in un posto solo**,
+  `frontend-next/src/lib/auth/ritorno-auth.ts`, per i tre flussi che rientrano
+  con un `code` (`registra`, `inviaMagicLink`, `accediConOAuth`). Il difetto
+  corretto è che `registra()` e `inviaMagicLink()` mandavano
+  `window.location.origin` **nudo**: Supabase confronta il valore con l'elenco
+  «Redirect URLs» e, non trovando corrispondenza, **non rifiuta** — ricade in
+  silenzio sul Site URL. Un errore di configurazione qui non produce un
+  messaggio, produce un utente su un dominio sbagliato. È anche la destinazione
+  sbagliata di per sé: il client è PKCE, quindi il link torna con un `?code=`
+  che **solo `/auth/callback` scambia**.
+- **La configurazione Auth del progetto reale è stata cambiata il 18 agosto
+  2026**, su autorizzazione esplicita: Site URL `http://localhost:3000` →
+  `https://timely-lokum-43a12e.netlify.app`, più
+  `https://timely-lokum-43a12e.netlify.app/**` fra i Redirect URLs, che passano
+  a tre voci. **Nessun wildcard sulle Deploy Preview**, per decisione: il jolly
+  copre un segmento arbitrario e ogni preview di qualunque PR diventerebbe una
+  destinazione valida per un token di sessione. Tabelle prima/dopo, misurate con
+  la stessa sonda di sola lettura, in `docs/ENVIRONMENT.md`.
+- **La configurazione Auth remota non ha un canale MCP né CLI in questo
+  ambiente**: si tocca dalla dashboard con la sessione reale, una impostazione
+  alla volta e rileggendo. **Mai `supabase config push`**, che spingerebbe
+  l'intero blocco `[auth]` di `config.toml` — dove `site_url` è
+  `http://127.0.0.1:3000`, diverso da quello di produzione, il che dimostra che
+  quel file non è la leva del progetto reale.
+- **Lettura e scrittura del profilo escono da `AuthService` e stanno in
+  `ProfileService`**, così `profiles` ha una porta sola. Il contratto **non ha
+  `userId` in firma**: la riga è quella di `auth.uid()`, risolta dalla sessione
+  dentro il servizio. Sostituisce una `ProfileService` dimostrativa mai
+  implementata, come la Fase 10 fece con `AiService`.
+- **Nessuna migrazione, e questo è verificato non assunto**: `bio`, `citta`,
+  `provincia`, `esperienza` e `avatar_url` sono già tutte nel `GRANT UPDATE` per
+  colonna della 9b, e `profiles_update_own` esiste dalla 5a.
+- **Gli avatar sono un insieme curato servito da noi**, sei SVG in
+  `public/avatar/`, e la lettura passa da `avatarSicuro()` con elenco chiuso —
+  `avatar_url` è scrivibile dal client, quindi un URL esterno memorizzato lì
+  trasformerebbe la scheda in un tracciatore per chi la apre. Il caricamento di
+  una foto propria è rimandato: un bucket nuovo riapre le domande che la Fase 11
+  chiuse in sessione per `foto-ai` — privato/pubblico, MIME, orfani, **spoglio
+  EXIF** — e la migrazione che lo crea si applicherebbe da sé al merge (7.10).
+- **Il consenso a Termini e Privacy non è registrato da nessuna parte**, e non lo
+  era già prima nemmeno per il percorso email, dove la casella è un requisito del
+  pulsante e nient'altro. `/completa-profilo` ora lo chiede anche a chi entra da
+  Google o Facebook, quindi i due percorsi sono **pari** — pari a zero. La
+  colonna è scritta e **non applicata** in
+  `supabase/queries/03_PROPOSTA_NON_ESEGUIRE_CONSENSO_TERMINI.sql`, in due
+  varianti: **rinviata alla revisione legale per decisione esplicita del
+  18 agosto 2026**, perché se basti l'istante o serva anche la versione del testo
+  accettato è ciò che la §9 della spec Fase 11 deve dire.
+- `MIN_TESTS` 402 → **433**.
+
+**Mai provato**: un giro di conferma email reale end-to-end. Va fatto **sul
+dominio di produzione** — le preview restano fuori dai Redirect URLs, quindi lì
+fallirebbe per configurazione e non per un difetto. Limite noto e non una
+regressione: con PKCE il `code_verifier` sta nel browser da cui è partita la
+registrazione, quindi chi apre l'email su un **altro dispositivo** non completa
+lo scambio (vale identico per OAuth) e finisce su `/accedi?errore=…`, che è dove
+deve andare, visto che la conferma lato server è già avvenuta.
+
 ### Postgres exposure rules (binding since Phase 6d-1)
 
 RLS filters rows, never columns. These three rules are what keeps that gap closed — breaking

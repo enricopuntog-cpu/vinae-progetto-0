@@ -21,9 +21,11 @@
  * conferma sull'origine nuda la fa atterrare su una pagina che quel code non
  * lo scambia.
  *
- * NESSUNA QUERY STRING, E NON È UNA PREFERENZA DI STILE. Misurato sul progetto
- * reale il 17 agosto 2026 interrogando `/auth/v1/verify` con un token non
- * valido — una GET che non crea utenti e non invia email:
+ * NESSUNA QUERY STRING: OGGI UNA SCELTA, IERI UNA NECESSITÀ. Il 17 agosto 2026,
+ * misurando sul progetto reale con `/auth/v1/verify` e un token non valido — una
+ * GET che non crea utenti e non invia email — la voce in elenco per il dominio
+ * beta era **esatta e senza wildcard**, e qualunque cosa si aggiungesse in coda
+ * faceva ricadere l'utente sul Site URL, che allora era `http://localhost:3000`:
  *
  *   https://timely-lokum-43a12e.netlify.app/auth/callback
  *     -> risolto in sé stesso                                    (ammesso)
@@ -32,12 +34,18 @@
  *   https://timely-lokum-43a12e.netlify.app/auth/callback/
  *     -> risolto in http://localhost:3000                    (NON ammesso)
  *
- * La voce in elenco per il dominio beta è **esatta e senza wildcard**, quindi
- * qualunque cosa si aggiunga in coda — un `?next=`, perfino una barra finale —
- * fa ricadere l'utente sul Site URL, che è `http://localhost:3000`. Finché
- * quella voce resta esatta, questo modulo non deve produrre né query né barra
- * finale: la destinazione dopo lo scambio la decide `/auth/callback` da sé,
- * che senza `next` manda a `/home`.
+ * Il **18 agosto 2026** la configurazione è cambiata, su autorizzazione
+ * esplicita: `https://timely-lokum-43a12e.netlify.app/**` è stato aggiunto in
+ * elenco e il Site URL non è più localhost. Rimisurato con la stessa sonda, un
+ * `?next=` e una barra finale ora sarebbero **ammessi**, quindi quel vincolo è
+ * decaduto e questo modulo non produce query né barra finale **per scelta**: la
+ * destinazione dopo lo scambio la decide `/auth/callback` da sé, che senza
+ * `next` manda a `/home`, e un secondo posto in cui deciderla sarebbe un secondo
+ * posto in cui sbagliarla.
+ *
+ * Quanto sopra descrive uno stato del progetto remoto, non una legge di natura:
+ * la tabella completa, prima e dopo, sta in docs/ENVIRONMENT.md, ed è lì che va
+ * riletta se la configurazione cambia ancora.
  */
 
 /** Unico punto dell'app che scambia un `code` per una sessione. */

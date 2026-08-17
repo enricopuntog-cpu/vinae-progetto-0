@@ -157,8 +157,9 @@ l'elenco «Redirect URLs», e **se non corrisponde Supabase non rifiuta la
 richiesta — ricade in silenzio sul Site URL**. Un errore di configurazione qui
 non produce nessun messaggio: produce un utente su un dominio sbagliato.
 
-**Stato misurato il 17 agosto 2026**, interrogando `/auth/v1/verify` con un
-token non valido — una `GET` che non crea utenti, non scrive e non invia email:
+**Stato misurato il 17 agosto 2026, PRIMA della modifica** — interrogando
+`/auth/v1/verify` con un token non valido, una `GET` che non crea utenti, non
+scrive e non invia email:
 
 | `redirect_to` chiesto | risolto da Supabase |
 | --- | --- |
@@ -176,23 +177,45 @@ ripiego di ogni valore non riconosciuto. La voce del dominio beta è **esatta e
 senza wildcard**: tollera `…/auth/callback` e nient'altro, nemmeno una query o
 una barra finale. Le **Deploy Preview non sono coperte**.
 
-**Proposta, NON applicata** — modificare le impostazioni del progetto Supabase
-remoto è un cancello a sé, come l'SQL, e vuole un'autorizzazione esplicita in
-sessione:
+**APPLICATA il 18 agosto 2026**, su autorizzazione esplicita di Enrico in
+sessione — modificare le impostazioni del progetto Supabase remoto è un
+cancello a sé, come l'SQL, e quell'autorizzazione è arrivata per nome:
 
-| Campo | Oggi | Proposto |
+| Campo | Prima | Adesso |
 | --- | --- | --- |
 | Site URL | `http://localhost:3000` | `https://timely-lokum-43a12e.netlify.app` |
-| Redirect URLs | `http://localhost:3000/**`, `https://timely-lokum-43a12e.netlify.app/auth/callback` | + `https://timely-lokum-43a12e.netlify.app/**` |
+| Redirect URLs | `http://localhost:3000/**`, `https://timely-lokum-43a12e.netlify.app/auth/callback` | le due di prima **+** `https://timely-lokum-43a12e.netlify.app/**` |
 
-Il **Site URL** è la voce che conta di più e non è cosmetica: è il ripiego di
-ogni valore non riconosciuto, quindi finché resta `localhost:3000` **ogni**
-errore futuro di configurazione manda gli utenti su una pagina irraggiungibile
-invece che sulla home del sito. È anche il valore che compare nelle email
-quando un template usa `{{ .SiteURL }}`.
+La voce esatta `…/auth/callback` è stata **lasciata in elenco** benché il `/**`
+ora la copra: toglierla era una cancellazione che nessuno aveva chiesto, ed è
+la voce che oggi fa funzionare OAuth.
 
-Sulle **Deploy Preview** la scelta è fra due strade con un compromesso reale,
-e non va presa per inerzia:
+Il **Site URL** è la voce che conta di più e non era cosmetica: è il ripiego di
+ogni valore non riconosciuto, quindi finché restava `localhost:3000` **ogni**
+errore futuro di configurazione avrebbe mandato gli utenti su una pagina
+irraggiungibile invece che sulla home del sito. È anche il valore che compare
+nelle email quando un template usa `{{ .SiteURL }}`.
+
+**Stato misurato il 18 agosto 2026, DOPO la modifica**, con la stessa sonda:
+
+| `redirect_to` chiesto | risolto da Supabase |
+| --- | --- |
+| `https://timely-lokum-43a12e.netlify.app/auth/callback` | sé stesso — ammesso |
+| `https://timely-lokum-43a12e.netlify.app` | sé stesso — **ora ammesso** |
+| `https://timely-lokum-43a12e.netlify.app/qualsiasi-percorso` | sé stesso — **ora ammesso** |
+| `https://deploy-preview-44--timely-lokum-43a12e.netlify.app/auth/callback` | `https://timely-lokum-43a12e.netlify.app` |
+| `https://evil.example.com` | `https://timely-lokum-43a12e.netlify.app` |
+| `http://localhost:3000/sonda-locale` | sé stesso (wildcard `/**`, invariato) |
+
+Tre cose che si leggono solo da questa seconda tabella. Il ripiego **non è più
+`localhost:3000`**: un valore non riconosciuto adesso finisce sulla home della
+beta, ed è esattamente ciò che le righe della preview e di `evil.example.com`
+dimostrano. Le **Deploy Preview restano fuori**, come deciso. E il jolly `/**`
+**copre anche l'origine nuda**, senza barra finale: era una domanda aperta che
+la sola lettura del carattere jolly non chiudeva, e adesso è misurata.
+
+Sulle **Deploy Preview** la scelta era fra due strade con un compromesso reale,
+e non andava presa per inerzia:
 
 - **niente wildcard**: si aggiunge a mano
   `https://deploy-preview-<numero>--timely-lokum-43a12e.netlify.app/auth/callback`
@@ -206,16 +229,21 @@ e non va presa per inerzia:
   sessione. Un dominio nostro, ma con dentro codice che nessuno ha ancora
   rivisto.
 
-**Raccomandazione: nessun wildcard sulle preview.** Il vantaggio è la comodità
-di chi prova; il costo è che la superficie si allarga in permanenza per un
-bisogno occasionale. La prima riga della tabella — Site URL e `/**` sul solo
-dominio di produzione — risolve il problema che gli utenti veri hanno oggi, e
-non dipende da questa seconda scelta.
+**Deciso il 18 agosto 2026: nessun wildcard sulle preview**, ed è la strada
+applicata. Il vantaggio sarebbe stato la comodità di chi prova; il costo è che
+la superficie si allarga in permanenza per un bisogno occasionale. Per provare
+un giro Auth su una PR si aggiunge a mano la voce di quella preview e la si
+toglie dopo, come già fatto per la #45.
 
-Da notare per chi applicherà: con `…netlify.app/**` in elenco, il vincolo
-«nessuna query string» di `lib/auth/ritorno-auth.ts` **decade** — quel modulo
-lo rispetta comunque, e il suo commento va aggiornato quando la configurazione
-cambia, perché descrive uno stato misurato e non una legge di natura.
+Due conseguenze da non perdere di vista. Con `…netlify.app/**` in elenco, il
+vincolo «nessuna query string» di `lib/auth/ritorno-auth.ts` **è decaduto**:
+quel modulo continua a rispettarlo — non produce query né barra finale — ma per
+scelta, non più per necessità, e il suo commento dice ora quale delle due cose
+è. Descriveva uno stato misurato, non una legge di natura, ed è cambiato lo
+stato. E poiché le preview restano fuori, **un giro di conferma email va
+provato sul dominio di produzione**: sulla Deploy Preview di una PR fallirebbe
+per configurazione, non per un difetto del codice, e leggerlo al contrario
+manderebbe a caccia del bug sbagliato.
 
 `NEXT_PUBLIC_AI_UI_ENABLED`, `NEXT_PUBLIC_AI_ACTIONS_ENABLED` e `AI_ENABLED`
 non sono intercambiabili. Le prime due sono leggibili e modificabili nel
