@@ -38,6 +38,8 @@ import { ReportDialog } from "@/components/vinea/ReportDialog";
 import { ListingContactActions } from "@/components/vinea/ListingContactActions";
 import { ProposalAction } from "@/components/vinea/ProposalAction";
 import { ListingOwnerActions } from "@/components/vinea/ListingOwnerActions";
+import { GalleriaVino } from "@/components/vinea/GalleriaVino";
+import { AperturaBottiglia } from "@/components/vinea/AperturaBottiglia";
 import type { AnnuncioProprietario } from "@/services/listing-service";
 import { PAGAMENTI_UI_ABILITATI } from "@/config/features";
 
@@ -55,7 +57,6 @@ export default function AnnuncioDetailPageClient({
   proprio?: AnnuncioProprietario | null;
 }) {
   const router = useRouter();
-  const [attiva, setAttiva] = useState(0);
   const listingId = wine.listingId ?? wine.id;
   const sonoIlVenditore = Boolean(proprio);
 
@@ -69,27 +70,10 @@ export default function AnnuncioDetailPageClient({
       </button>
 
       <div className="grid gap-8 md:grid-cols-2">
-        {/* Gallery */}
-        <div>
-          <div className="aspect-[4/5] overflow-hidden rounded-2xl bg-secondary">
-            <img
-              src={wine.immagini[attiva]}
-              alt={wine.nome}
-              className="h-full w-full object-cover"
-            />
-          </div>
-          <div className="mt-3 flex gap-2">
-            {wine.immagini.map((src: string, i: number) => (
-              <button
-                key={i}
-                onClick={() => setAttiva(i)}
-                className={`h-16 w-16 overflow-hidden rounded-lg border-2 ${attiva === i ? "border-bordeaux" : "border-transparent"}`}
-              >
-                <img src={src} alt="" className="h-full w-full object-cover" />
-              </button>
-            ))}
-          </div>
-        </div>
+        {/* La galleria è un componente a sé da quando la pagina di degustazione
+            ha avuto bisogno della stessa: due copie si sarebbero separate alla
+            prima correzione. */}
+        <GalleriaVino immagini={wine.immagini} nome={wine.nome} />
 
         {/* Info */}
         <div>
@@ -192,7 +176,7 @@ export default function AnnuncioDetailPageClient({
             <TrustLegend />
           </div>
 
-          <MyBottleActions wineId={wine.wineSlug ?? wine.id} />
+          <MyBottleActions wineId={wine.wineSlug ?? wine.id} nomeVino={wine.nome} />
         </div>
       </div>
 
@@ -291,11 +275,10 @@ function Info({ icon: Icon, label, value }: { icon: LucideIcon; label: string; v
  * L'apertura agisce sulla prima unità ancora chiusa, che è l'equivalente esatto
  * del decremento di una pila.
  */
-function MyBottleActions({ wineId }: { wineId: string }) {
-  const { bottiglieCantina, openBottle, scheduleOpen } = useVinea();
+function MyBottleActions({ wineId, nomeVino }: { wineId: string; nomeVino: string }) {
+  const { bottiglieCantina, scheduleOpen } = useVinea();
   const mie = bottiglieCantina.filter((b) => b.wineVintageId === wineId);
   const [when, setWhen] = useState("");
-  const [nota, setNota] = useState("");
   if (mie.length === 0) return null;
 
   const chiuse = mie.filter((b) => b.quantita > 0);
@@ -312,38 +295,16 @@ function MyBottleActions({ wineId }: { wineId: string }) {
         {pianificata ? ` · apertura pianificata ${pianificata}` : ""}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button
-              size="sm"
-              className="bg-bordeaux hover:bg-bordeaux/90"
-              disabled={disponibili === 0}
-            >
-              <WineOff className="h-4 w-4" /> Apri questa bottiglia
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="font-serif text-xl">Registra apertura</DialogTitle>
-            </DialogHeader>
-            <p className="text-sm text-muted-foreground">
-              Aggiorneremo la quantità nella tua cantina.
-            </p>
-            <Textarea
-              placeholder="Nota di degustazione (facoltativa)"
-              value={nota}
-              onChange={(e) => setNota(e.target.value)}
-            />
-            <DialogFooter>
-              <Button
-                className="bg-bordeaux hover:bg-bordeaux/90"
-                onClick={() => openBottle(bottle.bottleId, nota)}
-              >
-                Conferma apertura
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/*
+          Prima qui c'era un dialogo solo, che raccoglieva la nota e chiamava
+          `bottiglia_apri` subito. Su una bottiglia in vendita finiva
+          nell'eccezione della RPC — corretta, ma arrivata dopo il gesto e senza
+          una via d'uscita. `AperturaBottiglia` decide prima se la strada è
+          libera, se passa per la rimozione dell'annuncio o se non passa affatto,
+          e porta il commento sulla schermata di degustazione, che è dove la nota
+          ha lo spazio per essere scritta davvero.
+        */}
+        <AperturaBottiglia bottiglia={bottle} nomeVino={nomeVino} />
         <Dialog>
           <DialogTrigger asChild>
             <Button size="sm" variant="outline">

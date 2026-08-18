@@ -66,6 +66,16 @@ export type CellarBottle = {
   priceVisibility: PriceVisibility;
   storageLocationId?: string; // → StorageSlot.id
   personalNotes?: string;
+  /**
+   * L'annuncio che impedisce di aprire questa bottiglia, se c'è.
+   *
+   * Non è «l'annuncio della bottiglia»: è quello in uno dei cinque stati su cui
+   * `bottiglia_apri` rifiuta. Serve alla Cantina per sapere *prima* di premere
+   * se la strada è libera, se passa per una rimozione o se non passa affatto.
+   * Assente vuol dire che aprire non incontra ostacoli, non che non ci sia mai
+   * stato un annuncio: uno `sospeso` o `venduto` non blocca più niente.
+   */
+  annuncioBloccante?: { id: string; stato: string };
 };
 
 export type EnvShape =

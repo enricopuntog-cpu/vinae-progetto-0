@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import type { Wine } from "@/data/wines";
 import { WineCard } from "@/components/vinea/WineCard";
+import { AperturaBottiglia } from "@/components/vinea/AperturaBottiglia";
 import { Kpi } from "@/components/vinea/Layout";
 import { formatEUR, useVinea } from "@/lib/vinea-store";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ import { wineImages } from "@/lib/wine-images";
 import {
   SHAPE_LABELS,
   THEME_LABELS,
+  type CellarBottle,
   type EnvShape,
   type EnvTheme,
   type StorageSlot,
@@ -747,7 +749,10 @@ function BottiglieView({
   inVendita: Set<string>;
   prezzoNascosto: Set<string>;
   togglePrezzo: (id: string) => Promise<unknown>;
-  bottigliaDelVino: (w: Wine) => { bottleId: string } | undefined;
+  // Era ristretto a `{ bottleId }`, che bastava a comporre il link al wizard.
+  // Il comando di apertura ha bisogno della bottiglia intera — stato e annuncio
+  // che la blocca — e restringere qui significava solo nasconderli.
+  bottigliaDelVino: (w: Wine) => CellarBottle | undefined;
 }) {
   if (list.length === 0) {
     return (
@@ -808,6 +813,13 @@ function BottiglieView({
                 )}
                 {prezzoNascosto.has(slug) ? "Prezzo riservato" : "Prezzo visibile"}
               </button>
+              {/* Da qui si apre una bottiglia, e da qui si torna a rileggere la
+                  degustazione di una già aperta. Il comando esisteva solo sulla
+                  scheda dell'annuncio, cioè nel posto dove si va per vendere e
+                  non per bere. */}
+              {bottiglia ? (
+                <AperturaBottiglia bottiglia={bottiglia} nomeVino={w.nome} variante="compatto" />
+              ) : null}
             </div>
           </div>
         );

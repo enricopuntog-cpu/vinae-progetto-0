@@ -45,10 +45,18 @@ export const STATI_BLOCCANTI_APERTURA: readonly ListingStato[] = [
   "riservato",
 ];
 
-/** L'annuncio che occupa una bottiglia, ridotto a ciò che serve per decidere. */
+/**
+ * L'annuncio che occupa una bottiglia, ridotto a ciò che serve per decidere.
+ *
+ * `stato` è una stringa e non `ListingStato` di proposito: arriva da PostgREST,
+ * cioè da fuori, e stringerlo qui sarebbe una promessa che questo modulo non è
+ * in grado di mantenere. La verifica di appartenenza la fa `percorsoApertura`,
+ * ed è quella a decidere — un valore che non riconosce cade su `diretto`, dove
+ * `bottiglia_apri` resta comunque l'autorità che rifiuta.
+ */
 export type AnnuncioDellaBottiglia = {
   id: string;
-  stato: ListingStato;
+  stato: string;
 };
 
 /**
@@ -63,8 +71,8 @@ export type AnnuncioDellaBottiglia = {
  */
 export type PercorsoApertura =
   | { tipo: "diretto" }
-  | { tipo: "rimuovi-poi-apri"; listingId: string; stato: ListingStato }
-  | { tipo: "bloccato"; stato: ListingStato; spiegazione: string };
+  | { tipo: "rimuovi-poi-apri"; listingId: string; stato: string }
+  | { tipo: "bloccato"; stato: string; spiegazione: string };
 
 /**
  * Perché la bottiglia non si può aprire, per ognuno dei quattro stati senza
@@ -94,7 +102,7 @@ const SPIEGAZIONE_BLOCCO: Record<string, string> = {
 export function percorsoApertura(
   annuncio: AnnuncioDellaBottiglia | null | undefined,
 ): PercorsoApertura {
-  if (!annuncio || !STATI_BLOCCANTI_APERTURA.includes(annuncio.stato)) {
+  if (!annuncio || !(STATI_BLOCCANTI_APERTURA as readonly string[]).includes(annuncio.stato)) {
     return { tipo: "diretto" };
   }
 
