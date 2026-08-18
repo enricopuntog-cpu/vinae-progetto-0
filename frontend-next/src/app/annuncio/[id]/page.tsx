@@ -58,12 +58,10 @@ export default async function Page({
   // In parallelo: la richiesta dei correlati non dipende dall'esito del
   // dettaglio, quindi non c'è motivo di metterla in coda.
   //
-  // `mioAnnuncio` parte sempre, anche per un visitatore anonimo, e non è uno
-  // spreco: senza sessione la RLS non fa passare nessuna riga, quindi è una
-  // ricerca per chiave che torna vuota. L'alternativa — leggere prima la
-  // sessione e poi decidere — costerebbe un giro in più a *tutti* per
-  // risparmiarne uno agli estranei, e in più metterebbe in fila due richieste
-  // che qui viaggiano insieme.
+  // `mioAnnuncio` parte anche per un visitatore anonimo, ma si ferma da sé
+  // sulla sessione prima di interrogare: `anon` non ha nessun grant su
+  // `public.listings`, quindi la domanda risponderebbe `42501` e non "zero
+  // righe". Il dettaglio sta nel servizio, dove sta la ragione.
   const [wine, proprio, tutti] = await Promise.all([
     service.dettaglio(id),
     service.mioAnnuncio(id),

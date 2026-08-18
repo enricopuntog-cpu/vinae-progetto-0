@@ -357,6 +357,19 @@ export function createListingService(client: SupabaseClient | null): ListingServ
     async mioAnnuncio(idOrSlug: string): Promise<AnnuncioProprietario | null> {
       if (!client) return null;
 
+      // Senza sessione non si interroga affatto, e non e' un'ottimizzazione.
+      // `anon` non ha NESSUN grant su `public.listings` — la lettura pubblica
+      // passa dalla vista `public_listings` — quindi per un visitatore anonimo
+      // la domanda non torna vuota: torna `42501 permission denied`, che
+      // finirebbe nei log come errore a ogni apertura di una scheda pubblica.
+      // Misurato aprendo la pagina, non dedotto: la prima stesura la chiamava
+      // sempre, ragionando che la RLS avrebbe filtrato le righe. La RLS non
+      // entra mai in gioco, perche' il permesso di tabella viene prima.
+      const {
+        data: { user },
+      } = await client.auth.getUser();
+      if (!user) return null;
+
       const { data, error } = await client
         .from("listings")
         .select(COLONNE_PROPRIETARIO)
