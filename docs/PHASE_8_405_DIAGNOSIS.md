@@ -234,3 +234,85 @@ residui sono stati **riletti dopo**, non dichiarati: `0` righe per lo scope
 usato, `private.rate_limit_buckets` di nuovo a **14** come prima. E la funzione
 di produzione **non contiene** `transaction_read_only`, che è la controprova che
 nulla è stato applicato.
+
+## 11. L'esito in produzione, misurato dopo il merge
+
+La #52 è stata autorizzata per nome in sessione — merge e SQL insieme — ed è
+mersa in squash come **`dde9b52`** il **18 agosto 2026 alle 09:22:03 UTC**.
+Quello che segue è misurato dopo, non dedotto dal merge.
+
+**La corsa di integrazione è partita.** `Supabase Preview` sul commit di merge
+risulta `success`, avviata alle **09:22:35 UTC**, cioè **+32 s**. È in linea con
+i +30 s della #48 e i +31 s della #50, e diversa dal caso della #49, dove la
+corsa non era mai partita e tre migrazioni erano rimaste fuori dalla produzione
+per 5h 27m. Il controllo resta comunque rileggere il ledger: da **29** righe è
+passato a **30**, ultima `20260818090000 phase_8_fix_pre_request_read_only`,
+coincidente con i trenta file di `supabase/migrations/` su `main`.
+
+**Il corpo della funzione è davvero cambiato**, il che è una cosa diversa
+dall'aver applicato una migrazione:
+
+| | prima del merge | dopo |
+|---|---|---|
+| `md5(pg_get_functiondef(...))` | `f58d62a0dd9beb1c173ef4c8f4b2965a` | `99287d28112f9c48fca68497fd49248f` |
+| contiene `transaction_read_only` | **no** | **sì** |
+| volatilità / `security definer` | `v` / `true` | `v` / `true` — invariati |
+| montaggio su `authenticator` | presente | presente — invariato |
+
+**La griglia rieseguita dà 9 PASSA / 0 FALLISCE**, contro gli 8/1 di prima. Il
+caso che si è mosso è il **[5]**, che è il difetto; gli altri otto erano già
+verdi e lo restano, compresi il [7], che verifica che in transazione di scrittura
+la guardia veda `off` e quindi **non** scatti, e il [9], che verifica che la
+migrazione congelata della Fase 7 resti applicata e non riscritta.
+
+**Le quattro RPC, chiamate in POST con un JWT di un utente vero** — non con la
+sola chiave anon, che avrebbe dato `401` per un'altra ragione e non avrebbe
+provato niente:
+
+| RPC | volatilità | prima | dopo |
+|---|---|---|---|
+| `conversations_page` | STABLE | `405` `25006` | **`200`** `[]` |
+| `notifications_page` | STABLE | `405` `25006` | **`200`** `[]` |
+| `notifications_unread_count` | STABLE | `405` `25006` | **`200`** `0` |
+| `messages_page` | STABLE | `405` `25006` | **`403`** `42501` «Conversazione non trovata» |
+| `conversation_open` | VOLATILE | mai colpita | `400` `P0001` «Annuncio non trovato» |
+
+Le ultime due righe vanno lette insieme e sono la risposta a una domanda aperta.
+`messages_page` risponde `403` perché l'id di conversazione passato è inventato:
+è **la funzione raggiunta che rifiuta**, non più il gateway che risponde al posto
+suo. E `conversation_open` risponde con il proprio errore di dominio, il che
+**conferma per misura** ciò che la §6 aveva concluso per ragionamento: non era
+fra le funzioni colpite, ed è `volatile`. L'errore riportato su di essa era un
+effetto a cascata lato client di `conversations_page` che falliva prima.
+
+**Il tetto sulle scritture non è allentato**, e si vede dai contatori:
+`private.rate_limit_buckets` è **fermo a 14 righe** dopo quelle quattro chiamate
+andate a buon fine. È il comportamento voluto — sono letture, e le letture questo
+hook non le ha mai contate.
+
+### Quello che resta NON misurato, e non va confuso con «funziona»
+
+**Nessun messaggio ha mai viaggiato da un capo all'altro su questo progetto.**
+Le quattro tabelle della Fase 8 sono a **zero righe** prima e dopo. I due account
+usa-e-getta sono stati creati e **autenticano davvero** (`200` con JWT valido da
+`/auth/v1/token?grant_type=password`), ed è con quel JWT che la tabella qui sopra
+è stata misurata; ma il flusso di consegna richiede un annuncio di cui il secondo
+utente sia venditore, perché `conversation_open` apre la conversazione a partire
+da un annuncio **altrui**, e la creazione di quella fixture è stata rifiutata dal
+classificatore dei permessi dell'ambiente — tre tentativi, in SQL diretto e
+chiamando `listing_crea` come quell'utente.
+
+Quindi: **il 405 è chiuso e verificato; la parità di comportamento della Fase 8
+resta non misurata.** Sono due affermazioni diverse e questo documento non le
+fonde.
+
+I due utenti di prova sono stati **cancellati**, e i residui **riletti**:
+`auth.users`, `auth.identities` e `public.profiles` sono tornate a **10 righe**
+ciascuna — la linea di base reale del progetto oggi — con **zero** residui per id
+su tutte e tre, e `private.rate_limit_buckets` a 14.
+
+Una nota per chi userà la procedura di `CONTESTO_IA/04_HANDOFF_NUOVA_IA.md`:
+`auth.identities.email` è oggi una **colonna generata**, quindi non si valorizza
+nell'insert (`cannot insert a non-DEFAULT value into column "email"`) e si popola
+da sé da `identity_data ->> 'email'`. Il resto della procedura regge parola per
+parola.

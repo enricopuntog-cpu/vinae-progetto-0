@@ -316,17 +316,22 @@ Realtime smoke, zero residues in ten classes — were taken on the isolated Supa
 `jggjaqcdbcbxdxhnggio`, which was tied to the PR. **That Preview no longer exists**: `list_branches`
 on the real project now reports only the `main` branch. Those numbers are a report of that phase,
 not a state that can be re-measured on demand — the same distinction that applies to every grid in
-this project. In particular, the `private_only` Realtime restriction was configured on the Preview,
-never on production — but see PR #52 at the end of this file before repeating that sentence as it
-stands: the Realtime **authorization** half (the RLS policy on `realtime.messages`) *is* in
-production and correctly scoped, and only the project-level `private_only` toggle is still open.
+this project. The sentence this paragraph used to carry about the `private_only` Realtime
+restriction — configured on the Preview, never on production — **was wrong on both halves, and PR
+#52 closed it**: the Realtime **authorization** half (the RLS policy on `realtime.messages`) *is* in
+production and correctly scoped, and the project-level restriction to private channels is **already
+in force** as well. Do not reopen it; the toggle is named for the opposite of what the phrase
+`private_only` suggests, and the detail is in the PR #52 section at the end of this file.
 
-**Phase 8 was distributed but not working, and stayed that way for eleven days — read the PR #52
-section at the end of this file before trusting anything here about its runtime behaviour.** Its
-four `stable` read RPCs answered **405** to every page load by a logged-in user, so the phase has
-never been exercised in production: re-read for the first time on 18 August 2026, its four tables
-held **zero rows**. That re-read closes the "tables not re-read since the merge" gap this paragraph
-used to open. The other production fact that outlives the merge: the Phase 7g scheduled workflow
+**Phase 8 was distributed but not working for eleven days, and the fix is in production since
+18 August 2026 — read the PR #52 section at the end of this file before trusting anything here about
+its runtime behaviour.** Its four `stable` read RPCs answered **405** to every page load by a
+logged-in user, so the phase was never exercised in production: re-read for the first time on
+18 August 2026, its four tables held **zero rows**, and they still do. That re-read closes the
+"tables not re-read since the merge" gap this paragraph used to open. **The 405 itself is closed**
+by the merge of PR #52 (squash `dde9b52`), verified against the real project with an authenticated
+user — but **no message has ever travelled end to end there**, so parity of the phase's behaviour
+remains unmeasured, not proven. The other production fact that outlives the merge: the Phase 7g scheduled workflow
 `Phase 7 - auto-release payouts` has run 11 times from `main` and **failed every time** with
 `Configurazione mancante: SUPABASE_URL`, because the GitHub variables and secrets were never
 configured. The runner is fail-closed and never reached the network, but decision 1e — scheduler
@@ -1254,6 +1259,21 @@ Quello che il lavoro fissa in modo vincolante:
   una transazione di sola lettura non può mutare niente, quindi nessuna scrittura
   sfugge al tetto, e le letture questo hook non le ha mai contate — è ciò che
   dichiara già il ramo `GET`/`HEAD`/`OPTIONS`.
+- **È applicata e verificata in produzione**, non solo scritta. La #52 è mersa in
+  squash come `dde9b52` il 18 agosto 2026 alle 09:22:03 UTC; il ledger reale è a
+  **30 righe** e il corpo della funzione è davvero cambiato — `md5` da
+  `f58d62a0…` a `99287d28…`, e la definizione contiene `transaction_read_only`.
+  La griglia rieseguita dà **9 PASSA / 0 FALLISCE**, con il caso [5] che passa.
+  Con un JWT reale le quattro RPC rispondono `200`, `200`, `200` e — su un id
+  inesistente — `403`/`42501`, che è la funzione raggiunta che rifiuta.
+  `conversation_open` dà `400`/`P0001`: **conferma che non era fra le colpite** e
+  che l'errore riportato su di essa era un effetto a cascata lato client.
+  `private.rate_limit_buckets` resta a **14 righe** dopo quelle quattro letture,
+  che è il tetto sulle scritture intatto e non allentato.
+- **La consegna end-to-end non è mai stata esercitata**, né prima né dopo: le
+  quattro tabelle sono a zero righe e aprire una conversazione richiede un
+  annuncio altrui, cioè una fixture. Il 405 è chiuso; la parità di comportamento
+  della fase resta **non misurata**, che non è la stessa cosa di «funziona».
 - **Una griglia eseguita nel SQL Editor non può vedere questa classe di difetto**,
   ed è perché la Fase 8 passava verde con il difetto in produzione: una sessione
   Postgres diretta non passa da PostgREST, quindi non incontra né l'hook né la
@@ -1268,11 +1288,16 @@ Quello che il lavoro fissa in modo vincolante:
   `vinea_phase8_private_broadcast_select`, che ammette esattamente i due topic
   legittimi. Nessuna policy di `INSERT` perché nessun client pubblica — i
   broadcast li emette il database con `realtime.send()` da trigger. La
-  pubblicazione `supabase_realtime` ha **zero tabelle**. Resta aperto il solo
-  interruttore di progetto **`private_only`**, che non è leggibile né scrivibile
-  da SQL o MCP: il canale è la dashboard, come per la configurazione Auth della
-  #50. Accenderlo non può rompere la consegna, perché il client apre **solo**
-  canali privati (`realtime.ts:123`, `:131`, `:137`).
+  pubblicazione `supabase_realtime` ha **zero tabelle**. **E anche la restrizione
+  ai soli canali privati era già in vigore**, verificata in dashboard da Enrico il
+  18 agosto 2026: l'interruttore si chiama **«Allow public access to channels»**,
+  è **disattivato**, e la sua descrizione dice che se disabilitato saranno ammessi
+  solo canali privati. È l'inverso lessicale di «`private_only` da accendere», ma
+  lo stesso stato di fatto — **non c'era niente da accendere e qui non c'è mai
+  stato un gap**. Non è leggibile né scrivibile da SQL o MCP: il canale è la
+  dashboard, come per la configurazione Auth della #50. Chi rilegge non riapra la
+  voce per un fraintendimento del nome; e comunque il client apre **solo** canali
+  privati (`realtime.ts:123`, `:131`, `:137`).
 - **`MessagingService` e `NotificationService` in `types.ts` sono già nella forma
   della Fase 8** — `Result<T>`, cursori, nessun `userId` — e sono quelle che gli
   adapter implementano. Non c'è interfaccia morta lì. Il difetto di forma esiste

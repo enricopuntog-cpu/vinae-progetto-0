@@ -3,11 +3,12 @@
 --
 -- STATO DI ESECUZIONE, dichiarato per primo.
 --
---   ESEGUITA SUL PROGETTO REALE (pijnmcllmfgjmgsvtcej) il 18 agosto 2026,
---   PRIMA che la correzione fosse applicata, per fissare lo stato "prima".
---   L'esito di quella corsa e riportato in fondo a questo file, insieme al
---   caso che falliva. Ripetuta DOPO l'applicazione, il caso [5] deve passare;
---   se fallisce ancora, la correzione non e arrivata.
+--   ESEGUITA SUL PROGETTO REALE (pijnmcllmfgjmgsvtcej) il 18 agosto 2026 DUE
+--   VOLTE: PRIMA che la correzione fosse applicata, per fissare lo stato
+--   "prima", e DOPO il merge della PR #52. Entrambi gli esiti sono riportati in
+--   fondo a questo file. L'unico caso che si e mosso e il [5], che e il
+--   difetto: prima FALLISCE con 25006, dopo PASSA. Chi la riesegue e vede il
+--   [5] fallire sappia che la correzione non e arrivata su quel database.
 --
 --   E SICURO eseguirla sul progetto reale, ed e l'unica griglia del
 --   repository di cui si possa dire senza distinguo: NON SCRIVE NULLA. Ogni
@@ -179,5 +180,18 @@ from esiti_8_fix;
 --     SQL statement "SELECT private.rate_limit_consume(...)"
 --     PL/pgSQL function private.vinea_check_request() line 26 at PERFORM
 --
--- Dopo l applicazione l atteso e 9 PASSA / 0 FALLISCE.
+-- ESITO DELLA CORSA "DOPO", 18 agosto 2026, stesso progetto, dopo il merge
+-- della PR #52 (squash dde9b52, 09:22:03 UTC) e con il ledger riletto a 30
+-- righe:
+--
+--   9 PASSA / 0 FALLISCE
+--   L unico caso che si e mosso e il [5]. Gli altri otto erano gia verdi
+--   prima e lo restano, il che e cio che rende il [5] un discriminante e non
+--   un rumore: in particolare il [7] continua a verificare che in transazione
+--   di scrittura la guardia veda off e quindi NON scatti, e il [9] che la
+--   migrazione congelata della Fase 7 resti applicata e non riscritta.
+--
+-- Che questa griglia passi NON prova che la Fase 8 consegni un messaggio: prova
+-- che l hook non solleva piu 25006. La consegna end-to-end non e mai stata
+-- esercitata sul progetto reale, e le quattro tabelle restano a zero righe.
 -- ---------------------------------------------------------------------------
