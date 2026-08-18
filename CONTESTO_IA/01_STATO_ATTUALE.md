@@ -2248,6 +2248,53 @@ mai stato eseguito. Provare il *comportamento* richiede di eseguire la griglia s
 progetto reale, che è un'autorizzazione separata e per griglia — e quella
 **scrive**.
 
+
+## Apertura di una bottiglia e degustazione — PR #56, 18 agosto 2026
+
+Hardening, **non una fase nuova**, sul precedente di #45, #50, #52 e #54. Draft, base
+`7638f86`, **zero file sotto `supabase/migrations/`**. Gruppo 2 del lavoro Cantina/Annunci,
+**Parti A e B**; la Parte C resta fuori (vedi in fondo, la ragione e' cambiata).
+
+### L'asimmetria fra le due funzioni, misurata sui corpi vivi
+
+`bottiglia_apri` rifiuta se la bottiglia ha un annuncio in **cinque** stati — `bozza`,
+`in_revisione`, `modifiche_richieste`, `attivo`, `riservato`. `listing_sospendi` ne accetta
+**uno solo**: `if v_stato <> 'attivo' then raise ... 'Si puo' sospendere solo un annuncio
+attivo.'`. E non esiste una seconda uscita: `listing_scadi`, l'unico altro comando che il
+venditore possa eseguire, pretende `attivo` **e per giunta** una scadenza gia' passata.
+
+Quindi per **quattro dei cinque** stati nessun comando del venditore libera la bottiglia.
+Il percorso guidato copre `attivo` e per gli altri **spiega senza offrire un pulsante**:
+un pulsante che promette una rimozione e poi fallisce e' peggio dell'errore onesto che
+c'era prima. Per `riservato` il messaggio dice che di mezzo c'e' l'ordine di qualcun altro.
+
+### Dove finisce `nota`, e perche' serve una migrazione
+
+Il parametro `p_nota` **non** ha una colonna di degustazione: **sovrascrive `note_personali`**,
+che e' la nota generica della bottiglia, scrivibile dal client e usata per altro. Registrare
+li' la degustazione **cancella quello che c'era senza dirlo**: e' perdita di dati. E non
+esiste una data di apertura — `apertura_pianificata` e' *programmata*, di tipo `date` e
+scrivibile dal client; `updated_at` si muove a ogni modifica.
+
+Il SQL che chiude entrambi sta in `supabase/queries/05_PROPOSTA_NON_ESEGUIRE_DEGUSTAZIONE.sql`
+e **non e' applicato**. E' additiva davvero, misurato: su `bottle_units` `authenticated` ha
+un GRANT **di tabella in sola lettura** (quindi le colonne nuove si leggono subito) mentre
+l'UPDATE e' **per colonna** (quindi nascono non scrivibili dal client, come vuole la terza
+regola di esposizione). **Non deve aggiungere `grant update`**, e un test lo impedisce.
+Nessun travaso serve: 11 bottiglie, tutte `chiusa`, zero con `note_personali`.
+
+### Cosa e' verificato e cosa no
+
+`bun test` 481/0, `MIN_TESTS` 451 → 481, typecheck e lint puliti, build con la rotta
+`/cantina/[bottleId]/degustazione` registrata e caricata davvero nel browser. **I flussi
+autenticati non sono stati esercitati** e **il percorso del client non e' stato provato dal
+client**: una griglia SQL non passa da PostgREST e non vedrebbe mai un `405` da volatilita'.
+
+### La Parte C, e perche' la ragione dell'esclusione e' cambiata
+
+La formulazione «manca la 12c» **non e' piu' vera**: 12b e 12c sono in produzione con un
+meccanismo di segnalazione **specifico** per i contenuti dei club. La ragione vera e' che
+**`public.clubs` ha 0 righe**. Dettaglio completo nella voce della 12b/12c piu' sopra.
 ## Ciclo di vita dell'annuncio — PR #54, 18 agosto 2026
 
 **Correzione di data, 18 agosto 2026.** Questa sezione e le voci di `CHANGES.log` che le
