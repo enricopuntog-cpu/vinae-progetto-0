@@ -206,3 +206,31 @@ Conseguenza diretta sulla verifica end-to-end: **non c'è nulla da leggere**, e
 crearlo significa due utenti autenticati reali e una conversazione, cioè
 **scrittura sul progetto reale** — autorizzazione separata, per fixture, che
 questa PR non ha e non si prende.
+
+## 10. La correzione, provata prima di applicarla
+
+`Supabase Preview` sulla PR #52 è **`skipping`** — «This git branch is not
+associated with any Supabase Branch», lo stesso caso che la #51 ha registrato
+per la #49. Quel SQL arriverebbe quindi in produzione **senza essere mai stato
+eseguito da Supabase su un database suo**. Per non lasciarlo non provato, il
+corpo corretto è stato messo alla prova sul progetto reale **senza toccare
+niente**: definito in `pg_temp`, che sparisce con la sessione, mentre
+`private.vinea_check_request` resta quella di produzione.
+
+| | caso | esito |
+|---|---|---|
+| A | **corpo corretto**, POST in transazione di sola lettura | **PASSA** — `ok`, la guardia esce |
+| B | **funzione di produzione**, stessa identica condizione | **PASSA** — `25006`, cioè il difetto |
+| C | **corpo corretto**, POST in transazione di scrittura | **PASSA** — `ok` |
+| D | il bucket di rate limit è comparso davvero | **PASSA** — 1 riga per quello scope |
+
+A e B girano **nella stessa transazione**, uno dopo l'altro: è il confronto
+prima/dopo con ogni altra variabile ferma. C e D provano la cosa che più conta
+dopo la correzione, cioè che **il tetto sulle scritture non è allentato** — in
+transazione di scrittura la guardia non scatta e il contatore viene consumato.
+
+Il ramo di scrittura è stato eseguito dentro una transazione poi annullata, e i
+residui sono stati **riletti dopo**, non dichiarati: `0` righe per lo scope
+usato, `private.rate_limit_buckets` di nuovo a **14** come prima. E la funzione
+di produzione **non contiene** `transaction_read_only`, che è la controprova che
+nulla è stato applicato.
