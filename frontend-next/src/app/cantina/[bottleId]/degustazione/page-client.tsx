@@ -159,20 +159,39 @@ export default function DegustazionePageClient({ bottleId }: { bottleId: string 
 /**
  * Il blocco che prende il posto di «Compra ora» e «Proponi».
  *
- * La data è la parte delicata. Oggi `bottle_units` non registra **quando** una
- * bottiglia è stata aperta: c'è `apertura_pianificata`, che è una data
- * *programmata* e scrivibile dal client, e `updated_at`, che si muove a ogni
- * modifica. Quindi o si mostra la data programmata dicendo che è quella, o non
- * si mostra niente — mai un giorno inventato presentato come il giorno della
- * degustazione. La colonna che chiuderebbe la questione è proposta e non
- * applicata: `supabase/queries/05_PROPOSTA_NON_ESEGUIRE_DEGUSTAZIONE.sql`.
+ * La data è la parte delicata, e ha tre fonti possibili di cui una sola è
+ * vera. `degustazione_at` è il giorno in cui la bottiglia è stata aperta
+ * davvero, scritto da `bottiglia_apri` e da nessun altro. `apertura_pianificata`
+ * è una data *programmata*, scrivibile dal client, che dice quando qualcuno
+ * *voleva* aprirla. `updated_at` si muove a ogni modifica e non testimonia
+ * niente. Quindi: la prima se c'è, la seconda dichiarando che è quella, e
+ * altrimenti nessuna — mai un giorno inventato presentato come il giorno della
+ * degustazione. `dataDegustazione` incapsula proprio questa scelta.
+ *
+ * Le bottiglie aperte prima della migrazione `20260819120000` hanno la prima
+ * colonna vuota, perché non esisteva: per loro si continua a ripiegare sulla
+ * data programmata, ed è corretto che il testo lo dica.
+ *
+ * Il commento arriva da `degustazioneNota` e **non** da `personalNotes`. Prima
+ * di quella migrazione `bottiglia_apri` scriveva la nota di degustazione sopra
+ * `note_personali`, quindi leggerla da lì significava leggere la conseguenza di
+ * un difetto: dopo la correzione, `personalNotes` torna a essere la nota di
+ * cantina («regalo di Marco») e mostrarla qui la spaccerebbe per un commento
+ * che nessuno ha scritto.
  */
 function BottigliaDegustata({
   bottiglia,
 }: {
-  bottiglia: { plannedOpenDate?: string; personalNotes?: string };
+  bottiglia: {
+    plannedOpenDate?: string;
+    degustazioneNota?: string;
+    degustazioneAt?: string;
+  };
 }) {
-  const data = dataDegustazione({ aperturaPianificata: bottiglia.plannedOpenDate ?? null });
+  const data = dataDegustazione({
+    degustazioneAt: bottiglia.degustazioneAt ?? null,
+    aperturaPianificata: bottiglia.plannedOpenDate ?? null,
+  });
 
   return (
     <section className="mt-6 rounded-2xl border border-oro/40 bg-oro/10 p-4">
@@ -182,22 +201,22 @@ function BottigliaDegustata({
       </h2>
       {data.testo && !data.certa ? (
         <p className="mt-1 text-xs text-muted-foreground">
-          È la data che avevi programmato per l&apos;apertura: il giorno esatto in cui è stata
-          aperta non viene ancora registrato.
+          È la data che avevi programmato per l&apos;apertura: questa bottiglia è stata aperta
+          prima che il giorno esatto venisse registrato.
         </p>
       ) : null}
       {!data.testo ? (
         <p className="mt-1 text-xs text-muted-foreground">
-          Il giorno dell&apos;apertura non viene ancora registrato.
+          Di questa bottiglia non è rimasto il giorno dell&apos;apertura.
         </p>
       ) : null}
 
-      {bottiglia.personalNotes ? (
+      {bottiglia.degustazioneNota ? (
         <blockquote
           className="mt-4 whitespace-pre-line border-l-2 border-oro/50 pl-3 text-sm"
           data-testid="commento-degustazione-salvato"
         >
-          {bottiglia.personalNotes}
+          {bottiglia.degustazioneNota}
         </blockquote>
       ) : (
         <p className="mt-4 text-sm text-muted-foreground">

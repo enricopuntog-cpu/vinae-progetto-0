@@ -112,6 +112,8 @@ type RigaBottiglia = {
   visibilita: "privata" | "cantina_pubblica";
   apertura_pianificata: string | null;
   note_personali: string;
+  degustazione_nota: string;
+  degustazione_at: string | null;
   prezzo_visibilita: CellarBottle["priceVisibility"];
   override_finestra_inizio: number | null;
   override_finestra_fine: number | null;
@@ -139,6 +141,7 @@ const COLONNE_AMBIENTI = `
 
 const COLONNE_BOTTIGLIE = `
   id, stato, visibilita, apertura_pianificata, note_personali, prezzo_visibilita,
+  degustazione_nota, degustazione_at,
   override_finestra_inizio, override_finestra_fine,
   override_apice_inizio, override_apice_fine,
   override_preferenza, override_nota, ceduta_at, immagini, created_at,
@@ -247,6 +250,13 @@ function rigaABottiglia(riga: RigaBottiglia, slugVino: string): CellarBottle {
     priceVisibility: riga.prezzo_visibilita,
     storageLocationId: slot ? idPosizione(slot.module_id, slot.riga, slot.colonna) : undefined,
     personalNotes: riga.note_personali || undefined,
+    // Distinta da `personalNotes`, e la distinzione è il punto della migrazione
+    // 20260819120000: fino a quel file `bottiglia_apri` scriveva la nota di
+    // degustazione *dentro* `note_personali`, cancellando quello che c'era. Chi
+    // legge il commento da `personalNotes` sta leggendo la conseguenza di quel
+    // difetto, non il commento.
+    degustazioneNota: riga.degustazione_nota || undefined,
+    degustazioneAt: riga.degustazione_at ?? undefined,
     annuncioBloccante: annuncioCheBlocca(annunci) ?? undefined,
   };
 }

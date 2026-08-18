@@ -130,18 +130,44 @@ describe("percorsoApertura", () => {
   });
 });
 
-describe("la proposta sulle colonne di degustazione", () => {
+describe("la migrazione sulle colonne di degustazione", () => {
+  const MIGRAZIONE = "supabase/migrations/20260819120000_degustazione_nota.sql";
   const PROPOSTA = "supabase/queries/05_PROPOSTA_NON_ESEGUIRE_DEGUSTAZIONE.sql";
+  const GRIGLIA = "supabase/tests/degustazione_nota.sql";
 
-  it("sta fra le proposte e non fra le migrazioni", () => {
-    // Sotto migrations/ il merge la applicherebbe da se' (7.10) e il ramo di
-    // anteprima la eseguirebbe all'apertura della PR, cioe' prima della
-    // revisione. Cambia cartella quando l'autorizzazione arriva, non prima.
-    expect(existsSync(join(radice, PROPOSTA))).toBe(true);
-    expect(
-      existsSync(join(radice, "supabase/migrations/20260819100000_degustazione.sql")),
-    ).toBe(false);
-    expect(leggiRepo(PROPOSTA)).toInclude("NON ESEGUIRE");
+  it("ha cambiato cartella, e la vecchia posizione non e' rimasta indietro", () => {
+    // Finche' era una proposta stava sotto queries/, perche' sotto migrations/
+    // il merge l'avrebbe applicata da se' (7.10) e il ramo di anteprima
+    // l'avrebbe eseguita all'apertura della PR, cioe' prima della revisione. Ora
+    // che l'autorizzazione c'e' il file si e' spostato, e questo caso pretende
+    // che si sia spostato DAVVERO invece di essere stato copiato: due copie
+    // divergerebbero, e la prossima sessione non saprebbe quale legge il merge.
+    expect(existsSync(join(radice, MIGRAZIONE))).toBe(true);
+    expect(existsSync(join(radice, PROPOSTA))).toBe(false);
+    expect(leggiRepo(MIGRAZIONE)).not.toInclude("NON ESEGUIRE");
+  });
+
+  it("resta un blocco unico: le colonne e il cambio di comportamento insieme", () => {
+    // L'autorizzazione del 18 agosto 2026 e' stata data sui due statement
+    // INSIEME. Separarli e' la forma di difetto che il Gruppo 1 ha gia' pagato
+    // con la guardia social montata sul solo INSERT: chi applicasse solo il
+    // primo pezzo avrebbe due colonne che nessuno scrive, e chi applicasse solo
+    // il secondo una funzione che scrive in colonne che non esistono.
+    const sql = soloStatementEseguibili(leggiRepo(MIGRAZIONE)).toLowerCase();
+    expect(sql).toInclude("alter table public.bottle_units");
+    expect(sql).toInclude("create or replace function public.bottiglia_apri");
+  });
+
+  it("la griglia porta in testa i numeri di ENTRAMBE le corse", () => {
+    // Stessa regola che il Gruppo 1 ha fissato: una griglia versionata e mai
+    // eseguita non e' una prova (Fase 7e), e una griglia eseguita una volta sola
+    // non distingue una correzione da un file inerte. Se qualcuno riscrive
+    // l'intestazione e lascia cadere una delle due corse, questo caso protesta.
+    const testa = leggiRepo(GRIGLIA).slice(0, 4000);
+    expect(testa).toInclude("PRIMA della migrazione");
+    expect(testa).toInclude("DOPO  la migrazione");
+    expect(testa).toMatch(/PRIMA della migrazione\s*->\s*\d+ PASSA \/\s*\d+ FALLISCE/);
+    expect(testa).toMatch(/DOPO {2}la migrazione\s*->\s*\d+ PASSA \/\s*0 FALLISCE/);
   });
 
   it("non concede in scrittura al client le colonne che introduce", () => {
@@ -151,17 +177,51 @@ describe("la proposta sulle colonne di degustazione", () => {
     // file non deve rimediare da solo. Un `grant update` qui sarebbe il difetto
     // della 9b su profiles, e questo caso e' cio' che impedisce di aggiungerlo
     // per distrazione.
-    const sql = soloStatementEseguibili(leggiRepo(PROPOSTA)).toLowerCase();
+    const sql = soloStatementEseguibili(leggiRepo(MIGRAZIONE)).toLowerCase();
     expect(sql).not.toInclude("grant update");
     expect(sql).toInclude("degustazione_nota");
     expect(sql).toInclude("degustazione_at");
   });
 
   it("smette di sovrascrivere note_personali, che e' il difetto che chiude", () => {
-    const sql = soloStatementEseguibili(leggiRepo(PROPOSTA));
-    // Nel corpo proposto la nota va nella sua colonna: se `note_personali`
+    const sql = soloStatementEseguibili(leggiRepo(MIGRAZIONE));
+    // Nel corpo nuovo la nota va nella sua colonna: se `note_personali`
     // ricomparisse fra gli statement, la perdita di dati sarebbe ancora li'.
     expect(sql).not.toInclude("note_personali");
+  });
+
+  it("il client legge le due colonne, in entrambe le direzioni", () => {
+    // LEGAME A DOPPIO SENSO, sulla forma che il Gruppo 1 ha fissato per
+    // STATI_MODIFICABILI: protesta sia se la migrazione arriva e il client non
+    // la legge, sia se il client nomina colonne che nessuna migrazione crea.
+    //
+    // Non e' pedanteria. Una migrazione applicata e una `select` non aggiornata
+    // e' precisamente lo stato in cui la pagina di degustazione mostrerebbe
+    // «Bottiglia degustata» senza mai la data e senza mai il commento, cioe' il
+    // sintomo di una colonna vuota - indistinguibile, guardando lo schermo, da
+    // una migrazione che non e' passata.
+    const migrazione = soloStatementEseguibili(leggiRepo(MIGRAZIONE)).toLowerCase();
+    const servizio = readFileSync(join(progetto, "src/services/cellar-service.ts"), "utf8");
+
+    for (const colonna of ["degustazione_nota", "degustazione_at"]) {
+      expect(migrazione).toInclude(colonna);
+      expect(servizio).toInclude(colonna);
+    }
+  });
+
+  it("la pagina di degustazione NON legge il commento da personalNotes", () => {
+    // Il difetto che questa migrazione crea nell'interfaccia se nessuno la
+    // segue: `personalNotes` conteneva il commento solo PERCHE' bottiglia_apri
+    // ci scriveva sopra. Corretto il database e lasciata la pagina com'era, li'
+    // comparirebbe la nota di cantina - «regalo di Marco» - presentata come il
+    // commento di degustazione di chi legge.
+    const pagina = readFileSync(
+      join(progetto, "src/app/cantina/[bottleId]/degustazione/page-client.tsx"),
+      "utf8",
+    );
+    const codice = pagina.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(codice).toInclude("bottiglia.degustazioneNota");
+    expect(codice).not.toInclude("bottiglia.personalNotes");
   });
 });
 

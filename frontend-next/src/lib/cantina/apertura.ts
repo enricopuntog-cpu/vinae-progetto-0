@@ -120,13 +120,17 @@ export function percorsoApertura(
 /**
  * La data da mostrare accanto a «Bottiglia degustata il …».
  *
- * Oggi non esiste una data di apertura reale: `bottle_units` ha
- * `apertura_pianificata`, che è una **data programmata** scrivibile dal client e
- * spesso nulla, e `updated_at`, che si muove a ogni modifica e quindi non
- * testimonia l'apertura. Finché la colonna `degustazione_at` proposta in
- * `supabase/queries/05_PROPOSTA_NON_ESEGUIRE_DEGUSTAZIONE.sql` non è autorizzata,
- * questa funzione dice la verità invece di inventare un giorno: se la data
- * programmata non c'è, non se ne mostra nessuna.
+ * Tre fonti possibili, e una sola vera. `degustazione_at` — introdotta dalla
+ * migrazione `20260819120000_degustazione_nota.sql` — è il giorno in cui la
+ * bottiglia è stata aperta davvero, scritto da `bottiglia_apri` e da nessun
+ * altro. `apertura_pianificata` è una **data programmata**, scrivibile dal
+ * client e spesso nulla, che dice quando qualcuno *voleva* aprirla. `updated_at`
+ * si muove a ogni modifica e non testimonia niente, quindi non entra qui.
+ *
+ * Il ripiego sulla seconda non è una comodità: le bottiglie aperte prima di
+ * quella migrazione non hanno la prima, perché non esisteva. Per loro `certa`
+ * vale `false` e chi disegna deve dirlo. Se non c'è nemmeno la data programmata
+ * questa funzione non mostra niente, invece di inventare un giorno.
  */
 export function dataDegustazione(input: {
   degustazioneAt?: string | null;

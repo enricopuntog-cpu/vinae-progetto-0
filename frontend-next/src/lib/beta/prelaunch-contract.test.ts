@@ -150,7 +150,7 @@ describe("contratto di pre-lancio beta", () => {
   });
 
   it("allinea MIN_TESTS al conteggio della suite estesa", () => {
-    expect(leggi("../.github/workflows/ci.yml")).toInclude('MIN_TESTS: "481"');
+    expect(leggi("../.github/workflows/ci.yml")).toInclude('MIN_TESTS: "485"');
   });
 
   it("non trasforma secret o gate server in variabili pubbliche", () => {

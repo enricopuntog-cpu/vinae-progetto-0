@@ -67,6 +67,19 @@ export type CellarBottle = {
   storageLocationId?: string; // → StorageSlot.id
   personalNotes?: string;
   /**
+   * Il commento lasciato aprendo la bottiglia, e **il giorno in cui è stata
+   * aperta davvero**.
+   *
+   * Distinti da `personalNotes` e da `plannedOpenDate`, che sono altre due cose:
+   * la nota generica di cantina, scrivibile dal client, e una data
+   * *programmata*. Fino alla migrazione `20260819120000` la nota di degustazione
+   * finiva sopra la prima e il giorno reale non esisteva affatto — perciò una
+   * bottiglia aperta prima di quel file ha entrambi questi campi vuoti, e non è
+   * un errore di lettura.
+   */
+  degustazioneNota?: string;
+  degustazioneAt?: string;
+  /**
    * L'annuncio che impedisce di aprire questa bottiglia, se c'è.
    *
    * Non è «l'annuncio della bottiglia»: è quello in uno dei cinque stati su cui
