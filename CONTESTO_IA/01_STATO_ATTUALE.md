@@ -217,6 +217,21 @@ applicata per intero, cinque tabelle, undici funzioni e il `rolconfig` di
 che la storia è ricostruibile, non che il branch temporaneo fosse identico al
 progetto reale.
 
+**Nota del 18 agosto 2026 — PR #52: questo hook ha causato un difetto in
+produzione sulla Fase 8, e la correzione è
+`supabase/migrations/20260818090000_phase_8_fix_pre_request_read_only.sql`.**
+`private.vinea_check_request()` consuma un bucket con una `insert` per ogni
+metodo diverso da `GET`/`HEAD`/`OPTIONS`, ma **PostgREST sceglie `READ ONLY` o
+`READ WRITE` dalla volatilità della funzione chiamata, non dal verbo**: una RPC
+`stable` chiamata in POST — come `supabase-js` chiama sempre `.rpc()` — gira in
+transazione di sola lettura, la insert falliva con `25006` e PostgREST lo
+traduce in **405 Method Not Allowed**. Ne erano colpite le quattro `stable`
+della Fase 8, che per undici giorni hanno rifiutato ogni chiamata. La
+correzione aggiunge l'uscita quando `transaction_read_only` è `on` e **non
+allenta il tetto sulle scritture**, perché una transazione di sola lettura non
+può mutarne nessuna. Dettaglio e controprove in
+`docs/PHASE_8_405_DIAGNOSIS.md`.
+
 ## Fase 7b — Connect, commissione e trattenuta fondi
 
 **Stato:** integrata in `main` il 4 agosto 2026 con la PR

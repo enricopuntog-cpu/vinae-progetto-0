@@ -317,10 +317,16 @@ Realtime smoke, zero residues in ten classes — were taken on the isolated Supa
 on the real project now reports only the `main` branch. Those numbers are a report of that phase,
 not a state that can be re-measured on demand — the same distinction that applies to every grid in
 this project. In particular, the `private_only` Realtime restriction was configured on the Preview,
-never on production: whether production Realtime allows public channels is unverified.
+never on production — but see PR #52 at the end of this file before repeating that sentence as it
+stands: the Realtime **authorization** half (the RLS policy on `realtime.messages`) *is* in
+production and correctly scoped, and only the project-level `private_only` toggle is still open.
 
-Two production facts that outlive the merge: the Phase 8 tables have not been re-read since, so the
-schema is distributed but its data state is unverified; and the Phase 7g scheduled workflow
+**Phase 8 was distributed but not working, and stayed that way for eleven days — read the PR #52
+section at the end of this file before trusting anything here about its runtime behaviour.** Its
+four `stable` read RPCs answered **405** to every page load by a logged-in user, so the phase has
+never been exercised in production: re-read for the first time on 18 August 2026, its four tables
+held **zero rows**. That re-read closes the "tables not re-read since the merge" gap this paragraph
+used to open. The other production fact that outlives the merge: the Phase 7g scheduled workflow
 `Phase 7 - auto-release payouts` has run 11 times from `main` and **failed every time** with
 `Configurazione mancante: SUPABASE_URL`, because the GitHub variables and secrets were never
 configured. The runner is fail-closed and never reached the network, but decision 1e — scheduler
@@ -1199,3 +1205,76 @@ A change is complete when: it's typed and readable; errors don't leak internal d
 permissions are checked server-side; deterministic local tests exist; lint/typecheck/test/build
 all pass; docs and env examples are updated; no secrets or reliance on temporary preview
 environments are introduced.
+
+### PostgREST sceglie la transazione dalla volatilità, non dal verbo — PR #52
+
+Correzione di un difetto in produzione della **Fase 8**, non una fase nuova: va
+registrata come nota, come la #50 per le Fasi 5a/5b e la #45 per la beta. Per
+undici giorni, dal merge della #27, **ogni pagina caricata da un utente
+autenticato riceveva 405** dalle RPC di lettura di messaggi e notifiche.
+
+**La causa non è il verbo, ed è un'interazione fra due fasi.** L'hook
+`pgrst.db_pre_request = private.vinea_check_request` montato dalla **Fase 7**
+(`20260731135455…:140`) gira dentro la transazione di *ogni* richiesta e consuma
+un bucket di rate limit — cioè una `insert` — per ogni metodo diverso da
+`GET`/`HEAD`/`OPTIONS`. Ma **PostgREST sceglie `READ ONLY` o `READ WRITE` dalla
+volatilità della funzione chiamata, non dal verbo HTTP**: una RPC dichiarata
+`stable` gira in transazione di sola lettura *anche* chiamata in POST, che è come
+`supabase-js` chiama sempre `.rpc()`. La insert falliva con `25006`
+(`read_only_sql_transaction`), che **PostgREST traduce in `405 Method Not
+Allowed`** — ed è il motivo per cui il sintomo non somigliava alla causa.
+
+L'hook filtrava sul **metodo HTTP**, ma la proprietà che decide è **il modo della
+transazione**. Fino alla Fase 7 le due cose non si erano mai separate, perché
+ogni POST cadeva su funzioni `volatile`. **Chi scrive una RPC `stable` d'ora in
+poi tenga presente che è questo, e non il verbo, a determinare cosa può scrivere
+durante quella richiesta.**
+
+Quello che il lavoro fissa in modo vincolante:
+
+- **Le funzioni colpite erano quattro, non tre**, e sono tutte e sole le `stable`
+  della Fase 8 chiamate dal frontend: `conversations_page`, `notifications_page`,
+  `messages_page`, `notifications_unread_count`. **`conversation_open` non era fra
+  queste**: è `volatile`, non compare mai nei log, e non veniva raggiunta perché
+  `/messaggi` moriva sull'elenco prima. Era un'inferenza, non una misura.
+- **La controprova isola la sola volatilità**, con chiamate dirette fuori dal
+  frontend e la sola chiave anon: `stable` in POST → `405`/`25006`; `volatile` in
+  POST → `401`/`42501`, cioè l'hook è passato e la funzione è stata raggiunta. Lo
+  **stesso** endpoint `stable` chiamato in **GET** → `401`/`42501`. Unica
+  variabile mossa: la volatilità.
+- **Esclusa per misura, non per ragionamento, l'ipotesi che somiglia di più al
+  messaggio d'errore**: database in sola lettura per quota disco del piano Free.
+  Se lo fosse, anche `conversation_open` e `message_send` in POST fallirebbero
+  con `25006`, e invece arrivano al controllo dei permessi;
+  `private.rate_limit_buckets` aveva 14 righe scritte da quello stesso hook.
+- **La correzione è un file nuovo**,
+  `20260818090000_phase_8_fix_pre_request_read_only.sql`: la 20260731135455 è
+  spinta, quindi congelata. Aggiunge all'hook l'uscita quando
+  `current_setting('transaction_read_only', true) = 'on'`. **Non apre un buco**:
+  una transazione di sola lettura non può mutare niente, quindi nessuna scrittura
+  sfugge al tetto, e le letture questo hook non le ha mai contate — è ciò che
+  dichiara già il ramo `GET`/`HEAD`/`OPTIONS`.
+- **Una griglia eseguita nel SQL Editor non può vedere questa classe di difetto**,
+  ed è perché la Fase 8 passava verde con il difetto in produzione: una sessione
+  Postgres diretta non passa da PostgREST, quindi non incontra né l'hook né la
+  transazione di sola lettura. `supabase/tests/8_fix_pre_request_read_only.sql`
+  chiude il buco con `set transaction read only`, che è la sola riga che riproduce
+  in SQL ciò che PostgREST fa da solo. **È stata eseguita sul progetto reale prima
+  della correzione — 8 PASSA / 1 FALLISCE, l'unico fallimento è il caso [5], che è
+  il difetto** — e non scrive nulla: unica griglia del repository di cui si possa
+  dire senza distinguo.
+- **La lacuna Realtime di `CHANGES.log` confondeva due meccanismi.**
+  L'**autorizzazione** è in produzione: `realtime.messages` ha RLS e la policy
+  `vinea_phase8_private_broadcast_select`, che ammette esattamente i due topic
+  legittimi. Nessuna policy di `INSERT` perché nessun client pubblica — i
+  broadcast li emette il database con `realtime.send()` da trigger. La
+  pubblicazione `supabase_realtime` ha **zero tabelle**. Resta aperto il solo
+  interruttore di progetto **`private_only`**, che non è leggibile né scrivibile
+  da SQL o MCP: il canale è la dashboard, come per la configurazione Auth della
+  #50. Accenderlo non può rompere la consegna, perché il client apre **solo**
+  canali privati (`realtime.ts:123`, `:131`, `:137`).
+- **`MessagingService` e `NotificationService` in `types.ts` sono già nella forma
+  della Fase 8** — `Result<T>`, cursori, nessun `userId` — e sono quelle che gli
+  adapter implementano. Non c'è interfaccia morta lì. Il difetto di forma esiste
+  ma è di **`ModerationService`** (`types.ts:1145`), promesse nude e `userId` in
+  firma: è Fase 9, e non si tocca qui.
