@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { WineOff, Info } from "lucide-react";
@@ -16,6 +16,11 @@ import {
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { createListingService } from "@/services/listing-service";
 import { percorsoApertura } from "@/lib/cantina/apertura";
+import {
+  STATO_INIZIALE,
+  riduttoreApertura,
+  versoDegustazione,
+} from "@/lib/cantina/macchina-apertura";
 import { AVVISO_RIMOZIONE_IRREVERSIBILE, EFFETTO_RIMOZIONE } from "@/lib/annunci/rimozione";
 import type { CellarBottle } from "@/data/cellar";
 
@@ -36,6 +41,14 @@ import type { CellarBottle } from "@/data/cellar";
  * dialogo solo lascerebbe credere che o succede tutto o non succede niente,
  * mentre è possibilissimo rimuovere l'annuncio e poi cambiare idea sull'apertura
  * — e in quel caso l'annuncio resta rimosso. Il primo dialogo lo dice.
+ *
+ * ## Perché lo stato sta in un riduttore e non in tre booleani
+ *
+ * Perché «non si apre senza conferma esplicita» è la proprietà che conta, e in
+ * questo repository non c'è modo di montare un componente React in un test.
+ * `macchina-apertura.ts` la rende verificabile — compreso l'annullamento a metà
+ * di ciascuno dei due dialoghi — e questo componente la usa davvero, invece di
+ * riprodurne il comportamento a fianco.
  */
 export function AperturaBottiglia({
   bottiglia,
@@ -53,24 +66,22 @@ export function AperturaBottiglia({
     [bottiglia.annuncioBloccante],
   );
 
-  const [rimozioneAperta, setRimozioneAperta] = useState(false);
-  const [aperturaAperta, setAperturaAperta] = useState(false);
-  const [bloccoAperto, setBloccoAperto] = useState(false);
+  const [stato, dispatch] = useReducer(riduttoreApertura, STATO_INIZIALE);
   const [inCorso, setInCorso] = useState(false);
 
   const giaAperta = bottiglia.quantita === 0;
+  const destinazione = `/cantina/${bottiglia.bottleId}/degustazione`;
 
-  /** Il primo gesto: sceglie con quale conversazione cominciare. */
-  const premuto = () => {
-    if (percorso.tipo === "bloccato") return setBloccoAperto(true);
-    if (percorso.tipo === "rimuovi-poi-apri") return setRimozioneAperta(true);
-    return setAperturaAperta(true);
-  };
+  // La navigazione è l'effetto dello stato terminale, non di un click: è ciò
+  // che tiene il test della macchina aderente a quello che il componente fa.
+  useEffect(() => {
+    if (versoDegustazione(stato)) router.push(destinazione);
+  }, [stato, router, destinazione]);
 
   /**
-   * Prima conferma. Rimuove davvero l'annuncio, e solo dopo apre la seconda:
-   * se `listing_sospendi` fallisce non si prosegue, perché `bottiglia_apri`
-   * rifiuterebbe comunque e la seconda conferma sarebbe una domanda a vuoto.
+   * Prima conferma. Rimuove davvero l'annuncio, e solo se riesce si passa alla
+   * seconda: se `listing_sospendi` rifiuta, `bottiglia_apri` rifiuterebbe
+   * comunque e la seconda domanda sarebbe una domanda a vuoto.
    */
   const confermaRimozione = async () => {
     if (percorso.tipo !== "rimuovi-poi-apri") return;
@@ -79,26 +90,14 @@ export function AperturaBottiglia({
       const esito = await listingService.sospendi(percorso.listingId);
       if (!esito.ok) {
         toast.error(esito.error);
+        dispatch({ tipo: "rimozione-fallita" });
         return;
       }
       toast.success("Annuncio rimosso dalla vendita");
-      setRimozioneAperta(false);
-      setAperturaAperta(true);
+      dispatch({ tipo: "rimozione-riuscita" });
     } finally {
       setInCorso(false);
     }
-  };
-
-  /**
-   * Seconda conferma. Non apre la bottiglia: porta alla schermata che raccoglie
-   * il commento di degustazione, ed è lì che `bottiglia_apri` viene chiamata.
-   * Chi abbandona quella schermata lascia la bottiglia chiusa — il che è il
-   * comportamento giusto, ma è anche il motivo per cui la rimozione dell'annuncio
-   * va annunciata come definitiva già al primo dialogo.
-   */
-  const confermaApertura = () => {
-    setAperturaAperta(false);
-    router.push(`/cantina/${bottiglia.bottleId}/degustazione`);
   };
 
   // In Cantina i comandi di una scheda sono pastiglie piccole; sulla pagina
@@ -108,30 +107,40 @@ export function AperturaBottiglia({
     "inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-medium transition hover:border-bordeaux";
 
   if (giaAperta) {
-    const vaiAllaDegustazione = () =>
-      router.push(`/cantina/${bottiglia.bottleId}/degustazione`);
     return variante === "compatto" ? (
-      <button className={pastiglia} onClick={vaiAllaDegustazione} data-testid="vedi-degustazione">
+      <button
+        className={pastiglia}
+        onClick={() => router.push(destinazione)}
+        data-testid="vedi-degustazione"
+      >
         <WineOff className="h-3 w-3" /> Degustata
       </button>
     ) : (
-      <Button variant="outline" size="sm" onClick={vaiAllaDegustazione}>
+      <Button variant="outline" size="sm" onClick={() => router.push(destinazione)}>
         <WineOff className="mr-1 h-4 w-4" /> Vedi la degustazione
       </Button>
     );
   }
 
+  const premi = () => dispatch({ tipo: "premi", percorso });
+  // Un dialogo si chiude anche con Esc o cliccando fuori: per la macchina è lo
+  // stesso annullamento del pulsante «Annulla», e deve esserlo davvero, o si
+  // resterebbe in uno stato che l'utente crede chiuso.
+  const chiudi = (aperto: boolean) => {
+    if (!aperto) dispatch({ tipo: "annulla" });
+  };
+
   return (
     <>
       {variante === "compatto" ? (
-        <button className={pastiglia} onClick={premuto} data-testid="apri-bottiglia">
+        <button className={pastiglia} onClick={premi} data-testid="apri-bottiglia">
           <WineOff className="h-3 w-3" /> Apri
         </button>
       ) : (
         <Button
           size="sm"
           className="bg-bordeaux hover:bg-bordeaux/90"
-          onClick={premuto}
+          onClick={premi}
           data-testid="apri-bottiglia"
         >
           <WineOff className="mr-1 h-4 w-4" /> Apri questa bottiglia
@@ -139,7 +148,7 @@ export function AperturaBottiglia({
       )}
 
       {/* --- Strada chiusa: si spiega, non si promette ---------------------- */}
-      <Dialog open={bloccoAperto} onOpenChange={setBloccoAperto}>
+      <Dialog open={stato.fase === "bloccato"} onOpenChange={chiudi}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Non puoi aprire questa bottiglia adesso</DialogTitle>
@@ -148,7 +157,7 @@ export function AperturaBottiglia({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setBloccoAperto(false)}>
+            <Button variant="ghost" onClick={() => dispatch({ tipo: "annulla" })}>
               Ho capito
             </Button>
           </DialogFooter>
@@ -156,13 +165,13 @@ export function AperturaBottiglia({
       </Dialog>
 
       {/* --- Prima conferma: la rimozione dell'annuncio --------------------- */}
-      <Dialog open={rimozioneAperta} onOpenChange={setRimozioneAperta}>
+      <Dialog open={stato.fase === "rimozione"} onOpenChange={chiudi}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Confermi la rimozione dell&apos;annuncio?</DialogTitle>
             <DialogDescription>
-              {nomeVino} è in vendita, e una bottiglia in vendita non si può aprire. Per aprirla
-              va prima tolta dal mercato. {EFFETTO_RIMOZIONE}
+              {nomeVino} è in vendita, e una bottiglia in vendita non si può aprire. Per aprirla va
+              prima tolta dal mercato. {EFFETTO_RIMOZIONE}
               <strong className="mt-2 block font-medium text-foreground">
                 {AVVISO_RIMOZIONE_IRREVERSIBILE}
               </strong>
@@ -173,7 +182,11 @@ export function AperturaBottiglia({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setRimozioneAperta(false)} disabled={inCorso}>
+            <Button
+              variant="ghost"
+              onClick={() => dispatch({ tipo: "annulla" })}
+              disabled={inCorso}
+            >
               Annulla
             </Button>
             <Button onClick={confermaRimozione} disabled={inCorso} data-testid="conferma-rimozione">
@@ -184,13 +197,13 @@ export function AperturaBottiglia({
       </Dialog>
 
       {/* --- Seconda conferma: l'apertura ----------------------------------- */}
-      <Dialog open={aperturaAperta} onOpenChange={setAperturaAperta}>
+      <Dialog open={stato.fase === "apertura"} onOpenChange={chiudi}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Confermi l&apos;apertura della bottiglia?</DialogTitle>
             <DialogDescription>
-              {nomeVino} uscirà dalle bottiglie disponibili della tua cantina e non ci tornerà:
-              una bottiglia aperta non si richiude.
+              {nomeVino} uscirà dalle bottiglie disponibili della tua cantina e non ci tornerà: una
+              bottiglia aperta non si richiude.
               <span className="mt-2 block">
                 Nella schermata successiva potrai scrivere com&apos;era — e la bottiglia verrà
                 registrata come degustata solo quando confermerai lì.
@@ -198,12 +211,12 @@ export function AperturaBottiglia({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setAperturaAperta(false)} disabled={inCorso}>
+            <Button variant="ghost" onClick={() => dispatch({ tipo: "annulla" })}>
               Annulla
             </Button>
             <Button
               className="bg-bordeaux hover:bg-bordeaux/90"
-              onClick={confermaApertura}
+              onClick={() => dispatch({ tipo: "conferma-apertura" })}
               data-testid="conferma-apertura"
             >
               Sì, la sto aprendo
