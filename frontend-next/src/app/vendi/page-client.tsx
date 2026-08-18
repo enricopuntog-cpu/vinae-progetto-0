@@ -92,6 +92,10 @@ export default function VendiPageClient() {
     fotoInCorso,
     caricaFoto,
     rimuoviFoto,
+    riusoInCorso,
+    prezzoPrecedente,
+    prezzoConfermato,
+    setPrezzoConfermato,
     inviando,
     pubblica,
     salvaBozza,
@@ -261,6 +265,26 @@ export default function VendiPageClient() {
             <p className="text-sm text-muted-foreground">
               Consigliate: fronte, retro, capsula, livello, fondo, confezione ed eventuali difetti.
             </p>
+
+            {/*
+              Una bottiglia che arriva dalla Cantina le fotografie le ha già.
+              Dirlo qui evita la domanda che questo passo poneva prima senza
+              volerlo — «le devo ricaricare tutte?» — a cui la risposta era sì,
+              e chi non lo faceva pubblicava un annuncio senza immagini.
+            */}
+            {daCantina && riusoInCorso ? (
+              <p className="text-sm text-muted-foreground">
+                Recupero le fotografie che hai già scattato per questa bottiglia…
+              </p>
+            ) : null}
+
+            {daCantina && !riusoInCorso && foto.length > 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Queste sono le fotografie della bottiglia in Cantina. Puoi aggiungerne altre o
+                toglierne: quelle in Cantina restano dove sono.
+              </p>
+            ) : null}
+
             <FotoGriglia
               foto={foto}
               inCorso={fotoInCorso}
@@ -531,6 +555,29 @@ export default function VendiPageClient() {
                 disponibili: <b>{formatEUR(suggerito)}</b>
               </p>
             </div>
+            {/*
+              Il prezzo dell'annuncio precedente di questa bottiglia è già nel
+              campo: chi rimette in vendita non lo ridigita. Ma non si pubblica
+              finché non lo guarda — fra i due annunci può essere passato molto
+              tempo, e un prezzo ereditato in silenzio è un prezzo che nessuno
+              ha deciso.
+            */}
+            {prezzoPrecedente !== null ? (
+              <label className="flex items-start gap-2 rounded-xl border border-border bg-card p-3 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={prezzoConfermato}
+                  onChange={(e) => setPrezzoConfermato(e.target.checked)}
+                />
+                <span>
+                  Il prezzo dell&apos;ultimo annuncio di questa bottiglia era{" "}
+                  <b>{formatEUR(prezzoPrecedente / 100)}</b>, ed è quello che trovi qui sotto.
+                  Confermo che è ancora corretto.
+                </span>
+              </label>
+            ) : null}
+
             <div className="grid gap-3 md:grid-cols-2">
               <Field label="Prezzo (€)">
                 <Input

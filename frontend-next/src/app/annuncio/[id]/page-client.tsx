@@ -37,18 +37,27 @@ import { TrustBadge, TrustLegend } from "@/components/vinea/TrustBadge";
 import { ReportDialog } from "@/components/vinea/ReportDialog";
 import { ListingContactActions } from "@/components/vinea/ListingContactActions";
 import { ProposalAction } from "@/components/vinea/ProposalAction";
+import { ListingOwnerActions } from "@/components/vinea/ListingOwnerActions";
+import type { AnnuncioProprietario } from "@/services/listing-service";
 import { PAGAMENTI_UI_ABILITATI } from "@/config/features";
 
 export default function AnnuncioDetailPageClient({
   wine,
   correlati,
+  proprio,
 }: {
   wine: Wine;
   correlati: Wine[];
+  /**
+   * Valorizzato solo quando chi guarda è il venditore: la pagina lato server lo
+   * ottiene dalla lettura filtrata dalla RLS, non da un confronto fatto qui.
+   */
+  proprio?: AnnuncioProprietario | null;
 }) {
   const router = useRouter();
   const [attiva, setAttiva] = useState(0);
   const listingId = wine.listingId ?? wine.id;
+  const sonoIlVenditore = Boolean(proprio);
 
   return (
     <div className="space-y-8">
@@ -110,31 +119,47 @@ export default function AnnuncioDetailPageClient({
             {wine.disponibili} {wine.disponibili === 1 ? "bottiglia disponibile" : "bottiglie disponibili"} • Formato {wine.formato}
           </p>
 
-          <div className={`mt-6 grid gap-2 ${PAGAMENTI_UI_ABILITATI ? "grid-cols-3" : "grid-cols-1"}`}>
-            {PAGAMENTI_UI_ABILITATI ? (
-              <Button
-                className="col-span-2 bg-bordeaux hover:bg-bordeaux/90"
-                onClick={() => router.push(`/checkout/${wine.id}`)}
+          {/*
+            Al venditore la propria scheda mostra i comandi di gestione al posto
+            di quelli d'acquisto. Non è solo ordine: comprare da sé, trattare
+            con sé e segnalarsi non sono azioni che il database accetterebbe, e
+            un pulsante che porta a un rifiuto è peggio di un pulsante assente.
+          */}
+          {sonoIlVenditore && proprio ? (
+            <div className="mt-6">
+              <ListingOwnerActions annuncio={proprio} />
+            </div>
+          ) : (
+            <>
+              <div
+                className={`mt-6 grid gap-2 ${PAGAMENTI_UI_ABILITATI ? "grid-cols-3" : "grid-cols-1"}`}
               >
-                Compra ora
-              </Button>
-            ) : null}
-            <ProposalAction listingId={listingId} listingSlug={wine.id} prezzo={wine.prezzo} />
-          </div>
+                {PAGAMENTI_UI_ABILITATI ? (
+                  <Button
+                    className="col-span-2 bg-bordeaux hover:bg-bordeaux/90"
+                    onClick={() => router.push(`/checkout/${wine.id}`)}
+                  >
+                    Compra ora
+                  </Button>
+                ) : null}
+                <ProposalAction listingId={listingId} listingSlug={wine.id} prezzo={wine.prezzo} />
+              </div>
 
-          <ListingContactActions listingId={listingId} />
-          <div className="mt-2">
-            <ReportDialog
-              targetType="annuncio"
-              targetId={listingId}
-              targetLabel={`${wine.nome} ${wine.annata} — ${wine.venditore.nome}`}
-              trigger={
-                <Button variant="ghost" className="text-muted-foreground hover:text-bordeaux">
-                  <Flag className="h-4 w-4" /> Segnala annuncio
-                </Button>
-              }
-            />
-          </div>
+              <ListingContactActions listingId={listingId} />
+              <div className="mt-2">
+                <ReportDialog
+                  targetType="annuncio"
+                  targetId={listingId}
+                  targetLabel={`${wine.nome} ${wine.annata} — ${wine.venditore.nome}`}
+                  trigger={
+                    <Button variant="ghost" className="text-muted-foreground hover:text-bordeaux">
+                      <Flag className="h-4 w-4" /> Segnala annuncio
+                    </Button>
+                  }
+                />
+              </div>
+            </>
+          )}
 
           {/* Venditore */}
           <div className="mt-6 rounded-2xl border border-border bg-card p-4">

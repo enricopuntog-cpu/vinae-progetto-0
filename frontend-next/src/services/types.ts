@@ -304,6 +304,17 @@ export interface ListingService extends ListingReadService {
    * in Cantina. La catalogazione privata/pubblica appartiene a CellarService.
    */
   crea(dati: DatiVenditaDaCantina): Promise<Result<{ id: string; slug: string }>>;
+  /**
+   * L'annuncio letto dal suo proprietario, in **qualunque** stato, incluso uno
+   * che la vista pubblica non restituisce più. Non prende un identificativo di
+   * utente in nessuna posizione: la riga è quella di `auth.uid()`, risolta
+   * dalla sessione dentro il servizio, ed è la RLS a deciderlo.
+   *
+   * Il tipo di ritorno vive in `listing-service.ts` e non qui perché nomina
+   * `ListingStato`, che è l'enum del database: metterlo in questo file
+   * significherebbe che i mock debbano conoscere gli stati reali.
+   */
+  mioAnnuncio(idOrSlug: string): Promise<import("./listing-service").AnnuncioProprietario | null>;
   aggiorna(id: string, dati: Partial<DatiModificaAnnuncio>): Promise<Result<void>>;
   pubblica(id: string): Promise<Result<void>>;
   sospendi(id: string, motivo?: string): Promise<Result<void>>;

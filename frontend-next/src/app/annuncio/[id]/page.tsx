@@ -22,7 +22,13 @@ export async function generateMetadata({
   const wine = await createListingService(client).dettaglio(id);
 
   if (!wine) {
-    return { title: "Annuncio non trovato — Vinea" };
+    // Può essere un annuncio inesistente oppure uno che esiste ma non è più
+    // pubblico — sospeso, scaduto, ancora in bozza. I due casi non si
+    // distinguono qui apposta: il titolo della scheda è ciò che finisce nei
+    // risultati di ricerca e nelle anteprime dei link, e non deve confermare a
+    // un estraneo che quell'annuncio esiste. Il proprietario la sua pagina la
+    // vede lo stesso, con il pannello che gliene dice lo stato.
+    return { title: "Annuncio non trovato — Vinea", robots: { index: false, follow: false } };
   }
   const title = `${wine.nome} ${wine.annata} — ${wine.produttore} | Vinea`;
   const description = `${wine.produttore} ${wine.nome} ${wine.annata}, ${wine.regione}. In vendita a ${formatEUR(wine.prezzo)}.`;
@@ -51,22 +57,40 @@ export default async function Page({
 
   // In parallelo: la richiesta dei correlati non dipende dall'esito del
   // dettaglio, quindi non c'è motivo di metterla in coda.
-  const [wine, tutti] = await Promise.all([service.dettaglio(id), service.elenco()]);
+  //
+  // `mioAnnuncio` parte anche per un visitatore anonimo, ma si ferma da sé
+  // sulla sessione prima di interrogare: `anon` non ha nessun grant su
+  // `public.listings`, quindi la domanda risponderebbe `42501` e non "zero
+  // righe". Il dettaglio sta nel servizio, dove sta la ragione.
+  const [wine, proprio, tutti] = await Promise.all([
+    service.dettaglio(id),
+    service.mioAnnuncio(id),
+    service.elenco(),
+  ]);
 
-  if (!wine) notFound();
+  // Un annuncio sospeso, scaduto o in bozza non esce più da `public_listings`.
+  // Per il suo venditore la pagina deve restare raggiungibile lo stesso: è lì
+  // che stanno prezzo, fotografie e descrizione, ed è da lì che si rimuove
+  // dalla vendita. Per tutti gli altri resta un 404.
+  const daMostrare = wine ?? proprio?.wine ?? null;
+  if (!daMostrare) notFound();
 
-  const correlati = tutti.filter((w) => w.id !== wine.id).slice(0, 4);
+  const correlati = tutti.filter((w) => w.id !== daMostrare.id).slice(0, 4);
 
   // Il vino della scheda più quelli dei correlati: "Quando berlo", gli
   // abbinamenti e i distintivi delle schede correlate leggono tutti da qui.
   const metaPerVino = await caricaMetaPerVino(client, [
-    wine.wineSlug ?? wine.id,
+    daMostrare.wineSlug ?? daMostrare.id,
     ...correlati.map((c) => c.wineSlug ?? c.id),
   ]);
 
   return (
     <WineMetaProvider metaPerVino={metaPerVino}>
-      <AnnuncioDetailPageClient wine={wine} correlati={correlati} />
+      <AnnuncioDetailPageClient
+        wine={daMostrare}
+        correlati={correlati}
+        proprio={proprio}
+      />
     </WineMetaProvider>
   );
 }

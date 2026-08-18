@@ -1303,3 +1303,103 @@ Quello che il lavoro fissa in modo vincolante:
   adapter implementano. Non c'è interfaccia morta lì. Il difetto di forma esiste
   ma è di **`ModerationService`** (`types.ts:1145`), promesse nude e `userId` in
   firma: è Fase 9, e non si tocca qui.
+
+### Ciclo di vita dell'annuncio: rimozione, modifica, riuso delle foto — PR #54
+
+Hardening, **non una fase nuova**: va registrata come nota, come la #45 per la beta, la #50 per
+le Fasi 5a/5b e la #52 per la Fase 8. Nessuna sessione organizzativa ha assegnato un numero a
+questo lavoro, e nel repository non ne esiste traccia — cercato e verificato, non assunto.
+
+Quello che il lavoro fissa in modo vincolante:
+
+- **`listings_select_pubblici` NON esiste sul progetto reale.** `pg_policy` su `public.listings`
+  restituisce **tre** policy — `listings_insert_own`, `listings_select_own`, `listings_update_own`
+  — e la lettura pubblica passa dalla vista `public_listings` (`security_invoker = off`), com'è la
+  regola di esposizione della 6d-1. Chi legge una premessa che nomina quella policy la corregga:
+  una sospensione toglie la riga **dalla vista**, non da una policy, e `listings_select_own` non
+  guarda lo stato — quindi **il proprietario la sua riga ce l'ha sempre**, in qualunque stato.
+- **La lettura del proprietario non richiede schema nuovo, ed è misurato.** I tre `GRANT SELECT`
+  che servono esistono già (`listings`, `bottle_units`, `wines`) e le tre policy di lettura
+  lasciano passare la catena per il proprietario. L'innesto su `profiles` **deve nominare il
+  vincolo** (`profiles!listings_seller_id_fkey`): da `listings` partono **tre** chiavi esterne
+  verso `profiles` — `seller_id`, `reserved_by`, `stato_aggiornato_da` — e un innesto ambiguo non
+  è un valore sbagliato, è un errore in faccia a chi apre la pagina.
+- **`anon` non ha NESSUN grant su `public.listings`.** Una lettura di quella tabella fatta senza
+  sessione non torna vuota: torna `42501 permission denied`, perché il permesso di tabella viene
+  **prima** della RLS. Chi scrive una lettura "tanto la RLS filtra" su una tabella senza grant per
+  `anon` sta scrivendo un errore nei log a ogni richiesta anonima. Trovato aprendo la pagina, non
+  leggendo il codice.
+- **`sospeso` è terminale, e la UI lo dice prima di agire.** Tre misure: l'indice
+  `listings_un_solo_annuncio_non_terminale` non lo copre; `listing_pubblica` riparte solo da
+  `bozza`/`modifiche_richieste`; nessuna funzione riporta un annuncio ad `attivo` all'infuori di
+  `listing_pubblica` e delle due del checkout, nessuna raggiungibile da `sospeso`. **La
+  riattivazione non esiste e non è stata costruita**: per rivendere si crea un annuncio nuovo, il
+  che è possibile proprio perché lo stato è terminale e libera la bottiglia dall'indice. Renderlo
+  non terminale cambierebbe il significato di quell'indice, quindi è una decisione di dominio con
+  una sessione propria.
+- **La modifica di un annuncio attivo è applicata**, dalla migrazione
+  `supabase/migrations/20260819090000_annuncio_modifica_attivo.sql`, autorizzata **per nome e con
+  entrambi gli statement insieme** dalla sessione di coordinamento del **19 agosto 2026**. Il file
+  è nato come proposta in `supabase/queries/` e stava lì per una ragione che resta valida per la
+  prossima: sotto `supabase/migrations/` il merge lo applica da sé (7.10) **e** il ramo di preview
+  lo eseguirebbe all'apertura della PR, cioè prima della revisione. Una proposta cambia cartella
+  quando la revisione è avvenuta, non prima — è la stessa collocazione, e la stessa ragione, della
+  proposta di fixture della 12a e di quella sul consenso, che invece restano lì.
+- **Quella migrazione contiene DUE statement, e il secondo non era nella richiesta.**
+  `listings_scrittura_social_guard` era montato **BEFORE INSERT soltanto** su `listings`, mentre su
+  `messages` e sulle tre tabelle dei club copre anche l'UPDATE. È stato innocuo finché
+  `listings_update_own` si fermava alle bozze, che nessun estraneo vede. Con `attivo` ammesso, un
+  utente **sospeso al primo livello** potrebbe riscrivere prezzo e testo di un annuncio pubblico —
+  la scrittura social che la 7.6b gli toglie. **Chi applicasse solo il primo statement aprirebbe un
+  buco nella 9b**, e per questo non si dividono: un test lo pretende dal file. Il corpo della
+  funzione non si tocca: ricava l'attore da `seller_id` via `to_jsonb(new)`, che su UPDATE c'è
+  identico.
+- **`STATI_MODIFICABILI` e quella policy si muovono insieme, e un test lo impone in entrambe le
+  direzioni.** Un pulsante che scrive dove la policy non fa passare non solleva niente: l'UPDATE
+  aggiorna **zero righe e riporta `ok`**. È il difetto peggiore della categoria, perché è
+  silenzioso — e non è teoria: la corsa di controllo della griglia lo ha visto succedere ai casi
+  `[3]` e `[4]`, che passavano **anche senza** la migrazione. A misurare la modifica è `[3b]`, che
+  rilegge il valore. Chi tocca quei casi non tolga `[3b]` credendo che `[3]` gli basti.
+- **Le foto di una bottiglia si COPIANO da `cantina` ad `annunci`, non si referenziano.** `cantina`
+  è privato e si legge con URL firmato; `annunci` è pubblico e `listings.immagini` viene ricomposto
+  in URL pubblico da `urlImmagine()`. Un percorso di `cantina` dentro `listings.immagini` darebbe
+  un URL pubblico verso un oggetto che lì non esiste. E puntare l'annuncio al file privato non è
+  comunque una scelta disponibile: sarebbe pubblicare la cantina di qualcuno per il fatto di
+  averla messa in vendita una volta. **Il client manda solo l'id della bottiglia**; i percorsi li
+  legge il server e la RLS decide se quella riga è sua — stessa ragione per cui `firmaUploadFoto`
+  costruisce il percorso invece di accettarlo.
+- **Il disallineamento fra card e scheda è misurato sui dati reali.** `sabbioni-i-rifugi-2017`,
+  l'unico annuncio creato davvero da un utente attraverso il wizard, ha `listings.immagini = []`
+  mentre la sua bottiglia ha una foto nel bucket `cantina`; le due scritture distano tre minuti.
+  In Cantina la bottiglia si vede, perché `rigaAVino()` ripiega sulle foto di cantina quando
+  l'annuncio non ne ha (`cellar-service.ts:258-264`); nella scheda pubblica no, perché
+  `public_listings` non ha ripiego e `rigaAWine()` mette il segnaposto. **Quella è la radice, e il
+  riuso la chiude alla sorgente** — non riscrive gli annunci già nati vuoti, che restano da
+  correggere a mano o con il comando di modifica, che dal 19 agosto 2026 funziona anche su un annuncio attivo.
+- **Il prezzo ereditato si propone compilato ma non si pubblica senza conferma.** Fra il vecchio
+  annuncio e il nuovo può essere passato molto tempo: il lavoro risparmiato resta risparmiato, la
+  decisione resta del venditore.
+- **La griglia è stata ESEGUITA prima del merge, e la corsa di controllo conta quanto quella
+  verde.** `supabase/tests/annuncio_modifica_attivo.sql` è girata su un **branch di anteprima
+  Supabase** creato per questo, nato dalle trenta migrazioni di produzione, **PostgreSQL 17.6** —
+  la famiglia del progetto reale, non il 15.19 locale della 12b/12c. **Due corse: 7 PASSA /
+  5 FALLISCE senza la migrazione, 12 PASSA / 0 FALLISCE con essa.** La prima serve a escludere una
+  griglia verde in entrambi i casi, che non misurerebbe nulla, ed è quella che ha trovato i due
+  difetti descritti sopra e qui sotto. **Sul progetto reale non è girata**, e resta
+  un'autorizzazione separata per griglia: questa **scrive**. Chi apre una griglia nuova prenda
+  questo giro come forma — applicare su un ramo usa-e-getta e misurare due volte costa un branch a
+  ore e chiude la regola della 7e senza toccare la produzione.
+- **Una griglia SQL non vede la classe di difetto della #52, e questa nemmeno.** Una sessione
+  Postgres diretta non passa da PostgREST: se la modifica di un annuncio attivo rispondesse `405`
+  per la volatilità di una funzione, qui sarebbe invisibile. **Il percorso del client va provato dal
+  client**, e non lo è stato.
+- `MIN_TESTS` 433 → **451**. Un test lega `STATI_MODIFICABILI` alla migrazione **in entrambe le
+  direzioni** — protesta sia se l'elenco si allarga senza il file sia se il file arriva senza
+  l'elenco — e un altro pretende che la griglia porti in testa i numeri di **entrambe** le corse,
+  così che nessuno la riporti a «mai eseguita» per distrazione.
+- **Debito noto accettato, non risolto**: un annuncio attivo modificato **non ritorna in revisione**.
+  Accettato dalla sessione di coordinamento del 19 agosto 2026 per questa migrazione, con la
+  richiesta esplicita di scriverlo invece di lasciarlo implicito; se le modifiche sostanziali debbano
+  far ripassare per approvazione è una domanda per una fase successiva. Le altre due conseguenze
+  accettate allo stesso modo: il prezzo può cambiare fra visualizzazione e checkout, e una modifica
+  non lascia traccia di cosa ci fosse prima.

@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { firmaUploadFoto } from "@/app/vendi/actions";
+import { firmaUploadFoto, riusaFotoDellaBottiglia } from "@/app/vendi/actions";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { createCellarService } from "@/services/cellar-service";
 import { createListingService } from "@/services/listing-service";
@@ -135,6 +135,57 @@ export function useSellWizard({
   // Id della bozza già creata su Supabase, se c'è.
   const [bozzaId, setBozzaId] = useState<string | null>(null);
 
+  // -- Riuso di quello che la bottiglia ha già -------------------------------
+  //
+  // Una bottiglia catalogata ha già le sue fotografie, nel bucket privato
+  // `cantina`. Prima di questa modifica lo step Foto partiva vuoto e il
+  // venditore ricaricava tutto da capo — e chi non lo faceva pubblicava un
+  // annuncio senza immagini, che è la ragione per cui la scheda pubblica
+  // mostrava il segnaposto mentre in Cantina la stessa bottiglia si vedeva:
+  // `rigaAVino()` ripiega sulle foto di cantina quando l'annuncio non ne ha,
+  // la vista pubblica no.
+  const [riusoInCorso, setRiusoInCorso] = useState(daCantina);
+  const [prezzoPrecedente, setPrezzoPrecedente] = useState<number | null>(null);
+  const [prezzoConfermato, setPrezzoConfermato] = useState(false);
+  // Marcatore di "già chiesto" in un ref e non in state: in state il setState
+  // provoca un render, il render rifà l'effetto perché il marcatore è fra le
+  // sue dipendenze, e la pulizia annulla la richiesta appena partita. È la
+  // stessa lezione della 10c sul pannello Sommelier.
+  const riusoChiesto = useRef(false);
+
+  useEffect(() => {
+    if (!bottleUnitId || riusoChiesto.current) return;
+    riusoChiesto.current = true;
+
+    let attivo = true;
+    void riusaFotoDellaBottiglia(bottleUnitId)
+      .then((esito) => {
+        if (!attivo) return;
+        if (!esito.ok) {
+          // Non è un errore che ferma la vendita: si può sempre caricare a
+          // mano. Lo si dice e si va avanti.
+          toast.error(esito.error);
+          return;
+        }
+        // Si aggiunge in testa senza sostituire: se nel frattempo il venditore
+        // ha già caricato qualcosa, quello che ha fatto lui non si perde.
+        if (esito.data.foto.length > 0) {
+          setFoto((attuali) => [...esito.data.foto, ...attuali]);
+        }
+        if (esito.data.prezzoCentsPrecedente !== null) {
+          setPrezzoPrecedente(esito.data.prezzoCentsPrecedente);
+          setD((s) => (s.prezzo ? s : { ...s, prezzo: String(esito.data.prezzoCentsPrecedente! / 100) }));
+        }
+      })
+      .finally(() => {
+        if (attivo) setRiusoInCorso(false);
+      });
+
+    return () => {
+      attivo = false;
+    };
+  }, [bottleUnitId]);
+
   const listingService = useMemo(() => createListingService(getSupabaseClient()), []);
   const cellarService = useMemo(() => createCellarService(getSupabaseClient()), []);
   const aiService = useMemo(
@@ -243,7 +294,12 @@ export function useSellWizard({
       // aggiuntiva a ogni ripensamento, e un file mai referenziato da nessun
       // annuncio non è raggiungibile se non da chi ne conosce già l'URL. La
       // pulizia dei file orfani è manutenzione, non parte di questa fase.
-      if (uscente) URL.revokeObjectURL(uscente.anteprima);
+      //
+      // Solo le anteprime `blob:` vanno revocate. Quelle riusate dalla cantina
+      // sono URL pubblici del bucket `annunci`: revocarle non fa danno ma non
+      // significa niente, e il controllo dice a chi legge che le due specie di
+      // anteprima esistono davvero.
+      if (uscente?.anteprima.startsWith("blob:")) URL.revokeObjectURL(uscente.anteprima);
       return f.filter((_, i) => i !== indice);
     });
   }, []);
@@ -323,6 +379,15 @@ export function useSellWizard({
       return;
     }
 
+    // Un prezzo ereditato da un annuncio precedente non si pubblica finché il
+    // venditore non lo guarda. Il campo è già compilato — il lavoro che si
+    // risparmia resta risparmiato — ma la conferma è un gesto suo, perché fra
+    // il vecchio annuncio e questo può essere passato molto tempo.
+    if (prezzoPrecedente !== null && !prezzoConfermato) {
+      toast.error("Conferma il prezzo prima di pubblicare.");
+      return;
+    }
+
     setInviando(true);
     try {
       const bozza = await assicuraBozza();
@@ -345,7 +410,16 @@ export function useSellWizard({
     } finally {
       setInviando(false);
     }
-  }, [aggiungiInCantina, assicuraBozza, isVendita, onNavigate, listingService, onCantinaCambiata]);
+  }, [
+    aggiungiInCantina,
+    assicuraBozza,
+    isVendita,
+    onNavigate,
+    listingService,
+    onCantinaCambiata,
+    prezzoPrecedente,
+    prezzoConfermato,
+  ]);
 
   const salvaBozza = useCallback(async () => {
     if (!isVendita) {
@@ -398,6 +472,10 @@ export function useSellWizard({
     fotoInCorso,
     caricaFoto,
     rimuoviFoto,
+    riusoInCorso,
+    prezzoPrecedente,
+    prezzoConfermato,
+    setPrezzoConfermato,
     inviando,
     bozzaId,
     pubblica,
