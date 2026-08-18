@@ -1337,19 +1337,29 @@ Quello che il lavoro fissa in modo vincolante:
   che è possibile proprio perché lo stato è terminale e libera la bottiglia dall'indice. Renderlo
   non terminale cambierebbe il significato di quell'indice, quindi è una decisione di dominio con
   una sessione propria.
-- **La modifica di un annuncio attivo è SQL scritto e NON applicato**, in
-  `supabase/queries/04_PROPOSTA_NON_ESEGUIRE_MODIFICA_ANNUNCIO_ATTIVO.sql`. Sta lì e non sotto
-  `supabase/migrations/` perché il merge è il gate di deploy (7.10) **e** il ramo di preview
-  eseguirebbe il file all'apertura della PR, cioè prima della revisione. Stessa cartella e stessa
-  ragione della proposta di fixture della 12a e di quella sul consenso.
-- **Quella proposta contiene DUE statement, e il secondo non era nella richiesta.**
-  `listings_scrittura_social_guard` è montato **BEFORE INSERT soltanto** su `listings`, mentre su
+- **La modifica di un annuncio attivo è applicata**, dalla migrazione
+  `supabase/migrations/20260819090000_annuncio_modifica_attivo.sql`, autorizzata **per nome e con
+  entrambi gli statement insieme** dalla sessione di coordinamento del **19 agosto 2026**. Il file
+  è nato come proposta in `supabase/queries/` e stava lì per una ragione che resta valida per la
+  prossima: sotto `supabase/migrations/` il merge lo applica da sé (7.10) **e** il ramo di preview
+  lo eseguirebbe all'apertura della PR, cioè prima della revisione. Una proposta cambia cartella
+  quando la revisione è avvenuta, non prima — è la stessa collocazione, e la stessa ragione, della
+  proposta di fixture della 12a e di quella sul consenso, che invece restano lì.
+- **Quella migrazione contiene DUE statement, e il secondo non era nella richiesta.**
+  `listings_scrittura_social_guard` era montato **BEFORE INSERT soltanto** su `listings`, mentre su
   `messages` e sulle tre tabelle dei club copre anche l'UPDATE. È stato innocuo finché
   `listings_update_own` si fermava alle bozze, che nessun estraneo vede. Con `attivo` ammesso, un
   utente **sospeso al primo livello** potrebbe riscrivere prezzo e testo di un annuncio pubblico —
-  la scrittura social che la 7.6b gli toglie. **Chi autorizza solo il primo statement autorizza un
-  buco nella 9b.** Il corpo della funzione non si tocca: ricava l'attore da `seller_id` via
-  `to_jsonb(new)`, che su UPDATE c'è identico.
+  la scrittura social che la 7.6b gli toglie. **Chi applicasse solo il primo statement aprirebbe un
+  buco nella 9b**, e per questo non si dividono: un test lo pretende dal file. Il corpo della
+  funzione non si tocca: ricava l'attore da `seller_id` via `to_jsonb(new)`, che su UPDATE c'è
+  identico.
+- **`STATI_MODIFICABILI` e quella policy si muovono insieme, e un test lo impone in entrambe le
+  direzioni.** Un pulsante che scrive dove la policy non fa passare non solleva niente: l'UPDATE
+  aggiorna **zero righe e riporta `ok`**. È il difetto peggiore della categoria, perché è
+  silenzioso — e non è teoria: la corsa di controllo della griglia lo ha visto succedere ai casi
+  `[3]` e `[4]`, che passavano **anche senza** la migrazione. A misurare la modifica è `[3b]`, che
+  rilegge il valore. Chi tocca quei casi non tolga `[3b]` credendo che `[3]` gli basti.
 - **Le foto di una bottiglia si COPIANO da `cantina` ad `annunci`, non si referenziano.** `cantina`
   è privato e si legge con URL firmato; `annunci` è pubblico e `listings.immagini` viene ricomposto
   in URL pubblico da `urlImmagine()`. Un percorso di `cantina` dentro `listings.immagini` darebbe
@@ -1365,9 +1375,31 @@ Quello che il lavoro fissa in modo vincolante:
   l'annuncio non ne ha (`cellar-service.ts:258-264`); nella scheda pubblica no, perché
   `public_listings` non ha ripiego e `rigaAWine()` mette il segnaposto. **Quella è la radice, e il
   riuso la chiude alla sorgente** — non riscrive gli annunci già nati vuoti, che restano da
-  correggere a mano o con il comando di modifica quando la Parte B sarà autorizzata.
+  correggere a mano o con il comando di modifica, che dal 19 agosto 2026 funziona anche su un annuncio attivo.
 - **Il prezzo ereditato si propone compilato ma non si pubblica senza conferma.** Fra il vecchio
   annuncio e il nuovo può essere passato molto tempo: il lavoro risparmiato resta risparmiato, la
   decisione resta del venditore.
-- `MIN_TESTS` 433 → **450**. Un test lega `STATI_MODIFICABILI` alla proposta non applicata: il
-  giorno in cui la policy si allarga senza aggiornare l'elenco, o viceversa, protesta.
+- **La griglia è stata ESEGUITA prima del merge, e la corsa di controllo conta quanto quella
+  verde.** `supabase/tests/annuncio_modifica_attivo.sql` è girata su un **branch di anteprima
+  Supabase** creato per questo, nato dalle trenta migrazioni di produzione, **PostgreSQL 17.6** —
+  la famiglia del progetto reale, non il 15.19 locale della 12b/12c. **Due corse: 7 PASSA /
+  5 FALLISCE senza la migrazione, 12 PASSA / 0 FALLISCE con essa.** La prima serve a escludere una
+  griglia verde in entrambi i casi, che non misurerebbe nulla, ed è quella che ha trovato i due
+  difetti descritti sopra e qui sotto. **Sul progetto reale non è girata**, e resta
+  un'autorizzazione separata per griglia: questa **scrive**. Chi apre una griglia nuova prenda
+  questo giro come forma — applicare su un ramo usa-e-getta e misurare due volte costa un branch a
+  ore e chiude la regola della 7e senza toccare la produzione.
+- **Una griglia SQL non vede la classe di difetto della #52, e questa nemmeno.** Una sessione
+  Postgres diretta non passa da PostgREST: se la modifica di un annuncio attivo rispondesse `405`
+  per la volatilità di una funzione, qui sarebbe invisibile. **Il percorso del client va provato dal
+  client**, e non lo è stato.
+- `MIN_TESTS` 433 → **451**. Un test lega `STATI_MODIFICABILI` alla migrazione **in entrambe le
+  direzioni** — protesta sia se l'elenco si allarga senza il file sia se il file arriva senza
+  l'elenco — e un altro pretende che la griglia porti in testa i numeri di **entrambe** le corse,
+  così che nessuno la riporti a «mai eseguita» per distrazione.
+- **Debito noto accettato, non risolto**: un annuncio attivo modificato **non ritorna in revisione**.
+  Accettato dalla sessione di coordinamento del 19 agosto 2026 per questa migrazione, con la
+  richiesta esplicita di scriverlo invece di lasciarlo implicito; se le modifiche sostanziali debbano
+  far ripassare per approvazione è una domanda per una fase successiva. Le altre due conseguenze
+  accettate allo stesso modo: il prezzo può cambiare fra visualizzazione e checkout, e una modifica
+  non lascia traccia di cosa ci fosse prima.

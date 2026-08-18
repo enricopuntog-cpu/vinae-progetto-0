@@ -2290,19 +2290,44 @@ l'annuncio non ne ha (`cellar-service.ts:258-264`); nella scheda pubblica no, pe
 `public_listings` non ha ripiego e `rigaAWine()` mette il segnaposto. **Quello è il
 disallineamento fra card e scheda, ed è la radice del segnaposto.** Il riuso lo chiude alla
 sorgente; **non riscrive gli annunci già nati vuoti**, che restano da correggere a mano o con il
-comando di modifica quando la Parte B sarà autorizzata.
+comando di modifica, che dal 19 agosto 2026 funziona anche su un annuncio attivo.
+
+### Cosa è stato applicato e misurato
+
+- **La Parte B è applicata**, dalla migrazione
+  `supabase/migrations/20260819090000_annuncio_modifica_attivo.sql`. La sessione di coordinamento
+  del **19 agosto 2026** ha autorizzato **entrambi** gli statement insieme — la policy estesa ad
+  `attivo` e la guardia 9b rimontata sull'UPDATE — perché autorizzarne uno solo aprirebbe un buco
+  nella sospensione di primo livello.
+- `supabase/tests/annuncio_modifica_attivo.sql` **è stata eseguita** su un branch di anteprima
+  Supabase nato dalle trenta migrazioni di produzione, PostgreSQL 17.6, **prima del merge**: due
+  corse, **7 PASSA / 5 FALLISCE** senza la migrazione e **12 PASSA / 0 FALLISCE** con essa. **Sul
+  progetto reale non è girata** e resta un'autorizzazione separata per griglia, perché **scrive**.
+- **Due difetti della griglia sono emersi eseguendola, e nessuno dei due era visibile leggendola.**
+  `[3]` e `[4]` passavano **anche senza** la migrazione, perché un UPDATE che la RLS filtra a zero
+  righe riporta `ok` e non un errore — il trabocchetto che il commento di `[5]` descriveva, presente
+  in due casi che nessuno aveva guardato con quell'occhio. E `[8]` **falliva col comportamento
+  giusto**, per un `left(…, 22)` sbagliato di uno: il messaggio è «Account sospeso: …» e la
+  ventiduesima lettera è i due punti. Ora la lunghezza si ricava dal valore atteso.
+- **Una griglia SQL non può vedere la classe di difetto della #52.** Una sessione Postgres diretta
+  non passa da PostgREST, quindi un eventuale `405` da volatilità sarebbe invisibile qui: il
+  percorso del client va provato dal client, e non lo è stato.
 
 ### Cosa resta aperto
 
-- Il SQL della Parte B è **scritto e non applicato**, in
-  `supabase/queries/04_PROPOSTA_NON_ESEGUIRE_MODIFICA_ANNUNCIO_ATTIVO.sql`, e contiene **due**
-  statement: autorizzarne uno solo apre un buco nella sospensione di primo livello della 9b.
-- `supabase/tests/annuncio_modifica_attivo.sql` **non è mai stata eseguita** — nell'ambiente il
-  daemon Docker non gira e `psql` non è installato. Per la regola della 7e i suoi esiti sono
-  testo, non risultati. La griglia **scrive**.
 - **La verifica end-to-end con un account reale non è stata eseguita**: richiede una fixture la
   cui creazione è stata rifiutata dal classificatore dei permessi dell'ambiente in due sessioni
   consecutive. Ciò che è stato verificato nel browser è il percorso **anonimo**.
 - **La riattivazione di un annuncio sospeso non esiste e non è stata costruita**, per istruzione
   esplicita. Renderla possibile significa rendere `sospeso` non terminale, cioè cambiare il
   significato dell'indice di unicità: è una decisione di dominio con una sessione propria.
+- **Debito noto, accettato dalla sessione di coordinamento del 19 agosto 2026 e non risolto: un
+  annuncio attivo modificato NON ritorna in revisione.** Non esiste un ritorno automatico a
+  `in_revisione`, quindi un annuncio già approvato che viene riscritto resta approvato. La sessione
+  ha chiesto esplicitamente di **scriverlo** invece di lasciarlo implicito nel commento della
+  migrazione: se le modifiche sostanziali debbano far ripassare per approvazione è una domanda per
+  una fase successiva, non per questo lavoro. Accettate allo stesso modo, e nello stesso momento,
+  le altre due conseguenze: fra il caricamento della scheda e `order_checkout_reserve` il prezzo può
+  cambiare — un ordine **già creato** è immune, `orders.prezzo_cents` è materializzata, uno che
+  **sta nascendo** no — e una modifica **non lascia traccia** di cosa ci fosse prima, perché
+  `audit_log` è della moderazione.
