@@ -2312,6 +2312,23 @@ comando di modifica, che dal 19 agosto 2026 funziona anche su un annuncio attivo
 - **Una griglia SQL non può vedere la classe di difetto della #52.** Una sessione Postgres diretta
   non passa da PostgREST, quindi un eventuale `405` da volatilità sarebbe invisibile qui: il
   percorso del client va provato dal client, e non lo è stato.
+- **La PR è mersa in squash come `1783779` il 18 agosto 2026 alle 17:45:13 UTC, e la migrazione è
+  in produzione.** Ledger riletto **tre** volte: 30 righe prima del lavoro, 30 subito prima del
+  merge, **31** dopo — ultima `20260819090000 annuncio_modifica_attivo`, coincidente con i 31 file
+  su `origin/main`. **Distribuita dalla corsa innescata da questo merge**, non da una successiva:
+  `Supabase Preview` sul commit di merge è partito **+33 s** dopo ed è `success`. Non è il caso
+  della #49, dove quel check era assente e tre migrazioni restarono fuori dalla produzione per
+  cinque ore e mezza.
+- **Che l'oggetto sia cambiato è misurato sul progetto reale, non dedotto dalla riga di ledger** —
+  lezione della #52. `listings_update_own` ha `using` con i tre stati, `with_check` invariato a
+  `seller_id = auth.uid()`, le policy su `listings` sono ancora **tre**, il trigger è
+  `BEFORE INSERT OR UPDATE`, e il **`GRANT UPDATE` per `authenticated` è fermo alle otto colonne di
+  contenuto**: `stato` non c'è. Quest'ultimo è il controllo che conta di più, perché è il GRANT e
+  non la policy a fermare un venditore che provasse a scriversi lo stato.
+- **Decisione 7.10 misurata una decima volta**: le sei Edge Function da 33/32/32 e 19/19/19 a
+  **34/33/33 e 20/20/20**, un solo `updated_at`, **44,5 s** dopo il merge. Non ha mai saltato un
+  giro, e la PR non tocca una riga sotto `supabase/functions/`.
+
 
 ### Cosa resta aperto
 
