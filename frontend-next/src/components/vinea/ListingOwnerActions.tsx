@@ -141,16 +141,6 @@ export function ListingOwnerActions({ annuncio }: { annuncio: AnnuncioProprietar
         </p>
       ) : null}
 
-      {annuncio.stato === "attivo" && !annuncio.modificabile ? (
-        <p className="mt-3 flex gap-2 text-sm text-muted-foreground">
-          <Info className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
-            La modifica di un annuncio già pubblicato non è ancora attiva. Per cambiarne i dati
-            oggi si rimuove dalla vendita e si pubblica un annuncio nuovo dalla Cantina.
-          </span>
-        </p>
-      ) : null}
-
       {/* --- Rimozione dalla vendita -------------------------------------- */}
       <Dialog open={sospensioneAperta} onOpenChange={setSospensioneAperta}>
         <DialogContent>

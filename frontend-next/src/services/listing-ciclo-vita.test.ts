@@ -38,7 +38,9 @@ const STATI: ListingStato[] = [
   "rifiutato",
 ];
 
-const PROPOSTA_RLS = "supabase/queries/04_PROPOSTA_NON_ESEGUIRE_MODIFICA_ANNUNCIO_ATTIVO.sql";
+const MIGRAZIONE_RLS = "supabase/migrations/20260819090000_annuncio_modifica_attivo.sql";
+const PROPOSTA_VECCHIA =
+  "supabase/queries/04_PROPOSTA_NON_ESEGUIRE_MODIFICA_ANNUNCIO_ATTIVO.sql";
 
 const rigaMinima = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -89,45 +91,73 @@ describe("stati del ciclo di vita di un annuncio", () => {
     expect([...STATI_SOSPENDIBILI]).toEqual(["attivo"]);
   });
 
-  it("NON considera modificabile un annuncio attivo finche' la RLS non e' applicata", () => {
-    // Questo test e' scritto per fallire il giorno in cui la proposta viene
-    // applicata SENZA aggiornare l'elenco, e viceversa. Le due cose devono
-    // muoversi insieme: un pulsante che scrive dove la policy non fa passare
-    // torna indietro con zero righe modificate e nessun errore, cioe' il
-    // peggiore dei modi di non funzionare.
-    expect([...STATI_MODIFICABILI]).toEqual(["bozza", "modifiche_richieste"]);
-    expect(STATI_MODIFICABILI).not.toContain("attivo");
+  it("considera modificabile un annuncio attivo, come la policy applicata", () => {
+    // Questo caso e la policy si muovono INSIEME, in entrambe le direzioni: e'
+    // scritto per fallire sia se l'elenco si allarga senza la migrazione sia se
+    // la migrazione arriva senza l'elenco. Un pulsante che scrive dove la
+    // policy non fa passare torna indietro con zero righe modificate e nessun
+    // errore, cioe' il peggiore dei modi di non funzionare - ed e' esattamente
+    // cio' che la corsa di controllo della griglia ha visto succedere ai casi
+    // [3] e [4] prima della migrazione.
+    expect([...STATI_MODIFICABILI]).toEqual(["bozza", "modifiche_richieste", "attivo"]);
+    // I sei stati esclusi restano esclusi, e nominarli qui vale piu' di contarli:
+    // 'riservato' perche' un acquisto e' in corso, 'in_revisione' perche' la
+    // moderazione la sta leggendo, i quattro terminali perche' sono fatti
+    // avvenuti.
+    for (const fuori of ["in_revisione", "riservato", "sospeso", "scaduto", "venduto", "rifiutato"]) {
+      expect(STATI_MODIFICABILI).not.toContain(fuori);
+    }
   });
 
-  it("tiene la proposta RLS fuori da supabase/migrations/", () => {
-    // Sotto migrations/ il merge la applicherebbe da se' al progetto reale
-    // (7.10) e il ramo di preview la eseguirebbe all'apertura della PR:
-    // esattamente cio' che l'autorizzazione separata deve poter fermare.
-    expect(existsSync(join(radice, PROPOSTA_RLS))).toBe(true);
-    const proposta = leggiRepo(PROPOSTA_RLS);
-    expect(proposta).toInclude("NON ESEGUIRE SENZA AUTORIZZAZIONE ESPLICITA");
-    expect(proposta).toInclude("'bozza', 'modifiche_richieste', 'attivo'");
+  it("tiene la migrazione RLS sotto supabase/migrations/, non piu' fra le proposte", () => {
+    // Il file e' nato in supabase/queries/ perche' sotto migrations/ il merge
+    // lo avrebbe applicato da se' (7.10) e il ramo di preview lo avrebbe
+    // eseguito all'apertura della PR, cioe' prima della revisione. La revisione
+    // c'e' stata il 19 agosto 2026, quindi ha cambiato cartella - e la vecchia
+    // copia non deve restare in giro a far credere che sia ancora una proposta.
+    expect(existsSync(join(radice, MIGRAZIONE_RLS))).toBe(true);
+    expect(existsSync(join(radice, PROPOSTA_VECCHIA))).toBe(false);
+    const migrazione = leggiRepo(MIGRAZIONE_RLS);
+    expect(migrazione).toInclude("'bozza', 'modifiche_richieste', 'attivo'");
+    // Un file sotto migrations/ non deve piu' dire di se' che non va eseguito.
+    expect(migrazione).not.toInclude("NON ESEGUIRE");
   });
 
   it("porta con se' la guardia 9b sull'UPDATE, non solo l'allentamento", () => {
-    // Meta' della proposta che nessuno aveva chiesto: senza questa,
+    // Meta' del lavoro che nessuno aveva chiesto: senza questa,
     // `listings_update_own` esteso ad 'attivo' lascerebbe a un utente sospeso
-    // al primo livello la riscrittura di un annuncio pubblico.
-    const proposta = leggiRepo(PROPOSTA_RLS);
-    expect(proposta).toInclude("before insert or update on public.listings");
-    expect(proposta).toInclude("private.scrittura_social_guard()");
+    // al primo livello la riscrittura di un annuncio pubblico. I due statement
+    // sono inseparabili, e questo caso e' cio' che impedisce a una modifica
+    // futura di togliere il secondo lasciando il primo.
+    const migrazione = leggiRepo(MIGRAZIONE_RLS);
+    expect(migrazione).toInclude("before insert or update on public.listings");
+    expect(migrazione).toInclude("private.scrittura_social_guard()");
   });
 
   it("non allarga il GRANT UPDATE per colonna", () => {
     // La difesa contro un venditore che si scrive lo stato e' il GRANT, non la
-    // policy: se la proposta lo toccasse, il `with check` che non nomina lo
+    // policy: se la migrazione lo toccasse, il `with check` che non nomina lo
     // stato smetterebbe di essere sicuro.
-    const proposta = senzaCommentiSql(leggiRepo(PROPOSTA_RLS));
-    expect(proposta).not.toMatch(/grant\s+update/i);
-    expect(proposta).not.toMatch(/\brevoke\b/i);
+    const migrazione = senzaCommentiSql(leggiRepo(MIGRAZIONE_RLS));
+    expect(migrazione).not.toMatch(/grant\s+update/i);
+    expect(migrazione).not.toMatch(/\brevoke\b/i);
     // Gli unici due statement eseguibili sono la policy e il trigger.
-    expect(proposta).toInclude('create policy "listings_update_own"');
-    expect(proposta).toInclude("create trigger listings_scrittura_social_guard");
+    expect(migrazione).toInclude('create policy "listings_update_own"');
+    expect(migrazione).toInclude("create trigger listings_scrittura_social_guard");
+  });
+
+  it("registra nella griglia l'esito reale, non un atteso", () => {
+    // Regola della Fase 7e: una griglia versionata e mai eseguita non e' una
+    // prova. Questa e' girata su un branch di anteprima prima del merge, e il
+    // file lo dice con i numeri di entrambe le corse - quella di controllo
+    // serve a escludere una griglia verde con e senza la migrazione, che non
+    // misurerebbe nulla.
+    const griglia = leggiRepo("supabase/tests/annuncio_modifica_attivo.sql");
+    expect(griglia).toInclude("12 PASSA / 0 FALLISCE");
+    expect(griglia).toInclude("7 PASSA / 5 FALLISCE");
+    expect(griglia).not.toInclude("NON E' MAI STATA ESEGUITA");
+    // Il numero magico che sbagliava di uno non deve tornare.
+    expect(griglia).toInclude("length('42501|Account sospeso')");
   });
 });
 

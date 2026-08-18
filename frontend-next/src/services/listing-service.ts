@@ -445,18 +445,26 @@ export type ListingStato =
 export const STATI_SOSPENDIBILI: readonly ListingStato[] = ["attivo"];
 
 /**
- * Gli stati che `listings_update_own` lascia modificare **oggi**.
+ * Gli stati che `listings_update_own` lascia modificare.
  *
- * `attivo` non c'è: la policy in produzione lo esclude, e la migrazione che lo
- * aggiungerebbe è scritta ma **non applicata** — sta in
- * `supabase/queries/04_PROPOSTA_NON_ESEGUIRE_MODIFICA_ANNUNCIO_ATTIVO.sql` in
- * attesa di autorizzazione esplicita, perché allenta un controllo di sicurezza
- * già in produzione. Quando quella migrazione sarà applicata, `attivo` si
- * aggiunge qui e il comando di modifica compare anche sugli annunci pubblici.
- * Fino ad allora l'interfaccia non promette una scrittura che tornerebbe
- * indietro con zero righe modificate.
+ * `attivo` è qui dal 19 agosto 2026, quando la sessione di coordinamento ha
+ * autorizzato per nome i **due** statement di
+ * `supabase/migrations/20260819090000_annuncio_modifica_attivo.sql`: la policy
+ * estesa e la guardia 9b rimontata sull'UPDATE. Vanno insieme — il primo senza
+ * il secondo lascerebbe a un utente sospeso al primo livello la riscrittura di
+ * un annuncio pubblico.
+ *
+ * Questo elenco e quella policy si muovono **insieme**, e un test lo pretende:
+ * un pulsante che scrive dove la policy non fa passare torna indietro con zero
+ * righe modificate e nessun errore, cioè il peggiore dei modi di non
+ * funzionare. Gli altri sei stati restano fuori per ragioni distinte, scritte
+ * nella §2 di quella migrazione.
  */
-export const STATI_MODIFICABILI: readonly ListingStato[] = ["bozza", "modifiche_richieste"];
+export const STATI_MODIFICABILI: readonly ListingStato[] = [
+  "bozza",
+  "modifiche_richieste",
+  "attivo",
+];
 
 /** Etichetta e tono con cui la pagina del proprietario nomina lo stato. */
 export const ETICHETTA_STATO: Record<ListingStato, string> = {

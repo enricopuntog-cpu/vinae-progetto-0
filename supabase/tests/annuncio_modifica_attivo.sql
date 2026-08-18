@@ -1,29 +1,58 @@
 -- Modifica di un annuncio pubblicato - griglia COMPORTAMENTALE.
--- Eseguire DOPO aver applicato la proposta
---   supabase/queries/04_PROPOSTA_NON_ESEGUIRE_MODIFICA_ANNUNCIO_ATTIVO.sql
--- (o la migrazione che ne nascera'), non prima: senza quella, i casi [3], [4]
--- e [8] falliscono per costruzione, ed e' il loro modo di dire che la
--- modifica non e' ancora attiva.
+-- Eseguire DOPO la migrazione supabase/migrations/20260819090000_annuncio_
+-- modifica_attivo.sql, non prima: senza quella cinque casi falliscono, ed e' il
+-- loro modo di dire che la modifica non e' ancora attiva.
 --
--- STATO DI ESECUZIONE. Dichiarato per primo perche' e' la cosa piu' importante
--- che questo file dice di se stesso, e perche' la regola di questo repository
--- (Fase 7e) e' che UNA GRIGLIA VERSIONATA E MAI ESEGUITA NON E' UNA PROVA:
+-- STATO DI ESECUZIONE. Dichiarato per primo perche' la regola di questo
+-- repository (Fase 7e) e' che UNA GRIGLIA VERSIONATA E MAI ESEGUITA NON E' UNA
+-- PROVA. Questa e' stata ESEGUITA:
 --
---   QUESTA GRIGLIA NON E' MAI STATA ESEGUITA. Ne' in locale ne' sul progetto
---   reale. Nell'ambiente in cui e' stata scritta il daemon Docker non era in
---   esecuzione e `psql` non e' installato, quindi non e' stato possibile
---   ripetere quello che la 12b/12c aveva fatto - applicare le migrazioni dal
---   vuoto su un PostgreSQL usa-e-getta e far girare i casi.
+--   DOVE: su un branch di anteprima Supabase creato per questo
+--   (`griglia-modifica-attivo`, project_ref qjxhzabueivvguhliqde), nato dalle
+--   trenta migrazioni di produzione e poi cancellato. PostgreSQL 17.6, cioe'
+--   la stessa famiglia del progetto reale - non il 15.19 locale su cui girarono
+--   le griglie della 12b/12c.
+--   QUANDO: 19 agosto 2026, prima del merge e quindi prima dell'applicazione in
+--   produzione, perche' in questo repository il merge e' il gate di deploy.
 --
---   Gli esiti scritti qui sotto come "atteso" sono quindi TESTO, non
---   RISULTATI. La 12b/12c e' il precedente che dice quanto vale la
---   differenza: quattro esecuzioni - 25/42, 45/47, 46/47, 47/47 - e nessuno
---   dei fallimenti era visibile leggendo il file.
+--   DUE ESECUZIONI, e la prima conta quanto la seconda:
+--     PRIMA della migrazione   ->  7 PASSA / 5 FALLISCE
+--     DOPO  la migrazione      -> 12 PASSA / 0 FALLISCE
 --
---   ESEGUIRLA SUL PROGETTO REALE E' UN'AUTORIZZAZIONE SEPARATA, PER GRIGLIA e
---   non per progetto. Questa SCRIVE: crea utenti, vini, bottiglie e annunci.
---   Non e' della categoria di 8_fix_pre_request_read_only, che non scrive
---   nulla ed e' l'unica del repository di cui lo si possa dire senza distinguo.
+--   La corsa di controllo serve a escludere una griglia verde in entrambi i
+--   casi, che non misurerebbe nulla. Ha anche mostrato due cose che leggere il
+--   file non aveva mostrato:
+--
+--   (1) [3] e [4] PASSANO ANCHE SENZA LA MIGRAZIONE, ed e' un difetto loro. Un
+--       UPDATE che la RLS filtra a zero righe riporta 'ok', non un errore - il
+--       trabocchetto che il commento di [5] descrive, presente in [3] e [4]
+--       senza che nessuno l'avesse notato scrivendoli. A misurare la modifica
+--       e' [3b], che rilegge il valore: senza la migrazione dice 5000, con la
+--       migrazione 5500. Chi cambia questi casi non tolga [3b] credendo che
+--       [3] gli basti.
+--   (2) [8] FALLIVA CON LA MIGRAZIONE APPLICATA E IL COMPORTAMENTO GIUSTO, per
+--       un `left(..., 22)` sbagliato di uno: il messaggio vero e' «Account
+--       sospeso: ...» e la ventiduesima lettera e' i due punti. Difetto della
+--       griglia, non della migrazione - [8b] mostrava intanto che il prezzo era
+--       rimasto a 5500 invece di 9999, cioe' che il rifiuto era avvenuto. Ora
+--       la lunghezza si ricava dal valore atteso e non puo' piu' disallinearsi.
+--
+--   SUL PROGETTO REALE NON E' MAI GIRATA, ed e' un'autorizzazione separata per
+--   griglia: questa SCRIVE - crea utenti, vini, bottiglie e annunci. Non e'
+--   della categoria di 8_fix_pre_request_read_only, che non scrive nulla ed e'
+--   l'unica del repository di cui lo si possa dire senza distinguo.
+--
+--   UNA COSA CHE QUESTA GRIGLIA NON PUO' VEDERE, per la stessa ragione per cui
+--   la Fase 8 passava verde col difetto in produzione: una sessione Postgres
+--   diretta non passa da PostgREST. Se la modifica di un annuncio attivo
+--   rispondesse 405 per la volatilita' di una funzione, come nella #52, qui
+--   sarebbe invisibile. Il percorso client va provato dal client.
+--
+--   ADATTAMENTO DI TRASPORTO, dichiarato per onesta': eseguita via
+--   `execute_sql`, che non e' psql, quindi la meta-istruzione
+--   `\set ON_ERROR_STOP off` non e' stata inviata e le due select finali sono
+--   state unite in una che restituisce lo stesso contenuto in JSON. I CASI SONO
+--   QUELLI DI QUESTO FILE, lettera per lettera.
 --
 -- COSA VERIFICA, IN UNA RIGA: che dopo l'allentamento un venditore possa
 -- riscrivere il CONTENUTO del proprio annuncio attivo e nient'altro - non
@@ -220,7 +249,14 @@ select pg_temp.registra(
   '[8] un venditore SOSPESO non modifica il proprio annuncio attivo',
   '42501|Account sospeso',
   left(pg_temp.come('00000000-0000-4000-8000-0000000000a1',
-    $q$update public.listings set prezzo_cents = 9999 where slug = 'griglia-annuncio-a'$q$), 22));
+    $q$update public.listings set prezzo_cents = 9999 where slug = 'griglia-annuncio-a'$q$),
+       -- La lunghezza si ricava dal valore atteso, non si conta a mano. Scritta
+       -- come `22` era sbagliata di uno - il messaggio vero e' «Account
+       -- sospeso: ...» e la ventiduesima lettera e' i due punti - e il caso
+       -- FALLIVA con la migrazione applicata e il comportamento giusto.
+       -- Trovato eseguendo, non leggendo, ed e' la ragione per cui qui non c'e'
+       -- piu' un numero da tenere allineato a mano.
+       length('42501|Account sospeso')));
 
 select pg_temp.registra(
   '[8b] e il prezzo non si e'' mosso',

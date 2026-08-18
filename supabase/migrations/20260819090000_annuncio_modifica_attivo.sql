@@ -1,23 +1,25 @@
 -- ===========================================================================
--- PROPOSTA DI MIGRAZIONE - NON ESEGUIRE SENZA AUTORIZZAZIONE ESPLICITA
 -- Modifica di un annuncio gia' pubblicato: listings_update_own + guardia 9b
 -- ===========================================================================
 --
--- QUESTO FILE NON E' STATO ESEGUITO DA NESSUNA PARTE e non deve esserlo finche
--- non arriva un'autorizzazione esplicita in sessione.
---
--- DOVE STA, E PERCHE' NON IN supabase/migrations/.
--- Perche' li' il merge e' il gate di deploy (decisione 7.10) e la PR lo
--- applicherebbe da sola al progetto reale, che e' esattamente cio' che
--- l'autorizzazione separata deve poter fermare. In piu' Supabase apre un ramo
--- di preview per ogni PR e vi esegue le migrazioni all'apertura: sotto
--- migrations/ questo testo girerebbe su un database prima ancora della
--- revisione. Stessa cartella e stessa ragione della proposta di fixture della
--- 12a e di quella sul consenso ai termini.
+-- AUTORIZZATA PER NOME, ENTRAMBI GLI STATEMENT INSIEME, dalla sessione di
+-- coordinamento del 19 agosto 2026. Questo testo e' nato come proposta in
+-- supabase/queries/04_PROPOSTA_NON_ESEGUIRE_MODIFICA_ANNUNCIO_ATTIVO.sql, e
+-- stava li' per una ragione precisa: sotto migrations/ il merge lo avrebbe
+-- applicato da se' al progetto reale (decisione 7.10) e il ramo di preview lo
+-- avrebbe eseguito all'apertura della PR, cioe' prima della revisione. La
+-- revisione c'e' stata, e per questo il file ha cambiato cartella.
 --
 -- NON E' UN'AGGIUNTA ADDITIVA NEUTRA. E' l'allentamento di un controllo di
--- sicurezza gia' in produzione: oggi un annuncio pubblico non e' modificabile,
--- domani lo sarebbe. Va letto sapendo cosa apre, non solo cosa risolve.
+-- sicurezza gia' in produzione: fino a oggi un annuncio pubblico non era
+-- modificabile dal suo venditore, da qui in avanti lo e'. Chi rilegge questo
+-- file dopo mesi lo legga sapendo cosa apre, non solo cosa risolve.
+--
+-- I DUE STATEMENT SONO INSEPARABILI, e non per ordine ma per sicurezza. Il 5.1
+-- allenta la policy; il 5.2 rimonta la guardia 9b sull'UPDATE. Il primo senza
+-- il secondo lascerebbe a un utente sospeso al primo livello la riscrittura di
+-- un annuncio PUBBLICO, cioe' esattamente la scrittura social che la decisione
+-- 7.6b gli toglie. L'autorizzazione del 19 agosto 2026 li nomina insieme.
 --
 -- ---------------------------------------------------------------------------
 -- 1. LO STATO DI FATTO, MISURATO SUL PROGETTO REALE IL 19 AGOSTO 2026
@@ -128,9 +130,11 @@
 --
 -- (c) LA MODERAZIONE NON VIENE RIAPERTA. Un annuncio gia' approvato che viene
 --     riscritto resta approvato: non esiste un ritorno automatico a
---     'in_revisione'. Se questo sia accettabile e' una domanda per la
---     moderazione (Fase 9), non per questo file.
---
+--     'in_revisione'. ACCETTATO PER QUESTA MIGRAZIONE dalla sessione di
+--     coordinamento del 19 agosto 2026, e registrato come DEBITO NOTO in
+--     CHANGES.log invece di restare implicito qui: se le modifiche sostanziali
+--     debbano far ripassare per approvazione e' una domanda per una fase
+--     successiva, non per questo file.
 -- Nessuno dei tre e' risolto qui, e nessuno dei tre e' un motivo per non
 -- applicare: sono le conseguenze che l'autorizzazione si assume.
 --
@@ -138,10 +142,10 @@
 -- 5. IL TESTO ESATTO
 -- ---------------------------------------------------------------------------
 --
--- Se autorizzato, questo diventa un file nuovo sotto supabase/migrations/ con
--- timestamp piu' recente dell'ultimo applicato (l'ultimo e'
--- 20260818090000_phase_8_fix_pre_request_read_only). Nessuna migrazione
--- esistente viene modificata: sono tutte congelate.
+-- Il timestamp e' piu' recente dell'ultimo applicato al progetto reale
+-- (20260818090000_phase_8_fix_pre_request_read_only, trentesima riga del
+-- ledger letta il 19 agosto 2026 prima di scrivere questa riga). Nessuna
+-- migrazione esistente viene modificata: sono tutte congelate.
 
 begin;
 
@@ -203,7 +207,14 @@ commit;
 --   -- Se qui compare `stato`, qualcosa e' andato storto e va fermato.
 --
 -- La griglia con i casi di comportamento (proprio vs altrui, colonne di
--- autorita', utente sospeso) e' in supabase/tests/, e come ogni griglia di
--- questo repository la sua esecuzione sul progetto reale e' un'autorizzazione
--- separata, per griglia. Questa scrive: non e' della classe della
+-- autorita', utente sospeso) e' supabase/tests/annuncio_modifica_attivo.sql, ed
+-- E' STATA ESEGUITA PRIMA DEL MERGE, cioe' prima che questo file arrivasse in
+-- produzione: su un branch di anteprima Supabase nato dalle trenta migrazioni
+-- di produzione, PostgreSQL 17.6. Due corse - 7/12 senza questa migrazione,
+-- 12 PASSA / 0 FALLISCE con essa - e i tre controlli di sola lettura qui sopra
+-- verificati sullo stesso branch. Il dettaglio, compresi due difetti della
+-- griglia che solo l'esecuzione ha mostrato, sta nell'intestazione di quel file.
+--
+-- SUL PROGETTO REALE la griglia non e' girata e resta un'autorizzazione
+-- separata, per griglia: questa scrive, e non e' della classe della
 -- 8_fix_pre_request_read_only, che non scrive nulla.
