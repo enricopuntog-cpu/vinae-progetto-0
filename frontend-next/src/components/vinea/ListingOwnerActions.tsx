@@ -29,6 +29,7 @@ import {
   ETICHETTA_STATO,
   type AnnuncioProprietario,
 } from "@/services/listing-service";
+import { AVVISO_RIMOZIONE_IRREVERSIBILE, EFFETTO_RIMOZIONE } from "@/lib/annunci/rimozione";
 import type { Wine } from "@/data/wines";
 
 const CONDIZIONI: Wine["condizione"][] = ["Perfetto", "Ottimo", "Buono"];
@@ -154,12 +155,9 @@ export function ListingOwnerActions({ annuncio }: { annuncio: AnnuncioProprietar
               qui costa una riga; scoprirlo dopo costa la fiducia.
             */}
             <DialogDescription>
-              Sparisce dalla ricerca e dalle schede di chi compra. Prezzo, fotografie e
-              descrizione non vengono cancellati e restano visibili a te su questa pagina. La
-              bottiglia torna libera in Cantina.
+              {EFFETTO_RIMOZIONE}
               <strong className="mt-2 block font-medium text-foreground">
-                Non potrai rimettere in vendita questo annuncio: per venderla di nuovo dovrai
-                crearne uno nuovo dalla Cantina.
+                {AVVISO_RIMOZIONE_IRREVERSIBILE}
               </strong>
             </DialogDescription>
           </DialogHeader>

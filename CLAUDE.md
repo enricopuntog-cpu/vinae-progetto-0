@@ -161,7 +161,13 @@ The full picture is in `docs/ROADMAP_V1.md`, `docs/MIGRATION_PHASE_1_BACKLOG.md`
   follows Phase 11 directly in dependency order. Phase 12 is structured in three checkpoints
   **12a/12b/12c**, detailed in that phase's organizational document, **not yet written in this
   repo**; **checkpoint 12a opened on 17 August 2026** on `migration/phase-12a-club-readonly`
-  (draft PR #48), 12b and 12c are not started. That renumbering shipped **before** the phase
+  (PR #48), and **12b + 12c shipped together on 17 August 2026** (PR #49) — this line used to say
+  they were "not started", which stopped being true the same day and was still here on
+  **18 August 2026**, contradicting two sections further down this same file. What remains true is
+  narrower and is the only part to carry forward: **`public.clubs` has 0 rows**, so the club
+  surface has schema, RLS and a working club-specific reporting mechanism, and **no real
+  destination** — re-measured on the real project on 18 August 2026, detail in the 12b+12c section
+  below. That renumbering shipped **before** the phase
   branch was opened — it is the prerequisite that frees the number, not the phase itself.
   Unlike 11 August, **no frozen file keeps the old number**: searching "Fase 12"/"Phase 12" in
   `supabase/migrations/*.sql` and `docs/superpowers/plans/` returns **zero results**, verified
@@ -873,8 +879,30 @@ What 12a fixes in place, and that later checkpoints inherit:
 
 #### Checkpoint 12b + 12c — club content and its moderation. One PR, never two merges.
 
-Open on `migration/phase-12bc-club-content`, draft
-[PR #49](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/49), 17 August 2026.
+Shipped as [PR #49](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/49), squash `3a6ba69`,
+17 August 2026 — **merged, and in production**: its three migrations are rows 27-29 of the ledger,
+distributed 5h 27m later by the merge of PR #50 (see the PR #51 section).
+
+**Re-measured on the real project on 18 August 2026**, because a stale line elsewhere in this file
+still called 12b/12c "not started" and that had to be settled by measurement rather than by reading:
+all five club tables exist as ordinary tables with RLS on — `clubs` (9 columns), `club_memberships`
+(4), `club_posts` (13), `club_post_risposte` (8), `club_post_like` (3) — and **all five hold zero
+rows**. The reporting mechanism is **club-specific and live**, not the generic Phase 9 one:
+`segnalazione_invia` resolves the target against the real tables
+(`when 'post' then exists (select 1 from public.club_posts cp where cp.id = p_target_id)` and its
+twin on `club_post_risposte`), and both `moderazione_rimozione` and `moderazione_ripristino` carry a
+dedicated `elsif v_report.target_tipo in ('post','commento')` branch. **A measurement trap worth
+inheriting**: the body of `moderazione_rimozione` does **not** contain the string `club_posts` — the
+table reference lives in the delegated helper `private.moderazione_contenuto_club_transizione`, so a
+`like '%club_posts%'` probe there returns a false negative.
+
+**What this does not change**: the admission of club content writing stays **ammessa per eccezione**
+— the 16 August 2026 decision is untouched as a decision, only its progress status moved. And
+because `clubs` is empty, there is still **no real destination** for a club post: any later work
+that wants one needs the seed fixture
+(`supabase/queries/02_PROPOSTA_NON_ESEGUIRE_SEED_CLUB_FASE_12A.sql`), which is a separate
+authorization nobody has given.
+
 **12b and 12c never separate in merge.** 12b introduces user-writable public text; 12c
 introduces the way to report and remove it. Merging 12b alone would open a window — of a length
 decided by when 12c gets approved — in which anyone publishes on a public surface and nobody can
@@ -1350,7 +1378,7 @@ Quello che il lavoro fissa in modo vincolante:
   una sessione propria.
 - **La modifica di un annuncio attivo è applicata**, dalla migrazione
   `supabase/migrations/20260819090000_annuncio_modifica_attivo.sql`, autorizzata **per nome e con
-  entrambi gli statement insieme** dalla sessione di coordinamento del **19 agosto 2026**. Il file
+  entrambi gli statement insieme** dalla sessione di coordinamento del **18 agosto 2026**. Il file
   è nato come proposta in `supabase/queries/` e stava lì per una ragione che resta valida per la
   prossima: sotto `supabase/migrations/` il merge lo applica da sé (7.10) **e** il ramo di preview
   lo eseguirebbe all'apertura della PR, cioè prima della revisione. Una proposta cambia cartella
@@ -1386,7 +1414,7 @@ Quello che il lavoro fissa in modo vincolante:
   l'annuncio non ne ha (`cellar-service.ts:258-264`); nella scheda pubblica no, perché
   `public_listings` non ha ripiego e `rigaAWine()` mette il segnaposto. **Quella è la radice, e il
   riuso la chiude alla sorgente** — non riscrive gli annunci già nati vuoti, che restano da
-  correggere a mano o con il comando di modifica, che dal 19 agosto 2026 funziona anche su un annuncio attivo.
+  correggere a mano o con il comando di modifica, che dal 18 agosto 2026 funziona anche su un annuncio attivo.
 - **Il prezzo ereditato si propone compilato ma non si pubblica senza conferma.** Fra il vecchio
   annuncio e il nuovo può essere passato molto tempo: il lavoro risparmiato resta risparmiato, la
   decisione resta del venditore.
@@ -1409,7 +1437,7 @@ Quello che il lavoro fissa in modo vincolante:
   l'elenco — e un altro pretende che la griglia porti in testa i numeri di **entrambe** le corse,
   così che nessuno la riporti a «mai eseguita» per distrazione.
 - **Debito noto accettato, non risolto**: un annuncio attivo modificato **non ritorna in revisione**.
-  Accettato dalla sessione di coordinamento del 19 agosto 2026 per questa migrazione, con la
+  Accettato dalla sessione di coordinamento del 18 agosto 2026 per questa migrazione, con la
   richiesta esplicita di scriverlo invece di lasciarlo implicito; se le modifiche sostanziali debbano
   far ripassare per approvazione è una domanda per una fase successiva. Le altre due conseguenze
   accettate allo stesso modo: il prezzo può cambiare fra visualizzazione e checkout, e una modifica

@@ -2248,10 +2248,87 @@ mai stato eseguito. Provare il *comportamento* richiede di eseguire la griglia s
 progetto reale, che è un'autorizzazione separata e per griglia — e quella
 **scrive**.
 
-## Ciclo di vita dell'annuncio — PR #54, 19 agosto 2026
+
+## Apertura di una bottiglia e degustazione — PR #56, 18 agosto 2026
+
+Hardening, **non una fase nuova**, sul precedente di #45, #50, #52 e #54. Draft, base
+`7638f86`, **zero file sotto `supabase/migrations/`**. Gruppo 2 del lavoro Cantina/Annunci,
+**Parti A e B**; la Parte C resta fuori (vedi in fondo, la ragione e' cambiata).
+
+### L'asimmetria fra le due funzioni, misurata sui corpi vivi
+
+`bottiglia_apri` rifiuta se la bottiglia ha un annuncio in **cinque** stati — `bozza`,
+`in_revisione`, `modifiche_richieste`, `attivo`, `riservato`. `listing_sospendi` ne accetta
+**uno solo**: `if v_stato <> 'attivo' then raise ... 'Si puo' sospendere solo un annuncio
+attivo.'`. E non esiste una seconda uscita: `listing_scadi`, l'unico altro comando che il
+venditore possa eseguire, pretende `attivo` **e per giunta** una scadenza gia' passata.
+
+Quindi per **quattro dei cinque** stati nessun comando del venditore libera la bottiglia.
+Il percorso guidato copre `attivo` e per gli altri **spiega senza offrire un pulsante**:
+un pulsante che promette una rimozione e poi fallisce e' peggio dell'errore onesto che
+c'era prima. Per `riservato` il messaggio dice che di mezzo c'e' l'ordine di qualcun altro.
+
+### Dove finisce `nota`, e perche' serve una migrazione
+
+Il parametro `p_nota` **non** ha una colonna di degustazione: **sovrascrive `note_personali`**,
+che e' la nota generica della bottiglia, scrivibile dal client e usata per altro. Registrare
+li' la degustazione **cancella quello che c'era senza dirlo**: e' perdita di dati. E non
+esiste una data di apertura — `apertura_pianificata` e' *programmata*, di tipo `date` e
+scrivibile dal client; `updated_at` si muove a ogni modifica.
+
+Il SQL che chiude entrambi sta in `supabase/migrations/20260819120000_degustazione_nota.sql`
+ed **e' applicato**: autorizzato per nome dalla sessione di coordinamento del 18 agosto 2026
+**come blocco unico** — le due colonne e il cambio di comportamento non si separano, e un test
+lo pretende dal file. Era una proposta in `supabase/queries/` e ha cambiato cartella **quando
+la revisione e' avvenuta, non prima**. E' additiva davvero, misurato: su `bottle_units`
+`authenticated` ha un GRANT **di tabella in sola lettura** (quindi le colonne nuove si leggono
+subito) mentre l'UPDATE e' **per colonna** (quindi nascono non scrivibili dal client, come vuole
+la terza regola di esposizione). **Non aggiunge `grant update`**, e un test lo impedisce.
+Nessun travaso serve: 11 bottiglie, tutte `chiusa`, zero con `note_personali`.
+
+La griglia `supabase/tests/degustazione_nota.sql` e' stata **eseguita due volte** sul branch di
+anteprima della PR #56 (PostgreSQL 17.6): **8 PASSA / 7 FALLISCE senza la migrazione, 15 PASSA /
+0 FALLISCE con essa**. Il caso `[04]` e' la prova positiva del difetto — si aspettava
+`Regalo di Marco` e ha visto `Sorprendente, ancora giovanissimo.` — e il caso `[10b]` ha mostrato
+una cosa che nessuno aveva previsto: aprire **senza** nota non sovrascriveva niente, quindi il
+difetto mordeva **solo quando una nota c'era**, cioe' esattamente cio' che la schermata di
+degustazione invita a fare.
+
+Un secondo difetto e' emerso applicando, e stava nell'interfaccia: la pagina leggeva il commento
+da `personalNotes`, cioe' dalla **conseguenza** del difetto. Corretto il database e lasciata la
+pagina com'era, li' sarebbe comparsa la nota di cantina spacciata per commento di degustazione.
+Le due meta' viaggiano insieme, e due test lo tengono fermo — uno lega client e migrazione **in
+entrambe le direzioni**, l'altro vieta alla pagina di tornare a `bottiglia.personalNotes`.
+
+### Cosa e' verificato e cosa no
+
+`bun test` 481/0, `MIN_TESTS` 451 → 481, typecheck e lint puliti, build con la rotta
+`/cantina/[bottleId]/degustazione` registrata e caricata davvero nel browser. **I flussi
+autenticati non sono stati esercitati** e **il percorso del client non e' stato provato dal
+client**: una griglia SQL non passa da PostgREST e non vedrebbe mai un `405` da volatilita'.
+
+### La Parte C, e perche' la ragione dell'esclusione e' cambiata
+
+La formulazione «manca la 12c» **non e' piu' vera**: 12b e 12c sono in produzione con un
+meccanismo di segnalazione **specifico** per i contenuti dei club. La ragione vera e' che
+**`public.clubs` ha 0 righe**. Dettaglio completo nella voce della 12b/12c piu' sopra.
+## Ciclo di vita dell'annuncio — PR #54, 18 agosto 2026
+
+**Correzione di data, 18 agosto 2026.** Questa sezione e le voci di `CHANGES.log` che le
+corrispondono erano state datate «19 agosto 2026» per un errore della sessione che le scrisse.
+La data vera e' il **18 agosto 2026**: concordano orologio di sistema, `git log` e GitHub, dove
+lo squash `1783779` porta **18-08-2026 17:45:13 UTC**. La tabella della #54 in
+`05_INDICE_PR_E_FONTI.md` conteneva gia' la contraddizione in chiaro — colonna data `19-08-2026`
+accanto a uno squash `18-08-2026` — ed e' stata allineata.
+**Quattro occorrenze restano sbagliate di proposito**, nei commenti di
+`supabase/migrations/20260819090000_annuncio_modifica_attivo.sql`: quella migrazione e' spinta e
+quindi **congelata**, si corregge solo con un file nuovo, e una data in un commento non vale una
+migrazione. **Il nome del file e la riga di ledger restano `20260819090000`** anche loro: il
+timestamp di una migrazione e' un identificatore ordinale, non una data di calendario, e
+rinominarlo sfaserebbe il ledger dai file. Chi legge `20260819…` non ne deduca una data.
 
 Hardening, **non una fase nuova**. Nessuna sessione organizzativa ha assegnato un numero a
-questo lavoro e nel repository non ne esiste traccia: cercato «19 agosto 2026», «Fase 14»,
+questo lavoro e nel repository non ne esiste traccia: cercato «Fase 14»,
 «Phase 14» e «ciclo-vita-annuncio» in `docs/**` e `CONTESTO_IA/**`, zero risultati. Precedenti
 dello stesso trattamento: #45 (beta), #50 (Fasi 5a/5b), #52 (Fase 8).
 
@@ -2290,13 +2367,13 @@ l'annuncio non ne ha (`cellar-service.ts:258-264`); nella scheda pubblica no, pe
 `public_listings` non ha ripiego e `rigaAWine()` mette il segnaposto. **Quello è il
 disallineamento fra card e scheda, ed è la radice del segnaposto.** Il riuso lo chiude alla
 sorgente; **non riscrive gli annunci già nati vuoti**, che restano da correggere a mano o con il
-comando di modifica, che dal 19 agosto 2026 funziona anche su un annuncio attivo.
+comando di modifica, che dal 18 agosto 2026 funziona anche su un annuncio attivo.
 
 ### Cosa è stato applicato e misurato
 
 - **La Parte B è applicata**, dalla migrazione
   `supabase/migrations/20260819090000_annuncio_modifica_attivo.sql`. La sessione di coordinamento
-  del **19 agosto 2026** ha autorizzato **entrambi** gli statement insieme — la policy estesa ad
+  del **18 agosto 2026** ha autorizzato **entrambi** gli statement insieme — la policy estesa ad
   `attivo` e la guardia 9b rimontata sull'UPDATE — perché autorizzarne uno solo aprirebbe un buco
   nella sospensione di primo livello.
 - `supabase/tests/annuncio_modifica_attivo.sql` **è stata eseguita** su un branch di anteprima
@@ -2338,7 +2415,7 @@ comando di modifica, che dal 19 agosto 2026 funziona anche su un annuncio attivo
 - **La riattivazione di un annuncio sospeso non esiste e non è stata costruita**, per istruzione
   esplicita. Renderla possibile significa rendere `sospeso` non terminale, cioè cambiare il
   significato dell'indice di unicità: è una decisione di dominio con una sessione propria.
-- **Debito noto, accettato dalla sessione di coordinamento del 19 agosto 2026 e non risolto: un
+- **Debito noto, accettato dalla sessione di coordinamento del 18 agosto 2026 e non risolto: un
   annuncio attivo modificato NON ritorna in revisione.** Non esiste un ritorno automatico a
   `in_revisione`, quindi un annuncio già approvato che viene riscritto resta approvato. La sessione
   ha chiesto esplicitamente di **scriverlo** invece di lasciarlo implicito nel commento della

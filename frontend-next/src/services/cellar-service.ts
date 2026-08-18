@@ -29,6 +29,7 @@ import type {
 import type { Wine } from "@/data/wines";
 import { rigaAMeta, type RigaMetaVino } from "@/services/wine-meta";
 import { urlImmagine } from "@/services/listing-service";
+import { STATI_BLOCCANTI_APERTURA } from "@/lib/cantina/apertura";
 import type {
   CellarService,
   DatiCantina,
@@ -78,6 +79,7 @@ type RigaAmbiente = {
 };
 
 type RigaAnnuncio = {
+  id: string;
   slug: string;
   stato: string;
   prezzo_cents: number;
@@ -110,6 +112,8 @@ type RigaBottiglia = {
   visibilita: "privata" | "cantina_pubblica";
   apertura_pianificata: string | null;
   note_personali: string;
+  degustazione_nota: string;
+  degustazione_at: string | null;
   prezzo_visibilita: CellarBottle["priceVisibility"];
   override_finestra_inizio: number | null;
   override_finestra_fine: number | null;
@@ -137,6 +141,7 @@ const COLONNE_AMBIENTI = `
 
 const COLONNE_BOTTIGLIE = `
   id, stato, visibilita, apertura_pianificata, note_personali, prezzo_visibilita,
+  degustazione_nota, degustazione_at,
   override_finestra_inizio, override_finestra_fine,
   override_apice_inizio, override_apice_fine,
   override_preferenza, override_nota, ceduta_at, immagini, created_at,
@@ -148,7 +153,7 @@ const COLONNE_BOTTIGLIE = `
     temperatura_servizio, decantazione_minuti, calice, occasione, abbinamenti
   ),
   cellar_slots ( module_id, riga, colonna ),
-  listings ( slug, stato, prezzo_cents, prezzo_mercato_cents, condizione,
+  listings ( id, slug, stato, prezzo_cents, prezzo_mercato_cents, condizione,
              conservazione, storia, degustazione, immagini, tag, created_at )
 `;
 
@@ -245,7 +250,31 @@ function rigaABottiglia(riga: RigaBottiglia, slugVino: string): CellarBottle {
     priceVisibility: riga.prezzo_visibilita,
     storageLocationId: slot ? idPosizione(slot.module_id, slot.riga, slot.colonna) : undefined,
     personalNotes: riga.note_personali || undefined,
+    // Distinta da `personalNotes`, e la distinzione è il punto della migrazione
+    // 20260819120000: fino a quel file `bottiglia_apri` scriveva la nota di
+    // degustazione *dentro* `note_personali`, cancellando quello che c'era. Chi
+    // legge il commento da `personalNotes` sta leggendo la conseguenza di quel
+    // difetto, non il commento.
+    degustazioneNota: riga.degustazione_nota || undefined,
+    degustazioneAt: riga.degustazione_at ?? undefined,
+    annuncioBloccante: annuncioCheBlocca(annunci) ?? undefined,
   };
+}
+
+/**
+ * L'annuncio che `bottiglia_apri` conterebbe come ostacolo, se ce n'è uno.
+ *
+ * Distinto da `annuncioRappresentativo`, che sceglie il più vivo o il più
+ * recente per mostrarne prezzo e foto: qui interessa solo se esiste una riga in
+ * uno dei cinque stati che fanno fallire l'apertura. L'indice
+ * `listings_un_solo_annuncio_non_terminale` garantisce che non ce ne sia più di
+ * uno, quindi il primo trovato è *il* bloccante e non uno a caso.
+ */
+function annuncioCheBlocca(annunci: RigaAnnuncio[]): { id: string; stato: string } | null {
+  const bloccante = annunci.find((a) =>
+    (STATI_BLOCCANTI_APERTURA as readonly string[]).includes(a.stato),
+  );
+  return bloccante ? { id: bloccante.id, stato: bloccante.stato } : null;
 }
 
 type Venditore = Wine["venditore"];

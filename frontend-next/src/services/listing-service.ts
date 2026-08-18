@@ -420,7 +420,7 @@ export function createListingService(client: SupabaseClient | null): ListingServ
 }
 
 // ---------------------------------------------------------------------------
-// Lettura del proprietario (fix ciclo di vita annuncio, 19 agosto 2026)
+// Lettura del proprietario (fix ciclo di vita annuncio, 18 agosto 2026)
 // ---------------------------------------------------------------------------
 
 /**
@@ -447,7 +447,7 @@ export const STATI_SOSPENDIBILI: readonly ListingStato[] = ["attivo"];
 /**
  * Gli stati che `listings_update_own` lascia modificare.
  *
- * `attivo` è qui dal 19 agosto 2026, quando la sessione di coordinamento ha
+ * `attivo` è qui dal 18 agosto 2026, quando la sessione di coordinamento ha
  * autorizzato per nome i **due** statement di
  * `supabase/migrations/20260819090000_annuncio_modifica_attivo.sql`: la policy
  * estesa e la guardia 9b rimontata sull'UPDATE. Vanno insieme — il primo senza

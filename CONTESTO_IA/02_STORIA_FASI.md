@@ -806,17 +806,39 @@ lista di cutover e o lo sfondo viene applicato davvero, o il pannello va tolto.
 
 ### Fase 12 — Club/Community
 
-**Stato:** non iniziata. Nessun branch.
+**Stato:** i tre checkpoint sono **mersi e in produzione**. 12a con la PR #48
+(squash `e2132ee`, 17 agosto 2026), 12b e 12c insieme con la PR #49 (squash
+`3a6ba69`, stesso giorno). Questa voce diceva «non iniziata. Nessun branch» ed è
+rimasta così fino al **18 agosto 2026**: la correzione è qui perché la
+formulazione vecchia ha fatto escludere una funzionalità per la ragione
+sbagliata, prima che qualcuno andasse a misurare.
 
 Ha preso il numero 12 il **16 agosto 2026**, perché segue direttamente la Fase 11
 nell'ordine di dipendenza; il cutover si è spostato alla 13. È strutturata in
 **tre checkpoint, 12a/12b/12c**, dettagliati nel **documento organizzativo della
-fase**, che **non è ancora scritto in questo repo**: il contenuto dei tre
-checkpoint non si deduce da questa voce.
+fase**, che **non è ancora scritto in questo repo**.
 
-La voce registra numero e struttura e **non apre la fase**: nessuna funzionalità
-della Fase 12 è ammessa per nome qui, e l'ammissione appartiene alla sessione che
-apre davvero il branch della fase.
+**Misurato sul progetto reale il 18 agosto 2026**, non dedotto: tutte e cinque le
+tabelle esistono come tabelle vere (`relkind = 'r'`) con RLS attiva — `clubs` (9
+colonne), `club_memberships` (4), `club_posts` (13), `club_post_risposte` (8),
+`club_post_like` (3) — e **tutte e cinque hanno zero righe**. Il meccanismo di
+segnalazione è **specifico per i contenuti dei club** e funzionante, non quello
+generico della Fase 9: `segnalazione_invia` risolve il bersaglio contro le
+tabelle vere, e `moderazione_rimozione` e `moderazione_ripristino` hanno
+entrambe un ramo dedicato per `post` e `commento`. **Trappola di misura da
+ereditare**: il corpo di `moderazione_rimozione` non contiene la stringa
+`club_posts`, perché il riferimento sta nell'helper
+`private.moderazione_contenuto_club_transizione` — cercarla lì con un `like` dà
+un falso negativo.
+
+La scrittura di contenuti pubblici nei club resta **ammessa per eccezione** e per
+nome: la decisione del 16 agosto 2026 non è toccata *come decisione*, è cambiato
+soltanto lo stato di avanzamento. Quello che **resta vero** della vecchia
+formulazione, ed è l'unica parte da portarsi avanti, è che **`clubs` ha 0 righe**:
+non esiste nessuna destinazione reale per un post: chi volesse scriverne uno
+passa dalla fixture di seed
+(`supabase/queries/02_PROPOSTA_NON_ESEGUIRE_SEED_CLUB_FASE_12A.sql`), che è
+un'autorizzazione separata e mai data.
 
 ### Fase 13 — cutover
 

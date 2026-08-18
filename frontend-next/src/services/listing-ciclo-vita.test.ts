@@ -113,7 +113,7 @@ describe("stati del ciclo di vita di un annuncio", () => {
     // Il file e' nato in supabase/queries/ perche' sotto migrations/ il merge
     // lo avrebbe applicato da se' (7.10) e il ramo di preview lo avrebbe
     // eseguito all'apertura della PR, cioe' prima della revisione. La revisione
-    // c'e' stata il 19 agosto 2026, quindi ha cambiato cartella - e la vecchia
+    // c'e' stata il 18 agosto 2026, quindi ha cambiato cartella - e la vecchia
     // copia non deve restare in giro a far credere che sia ancora una proposta.
     expect(existsSync(join(radice, MIGRAZIONE_RLS))).toBe(true);
     expect(existsSync(join(radice, PROPOSTA_VECCHIA))).toBe(false);
