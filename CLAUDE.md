@@ -1306,6 +1306,17 @@ Quello che il lavoro fissa in modo vincolante:
 
 ### Ciclo di vita dell'annuncio: rimozione, modifica, riuso delle foto — PR #54
 
+**Mersa in squash come `1783779` il 18 agosto 2026 alle 17:45:13 UTC**, e la migrazione è in
+produzione. Tre job CI `success`, `mergeable: MERGEABLE` e `mergeStateStatus: CLEAN` letti **sul
+commit di testa** `4fb898d`. Il ledger passa da **30 a 31 righe** — ultima
+`20260819090000 annuncio_modifica_attivo`, coincidente con i 31 file su `main` — e a distribuirla
+è stata la corsa innescata da **questo** merge: `Supabase Preview` è partito **+33 s** dopo ed è
+`success`. **Non è il caso della #49.** Che l'oggetto sia cambiato è misurato e non dedotto dalla
+riga di ledger, com'è la lezione della #52: `using` con i tre stati, `with_check` invariato, tre
+policy, trigger `BEFORE INSERT OR UPDATE`, e `GRANT UPDATE` per `authenticated` **fermo alle otto
+colonne di contenuto**. Le sei Edge Function sono ripartite insieme — 34/33/33 e 20/20/20, un solo
+`updated_at`, **44,5 s** dopo il merge: **decima** misura della 7.10, mai saltata.
+
 Hardening, **non una fase nuova**: va registrata come nota, come la #45 per la beta, la #50 per
 le Fasi 5a/5b e la #52 per la Fase 8. Nessuna sessione organizzativa ha assegnato un numero a
 questo lavoro, e nel repository non ne esiste traccia — cercato e verificato, non assunto.
