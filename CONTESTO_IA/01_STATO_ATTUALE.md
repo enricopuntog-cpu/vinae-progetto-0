@@ -2248,10 +2248,23 @@ mai stato eseguito. Provare il *comportamento* richiede di eseguire la griglia s
 progetto reale, che è un'autorizzazione separata e per griglia — e quella
 **scrive**.
 
-## Ciclo di vita dell'annuncio — PR #54, 19 agosto 2026
+## Ciclo di vita dell'annuncio — PR #54, 18 agosto 2026
+
+**Correzione di data, 18 agosto 2026.** Questa sezione e le voci di `CHANGES.log` che le
+corrispondono erano state datate «19 agosto 2026» per un errore della sessione che le scrisse.
+La data vera e' il **18 agosto 2026**: concordano orologio di sistema, `git log` e GitHub, dove
+lo squash `1783779` porta **18-08-2026 17:45:13 UTC**. La tabella della #54 in
+`05_INDICE_PR_E_FONTI.md` conteneva gia' la contraddizione in chiaro — colonna data `19-08-2026`
+accanto a uno squash `18-08-2026` — ed e' stata allineata.
+**Quattro occorrenze restano sbagliate di proposito**, nei commenti di
+`supabase/migrations/20260819090000_annuncio_modifica_attivo.sql`: quella migrazione e' spinta e
+quindi **congelata**, si corregge solo con un file nuovo, e una data in un commento non vale una
+migrazione. **Il nome del file e la riga di ledger restano `20260819090000`** anche loro: il
+timestamp di una migrazione e' un identificatore ordinale, non una data di calendario, e
+rinominarlo sfaserebbe il ledger dai file. Chi legge `20260819…` non ne deduca una data.
 
 Hardening, **non una fase nuova**. Nessuna sessione organizzativa ha assegnato un numero a
-questo lavoro e nel repository non ne esiste traccia: cercato «19 agosto 2026», «Fase 14»,
+questo lavoro e nel repository non ne esiste traccia: cercato «Fase 14»,
 «Phase 14» e «ciclo-vita-annuncio» in `docs/**` e `CONTESTO_IA/**`, zero risultati. Precedenti
 dello stesso trattamento: #45 (beta), #50 (Fasi 5a/5b), #52 (Fase 8).
 
@@ -2290,13 +2303,13 @@ l'annuncio non ne ha (`cellar-service.ts:258-264`); nella scheda pubblica no, pe
 `public_listings` non ha ripiego e `rigaAWine()` mette il segnaposto. **Quello è il
 disallineamento fra card e scheda, ed è la radice del segnaposto.** Il riuso lo chiude alla
 sorgente; **non riscrive gli annunci già nati vuoti**, che restano da correggere a mano o con il
-comando di modifica, che dal 19 agosto 2026 funziona anche su un annuncio attivo.
+comando di modifica, che dal 18 agosto 2026 funziona anche su un annuncio attivo.
 
 ### Cosa è stato applicato e misurato
 
 - **La Parte B è applicata**, dalla migrazione
   `supabase/migrations/20260819090000_annuncio_modifica_attivo.sql`. La sessione di coordinamento
-  del **19 agosto 2026** ha autorizzato **entrambi** gli statement insieme — la policy estesa ad
+  del **18 agosto 2026** ha autorizzato **entrambi** gli statement insieme — la policy estesa ad
   `attivo` e la guardia 9b rimontata sull'UPDATE — perché autorizzarne uno solo aprirebbe un buco
   nella sospensione di primo livello.
 - `supabase/tests/annuncio_modifica_attivo.sql` **è stata eseguita** su un branch di anteprima
@@ -2338,7 +2351,7 @@ comando di modifica, che dal 19 agosto 2026 funziona anche su un annuncio attivo
 - **La riattivazione di un annuncio sospeso non esiste e non è stata costruita**, per istruzione
   esplicita. Renderla possibile significa rendere `sospeso` non terminale, cioè cambiare il
   significato dell'indice di unicità: è una decisione di dominio con una sessione propria.
-- **Debito noto, accettato dalla sessione di coordinamento del 19 agosto 2026 e non risolto: un
+- **Debito noto, accettato dalla sessione di coordinamento del 18 agosto 2026 e non risolto: un
   annuncio attivo modificato NON ritorna in revisione.** Non esiste un ritorno automatico a
   `in_revisione`, quindi un annuncio già approvato che viene riscritto resta approvato. La sessione
   ha chiesto esplicitamente di **scriverlo** invece di lasciarlo implicito nel commento della

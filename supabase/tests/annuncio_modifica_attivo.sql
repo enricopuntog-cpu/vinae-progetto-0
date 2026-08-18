@@ -12,7 +12,7 @@
 --   trenta migrazioni di produzione e poi cancellato. PostgreSQL 17.6, cioe'
 --   la stessa famiglia del progetto reale - non il 15.19 locale su cui girarono
 --   le griglie della 12b/12c.
---   QUANDO: 19 agosto 2026, prima del merge e quindi prima dell'applicazione in
+--   QUANDO: 18 agosto 2026, prima del merge e quindi prima dell'applicazione in
 --   produzione, perche' in questo repository il merge e' il gate di deploy.
 --
 --   DUE ESECUZIONI, e la prima conta quanto la seconda:

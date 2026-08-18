@@ -1350,7 +1350,7 @@ Quello che il lavoro fissa in modo vincolante:
   una sessione propria.
 - **La modifica di un annuncio attivo è applicata**, dalla migrazione
   `supabase/migrations/20260819090000_annuncio_modifica_attivo.sql`, autorizzata **per nome e con
-  entrambi gli statement insieme** dalla sessione di coordinamento del **19 agosto 2026**. Il file
+  entrambi gli statement insieme** dalla sessione di coordinamento del **18 agosto 2026**. Il file
   è nato come proposta in `supabase/queries/` e stava lì per una ragione che resta valida per la
   prossima: sotto `supabase/migrations/` il merge lo applica da sé (7.10) **e** il ramo di preview
   lo eseguirebbe all'apertura della PR, cioè prima della revisione. Una proposta cambia cartella
@@ -1386,7 +1386,7 @@ Quello che il lavoro fissa in modo vincolante:
   l'annuncio non ne ha (`cellar-service.ts:258-264`); nella scheda pubblica no, perché
   `public_listings` non ha ripiego e `rigaAWine()` mette il segnaposto. **Quella è la radice, e il
   riuso la chiude alla sorgente** — non riscrive gli annunci già nati vuoti, che restano da
-  correggere a mano o con il comando di modifica, che dal 19 agosto 2026 funziona anche su un annuncio attivo.
+  correggere a mano o con il comando di modifica, che dal 18 agosto 2026 funziona anche su un annuncio attivo.
 - **Il prezzo ereditato si propone compilato ma non si pubblica senza conferma.** Fra il vecchio
   annuncio e il nuovo può essere passato molto tempo: il lavoro risparmiato resta risparmiato, la
   decisione resta del venditore.
@@ -1409,7 +1409,7 @@ Quello che il lavoro fissa in modo vincolante:
   l'elenco — e un altro pretende che la griglia porti in testa i numeri di **entrambe** le corse,
   così che nessuno la riporti a «mai eseguita» per distrazione.
 - **Debito noto accettato, non risolto**: un annuncio attivo modificato **non ritorna in revisione**.
-  Accettato dalla sessione di coordinamento del 19 agosto 2026 per questa migrazione, con la
+  Accettato dalla sessione di coordinamento del 18 agosto 2026 per questa migrazione, con la
   richiesta esplicita di scriverlo invece di lasciarlo implicito; se le modifiche sostanziali debbano
   far ripassare per approvazione è una domanda per una fase successiva. Le altre due conseguenze
   accettate allo stesso modo: il prezzo può cambiare fra visualizzazione e checkout, e una modifica
