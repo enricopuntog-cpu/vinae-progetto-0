@@ -2247,3 +2247,62 @@ a **zero righe**, e nessuna con `scope = 'club'`. Il fixture dei sette club non 
 mai stato eseguito. Provare il *comportamento* richiede di eseguire la griglia sul
 progetto reale, che è un'autorizzazione separata e per griglia — e quella
 **scrive**.
+
+## Ciclo di vita dell'annuncio — PR #54, 19 agosto 2026
+
+Hardening, **non una fase nuova**. Nessuna sessione organizzativa ha assegnato un numero a
+questo lavoro e nel repository non ne esiste traccia: cercato «19 agosto 2026», «Fase 14»,
+«Phase 14» e «ciclo-vita-annuncio» in `docs/**` e `CONTESTO_IA/**`, zero risultati. Precedenti
+dello stesso trattamento: #45 (beta), #50 (Fasi 5a/5b), #52 (Fase 8).
+
+### Fatti misurati sul progetto reale, tutti in sola lettura
+
+| Cosa | Misura |
+| --- | --- |
+| `listings_update_own` prima del lavoro | `(seller_id = auth.uid()) AND (stato = ANY (ARRAY['bozza','modifiche_richieste']))` — la precondizione, confermata parola per parola |
+| Policy su `public.listings` | **Tre**, non quattro: `listings_insert_own`, `listings_select_own`, `listings_update_own`. **`listings_select_pubblici` NON esiste** |
+| `listings_select_own` | `seller_id = auth.uid()`, **senza filtro di stato** — il proprietario raggiunge la propria riga in qualunque stato |
+| Grant di `anon` su `public.listings` | **Nessuno**. Una lettura senza sessione risponde `42501`, non "zero righe" |
+| `GRANT UPDATE` di `authenticated` | Otto colonne di contenuto. `stato`, `published_at`, `expires_at`, `seller_id` **fuori** |
+| `listings_un_solo_annuncio_non_terminale` | Copre `bozza, in_revisione, modifiche_richieste, attivo, riservato`. **`sospeso` è fuori** → terminale |
+| `listing_pubblica` | `if v_stato not in ('bozza','modifiche_richieste') then raise ... P0001` → non riparte da `sospeso` |
+| Funzioni che portano ad `attivo` | Solo `listing_pubblica`, `order_checkout_reserve`, `order_checkout_release`. **Nessuna raggiungibile da `sospeso`** |
+| `listings_scrittura_social_guard` | `BEFORE INSERT` **soltanto** — mentre su `messages` e sulle tabelle dei club copre anche l'UPDATE |
+| FK da `listings` a `profiles` | **Tre**: `seller_id`, `reserved_by`, `stato_aggiornato_da` → l'innesto PostgREST deve nominare il vincolo |
+| `orders.prezzo_cents` | `is_generated = NEVER` — colonna materializzata, non una lettura dell'annuncio: un ordine esistente è immune a una modifica successiva |
+| Bucket | `annunci` pubblico, `cantina` privato, entrambi 5 MB e quattro MIME |
+| `listing_bottle_units` | **Nessun grant** a `anon`/`authenticated`: la vista ne conta le righe solo perché è `security_invoker = off` |
+
+### Il difetto delle foto, misurato sui dati e non ipotizzato
+
+`sabbioni-i-rifugi-2017` è l'**unico** annuncio del progetto creato davvero da un utente
+attraverso il wizard — gli altri nove sono dati di prova della 6a con percorsi `/images/…`.
+
+| | Valore |
+| --- | --- |
+| `listings.immagini` | `[]` |
+| `bottle_units.immagini` | `["1dfd5e75…/bea3ffa2….jpg"]` |
+| Dove sta quel file | bucket **`cantina`** (privato), 79 440 byte, creato **16-08-2026 17:28:56** |
+| Quando è nato l'annuncio | **16-08-2026 17:32:01** — tre minuti dopo |
+
+In Cantina la bottiglia si vede, perché `rigaAVino()` ripiega sulle foto di cantina quando
+l'annuncio non ne ha (`cellar-service.ts:258-264`); nella scheda pubblica no, perché
+`public_listings` non ha ripiego e `rigaAWine()` mette il segnaposto. **Quello è il
+disallineamento fra card e scheda, ed è la radice del segnaposto.** Il riuso lo chiude alla
+sorgente; **non riscrive gli annunci già nati vuoti**, che restano da correggere a mano o con il
+comando di modifica quando la Parte B sarà autorizzata.
+
+### Cosa resta aperto
+
+- Il SQL della Parte B è **scritto e non applicato**, in
+  `supabase/queries/04_PROPOSTA_NON_ESEGUIRE_MODIFICA_ANNUNCIO_ATTIVO.sql`, e contiene **due**
+  statement: autorizzarne uno solo apre un buco nella sospensione di primo livello della 9b.
+- `supabase/tests/annuncio_modifica_attivo.sql` **non è mai stata eseguita** — nell'ambiente il
+  daemon Docker non gira e `psql` non è installato. Per la regola della 7e i suoi esiti sono
+  testo, non risultati. La griglia **scrive**.
+- **La verifica end-to-end con un account reale non è stata eseguita**: richiede una fixture la
+  cui creazione è stata rifiutata dal classificatore dei permessi dell'ambiente in due sessioni
+  consecutive. Ciò che è stato verificato nel browser è il percorso **anonimo**.
+- **La riattivazione di un annuncio sospeso non esiste e non è stata costruita**, per istruzione
+  esplicita. Renderla possibile significa rendere `sospeso` non terminale, cioè cambiare il
+  significato dell'indice di unicità: è una decisione di dominio con una sessione propria.
