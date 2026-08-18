@@ -2276,12 +2276,29 @@ li' la degustazione **cancella quello che c'era senza dirlo**: e' perdita di dat
 esiste una data di apertura — `apertura_pianificata` e' *programmata*, di tipo `date` e
 scrivibile dal client; `updated_at` si muove a ogni modifica.
 
-Il SQL che chiude entrambi sta in `supabase/queries/05_PROPOSTA_NON_ESEGUIRE_DEGUSTAZIONE.sql`
-e **non e' applicato**. E' additiva davvero, misurato: su `bottle_units` `authenticated` ha
-un GRANT **di tabella in sola lettura** (quindi le colonne nuove si leggono subito) mentre
-l'UPDATE e' **per colonna** (quindi nascono non scrivibili dal client, come vuole la terza
-regola di esposizione). **Non deve aggiungere `grant update`**, e un test lo impedisce.
+Il SQL che chiude entrambi sta in `supabase/migrations/20260819120000_degustazione_nota.sql`
+ed **e' applicato**: autorizzato per nome dalla sessione di coordinamento del 18 agosto 2026
+**come blocco unico** — le due colonne e il cambio di comportamento non si separano, e un test
+lo pretende dal file. Era una proposta in `supabase/queries/` e ha cambiato cartella **quando
+la revisione e' avvenuta, non prima**. E' additiva davvero, misurato: su `bottle_units`
+`authenticated` ha un GRANT **di tabella in sola lettura** (quindi le colonne nuove si leggono
+subito) mentre l'UPDATE e' **per colonna** (quindi nascono non scrivibili dal client, come vuole
+la terza regola di esposizione). **Non aggiunge `grant update`**, e un test lo impedisce.
 Nessun travaso serve: 11 bottiglie, tutte `chiusa`, zero con `note_personali`.
+
+La griglia `supabase/tests/degustazione_nota.sql` e' stata **eseguita due volte** sul branch di
+anteprima della PR #56 (PostgreSQL 17.6): **8 PASSA / 7 FALLISCE senza la migrazione, 15 PASSA /
+0 FALLISCE con essa**. Il caso `[04]` e' la prova positiva del difetto — si aspettava
+`Regalo di Marco` e ha visto `Sorprendente, ancora giovanissimo.` — e il caso `[10b]` ha mostrato
+una cosa che nessuno aveva previsto: aprire **senza** nota non sovrascriveva niente, quindi il
+difetto mordeva **solo quando una nota c'era**, cioe' esattamente cio' che la schermata di
+degustazione invita a fare.
+
+Un secondo difetto e' emerso applicando, e stava nell'interfaccia: la pagina leggeva il commento
+da `personalNotes`, cioe' dalla **conseguenza** del difetto. Corretto il database e lasciata la
+pagina com'era, li' sarebbe comparsa la nota di cantina spacciata per commento di degustazione.
+Le due meta' viaggiano insieme, e due test lo tengono fermo — uno lega client e migrazione **in
+entrambe le direzioni**, l'altro vieta alla pagina di tornare a `bottiglia.personalNotes`.
 
 ### Cosa e' verificato e cosa no
 

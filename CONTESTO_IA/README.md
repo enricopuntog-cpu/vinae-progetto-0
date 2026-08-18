@@ -99,5 +99,13 @@ aperta, e la fase non si dichiara chiusa senza. Il **cutover è la Fase 13**, do
 due rinumerazioni — l'11 agosto 2026 da Fase 11 a Fase 12, il 16 agosto 2026 da
 Fase 12 a Fase 13 — e non è iniziato. La **Fase 12** è **Club/Community**, che ha
 preso quel numero perché segue direttamente la Fase 11 nell'ordine di dipendenza:
-non iniziata, nessun branch, tre checkpoint 12a/12b/12c dettagliati nel documento
-organizzativo della fase, non ancora scritto in questo repo.
+i suoi **tre checkpoint 12a/12b/12c sono mersi e in produzione** (PR #48 e #49,
+17 agosto 2026), con RLS attiva e un meccanismo di segnalazione **specifico** per
+i contenuti dei club già funzionante. Questa riga diceva «non iniziata, nessun
+branch» ed è stata corretta il **18 agosto 2026**, dopo una misura sul progetto
+reale. Quello che resta vero è più stretto: **tutte e cinque le tabelle dei club
+hanno zero righe**, `clubs` compresa, quindi non esiste nessuna destinazione
+reale per un post. La scrittura di contenuti nei club resta **ammessa per
+eccezione** — la decisione del 16 agosto 2026 non cambia, cambia solo lo stato di
+avanzamento. Il documento organizzativo della fase non è ancora scritto in questo
+repo.
