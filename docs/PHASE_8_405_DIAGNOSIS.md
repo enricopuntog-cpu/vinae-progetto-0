@@ -132,3 +132,77 @@ Le griglie di prova si eseguono nel **SQL Editor**, cioè in una sessione
 Postgres diretta: non passano da PostgREST, quindi non incontrano né l'hook di
 pre-richiesta né la transazione di sola lettura. Un difetto che vive
 esattamente nel tratto che le griglie non attraversano.
+
+## 9. Le due lacune aperte di `CHANGES.log`, verificate sul progetto reale
+
+Riletto il progetto invece di fidarsi della riga che le registra. Una delle due
+era descritta in modo più allarmante del vero, l'altra era semplicemente da
+fare.
+
+### 9.1 Realtime `private_only` — la riga confondeva due cose diverse
+
+`CHANGES.log:200` dice che «la restrizione Realtime `private_only` è stata
+configurata sulla sola Preview della Fase 8, mai sulla produzione». Sono due
+meccanismi distinti e vanno separati, perché stanno in due posti diversi e uno
+dei due **c'è**:
+
+**L'autorizzazione Realtime è in produzione, ed è la metà che protegge davvero
+i dati.** `realtime.messages` ha RLS attiva e **una** policy:
+
+```
+vinea_phase8_private_broadcast_select   SELECT   to authenticated
+  extension = 'broadcast' AND (
+    EXISTS (select 1 from conversation_participants cp
+            where cp.user_id = auth.uid()
+              and realtime.topic() = 'conversation:' || cp.conversation_id)
+    OR realtime.topic() = 'user:' || auth.uid() || ':notifications'
+  )
+```
+
+È scoping corretto, non un blocco: ammette esattamente i due topic legittimi —
+la conversazione di cui si è partecipanti, e le proprie notifiche — e niente
+altro. Non esiste policy di `INSERT` perché **nessun client pubblica**: i
+broadcast li emette il database con `realtime.send()` da trigger
+(`20260806224517…:398` e `:431`). Il client può solo ricevere.
+
+**La pubblicazione `supabase_realtime` ha zero tabelle.** Postgres Changes non è
+usato affatto: la Fase 8 passa solo da Broadcast. Nessun feed di riga esposto.
+
+**Quello che manca è l'interruttore di progetto `private_only`**, che vieta
+globalmente i canali *pubblici*. Vive nelle impostazioni Realtime del progetto,
+non nel database: **non è leggibile né scrivibile da SQL, e fra gli strumenti
+MCP non c'è un canale per la configurazione Realtime** — stessa situazione della
+configurazione Auth della #50, il cui canale è la dashboard con la sessione
+reale.
+
+Accenderlo **non può rompere la consegna fra le due parti di una
+conversazione**, e non è una previsione: il client apre **solo** canali privati
+— `client.realtime.setAuth()` prima di iscriversi
+(`frontend-next/src/services/phase8/realtime.ts:123`) e
+`{ config: { private: true } }` su entrambi i topic (`:131`, `:137`). Un
+interruttore che vieta i canali pubblici non tocca chi non ne apre. Il rischio
+è l'opposto di quello temuto: finché resta spento, **un canale pubblico è
+ammesso** — e un canale pubblico non passa dalla policy qui sopra.
+
+### 9.2 Le tabelle della Fase 8, rilette
+
+Prima rilettura dopo il merge del 7 agosto 2026.
+
+| tabella | RLS | policy | in `supabase_realtime` | righe |
+|---|---|---|---|---|
+| `conversations` | on | 1 | no | **0** |
+| `conversation_participants` | on | 1 | no | **0** |
+| `messages` | on | 1 | no | **0** |
+| `notifications` | on | 1 | no | **0** |
+
+Schema e chiusure come attese. **Il dato è zero ovunque**: la Fase 8 non è mai
+stata esercitata in produzione, il che è coerente con un difetto che rifiuta
+ogni chiamata da undici giorni. Per contrasto, nello stesso momento `profiles`
+ha 10 righe, `listings` 10 e `private.rate_limit_buckets` 14 — quest'ultima è
+anche la prova che il ramo di scrittura dell'hook funziona quando la
+transazione glielo permette.
+
+Conseguenza diretta sulla verifica end-to-end: **non c'è nulla da leggere**, e
+crearlo significa due utenti autenticati reali e una conversazione, cioè
+**scrittura sul progetto reale** — autorizzazione separata, per fixture, che
+questa PR non ha e non si prende.
