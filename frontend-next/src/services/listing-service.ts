@@ -344,6 +344,44 @@ export function createListingService(client: SupabaseClient | null): ListingServ
       );
     },
 
+    /**
+     * L'annuncio come lo vede il suo proprietario, in qualunque stato.
+     *
+     * `dettaglio()` legge `public_listings`, che filtra `stato = 'attivo'`:
+     * dopo una sospensione quella strada restituisce `null` anche al venditore.
+     * Questa legge la tabella, dove `listings_select_own` non guarda lo stato.
+     * Se chi chiede non è il venditore la RLS non lascia passare nessuna riga e
+     * la risposta è `null` come per un annuncio inesistente — non un errore,
+     * che direbbe a un estraneo che quell'annuncio esiste.
+     */
+    async mioAnnuncio(idOrSlug: string): Promise<AnnuncioProprietario | null> {
+      if (!client) return null;
+
+      const { data, error } = await client
+        .from("listings")
+        .select(COLONNE_PROPRIETARIO)
+        .eq(listingLookupField(idOrSlug), idOrSlug)
+        .maybeSingle();
+
+      if (error) {
+        segnalaErrore(`mioAnnuncio(${idOrSlug})`, error);
+        return null;
+      }
+      if (!data) return null;
+
+      const riga = data as unknown as RigaAnnuncioProprietario;
+      const wine = rigaProprietarioAWine(riga);
+      if (!wine) return null;
+
+      return {
+        wine,
+        stato: riga.stato,
+        immaginiPercorsi: riga.immagini ?? [],
+        modificabile: STATI_MODIFICABILI.includes(riga.stato),
+        sospendibile: STATI_SOSPENDIBILI.includes(riga.stato),
+      };
+    },
+
     /** bozza | modifiche_richieste → attivo. */
     async pubblica(id: string): Promise<Result<void>> {
       if (!client) return NESSUN_CLIENT;
@@ -365,5 +403,183 @@ export function createListingService(client: SupabaseClient | null): ListingServ
       if (!client) return NESSUN_CLIENT;
       return scrittura("scadi", async () => client.rpc("listing_scadi", { p_listing_id: id }));
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Lettura del proprietario (fix ciclo di vita annuncio, 19 agosto 2026)
+// ---------------------------------------------------------------------------
+
+/**
+ * Gli stati di `public.listing_stato`, nell'ordine dell'enum.
+ */
+export type ListingStato =
+  | "bozza"
+  | "in_revisione"
+  | "modifiche_richieste"
+  | "attivo"
+  | "riservato"
+  | "sospeso"
+  | "scaduto"
+  | "venduto"
+  | "rifiutato";
+
+/**
+ * Gli stati da cui `listing_sospendi` accetta di partire. È uno solo, e la
+ * funzione lo verifica da sé: qui serve solo a non mostrare un comando che
+ * il database rifiuterebbe.
+ */
+export const STATI_SOSPENDIBILI: readonly ListingStato[] = ["attivo"];
+
+/**
+ * Gli stati che `listings_update_own` lascia modificare **oggi**.
+ *
+ * `attivo` non c'è: la policy in produzione lo esclude, e la migrazione che lo
+ * aggiungerebbe è scritta ma **non applicata** — sta in
+ * `supabase/queries/04_PROPOSTA_NON_ESEGUIRE_MODIFICA_ANNUNCIO_ATTIVO.sql` in
+ * attesa di autorizzazione esplicita, perché allenta un controllo di sicurezza
+ * già in produzione. Quando quella migrazione sarà applicata, `attivo` si
+ * aggiunge qui e il comando di modifica compare anche sugli annunci pubblici.
+ * Fino ad allora l'interfaccia non promette una scrittura che tornerebbe
+ * indietro con zero righe modificate.
+ */
+export const STATI_MODIFICABILI: readonly ListingStato[] = ["bozza", "modifiche_richieste"];
+
+/** Etichetta e tono con cui la pagina del proprietario nomina lo stato. */
+export const ETICHETTA_STATO: Record<ListingStato, string> = {
+  bozza: "Bozza",
+  in_revisione: "In revisione",
+  modifiche_richieste: "Modifiche richieste",
+  attivo: "In vendita",
+  riservato: "Riservato",
+  sospeso: "Rimosso dalla vendita",
+  scaduto: "Scaduto",
+  venduto: "Venduto",
+  rifiutato: "Rifiutato",
+};
+
+/**
+ * Un annuncio letto dal suo proprietario, in **qualunque** stato.
+ *
+ * Serve perché `public_listings` filtra `stato = 'attivo'`: appena il venditore
+ * sospende, quella vista smette di restituire la riga e la pagina risponderebbe
+ * 404 anche a chi l'ha scritta. La policy `listings_select_own` invece non
+ * guarda lo stato — `seller_id = auth.uid()` e basta — quindi la riga è
+ * raggiungibile leggendo la tabella. Nessuno schema nuovo: i tre `GRANT SELECT`
+ * per colonna che servono (`listings`, `bottle_units`, `wines`) esistono già.
+ */
+export type AnnuncioProprietario = {
+  wine: Wine;
+  stato: ListingStato;
+  /**
+   * I percorsi grezzi dentro il bucket `annunci`, non gli URL: sono ciò che
+   * `aggiorna()` riscrive in `listings.immagini`. `wine.immagini` porta gli
+   * stessi oggetti già trasformati in URL per essere mostrati.
+   */
+  immaginiPercorsi: string[];
+  modificabile: boolean;
+  sospendibile: boolean;
+};
+
+/**
+ * Riga dell'annuncio letta dal proprietario, con i due livelli innestati.
+ *
+ * L'innesto su `profiles` **nomina il vincolo** (`listings_seller_id_fkey`) e
+ * non può farne a meno: da `listings` partono tre chiavi esterne verso
+ * `profiles` — `seller_id`, `reserved_by` e `stato_aggiornato_da` — e un
+ * innesto ambiguo non è un valore sbagliato, è un errore in faccia a chi apre
+ * la pagina.
+ */
+type RigaAnnuncioProprietario = {
+  id: string;
+  slug: string;
+  stato: ListingStato;
+  prezzo_cents: number;
+  prezzo_mercato_cents: number | null;
+  condizione: string;
+  conservazione: string;
+  storia: string;
+  degustazione: string;
+  immagini: string[] | null;
+  tag: string[] | null;
+  published_at: string | null;
+  created_at: string;
+  bottle_units: {
+    wines: {
+      id: string;
+      slug: string;
+      produttore: string;
+      nome: string;
+      annata: number;
+      regione: string;
+      denominazione: string;
+      tipo: string;
+      formato: string;
+      provenienza: "staff" | "utente";
+    } | null;
+  } | null;
+  profiles: { username: string; citta: string; avatar_url: string } | null;
+};
+
+const COLONNE_PROPRIETARIO = [
+  "id",
+  "slug",
+  "stato",
+  "prezzo_cents",
+  "prezzo_mercato_cents",
+  "condizione",
+  "conservazione",
+  "storia",
+  "degustazione",
+  "immagini",
+  "tag",
+  "published_at",
+  "created_at",
+  "bottle_units!inner(wines!inner(id,slug,produttore,nome,annata,regione,denominazione,tipo,formato,provenienza))",
+  "profiles!listings_seller_id_fkey(username,citta,avatar_url)",
+].join(",");
+
+export function rigaProprietarioAWine(riga: RigaAnnuncioProprietario): Wine | null {
+  const vino = riga.bottle_units?.wines;
+  if (!vino) return null;
+
+  const percorsi = riga.immagini ?? [];
+
+  return {
+    id: riga.slug,
+    listingId: riga.id,
+    detailHref: `/annuncio/${riga.slug}`,
+    wineSlug: vino.slug,
+    catalogSource: vino.provenienza,
+    produttore: vino.produttore,
+    nome: vino.nome,
+    annata: vino.annata,
+    regione: vino.regione,
+    denominazione: vino.denominazione,
+    tipo: vino.tipo as Wine["tipo"],
+    formato: vino.formato,
+    prezzo: centesimiInEuro(riga.prezzo_cents),
+    prezzoMercato:
+      riga.prezzo_mercato_cents === null ? undefined : centesimiInEuro(riga.prezzo_mercato_cents),
+    condizione: riga.condizione as Wine["condizione"],
+    conservazione: riga.conservazione,
+    venditore: {
+      nome: riga.profiles?.username ?? "",
+      citta: riga.profiles?.citta ?? "",
+      rating: 0,
+      valutazioni: 0,
+      verificato: false,
+      avatar: riga.profiles?.avatar_url ?? "",
+    },
+    immagini: percorsi.length > 0 ? percorsi.map(urlImmagine) : [IMMAGINE_ASSENTE],
+    storia: riga.storia,
+    degustazione: riga.degustazione,
+    // La vista pubblica conta `listing_bottle_units`; qui non si può, perché
+    // quella tabella non ha nessun GRANT verso `authenticated` — la vista ci
+    // arriva solo perché è `security_invoker = off`. Un annuncio nasce da una
+    // bottle_unit sola, che è il caso di ogni riga scritta finora.
+    disponibili: 1,
+    tag: riga.tag ?? [],
+    createdAt: riga.published_at ?? riga.created_at,
   };
 }
