@@ -2128,3 +2128,107 @@ Nessun SQL, migrazione, fixture o deploy manuale Supabase; nessuna chiamata IA,
 Stripe o logistica; `AI_ENABLED` e `PAYMENTS_ENABLED` invariati. **L'unica
 scrittura remota è la configurazione Auth qui sopra.** Nessun percorso autenticato
 è stato esercitato: resta **NON ESEGUITO**, non «passato».
+
+## La distribuzione delle migrazioni non è il merge — PR #51, 18 agosto 2026
+
+Sola documentazione, base `6b0e999`. Nasce da una verifica **post-merge** della
+#50 che ha trovato un fatto contrario a una riga già scritta in `CHANGES.log`: le
+tre migrazioni della #49 non erano state distribuite dal proprio merge. Il difetto
+era nel registro e non nel codice, e per questo ha una PR sua invece di un commit
+su `main`, che questo repository non ammette.
+
+Misurato su `repos/…/commits/<sha>/check-runs` per i tre merge della Fase 12 — non
+con `gh pr checks`, che dice soltanto che dei check esistono per la PR:
+
+| merge | quando (UTC) | corsa `Supabase Preview` sul commit di merge |
+|---|---|---|
+| #48 `e2132ee` — una migrazione | 07:58:49 | `success`, partita 07:59:19 — **+30 s** |
+| #49 `3a6ba69` — **tre** migrazioni | 17:50:10 | **assente**: quattro check, nessuno suo |
+| #50 `6b0e999` — **zero** migrazioni | 23:16:44 | `success`, 23:17:15 → 23:17:29 — **+31 s** |
+
+Le tre migrazioni 12b/12c sono quindi rimaste su `main` e **fuori dalla produzione
+per 5h 27m 05s**, e a distribuirle è stata la corsa innescata dal merge di una PR
+che non ne conteneva nessuna. Riletto dopo: ledger a **29 righe**, ultima
+`20260817121000 phase_12c_club_moderation`, coincidenti con i **29 file** di
+`supabase/migrations/` su `origin/main`. Le sei Edge Function sono ripartite
+insieme — **30/29/29 e 16/16/16**, un solo `updated_at` `2026-08-17T23:17:27.365Z`,
+**43,4 s** dopo il merge: sul redeploy la 7.10 è misurata una **nona** volta e non
+ha mai saltato un giro.
+
+**Una cautela ereditata e rispettata**: la prima lettura del ledger dopo il merge
+ha dato **26 righe** perché ha colto il progetto a metà applicazione. È lo stesso
+inganno che `CLAUDE.md` documenta per `list_edge_functions`, e vale anche per il
+ledger; riportare quella lettura avrebbe sostenuto la conclusione opposta e
+sbagliata, cioè che le migrazioni della #49 non fossero mai arrivate.
+
+Cosa cambia. La **7.10** dice «il merge **è** il gate di deploy»: resta vero per le
+Edge Function, mentre per le migrazioni fra merge e applicazione c'è una corsa che
+può non partire e riversare l'arretrato su un merge successivo qualunque.
+L'eccezione della **#47** — merge autonomo se il diff ha zero file sotto
+`supabase/migrations/` — è motivata da «una migrazione mersa arriva sul progetto
+reale nello stesso istante», e qui una PR **dentro** quel confine ne ha distribuite
+tre di un'altra. **Il confine resta dov'è** e la #51 non lo tocca: risponde ancora
+alla domanda che l'eccezione pone davvero, cioè se *quella* PR aggiunge SQL suo.
+Quello che non è più lecito dedurre è che «zero migrazioni nel diff» significhi
+«questo merge non distribuisce SQL».
+
+Il controllo introdotto sta **a valle**, scritto in `CLAUDE.md` accanto
+all'eccezione dove chi merge lo legge: chi merge una PR con migrazioni **rilegge il
+ledger con `list_migrations` dopo il merge e ne riporta il conteggio**, invece di
+dare l'applicazione per avvenuta; chi merge senza migrazioni verifica che il ledger
+coincida ancora con i file su `main`, perché un arretrato atterra su un merge
+arbitrario e il merge che lo smaltisce non è quello che lo possiede. **A valle e non
+a monte per una ragione misurata**: la rete che esisteva — «verifica che
+`Supabase Preview` diventi `SUCCESS` prima del merge» — dipende da un check che
+sulla #49 **non esisteva**, essendo `skipped` con «This git branch is not
+associated with any Supabase Branch». Le due reti sono mancate nello stesso caso, e
+la conseguenza è che quelle tre migrazioni sono arrivate in produzione **senza che
+Supabase le avesse mai eseguite su un database suo**: l'unica esecuzione reale
+resta la griglia locale su PostgreSQL 15.19, 47 PASSA / 0 FALLISCE.
+
+**Le email di conferma spesso non partono, e la causa è chiusa.** È
+`over_email_send_rate_limit` del mailer di prova incorporato in Supabase, poche
+email l'ora perché è pensato per lo sviluppo. **Non è un difetto del codice della
+#50**: provato il 18 agosto 2026 che quando l'email arriva davvero il link riporta
+su `/auth/callback` e il giro si chiude. Il rimedio è un SMTP proprio, e
+l'attivazione di Resend si ferma su un prerequisito che non dipende dalla
+configurazione — verificare un mittente richiede di provare via DNS il possesso di
+un dominio, e `timely-lokum-43a12e.netlify.app` è assegnato da Netlify e non è
+nostro. **La configurazione SMTP si fa quando la beta avrà un dominio custom**, che
+è il blocco reale: non la scelta del fornitore, non le chiavi.
+
+Nessuna scrittura remota di alcun tipo: nessun SQL, migrazione, fixture o deploy;
+nessuna chiamata IA, Stripe o logistica; nessuna modifica alla configurazione di
+Supabase, Netlify o GitHub. Solo letture — `check-runs`, `list_migrations`,
+`list_edge_functions`, `git`.
+
+### Lo schema 12b/12c riletto sul progetto reale — 18 agosto 2026, sola lettura
+
+La verifica che la scoperta rendeva necessaria: quelle tre migrazioni sono in
+produzione **senza che nessun `Supabase Preview` le avesse mai eseguite**, quindi
+finora la sola prova della loro correttezza era la griglia locale.
+
+Misurato: le tre tabelle esistono con RLS attiva e **tre policy ciascuna**;
+`report_target_tipo` ha **sette** etichette — `annuncio, profilo, messaggio,
+conversazione, recensione, post, commento`; `reports_target_coerente` ha davvero
+il ramo **`else false`** e nomina `post`, quindi un'ottava etichetta fallirebbe
+chiusa invece di passare in silenzio. I grant di scrittura di `authenticated` sono
+stretti come dichiarato: `club_post_like` solo `post_id`, `club_post_risposte`
+`corpo, post_id` in `INSERT` e il solo `corpo` in `UPDATE`, `club_posts` sette
+colonne in `INSERT` e `corpo, titolo` in `UPDATE`. **Nessun `DELETE` da nessuna
+parte**, **nessuna colonna di rimozione in alcun grant di scrittura**, e nessuna
+colonna d'autore in un `INSERT` — viene da `DEFAULT auth.uid()`, come nella 12a.
+
+**Una precisazione che la lettura ha corretto**: `rimosso_at` **non** è fuori da
+ogni grant client, come `CLAUDE.md` diceva di tutte e tre le colonne di rimozione.
+In scrittura è vero e nessuna è toccabile; in **lettura** `authenticated` ha
+`SELECT` su `rimosso_at`, ed è ciò che permette di dire a chi legge che un
+contenuto è stato rimosso, mentre `rimosso_da` e `rimosso_motivo` non sono
+concesse a nessuno. Il disegno è giusto; era imprecisa la riga.
+
+**Distribuito non vuol dire esercitato**: `club_posts`, `club_post_risposte`,
+`club_post_like`, `clubs`, `club_memberships`, `reports` e `audit_log` sono tutti
+a **zero righe**, e nessuna con `scope = 'club'`. Il fixture dei sette club non è
+mai stato eseguito. Provare il *comportamento* richiede di eseguire la griglia sul
+progetto reale, che è un'autorizzazione separata e per griglia — e quella
+**scrive**.

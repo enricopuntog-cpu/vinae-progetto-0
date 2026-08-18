@@ -124,9 +124,24 @@ The full picture is in `docs/ROADMAP_V1.md`, `docs/MIGRATION_PHASE_1_BACKLOG.md`
   all green, and GitHub reporting `mergeable: MERGEABLE` **and** `mergeStateStatus: CLEAN` **on
   the head commit being merged**, not on an earlier one. **Any PR carrying even a single migration
   file stays an explicit merge by Enrico, without exceptions.** The reason is that in this repo the
-  merge **is** the deploy gate for migrations (decision 7.10, recorded below): there is no separate
-  apply command, and a merged migration is distributed to the real Supabase project in the same
-  instant. This narrows the "explicit approval in-session" rule under "Process rules" below; it
+  merge is the **only** gate for migrations (decision 7.10, recorded below): there is no separate
+  apply command, so a PR carrying SQL has no later step at which anybody reviews it. What the
+  **18 August 2026** re-measurement of the three Phase 12 merges corrects is the word *instant*.
+  The merge triggers a **Supabase integration run**, and that run **can fail to start**. On the
+  merge of **PR #49** (17 August 2026, 17:50:10 UTC) it never ran: `3a6ba69` carries four check
+  runs and none of them is `Supabase Preview`. Its three 12b/12c migrations reached production
+  **5h 27m 05s later**, carried by the run that the merge of **PR #50** triggered — a PR with
+  **zero** migration files. So "zero files under `supabase/migrations/`"
+  still answers the question the exception actually asks — *does this PR add SQL of its own* — and
+  the boundary does not move; but it does **not** promise that a given merge distributes nothing.
+  **Whoever merges a PR carrying migrations re-reads the ledger with `list_migrations` afterwards
+  and reports the count**, rather than treating the merge as proof that they applied — and whoever
+  merges without them checks the ledger still matches the files on `main`, because a backlog lands
+  on an arbitrary later merge and the merge that clears it is not the one that owns it. Wait past a
+  minute before concluding: a read taken mid-apply returns the *previous* count, the same stale-read
+  trap `list_edge_functions` has. Edge Functions are the other half and behave differently: their
+  redeploy has **never** skipped a merge, in nine measurements.
+  This narrows the "explicit approval in-session" rule under "Process rules" below; it
   does not abolish it, and it changes nothing about starting a phase, applying SQL or fixtures to
   the real project, or the cutover — each stays its own separate authorization.
 - **No new features during migration** — the goal is behavioral parity with `frontend/`, not
@@ -891,7 +906,11 @@ What 12b+12c fix in place, and that later work inherits:
   two `annuncio` posts are «**Vendo** Barolo Brunate 2018» and «**Vendo** Magnum Ornellaia 2017»
   (`frontend/src/data/communities.ts:179`, `:265`), where the post's author *is* the seller.
 - **Removal is logical, never a physical DELETE**, and its only door is a `SECURITY DEFINER`
-  function — `rimosso_at`/`rimosso_da`/`rimosso_motivo` are outside every client grant. The two
+  function — none of `rimosso_at`/`rimosso_da`/`rimosso_motivo` is in any client **write** grant.
+  Read side, measured on the real project 18 August 2026 and more precise than "outside every
+  client grant" as this line first read: `authenticated` does hold `SELECT` on **`rimosso_at`**,
+  which is what lets a reader be told a post was removed, while `rimosso_da` and `rimosso_motivo`
+  are granted to nobody — who removed it and why stay inside moderation. The two
   actions are **new branches inside `moderazione_rimozione` and `moderazione_ripristino`**, not new
   RPCs: those already branch on `target_tipo` and would otherwise write the audit row **without
   removing anything**. No per-target "remove this post" door, because it would have no caller.
@@ -1071,13 +1090,58 @@ Cosa fissa in modo vincolante per il lavoro futuro:
   accettato è ciò che la §9 della spec Fase 11 deve dire.
 - `MIN_TESTS` 402 → **433**.
 
-**Mai provato**: un giro di conferma email reale end-to-end. Va fatto **sul
-dominio di produzione** — le preview restano fuori dai Redirect URLs, quindi lì
-fallirebbe per configurazione e non per un difetto. Limite noto e non una
-regressione: con PKCE il `code_verifier` sta nel browser da cui è partita la
+**Provato end-to-end il 18 agosto 2026, e la correzione regge**: quando l'email
+arriva davvero, il link riporta su `/auth/callback` e il giro si chiude. Va fatto
+**sul dominio di produzione** — le preview restano fuori dai Redirect URLs,
+quindi lì fallirebbe per configurazione e non per un difetto. Limite noto e non
+una regressione: con PKCE il `code_verifier` sta nel browser da cui è partita la
 registrazione, quindi chi apre l'email su un **altro dispositivo** non completa
 lo scambio (vale identico per OAuth) e finisce su `/accedi?errore=…`, che è dove
 deve andare, visto che la conferma lato server è già avvenuta.
+
+**Le email di conferma però spesso non partono, e la causa è nota**:
+`over_email_send_rate_limit` del mailer di prova incorporato in Supabase, poche
+email l'ora perché è pensato per lo sviluppo e non per il traffico reale. **Non è
+un difetto del codice della #50** e non va indagato di nuovo. Il rimedio è un SMTP
+proprio, ed è **rimandato per una ragione precisa**: attivare Resend richiede di
+verificare via DNS un dominio, e `timely-lokum-43a12e.netlify.app` è assegnato da
+Netlify, non è nostro e non è verificabile. La configurazione SMTP si fa quando la
+beta avrà **un dominio custom** — quello è il prerequisito, non la scelta del
+fornitore.
+
+### La distribuzione delle migrazioni non è il merge, è la corsa dell'integrazione — PR #51
+
+Documentazione soltanto, 18 agosto 2026, aperta subito dopo il merge della #50 e
+nata da una sua verifica post-merge. Il fatto, misurato su
+`repos/…/commits/<sha>/check-runs` per i tre merge della Fase 12 e non su
+`gh pr checks`:
+
+| merge | quando (UTC) | corsa `Supabase Preview` sul commit di merge |
+|---|---|---|
+| #48 `e2132ee` — una migrazione | 07:58:49 | `success`, partita 07:59:19 — **+30 s** |
+| #49 `3a6ba69` — **tre** migrazioni | 17:50:10 | **assente**: quattro check, nessuno suo |
+| #50 `6b0e999` — **zero** migrazioni | 23:16:44 | `success`, 23:17:15 → 23:17:29 — **+31 s** |
+
+Le tre migrazioni 12b/12c sono quindi rimaste su `main` e **fuori dalla produzione
+per 5h 27m 05s**, e a distribuirle è stata la corsa innescata dal merge di una PR
+che non ne conteneva nessuna. Riletto dopo: ledger a **29 righe**, ultima
+`20260817121000 phase_12c_club_moderation`, coincidenti con i **29 file** di
+`supabase/migrations/` su `origin/main`. Le sei Edge Function sono ripartite
+insieme — **30/29/29 e 16/16/16**, un solo `updated_at`
+`2026-08-17T23:17:27.365Z`, **43,4 s** dopo il merge: sul redeploy la 7.10 è
+misurata una **nona** volta e non ha mai saltato un giro.
+
+Quello che cambia è scritto dove la regola vive, nel punto dell'eccezione della
+#47 sopra: il confine «zero file sotto `supabase/migrations/`» **resta dov'è**,
+perché risponde ancora alla domanda che l'eccezione pone davvero — *questa PR
+aggiunge SQL suo?* — ma la motivazione «arriva sul progetto reale nello stesso
+istante» era troppo forte, e **il controllo è rileggere il ledger dopo il merge**
+invece di dare l'applicazione per avvenuta. Il caso della #49 sfugge a entrambe le
+reti che c'erano: il `Supabase Preview` della PR era `skipped` — «This git branch
+is not associated with any Supabase Branch» — quindi quelle tre migrazioni non
+sono **mai** state eseguite da Supabase su un database suo prima di arrivare in
+produzione, e l'unica esecuzione reale resta la griglia locale su PostgreSQL
+15.19, 47 PASSA / 0 FALLISCE.
 
 ### Postgres exposure rules (binding since Phase 6d-1)
 
