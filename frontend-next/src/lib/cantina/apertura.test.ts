@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   STATI_BLOCCANTI_APERTURA,
@@ -15,6 +15,15 @@ const leggiRepo = (percorso: string) => readFileSync(join(radice, percorso), "ut
 // corpo della funzione lo troverebbe anche nella prosa che lo spiega: stessa
 // classe di difetto gia' pagata dal Gruppo 1 e dalla #50.
 const senzaCommentiSql = (sorgente: string) => sorgente.replace(/^\s*--.*$/gm, "");
+// E nemmeno basta togliere i `--`: la prosa vive anche dentro `comment on ...`,
+// che e' uno statement eseguibile con una stringa dentro. I due casi qui sotto
+// vietano `grant update` e `note_personali`, ed entrambe quelle parole compaiono
+// nei commenti di colonna proprio per spiegare perche' sono vietate. Trovato
+// eseguendo: e' la terza volta che questo repository incontra la stessa forma -
+// spiegare un divieto facendo fallire la verifica del divieto - dopo `pravatar`
+// nella #50 e il ripulitore `//` invece di `--` nel Gruppo 1.
+const soloStatementEseguibili = (sorgente: string) =>
+  senzaCommentiSql(sorgente).replace(/^comment\s+on\s[\s\S]*?;\s*$/gim, "");
 
 /** Il file dove `bottiglia_apri` ha la sua ultima definizione nel repository. */
 const MIGRAZIONE_APRI = "supabase/migrations/20260730162046_fix_6d1_bottle_message_encoding.sql";
@@ -118,6 +127,41 @@ describe("percorsoApertura", () => {
     // Non e' un blocco come gli altri: c'e' un ordine di qualcun altro.
     expect(percorso.spiegazione.toLowerCase()).toInclude("compratore");
     expect(percorso.spiegazione.toLowerCase()).toInclude("ordine");
+  });
+});
+
+describe("la proposta sulle colonne di degustazione", () => {
+  const PROPOSTA = "supabase/queries/05_PROPOSTA_NON_ESEGUIRE_DEGUSTAZIONE.sql";
+
+  it("sta fra le proposte e non fra le migrazioni", () => {
+    // Sotto migrations/ il merge la applicherebbe da se' (7.10) e il ramo di
+    // anteprima la eseguirebbe all'apertura della PR, cioe' prima della
+    // revisione. Cambia cartella quando l'autorizzazione arriva, non prima.
+    expect(existsSync(join(radice, PROPOSTA))).toBe(true);
+    expect(
+      existsSync(join(radice, "supabase/migrations/20260819100000_degustazione.sql")),
+    ).toBe(false);
+    expect(leggiRepo(PROPOSTA)).toInclude("NON ESEGUIRE");
+  });
+
+  it("non concede in scrittura al client le colonne che introduce", () => {
+    // La proprieta' che rende la proposta additiva davvero: su bottle_units il
+    // GRANT di tabella per authenticated e' di sola lettura, mentre l'UPDATE e'
+    // per colonna. Percio' una colonna nuova nasce non scrivibile - e questo
+    // file non deve rimediare da solo. Un `grant update` qui sarebbe il difetto
+    // della 9b su profiles, e questo caso e' cio' che impedisce di aggiungerlo
+    // per distrazione.
+    const sql = soloStatementEseguibili(leggiRepo(PROPOSTA)).toLowerCase();
+    expect(sql).not.toInclude("grant update");
+    expect(sql).toInclude("degustazione_nota");
+    expect(sql).toInclude("degustazione_at");
+  });
+
+  it("smette di sovrascrivere note_personali, che e' il difetto che chiude", () => {
+    const sql = soloStatementEseguibili(leggiRepo(PROPOSTA));
+    // Nel corpo proposto la nota va nella sua colonna: se `note_personali`
+    // ricomparisse fra gli statement, la perdita di dati sarebbe ancora li'.
+    expect(sql).not.toInclude("note_personali");
   });
 });
 
