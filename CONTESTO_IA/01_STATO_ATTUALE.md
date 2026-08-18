@@ -2201,3 +2201,34 @@ Nessuna scrittura remota di alcun tipo: nessun SQL, migrazione, fixture o deploy
 nessuna chiamata IA, Stripe o logistica; nessuna modifica alla configurazione di
 Supabase, Netlify o GitHub. Solo letture — `check-runs`, `list_migrations`,
 `list_edge_functions`, `git`.
+
+### Lo schema 12b/12c riletto sul progetto reale — 18 agosto 2026, sola lettura
+
+La verifica che la scoperta rendeva necessaria: quelle tre migrazioni sono in
+produzione **senza che nessun `Supabase Preview` le avesse mai eseguite**, quindi
+finora la sola prova della loro correttezza era la griglia locale.
+
+Misurato: le tre tabelle esistono con RLS attiva e **tre policy ciascuna**;
+`report_target_tipo` ha **sette** etichette — `annuncio, profilo, messaggio,
+conversazione, recensione, post, commento`; `reports_target_coerente` ha davvero
+il ramo **`else false`** e nomina `post`, quindi un'ottava etichetta fallirebbe
+chiusa invece di passare in silenzio. I grant di scrittura di `authenticated` sono
+stretti come dichiarato: `club_post_like` solo `post_id`, `club_post_risposte`
+`corpo, post_id` in `INSERT` e il solo `corpo` in `UPDATE`, `club_posts` sette
+colonne in `INSERT` e `corpo, titolo` in `UPDATE`. **Nessun `DELETE` da nessuna
+parte**, **nessuna colonna di rimozione in alcun grant di scrittura**, e nessuna
+colonna d'autore in un `INSERT` — viene da `DEFAULT auth.uid()`, come nella 12a.
+
+**Una precisazione che la lettura ha corretto**: `rimosso_at` **non** è fuori da
+ogni grant client, come `CLAUDE.md` diceva di tutte e tre le colonne di rimozione.
+In scrittura è vero e nessuna è toccabile; in **lettura** `authenticated` ha
+`SELECT` su `rimosso_at`, ed è ciò che permette di dire a chi legge che un
+contenuto è stato rimosso, mentre `rimosso_da` e `rimosso_motivo` non sono
+concesse a nessuno. Il disegno è giusto; era imprecisa la riga.
+
+**Distribuito non vuol dire esercitato**: `club_posts`, `club_post_risposte`,
+`club_post_like`, `clubs`, `club_memberships`, `reports` e `audit_log` sono tutti
+a **zero righe**, e nessuna con `scope = 'club'`. Il fixture dei sette club non è
+mai stato eseguito. Provare il *comportamento* richiede di eseguire la griglia sul
+progetto reale, che è un'autorizzazione separata e per griglia — e quella
+**scrive**.

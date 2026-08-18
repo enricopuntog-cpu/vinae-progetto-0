@@ -906,7 +906,11 @@ What 12b+12c fix in place, and that later work inherits:
   two `annuncio` posts are «**Vendo** Barolo Brunate 2018» and «**Vendo** Magnum Ornellaia 2017»
   (`frontend/src/data/communities.ts:179`, `:265`), where the post's author *is* the seller.
 - **Removal is logical, never a physical DELETE**, and its only door is a `SECURITY DEFINER`
-  function — `rimosso_at`/`rimosso_da`/`rimosso_motivo` are outside every client grant. The two
+  function — none of `rimosso_at`/`rimosso_da`/`rimosso_motivo` is in any client **write** grant.
+  Read side, measured on the real project 18 August 2026 and more precise than "outside every
+  client grant" as this line first read: `authenticated` does hold `SELECT` on **`rimosso_at`**,
+  which is what lets a reader be told a post was removed, while `rimosso_da` and `rimosso_motivo`
+  are granted to nobody — who removed it and why stay inside moderation. The two
   actions are **new branches inside `moderazione_rimozione` and `moderazione_ripristino`**, not new
   RPCs: those already branch on `target_tipo` and would otherwise write the audit row **without
   removing anything**. No per-target "remove this post" door, because it would have no caller.
