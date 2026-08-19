@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { MapPin, ShieldCheck, Tag, EyeOff } from "lucide-react";
+import { MapPin, ShieldCheck, Tag, EyeOff, Wine as WineIcon } from "lucide-react";
 import type { Wine } from "@/data/wines";
+import type { StatoBottiglia } from "@/data/cellar";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
 import { DrinkBadge } from "@/components/vinea/DrinkWindow";
 import { SafeImage } from "@/components/vinea/States";
+import { badgeStatoBottiglia } from "@/lib/cantina/badge-stato";
 
 const DetailLink = ({
   href,
@@ -34,11 +36,21 @@ export function WineCard({
   variant = "grid",
   showSaleBadge = false,
   hidePriceIfPrivate = false,
+  statoBottiglia,
 }: {
   wine: Wine;
   variant?: "grid" | "list";
   showSaleBadge?: boolean;
   hidePriceIfPrivate?: boolean;
+  /**
+   * Lo stato della bottiglia che questa scheda rappresenta, quando ce n'è una.
+   *
+   * Assente ovunque tranne che in Cantina, ed è giusto così: su `/esplora` e
+   * sulla scheda di un annuncio si guarda il vino di qualcun altro, e lo stato
+   * della propria bottiglia lì non vuol dire niente. Per la stessa ragione non
+   * è un campo di `Wine`, che è la forma del catalogo e non della cantina.
+   */
+  statoBottiglia?: StatoBottiglia;
 }) {
   const { inVendita, prezzoNascosto } = useVinea();
   const cellarKey = wine.wineSlug ?? wine.id;
@@ -47,6 +59,10 @@ export function WineCard({
   const priceUnavailable = wine.detailHref === null && wine.prezzo === 0;
   const detailHref =
     wine.detailHref === undefined ? `/annuncio/${wine.id}` : wine.detailHref;
+  // La regola di quale stato meriti un badge sta nel modulo, non qui: è là che
+  // ha dei test, ed è là che la condizione di non costruirne uno per
+  // `consumata` è scritta una volta sola.
+  const badgeStato = badgeStatoBottiglia(statoBottiglia);
 
   if (variant === "list") {
     return (
@@ -65,6 +81,16 @@ export function WineCard({
           {sale && (
             <span className="absolute left-1 top-1 rounded-full bg-bordeaux px-1.5 py-0.5 text-[9px] font-semibold text-crema shadow">
               In vendita
+            </span>
+          )}
+          {/* In basso e non in alto a destra: qui la foto è 80×96 px, e due
+              pastiglie affiancate in cima non ci starebbero. */}
+          {badgeStato && (
+            <span
+              className={`absolute bottom-1 left-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold shadow ${badgeStato.classi}`}
+              data-testid="wine-card-badge-aperta"
+            >
+              <WineIcon className="h-2.5 w-2.5" /> {badgeStato.testo}
             </span>
           )}
         </div>
@@ -114,6 +140,17 @@ export function WineCard({
             servirebbe a nulla. Vedi il commento su Wine.wineSlug. */}
         <DrinkBadge wineId={wine.wineSlug ?? wine.id} />
       </div>
+      {/* L'angolo opposto a «In vendita» (left-3 top-3) e alla finestra di
+          bevuta (left-3 top-12): una posizione fissa, così il badge non si
+          sposta a seconda di quali vicini abbia quel giorno. */}
+      {badgeStato && (
+        <span
+          className={`absolute right-3 top-3 z-10 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold shadow ${badgeStato.classi}`}
+          data-testid="wine-card-badge-aperta"
+        >
+          <WineIcon className="h-3 w-3" /> {badgeStato.testo}
+        </span>
+      )}
       <DetailLink
         href={detailHref}
         testId={`wine-card-link-${wine.id}`}

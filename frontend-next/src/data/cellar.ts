@@ -49,10 +49,36 @@ export type FoodPairing = {
 export type SaleStatus = "privata" | "cantina_pubblica" | "in_vendita" | "venduta";
 export type PriceVisibility = "visibile" | "riservato";
 
+/**
+ * I tre valori di `public.bottle_units.stato`.
+ *
+ * Sono le etichette dell'enum `bottle_unit_stato`, lette da `pg_type` sul
+ * progetto reale il 19 agosto 2026 e non dedotte da un file di migrazione:
+ * `{chiusa, aperta, consumata}`, in quest'ordine.
+ */
+export type StatoBottiglia = "chiusa" | "aperta" | "consumata";
+
 export type CellarBottle = {
   bottleId: string;
   wineVintageId: string; // → wines[].id
   quantita: number;
+  /**
+   * Lo stato reale della bottiglia, distinto da `quantita`.
+   *
+   * `quantita` lo comprime: vale 1 per una chiusa e 0 per una **aperta o
+   * consumata**, che sono così indistinguibili. Bastava finché nessuno doveva
+   * dire quale delle due; non basta a un badge che parla di una sola.
+   *
+   * Facoltativo perché i dati dimostrativi di `bottiglieSeed` non hanno uno
+   * stato affatto — lì `quantita` è un conteggio (2, 4, 3…), non un
+   * interruttore. `undefined` vale quindi «non lo so» e non «chiusa»: chi
+   * disegna non deve dedurne nulla.
+   *
+   * **Nessuna migrazione**: la colonna era già dentro `COLONNE_BOTTIGLIE` e
+   * `authenticated` ha su `bottle_units` un GRANT di tabella in sola lettura.
+   * Questo campo smette di buttare via un dato che arrivava già.
+   */
+  stato?: StatoBottiglia;
   plannedOpenDate?: string;
   override?: {
     drinkWindowStart?: number;
