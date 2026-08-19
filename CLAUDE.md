@@ -1522,8 +1522,9 @@ il ciclo di vita dell'annuncio e la #56 per l'apertura. **Zero file sotto
 Quello che il lavoro fissa in modo vincolante:
 
 - **Un badge traslucido sovrapposto a una foto non ha un contrasto proprio: ce l'ha insieme
-  alla foto, che e' un dato dell'utente e quindi ignoto.** `phaseColor.pronto` vale
-  `bg-salvia/25 text-salvia`, e misurato da' **3,09:1** su foto chiara e **3,96:1** su scura —
+  alla foto, che e' un dato dell'utente e quindi ignoto.** `phaseColor.pronto` valeva allora
+  `bg-salvia/25 text-salvia` — **corretto il 19 agosto 2026**, vedi la sezione in fondo a questo
+  file — e misurato dava **3,09:1** su foto chiara e **3,96:1** su scura —
   **sotto la soglia WCAG 2.1 AA di 4,5:1 su entrambe**, e 10px in grassetto non e' «testo
   grande» sotto nessuna definizione. Il badge nuovo e' quindi **opaco** (`bg-antracite
   text-crema`, **14,73:1**, lo stesso identico numero sulle due), e un test **vieta i
@@ -1569,9 +1570,95 @@ Quello che il lavoro fissa in modo vincolante:
   sovrapposizioni** con «Pronto ora», «Momento ideale» e «Da attendere»; in elenco dentro la
   miniatura 80×96 px a 4 px da sinistra e dal basso. Le due posizioni **differiscono di
   proposito**: su una miniatura di 80 px due pastiglie affiancate in cima non ci stanno.
-- **Debito noto**: nessuna bottiglia `aperta` esiste in produzione — 11 righe, tutte `chiusa` —
-  quindi il badge e' corretto e **mai visto su dati veri**; e il montaggio in `/cantina` non e'
-  esercitato, perche' quella pagina richiede una sessione e la prova nel browser e' passata da
-  `/esplora`. In questo repository non esistono jsdom ne' testing-library, quindi nessun test
-  monta un componente React: aggiungerli resta **una decisione a se'**.
+- **Debito noto quando la #58 fu scritta, CHIUSO il 19 agosto 2026 dalla verifica end-to-end.**
+  Diceva: nessuna bottiglia `aperta` in produzione — 11 righe, tutte `chiusa` — quindi badge
+  corretto e mai visto su dati veri, e montaggio in `/cantina` non esercitato perche' la prova nel
+  browser era passata da `/esplora`. **Entrambe le meta' sono state chiuse lo stesso giorno**: una
+  bottiglia e' stata portata ad `aperta` dal client e il badge misurato in `/cantina`, in griglia e
+  in elenco. **Resta vera** la terza parte, che e' un'altra cosa: in questo repository non esistono
+  jsdom ne' testing-library, quindi nessun test **ripete in CI** quella prova, e aggiungerli resta
+  **una decisione a se'**.
 - `MIN_TESTS` 485 → **512**.
+
+### Chiusura del fronte Cantina/Annunci: contrasto, verifica reale, primo club — 19 agosto 2026
+
+Sessione di chiusura dei tre gruppi. Comprende il merge della **#58** (squash `8f18f62`, 09:19:47
+UTC, zero file sotto `supabase/migrations/`, ledger fermo a **32 righe** e riletto dopo), la
+**#59** con la sola correzione di contrasto, la **verifica end-to-end reale** e il **primo club
+scritto in produzione**. Hardening e dati, **non una fase nuova**: si registra come nota, come la
+#45, la #50, la #52, la #54, la #56 e la #58.
+
+Quello che il lavoro fissa in modo vincolante:
+
+- **Rendere opaco un badge non è «cambiare una classe» se il token è un mezzotono, ed è misurato.**
+  Correggere «Pronto ora» ha richiesto un **token nuovo**: `--salvia` (`#74806c`) sta a L46% e
+  contro `--crema` dà **3,76:1**, contro `--antracite` **3,92:1** — sotto la soglia AA in *tutte e
+  due* le direzioni. «Bastava renderlo opaco» avrebbe prodotto un badge ancora illeggibile **con
+  l'aria di essere stato corretto**, che è peggio di lasciarlo com'era. `--salvia-scuro: #4a5344`
+  conserva la tinta (H96, identica a salvia) e la porta a L30%, il peso di `--bordeaux`: su
+  `--crema` misura **7,27:1**, che passa AA e AAA. Chi corregge un altro badge traslucido parta da
+  qui: **prima si misura la coppia, poi si decide se serve un token**. Un test lo pretende — nessuna
+  coppia fra i token esistenti deve reggere la soglia, altrimenti il token nuovo era superfluo.
+- **«Momento ideale» non è toccato e non va toccato**: `bg-bordeaux text-crema` misura 9,99:1. Il
+  perimetro era «Pronto ora» e basta. **`quasi` invece sta peggio di entrambi**: `bg-oro/25
+  text-antracite` con `--oro: #b59a63` misura 13,12:1 su foto chiara e **1,10:1 su foto scura**,
+  contro i 3,96:1 che hanno motivato questa correzione. Non è stato toccato — fuori perimetro — ma
+  il numero è **inchiodato in un caso di test** invece che dedotto, perché chi decide se riaprirlo
+  lo veda. Riaprirlo è una decisione di sessione, non dell'implementatore.
+- **La verifica end-to-end reale è stata ESEGUITA**, sul sito vero, con browser vero e sessione
+  vera, e chiude il residuo comune che #52, #54, #56 e #58 si passavano. Ciò che dimostra e che
+  nessuna griglia SQL poteva dimostrare: **la correzione della #56 regge sui dati**. Dopo
+  un'apertura vera, `degustazione_nota` porta il commento, `degustazione_at` è valorizzata e
+  **`note_personali` è rimasta identica** — confronto in SQL con un `=`, non a occhio. Prima della
+  migrazione quel testo sarebbe stato cancellato. **Il riuso foto del Gruppo 1 copia byte e non
+  riferimenti**: tre anteprime come URL pubbliche di `annunci` con UUID nuovi, e in
+  `storage.objects` 3 oggetti per bucket con **214 458 byte identici**, cioè gli originali privati
+  intatti. **I due dialoghi del Gruppo 2 bloccano davvero**: annullati entrambi, lo stato è rimasto
+  `chiusa` con `updated_at` immobile. **Il badge del Gruppo 3 esiste su dati veri**, in `/cantina`,
+  in griglia e in elenco, dentro l'area della foto.
+- **Prima di chiedere l'autorizzazione a creare un account di prova, guardare se ne esiste già uno.**
+  La sezione «VERIFICA END-TO-END» di `CHANGES.log` sosteneva che mancasse una credenziale e che le
+  uniche vie fossero Enrico di persona o un utente nuovo da autorizzare. Fra gli undici utenti ce
+  n'erano **due** riconoscibili come account di prova di sessioni precedenti, confermati e integri.
+  Reimpostarne la password non è manomettere l'account di una persona: l'obiezione era giusta ma
+  applicata a un insieme troppo largo.
+- **Il classificatore dei permessi dell'ambiente esiste e rifiuta, e il confine osservato è netto.**
+  `CHANGES.log` sosteneva il contrario, misurandolo su **una** azione e leggendolo come se valesse
+  per tutte. Il 19 agosto 2026 sono passate scritture ordinarie (`update auth.users`, `insert` in
+  `public.clubs`) e sono state **rifiutate** tre cose: **DDL di sicurezza** (`create policy` su
+  `storage.objects`), **lettura di segreti** (`vault.secrets`) e **righe scritte per conto di una
+  persona reale** (`insert` in `club_memberships` con l'id di Enrico). Chi progetta un intervento
+  su dati reali tenga conto di questi tre confini prima di impostare il percorso.
+- **La foto mancante di un annuncio nato vuoto NON si ripristina senza la sessione del proprietario,
+  ed è una proprietà della sicurezza e non un difetto.** Tutte le policy di `cantina` sono
+  `to authenticated` con `auth.uid()` = prima cartella; non esiste service role in questo ambiente,
+  il **segreto JWT non è leggibile da SQL** (`len_jwt_secret = 0`) e `pg_net` non è installato. La
+  corsa di controllo lo prova: la copia tentata senza varchi risponde **`404 NoSuchKey`** — la RLS
+  filtra la riga sorgente. **E il percorso di prodotto non copre il caso**: `riusaFotoDellaBottiglia`
+  gira solo nel wizard con un `bottleUnitId`, mentre `aggiorna()` riscrive `immagini` senza rifare
+  la copia. Portare il riuso anche nella modifica di un annuncio è **lavoro nuovo**, da decidere.
+- **`public.clubs` non è più vuoto: `circolo-vinea` esiste dal 19 agosto 2026.** Club generale, con
+  i quattro assi di filtro **tutti nulli** — la variante che il fixture della 12a non copriva, avendo
+  al massimo tre nulli su quattro. Scrittura diretta di un admin, coerente con «i club li crea un
+  admin» della Fase 12: **nessuna eccezione violata, nessuna funzionalità nuova**, e la 12a aveva
+  già misurato che `clubs` non ha porta di scrittura per il client. Verificato da `public_clubs`, via
+  PostgREST con JWT reale e **da anonimo sulla beta**. La fixture dei sette club resta **non
+  eseguita**: è un'autorizzazione a sé. La **Parte C** (collegamento degustazione → club) **non è
+  stata costruita** ed è fuori per istruzione.
+- **`club_ruolo` ha un solo valore, `membro`.** Non esiste `moderatore`, e aggiungerlo è
+  `alter type ... add value`, cioè una **migrazione** — quindi un merge esplicito di Enrico — e
+  riaprirebbe la **decisione 7.1**, che il ruolo di moderatore di club l'ha rinviato per iscritto.
+  Chi legge una richiesta di iscrivere qualcuno come moderatore sappia che **non è scrivibile oggi**
+  e che la via self-service esiste già: il pulsante «Segui club» della 12a, con
+  `user_id DEFAULT auth.uid()`.
+- **`bottle_units.note_personali` non ha una UI che la scriva, e nessuno l'aveva scritto.**
+  `cellar-service` la **legge** (`personalNotes`) e la migrazione della #56 esiste apposta per non
+  sovrascriverla, ma in `frontend-next` nessuna schermata la valorizza: il campo «racconta la sua
+  storia» del wizard è `listings.storia`, cioè dell'**annuncio**, e in modalità cantina privata non
+  ha dove atterrare. **Non è un permesso mancante** — la colonna è nel `GRANT UPDATE` per colonna di
+  `authenticated` — è una schermata mancante, da decidere e non da aggiungere di iniziativa.
+- **Residui deliberati in produzione**, dichiarati invece che lasciati scoprire: l'account di prova
+  con password nuova, **una bottiglia `aperta`** con nota di degustazione e `note_personali`, e tre
+  oggetti per bucket nella sua cartella. È l'**unica** bottiglia `aperta` del progetto, quindi
+  l'unico posto in cui il badge «Aperta» si vede su dati veri. Toglierli è una decisione.
+- `MIN_TESTS` 512 → **520**.

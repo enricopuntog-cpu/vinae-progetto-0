@@ -2512,3 +2512,96 @@ Il badge legge **la stessa bottiglia che i comandi accanto usano**, `bottigliaDe
 un aggregato sulle bottiglie di quel vino. L'aggregato sarebbe piu' furbo, ma potrebbe far dire
 «Aperta» al badge guardando una bottiglia mentre il pulsante di fianco dice «Apri questa
 bottiglia» guardandone un'altra: **la coerenza fra badge e comando batte l'aggregato**.
+
+## Chiusura del fronte Cantina/Annunci — 19 agosto 2026
+
+Sessione di chiusura dei tre gruppi: merge della #58, correzione del contrasto di «Pronto ora»
+(#59), **verifica end-to-end reale eseguita**, primo club scritto in produzione. Hardening e dati,
+**non una fase nuova**.
+
+### La correzione del contrasto ha richiesto un token nuovo, e non era prevedibile
+
+L'istruzione era «applica lo stesso pattern che ha risolto «Aperta»: sfondo opaco ancorato a un
+token di `globals.css`». Il pattern e' quello, ma **il token esistente non bastava**, e la
+differenza si vede solo misurando:
+
+| coppia | contrasto su `--crema` | contrasto su `--antracite` |
+|---|---|---|
+| `--salvia` `#74806c` (L46%) | **3,76:1** | **3,92:1** |
+| `--salvia-scuro` `#4a5344` (L30%) | **7,27:1** | — |
+| `--bordeaux` `#6b2138` (L27%) — «Momento ideale», intatto | 9,99:1 | — |
+| `--antracite` `#202020` — badge «Aperta» | 14,73:1 | — |
+
+`--salvia` e' un **mezzotono**: fallisce la soglia AA in *tutte e due* le direzioni, quindi
+`bg-salvia text-crema` sarebbe stato un badge **ancora illeggibile con l'aria di essere corretto**
+— il difetto peggiorato, non risolto. `#4a5344` conserva la tinta esatta (H96, identica a salvia) e
+la porta al peso di `--bordeaux`, che e' la pastiglia accanto.
+
+**Prima misura, poi decidi se serve un token.** Un caso di test lo pretende: nessuna coppia fra i
+token esistenti deve reggere la soglia, altrimenti il token nuovo era superfluo.
+
+### `quasi` sta peggio di quello che abbiamo corretto, ed e' scritto invece che dedotto
+
+`phaseColor.quasi` vale `bg-oro/25 text-antracite` e con `--oro: #b59a63` misura **13,12:1 su foto
+chiara e 1,10:1 su foto scura**. E' peggio dei 3,96:1 che hanno motivato questa sessione. **Non e'
+stato toccato**: il perimetro chiedeva «Pronto ora» e basta, e allargarlo di iniziativa sarebbe
+lavoro che nessuno ha chiesto. Il numero e' inchiodato in un caso di test perche' chi decide se
+riaprirlo lo veda invece di ricalcolarlo.
+
+### La verifica end-to-end: cosa e' stato provato e cosa no
+
+Eseguita sulla beta (`https://timely-lokum-43a12e.netlify.app`, deploy da `8f18f62`), browser vero,
+sessione vera di `test.vinea.qa.1786989444@mailinator.com` — **account riusato e non creato**.
+
+- **Gruppo 1.** Il passo Foto del wizard di vendita mostra le tre fotografie della bottiglia gia'
+  precompilate. Le anteprime sono **URL pubbliche di `annunci` con UUID nuovi**, e in
+  `storage.objects` ci sono **3 oggetti in `cantina` e 3 in `annunci`, 214 458 byte per gruppo**:
+  copia di byte, originali privati intatti.
+- **Gruppo 2.** Primo dialogo annullato → `chiusa`, `updated_at` immobile. Secondo («Non adesso»)
+  → di nuovo niente. Conferma → `aperta`, `degustazione_nota` col commento vero, `degustazione_at`
+  valorizzata, e **`note_personali` identica al valore scritto prima**. E' la correzione della #56
+  provata sui dati per la prima volta: prima della migrazione quel testo sarebbe stato cancellato.
+  La pagina di degustazione mostra il commento e **non** la nota di cantina.
+- **Gruppo 3.** Badge «Aperta» in `/cantina`, in **griglia** (65x23 px dentro una foto 268x402) e in
+  **elenco** (56x18 px dentro la miniatura 80x96), `rgb(32,32,32)` su `rgb(247,243,236)`,
+  `opacity 1`. Il pulsante accanto e' passato da «Apri» a «Degustata».
+- **NON provato**: la modifica di un annuncio **attivo** dal client (#54) — il wizard e' stato
+  abbandonato senza pubblicare, perche' un annuncio attivo avrebbe bloccato l'apertura; e la
+  consegna di un messaggio (#52), che richiede **due** utenti e un annuncio altrui.
+
+### Il primo club, e il ruolo che non esiste
+
+`public.clubs` passa da **0 a 1 riga**: `circolo-vinea`, «Circolo Vinea», club generale con i
+quattro assi di filtro **tutti nulli** — variante che il fixture della 12a non copriva. Scrittura
+diretta di un admin, coerente con «i club li crea un admin»: nessuna eccezione violata, nessuna
+funzionalita' nuova. Verificato da `public_clubs`, via PostgREST con JWT reale e da anonimo sulla
+beta.
+
+**`club_ruolo` ha un solo valore, `membro`.** La membership `moderatore` chiesta per Enrico **non e'
+scrivibile**: servirebbe `alter type ... add value`, cioe' una migrazione, e riaprirebbe la
+**decisione 7.1**. La via self-service esiste gia' ed e' il pulsante «Segui club» della 12a.
+
+### Due lacune trovate eseguendo, che nessuno aveva scritto
+
+- **`bottle_units.note_personali` non ha una UI che la scriva.** E' letta da `cellar-service` e la
+  migrazione della #56 esiste apposta per non sovrascriverla, ma nessuna schermata di
+  `frontend-next` la valorizza: il campo «racconta la sua storia» del wizard e' `listings.storia`,
+  cioe' dell'**annuncio**. Non e' un permesso mancante — la colonna e' nel `GRANT UPDATE` per
+  colonna di `authenticated` — e' una **schermata** mancante.
+- **Il classificatore dei permessi dell'ambiente esiste e rifiuta.** `CHANGES.log` sosteneva il
+  contrario, misurandolo su **una** azione. Il confine osservato: passano le scritture ordinarie,
+  **non passano** il DDL di sicurezza (`create policy` su `storage.objects`), la lettura di segreti
+  (`vault.secrets`) e le righe scritte per conto di una persona reale (`insert` in
+  `club_memberships` con l'id di Enrico).
+
+### La foto mancante non si ripristina, ed e' la sicurezza che funziona
+
+`sabbioni-i-rifugi-2017` resta senza immagini. La sorgente esiste in `cantina` (79 440 byte), ma
+tutte le policy di quel bucket sono `to authenticated` con `auth.uid()` = prima cartella: serve la
+sessione di Enrico. Niente service role in questo ambiente, **segreto JWT non leggibile da SQL**
+(`len_jwt_secret = 0`), niente `pg_net`. La corsa di controllo lo prova: la copia tentata senza
+varchi risponde **`404 NoSuchKey`**, cioe' la RLS filtra la riga sorgente.
+
+**E il percorso di prodotto non copre il caso**: `riusaFotoDellaBottiglia` gira **solo** nel wizard
+con un `bottleUnitId`, mentre `aggiorna()` riscrive `immagini` senza rifare la copia. Portare il
+riuso anche nella modifica di un annuncio esistente e' **lavoro nuovo**, da decidere in sessione.

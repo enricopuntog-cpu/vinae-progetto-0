@@ -33,6 +33,7 @@
   --color-crema: var(--crema);
   --color-antracite: var(--antracite);
   --color-salvia: var(--salvia);
+  --color-salvia-scuro: var(--salvia-scuro);
   --color-oro: var(--oro);
 
   --font-serif: "Cormorant Garamond", "Playfair Display", ui-serif, Georgia, serif;
@@ -54,6 +55,11 @@
   --crema: #f7f3ec;
   --antracite: #202020;
   --salvia: #74806c;
+  /* Salvia scurita a L30%, stessa tinta (H96): e lo sfondo OPACO del badge
+     «Pronto ora». Su --crema misura 7,27:1, che passa AA e anche AAA. La
+     versione traslucida bg-salvia/25 dava 3,09:1 su foto chiara e 3,96:1 su
+     foto scura, cioe sotto soglia su entrambe. Dettaglio in badge-stato.ts. */
+  --salvia-scuro: #4a5344;
   --oro: #b59a63;
 
   /* Shadcn semantic */

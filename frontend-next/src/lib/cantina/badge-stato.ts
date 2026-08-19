@@ -13,8 +13,8 @@
  *
  * ## Il difetto che questo badge non ripete
  *
- * I badge della finestra di bevuta usano sfondi **traslucidi**: `phaseColor`
- * dà a «Pronto ora» le classi `bg-salvia/25 text-salvia`
+ * I badge della finestra di bevuta usavano sfondi **traslucidi**: `phaseColor`
+ * dava a «Pronto ora» le classi `bg-salvia/25 text-salvia`
  * (`src/data/cellar.ts`). Un badge traslucido sovrapposto a una foto non ha un
  * contrasto proprio — ce l'ha *insieme alla foto che ha sotto*, che è un dato
  * caricato dall'utente e quindi ignoto. Su una foto chiara «Pronto ora» misura
@@ -27,8 +27,20 @@
  * preferenza estetica — è la sola forma in cui la promessa si può mantenere
  * senza sapere che foto ci sarà sotto.
  *
- * `phaseColor` **non** viene toccato: la sessione di coordinamento ha chiesto di
- * costruire il badge nuovo, non di rifare i badge esistenti.
+ * ## E poi «Pronto ora» è stato corretto con lo stesso rimedio
+ *
+ * Quando il badge «Aperta» è nato, `phaseColor` non fu toccato: la sessione
+ * aveva chiesto il badge nuovo, non il rifacimento di quelli esistenti. La
+ * sessione del **19 agosto 2026** ha chiesto anche quello, per «Pronto ora» e
+ * **solo** per quello — «Momento ideale» misura 9,99:1 ed è già leggibile.
+ * `COLORE_BADGE_PRONTO` è il risultato, e `COLORE_BADGE_PRONTO_PRIMA` tiene in
+ * vita la misura del difetto perché nessuno possa tornarci sopra per
+ * distrazione.
+ *
+ * Gli altri fondi traslucidi di `phaseColor` restano come sono: sono fuori dal
+ * perimetro chiesto. Non è approvazione — `quasi` è misurato in questo file, e
+ * il suo numero su foto scura è **peggiore** di quello che ha motivato questa
+ * correzione. È una decisione di un'altra sessione, non di chi implementa.
  */
 
 // Gli stati vivono accanto a `CellarBottle`, che è il tipo di cui sono un
@@ -57,6 +69,44 @@ export const COLORE_BADGE_APERTA = {
   classi: "bg-antracite text-crema",
   sfondo: "#202020",
   testo: "#f7f3ec",
+} as const;
+
+/**
+ * I colori di «Pronto ora», nella stessa forma e per la stessa ragione.
+ *
+ * Questa pastiglia è il difetto che il badge «Aperta» era stato costruito per
+ * non ripetere, e ora è corretta con lo stesso rimedio: fondo **opaco**, quindi
+ * un contrasto che non dipende dalla foto sottostante.
+ *
+ * `--salvia-scuro` è un token **nuovo**, e la ragione è una misura: nessuna
+ * coppia fra i token già esistenti reggeva la soglia. `--salvia` (`#74806c`) è
+ * un mezzotono a L46%, e contro `crema` dà 3,76:1, contro `antracite` 3,92:1 —
+ * sotto 4,5:1 in tutte e due le direzioni. «Rendilo opaco» non era quindi un
+ * cambio di una classe: senza un colore nuovo il badge restava illeggibile con
+ * l'aria di essere stato corretto, che è peggio di lasciarlo com'era.
+ *
+ * `#4a5344` conserva la tinta di salvia (H96, identica) e la porta a L30%, cioè
+ * al peso di `--bordeaux` (L27%), che è il fondo della pastiglia accanto. Su
+ * `--crema` misura 7,27:1: passa AA e anche AAA.
+ */
+export const COLORE_BADGE_PRONTO = {
+  classi: "bg-salvia-scuro text-crema",
+  sfondo: "#4a5344",
+  testo: "#f7f3ec",
+} as const;
+
+/**
+ * Il valore che `phaseColor.pronto` aveva prima della correzione, tenuto qui
+ * perché i casi che ne misurano il difetto restino eseguibili.
+ *
+ * Non è nostalgia: quei numeri — 3,09:1 e 3,96:1 — sono la ragione per cui
+ * `--salvia-scuro` esiste, e un test che li ricalcola ogni volta è ciò che
+ * impedisce di tornare a un fondo traslucido «tanto si legge».
+ */
+export const COLORE_BADGE_PRONTO_PRIMA = {
+  classi: "bg-salvia/25 text-salvia",
+  base: "#74806c",
+  alpha: 0.25,
 } as const;
 
 export type BadgeStatoBottiglia = {
