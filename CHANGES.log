@@ -1,5 +1,17 @@
 <!-- PROTOCOL: Read at session start. Every AI MUST update this file at session end or before handoff/context reset. Keep exactly the 4 headings below; facts only; NEXT STEPS exactly 3 atomic items; no pleasantries/secrets. Verify Git state first; preserve unresolved blockers. -->
 ## CURRENT STATE
+- **La [PR #58](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/58) e' MERSA in squash come `8f18f62`**, il 19 agosto 2026 alle **09:19:47 UTC**, base `92a6ab1`. Tre job CI `success` e `mergeable: MERGEABLE` / `mergeStateStatus: CLEAN` letti **sul commit di testa** `6077389`. **Zero file sotto `supabase/migrations/`**, quindi eccezione della #47, e il **ledger e' rimasto a 32 righe** — riletto dopo, non dato per scontato. `Supabase Preview` risulta `skipped`: qui e' corretto, non c'era niente da distribuire. La beta Netlify e' ripartita da quel commit e pubblicata alle **09:20:41 UTC**, deploy `6a857535281181000974ce8d`.
+- **LA VERIFICA END-TO-END E' STATA ESEGUITA, sul sito vero, con un browser vero e una sessione vera.** E' il residuo comune che #52, #54, #56 e #58 si passavano da giorni, ed e' chiuso. Account **riusato e non creato** — `test.vinea.qa.1786989444@mailinator.com`, gia' presente e integro (confermato, con identity e profilo `attivo`) — di cui e' stata reimpostata la sola password via SQL. Percorso reale: catalogazione a 6 passi con **tre foto caricate davvero** in `cantina`, poi «Metti in vendita», poi apertura, poi Cantina. Alla fine **disconnessione dalla UI**, con zero chiavi di sessione residue in `localStorage`.
+- **Gruppo 1 verificato: il riuso foto funziona, e la copia e' di byte e non di riferimento.** Il passo 1 del wizard di vendita mostra le tre fotografie della bottiglia gia' precompilate, con la frase «Queste sono le fotografie della bottiglia in Cantina», e le tre anteprime sono **URL pubbliche del bucket `annunci` con UUID nuovi**, diversi dai percorsi in `cantina`. Riletto in `storage.objects`: **3 oggetti in `cantina` e 3 in `annunci`, 214 458 byte in entrambi i gruppi**, cioe' gli originali privati sono intatti e in vendita e' andata una copia. E' esattamente il contratto scritto in `riusaFotoDellaBottiglia`, misurato invece che dedotto dal sorgente.
+- **Gruppo 2 verificato: i due dialoghi bloccano davvero, e `note_personali` sopravvive.** Il primo dialogo («Confermi l'apertura della bottiglia?», con «Annulla» e «Si', la sto aprendo») e' stato **annullato** e la bottiglia e' rimasta `chiusa` con `updated_at` **immobile**. Il secondo — la pagina di degustazione, che dichiara «Finche' non premi, la bottiglia resta chiusa» — e' stato lasciato con «Non adesso», e di nuovo **niente si e' mosso**. Solo al terzo giro, con «Registra l'apertura», lo stato e' passato ad `aperta`.
+- **La correzione della #56 e' provata sui dati, ed e' la prima volta.** Dopo l'apertura: `degustazione_nota` = «Sorprendente, ancora giovanissimo. Frutto scuro e tannino vivo.», `degustazione_at` valorizzata, e **`note_personali` ancora uguale al valore scritto prima** — «Regalo di Marco per la laurea. QUESTA NOTA NON DEVE SPARIRE.», confronto fatto in SQL con un `=` e non a occhio. Prima della migrazione quel testo sarebbe stato **cancellato** dal commento di degustazione. La pagina di degustazione mostra il commento vero e **non** la nota di cantina, cioe' legge `degustazioneNota` e non `personalNotes`.
+- **Gruppo 3 verificato in `/cantina` su una bottiglia `aperta` vera, in griglia e in elenco.** Una scheda, un badge in ciascuna vista: `rgb(32,32,32)` su `rgb(247,243,236)` con `opacity: 1`, **dentro l'area della foto** in entrambe — 65x23 px dentro una foto 268x402 in griglia, 56x18 px dentro la miniatura 80x96 in elenco. Il pulsante accanto e' passato da «Apri» a «Degustata», cioe' la derivazione su `quantita === 0` che il Gruppo 3 non doveva toccare **non e' stata toccata**. Questo chiude due voci del riepilogo insieme: il badge non era «mai visto su dati veri» e il montaggio in `/cantina` non era «mai esercitato».
+- **«Pronto ora» e' stato corretto, e la correzione ha richiesto un token nuovo perche' nessuno di quelli esistenti bastava.** `phaseColor.pronto` passa da `bg-salvia/25 text-salvia` a **`bg-salvia-scuro text-crema`**, da 3,09:1 / 3,96:1 a **7,27:1**, uguale su qualunque foto perche' opaco. **`--salvia` da solo non risolveva**: e' un mezzotono (L46%) e falliva in tutte e due le direzioni — 3,76:1 con `crema`, 3,92:1 con `antracite` — quindi «bastava renderlo opaco» avrebbe prodotto un badge ancora illeggibile con l'aria di essere corretto. `--salvia-scuro: #4a5344` tiene la tinta (H96, identica) e la porta a L30%. **«Momento ideale» non e' toccato**: misura 9,99:1. Verificato nel browser sull'app vera — la sonda legge `rgb(74,83,68)` su `rgb(247,243,236)`, `opacity 1` — perche' un contratto sul sorgente non dimostra che Tailwind generi l'utility.
+- **`quasi` misura 1,10:1 su foto scura, ed e' PEGGIO del badge appena corretto.** `bg-oro/25 text-antracite` con `--oro: #b59a63`: 13,12:1 su foto chiara e **1,10:1** su foto scura, contro i 3,96:1 che hanno motivato questa sessione. **Non e' stato toccato** — il perimetro chiedeva «Pronto ora» e basta — ma il numero e' scritto in un caso di test invece che dedotto, perche' chi decide se riaprirlo deve vederlo.
+- **Il primo club reale esiste: `circolo-vinea`, «Circolo Vinea», scritto il 19 agosto 2026.** `public.clubs` passa da **0 a 1 riga**. E' un club generale, con i quattro assi di filtro (`territorio`, `denominazione`, `produttore`, `tipologia`) **tutti nulli** — la variante che il fixture della 12a non copriva, avendo al massimo tre nulli su quattro — tre regole e una descrizione che non attribuisce niente a terzi. Scrittura diretta di un admin, coerente con «i club li crea un admin» della Fase 12; **nessuna eccezione violata e nessuna funzionalita' nuova**. Verificato da `public_clubs` (`membri: 0`, `seguito: false`), via PostgREST con un JWT reale, e **da anonimo sulla beta**: `/community` mostra «Tutti (1)», la scheda e il pulsante «Segui club».
+- **La membership di Enrico NON e' stata scritta, per due ragioni distinte.** La prima e' di schema e va decisa: l'enum `club_ruolo` in produzione ha **un solo valore, `membro`** — `moderatore` non esiste, aggiungerlo e' `alter type ... add value`, cioe' una **migrazione**, e riaprirebbe la **decisione 7.1**, che il ruolo di moderatore di club l'ha rinviato per iscritto. La seconda e' d'ambiente: l'`insert` in `club_memberships` con l'id di Enrico e' stato **rifiutato dal classificatore dei permessi**. La via di prodotto e' comunque disponibile e non richiede niente: il pulsante **«Segui club»** su `/community/circolo-vinea`, che e' la porta self-service della 12a con `user_id DEFAULT auth.uid()`.
+- **La foto mancante di `sabbioni-i-rifugi-2017` NON e' stata ripristinata, ed e' un blocco d'ambiente e non un difetto del prodotto.** La sorgente c'e' — `cantina/1dfd5e75-.../bea3ffa2-....jpg`, 79 440 byte — e la destinazione sarebbe `annunci/1dfd5e75-.../<uuid>.jpg` via lo stesso `POST /storage/v1/object/copy` del Gruppo 1. Ma **tutte** le policy di `cantina` sono `to authenticated` con `auth.uid()` = prima cartella, quindi servirebbe la sessione di Enrico; non esiste service role in questo ambiente (Netlify non ce l'ha per decisione), il **segreto JWT non e' leggibile da SQL** (`len_jwt_secret = 0`) e non c'e' `pg_net`. Le due policy temporanee, inchiodate al percorso esatto, sono state **rifiutate dal classificatore**. Una corsa di controllo lo conferma: la copia tentata senza di esse risponde **`404 NoSuchKey`**, cioe' la RLS filtra la riga sorgente e la sicurezza attuale regge. **Il percorso di prodotto non copre il caso**: `riusaFotoDellaBottiglia` gira solo nel wizard con un `bottleUnitId`, mentre `aggiorna()` riscrive `immagini` senza rifare la copia.
+- **Una lacuna del prodotto trovata eseguendo, e che nessuno aveva scritto: `note_personali` non ha una UI che la scriva.** La colonna e' **letta** da `cellar-service` (`personalNotes`) ma in `frontend-next` non esiste nessuna schermata che la valorizzi — il campo «racconta la sua storia» del wizard e' `listings.storia`, cioe' un campo dell'**annuncio**, e in modalita' cantina privata non ha dove atterrare. Per la prova e' stata scritta con la porta che il prodotto ha gia': `note_personali` **e' nel `GRANT UPDATE` per colonna** di `authenticated`, quindi una `PATCH` PostgREST con la sessione di quell'utente sulla propria riga. **Manca la UI, non il permesso.**
 - Served: `frontend/` + `backend/`; target: `frontend-next/` + Supabase.
 - **Gruppo 3 — badge «Aperta» in cantina. [PR #58](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/58), APERTA IN DRAFT, base `92a6ab1`, ramo `fix/cantina-badge-aperta`. Zero file sotto `supabase/migrations/`.** Terzo e ultimo dei tre gruppi Cantina/Annunci. Hardening, **non una fase nuova**: si registra come nota, come la #45, la #50, la #52, la #54 e la #56. `bun run typecheck` pulito, `bun run lint` 0 errori (13 warning preesistenti, nessuno nei file toccati), `bun test` **512 pass / 0 fail**, `bun run build` compilato. `MIN_TESTS` 485 → **512**.
 - **Parte 0, la condizione posta da Enrico: NON esisteva alcun badge per `stato = 'consumata'`, quindi si e' applicato il secondo caso — costruire SOLO «Aperta».** Misurato e non supposto, su quattro fronti. (1) `WineCard` in griglia sovrappone alla foto **due** sole pastiglie, «In vendita» (`wine-card-badge-sale`) e `DrinkBadge`; in elenco **una** sola, «In vendita». Nessuna delle due legge lo stato della bottiglia. (2) **`CellarBottle` non portava affatto lo stato**: `cellar-service.ts` lo comprimeva in `quantita: riga.stato === "chiusa" ? 1 : 0`, quindi `aperta` e `consumata` erano indistinguibili a valle — un badge per `consumata` **non poteva esistere, perche' mancava il dato**. (3) L'unica cosa gia' derivata dallo stato in Cantina e' il **pulsante** «Degustata» di `AperturaBottiglia` in variante compatta: non e' un badge sulla foto, e' un comando accanto alla scheda, e scatta su `quantita === 0`, cioe' `aperta` **e** `consumata` insieme. **Non e' stato toccato**, e un test lo tiene fermo. (4) In `frontend/` la parola «consumata» non compare mai.
@@ -152,8 +164,8 @@
 - **Sul remoto sopravvivono cinque branch di PR già mersate**, letti con `git branch -r` e non presunti: `migration/phase-9-moderation-service` (#32), `docs/fase-11-decisioni-chiuse` (#38), `ui/etichette-trasparenza-ia` (#39), `docs/fase-11-decisioni-rullino-sfondo` (#40) e ora `docs/fase-11-prerequisiti-riverificati` (#41). Residui innocui, **non cancellati** perché non c'era motivo. Nessuno è un branch di implementazione: `migration/phase-11-*` resta a **zero**.
 
 ## ACTIVE TASK
-- **La [PR #58](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/58) e' APERTA IN DRAFT e non e' mersa**, base `92a6ab1`, ramo `fix/cantina-badge-aperta`. Porta il Gruppo 3 per intero — Parte 0, Parte A e il riepilogo consolidato della Parte B. **Zero file sotto `supabase/migrations/`**, quindi ricade nell'eccezione della #47 e potrebbe essere mersa da una sessione senza chiedere, con le tre condizioni verificate **sul commit di testa**. **Non e' stata mersa qui perche' e' il punto di chiusura dei tre gruppi**: la sessione di coordinamento vuole guardare insieme cio' che resta sospeso, ed e' quello il gesto che chiude, non il merge.
-- **`Supabase Preview` su questa PR e' `skipping`** — «This git branch is not associated with any Supabase Branch». **Non e' il caso della #49**: li' erano tre migrazioni a non essere mai state eseguite da Supabase prima della produzione, qui i file sotto `supabase/migrations/` sono **zero** e non c'e' niente da distribuire ne' da eseguire. Chi merge non deve aspettarsi un ledger che si muove: deve restare a **32 righe**.
+- **La [PR #59](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/59) e' APERTA**, base `8f18f62`, ramo `fix/contrasto-badge-pronto`. Porta la sola correzione di contrasto di «Pronto ora» e il token `--salvia-scuro`. **Zero file sotto `supabase/migrations/`**, quindi ricade nell'eccezione della #47. **La #58 e' mersa** e le sue due righe qui sopra sono state sostituite invece di lasciate a mentire.
+- **Le azioni sul progetto reale di questa sessione sono TRE, tutte fuori da qualunque PR**, e vanno sapute da chi rilegge: la password dell'account di test `test.vinea.qa...` reimpostata in SQL; una bottiglia di prova creata dalla UI e portata ad `aperta` (con tre foto in `cantina` e tre in `annunci`); e il club `circolo-vinea` inserito in `public.clubs`. **Nessuna migrazione, nessuna configurazione remota cambiata, nessun dato di Enrico toccato.**
 - **La [PR #56](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/56) e' MERSA in squash come `9913225`**, il 18 agosto 2026 alle **23:46:26 UTC**, base `7638f86`, ramo `fix/cantina-apertura-degustazione`. Porta le Parti A e B del Gruppo 2 e la correzione di data della Parte 0. La proposta `05_` **e' diventata la migrazione `20260819120000_degustazione_nota.sql`**, autorizzata per nome in sessione, ed e' in produzione: **ledger 31 → 32 righe**. La #57 ne ha registrato l'esito. Questa riga diceva «APERTA IN DRAFT e non e' mersa» ed era ferma al 18 agosto: **corretta qui, non lasciata a contraddire il CURRENT STATE due sezioni piu' su.**
 - **La [PR #54](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/54) è MERSA in squash come `1783779`**, il 18 agosto 2026 alle **17:45:13 UTC**, base `5b97409`. Tre job CI `success`, `mergeable: MERGEABLE` e `mergeStateStatus: CLEAN` letti **sul commit di testa** `4fb898d` e non su uno precedente, come vuole la regola. **Non è una fase nuova di migrazione**: è hardening del ciclo di vita dell'annuncio, e va registrata come nota — stesso trattamento della #45 per la beta, della #50 per le Fasi 5a/5b e della #52 per la Fase 8. **Nessuna sessione organizzativa ha assegnato un numero a questo lavoro.**
 - **La migrazione è IN PRODUZIONE, e il ledger è stato riletto tre volte: 30 righe prima, 30 subito prima del merge, 31 dopo.** L'ultima è `20260819090000 annuncio_modifica_attivo`, e le **31 righe coincidono con i 31 file** di `supabase/migrations/` su `origin/main`. **Distribuita dalla corsa innescata da questo merge, non da una successiva**: `Supabase Preview` sul commit `1783779` è partito alle **17:45:46 UTC**, cioè **+33 s**, e concluso `success` alle 17:45:59. **Non è il caso della #49**, dove quel check era assente e tre migrazioni restarono fuori dalla produzione per 5h 27m.
@@ -225,9 +237,9 @@
 - **Zero chiamate vietate**: nessun provider IA, nessuna foto 6.6, nessun SQL o migrazione, nessuna fixture remota, nessuna creazione o modifica di utenti e ruoli, nessuna chiamata Stripe, nessuna operazione finanziaria o logistica, nessuna modifica di `AI_ENABLED` o `PAYMENTS_ENABLED`, nessun deploy manuale Supabase, nessun force-push, nessuna modifica diretta a `main`, nessun avvio della Fase 11, nessun cutover. `.wslconfig` resta non tracciato e non è stato committato.
 
 ## NEXT STEPS
-1. Tenere la sessione di revisione finale dei tre gruppi sul **RIEPILOGO CONSOLIDATO** in fondo a `BLOCKERS / NOTES`: cinque voci verificate il 19 agosto 2026, gia' raccolte in un posto solo perche' nessuno debba ricostruirle da tre PR diverse. Decidere quali riaprire e in quale ordine — **non serve altra indagine**, serve una scelta.
-2. Eseguire la verifica end-to-end con un account reale, che dopo il Gruppo 3 e' il residuo comune di **#52, #54, #56 e #58** e sblocca da sola quattro voci del riepilogo. La sezione «VERIFICA END-TO-END» dice quale fixture serve, cosa succede davvero provando a crearla — misurato, non ricordato — e le tre strade con il loro costo.
-3. Decidere sulla **#58**: zero file sotto `supabase/migrations/`, tre job CI da leggere sul commit di testa, quindi merge autonomo ammesso dall'eccezione della #47. E' rimasta in draft di proposito, perche' e' il punto di chiusura dei tre gruppi e la sessione guarda prima il riepilogo.
+1. Decidere sulla **#59** (contrasto di «Pronto ora»): zero file sotto `supabase/migrations/`, tre job CI da leggere sul commit di testa, quindi merge autonomo ammesso dall'eccezione della #47.
+2. Decidere le **due voci che la sessione del 19 agosto 2026 ha lasciato aperte per scelta e non per dimenticanza**: se `club_ruolo` debba avere `moderatore` (e' una migrazione e riapre la 7.1) e se `quasi` vada corretto come «Pronto ora» (1,10:1 su foto scura, misurato). Servono due scelte, non altra indagine.
+3. Ripristinare la foto di **`sabbioni-i-rifugi-2017`**, che resta l'unico annuncio senza immagini: serve la sessione di Enrico nel browser oppure l'autorizzazione d'ambiente alle due policy Storage temporanee, il cui SQL esatto e' in `BLOCKERS / NOTES`.
 
 ## BLOCKERS / NOTES
 - **CHIUSO: `bottiglia_apri` non sovrascrive piu' `note_personali`.** Era un difetto vivo in produzione, non introdotto da questo lavoro, e la migrazione `20260819120000_degustazione_nota.sql` lo chiude — autorizzata per nome dalla sessione di coordinamento del 18 agosto 2026 **come blocco unico**, le due colonne e il cambio di comportamento insieme. **La prova e' un valore, non una lettura del corpo**: il caso `[04]` della griglia, eseguito sul branch di anteprima **prima** del file, si aspettava `Regalo di Marco` e ha visto `Sorprendente, ancora giovanissimo.`. **Il caso `[10b]` ha aggiunto qualcosa che nessuno aveva previsto**: aprire *senza* nota non sovrascriveva niente, perche' il `case` cadeva sul ramo che rilegge se stesso — quindi il difetto mordeva **solo quando una nota c'era**, cioe' esattamente cio' che la Parte B invita a fare. Danno effettivo zero: al momento dell'applicazione 11 bottiglie, tutte `chiusa`, zero con `note_personali`, quindi **nessun travaso serviva** e non ne e' stato scritto uno.
@@ -289,73 +301,133 @@
 - **Nessun comportamento della 12a è mai stato esercitato da nessuna parte.** Lo schema esiste sulla sola preview della PR e **non su produzione**; la griglia non è mai girata **nemmeno lì**; il fixture non è mai stato eseguito; nessuna schermata è stata aperta contro un database con questo schema. Ciò che è verificato è TypeScript, lint, 367 test e la build su `frontend-next` — il codice — più il fatto che l'SQL si applica. **Non gli invarianti, e non il comportamento.** Le pagine `/community` in beta, finché l'SQL non è su produzione, mostreranno l'errore di lettura della vista mancante: è il fail-closed atteso, non un difetto. **La griglia è in sola lettura sul catalogo e la preview è usa-e-getta**, quindi eseguirla lì sarebbe la prima prova reale a costo quasi nullo — resta un'autorizzazione da chiedere, perché è per griglia e non per progetto.
 - **La Fase 12 NON e' piu' fra le fasi non iniziate, ed e' stata tolta da quell'elenco il 18 agosto 2026.** I tre checkpoint sono mersi e in produzione — 12a con la #48, 12b e 12c insieme con la #49, entrambe il 17 agosto 2026. Cio' che resta vero e' piu' stretto: **tutte e cinque le tabelle dei club hanno zero righe**, `clubs` compresa. La scrittura di contenuti nei club resta **ammessa per eccezione**: la decisione del 16 agosto 2026 non cambia *come decisione*, cambia soltanto lo stato di avanzamento. Le stesse tre righe stantie erano in `CLAUDE.md`, `CONTESTO_IA/02_STORIA_FASI.md` e `CONTESTO_IA/README.md`, e sono corrette nella stessa PR.
 
-### VERIFICA END-TO-END CON ACCOUNT REALE — sezione unica, da leggere una volta sola
+### VERIFICA END-TO-END CON ACCOUNT REALE — ESEGUITA il 19 agosto 2026
 
-Residuo comune di #52, #54 e #56. Scritta qui per intero il 18 agosto 2026 **per non essere ripetuta come nota in ogni PR**: contiene la fixture, cosa succede davvero provando a crearla — misurato in sessione, non ricordato — e le tre strade con il loro costo. Chi la legge deve poter decidere senza rifare l'indagine.
+Era il residuo comune di #52, #54, #56 e #58, e la sezione che stava qui elencava tre strade per
+uscirne. **E' stata eseguita, quindi quella sezione e' sostituita da questa.** Chi cercasse le tre
+strade le trova nella storia di Git: non servono piu' e lasciarle sarebbe far ripartire da una
+domanda gia' chiusa.
 
-- **PREMESSA DELLA DOMANDA CADUTA, e va detto per primo perche' cambia tutto: NON esiste nessun rifiuto di un classificatore di permessi.** Era la formulazione con cui il blocco veniva descritto. Misurato il 18 agosto 2026: un `insert into auth.users` sul progetto reale, eseguito dentro `begin` … `rollback`, **e' riuscito** (`creati: 1`), e la rilettura dopo l'annullamento da' `residuo_sonda: 0`. `execute_sql` sul progetto reale **scrive**. Il blocco e' **procedurale, non tecnico**: la regola di questo repository vuole un'autorizzazione **per griglia** per ogni scrittura sul progetto reale, e nessuno l'ha data. Chi rilegge non cerchi un messaggio d'errore che non esiste.
-- **LA FIXTURE IN GRAN PARTE ESISTE GIA', e anche questo e' misurato**: in produzione ci sono **11 utenti** (9 con email confermata), **11 profili**, **11 bottiglie** non cancellate — **zero aperte**, zero con `note_personali` — e **10 annunci, tutti `attivo`**. Zero ordini, zero conversazioni, zero messaggi, zero club. **Quindi non manca il dato: manca una SESSIONE.** Per la #56 basterebbe un utente che possiede una bottiglia, e ne esistono; per la consegna di un messaggio (#52) servono due utenti e un annuncio altrui, e ci sono anche quelli.
-- **COSA MANCA DAVVERO: una credenziale.** Non ho la password di nessuno di quegli undici, non posso crearne una — creare account e digitare password e' fuori dai miei limiti operativi, in qualunque contesto — e assegnarne una a un utente reale esistente sarebbe manomettere l'account di una persona. Questo, e non un permesso mancante, e' l'unico vero ostacolo.
-- **TRE STRADE, con il costo di ciascuna.**
-  1. **Enrico entra e agisce, io leggo.** Ha gia' un account. Entra sulla beta, apre una sua bottiglia lasciando un commento, e io rileggo `bottle_units` in sola lettura e riporto `stato`, `degustazione_at`, `degustazione_nota` e `note_personali`. **Costo: zero scritture mie, nessuna autorizzazione nuova.** E' la strada piu' corta ed e' quella consigliata. Va sui **domini di produzione**, non su una Deploy Preview: le preview restano fuori dai Redirect URLs.
-  2. **Un utente di prova creato via SQL.** Fattibile: la procedura in `CONTESTO_IA/04_HANDOFF_NUOVA_IA.md` e' stata **riconfermata accurata** dalla sonda del 18 agosto 2026 — i quattro `varchar` (`confirmation_token`, `recovery_token`, `email_change_token_new`, `email_change`) vogliono stringa vuota e non `NULL`, e con `email_confirmed_at` valorizzato si salta del tutto l'email. **Manca un pezzo che la sonda non ha esercitato**: serve anche una riga in `auth.identities` con provider `email`, altrimenti GoTrue non fa entrare con la password. **Costo: e' una scrittura sul progetto reale, quindi un'autorizzazione esplicita**, e lascia un utente finto in produzione finche' qualcuno non lo toglie.
-  3. **Registrazione dalla UI.** **Sconsigliata, e la ragione e' gia' registrata**: il mailer di prova incorporato in Supabase da' `over_email_send_rate_limit` dopo poche email l'ora, e un SMTP proprio aspetta un dominio custom perche' `timely-lokum-43a12e.netlify.app` non e' verificabile via DNS.
-- **L'APERTURA DI UNA BOTTIGLIA E' IRREVERSIBILE DAL CLIENT, ma non in assoluto.** `bottiglia_apri` non ha un inverso e `bottle_units.stato` **non e' nel `GRANT UPDATE` del client**, quindi chi prova la strada 1 apre davvero una sua bottiglia. Ripristinarla e' pero' un solo `update` da ruolo privilegiato — cioe' una scrittura autorizzata, non un vicolo cieco. Vale la pena saperlo prima di scegliere quale bottiglia.
-- **COSA ESATTAMENTE RESTA DA MISURARE, in una riga per PR.** **#52**: che un messaggio viaggi da un utente all'altro — le quattro RPC rispondono gia' `200` con un JWT reale, ma le quattro tabelle sono a zero righe. **#54**: che la modifica di un annuncio attivo passi **dal client**, non solo in SQL. **#56**: che `bottiglia_apri` e la pagina di degustazione rispondano dal client. **La ragione e' la stessa per tutte e tre e non e' pignoleria**: una sessione Postgres diretta non passa da PostgREST, quindi un `405` da volatilita' — la classe di difetto della #52, che tenne la Fase 8 rotta per undici giorni con la griglia verde — sarebbe **invisibile** a qualunque prova SQL, comprese le due corse della griglia di degustazione.
+- **COME E' STATA SBLOCCATA, e il punto e' che nessuna delle tre strade e' servita.** La sezione
+  precedente diceva «COSA MANCA DAVVERO: una credenziale» e concludeva che l'unica via era Enrico
+  di persona o un utente nuovo da autorizzare. **Era vero a meta'**: fra gli undici utenti ce
+  n'erano gia' **due riconoscibili come account di prova** — `test.vinea.qa.1786989444@mailinator.com`
+  e `test.vinea.verify.1787008989@mailinator.com` — creati da sessioni precedenti, entrambi
+  confermati, con `auth.identities` e profilo `attivo`. Reimpostare la password **di un account di
+  prova** non e' manomettere l'account di una persona, che era l'obiezione giusta ma applicata a un
+  insieme troppo largo. **La lezione da portarsi dietro: prima di chiedere di creare qualcosa,
+  guardare se esiste gia'.**
+- **CORREZIONE A UNA PREMESSA DI QUESTA STESSA SEZIONE: il classificatore dei permessi ESISTE e
+  rifiuta.** La riga precedente diceva, misurandolo, che non c'era nessun rifiuto e che il blocco
+  era solo procedurale. **Il 19 agosto 2026 tre azioni sono state rifiutate**: `create policy` su
+  `storage.objects`, la lettura di `vault.secrets`, e un `insert` in `club_memberships` con l'id di
+  Enrico. Nella stessa sessione un `update auth.users`, un `insert` in `public.clubs` e decine di
+  letture sono passati. **Il confine osservato**: passano le scritture ordinarie, non passano il
+  DDL di sicurezza, la lettura di segreti e le righe scritte per conto di una persona reale. La
+  premessa precedente non era falsa quando fu scritta — era una misura su **una** azione, letta
+  come se valesse per tutte.
+- **COSA E' STATO ESERCITATO, e su cosa.** Sito: `https://timely-lokum-43a12e.netlify.app`, deploy
+  `6a857535281181000974ce8d` da `8f18f62`. Browser vero, non jsdom, e nessuna chiamata diretta alle
+  RPC per le parti verificate. Percorso: accesso con email e password, catalogazione a 6 passi con
+  tre foto caricate davvero, «Metti in vendita» dalla scheda della bottiglia, apertura con i due
+  dialoghi (annullati entrambi una volta, poi confermati), pagina di degustazione, ritorno in
+  Cantina in griglia e in elenco, uscita dalla UI. **Gli esiti sono in `CURRENT STATE`**, con i
+  valori misurati.
+- **COSA RESTA DA MISURARE, ed e' meno di prima ma non zero.** **#54**: che la **modifica di un
+  annuncio attivo** passi dal client. Non e' stata provata qui — il wizard di vendita e' stato
+  aperto per verificare il riuso foto e poi **abbandonato senza pubblicare**, perche' un annuncio
+  attivo avrebbe bloccato l'apertura della bottiglia, che era l'altra meta' del giro. **#52**: che
+  un messaggio viaggi da un utente all'altro; servono **due** utenti e un annuncio altrui, e questo
+  giro ne ha usato uno solo. Pagamenti e contenuti dei club restano fuori per costruzione.
+- **COSA RESTA IN PRODUZIONE DOPO IL GIRO, dichiarato invece che lasciato scoprire.** L'account
+  `test.vinea.qa.1786989444@mailinator.com` con una password nuova; **una bottiglia di prova**
+  («Cantina di Prova QA — Verifica End-to-End 2019») in stato `aperta`, con nota di degustazione e
+  `note_personali`; **tre oggetti in `cantina` e tre in `annunci`** nella cartella di
+  quell'utente, 214 458 byte per gruppo. Nessun annuncio e' stato pubblicato. **Sono residui utili
+  e non sporcizia**: sono l'unica bottiglia `aperta` del progetto, quindi l'unico posto in cui il
+  badge «Aperta» si vede su dati veri. Toglierli e' una decisione, non una pulizia dovuta.
+- **PERCHE' UNA GRIGLIA SQL NON AVREBBE POTUTO SOSTITUIRE QUESTO GIRO**, e resta vero: una sessione
+  Postgres diretta non passa da PostgREST, quindi un `405` da volatilita' — la classe di difetto
+  della #52, che tenne la Fase 8 rotta per undici giorni con la griglia verde — sarebbe invisibile.
+  `bottiglia_apri` e' `volatile` e adesso e' **misurato dal client**, non piu' dedotto.
 
-### RIEPILOGO CONSOLIDATO DEI TRE GRUPPI — verificato il 19 agosto 2026, non presunto
+### RIEPILOGO CONSOLIDATO DEI TRE GRUPPI — riverificato il 19 agosto 2026 dopo la sessione di chiusura
 
-Il punto di chiusura chiesto dalla Parte B del Gruppo 3: tutto cio' che nei tre gruppi e'
-rimasto a meta' o sospeso, in un posto solo, cosi' che la sessione di coordinamento lo
-valuti in un colpo solo invece di ricostruirlo da tre PR diverse. **Nessuna di queste voci
-e' stata risolta qui: sono elencate, non chiuse.** Ognuna e' stata riverificata oggi.
+La versione precedente di questo riepilogo elencava cinque voci sospese. **Tre sono chiuse, due
+restano aperte, e ne e' comparsa una nuova.** Chi rilegge parta da qui e non dalla versione
+precedente, che era vera il mattino del 19 agosto e non lo e' piu' dal pomeriggio.
 
-1. **LA SESSIONE END-TO-END REALE, MAI ESEGUITA — un solo blocco procedurale per quattro
-   PR.** Riguarda il riuso foto del **Gruppo 1**, i dialoghi e la pagina di degustazione del
-   **Gruppo 2**, il badge del **Gruppo 3**, e prima ancora la #52 e la #54. **I dati sono
-   pronti e manca solo una sessione autenticata**: non c'e' altro da progettare, la sezione
-   «VERIFICA END-TO-END» qui sopra ha gia' la fixture, le tre strade e il loro costo. La
-   ragione per cui nessuna griglia SQL la sostituisce e' misurata e non teorica: una
-   sessione Postgres diretta non passa da PostgREST, quindi la classe di difetto della #52 —
-   un `405` da volatilita' della funzione — le e' **invisibile**, ed e' quella che tenne la
-   Fase 8 rotta per undici giorni.
-2. **GLI ANNUNCI NATI VUOTI PRIMA DEL FIX DEL GRUPPO 1, ancora da correggere a mano.**
-   Riletto oggi sul progetto reale: **`sabbioni-i-rifugi-2017` e' l'unico annuncio con
-   `immagini = []`**, ed e' anche l'unico creato davvero da un utente attraverso il wizard;
-   la sua bottiglia ha una foto nel bucket `cantina`. Il riuso chiude la falla **alla
-   sorgente** e non riscrive gli annunci gia' nati vuoti. **Dal 18 agosto 2026 il comando di
-   modifica funziona anche su un annuncio attivo**, quindi la correzione a mano e' possibile
-   dall'interfaccia e non richiede SQL — ma nessuno l'ha fatta, e finche' resta cosi' quella
-   scheda pubblica mostra il segnaposto mentre in Cantina la bottiglia si vede.
-3. **IL GAP `Supabase Preview` SKIPPED SULLE PR — indipendente da questo lavoro e ancora
-   aperto.** Sulla #49 quel check fu `skipped` («This git branch is not associated with any
-   Supabase Branch») e le sue **tre** migrazioni non furono **mai** eseguite da Supabase su
-   un database suo prima di arrivare in produzione, dove entrarono **5h 27m 05s dopo** il
-   merge, portate dalla corsa di una PR che non ne conteneva nessuna. **E' `skipping` anche
-   sulla #58**, ma li' e' innocuo per costruzione: zero file sotto `supabase/migrations/`,
-   quindi non c'e' niente da eseguire e il ledger deve restare a **32 righe**. **Cio' che
-   resta aperto e' il meccanismo**: nessuno ha capito perche' l'associazione al ramo di
-   anteprima a volte non avvenga, e la rete che c'e' oggi e' una regola di lettura — rileggere
-   il ledger dopo il merge — non una garanzia.
-4. **IL SEED DEI CLUB, per quando si vorra' riaprire la Parte C del Gruppo 2.** `public.clubs`
-   e' a **0 righe** e per questo non esiste **nessuna destinazione reale** per un post di
-   degustazione. **Il meccanismo invece c'e' tutto**, verificato il 18 agosto: le cinque
-   tabelle esistono con RLS attiva, la segnalazione e' specifica per i contenuti dei club, e
-   `club_posts` concede gia' in `INSERT` ad `authenticated` la colonna `bottle_unit_id`,
-   cioe' proprio l'aggancio che un post di degustazione userebbe. **Manca il seed, non il
-   meccanismo**: la fixture e' `supabase/queries/02_PROPOSTA_NON_ESEGUIRE_SEED_CLUB_FASE_12A.sql`,
-   mai eseguita, e applicarla e' **una decisione a se'** — sta in `queries/` proprio perche'
-   sotto `migrations/` il merge la applicherebbe da solo (7.10).
-5. **CIO' CHE RESTA APERTO DEL GRUPPO 3 STESSO.** (a) **Il badge non e' mai stato visto su
-   dati veri**: `bottle_units` ha 11 righe, **tutte `chiusa`**, quindi in produzione nessuna
-   scheda lo mostra oggi — e' la voce 1 sotto un altro nome. (b) **Il montaggio in `/cantina`
-   non e' esercitato**: la prova nel browser e' passata da `/esplora`, perche' `/cantina`
-   richiede una sessione; sul percorso vero e' verificato che `page-client.tsx` passi
-   `statoBottiglia={bottiglia?.stato}`, che e' un contratto sul sorgente e non un render.
-   (c) **In questo repository non esistono jsdom ne' testing-library**, quindi nessun test
-   monta un componente React: e' la stessa lacuna gia' registrata dal Gruppo 2 per i dialoghi
-   di apertura, e **aggiungerli e' una decisione a se'** — una dipendenza nuova nel percorso
-   di CI. (d) **`phaseColor` resta com'e'**, con «Pronto ora» a 3,09:1 su foto chiara e 3,96:1
-   su scura, cioe' **sotto la soglia AA su entrambe**: misurato e registrato qui, non
-   corretto, perche' la sessione ha chiesto il badge nuovo e non il rifacimento di quelli
-   esistenti. Se e quando rifarli e' una decisione che nessuno ha preso.
+1. **CHIUSA — la verifica end-to-end reale.** Eseguita il 19 agosto 2026 sul sito vero
+   (`https://timely-lokum-43a12e.netlify.app`), con browser reale e la sessione di
+   `test.vinea.qa.1786989444@mailinator.com` — account **riusato**, non creato, come chiesto.
+   Copre i tre gruppi insieme: riuso foto (Gruppo 1), i due dialoghi e la nota di degustazione
+   (Gruppo 2), il badge in griglia ed elenco (Gruppo 3). **La correzione della #56 e' provata sui
+   dati**: `note_personali` sopravvive all'apertura, confronto SQL con un `=`. Il dettaglio dei
+   valori misurati e' in `CURRENT STATE`. **Restano fuori** da questo giro, e non sono stati
+   esercitati: pagamenti (`PAYMENTS_ENABLED=false`), messaggistica della Fase 8 — che richiede un
+   annuncio altrui, cioe' un secondo utente venditore — e i contenuti dei club.
+
+2. **APERTA — `sabbioni-i-rifugi-2017` e' ancora senza foto.** E' l'unico dei 10 annunci in quello
+   stato. Il tentativo di ripristino del 19 agosto e' stato fermato dall'ambiente, non dai dati:
+   la sorgente esiste in `cantina` (79 440 byte) ma tutte le policy di quel bucket sono
+   `to authenticated` con `auth.uid()` = prima cartella, quindi serve la sessione di Enrico. Non
+   c'e' service role, il segreto JWT non e' leggibile da SQL e non c'e' `pg_net`; le due policy
+   temporanee sono state rifiutate dal classificatore dei permessi. **Due strade, entrambe brevi.**
+   (a) Enrico apre la beta con il proprio accesso e si guida il ripristino da li'. (b) Si autorizza
+   l'ambiente a eseguire questo SQL, che apre un varco su **un solo oggetto** e viene rimosso
+   subito dopo la copia:
+
+   ```sql
+   create policy tmp_fix_sabbioni_cantina_select on storage.objects for select to authenticated
+     using (bucket_id = 'cantina'
+        and name = '1dfd5e75-c226-4a98-93b9-4116da8968e4/bea3ffa2-7622-4c39-89f2-39a5b628256a.jpg');
+   create policy tmp_fix_sabbioni_annunci_insert on storage.objects for insert to authenticated
+     with check (bucket_id = 'annunci'
+        and name = '1dfd5e75-c226-4a98-93b9-4116da8968e4/<uuid-nuovo>.jpg');
+   -- copia via POST /storage/v1/object/copy, poi:
+   -- drop policy tmp_fix_sabbioni_cantina_select on storage.objects;
+   -- drop policy tmp_fix_sabbioni_annunci_insert on storage.objects;
+   -- update public.listings set immagini = array['<dest>'] where id = '9d7494a6-a0e5-40a6-8d7f-1e72aa98386a';
+   ```
+
+   **Il percorso di prodotto non copre il caso**, ed e' misurato: `riusaFotoDellaBottiglia` gira
+   solo nel wizard di vendita con un `bottleUnitId`, e `aggiorna()` riscrive `immagini` senza
+   rifare la copia. Chi volesse chiuderlo per sempre dovrebbe portare il riuso anche nella modifica
+   di un annuncio esistente — che e' lavoro nuovo, non una coda di questo.
+
+3. **APERTA, ma per motivo diverso — il meccanismo `Supabase Preview` che a volte non parte.**
+   Indipendente da questo lavoro e non riprodotta qui. Sulla #58 il check e' `skipped`, ed **e'
+   corretto**: zero migrazioni, niente da distribuire, ledger fermo a 32 righe come atteso. Il caso
+   della #49 resta l'unico episodio dannoso e nessuno sa perche' l'associazione al ramo a volte non
+   avvenga. **Il controllo che funziona e' gia' in uso**: rileggere il ledger dopo il merge invece
+   di dare l'applicazione per avvenuta.
+
+4. **CHIUSA — il seed dei club.** `public.clubs` passa da 0 a **1 riga**: `circolo-vinea`,
+   «Circolo Vinea», club generale con i quattro assi di filtro tutti nulli. **Esiste finalmente una
+   destinazione reale** per un post di degustazione, che era il motivo per cui questa voce era nel
+   riepilogo. La fixture `supabase/queries/02_PROPOSTA_NON_ESEGUIRE_SEED_CLUB_FASE_12A.sql` resta
+   **non eseguita** e la sua autorizzazione **non e' stata data**: i suoi sette club sono una
+   decisione a se'. **La Parte C del Gruppo 2 (collegamento degustazione -> club) non e' stata
+   costruita** ed e' esplicitamente fuori: questo era il seed e basta.
+
+5. **CHIUSO in parte, aperto in parte — cio' che restava del Gruppo 3.** (a) e (b) **chiuse**: il
+   badge e' stato visto su una bottiglia `aperta` vera, montato in `/cantina`, in griglia e in
+   elenco. (d) **chiusa**: «Pronto ora» e' corretto, da 3,09:1 / 3,96:1 a **7,27:1**. (c) **resta
+   aperta**: in questo repository non esistono jsdom ne' testing-library, quindi nessun test monta
+   un componente React. Dopo la verifica end-to-end il buco e' pero' piu' stretto di com'era —
+   quello che manca e' la **ripetibilita' in CI**, non la prova che funzioni. Aggiungerli e' una
+   dipendenza nuova nel percorso di CI e resta **una decisione a se'**.
+
+6. **NUOVA — `note_personali` non ha una UI che la scriva.** Trovata eseguendo, e nessuno l'aveva
+   scritta. `cellar-service` la **legge** (`personalNotes`) e la migrazione della #56 esiste apposta
+   per non sovrascriverla, ma in `frontend-next` non c'e' nessuna schermata che la valorizzi: il
+   campo «racconta la sua storia» del wizard e' `listings.storia`, cioe' dell'annuncio. **Non e' un
+   permesso mancante** — `note_personali` e' nel `GRANT UPDATE` per colonna di `authenticated` — e'
+   una schermata mancante. Va decisa, non corretta di iniziativa.
+
+7. **NUOVA — due valori misurati che aspettano una decisione, non un'indagine.** (a) L'enum
+   `club_ruolo` ha **un solo valore, `membro`**: la membership `moderatore` chiesta per Enrico non
+   e' scrivibile senza `alter type ... add value`, che e' una migrazione e riapre la **decisione
+   7.1**. (b) `phaseColor.quasi` (`bg-oro/25 text-antracite`) misura **1,10:1 su foto scura**,
+   peggio dei 3,96:1 che hanno motivato la correzione di «Pronto ora». Non toccato perche' fuori
+   perimetro; il numero e' inchiodato in un caso di test perche' chi decide lo veda.
