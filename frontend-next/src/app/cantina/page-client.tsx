@@ -775,11 +775,17 @@ function BottiglieView({
         const bottiglia = bottigliaDelVino(w);
         return (
           <div key={w.id} className="space-y-2">
+            {/* Lo stato viene dalla stessa bottiglia che i comandi qui sotto
+                usano, e non da un aggregato sulle bottiglie di quel vino: se
+                il badge dicesse «Aperta» guardando una bottiglia e il pulsante
+                accanto dicesse «Apri questa bottiglia» guardandone un'altra, la
+                scheda si contraddirebbe da sola. */}
             <WineCard
               wine={w}
               variant={view === "list" ? "list" : "grid"}
               showSaleBadge
               hidePriceIfPrivate
+              statoBottiglia={bottiglia?.stato}
             />
             <div className="flex flex-wrap gap-2">
               {/* Nel mock questo era un interruttore su un insieme in memoria.

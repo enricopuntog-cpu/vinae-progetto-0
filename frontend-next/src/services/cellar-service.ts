@@ -244,6 +244,11 @@ function rigaABottiglia(riga: RigaBottiglia, slugVino: string): CellarBottle {
     wineVintageId: slugVino,
     // Chiusa = 1, aperta o consumata = 0. Vedi l'intestazione del file.
     quantita: riga.stato === "chiusa" ? 1 : 0,
+    // Lo stato per esteso, accanto alla sua compressione e non al posto suo:
+    // `quantita` è letto da mezza Cantina e restringerlo ora sarebbe un lavoro
+    // che nessuno ha chiesto. Chi deve distinguere `aperta` da `consumata` —
+    // il badge della scheda — legge questo.
+    stato: riga.stato,
     plannedOpenDate: riga.apertura_pianificata ?? undefined,
     override: haOverride ? override : undefined,
     saleStatus: statoDiVendita(annunci, riga.visibilita, riga.ceduta_at),
