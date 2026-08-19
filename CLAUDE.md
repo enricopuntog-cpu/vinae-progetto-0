@@ -1511,3 +1511,67 @@ Quello che il lavoro fissa in modo vincolante:
   volatilità — la classe di difetto della #52 — le sarebbe invisibile. `bottiglia_apri` è
   `volatile`, misurato, quindi in POST non dovrebbe incontrarlo; «non dovrebbe» non è una misura.
 - `MIN_TESTS` 451 → **485**.
+
+### Badge «Aperta» in cantina, e il contrasto come misura — PR #58
+
+Terzo e ultimo dei tre gruppi Cantina/Annunci. Hardening, **non una fase nuova**: si registra
+come nota, come la #45 per la beta, la #50 per le Fasi 5a/5b, la #52 per la Fase 8, la #54 per
+il ciclo di vita dell'annuncio e la #56 per l'apertura. **Zero file sotto
+`supabase/migrations/`**, quindi ricade nell'eccezione della #47.
+
+Quello che il lavoro fissa in modo vincolante:
+
+- **Un badge traslucido sovrapposto a una foto non ha un contrasto proprio: ce l'ha insieme
+  alla foto, che e' un dato dell'utente e quindi ignoto.** `phaseColor.pronto` vale
+  `bg-salvia/25 text-salvia`, e misurato da' **3,09:1** su foto chiara e **3,96:1** su scura —
+  **sotto la soglia WCAG 2.1 AA di 4,5:1 su entrambe**, e 10px in grassetto non e' «testo
+  grande» sotto nessuna definizione. Il badge nuovo e' quindi **opaco** (`bg-antracite
+  text-crema`, **14,73:1**, lo stesso identico numero sulle due), e un test **vieta i
+  modificatori di trasparenza** nelle sue classi. Chi aggiunge una pastiglia sopra una foto
+  parta da qui: la trasparenza non e' un dettaglio estetico, e' cio' che consegna il
+  contrasto a un dato che nessuno controlla.
+- **I due esadecimali del badge sono ancorati ai token di `globals.css` da un test.** Le
+  classi Tailwind risolvono a `--antracite` e `--crema`: senza quell'ancoraggio, ridefinire
+  un token renderebbe falso il 14,73 senza che nulla protestasse. Stessa forma dei legami «in
+  entrambe le direzioni» gia' usati dalla #54 e dalla #56.
+- **`bg-antracite` e `text-crema` esistono davvero come utility generate, ed e' misurato nel
+  browser e non dedotto dal blocco `@theme`.** Una sonda sull'app vera legge
+  `background rgb(32,32,32)` e `color rgb(247,243,236)`; la stessa sonda su `bg-salvia/25`
+  legge `oklab(... / 0.25)`, cioe' l'alpha. **Un contratto sul sorgente non dimostra che
+  Tailwind generi la classe**: se non la generasse, il badge sarebbe senza sfondo e il
+  contrasto sarebbe quello della foto — esattamente il difetto che si voleva evitare, in
+  forma peggiore.
+- **`CellarBottle.stato` si affianca a `quantita`, non lo sostituisce.** `quantita` comprime i
+  tre stati in due — 1 per `chiusa`, 0 per `aperta` **o** `consumata` — ed e' letto da mezza
+  Cantina: restringerlo per far posto al badge sarebbe stato lavoro che nessuno ha chiesto.
+  **Nessuna migrazione, e non per scelta**: `stato` era gia' dentro `COLONNE_BOTTIGLIE` e
+  `authenticated` ha su `bottle_units` un GRANT di tabella in sola lettura, quindi l'aggiunta
+  smette solo di buttare via un dato che arrivava gia'.
+- **`Wine` non ha e non deve avere lo stato della bottiglia.** `WineCard` lo riceve come prop
+  facoltativa: su `/esplora` e sulla scheda di un annuncio si guarda il vino di qualcun altro,
+  e li' lo stato della propria bottiglia non vuol dire niente. `Wine` e' la forma del catalogo,
+  non della cantina.
+- **Solo `aperta` ha un badge, e `consumata` di proposito no.** Condizione posta in sessione, e
+  la Parte 0 ha misurato che si applicava: nel repository **non esisteva alcun badge** per
+  `consumata` — non poteva esistere, perche' `CellarBottle` non portava lo stato affatto.
+  L'unica cosa gia' derivata dallo stato e' il **pulsante** «Degustata» di `AperturaBottiglia`,
+  che non e' un badge sulla foto e scatta su `quantita === 0`, cioe' su **entrambi** gli stati:
+  **non e' stato toccato**, e un test lo tiene fermo, perche' restringerlo toglierebbe a una
+  bottiglia consumata l'unica via per rileggere la propria degustazione.
+- **Il badge legge la stessa bottiglia che i comandi accanto usano** — `bottigliaDelVino(w)`, la
+  prima del vino — e non un aggregato sulle bottiglie di quel vino. L'aggregato sarebbe piu'
+  furbo e potrebbe far dire «Aperta» al badge guardando una bottiglia mentre il pulsante di
+  fianco dice «Apri questa bottiglia» guardandone un'altra: **la coerenza fra badge e comando
+  batte l'aggregato.**
+- **La verifica nel browser ha esercitato il componente vero**, con lo stato forzato a
+  `aperta / consumata / chiusa` a rotazione su dieci schede e la sonda poi rimossa: **4 badge
+  su 10**, esattamente le `aperta`; in griglia dentro la foto a 13 px dai bordi con **zero
+  sovrapposizioni** con «Pronto ora», «Momento ideale» e «Da attendere»; in elenco dentro la
+  miniatura 80×96 px a 4 px da sinistra e dal basso. Le due posizioni **differiscono di
+  proposito**: su una miniatura di 80 px due pastiglie affiancate in cima non ci stanno.
+- **Debito noto**: nessuna bottiglia `aperta` esiste in produzione — 11 righe, tutte `chiusa` —
+  quindi il badge e' corretto e **mai visto su dati veri**; e il montaggio in `/cantina` non e'
+  esercitato, perche' quella pagina richiede una sessione e la prova nel browser e' passata da
+  `/esplora`. In questo repository non esistono jsdom ne' testing-library, quindi nessun test
+  monta un componente React: aggiungerli resta **una decisione a se'**.
+- `MIN_TESTS` 485 → **512**.

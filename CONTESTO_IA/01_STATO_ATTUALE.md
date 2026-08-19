@@ -2425,3 +2425,90 @@ comando di modifica, che dal 18 agosto 2026 funziona anche su un annuncio attivo
   cambiare — un ordine **già creato** è immune, `orders.prezzo_cents` è materializzata, uno che
   **sta nascendo** no — e una modifica **non lascia traccia** di cosa ci fosse prima, perché
   `audit_log` è della moderazione.
+
+## Badge «Aperta» in cantina — PR #58, 19 agosto 2026
+
+Gruppo 3, terzo e ultimo dei tre gruppi Cantina/Annunci. **Aperta in draft**, base `92a6ab1`,
+ramo `fix/cantina-badge-aperta`, **zero file sotto `supabase/migrations/`**. Hardening, **non
+una fase nuova**: si registra come nota, come la #45, la #50, la #52, la #54 e la #56.
+
+### Parte 0 — la verifica prima di costruire, e quale dei due casi si e' applicato
+
+**Non esisteva alcun badge per `stato = 'consumata'`**, quindi si e' applicato il secondo caso
+posto da Enrico: costruire **solo** «Aperta». Misurato su quattro fronti, non supposto.
+
+- `WineCard` in **griglia** sovrappone alla foto **due** sole pastiglie — «In vendita»
+  (`wine-card-badge-sale`) e `DrinkBadge` (finestra di bevuta) — e in **elenco** una sola, «In
+  vendita». Nessuna delle due legge lo stato della bottiglia.
+- **`CellarBottle` non portava affatto lo stato.** `cellar-service.ts` lo comprimeva in
+  `quantita: riga.stato === "chiusa" ? 1 : 0`, quindi `aperta` e `consumata` erano
+  indistinguibili a valle: **un badge per `consumata` non poteva esistere, perche' mancava il
+  dato**. E' la ragione per cui la Parte A ha dovuto aggiungere il campo prima del badge.
+- L'unica cosa gia' derivata dallo stato in Cantina e' il **pulsante** «Degustata» di
+  `AperturaBottiglia` in variante compatta. Non e' un badge sulla foto — e' un comando accanto
+  alla scheda — e scatta su `quantita === 0`, cioe' su `aperta` **e** `consumata` insieme.
+  **Non e' stato toccato**, e un test lo tiene fermo: restringerlo toglierebbe a una bottiglia
+  consumata l'unica via per rileggere la propria degustazione, e sarebbe lavoro non chiesto.
+- In `frontend/` la parola «consumata» non compare mai.
+
+### Il contrasto e' il punto tecnico del gruppo
+
+Un badge **traslucido** sovrapposto a una foto non ha un contrasto proprio: ce l'ha **insieme
+alla foto che ha sotto**, che e' un dato caricato dall'utente e quindi ignoto.
+
+| badge | classi | foto chiara | foto scura |
+| --- | --- | --- | --- |
+| «Pronto ora» (esistente) | `bg-salvia/25 text-salvia` | **3,09:1** ✗ | **3,96:1** ✗ |
+| «Momento ideale» (esistente) | `bg-bordeaux text-crema` | 9,99:1 ✓ | 9,99:1 ✓ |
+| **«Aperta» (nuovo)** | `bg-antracite text-crema` | **14,73:1** ✓ | **14,73:1** ✓ |
+
+La soglia WCAG 2.1 AA per il testo normale e' **4,5:1**, e 10px in grassetto non e' «testo
+grande» sotto nessuna definizione. Che le due colonne del badge nuovo portino **lo stesso
+numero** e' la proprieta' che conta, non il numero: un badge opaco non ha una foto dentro il
+proprio contrasto, quindi non esiste una foto che lo rompa. Un test **vieta i modificatori di
+trasparenza** nelle sue classi; un altro **ancora i due esadecimali ai token di `globals.css`**,
+perche' ridefinire `--antracite` renderebbe altrimenti falso il 14,73 senza che nulla protesti.
+
+**`phaseColor` non e' stato toccato**: la sessione ha chiesto il badge nuovo, non il
+rifacimento di quelli esistenti. La misura di «Pronto ora» e' **registrata, non corretta**.
+
+### Nessuna migrazione, e non per scelta
+
+`stato` era **gia'** dentro `COLONNE_BOTTIGLIE`, e su `bottle_units` `authenticated` ha un
+GRANT di tabella in sola lettura: la colonna arrivava e veniva buttata via. `CellarBottle.stato`
+si **affianca** a `quantita` senza sostituirlo, perche' `quantita` e' letto da mezza Cantina e
+restringerlo ora sarebbe lavoro che nessuno ha chiesto. L'enum `bottle_unit_stato` e' stato
+riletto da `pg_type` sul progetto reale: `{chiusa, aperta, consumata}`, tre label.
+
+`Wine` **non** ha e non deve avere lo stato: `WineCard` lo riceve come prop facoltativa, perche'
+su `/esplora` e sulla scheda di un annuncio si guarda il vino di qualcun altro e li' lo stato
+della propria bottiglia non vuol dire niente.
+
+### Cosa e' verificato e cosa no
+
+Verificato **nel browser**, perche' un contratto sul sorgente non dimostra che Tailwind generi
+la classe — e se non la generasse il badge sarebbe senza sfondo, cioe' il difetto che si voleva
+evitare in forma peggiore. Componente vero montato nel server di sviluppo con lo stato forzato a
+`aperta / consumata / chiusa` a rotazione su dieci schede, sonda poi rimossa e `git diff` del
+file verificato vuoto:
+
+- **4 badge su 10**, esattamente le `aperta`; zero sulle `consumata` e sulle `chiusa`.
+- `background rgb(32,32,32)`, `color rgb(247,243,236)`, `opacity 1`, `position absolute`.
+- **Griglia**: dentro l'area della foto (239×298 px), 13 px dal bordo destro e superiore,
+  `z-index 10`, **zero sovrapposizioni** con «Pronto ora», «Momento ideale» e «Da attendere».
+- **Elenco**: dentro la miniatura 80×96 px, 4 px da sinistra e dal basso. Le due posizioni
+  differiscono **di proposito**: su 80 px due pastiglie affiancate in cima non ci stanno.
+- Senza `statoBottiglia`, cioe' su `/esplora` reale: 20 schede e **zero** badge.
+
+**Non** verificato: il badge **non e' mai stato visto su dati veri**, perche' `bottle_units` ha
+11 righe **tutte `chiusa`**; e il **montaggio in `/cantina` non e' esercitato**, perche' quella
+pagina richiede una sessione e la prova e' passata da `/esplora`. Che `page-client.tsx` passi
+`statoBottiglia={bottiglia?.stato}` e' un contratto sul sorgente, non un render — in questo
+repository non esistono jsdom ne' testing-library, la stessa lacuna gia' registrata dal Gruppo 2.
+
+### Una scelta di dominio da rivedere se non convince
+
+Il badge legge **la stessa bottiglia che i comandi accanto usano**, `bottigliaDelVino(w)`, e non
+un aggregato sulle bottiglie di quel vino. L'aggregato sarebbe piu' furbo, ma potrebbe far dire
+«Aperta» al badge guardando una bottiglia mentre il pulsante di fianco dice «Apri questa
+bottiglia» guardandone un'altra: **la coerenza fra badge e comando batte l'aggregato**.
