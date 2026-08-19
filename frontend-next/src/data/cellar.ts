@@ -494,10 +494,31 @@ export const phaseShort: Record<DrinkPhase, string> = {
   none: "",
 };
 
+/**
+ * Le classi delle pastiglie della finestra di bevuta.
+ *
+ * `pronto` è **opaco** — `bg-salvia-scuro text-crema`, 7,27:1 — e non lo era.
+ * Valeva `bg-salvia/25 text-salvia`, e un fondo traslucido sovrapposto a una
+ * foto non ha un contrasto proprio: ce l'ha *insieme alla foto*, che è un dato
+ * caricato dall'utente e quindi ignoto. Misurato, dava 3,09:1 su una foto
+ * chiara e 3,96:1 su una scura, cioè sotto la soglia WCAG 2.1 AA di 4,5:1 su
+ * entrambe, per un testo che a 10px in grassetto non è «testo grande» sotto
+ * nessuna definizione. Ora il numero è **lo stesso qualunque sia la foto**.
+ *
+ * `--salvia-scuro` è un token nuovo e non un riuso, perché nessuna coppia fra i
+ * token esistenti passava: `--salvia` è un mezzotono (L46%) e falliva in tutte
+ * e due le direzioni — 3,76:1 con `crema`, 3,92:1 con `antracite`. Renderlo
+ * semplicemente opaco non sarebbe bastato, ed è la ragione per cui questa
+ * correzione tocca `globals.css` mentre quella del badge «Aperta» no.
+ *
+ * `ideale` **non** è toccato: `bg-bordeaux text-crema` misura 9,99:1 ed era già
+ * leggibile. Gli altri traslucidi restano come sono — sono fuori dal perimetro
+ * chiesto, e la loro misura sta in `badge-stato.test.ts` invece che qui.
+ */
 export const phaseColor: Record<DrinkPhase, string> = {
   attesa: "bg-secondary text-antracite",
   quasi: "bg-oro/25 text-antracite",
-  pronto: "bg-salvia/25 text-salvia",
+  pronto: "bg-salvia-scuro text-crema",
   ideale: "bg-bordeaux text-crema",
   presto: "bg-oro text-antracite",
   oltre: "bg-destructive/20 text-destructive",

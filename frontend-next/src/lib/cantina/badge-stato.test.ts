@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   COLORE_BADGE_APERTA,
+  COLORE_BADGE_PRONTO,
+  COLORE_BADGE_PRONTO_PRIMA,
   SFONDO_CHIARO,
   SFONDO_SCURO,
   SOGLIA_CONTRASTO_AA,
@@ -119,27 +121,100 @@ describe("il contrasto del badge «Aperta»", () => {
   });
 });
 
-describe("il modello da non copiare, misurato invece che ricordato", () => {
-  // `phaseColor.pronto` vale `bg-salvia/25 text-salvia` in src/data/cellar.ts,
-  // e non viene toccato: la sessione ha chiesto il badge nuovo, non il
-  // rifacimento di quelli esistenti. Qui se ne registra soltanto la misura, che
-  // e' la ragione per cui «Aperta» non ne eredita la forma.
-  const SALVIA = "#74806c";
+describe("il difetto di «Pronto ora», misurato invece che ricordato", () => {
+  // Questi casi misuravano un badge che NON si toccava. Dal 19 agosto 2026 e'
+  // corretto, e restano perche' sono la ragione per cui `--salvia-scuro`
+  // esiste: senza di essi «tanto si legge» basterebbe a rimettere un fondo
+  // traslucido, e nessuno rifarebbe il calcolo.
+  const { base: SALVIA, alpha: ALPHA } = COLORE_BADGE_PRONTO_PRIMA;
 
-  it("un badge traslucido non raggiunge la soglia AA su una foto chiara", () => {
-    const sfondo = componiAlpha(SALVIA, 0.25, SFONDO_CHIARO);
+  it("il fondo traslucido non raggiungeva la soglia AA su una foto chiara", () => {
+    const sfondo = componiAlpha(SALVIA, ALPHA, SFONDO_CHIARO);
     expect(arrotonda(contrastoWcag(sfondo, SALVIA))).toBe(3.09);
     expect(contrastoWcag(sfondo, SALVIA)).toBeLessThan(SOGLIA_CONTRASTO_AA);
   });
 
-  it("non la raggiunge nemmeno su una foto scura, e i due numeri sono diversi", () => {
-    const suScuro = contrastoWcag(componiAlpha(SALVIA, 0.25, SFONDO_SCURO), SALVIA);
-    const suChiaro = contrastoWcag(componiAlpha(SALVIA, 0.25, SFONDO_CHIARO), SALVIA);
+  it("non la raggiungeva nemmeno su una foto scura, e i due numeri erano diversi", () => {
+    const suScuro = contrastoWcag(componiAlpha(SALVIA, ALPHA, SFONDO_SCURO), SALVIA);
+    const suChiaro = contrastoWcag(componiAlpha(SALVIA, ALPHA, SFONDO_CHIARO), SALVIA);
     expect(arrotonda(suScuro)).toBe(3.96);
     expect(suScuro).toBeLessThan(SOGLIA_CONTRASTO_AA);
-    // Che i due differiscano e' il difetto in se': il contrasto di quel badge
-    // e' una proprieta' della foto, cioe' di un dato che nessuno controlla.
+    // Che i due differissero e' il difetto in se': il contrasto di quel badge
+    // era una proprieta' della foto, cioe' di un dato che nessuno controlla.
     expect(suScuro).not.toBe(suChiaro);
+  });
+
+  it("quel valore non e' piu' in `phaseColor`", () => {
+    // Il caso che conta davvero: i due qui sopra passerebbero identici anche
+    // se la correzione non fosse mai stata applicata, perche' calcolano su una
+    // costante. Questo guarda il file.
+    expect(senzaCommenti(leggi("src/data/cellar.ts"))).not.toInclude(
+      COLORE_BADGE_PRONTO_PRIMA.classi,
+    );
+  });
+});
+
+// ============================================================
+// «Pronto ora» corretto: opaco, e per la stessa ragione di «Aperta»
+// ============================================================
+
+describe("«Pronto ora» dopo la correzione", () => {
+  it("supera la soglia AA su una foto chiara", () => {
+    const c = contrastoWcag(COLORE_BADGE_PRONTO.testo, COLORE_BADGE_PRONTO.sfondo);
+    expect(arrotonda(c)).toBe(7.27);
+    expect(c).toBeGreaterThanOrEqual(SOGLIA_CONTRASTO_AA);
+  });
+
+  it("da' lo stesso identico numero su una foto scura, perche' e' opaco", () => {
+    // La forma della promessa: un fondo opaco non compone con niente, quindi il
+    // contrasto e' lo stesso qualunque foto ci sia sotto. Comporlo con alpha 1
+    // sui due estremi e' il modo di dimostrarlo invece di affermarlo.
+    const suChiaro = contrastoWcag(
+      COLORE_BADGE_PRONTO.testo,
+      componiAlpha(COLORE_BADGE_PRONTO.sfondo, 1, SFONDO_CHIARO),
+    );
+    const suScuro = contrastoWcag(
+      COLORE_BADGE_PRONTO.testo,
+      componiAlpha(COLORE_BADGE_PRONTO.sfondo, 1, SFONDO_SCURO),
+    );
+    expect(suChiaro).toBe(suScuro);
+    expect(suScuro).toBeGreaterThanOrEqual(SOGLIA_CONTRASTO_AA);
+  });
+
+  it("non porta modificatori di trasparenza nelle sue classi", () => {
+    // Stessa guardia del badge «Aperta»: `/25` o `/40` qui sarebbe una scelta
+    // estetica che riaprirebbe esattamente il difetto appena chiuso.
+    expect(COLORE_BADGE_PRONTO.classi).not.toMatch(/\/\d/);
+  });
+
+  it("ha gli esadecimali allineati ai token di globals.css", () => {
+    // `--salvia-scuro` e' un token NUOVO: se qualcuno lo ridefinisce, il 7,27
+    // qui sopra smette di essere vero senza che nulla protesti.
+    const css = leggi("src/app/globals.css");
+    expect(css).toInclude(`--salvia-scuro: ${COLORE_BADGE_PRONTO.sfondo};`);
+    expect(css).toInclude(`--crema: ${COLORE_BADGE_PRONTO.testo};`);
+    // E la utility deve esistere nel blocco @theme, altrimenti Tailwind non
+    // genera `bg-salvia-scuro` e il badge resta senza fondo — il difetto di
+    // partenza in forma peggiore.
+    expect(css).toInclude("--color-salvia-scuro: var(--salvia-scuro);");
+  });
+
+  it("nessuna coppia fra i token gia' esistenti avrebbe retto la soglia", () => {
+    // Il caso che spiega perche' questa correzione tocca globals.css mentre
+    // quella di «Aperta» no. Senza di esso, «bastava rendere opaco bg-salvia»
+    // resta un'obiezione ragionevole a cui nessuno ha una risposta misurata.
+    const SALVIA = COLORE_BADGE_PRONTO_PRIMA.base;
+    expect(contrastoWcag(COLORE_BADGE_PRONTO.testo, SALVIA)).toBeLessThan(SOGLIA_CONTRASTO_AA);
+    expect(contrastoWcag(COLORE_BADGE_APERTA.sfondo, SALVIA)).toBeLessThan(SOGLIA_CONTRASTO_AA);
+  });
+
+  it("`phaseColor.pronto` e la costante misurata dicono la stessa cosa", () => {
+    // Il legame nelle due direzioni gia' usato dalla #54 e dalla #56: cambiare
+    // la classe nel file senza rifare la misura, o viceversa, non deve passare
+    // in silenzio.
+    expect(senzaCommenti(leggi("src/data/cellar.ts"))).toInclude(
+      `pronto: "${COLORE_BADGE_PRONTO.classi}"`,
+    );
   });
 });
 
@@ -248,11 +323,30 @@ describe("cio' che il Gruppo 3 non doveva toccare, e non ha toccato", () => {
     expect(apertura).not.toInclude("badgeStatoBottiglia");
   });
 
-  it("i badge della finestra di bevuta restano invariati, traslucidi compresi", () => {
-    // Non e' approvazione: e' il perimetro. La misura del loro difetto sta nei
-    // casi qui sopra, la decisione di rifarli e' di un'altra sessione.
-    const cellar = leggi("src/data/cellar.ts");
-    expect(cellar).toInclude('pronto: "bg-salvia/25 text-salvia"');
-    expect(cellar).toInclude('ideale: "bg-bordeaux text-crema"');
+  it("«Momento ideale» resta invariato, perche' era gia' leggibile", () => {
+    // Condizione posta in sessione il 19 agosto 2026: correggere «Pronto ora» e
+    // NON toccare «Momento ideale». Non e' una preferenza: `bg-bordeaux
+    // text-crema` misura 9,99:1, quindi non c'era niente da correggere, e
+    // rifarlo sarebbe stato lavoro che nessuno ha chiesto.
+    expect(senzaCommenti(leggi("src/data/cellar.ts"))).toInclude(
+      'ideale: "bg-bordeaux text-crema"',
+    );
+    expect(contrastoWcag("#f7f3ec", "#6b2138")).toBeGreaterThanOrEqual(SOGLIA_CONTRASTO_AA);
+  });
+
+  it("gli altri fondi traslucidi restano dove sono, e «quasi» e' misurato", () => {
+    // Non e' approvazione: e' il perimetro, che chiedeva «Pronto ora» e basta.
+    // Ma il numero va scritto, perche' su foto scura `quasi` sta PEGGIO del
+    // badge appena corretto — 1,10:1 contro i 3,96:1 che hanno motivato questa
+    // sessione — e chi decide se riaprirlo deve vederlo, non dedurlo.
+    const cellar = senzaCommenti(leggi("src/data/cellar.ts"));
+    expect(cellar).toInclude('quasi: "bg-oro/25 text-antracite"');
+    expect(cellar).toInclude('oltre: "bg-destructive/20 text-destructive"');
+
+    const ORO = "#b59a63";
+    expect(leggi("src/app/globals.css")).toInclude(`--oro: ${ORO};`);
+    const quasiSuScuro = contrastoWcag("#202020", componiAlpha(ORO, 0.25, SFONDO_SCURO));
+    expect(arrotonda(quasiSuScuro)).toBe(1.1);
+    expect(quasiSuScuro).toBeLessThan(SOGLIA_CONTRASTO_AA);
   });
 });
