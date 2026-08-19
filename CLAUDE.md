@@ -1442,3 +1442,72 @@ Quello che il lavoro fissa in modo vincolante:
   far ripassare per approvazione è una domanda per una fase successiva. Le altre due conseguenze
   accettate allo stesso modo: il prezzo può cambiare fra visualizzazione e checkout, e una modifica
   non lascia traccia di cosa ci fosse prima.
+
+### Apertura di una bottiglia: conferme, degustazione, e la nota che non si cancella più — PR #56
+
+**Mersa in squash come `9913225` il 18 agosto 2026 alle 23:46:26 UTC**, e la migrazione è in
+produzione. Tre job CI `success` più `Supabase Preview`, `mergeable: MERGEABLE` e
+`mergeStateStatus: CLEAN` letti **sul commit di testa** `a58998a`. La PR porta **un** file sotto
+`supabase/migrations/`, quindi **non** ricade nell'eccezione della #47: è un merge esplicito
+autorizzato in sessione. Il ledger passa da **31 a 32 righe** — ultima
+`20260819120000 degustazione_nota`, coincidente con i 32 file su `main` — e la corsa
+`Supabase Preview` innescata da **questo** merge è partita **+31 s** dopo ed è `success`: **non è
+il caso della #49**. Le sei Edge Function sono ripartite insieme — 36/35/35 e 22/22/22, un solo
+`updated_at`, **39,4 s** dopo il merge: **undicesima** misura della 7.10, mai saltata.
+
+Hardening, **non una fase nuova**: va registrata come nota, come la #45 per la beta, la #50 per le
+Fasi 5a/5b, la #52 per la Fase 8 e la #54 per il ciclo di vita dell'annuncio.
+
+Quello che il lavoro fissa in modo vincolante:
+
+- **`bottiglia_apri` sovrascriveva `note_personali`, ed era perdita di dati in produzione.** Il
+  parametro `p_nota` non finiva in una colonna di degustazione: andava sopra la nota generica di
+  cantina, quella che dice «regalo di Marco». **La prova è un valore, non una lettura del corpo**:
+  il caso `[04]` della griglia, eseguito prima della migrazione, si aspettava `Regalo di Marco` e
+  ha visto `Sorprendente, ancora giovanissimo.`.
+- **Il difetto mordeva SOLO quando una nota c'era**, e nessuno l'aveva previsto: il caso `[10b]`
+  mostra che aprire *senza* nota non sovrascriveva niente, perché il `case` cadeva sul ramo che
+  rilegge se stesso. È esattamente ciò che rendeva urgente correggerlo **insieme** alla schermata
+  di degustazione, che invita a scrivere un commento: quel lavoro alzava la probabilità che il
+  difetto si manifestasse.
+- **La verifica post-merge scritta DENTRO la migrazione è sbagliata, e la migrazione è congelata.**
+  Il controllo `pg_get_functiondef(...) ilike '%note_personali%'` restituisce `true` sulla versione
+  **corretta**, perché `pg_get_functiondef` include i commenti SQL del corpo e uno di quei commenti
+  spiega che la nota *non* va più là. Chi rilegge tolga prima i commenti
+  (`regexp_replace(def, '--[^\n]*', '', 'g')`): così misurato, l'`update` non nomina
+  `note_personali`, scrive `degustazione_at` e `degustazione_nota`, conserva `for update` e lascia
+  intatto il blocco sui cinque stati. **È la QUARTA volta che questo repository inciampa nella
+  stessa forma** — spiegare un divieto fa fallire la verifica del divieto — dopo `pravatar` nella
+  #50, il ripulitore `//` invece di `--` del Gruppo 1, e i `comment on` nei test di questa stessa
+  PR. Fidarsi di quel `true` avrebbe fatto concludere che la migrazione non era passata.
+- **Una correzione del database può peggiorare l'interfaccia, se le due metà viaggiano separate.**
+  La pagina di degustazione leggeva il commento da `personalNotes`, cioè **dalla conseguenza del
+  difetto**. Corretto il database e lasciata la pagina com'era, lì sarebbe comparsa la nota di
+  cantina spacciata per commento di degustazione. Due test lo tengono fermo: uno lega client e
+  migrazione **in entrambe le direzioni**, l'altro vieta alla pagina di tornare a
+  `bottiglia.personalNotes`.
+- **La griglia `supabase/tests/degustazione_nota.sql` è stata ESEGUITA due volte**, sul branch di
+  anteprima della PR (PostgreSQL 17.6): **8 PASSA / 7 FALLISCE senza la migrazione, 15 PASSA /
+  0 FALLISCE con essa**. Il perno che la rende eseguibile identica nelle due corse è
+  `to_jsonb(riga) ->> 'colonna'`: un `select bu.degustazione_nota` sarebbe un errore di **analisi**
+  prima della migrazione e farebbe abortire il file invece di far fallire un caso — la corsa
+  «prima» non esisterebbe. **Sul progetto reale non è girata**, ed è un'autorizzazione separata per
+  griglia: questa **scrive**.
+- **Fra le due corse la migrazione è stata applicata al branch con `execute_sql`, deliberatamente
+  SENZA registrarla nel ledger.** Registrandola, al push l'integrazione avrebbe trovato la versione
+  già applicata e l'avrebbe saltata, e «saltata perché già c'era» sarebbe stato indistinguibile da
+  «saltata perché rotta» — il segnale che il caso della #49 insegna a non perdere. Così la
+  distribuzione è rimasta osservabile: al push il ledger del branch è passato da 31 a 32.
+- **L'asimmetria che governa la Parte A**: `bottiglia_apri` rifiuta su **cinque** stati
+  dell'annuncio, `listing_sospendi` ne accetta **uno**, e `listing_scadi` non è una seconda uscita
+  perché pretende `attivo` **e** una scadenza già passata. Per quattro stati su cinque nessun
+  comando del venditore libera la bottiglia: lì si spiega e non si offre un pulsante, perché
+  promettere una rimozione che fallisce è peggio dell'errore onesto che c'era.
+- **Le due colonne nascono non scrivibili dal client, e non serve una riga per ottenerlo**: su
+  `bottle_units` il `GRANT` di tabella per `authenticated` è di sola lettura mentre l'`UPDATE` è
+  per colonna. Verificato in produzione dopo il merge: privilegi client `SELECT` e nient'altro.
+- **Debito noto**: la pagina di degustazione **non è mai stata esercitata da un client
+  autenticato**, né qui né altrove. Una griglia SQL non passa da PostgREST, quindi un `405` da
+  volatilità — la classe di difetto della #52 — le sarebbe invisibile. `bottiglia_apri` è
+  `volatile`, misurato, quindi in POST non dovrebbe incontrarlo; «non dovrebbe» non è una misura.
+- `MIN_TESTS` 451 → **485**.
