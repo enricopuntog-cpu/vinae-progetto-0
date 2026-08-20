@@ -2610,3 +2610,172 @@ varchi risponde **`404 NoSuchKey`**, cioe' la RLS filtra la riga sorgente.
 **E il percorso di prodotto non copre il caso**: `riusaFotoDellaBottiglia` gira **solo** nel wizard
 con un `bottleUnitId`, mentre `aggiorna()` riscrive `immagini` senza rifare la copia. Portare il
 riuso anche nella modifica di un annuncio esistente e' **lavoro nuovo**, da decidere in sessione.
+
+## Prova provider 6.6 — checkpoint storico verificato il 20 agosto 2026
+
+Il checkpoint ha recuperato e verificato fuori dal repository gli artefatti privati datati 15 agosto
+2026. Le due esecuzioni storiche sono avvenute, ma hanno prodotto **zero output validi**: non sono
+una prova comparativa e **non selezionano alcun provider**. Durante questo checkpoint non e' stata
+eseguita nessuna nuova richiesta Anthropic o Google, non e' stato aperto alcun branch
+`migration/phase-11-*`, non e' stato implementato codice 11a e Supabase non e' stato modificato.
+
+### Integrita' degli input sanitizzati
+
+Le fotografie non sono state aperte, visualizzate o copiate nel repository. Sono stati letti soltanto
+i byte necessari a dimensione, SHA-256 e parsing dei marker JPEG. Tutti i file hanno SOI ed EOI
+validi, **zero segmenti APP1** e **zero segmenti APP1/EXIF**. Mapping, protocolli e manifest
+assegnano ad Anthropic e Google lo stesso SHA-256 per ogni fotografia:
+
+| ID | byte | SHA-256 | APP1 | APP1/EXIF | byte assegnati uguali |
+|---|---:|---|---:|---:|---|
+| F01 | 79 440 | `06d8b209cb73a23e928ee6daca6331d42d4246d37a036f78add207afde5cbfe0` | 0 | 0 | si' |
+| F02 | 44 580 | `c30d6767a1775d124b5d2d585d4069564e7a9994fe77904953e079265670d279` | 0 | 0 | si' |
+| F03 | 97 117 | `dd842947e0a22be2546b35d3f218cb0bb590e328637ad997877dede9409b7d8b` | 0 | 0 | si' |
+| F04 | 67 860 | `7ca6087edc8153078e0d8d24f2f5947051c75cf88c0334d1e6ef0cd1117c27a5` | 0 | 0 | si' |
+| F05 | 132 001 | `baae3cec15b1c48355599db85344ef33c0e75c740171cba283f1bcc68ea8116d` | 0 | 0 | si' |
+| F06 | 74 065 | `d31f8a88a96e61e9615e503066a178667fb521d0b4ffc5ce18d764c6b84baff3` | 0 | 0 | si' |
+
+Sono stati ricalcolati anche gli hash degli artefatti privati di supporto, senza registrarne percorsi,
+segreti o contenuti sensibili:
+
+| artefatto | SHA-256 |
+|---|---|
+| `mapping.json` | `b452d3f091937c8923d646791430b2cfc94cddbb8366d0052cc0e2adb3d3e555` |
+| `ground-truth-draft.json` | `bd281d1f768189eb9224760f6b0f8a373c0a3dfc63ea607f4cde96e4ab98a20e` |
+| `trial-protocol-draft.json` | `d0e8357b285c99ab9c5cf5eb09d2afd2b1e749566d9e950d1a6cbbdb34f48e8c` |
+| `run-trial.py` | `2b1ec5e0dd641ff9779bbbc3c6c845a859236f43981a5433507068b9d7f43c76` |
+| `test_run_trial.py` | `6f8e612909f16787d9a145a534f984d4cb3d5c0ee4eaeb57647d0f23252b55e5` |
+| `historical-artifact-hashes.json` | `a9b0b6ae646f5b08c40239f9b71b8b46758386a6dc60536ceef4065316f73794` |
+| `trial-protocol-v2.json` | `865903ed6303bbe4fc370ff99ffa5f9f1071e53f2c0cadbed72624751490b979` |
+| `run-trial-v2.py` | `0a5d547a3a8c0fe06e2a358f7166db98ff0cd3b8c1b89e346413ea9a3d2961e4` |
+| `test_run_trial_v2.py` | `5696cee36c6a0d4a4164b16f65272333b62e04fba923be005481cadfe6027524` |
+
+Il record storico ancora i tre sorgenti v1 — runner, protocollo e test — e i loro hash coincidono.
+Non include invece gli hash dei risultati v1 al momento dell'esecuzione: gli hash correnti dei
+quattro file risultato sono ricalcolabili, ma **non dimostrano l'immutabilita' storica** in assenza
+di un sidecar conservato.
+Gli SHA-256 correnti sono:
+
+| risultato v1 | SHA-256 |
+|---|---|
+| `request-manifest.json` | `c13abbe5048809b24cd17cb6c7d87b3db10a7ef954fa28561dad30d872077715` |
+| `raw-results.jsonl` | `9731b02c37abd11f05a105235f2caa447706b3acc8eed79c3fa0a1bfa4c6cbaa` |
+| `completion-results.jsonl` | `cba88b406476e812fa0c1f694b59c292f067898c2977f79b905198f10f4f31b0` |
+| `evaluation-summary.json` | `aa5d451f8d59668ae2a29a49a24b9e46f48ccf0b7852d0c069498cfc7bdfc0ad` |
+
+Per v2 i tre manifest hanno hash rispettivamente
+`42a5ea28c481ffd83a969b0accd775d024d03e26b6af2a6ac371ce01b56c9f25`,
+`4a257a71ccbbca0f66a6e4a24a9728703ba84753e348d5bea5006099b90b5d22` e
+`d12b24ab9a3086f7fe7d3dcd85b8ce954de26baf1bce9c20bccc2ffb17b02616`: tutti i sidecar
+sono validi. Sono stati ricalcolati i **36 fingerprint** delle richieste — 12 per manifest, con la
+serializzazione canonica del runner Python — e coincidono tutti. Anche la sequenza dei 12
+fingerprint e' identica nei tre manifest. `attempts.jsonl` ha SHA-256
+`bdad71e65b657b583c05a09ace9e3e78f627504e36c96e4c44c6e515da1e2adf`.
+
+### Ricostruzione fedele delle due esecuzioni
+
+**v1 — 15 agosto 2026, 06:22:04 UTC.** Dodici tentativi unici, nessun retry automatico:
+
+1. F01 / Anthropic — HTTP 400;
+2. F01 / Google — HTTP 400;
+3. F02 / Google — HTTP 400;
+4. F02 / Anthropic — HTTP 400;
+5. F03 / Anthropic — HTTP 400;
+6. F03 / Google — HTTP 400;
+7. F04 / Google — HTTP 400;
+8. F04 / Anthropic — HTTP 400;
+9. F05 / Anthropic — HTTP 400;
+10. F05 / Google — HTTP 400;
+11. F06 / Google — reset di trasporto;
+12. F06 / Anthropic — HTTP 400.
+
+Totale: 11 HTTP 400, un errore di trasporto, zero output validi. Il runner non era fail-fast e
+continuo' dopo ogni errore. Gli undici HTTP 400 non riportavano usage e l'evidenza conservata stima
+USD 0; l'eventuale costo effettivo del tentativo Google/F06 terminato con reset non e' determinabile.
+Una riserva prudenziale non e' prova di un addebito.
+
+**v2 — 15 agosto 2026, 07:02:51 UTC.** Il canary si fermo' correttamente al primo errore: un solo
+tentativo F01 / Anthropic, HTTP 400, zero output validi e costo stimato USD 0. Google non fu chiamato
+e le dieci richieste di continuazione non furono eseguite. I booleani di autorizzazione generati dal
+runner nel manifest descrivono uno stato costruito dal programma e non sono prova autosufficiente di
+consenso corrente o durevole.
+
+### Diagnosi separata per forza dell'evidenza
+
+**Dimostrato:**
+
+- v1 non era fail-fast, gestiva in modo incompleto gli errori di trasporto e conservava piu' corpo di
+  risposta del necessario;
+- v2 si fermo' al primo HTTP 400 e non completo' il canary a due provider;
+- nessun run produsse un output semanticamente valido: non esiste una misura comparativa della
+  qualita' visiva;
+- input, mapping e manifest correnti coincidono; ciascun provider era assegnato agli stessi byte;
+- i sei JPEG contengono zero APP1/EXIF; i tre sidecar v2 e tutti i 36 fingerprint sono validi;
+- i risultati v1 non hanno un sidecar d'esecuzione che ne dimostri l'immutabilita' da allora;
+- la documentazione Anthropic corrente esaminata il 20 agosto non supporta `minimum` e `maximum`
+  nello schema JSON raw di structured output usato da v1;
+- il payload Anthropic v2 e' strutturalmente coerente con la documentazione corrente;
+- Gemini 3.7 Flash e' documentato: l'ipotesi che il modello non esista e' confutata;
+- l'endpoint Google `/v1/interactions` di v2 non compare nelle fonti ufficiali correnti esaminate.
+
+**Probabile, ma non provato:**
+
+- i vincoli numerici non supportati sono una causa probabile degli HTTP 400 Anthropic v1;
+- il reset Google/F06 sembra un guasto di trasporto incidentale;
+- uno o piu' dettagli del payload o della revisione Google v1 possono aver causato gli HTTP 400;
+- prima di un nuovo canary la forma Google v2 richiede almeno una correzione dell'endpoint.
+
+**Non determinabile dalle evidenze conservate:**
+
+- la causa precisa di ciascun HTTP 400 storico;
+- il costo effettivo del tentativo Google/F06;
+- il rapporto normativo corrente fra `/v1beta/interactions` e `/v1beta2/interactions`;
+- la forma normativa del model ID Google, bare oppure con prefisso `models/`;
+- la forma corrente univoca di `response_format`, oggetto oppure array;
+- la disponibilita' storica effettiva dei modelli nello specifico progetto Google.
+
+Il confronto e' stato soltanto documentale e offline. Per Anthropic sono state esaminate la Messages
+API, la guida vision, gli structured output, il catalogo modelli e il pricing correnti. Per Google
+sono state esaminate la reference Interactions, le guide structured output, latest model e
+migrazione, il catalogo Gemini 3.7 Flash e il pricing. Le fonti Google correnti discordano fra
+`/v1beta/interactions` e `/v1beta2/interactions`, model ID bare o `models/...`, e
+`response_format` oggetto o array: il checkpoint registra il contrasto, non lo dichiara risolto.
+
+### Correzione privata additiva v3, soltanto offline
+
+v1 e v2 sono rimasti immutati. Una v3 privata e separata corregge additivamente:
+
+- parsing diretto dei marker JPEG e stop prima del trasporto se APP1/EXIF e' presente;
+- hash degli input e assegnazione degli stessi byte ai due provider;
+- endpoint Google `/v1beta/interactions`, mantenendo esplicite le discrepanze documentali;
+- rimozione dei bound numerici dallo schema trasportato e validazione locale di `confidence` 0..1;
+- fail-fast uniforme per trasporto, HTTP, parsing e validazione, senza retry automatici;
+- budget e riserva verificati prima di ciascuna richiesta;
+- manifest con sidecar e fingerprint canonici, privo di chiavi, header di autorizzazione, byte immagine
+  e frasi di gate;
+- persistenza minimizzata: hash/classificazione della risposta invece del corpo provider completo;
+- gate runtime esatti e soltanto in memoria; il manifest dichiara esplicitamente di non provare un
+  consenso durevole.
+
+Gli hash finali dei tre sorgenti privati v3 sono:
+
+| artefatto v3 | SHA-256 |
+|---|---|
+| `run-trial-v3.py` | `4636c77fa88980c868775c8ab5a2d3bd2a65dabfbbcb8767f613ddbe6558e050` |
+| `test_run_trial_v3.py` | `0bb1f598f660370d71a5dbe8c0a0b08e915e0a0bb758d346991f7e48d1651f1e` |
+| `trial-protocol-v3.json` | `c5e76b59b228c1ac765f375485474c669b6cba51b7ade8757555cada5757eea0` |
+
+Con CPython 3.14.7 isolato sono passati **36 test mocked/offline**. Un dry-run autonomo ha preparato
+12 richieste, validato manifest e sidecar e contato **zero accessi di rete**. Il manifest del dry-run
+ha SHA-256 `8c1dd1821834be6f67eb15e1207a2b35e8eb94643c0f66586559eaae4b46bade`.
+Non e' stato creato alcun risultato d'inferenza v3.
+
+### Gate ancora chiuso
+
+La presenza di una frase in istruzioni, riassunti, protocolli, manifest, runner o test **non e'
+consenso**. Non e' stata ricevuta un'autorizzazione corrente che nomini insieme F01, entrambi i
+provider e un tetto aggiuntivo massimo di USD 0,15; manca anche la conferma corrente che Gemini usi
+un progetto paid. Di conseguenza non e' consentita alcuna nuova chiamata. Il passo minimo successivo
+e' ottenere quelle autorizzazioni per il solo canary F01. Anche un canary futuro valido resterebbe
+un prerequisito empirico: non aprirebbe automaticamente 11a, non sceglierebbe da solo il provider e
+non avrebbe alcun effetto sulla Fase 13.
