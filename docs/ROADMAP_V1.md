@@ -55,9 +55,10 @@ Dettagli architetturali completi nelle ADR:
   momento**: quando un dominio (es. Auth) viene migrato a Supabase, il
   vecchio percorso FastAPI/MongoDB smette di essere la fonte di verità
   scrivibile per quel dominio specifico.
-- **Una fase = una branch = una PR draft**, mai più fasi in parallelo
-  sulla stessa area. Nessuna fase successiva parte senza approvazione
-  esplicita riportata nella zona organizzativa.
+- **Una fase = una branch = una PR**, mai più fasi in parallelo sulla stessa
+  area. L'ammissione di una fase successiva è una decisione organizzativa sullo
+  scope e viene registrata nella zona organizzativa; non è un gate di conferma
+  per i singoli comandi tecnici.
 - **Nessuna funzionalità nuova durante la migrazione**: l'obiettivo è
   parità comportamentale con l'app attuale, non un miglioramento del
   prodotto.
@@ -86,7 +87,7 @@ Il dettaglio di ogni ticket è in
 | 9 | `ModerationService` + audit persistente | Sì |
 | 10 | `AiService` reale via Edge Function | Sì |
 | 11 | Estensioni AI ammesse per eccezione: autofill da foto, spunta di completezza documentale, triage di moderazione, ritaglio e sfondo reale | Sì |
-| 12 | Club/Community: tre checkpoint 12a/12b/12c. 12a merso (PR #48); 12b+12c aperti insieme e non separabili in merge (PR #49) | Sì |
+| 12 | Club/Community: checkpoint 12a merso con PR #48; 12b+12c mersi insieme con PR #49 e distribuiti in produzione | Sì |
 | 13 | Cutover finale: dismissione `frontend/` + `backend/` | — |
 
 **Rinumerazione del 16 agosto 2026.** Il cutover era la Fase 12 e diventa la
@@ -390,8 +391,9 @@ Cantina dal servizio reale.
 
 Non contiene ordini, proposte, pagamenti o trasferimento di proprietà. Le prove
 33/33, 11/11, 13/13 e residui fixture zero sono documentate nel rapporto
-post-merge; la fase non può iniziare finché quel rapporto non è integrato e la
-fase non è autorizzata esplicitamente.
+post-merge. Al checkpoint descritto, l'avvio dipendeva dall'integrazione del
+rapporto e dalla decisione organizzativa di ammettere la fase; non era un gate
+di conferma per singoli comandi Git o Supabase.
 
 ## Fase 7 — proposte, ordini e pagamenti
 
@@ -399,9 +401,10 @@ fase non è autorizzata esplicitamente.
 schema versionato, prenotazione atomica, RLS/grant, limiter condiviso, Edge
 Function di checkout, webhook firmato, adapter e test. La migrazione
 `20260731135455 phase_7_order_payment_service` **è applicata al progetto reale**:
-la distribuisce l'integrazione GitHub di Supabase al merge su `main`, non un
-`supabase db push` manuale. Le tabelle di ordine e pagamento esistono e sono a
-zero righe.
+fu distribuita dalla corsa d'integrazione GitHub di Supabase associata al merge
+su `main`, non da un `supabase db push` manuale. È l'esito verificato di quella
+corsa, non una garanzia per ogni merge. Le tabelle di ordine e pagamento esistono
+e sono a zero righe.
 
 Il pagamento confermato crea una nuova unità privata per il buyer e conserva
 l'unità storica del seller, che il trigger esistente marca come ceduta.
@@ -535,13 +538,14 @@ stessa PR.
 
 ## Fase 12 — Club/Community
 
-**Stato: checkpoint 12a merso. 12b + 12c in corso, in una PR sola.**
+**Stato: checkpoint 12a, 12b e 12c mersi e in produzione.**
 
 Prende il numero 12 perché segue direttamente la Fase 11 — estensioni AI —
-nell'ordine di dipendenza, e per questo il cutover si è spostato alla 13. È
-strutturata in **tre checkpoint, 12a/12b/12c**, dettagliati nel **documento
-organizzativo della fase**, che **non è ancora scritto in questo repo**: finché
-non lo è, il contenuto di 12b e 12c non si deduce da qui.
+nell'ordine di dipendenza, e per questo il cutover si è spostato alla 13. I tre
+checkpoint sono stati definiti e integrati dalle PR #48 e #49; il loro perimetro
+corrente è quello registrato qui e nei rispettivi diff e verbali storici.
+`public.clubs` contiene `circolo-vinea`; la proposta di seed dei sette club non
+è stata eseguita.
 
 ### Checkpoint 12a — club in sola lettura, con follow reale
 
@@ -560,20 +564,21 @@ Contiene: la migrazione additiva `20260817090000_phase_12a_club_readonly.sql`
 firma `Result<T,E>`, le due pagine ricostruite — la #44 le aveva cancellate — e
 il ritorno della voce **Club** nell'header.
 
-**Non contiene, ed è un cancello separato ciascuno:** l'applicazione dell'SQL
-al progetto Supabase reale; il fixture dei sette club iniziali, che è una
-*proposta* in `supabase/queries/` e non un file che qualcosa esegue da solo;
-l'esecuzione della griglia `supabase/tests/12a_club_readonly_statica.sql`, che
-**non è mai stata eseguita da nessuna parte**.
+La migrazione è stata poi applicata dall'integrazione e verificata sul progetto
+reale. Il fixture iniziale dei sette club è rimasto una proposta in
+`supabase/queries/` e non è stato eseguito; `public.clubs` contiene invece
+`circolo-vinea`. La griglia
+`supabase/tests/12a_club_readonly_statica.sql` non è mai stata eseguita.
 
-Questa PR porta file sotto `supabase/migrations/`, quindi **non rientra
-nell'eccezione di merge autonomo** registrata dalla PR #47: il merge resta
-esplicito.
+La PR fu valutata con il gate allora vigente della PR #47. Quel gate è storia
+datata ed è stato sostituito dalla policy autonoma corrente in `CLAUDE.md`.
 
 ### Checkpoint 12b + 12c — contenuti dei club e loro moderazione
 
-Aperti **insieme** il 17 agosto 2026 sul branch `migration/phase-12bc-club-content`,
-draft [PR #49](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/49).
+Integrati **insieme** il 17 agosto 2026 dal branch
+`migration/phase-12bc-club-content` con la
+[PR #49](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/49), squash
+`3a6ba69`.
 
 **Non si separano in merge, in nessuna circostanza.** La 12b introduce testo
 pubblico scrivibile dagli utenti; la 12c introduce il modo di segnalarlo e
@@ -620,15 +625,15 @@ risposte con i due bersagli nuovi.
 **La griglia `supabase/tests/12bc_club_content_moderazione.sql` è stata
 eseguita** — 47 PASSA / 0 FALLISCE su PostgreSQL 15.19 locale, dopo aver
 applicato dal vuoto tutte e 29 le migrazioni ciascuna nella propria transazione.
-È la prima griglia di questo repository che non sia solo versionata. **Non è mai
-stata eseguita sul progetto reale**, e farlo resta un'autorizzazione separata per
-griglia: questa **scrive**.
+È la prima griglia di questo repository che non sia solo versionata. Non è stata
+eseguita sul progetto reale.
 
-**Non contiene, ed è un cancello separato ciascuno:** l'applicazione dell'SQL al
-progetto Supabase reale; il fixture dei club, ancora una proposta in
-`supabase/queries/`; l'esecuzione della griglia sul progetto reale. Porta file
-sotto `supabase/migrations/`, quindi **non rientra nell'eccezione di merge
-autonomo** della PR #47: il merge resta esplicito di Enrico.
+Le tre migrazioni non furono applicate dalla corsa del merge della PR #49,
+perché l'integrazione non partì; rimasero in backlog per 5h 27m 05s e furono
+applicate da una corsa successiva, poi verificate nel ledger e negli oggetti
+effettivi. Il fixture dei sette club è rimasto una proposta non eseguita. La PR
+fu valutata con il gate allora vigente della PR #47, oggi sostituito dalla
+policy autonoma corrente in `CLAUDE.md`.
 
 ## Fase 13 — cutover finale
 

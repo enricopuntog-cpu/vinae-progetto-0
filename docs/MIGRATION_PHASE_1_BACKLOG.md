@@ -468,11 +468,12 @@ liberare i fondi comunque.
 [`20260803150000_phase_7b_stripe_connect_marketplace.sql`](../supabase/migrations/20260803150000_phase_7b_stripe_connect_marketplace.sql)
 è a ledger sul progetto reale e `connect-onboarding`, `payments-checkout` e
 `payouts-release` sono `ACTIVE`: li ha distribuiti l'integrazione GitHub di
-Supabase al merge, non un'autorizzazione. Il contenuto applicato è quello a netto
-garantito. Restano fuori, come gate separati e nessuno autorizzato:
-esecuzione della griglia
+Supabase innescata da quella corsa di merge. Il contenuto applicato è quello a
+netto garantito. Alla misura restavano non eseguite la griglia
 [`supabase/tests/7b_connect_marketplace.sql`](../supabase/tests/7b_connect_marketplace.sql)
-(23 casi, mai eseguita), e la schedulazione reale del job. La decisione
+(23 casi) e la schedulazione reale del job. Non sono gate di conferma correnti:
+il lavoro tecnico può essere eseguito autonomamente quando il task lo richiede,
+con ambiente idoneo, protezioni delle fixture e verifica remota dell'esito. La decisione
 vincolante 1a della Fase 7d prescrive uno scheduler esterno GitHub Actions, non
 `pg_cron`/`pg_net`; il blocco commentato nella migrazione resta testimonianza
 storica della soluzione respinta. Il checkpoint 7g implementa localmente il

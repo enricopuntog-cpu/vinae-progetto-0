@@ -1,6 +1,11 @@
-# Stato attuale verificato
+# Dossier storico degli stati verificati
 
-Fotografia del **9 agosto 2026**, dopo il merge della PR #27 e della Fase 8.
+> **Archivio datato, non stato corrente.** L'apertura qui sotto è una fotografia
+> del **9 agosto 2026**, dopo il merge della PR #27 e della Fase 8. Hash, fasi,
+> conteggi e gate descrivono ciò che risultava vero alla data di ciascuna voce;
+> per la policy vigente e lo stato corrente usare `../CLAUDE.md` e
+> `../CHANGES.log`. Le vecchie regole di conferma restano evidenza storica e non
+> autorizzazione operativa.
 
 ## Repository
 

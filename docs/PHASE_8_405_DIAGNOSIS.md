@@ -204,8 +204,8 @@ transazione glielo permette.
 
 Conseguenza diretta sulla verifica end-to-end: **non c'è nulla da leggere**, e
 crearlo significa due utenti autenticati reali e una conversazione, cioè
-**scrittura sul progetto reale** — autorizzazione separata, per fixture, che
-questa PR non ha e non si prende.
+**scrittura sul progetto reale**. La fixture non rientrava nel perimetro di
+questa PR e non fu creata; non è un gate operativo corrente per singolo comando.
 
 ## 10. La correzione, provata prima di applicarla
 

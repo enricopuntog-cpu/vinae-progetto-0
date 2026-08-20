@@ -177,9 +177,11 @@ ripiego di ogni valore non riconosciuto. La voce del dominio beta è **esatta e
 senza wildcard**: tollera `…/auth/callback` e nient'altro, nemmeno una query o
 una barra finale. Le **Deploy Preview non sono coperte**.
 
-**APPLICATA il 18 agosto 2026**, su autorizzazione esplicita di Enrico in
-sessione — modificare le impostazioni del progetto Supabase remoto è un
-cancello a sé, come l'SQL, e quell'autorizzazione è arrivata per nome:
+**APPLICATA il 18 agosto 2026**, dopo l'autorizzazione esplicita registrata in
+sessione secondo la policy allora vigente. È un fatto storico: la policy
+corrente di `CLAUDE.md` non richiede un gate separato per la normale modifica
+tecnica richiesta dal task, ma impone sempre la verifica preventiva di progetto,
+ref, ambiente e stato remoto:
 
 | Campo | Prima | Adesso |
 | --- | --- | --- |
@@ -284,12 +286,14 @@ sono montati. `NEXT_PUBLIC_DEMO_UI_ENABLED` non cambia questo confine.
 
 ### Fase 10 — perché `AI_ENABLED` è diverso dagli altri flag
 
-Il merge distribuisce **tutte** le Edge Function insieme, entro un minuto, con
-l'ambiente che trovano in quel momento: verificato l'11 agosto 2026 e registrato
-nella decisione 7.10 di `PHASE_10_AI_SERVICE_SPEC.md`. Ne segue che l'ambiente
-di una function si configura **prima** del merge che la introduce, mai dopo — e
-che il flag non è una comodità operativa ma l'unica cosa che rende sicuro
-mergiare la fase prima che le chiavi esistano.
+Le corse d'integrazione misurate l'11 agosto 2026 distribuirono **tutte** le Edge
+Function insieme entro un minuto, con l'ambiente presente in quel momento; la
+misura è registrata nella decisione 7.10 di `PHASE_10_AI_SERVICE_SPEC.md`. Non è
+una garanzia che ogni merge avvii o completi la distribuzione: dopo il merge si
+verificano corsa e stato remoto. Poiché però anche un merge che non tocca una
+function può ridistribuirla, il suo ambiente si configura e si verifica **prima**
+del merge che può attivarla, mai dopo. Il flag non è una comodità operativa ma
+la protezione che rende sicura una distribuzione senza chiavi.
 
 `AI_ENABLED` è quindi **fail-closed per costruzione**: la function controlla
 `!== "true"` e risponde 503. Non c'è nessun default permissivo, e nessun ramo in

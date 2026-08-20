@@ -10,10 +10,14 @@ prove: `supabase/tests/` contiene griglie di esiti, qui ci sono scritture.
 
 ## Regola d'ingaggio
 
-Ogni file di questa cartella nasce come **bozza** e resta tale finché non
-compare in tabella con l'autorizzazione registrata. La regola di `CLAUDE.md`
-sulle migrazioni verso il progetto reale vale qui identica: mostrare l'SQL,
-attendere conferma esplicita in sessione, e solo dopo eseguire.
+Ogni file di questa cartella nasce come **bozza** e resta tale finché la tabella
+non ne registra l'applicazione verificata. Non esiste un gate di conferma per
+singolo comando: un agente dotato degli strumenti necessari può eseguire la
+riparazione quando il task la richiede. Prima della scrittura deve però leggere
+l'intero script, verificare progetto, ref, ambiente e ledger corrente, e
+confermare che l'effetto resti limitato al bookkeeping dichiarato; dopo deve
+rileggere ledger, hash e oggetti effettivi. Le autorizzazioni riportate sotto
+restano fatti storici della policy allora vigente.
 
 ## Script
 
@@ -192,9 +196,11 @@ non che il branch temporaneo fosse identico al progetto reale. E l'esito è una
 misura eseguita fuori da questa postazione: è registrato qui come tale, non è
 riverificabile da Git.
 
-Restano gate separati, e nessuno di essi è autorizzato: esecuzione della
-griglia [`7_ordini_pagamenti.sql`](../tests/7_ordini_pagamenti.sql) e smoke
-Storage. I due che erano elencati qui — `apply_migration` della Fase 7 sul
-progetto reale e distribuzione della Edge Function — sono chiusi dal
-2026-08-03 senza autorizzazione: li ha eseguiti l'integrazione GitHub di
-Supabase al merge della PR #18.
+Alla misura restavano non eseguiti la griglia
+[`7_ordini_pagamenti.sql`](../tests/7_ordini_pagamenti.sql) e lo smoke Storage.
+Non sono gate di conferma correnti: si eseguono quando il task lo richiede, con
+ambiente idoneo, protezioni delle fixture e verifica dei residui. I due punti
+allora elencati qui — applicazione della Fase 7 sul progetto reale e
+distribuzione della Edge Function — furono chiusi il 3 agosto 2026 dalla corsa
+d'integrazione GitHub di Supabase associata al merge della PR #18; è un esito
+storico, non una garanzia per ogni merge.

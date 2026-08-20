@@ -55,7 +55,7 @@ conseguenti che nessuna decisione copriva. **Tutte chiuse:**
 | 7.7 | Streaming della chat | **Chiusa** — SSE, troncamento come caso atteso lato client |
 | 7.8 | Catalogo dell'abbinamento | **Chiusa** — lato server, deviazione dichiarata |
 | 7.9 | Chi può usare l'AI | **Chiusa** — segue i due livelli 9b/9c; anonimo → 401 |
-| 7.10 | Gate di autorizzazione | **Chiusa** — è il merge; conferma per perimetro invariata |
+| 7.10 | Gate storico di autorizzazione | **Chiusa allora** — il merge era il gate; regola sostituita dalla policy corrente di `CLAUDE.md` |
 | 7.11 | Chi configura chiave e budget, e quando | **Chiusa** — Enrico, entro il 18 agosto 2026, più il fail-closed |
 | — | TTL dello storico (segue dalla 7.2) | **Chiuso** — applicato in lettura, nessuna cancellazione fisica in v0 |
 | — | Dove finisce l'esito del triage (segue dalla 7.12) | **Chiuso** — colonna persistita su `reports`, seconda migrazione |
@@ -67,9 +67,12 @@ prima stesura, il testo è stato corretto sul posto e la correzione è segnalata
 
 **Una correzione che riguarda questo documento**, e non una decisione: la prima
 stesura affermava, nella 7.10, che «distribuire una Edge Function non è un merge,
-è un `deploy` separato che nessuna decisione precedente copre». **È falso**, e la
-verifica è nella 7.10 stessa. Il merge distribuisce le function, automaticamente
-e tutte insieme. Questo cambia in meglio la 7.10 e in peggio la 7.11.
+è un `deploy` separato che nessuna decisione precedente copre». Le corse misurate
+nella 7.10 smentirono quella premessa: l'integrazione ridistribuì automaticamente
+le function, tutte insieme. È un esito datato, non la garanzia che ogni merge
+avvii o completi la distribuzione; corsa e stato remoto vanno sempre verificati.
+Il rischio per la 7.11 resta: un merge può ridistribuire anche function non
+toccate dal diff.
 
 ---
 
@@ -1194,14 +1197,15 @@ aggiunge la Fase 10. Leggere `stato_utente` dentro una function AI non è quel
 caso, perché quella function non tocca nessun ordine: è però la ragione per cui
 il controllo va lì e in nessun altro posto.
 
-### 7.10 Dove sta il gate di autorizzazione — CHIUSA (11 agosto 2026): è il merge
+### 7.10 Dove stava il gate di autorizzazione — decisione storica dell'11 agosto 2026
 
-> **Deciso**, e confermato dalla correzione che segue: **il gate di distribuzione
-> delle Edge Function è il merge**, lo stesso delle migrazioni. **Nessuna azione di
-> deploy separata da autorizzare.** Vale comunque la regola già in vigore:
-> l'applicazione al progetto reale — **sia migrazione sia function** — richiede
-> una **conferma esplicita e distinta per perimetro** nella sessione
-> organizzativa, come per la Fase 9.
+> **Decisione datata.** La sessione stabilì che il merge fosse il gate allora
+> autorizzato per distribuire insieme Edge Function e migrazioni, senza un
+> secondo deploy manuale, e mantenne una conferma esplicita per perimetro. La
+> policy corrente in `CLAUDE.md` sostituisce quel gate di conferma: il ciclo Git e
+> il lavoro Supabase richiesti dal task sono autonomi. Resta invece valida la
+> distinzione fra merge e distribuzione verificata: una corsa può non partire,
+> distribuire un backlog più tardi o ridistribuire function non toccate dal diff.
 
 **Prima la correzione, perché la decisione ne dipende.** La prima stesura di
 questa sezione affermava che «distribuire una Edge Function non è un merge, è un
@@ -1231,19 +1235,22 @@ conclusioni, e nessuna dipende da come si spiega l'ora:
    codice delle Edge Function.
 3. Quindi il gate esiste già ed è lo stesso delle migrazioni.
 
-**Proposta accolta — vale la forma della decisione 7.9 della Fase 9**, cioè una sola
-conferma esplicita in sessione che copre insieme il merge e ciò che il merge
-applica; e l'autorizzazione a eseguire una griglia di verifica resta **per
-griglia, non per progetto** (`CLAUDE.md`, sezione «Phase 9 moderation»).
+**Decisione storica.** La forma allora accolta copriva con una sola conferma il
+merge e ciò che la corsa applicava, mentre ogni griglia richiedeva una propria
+autorizzazione. Entrambe le regole di conferma sono oggi sostituite da
+`CLAUDE.md`; restano vincolanti l'idoneità dell'ambiente, le protezioni delle
+fixture e la verifica dell'esito effettivo.
 
 **Proposta accolta — con un'aggiunta che la Fase 9 non aveva bisogno di fare.** Per una
 migrazione, «applicare» significa modificare uno schema che poi resta lì; per una
-Edge Function significa che **codice nuovo inizia a rispondere a richieste entro
-un minuto**, con l'ambiente che trova in quel momento. Ne discende una regola
-operativa che va confermata insieme alla conferma di merge:
+Edge Function significa che **codice nuovo può iniziare a rispondere a richieste
+quando la distribuzione effettiva avviene**, con l'ambiente che trova in quel
+momento. Ne discende una regola operativa che resta valida indipendentemente dal
+vecchio gate di conferma:
 
-> L'ambiente della function si configura **prima** del merge che la introduce, mai
-> dopo, e la function ha un flag che la tiene spenta se l'ambiente manca (7.5).
+> L'ambiente della function si configura e si verifica **prima** del merge che può
+> attivarne la distribuzione, mai dopo, e la function ha un flag che la tiene
+> spenta se l'ambiente manca (7.5).
 
 È la stessa forma della decisione 1e della Fase 7d — scheduler acceso e verificato
 *prima* di `PAYMENTS_ENABLED`, mai dopo — e la ragione per riproporla qui è che
@@ -1306,8 +1313,9 @@ scadenza che non scade non è una scadenza. Proposta:
 > typecheck e documentazione aggiornata (`docs/DEVELOPMENT.md`, «Definition of
 > done»).
 
-Questo si aggancia direttamente alla 7.10: dato che il merge distribuisce, «prima
-del merge» è l'unico momento in cui «prima» significa qualcosa.
+Questo si aggancia direttamente alla 7.10: poiché il merge può innescare la
+ridistribuzione, l'ambiente deve essere pronto **prima** del merge che può
+attivare la function. Dopo si verificano comunque corsa e stato remoto.
 
 **Proposta accolta — i nomi, con un vincolo di piattaforma da rispettare.** Le variabili
 d'ambiente di una Edge Function **non possono iniziare con `SUPABASE_`**, prefisso

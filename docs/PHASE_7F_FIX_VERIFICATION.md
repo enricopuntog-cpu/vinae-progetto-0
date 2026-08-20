@@ -296,7 +296,7 @@ sarebbe diventata ambigua (`42725`). Per questo entrambi i registratori sono
 precedute da un `drop function if exists` della firma vecchia.
 
 La griglia 7b ha lo stesso limite sul suo gestore. **Non è stata toccata in questa
-fase:** è un'autorizzazione separata e successiva.
+fase:** restò fuori dal perimetro verificato di quel checkpoint.
 
 ### Provenienza da correggere del rapporto della 7e
 
@@ -318,5 +318,7 @@ dal repository. La tabella della sezione 4.3 viene dal file come è versionato.
   differiscono per tre costanti. Due delle tre sono proprio quelle che questa fase
   ha castato, quindi il caso 20 prova la forma del cast per entrambi; ma le righe
   di `risolta` restano corrette e non eseguite. Limite dichiarato, invariato.
-- Le griglie della Fase 7 (16 casi), della 7b (23) e della 6d-2a (18) restano
-  **senza esito**. L'autorizzazione fixture è per griglia, non per progetto.
+- Le griglie della Fase 7 (16 casi), della 7b (23) e della 6d-2a (18) restavano
+  **senza esito** a questo checkpoint. La policy allora vigente trattava le
+  fixture per griglia; oggi non è un gate di conferma, ma restano obbligatori
+  ambiente idoneo, isolamento, cleanup anche in errore e verifica dei residui.

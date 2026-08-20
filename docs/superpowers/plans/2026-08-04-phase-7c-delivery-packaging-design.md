@@ -1,5 +1,10 @@
 # Fase 7c — Consegna, tracking e selezione imballaggio: documento di design
 
+> **Documento storico del 4 agosto 2026.** Le formule di autorizzazione e le
+> deduzioni sul deploy descrivono la policy e le conoscenze di quel checkpoint;
+> non sono gate correnti. Per la policy vigente e l'obbligo di verificare lo
+> stato remoto dopo il merge usare `../../../CLAUDE.md`.
+>
 > **Stato: approvato e implementato.** Le sette decisioni della sezione 9 sono
 > state chiuse il 4 agosto 2026; l'esito di ciascuna è riportato in linea, nella
 > sezione che la riguarda, e riassunto in §9.
