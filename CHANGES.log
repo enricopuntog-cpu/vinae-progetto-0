@@ -27,22 +27,30 @@
   normal technical lifecycle autonomously, including migration PRs and scoped
   remote Supabase work. Product scope, new phase admission and Phase 13 cutover
   remain separate organizational decisions.
+- The historical provider trial 6.6 checkpoint is verified. The 15 August runs
+  made 12 v1 attempts and one v2 canary attempt, produced zero valid outputs and
+  selected no provider. Six sanitized JPEG inputs match their retained hashes,
+  contain zero APP1/EXIF segments and were assigned identically to both
+  providers. A private additive v3 passes 36 offline tests; its 12-request
+  dry-run made zero network calls.
 
 ## ACTIVE TASK
 
-- No product implementation phase is active. Governance documentation now
-  reflects the current autonomous technical policy; no application code or
-  Supabase project was changed.
+- No product implementation phase is active. The trial 6.6 evidence is recorded
+  without versioning private inputs or runners, making a provider call, opening
+  Phase 11a, changing application code or modifying Supabase.
 
 ## NEXT STEPS
 
-1. Complete the empirical provider trial required before opening Phase 11a.
+1. Obtain the current F01/two-provider/USD 0.15 canary authorization and Gemini paid-project confirmation.
 2. Verify the payout scheduler successfully while `PAYMENTS_ENABLED=false` before enabling payments.
 3. Decide Phase 13 cutover only after end-to-end parity and a separate product/operational review.
 
 ## BLOCKERS / NOTES
 
-- Phase 11 implementation is not open: the provider trial, provider keys/budget,
+- Phase 11 implementation is not open: the historical trial failed, and a new
+  two-provider F01 canary lacks current authorization and paid-project
+  confirmation. Provider keys/budget,
   PhotoRoom timing and legal review remain external/product prerequisites as
   recorded in `docs/PHASE_11_AI_EXTENSIONS_SPEC.md`.
 - Phase 13 has not started and must not be inferred from the public beta or from
