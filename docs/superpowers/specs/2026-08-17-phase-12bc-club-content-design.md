@@ -221,9 +221,11 @@ scrittura senza chiamante è superficie in più.
   scope club rinviato, e `club_ruolo` resta a un solo valore.
 - **Nessun thread annidato**: un solo livello, come da brief. `club_post_risposte`
   non ha `parent_risposta_id`.
-- **Nessuna esecuzione di SQL sul progetto Supabase reale.** Le tre migrazioni sono
-  testo in attesa di autorizzazione esplicita e separata; la griglia versionata è
-  testo e non un risultato, con la stessa dichiarazione della 12a.
+- **Nessuna esecuzione di SQL sul progetto Supabase reale in quella sessione.**
+  Le tre migrazioni restarono testo non applicato e la griglia versionata restò
+  testo, non un risultato. È un fatto storico del perimetro di quel checkpoint,
+  non un gate corrente per singolo comando: vale la policy tecnica di
+  `CLAUDE.md`.
 
 ## 8. Un difetto preesistente, trovato e non corretto
 

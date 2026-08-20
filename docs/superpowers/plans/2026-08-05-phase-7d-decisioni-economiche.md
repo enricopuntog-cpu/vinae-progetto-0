@@ -1,5 +1,10 @@
 # Fase 7d — Decisioni economiche aperte: auto-rilascio, fee reale, spedizione e protezione
 
+> **Documento storico del 5 agosto 2026.** Le formule di autorizzazione e le
+> deduzioni sul deploy descrivono la policy e le conoscenze di quel checkpoint;
+> non sono gate correnti. Per la policy vigente e l'obbligo di verificare lo
+> stato remoto dopo il merge usare `../../../CLAUDE.md`.
+>
 > **Stato: documento di design. Tre delle cinque decisioni bloccanti sono state
 > chiuse in sessione organizzativa il 5 agosto 2026 — vedi
 > [«Esito della sessione organizzativa»](#esito-della-sessione-organizzativa--5-agosto-2026).

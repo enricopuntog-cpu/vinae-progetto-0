@@ -53,10 +53,10 @@ Validati inoltre JSON del manifest, YAML del workflow, TOML Supabase, struttura
 di `CHANGES.log`, `git diff --check` e scansione locale dei pattern di segreto:
 tutti superati.
 
-## Gate remoto ancora chiuso
+## Stato remoto rimasto aperto al checkpoint 7g
 
-Questo checkpoint non configura né ruota nulla. Prima dell'attivazione servono,
-con autorizzazione separata:
+Questo checkpoint non configurò né ruotò nulla. Prima dell'attivazione restavano
+da completare:
 
 1. configurare la variabile Actions `SUPABASE_URL` e i secret
    `SUPABASE_ANON_KEY` e `PAYOUTS_JOB_TOKEN`, verificando che quest'ultimo
@@ -65,8 +65,12 @@ con autorizzazione separata:
    native di fallimento raggiungano `enricopuntog-cpu`;
 3. eseguire un primo `workflow_dispatch` reale con `PAYMENTS_ENABLED=false`:
    deve restituire solo sanità e zero azioni di rilascio. L'invocazione reale non
-   è stata autorizzata né eseguita in 7g.
+   fu eseguita in 7g e resta una protezione obbligatoria prima di abilitare i
+   pagamenti.
 
-Restano non autorizzati SQL e fixture remoti, deploy manuali, impostazioni
-Supabase, configurazione o rotazione secret, chiamate Stripe, push, PR, merge e
-abilitazione di `PAYMENTS_ENABLED`.
+La sessione 7g registrò inoltre come non autorizzati SQL e fixture remoti, deploy
+manuali, impostazioni Supabase, configurazione o rotazione secret, chiamate
+Stripe, push, PR, merge e `PAYMENTS_ENABLED`. È un confine storico di quel
+task, non la policy operativa corrente: `CLAUDE.md` autorizza oggi il normale
+ciclo Git e Supabase richiesto dal task, senza rimuovere la prova a pagamenti
+spenti né le altre protezioni tecniche.

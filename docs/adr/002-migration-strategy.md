@@ -41,13 +41,13 @@ branch e Pull Request dedicate (draft finché non diversamente indicato):
 
 Il cutover era la **Fase 12** in questa ADR fino al 16 agosto 2026, quando è
 stata inserita prima di esso una **Fase 12 nuova**: Club/Community, che prende
-quel numero perché segue direttamente la Fase 11 nell'ordine di dipendenza. È
-strutturata in tre checkpoint 12a/12b/12c, dettagliati nel documento
-organizzativo della fase, non ancora scritto in questo repo. Vale per essa la
-stessa osservazione fatta qui sotto per la Fase 11: **non è un dominio migrato**,
-quindi resta fuori dal punto 2 e non allarga il perimetro «un dominio alla volta
-collegato a Supabase», che si è chiuso con la Fase 10. Questa ADR ne registra il
-numero e non ne apre la fase.
+quel numero perché segue direttamente la Fase 11 nell'ordine di dipendenza. I
+checkpoint 12a/12b/12c sono ora mersi e in produzione. Vale per essi la stessa
+osservazione fatta qui sotto per la Fase 11: **non costituiscono un dominio
+migrato**, quindi restano fuori dal punto 2 e non allargano il perimetro «un
+dominio alla volta collegato a Supabase», che si è chiuso con la Fase 10. Questa
+ADR registra l'assegnazione corrente; il cutover resta la Fase 13 e non segue
+automaticamente dalla chiusura della Fase 12.
 
 Il cutover era la **Fase 11** in questa ADR fino all'11 agosto 2026, quando la
 chiusura della Fase 10 ha inserito prima di esso una **Fase 11 nuova**: le
@@ -63,38 +63,45 @@ alla volta collegato a Supabase», che si chiude con la Fase 10.
 - Pull Request in draft (non ready for review) per tutta questa traccia,
   finché non diversamente indicato — è pianificazione/fondazione, non
   lavoro pronto per merge immediato.
-- Nessuna fase introduce funzionalità non richiesta dal prompt della fase
-  stessa; l'obiettivo è parità, non miglioramento del prodotto.
-- Ogni fase che tocca dati reali richiede: migrazioni pulite, policy RLS
-  verificate, test pgTAP dove applicabile.
-- Ogni fase termina con un rapporto strutturato riportato nella zona
-  organizzativa; nessuna fase successiva parte senza approvazione
-  esplicita.
+- Nessuna fase introduce funzionalità non ammessa nel proprio perimetro;
+  l'obiettivo ordinario è parità, non miglioramento del prodotto.
+- Ogni fase che tocca dati reali richiede migrazioni pulite, policy RLS
+  verificate e prove database dove applicabili.
+- L'ammissione di una nuova fase o funzionalità è una decisione organizzativa
+  sullo scope e viene registrata nella zona organizzativa. Non è una richiesta
+  di conferma per ogni comando Git o Supabase.
 
-### Deroga al merge autonomo — 16 agosto 2026
+### Autonomia tecnica e gate di scope — decisione corrente
 
-Ammessa **per nome da Enrico il 16 agosto 2026**, ed è stretta. Una sessione
-Claude Code può mergiare da sé una Pull Request — senza chiedere prima — **se e
-solo se il suo diff contiene zero file sotto `supabase/migrations/`**,
-indipendentemente da cos'altro tocca (`frontend-next/src/`, `backend/`,
-documentazione, configurazione CI), e a condizione che i tre job CI —
-`frontend`, `frontend-next`, `backend` — siano **tutti verdi** e che GitHub
-riporti `mergeable: MERGEABLE` e `mergeStateStatus: CLEAN` **sull'head commit
-che sta per mergiare**, non su uno precedente.
+Un agente dotato degli strumenti necessari è autorizzato autonomamente a
+completare il ciclo `branch → implementazione → test → commit → push → PR → CI
+→ fix CI → merge → verifica post-merge`. Questo vale anche per PR con file sotto
+`supabase/migrations/` e per il lavoro Supabase richiesto dal task: migrazioni,
+schema, RPC, trigger, RLS, Storage, Edge Function, fixture tecniche necessarie e
+verifiche remote.
 
-Qualunque PR con anche **un solo** file di migrazione resta un **merge esplicito
-di Enrico, senza eccezioni**. Il motivo è che in questo repository **il merge è
-il gate di deploy delle migrazioni** — decisione 7.10, già registrata in
-`CLAUDE.md`: non esiste un comando di applicazione separato, e una migrazione
-mersa si distribuisce al progetto Supabase reale **nello stesso istante**.
+L'autonomia non modifica i gate di integrità: si lavora fuori da `main`, i
+controlli pertinenti devono essere verdi e GitHub deve riportare l'head esatto
+come `MERGEABLE`/`CLEAN`. Restano vietati force push o riscritture di `main`,
+bypass deliberato della CI, distruzione di lavoro altrui e merge sapendo che un
+controllo rilevante fallisce.
 
-La deroga riguarda **il merge di una PR e nient'altro**. In particolare **non
-abolisce** la regola qui sopra per cui nessuna fase successiva parte senza
-approvazione esplicita: aprire una fase e mergiare una PR sono due cancelli
-distinti, e questa deroga apre solo il secondo. Restano intatte anche
-l'autorizzazione separata per applicare SQL o fixture al progetto reale, quella
-per eseguire una griglia remota — che è **per griglia e non per progetto** — e
-quella del punto 5 per il cutover della Fase 13.
+Per Supabase si verificano project ref, ambiente e stato remoto prima di ogni
+scrittura; si evolve migration-first; un file già pushato o distribuito è
+congelato; non si disabilita RLS globalmente, non si committano segreti e non si
+cancellano arbitrariamente dati reali. Fixture e griglie scriventi devono essere
+richieste dal task, minime, ripulite anche sull'errore e seguite dalla verifica
+dei residui.
+
+Il merge non dimostra che una migrazione sia stata applicata. L'integrazione
+Supabase può non partire e una corsa successiva può distribuire il backlog; dopo
+il merge si confrontano ledger remoto e file su `origin/main` e si verificano
+gli oggetti effettivi. L'ammissione di una fase e il cutover di Fase 13 restano
+invece decisioni di prodotto/organizzative separate.
+
+La deroga del 16 agosto 2026 che limitava il merge autonomo alle PR senza
+migrazioni è conservata nell'indice storico della PR #47, ma non è più la policy
+operativa.
 
 ## Conseguenze
 

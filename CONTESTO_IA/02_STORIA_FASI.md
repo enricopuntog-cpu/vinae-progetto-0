@@ -1,15 +1,18 @@
 # Storia fase per fase
 
-Le date e gli stati delle PR sono stati verificati su GitHub il 5 agosto
-2026. “Integrata” significa presente in `main`; “sul branch” significa che il
-lavoro esiste ma non è ancora parte di `main`.
+Le date e gli stati delle prime PR sono stati verificati su GitHub il 5 agosto
+2026; le voci successive riportano la data della propria misura. “Integrata”
+significa soltanto presente in `main`; “sul branch” significa che il lavoro
+esiste ma non è ancora parte di `main`. La distribuzione è uno stato distinto da
+verificare sull'ambiente remoto.
 
-**Su questo progetto “integrata” significa anche “distribuita”**, e la versione
-precedente di questa nota diceva il contrario: l'integrazione GitHub di Supabase
-applica migrazioni ed Edge Function al merge su `main`, da sola, senza
-`supabase db push` né `apply_migration`. Le migrazioni delle fasi 7, 7b e 7c
-sono a ledger sul progetto reale. La distinzione utile non è fra integrato e
-applicato, ma fra **distribuito e percorso**.
+Le migrazioni delle fasi 7, 7b e 7c furono trovate a ledger sul progetto reale e
+le relative integrazioni GitHub applicarono anche le Edge Function senza
+`supabase db push` né `apply_migration` manuali. È una misura datata di quelle
+corse, non una regola per ogni merge: la corsa della PR #49 non partì e tre
+migrazioni rimasero in backlog per 5 ore e 27 minuti, finché una corsa successiva
+le distribuì. Un merge non prova quindi l'applicazione; dopo l'integrazione si
+rileggono ledger, oggetti e comportamento effettivo.
 
 ## Fondazione tecnica
 
@@ -642,8 +645,8 @@ il blocco ha scritto, la tabella degli esiti compresa. Misurato con due sonde su
 tabelle temporanee: forma 7b → 1 riga superstite, la sola sentinella 99; guardia
 dentro il caso → 4 su 4. L'impalcatura della griglia 7c è quindi in due parti —
 tredici guardie per singolo caso che fanno il lavoro vero, e la rete esterna che
-copre allestimento e pulizia. La griglia 7b ha lo stesso limite e **non è stata
-toccata**: è un'autorizzazione separata.
+copre allestimento e pulizia. La griglia 7b ha lo stesso limite e **non fu
+toccata**: restò fuori dal perimetro di quella fase.
 
 ### Fase 7g — chiusura operativa dell'auto-rilascio
 
@@ -657,8 +660,9 @@ oltre 24 ore.
 
 `PAYMENTS_ENABLED=false` resta invariato: la function autentica il job e legge
 solo il conteggio di sanità, senza reclamare ordini né chiamare Stripe. Otto test
-mock del runner passano; configurazione secret e invocazione reale restano gate
-separati e non eseguiti.
+mock del runner passano; configurazione secret e invocazione reale non furono
+eseguite nel checkpoint e la prova a pagamenti spenti resta obbligatoria prima
+dell'abilitazione.
 
 ### Fase 8 — messaggistica privata e notifiche persistenti
 
@@ -679,10 +683,11 @@ residui. Realtime sulla Preview era attivo con canali pubblici disabilitati; lo
 smoke autenticato ha consentito i due topic proprietari, respinto outsider e
 pubblico, ricevuto payload chiusi senza duplicati e ripulito dieci classi.
 
-**Il merge ha distribuito.** `20260806224517_phase_8_messaging_notifications` è
-la **ventesima riga del ledger di produzione**, riletta con `list_migrations` il
-9 agosto 2026: nessuno ha lanciato un comando, l'integrazione GitHub l'ha
-applicata al merge come per ogni fase dalla 7 in avanti.
+**Quella corsa di merge ha distribuito.**
+`20260806224517_phase_8_messaging_notifications` è la **ventesima riga del ledger
+di produzione**, riletta con `list_migrations` il 9 agosto 2026: nessuno lanciò
+un comando manuale e l'integrazione GitHub la applicò. È l'esito verificato di
+quella corsa, non una garanzia per i merge successivi.
 
 **Le prove della Fase 8 non sono più riverificabili dove sono state prese.** La
 Preview `jggjaqcdbcbxdxhnggio` era un ambiente effimero legato alla PR e non
@@ -833,12 +838,11 @@ un falso negativo.
 
 La scrittura di contenuti pubblici nei club resta **ammessa per eccezione** e per
 nome: la decisione del 16 agosto 2026 non è toccata *come decisione*, è cambiato
-soltanto lo stato di avanzamento. Quello che **resta vero** della vecchia
-formulazione, ed è l'unica parte da portarsi avanti, è che **`clubs` ha 0 righe**:
-non esiste nessuna destinazione reale per un post: chi volesse scriverne uno
-passa dalla fixture di seed
-(`supabase/queries/02_PROPOSTA_NON_ESEGUIRE_SEED_CLUB_FASE_12A.sql`), che è
-un'autorizzazione separata e mai data.
+soltanto lo stato di avanzamento. Alla misura del 18 agosto **`clubs` aveva 0
+righe**, quindi non esisteva una destinazione reale per un post. Il seed proposto
+in `supabase/queries/02_PROPOSTA_NON_ESEGUIRE_SEED_CLUB_FASE_12A.sql` non fu
+eseguito; è un'operazione di contenuto distinta dall'evoluzione dello schema, non
+un prerequisito implicito né un gate corrente per singolo comando.
 
 ### Fase 13 — cutover
 

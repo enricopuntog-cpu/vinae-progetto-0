@@ -4,6 +4,15 @@ Script eseguibili a mano nel **SQL Editor** del progetto Supabase. Non sono
 migrazioni: non vengono applicati da `supabase db push` e non compaiono in
 `supabase/migrations/`.
 
+> **Policy corrente.** Le vecchie formule di «autorizzazione per griglia» in
+> verbali e specifiche datate sono storia, non gate operativi. Un agente dotato
+> degli strumenti necessari può eseguire le verifiche richieste dal task dopo
+> avere verificato progetto, ref, ambiente e stato remoto. Questo non rende
+> intercambiabili gli ambienti: una griglia distruttiva o progettata per un
+> database usa e getta non va eseguita in produzione; fixture e dati tecnici
+> devono essere necessari, minimi, isolati, puliti anche in errore e seguiti da
+> una verifica dei residui. Una griglia non eseguita non è una prova.
+
 ## Perché a mano, e non in CI
 
 La CLI Supabase e Docker non sono disponibili nell'ambiente in cui la Fase 6d-1
@@ -30,7 +39,7 @@ mano per correggerne il contenuto.
 | 2 | `supabase/migrations/20260729230000_security_invariants.sql` | dopo il preflight | migrazione base applicata senza errori |
 | 3 | `supabase/migrations/20260729234500_security_invariants_followup.sql` | dopo la base | follow-up applicato senza errori |
 | 4 | `supabase/migrations/20260729235500_security_helper_invoker.sql` | dopo il follow-up | helper RLS applicati senza errori |
-| 5 | `supabase/migrations/20260730140948_security_invariants_remote_drift_repair.sql` | solo dopo approvazione esplicita, se il catalogo remoto mostra la deriva documentata | repair applicata e registrata senza modificare dati applicativi |
+| 5 | `supabase/migrations/20260730140948_security_invariants_remote_drift_repair.sql` | solo se il catalogo remoto mostra la deriva documentata e dopo avere verificato progetto/ref/ambiente | repair applicata e registrata senza modificare dati applicativi |
 | 6 | [`6d-1_invarianti_sicurezza.sql`](6d-1_invarianti_sicurezza.sql) | dopo tutte le migrazioni | 33 righe, tutte `PASSA`, nessuna riga 99 |
 | 7 | [`6d-1_followup_invarianti.sql`](6d-1_followup_invarianti.sql) | dopo tutte le migrazioni | 11 righe, tutte `PASSA`, nessuna riga 99 |
 | 8 | [`6d-1_remote_drift_repair_verifica.sql`](6d-1_remote_drift_repair_verifica.sql) | dopo la repair | una sola griglia, tutte le righe `PASSA` |
@@ -43,11 +52,13 @@ e le RPC applicative restano documentate in
 [`docs/PHASE_6D1_SUPABASE_REVIEW.md`](../../docs/PHASE_6D1_SUPABASE_REVIEW.md).
 
 Le griglie ai punti 6 e 7 creano e cancellano fixture nel progetto remoto:
-richiedono un'approvazione esplicita separata dal deploy della migrazione.
+eseguirle solo quando il task richiede quella prova, con fixture isolate, cleanup
+anche in errore e verifica finale dei residui.
 
 ## Fase 6d-2a — catalogo e percorsi Cantina
 
-Applicare la migrazione solo dopo revisione e autorizzazione esplicita:
+Applicare la migrazione migration-first, dopo revisione e verifica di
+progetto/ref/ambiente:
 
 | # | File | Esito atteso |
 | --- | --- | --- |
@@ -55,9 +66,10 @@ Applicare la migrazione solo dopo revisione e autorizzazione esplicita:
 | 2 | [`6d-2a_catalog_cellar_paths.sql`](6d-2a_catalog_cellar_paths.sql) | 18 righe, tutte `PASSA`, nessuna riga 99 |
 
 La griglia crea e cancella due utenti, due vini, due bottiglie, un annuncio e un
-ambiente. Richiede un'autorizzazione fixture separata da quella della
-migrazione. Non riesegue le griglie 6d-1. Il caso 18 verifica esplicitamente che
-la pulizia non lasci utenti, profili, vini o ambienti marcati dalla prova.
+ambiente. Va eseguita soltanto quando la prova con fixture rientra nel task, con
+isolamento, cleanup anche in errore e verifica dei residui. Non riesegue le
+griglie 6d-1. Il caso 18 verifica esplicitamente che la pulizia non lasci utenti,
+profili, vini o ambienti marcati dalla prova.
 
 La griglia non carica né legge fotografie reali dal bucket `cantina`: verifica
 soltanto che il bucket sia privato. Non esiste un esito remoto verificato né per i
@@ -96,8 +108,8 @@ senza alcun esito verificato**: applicata non vuol dire provata.
 | 2 | [`7_ordini_pagamenti.sql`](7_ordini_pagamenti.sql) | 16 righe, tutte `PASSA`, nessuna riga 99 |
 
 La griglia crea e cancella tre utenti, due vini, due bottiglie, due annunci e i
-relativi ordini, pagamenti ed eventi. Richiede un'autorizzazione fixture
-separata da quella della migrazione. Il caso 16 verifica che la pulizia non
+relativi ordini, pagamenti ed eventi. Va eseguita soltanto quando la prova con fixture rientra nel task,
+con isolamento, cleanup anche in errore e verifica dei residui. Il caso 16 verifica che la pulizia non
 lasci utenti, profili, vini, eventi o bucket di rate limit marcati dalla prova.
 
 Copre i tre comportamenti che nessun test TypeScript può coprire perché vivono
@@ -158,10 +170,10 @@ Presuppone che la migrazione della Fase 7 sia già applicata: la griglia parte d
 
 Crea e cancella due utenti, quattro vini, quattro bottiglie, quattro annunci e i
 relativi ordini, pagamenti, payout ed eventi; tocca anche
-`public.marketplace_config`, ripristinando la riga corrente alla fine. Richiede
-un'autorizzazione fixture separata da quella della migrazione. Il caso 18
-verifica staticamente che nessuna coordinata di incasso sia leggibile dai ruoli
-client.
+`public.marketplace_config`, ripristinando la riga corrente alla fine. Va eseguita
+soltanto quando la prova con fixture rientra nel task, in un ambiente adatto e
+con cleanup anche in errore e verifica dei residui. Il caso 18 verifica
+staticamente che nessuna coordinata di incasso sia leggibile dai ruoli client.
 
 Il gruppo F prova la formula del rincaro: gli otto prezzi del caso 19 sono gli
 stessi asseriti da `marketplace-fee.test.ts`, ed è lì che le due copie della
@@ -246,8 +258,9 @@ dati di produzione**: scade la riga corrente di `packaging_options` per
 `centro_partner` e ne inserisce una a prezzo non nullo, perché con il prezzo a
 zero del seed `totale_cents` e `addebito_totale_cents` coinciderebbero e i casi
 2-3, quelli che li distinguono, non proverebbero nulla. La pulizia finale
-ripristina la riga a `prezzo_cents = 0` con `valida_fino = null`. Richiede
-un'autorizzazione fixture separata da quella della migrazione.
+ripristina la riga a `prezzo_cents = 0` con `valida_fino = null`. Non va eseguita
+sul progetto reale come normale verifica: vuole un ambiente isolato coerente con
+questo comportamento distruttivo e una verifica finale dei residui.
 
 Copre sei gruppi: A transizioni di preparazione e spedizione; B la timeline
 scritta dalle RPC e dal trigger e mai dal client; C il fascicolo di
@@ -346,13 +359,12 @@ il compratore e pretendono un `permission denied` vero. L'assenza di grant impli
 il rifiuto, ma le due prove non sono la stessa.
 
 **I casi 1-17 e 19-23 della 7b restano senza esito**, e con loro i 16 casi della
-griglia della Fase 7: le fixture della 7b toccano `payouts` e
-`seller_payout_accounts`, ed è un'autorizzazione distinta da quella concessa per
-la 7c.
+griglia della Fase 7: l'esecuzione della 7c non prova queste griglie, le cui
+fixture toccano anche `payouts` e `seller_payout_accounts`.
 
 ## Fase 8 — messaggi e notifiche
 
-Eseguire soltanto dopo l'applicazione autorizzata della migrazione
+Eseguire soltanto dopo avere verificato l'applicazione della migrazione
 `20260806224517_phase_8_messaging_notifications.sql`:
 
 | # | File | Fixture | Esito atteso |
@@ -361,10 +373,10 @@ Eseguire soltanto dopo l'applicazione autorizzata della migrazione
 | 2 | [`8_messaging_notifications.sql`](8_messaging_notifications.sql) | Sì | 23 `PASSA`, 0 `FALLISCE`, nessuna riga 99 |
 
 La griglia con fixture crea e cancella tre utenti, vino, bottiglia, annuncio,
-conversazione, messaggi, notifiche e bucket rate-limit. Richiede quindi una
-autorizzazione esplicita distinta dal deploy della migrazione. Il caso 23
-misura i residui dopo il cleanup; il test forza inoltre i constraint differiti
-in modalità immediata dopo la creazione della conversazione.
+conversazione, messaggi, notifiche e bucket rate-limit. Va eseguita solo quando
+questa prova rientra nel task, su un ambiente adatto e con verifica del cleanup.
+Il caso 23 misura i residui dopo il cleanup; il test forza inoltre i constraint
+differiti in modalità immediata dopo la creazione della conversazione.
 
 Le cinque gare descritte in
 [`docs/PHASE_8_CONCURRENCY_TEST.md`](../../docs/PHASE_8_CONCURRENCY_TEST.md)
@@ -382,10 +394,9 @@ Produzione non è stata usata e resta priva della migrazione di Fase 8.
 | 2 | `supabase/migrations/20260810152500_phase_9a_drop_public_bottle_units.sql` | — | migrazione applicata e registrata |
 | 3 | [`9a_moderazione_statica.sql`](9a_moderazione_statica.sql) | No | 28 `PASSA`, 0 `FALLISCE` |
 
-La griglia è **statica**: non inserisce e non cancella nulla, quindi non
-richiede un'autorizzazione fixture. Richiede comunque l'autorizzazione a
-eseguirla sul progetto reale, che **non è stata chiesta né concessa**: sul
-progetto `pijnmcllmfgjmgsvtcej` questa griglia non ha mai girato.
+La griglia è **statica**: non inserisce e non cancella nulla. Sul progetto
+`pijnmcllmfgjmgsvtcej` non ha mai girato; l'assenza di esecuzione resta un fatto
+storico e non va trasformata in un esito implicito.
 
 ### Dove è stata eseguita davvero, e che cosa questo prova
 
@@ -453,10 +464,9 @@ essere nascosta in una modifica silenziosa.
 | 1 | `supabase/migrations/20260810180000_phase_9b_moderation_actions.sql` | — | migrazione applicata e registrata |
 | 2 | [`9b_moderazione_azioni_statica.sql`](9b_moderazione_azioni_statica.sql) | No | 26 `PASSA`, 0 `FALLISCE` |
 
-Come la 9a: griglia **statica**, nessun dato inserito o cancellato, nessuna
-autorizzazione fixture necessaria. Resta necessaria l'autorizzazione a eseguirla
-sul progetto reale, che **non è stata chiesta né concessa**: su
-`pijnmcllmfgjmgsvtcej` non ha mai girato.
+Come la 9a: griglia **statica**, nessun dato inserito o cancellato. Sul progetto
+`pijnmcllmfgjmgsvtcej` non ha mai girato; l'assenza di esecuzione resta un fatto
+storico e non va trasformata in un esito implicito.
 
 ### Dove è stata eseguita, e con che esito
 
@@ -478,8 +488,8 @@ Dopo le correzioni: **26 PASSA / 0 FALLISCE**.
 
 Accanto alla griglia statica è stata eseguita, sullo stesso Postgres, una
 batteria di **61 sonde comportamentali**, esito finale **61 PASSA / 0 FALLISCE**.
-Non sono versionate qui perché dipendono da fixture, e l'autorizzazione fixture è
-per griglia e non per progetto. Che cosa misurano:
+Non sono versionate qui perché dipendono dall'impalcatura e dalle fixture di
+quella prova. Che cosa misurano:
 
 - il gate di moderazione, impersonando `authenticated` senza ruolo e `anon`;
 - le cinque transizioni sugli annunci, il rifiuto di `riservato` e `venduto`, e
@@ -586,8 +596,9 @@ rilascio nomina `stato_utente`, con i commenti rimossi prima del confronto (nel
 
 * Non prova nulla su `pijnmcllmfgjmgsvtcej`: **non ci è mai girata, e non deve
   girarci** — scrive ordini, pagamenti e provvedimenti di moderazione, e vuole
-  un database usa e getta. L'autorizzazione a eseguire una griglia è per
-  griglia, non per progetto.
+  un database usa e getta. La policy corrente autorizza le verifiche remote
+  richieste dal task, ma non giustifica eseguire sul progetto reale una griglia
+  progettata per un database usa e getta.
 * Non esercita `public.order_checkout_reserve`, che dipende da Stripe e dalla
   Edge Function. Il guard è un trigger sulla tabella, quindi il caso 05 — «nemmeno
   `postgres` crea un ordine per un rimosso» — copre a valle ogni percorso di
@@ -625,26 +636,27 @@ difetto della griglia, come è successo alla 7c (quattro difetti) e alla 9c
 (otto), e lo annoti qui.
 
 Rispetto alle griglie di Fase 7 e 9 è in sola lettura sul catalogo di sistema,
-quindi meno rischiosa; **non per questo è autorizzata**. L'autorizzazione a
-eseguire una griglia resta per griglia e non per progetto, e non è compresa
-nell'approvazione del merge della migrazione.
+quindi meno rischiosa. Prima di eseguirla sul progetto reale vanno comunque
+verificati progetto/ref/ambiente e va registrato l'esito: il merge della
+migrazione non dimostra che la griglia abbia girato.
 
 ### Quello che non misura
 
 * **Nessun comportamento.** Non inserisce righe, quindi «un utente non può
   iscriverne un altro» è verificato sulla *forma* — grant a colonna più
   predicato della policy — e non esercitato. Una griglia comportamentale con
-  fixture non esiste ancora ed è un'autorizzazione a parte.
+  fixture non esiste ancora e sarebbe una prova distinta, con requisiti propri
+  di isolamento e cleanup.
 * **Nessuna interfaccia.** Nessuna schermata è stata aperta contro un database
   con questa migrazione applicata.
 
-### Il fixture di seed è un cancello separato
+### Il fixture di seed è un'operazione distinta
 
 [`../queries/02_PROPOSTA_NON_ESEGUIRE_SEED_CLUB_FASE_12A.sql`](../queries/02_PROPOSTA_NON_ESEGUIRE_SEED_CLUB_FASE_12A.sql)
-propone i sette club iniziali. **Non è stato eseguito** e richiede
-un'autorizzazione esplicita **distinta** da quella della migrazione: la
-migrazione crea lo schema, il fixture scrive dati nel progetto reale. Non sta
-in `supabase/migrations/` perché lì il merge lo applicherebbe da solo
-(decisione 7.10), e non si chiama `supabase/seed.sql` perché `config.toml` ha
-`[db.seed]` abilitato su quel nome e lo caricherebbe a ogni `db reset` e sulle
-preview branch.
+propone i sette club iniziali. **Non è stato eseguito**: la migrazione crea lo
+schema, mentre il fixture scriverebbe dati nel progetto reale e richiede quindi
+un task che lo ammetta esplicitamente come scelta di contenuto, oltre alle
+protezioni tecniche. Non sta in `supabase/migrations/` perché il seed non è
+schema evolution e non deve essere applicato implicitamente dall'integrazione;
+non si chiama `supabase/seed.sql` perché `config.toml` ha `[db.seed]` abilitato
+su quel nome e lo caricherebbe a ogni `db reset` e sulle preview branch.

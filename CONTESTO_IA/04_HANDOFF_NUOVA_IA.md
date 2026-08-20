@@ -1,309 +1,109 @@
-# Handoff operativo per una nuova IA
+# Procedure operative durevoli per nuovi agenti
 
-## Prompt iniziale consigliato
+Questo file raccoglie procedure non ovvie. Il bootstrap corrente è in
+`../CLAUDE.md`; lo stato corrente è in `../CHANGES.log`. Le approvazioni e i
+gate descritti nei vecchi verbali restano storia datata e non sostituiscono la
+policy autonoma corrente.
 
-> Lavora sul repository Vinea. Prima di proporre modifiche leggi
-> `AGENTS.md`, poi tutti i file in `CONTESTO_IA/` nell'ordine indicato dal
-> README, quindi verifica con Git lo stato corrente. Non assumere che
-> `frontend-next/` sia in produzione. Non toccare `main`, non applicare
-> migrazioni Supabase remote senza mostrare l'SQL e ottenere conferma
-> esplicita, non iniziare una fase successiva senza approvazione. Conserva le
-> modifiche locali non tue.
+## Preflight
 
-## Checklist prima di lavorare
+```powershell
+git status --short --branch
+git remote -v
+git log --oneline --decorate -20
+git diff --stat origin/main...HEAD
+```
 
-1. Leggere `AGENTS.md` se presente.
-2. Leggere `CONTESTO_IA/README.md` e i file successivi.
-3. Eseguire:
-
-   ```powershell
-   git status --short --branch
-   git remote -v
-   git log --oneline --decorate -20
-   git diff --stat origin/main...HEAD
-   ```
-
-4. Controllare `docs/ROADMAP_V1.md` e il ticket della fase nel backlog.
-5. Identificare la versione da modificare:
-   - bug dell'app servita: `frontend/` o `backend/`;
-   - lavoro di migrazione approvato: `frontend-next/` o `supabase/`.
-6. Cercare modifiche locali non proprie e non sovrascriverle.
-7. Verificare che il branch non sia `main`.
-
-## Stato da non reinterpretare
-
-- La Fase 4 è assorbita nella Fase 3.
-- Le fasi 6a, 6b, 6c-1, 6c-2 sono sotto-fasi deliberate, non duplicati di
-  prodotto.
-- La 6d-1 è in `main` tramite PR #14; il branch di verifica post-merge registra
-  33/33, 11/11, verifier storico 13/13 e residui fixture zero.
-- Il merge non equivale ad autorizzazione o prova delle fixture remote.
-- La Fase 6d-2a è in `main` tramite PR #17 al merge squash `3037bf4`. Lo smoke
-  Storage del bucket `cantina` non era compreso nel merge ed è stato **chiuso il 5
-  agosto 2026** con la Fase 7e, in dieci passi tutti con l'esito atteso. La
-  **griglia** 6d-2a resta invece non eseguita: sono due cose diverse.
-- **Una griglia versionata e mai eseguita non è una prova.** La 7e l'ha misurato:
-  la griglia 7c era rotta in quattro punti, nessuno visibile leggendo il file, e non
-  poteva committare in nessuno scenario. Alla prima esecuzione reale ha dato 21
-  PASSA e 1 FALLISCE, e quel FALLISCE era un difetto della migrazione con una
-  conseguenza sul denaro. Vale per ogni griglia ancora senza esito.
-- La Fase 7f ha corretto quel difetto e la griglia 7c ora dà **22 PASSA / 0
-  FALLISCE** sul progetto reale, residui a zero su 26 controlli. La regola di tipo che
-  ne deriva è al capitolo «Regole di tipo che hanno già rotto il denaro una volta» di
-  [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md), e va letta
-  prima di scrivere qualunque `update` verso una colonna enum.
-- **Il gestore `exception when others` di una griglia non conserva gli esiti già
-  registrati.** Un blocco PL/pgSQL con clausola `exception` è una sottotransazione:
-  catturare l'errore annulla tutto ciò che il blocco ha scritto, la tabella degli
-  esiti compresa. Misurato: 1 riga superstite contro 4 con la guardia dentro il caso.
-  Chi aggiunge robustezza a una griglia deve metterla **per caso**, con la
-  registrazione fuori dalla sottotransazione. La 7c è fatta così; la 7b non ancora.
-- La Fase 7 è in `main` tramite PR #18 al merge squash `2a47952`, la Fase 7b
-  tramite PR #19 al merge squash `5e6b8e4`, la Fase 7c tramite PR #21 al merge
-  squash `471b529`, la Fase 7d tramite PR #22 al merge squash `306952f`, la
-  correzione di `ARCHITECTURE.md` tramite PR #24 al merge squash `d8503af`, la
-  Fase 7e tramite PR #23 al merge squash `6b5b219`, la Fase 7f tramite PR #25 al
-  merge squash `491e10d`, la Fase 7g tramite PR #26 al merge squash `f9c53e0` e
-  la **Fase 8 tramite PR #27 al merge squash `4f96864`**, il 7 agosto 2026 con i
-  quattro check `SUCCESS` sull'HEAD finale `b32ff9d`. La Preview
-  `jggjaqcdbcbxdxhnggio`, dove le griglie 20/20 e 23/23, la concorrenza 5/5 e lo
-  smoke Realtime autenticato erano stati eseguiti, era legata alla PR e **non
-  esiste più**: quelle misure sono un rapporto, non uno stato riproducibile.
-- «Integrata» qui significa anche «distribuita»: l'integrazione GitHub di
-  Supabase applica migrazioni e Edge Function al merge su `main`, da sola.
-  Riverificato in lettura il 9 agosto 2026 — il ledger è a **venti righe**, le
-  migrazioni di 7, 7b e 7c ci sono tutte, e `payments-checkout`,
-  `connect-onboarding` e `payouts-release` sono `ACTIVE`. Il contenuto applicato è
-  quello a netto garantito, non la prima bozza a percentuale piatta. La
-  diciannovesima riga appartiene alla Fase 7f: è l'unica applicata per via diretta
-  e non dal merge. La ventesima è
-  `20260806224517 phase_8_messaging_notifications` ed è arrivata dal merge della
-  PR #27, come tutte le altre.
-- La Fase 7d **non ha scritto SQL**: ha chiuso decisioni. Le sue conseguenze
-  vincolanti sono al capitolo dedicato di
-  [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
-  scheduler esterno e non `pg_cron`, scheduler acceso prima dei pagamenti,
-  «protezione» fuori dal modello Supabase, e nessun valore nuovo in
-  `public.payment_stato` per il tetto ai tentativi della fee.
-- Il merge su `main` non richiede più il click manuale del committente, ma
-  richiede ancora **l'approvazione esplicita in sessione**, è **solo squash**, e
-  pretende come ultimo commit della PR l'aggiornamento di `CHANGES.log`,
-  `CLAUDE.md` e di questa cartella allo stato che quella PR produce.
-  **Dal 16 agosto 2026 c'è una deroga, ammessa per nome**: se il diff della PR
-  contiene **zero file sotto `supabase/migrations/`**, la sessione può mergiare
-  da sé, con i tre job CI verdi e `mergeable: MERGEABLE` /
-  `mergeStateStatus: CLEAN` letti sull'head commit che sta per mergiare. Con
-  anche **un solo** file di migrazione si torna al merge esplicito di Enrico,
-  perché lì il merge è il gate di deploy verso il progetto reale.
-- «Distribuita» non significa «percorsa», ed è questa la distinzione da tenere:
-  le tabelle di denaro sono a **zero righe**, `marketplace_config` ha la sola
-  riga iniziale, nessun percorso UI raggiunge onboarding o checkout; conferma e
-  contestazione hanno percorsi ordine reali. `PAYMENTS_ENABLED` resta `false` e
-  nessuna chiamata a Stripe è mai stata fatta, nemmeno in test mode. Dettaglio in
-  [`../docs/ROADMAP_V1.md`](../docs/ROADMAP_V1.md), sezione «Distribuita non
-  vuol dire percorsa».
-- La migrazione di Fase 7b **dipende** da quella di Fase 7: sul progetto reale
-  l'ordine è stato rispettato dalle versioni, ma in qualsiasi ambiente nuovo
-  applicarla per prima fallisce, perché estende tabelle e RPC che l'altra crea.
-- Il ruolo `seller_enabled` ha una sorgente autoritativa dalla 7b, ma il gate
-  sulla creazione di annunci è deliberatamente spento.
-- La Fase 8 è **integrata e distribuita**: schema, RPC, RLS, Realtime privato,
-  route `/messaggi` e `/notifiche` sono in `main` e la migrazione è a ledger in
-  produzione. Le fasi 9–11 non sono iniziate.
-- **Lo scheduler dell'auto-rilascio della 7g gira da `main` e fallisce sempre.**
-  `Phase 7 - auto-release payouts` ha 11 run su 11 in `failure`, dal 7 agosto
-  2026 al 9 agosto 2026, tutte con `Configurazione mancante: SUPABASE_URL`:
-  variabili e secret GitHub non sono mai stati configurati. Il runner è
-  fail-closed e non ha mai raggiunto la rete, ma la decisione 1e — scheduler
-  acceso e verificato **prima** di `PAYMENTS_ENABLED` — non è soddisfatta.
-- La vecchia app resta quella servita.
-- Auth reale e ruoli demo coesistono intenzionalmente.
-- Facebook OAuth non è “da finire nel codice”: è disabilitato per un problema
-  di configurazione/provider esterno.
+- Identificare branch e worktree prima di scrivere.
+- Conservare modifiche, file non tracciati, stash e worktree non propri.
+- Non lavorare direttamente su `main`.
+- Per il routing documentale leggere `README.md`; non caricare tutto l'archivio
+  per ogni task.
+- Verificare qual è lo stack autorevole per il dominio: `frontend/` + `backend/`
+  sono ancora il prodotto servito, mentre `frontend-next/` + Supabase sono il
+  target e una beta separata.
 
 ## Se il lavoro riguarda Supabase
 
-1. Leggere integralmente la skill Supabase disponibile nell'ambiente.
-2. Leggere le migrazioni precedenti del dominio.
-3. Trattare lo schema remoto come dato esterno da verificare, non come
-   identico al repository.
-4. Preparare una nuova migrazione additiva. Un file già pushato almeno una
-   volta non si modifica più in place, nemmeno in bozza e nemmeno se nessun
-   database reale lo ha eseguito: vale la regola 11 di
-   [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md).
-5. Aggiungere/aggiornare RLS, privilegi, test e documentazione.
-6. Fermarsi prima di applicare sul progetto reale.
-7. Mostrare l'SQL esatto e chiedere conferma in sessione.
-8. Dopo l'applicazione, verificare cronologia migrazioni e catalogo effettivo.
-9. Chiedere una conferma separata prima di test che creano/cancellano fixture.
-10. Se l'API assegna la versione, riallineare il filename locale alla history.
+Gli agenti dotati degli strumenti necessari possono eseguire autonomamente il
+lavoro Supabase richiesto dal task. Non esiste un gate di conferma per singolo
+comando, migration o griglia; esistono invece protezioni tecniche obbligatorie:
 
-## Come creare un utente di test autenticabile (procedura verificata)
+1. verificare project ref, branch/ambiente e stato remoto;
+2. leggere le migrazioni precedenti del dominio;
+3. usare una nuova migrazione additiva;
+4. non modificare mai in place un file già pushato o distribuito, anche se era
+   una bozza o un ambiente sostiene di non averlo applicato;
+5. includere RLS, privilegi, test, documentazione e variabili d'ambiente nello
+   stesso cambiamento;
+6. non disabilitare RLS globalmente e non inserire segreti nel repository;
+7. limitare le fixture ai dati tecnici necessari, garantire cleanup anche
+   sull'errore e rileggere i residui;
+8. dopo deploy, verificare history, catalogo effettivo, policy e comportamento;
+9. se un'API assegna la versione, riallineare il filename locale alla history.
 
-Serve per gli smoke Storage e per qualunque prova che richieda un JWT reale. La
-via dell'API Auth **non funziona su questo progetto**: il limite dell'SMTP
-incorporato è project-wide e produce un `429` che né il piano né un IP diverso
-spostano. La via che ha funzionato il 5 agosto 2026, senza `service_role` e senza
-SMTP proprio:
+Il merge della PR non è prova di applicazione. L'integrazione può non partire e
+una corsa successiva può distribuire il backlog. Attendere la corsa, confrontare
+il ledger remoto con i file su `origin/main` e verificare gli oggetti effettivi.
+Le Edge Function possono essere ridistribuite anche da PR che non le toccano.
 
-1. `insert into auth.users` con
-   `encrypted_password = extensions.crypt('…', extensions.gen_salt('bf'))` —
-   `pgcrypto` sta nello schema `extensions`, non in `public` — ed
-   `email_confirmed_at = now()`;
-2. `POST /auth/v1/token?grant_type=password` con la sola chiave pubblica. Non
-   spedisce email, quindi non incontra il limite SMTP.
+## Utente tecnico autenticabile senza SMTP
 
-**Due cose non ovvie, scoperte eseguendo e non ragionando.** Senza di esse il primo
-tentativo risponde `500 unexpected_failure`, e la causa esatta arriva dai log di
-Auth, non da un'ipotesi:
+Procedura misurata il 5 agosto 2026 e utile soltanto quando una prova autorizzata
+dal perimetro richiede un JWT reale. Verificare prima se esiste già un account
+tecnico integro; non modificare account di persone reali.
 
-- serve **una riga in `auth.identities`**. I 5 utenti reali del progetto ne hanno
-  una, quelli creati in SQL no, e senza di essa GoTrue non autentica;
-- le quattro colonne token `confirmation_token`, `recovery_token`,
-  `email_change_token_new` ed `email_change` vanno messe a **stringa vuota, non a
-  `NULL`**: sono `varchar(255)` e non `text`, e GoTrue le scansiona in `string` non
-  nullable.
+L'API Auth di signup incontra il limite project-wide del mailer incorporato. La
+procedura SQL che ha funzionato richiede:
 
-`phone` invece **resta `NULL`**: per GoTrue è nullable e ha un indice unico che due
-stringhe vuote violerebbero.
+1. una riga in `auth.users` con password cifrata tramite
+   `extensions.crypt(..., extensions.gen_salt('bf'))` ed email confermata;
+2. una riga coerente in `auth.identities` — senza di essa GoTrue risponde con
+   errore interno;
+3. `confirmation_token`, `recovery_token`, `email_change_token_new` ed
+   `email_change` a stringa vuota, non `NULL`;
+4. `phone` a `NULL`, non stringa vuota;
+5. autenticazione via `POST /auth/v1/token?grant_type=password` con chiave
+   pubblica, senza service-role nel client.
 
-La pulizia va fatta nello stesso ordine inverso, e va verificata: dopo lo smoke del
-5 agosto 2026 `auth.users`, `auth.identities` e `public.profiles` sono tornati a 5
-righe, che è la linea di base reale del progetto.
+`auth.identities.email` è generata: non inserirla esplicitamente. Ripulire in
+ordine inverso, verificare `auth.users`, `auth.identities`, `public.profiles` e
+ogni tabella/oggetto Storage toccato. Se il task richiede di conservare un
+residuo, registrarlo in `CHANGES.log`.
 
-La repair `supabase/migrations/20260730140948_security_invariants_remote_drift_repair.sql`
-è stata applicata il 30 luglio 2026. La query
-`supabase/tests/6d-1_remote_drift_repair_verifica.sql` restituisce 13/13
-`PASSA`; le griglie `6d-1_invarianti_sicurezza.sql` e
-`6d-1_followup_invarianti.sql` restano pendenti perché richiedono autorizzazione
-esplicita per le fixture remote.
+## Griglie e verifiche remote
+
+- Una griglia versionata ma mai eseguita non è una prova.
+- Registrare motore/versione, ambiente, conteggio PASSA/FALLISCE e residui.
+- Quando applicabile, fare una corsa di controllo senza la correzione e una con
+  la correzione: una griglia verde in entrambi gli stati non misura il difetto.
+- Un blocco PL/pgSQL con `exception` è una sottotransazione: il rollback può
+  cancellare gli esiti già registrati. Isolare l'errore per caso e registrare
+  l'esito fuori dalla sottotransazione.
+- SQL Editor non attraversa PostgREST. Non dimostra verbo/volatilità, hook di
+  richiesta, CORS, redirect, sessione browser o UI; provare il percorso client
+  quando la classe di difetto vive lì.
+- Per enum, castare entrambi i rami di un `CASE` al tipo esatto e verificare le
+  label prima della prova.
 
 ## Se il lavoro riguarda una nuova fase
 
-- Accertare che la fase precedente sia integrata e approvata.
-- Per la 6d-2a verificare anche 33/33, 11/11, 13/13 e residui fixture zero.
-- Creare un branch dedicato partendo da `main` aggiornato.
-- Non portare due fasi avanti insieme sullo stesso dominio.
-- Definire parità e fuori-scope prima di scrivere codice.
-- A ogni checkpoint eseguire lint/typecheck/test/build pertinenti.
-- Fare commit piccoli e descrittivi.
-- Aprire una PR draft. Il merge autonomo è ammesso **solo** se il diff non
-  contiene alcun file sotto `supabase/migrations/` (deroga del 16 agosto 2026);
-  una fase che scrive SQL non rientra mai in quel caso, quindi per una nuova
-  fase con migrazioni il merge resta esplicito di Enrico.
+- Confermare che il perimetro di prodotto sia stato ammesso e che i prerequisiti
+  della roadmap siano soddisfatti. Questo è un gate organizzativo sullo scope,
+  non una conferma per i comandi tecnici.
+- Una fase usa branch e PR dedicati; non portare due fasi avanti in parallelo
+  sulla stessa area.
+- Definire parità, fuori-scope e writer autorevole prima del codice.
+- Eseguire checkpoint piccoli con test/lint/typecheck/build pertinenti.
+- PR, CI, fix, merge e verifica post-merge sono parte del ciclo autonomo anche
+  quando la fase contiene migrazioni.
+- Fase 12 è Club/Community ed è distribuita; Fase 13 è Cutover e resta una
+  decisione prodotto/operativa separata.
 
-## Handoff specifico alla Fase 6d-2a
+## Chiusura e handoff
 
-La Fase 6d-2a deve:
-
-- distinguere in modo autoritativo il catalogo curato dallo staff dai vini
-  inseriti dagli utenti;
-- separare aggiunta privata, aggiunta pubblica e vendita da bottiglia esistente;
-- rendere atomica la creazione dell'ambiente e del modulo iniziale;
-- collegare alla home soltanto dati reali della Cantina;
-- preservare gli invarianti, i privilegi e le viste chiuse introdotti dalla
-  6d-1;
-- fermarsi prima di qualsiasi SQL remoto e chiedere conferma esplicita.
-
-Il gate post-merge 6d-1 è stato documentato e approvato, e la fase è stata
-consegnata: questo elenco resta come descrizione di ciò che la 6d-2a ha dovuto
-garantire, non come lavoro da avviare.
-
-## Handoff specifico alla Fase 7
-
-La Fase 7 deve:
-
-- implementare ordini, proposte e pagamenti dietro le interfacce esistenti;
-- ricavare prezzo, valuta, venditore e stock lato server;
-- ricontrollare scadenza, stato e bottiglia nella stessa transazione;
-- sapere che `listings_marca_bottiglia_ceduta` valorizza già `ceduta_at`;
-- trasferire o creare correttamente l'unità del compratore senza far
-  riapparire quella ceduta nella cantina del venditore;
-- progettare Stripe Connect/KYC prima di denaro reale;
-- colmare il rate limiting delle RPC prima di esporre pagamenti.
-
-La fase è integrata e copre schema, rate limiting condiviso, Edge Function,
-webhook, adapter e il trasferimento della proprietà al compratore tramite
-`orders.buyer_bottle_unit_id`. Questo elenco resta come descrizione di ciò che
-la Fase 7 ha dovuto garantire, non come lavoro da avviare.
-
-## Handoff specifico alla Fase 7b
-
-La Fase 7b è integrata. Ciò che una nuova chat deve sapere prima di toccarne il
-codice:
-
-- la commissione è un rincaro a netto garantito, non una percentuale scelta, e
-  la formula vive in `private.marketplace_totale_cents` e in nessun altro posto;
-- sull'ordine sono congelati i tre parametri oltre al risultato: un ordine
-  vecchio deve restare spiegabile dopo che la configurazione è cambiata;
-- i fondi restano alla piattaforma perché l'addebito non porta `transfer_data`
-  né `on_behalf_of`. Aggiungerli spegnerebbe l'intera trattenuta senza che
-  nessun test lo dica;
-- la fee davvero trattenuta si misura e non decide nulla;
-- il gate `seller_enabled` sulla creazione di annunci è spento di proposito.
-
-## Gate chiusi dal merge, non da un'autorizzazione
-
-`apply_migration` di Fase 7 e Fase 7b e il deploy delle tre Edge Function erano
-elencati qui come gate aperti. Non lo sono più, e nessuno li ha autorizzati: li
-ha chiusi il merge, tramite l'integrazione GitHub. Il riallineamento dei filename
-cade con loro, perché le versioni a ledger coincidono già con i nomi dei file.
-
-## Gate ancora aperti, in ordine
-
-1. esecuzione delle griglie `7_ordini_pagamenti.sql` (16 casi) e
-   `7b_connect_marketplace.sql` (23 casi), che creano e cancellano fixture
-   remote e richiedono un'autorizzazione esplicita. **Non autorizzate**:
-   l'autorizzazione data per la griglia 7c non le copre, perché è per griglia e
-   non per progetto;
-2. decidere dove sta il gate di autorizzazione, dato che la regola scritta
-   presidia `supabase db push` e il percorso reale è il merge su `main`. Dall'11
-   agosto 2026 si sa che **il merge distribuisce anche le Edge Function**, tutte
-   insieme e anche quando la PR non ne tocca nessuna: la PR #33, tre file di sola
-   documentazione, ha ridistribuito tutte e tre le function in produzione. Il
-   gate quindi è uno solo per migrazioni e function — ma l'ambiente di una
-   function va configurato **prima** del merge, perché dopo è già in risposta;
-3. configurare variabili e secret GitHub dello scheduler di auto-rilascio e
-   ottenere una run verde di `Phase 7 - auto-release payouts`, oggi a **18 run
-   su 18** in `failure` con `gh variable list` e `gh secret list` entrambi
-   vuoti, verificato l'11 agosto 2026. È il gate che la 7g ha dichiarato fuori
-   dal merge, ed è la precondizione della decisione 1e;
-4. **configurare chiave e budget dei provider AI entro lunedì 18 agosto 2026**,
-   impegno assunto da Enrico nella decisione 7.11 della Fase 10, e **eseguire le
-   prove empiriche della 7.1** — 5-6 conversazioni reali per la chat, foto vere
-   di etichette per le funzionalità di visione. Le tredici decisioni della fase
-   sono **tutte chiuse** dalla sessione dell'11 agosto 2026
-   ([`../docs/PHASE_10_AI_SERVICE_SPEC.md`](../docs/PHASE_10_AI_SERVICE_SPEC.md),
-   sezione 7), e con esse i due punti conseguenti: il TTL dello storico si applica
-   **in lettura** e l'esito del triage è una **colonna persistita su `reports`**.
-   Finché la configurazione manca la fase resta distribuibile ma **spenta**:
-   `AI_ENABLED` fallisce chiuso per costruzione. Finché le prove non sono state
-   fatte **la fase non ha un provider confermato**, e nessuna riga di codice può
-   chiudere quel prerequisito.
-
-La voce che questo elenco portava come quarta — approvare l'avvio della Fase 9 —
-è chiusa: la fase è mersa con la PR #32 (squash `cd81df6`) l'11 agosto 2026 e le
-quattro migrazioni sono applicate al progetto reale.
-
-Lo smoke Storage del bucket `cantina`, che questo elenco portava come terza voce,
-è stato eseguito e chiuso il 5 agosto 2026; la sua registrazione arriva con la
-PR #23.
-
-## Cosa aggiornare alla fine di una fase
-
-Non «alla fine»: **prima del merge**, come ultimo commit della PR. Dopo lo squash
-il branch non c'è più e l'aggiornamento richiederebbe una PR a parte.
-
-- `CHANGES.log`, con le quattro intestazioni esatte e `NEXT STEPS` a tre voci;
-- `CLAUDE.md`, se la fase ha prodotto regole o invarianti vincolanti;
-- `docs/ROADMAP_V1.md`;
-- `docs/MIGRATION_PHASE_1_BACKLOG.md`;
-- documenti di sicurezza/ambiente se toccati;
-- questa cartella:
-  - stato attuale;
-  - storia della fase;
-  - indice PR;
-  - `context-manifest.json`.
-
-Con i fatti veri di quella PR — numero, cosa cambia, cosa resta aperto — non con
-un riassunto generico.
+Prima del merge, aggiornare `CHANGES.log` con lo stato prodotto dalla PR.
+Aggiornare `CLAUDE.md` solo se cambia una regola costituzionale e i documenti
+storici/architetturali solo quando il cambiamento richiede memoria durevole.
+Dopo il merge, fare fetch di `origin/main`, verificare i file finali e misurare
+gli effetti remoti invece di dedurli dal merge.

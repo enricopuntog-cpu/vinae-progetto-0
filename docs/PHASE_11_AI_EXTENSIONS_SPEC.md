@@ -203,15 +203,16 @@ fatta.**
 
 ### 2.2 I vincoli trasversali della Fase 10 che valgono anche qui
 
-- **7.10 — il deploy è il merge.** Non esiste un passo di deploy separato da
-  autorizzare: il merge su `main` distribuisce migrazioni **e ridistribuisce
-  tutte le Edge Function, comprese quelle che la PR non ha toccato**. Misurato
-  **tre volte**, l'ultima il 12 agosto 2026 (§2.5): le tre function nuove della
-  Fase 10 create 38 secondi dopo il merge, e tutte e sei con lo stesso
-  `updated_at` 43 secondi dopo, con le tre preesistenti passate a versione
-  15/14/14 e hash di bundle nuovi; poi di nuovo dopo la #37, che è sola
-  documentazione. **Conseguenza operativa per questa fase: l'ambiente di una
-  function si configura prima del merge, mai dopo.**
+- **7.10 — il merge può innescare il deploy.** Non c'è un gate di autorizzazione
+  separato per il deploy tecnico richiesto dal task. Le corse misurate
+  **tre volte**, l'ultima il 12 agosto 2026 (§2.5), distribuirono migrazioni e
+  ridistribuirono **tutte** le Edge Function, comprese quelle non toccate dalla
+  PR: le tre function nuove della Fase 10 furono create 38 secondi dopo il merge,
+  e tutte e sei ebbero lo stesso `updated_at` 43 secondi dopo; accadde di nuovo
+  dopo la #37, di sola documentazione. Non è una garanzia per ogni merge: corsa
+  e stato remoto vanno verificati. **Conseguenza operativa per questa fase:
+  l'ambiente di una function si configura e si verifica prima del merge che può
+  attivarla, mai dopo.**
 - **`_shared/cors.ts` ha diff vuoto e deve mantenerlo** (7.6). Le function AI
   leggono `AI_ALLOWED_ORIGINS` da `_shared/ai-cors.ts`, un modulo separato che
   replica il pattern invece di importarlo. Toccare il file condiviso rimetterebbe
@@ -237,7 +238,10 @@ fatta.**
   timestamp più recente — anche in bozza, anche se nessun ambiente l'ha mai
   applicata.
 - **Una griglia SQL scritta non è una prova finché non è stata eseguita almeno
-  una volta**, e l'autorizzazione a eseguirla è **per griglia, non per progetto**.
+  una volta.** La regola allora vigente richiedeva un'autorizzazione per ogni
+  griglia; resta un fatto storico di questa specifica datata ed è sostituita
+  dalla policy autonoma corrente di `CLAUDE.md`, con verifica obbligatoria di
+  progetto/ref/ambiente, idoneità dell'ambiente, cleanup e residui.
 
 ### 2.3 Una decisione della 7.1 che il codice della 10a ha già chiuso
 
@@ -1364,12 +1368,13 @@ un branch, non durante:
 | Griglie SQL | Una per migrazione — quindi **quattro** — **da eseguire almeno una volta** prima di chiamarle prove. Fra i casi obbligatori: l'unicità della 6.7 e la mancata pulizia di `foto-ai` della 6.1(b) | «Una per migrazione» |
 
 **Il conteggio delle Edge Function ha una conseguenza operativa, non solo
-contabile.** Ogni merge di questa fase ridistribuisce **tutte** le function
-esistenti (7.10, misurata tre volte — §2.5). A dieci function, un merge di `11d`
-rimette in produzione anche i tre percorsi dei pagamenti e i tre della Fase 10.
-È la ragione per cui `_shared/cors.ts` deve avere diff vuoto in ogni PR di questa
-fase, e per cui l'ambiente di ogni function nuova va configurato **prima** del
-merge che la introduce.
+contabile.** Le tre corse misurate in 7.10 (§2.5) ridistribuirono **tutte** le
+function esistenti, quindi anche un merge che non le tocca può rimettere in
+produzione i tre percorsi dei pagamenti e i tre della Fase 10. Non si presume che
+la corsa parta o completi: la si verifica dopo. È la ragione per cui
+`_shared/cors.ts` deve avere diff vuoto in ogni PR di questa fase, e per cui
+l'ambiente di ogni function nuova va configurato e verificato **prima** del
+merge che può attivarla.
 
 **Il debito che questa fase eredita e deve chiudere.** La 7.13 ha tolto
 `SfondoIAPanel` dalla lista di cutover per chiuderlo «in questa fase», ma la 7.13
@@ -1411,9 +1416,11 @@ documento e nessuno dei due si chiude scrivendo codice.
 > `11d` dal pannello mai esercitato. **Fermarsi a un checkpoint onesto non è un
 > fallimento; forzare tutto in una sessione per finire prima lo è.**
 
-Applicare qualunque cosa al progetto reale — migrazione, function, configurazione
-— resta **una conferma esplicita e distinta per perimetro**, data in sessione, e
-non è coperta da un'autorizzazione precedente che nominava un perimetro diverso.
+Alla data di questa decisione, applicare qualunque cosa al progetto reale —
+migrazione, function, configurazione — richiedeva **una conferma esplicita e
+distinta per perimetro**. Questa è storia della sessione, non policy corrente:
+`CLAUDE.md` oggi autorizza autonomamente il lavoro tecnico richiesto dal task,
+fermi i gate organizzativi sullo scope e tutte le protezioni operative.
 
 ---
 

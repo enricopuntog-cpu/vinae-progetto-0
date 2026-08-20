@@ -29,54 +29,47 @@ CONTESTO_IA/    handoff sintetico per nuove IA/chat
 
 ## Regole di migrazione
 
-1. Una fase = un branch = una PR draft.
-2. Nessuna fase successiva senza approvazione esplicita.
-3. Nessuna nuova funzionalità durante la migrazione: cercare parità.
-4. Un solo writer autorevole per dominio.
-5. `frontend/` + `backend/` restano serviti fino alla Fase 13 (era la Fase 11
-   fino all'11 agosto 2026: alla chiusura della Fase 10 il cutover è diventato
-   la 12 e le quattro estensioni AI ammesse per eccezione sono diventate la 11;
-   ed era la Fase 12 fino al 16 agosto 2026, quando una seconda rinumerazione ha
-   dato quel numero a Club/Community, che segue direttamente la Fase 11
-   nell'ordine di dipendenza).
-6. Non lavorare direttamente su `main` e non force-pushare mai. Il merge su
-   `main` è consentito **solo dopo approvazione esplicita data in sessione** e
-   **solo in squash**: l'autorizzazione del 5 agosto 2026 sostituisce il click
-   manuale, non l'approvazione. Prima di chiudere o mergiare qualunque PR,
-   aggiornare `CHANGES.log`, `CLAUDE.md` e questa cartella con lo stato che
-   quella PR produce davvero — numero, cosa cambia, cosa resta aperto — come
-   **ultimo commit della PR stessa**, prima dello squash e non dopo: dopo lo
-   squash il branch non c'è più e l'aggiornamento richiederebbe una PR a parte.
-   **Una sola deroga, ammessa per nome da Enrico il 16 agosto 2026**: una PR il
-   cui diff contiene **zero file sotto `supabase/migrations/`** può essere mersa
-   autonomamente dalla sessione, senza chiedere prima, con i tre job CI verdi e
-   `mergeable: MERGEABLE` / `mergeStateStatus: CLEAN` letti **sull'head commit
-   che si sta per mergiare**. Il confine è quella cartella e nient'altro: cosa
-   tocchi il resto del diff non lo sposta. Con anche **un solo** file di
-   migrazione il merge resta esplicito di Enrico, perché qui **il merge è il
-   gate di deploy** (7.10) e una migrazione mersa arriva sul progetto reale
-   nello stesso istante. La deroga vale per il merge di una PR e per nient'altro:
-   i punti 2, 8 e 9 di questo elenco restano intatti.
-7. Non usare Lovable o Emergent per generare/modificare il codice.
-8. Le migrazioni sul progetto Supabase reale richiedono revisione dell'SQL e
-   conferma esplicita in sessione prima di `supabase db push` o equivalenti.
-9. I test remoti che inseriscono o cancellano fixture richiedono una conferma
-   esplicita separata dall'approvazione al deploy. L'autorizzazione è **per
-   griglia e non per progetto**: quella concessa per la 7c non copre la 7b. La
-   pulizia va garantita anche sul percorso d'errore, e i residui vanno riletti e
-   riportati dopo l'esecuzione, non dichiarati.
+1. Una fase usa branch e PR dedicati; non portare due fasi avanti in parallelo
+   sulla stessa area.
+2. L'ammissione di una nuova fase o funzionalità è una decisione organizzativa
+   sul perimetro. Non è un gate di conferma per i singoli comandi tecnici.
+3. Nessuna nuova funzionalità durante la migrazione, salvo quelle ammesse
+   esplicitamente per nome; l'obiettivo ordinario è la parità.
+4. Ogni dominio migrato ha un solo writer autorevole.
+5. `frontend/` + `backend/` restano serviti fino alla Fase 13. Il cutover era la
+   Fase 11 fino all'11 agosto 2026 e la Fase 12 fino al 16 agosto 2026; oggi la
+   Fase 12 è Club/Community e la Fase 13 è Cutover.
+6. Un agente dotato degli strumenti necessari completa autonomamente il ciclo
+   `branch → implementazione → test → commit → push → PR → CI → fix CI → merge
+   → verifica post-merge`, anche quando la PR contiene migrazioni. Si lavora
+   fuori da `main`, il metodo ordinario è squash e il merge richiede i controlli
+   pertinenti verdi e l'head esatto `MERGEABLE`/`CLEAN`. Force push su `main`,
+   bypass deliberato della CI, distruzione di lavoro altrui e merge con controlli
+   rilevanti falliti restano vietati.
+7. Prima del merge, `CHANGES.log` deve descrivere lo stato che la PR produrrà.
+   `CLAUDE.md` cambia solo quando cambia una regola costituzionale; questa
+   cartella cambia quando serve memoria durevole.
+8. Il lavoro Supabase richiesto dal task è tecnico e autonomo: migrazioni,
+   schema, RPC, trigger, RLS, Storage, Edge Function, fixture necessarie e
+   verifiche remote. Prima di ogni scrittura si verificano progetto, ref,
+   ambiente e stato remoto; si opera migration-first e non si disabilita RLS
+   globalmente.
+9. Le fixture tecniche devono essere necessarie, minime e isolate. La pulizia va
+   garantita anche sul percorso d'errore; i residui vanno riletti e riportati.
+   Non si cancellano o riscrivono arbitrariamente dati reali.
 10. Dopo `apply_migration` via API/MCP, allineare il file locale alla versione
-    assegnata dal server e verificare la migration history.
-11. Un file di migrazione già pushato almeno una volta non si modifica più in
-    place: ogni correzione successiva è un nuovo file con timestamp più
-    recente, anche in bozza e anche se la versione precedente non è mai stata
-    applicata al progetto reale. Il branch di anteprima che Supabase crea per
-    ogni PR esegue le migrazioni all'apertura, e un ambiente che ha già
-    registrato una versione come eseguita non la rilancia quando il testo
-    cambia: controlla la versione, non il contenuto. È successo sulla PR #19,
-    dove l'anteprima ha eseguito la prima bozza della migrazione di Fase 7b
-    (commissione 5% piatta) e non ha mai ripreso la riscrittura a netto
-    garantito.
+    assegnata dal server e verificare la migration history e gli oggetti
+    effettivi. Il merge non prova l'applicazione: l'integrazione può non partire
+    e una corsa successiva può distribuire un backlog.
+11. Un file di migrazione già pushato o distribuito almeno una volta non si
+    modifica più in place: ogni correzione è un nuovo file con timestamp più
+    recente. Un ambiente che ha già registrato una versione non ne riesegue il
+    testo modificato. È successo sulla PR #19, dove l'anteprima eseguì la prima
+    bozza della migrazione di Fase 7b e non riprese la riscrittura successiva.
+
+La deroga del 16 agosto 2026 che limitava il merge autonomo alle PR senza file
+sotto `supabase/migrations/` resta un fatto storico nelle voci PR #47–#51, ma è
+stata sostituita dalla policy corrente sopra.
 
 ## Regole di tipo che hanno già rotto il denaro una volta
 
@@ -192,8 +185,9 @@ successive possono costruire.
 ### Bloccanti prima di denaro reale o beta pubblica
 
 - Stripe Connect, payout e onboarding venditore: merged con la Fase 7b e
-  distribuiti sul progetto reale al merge — schema a ledger e tre Edge Function
-  `ACTIVE` — ma mai percorsi da un ordine e mai provati contro Stripe, nemmeno
+  verificati sul progetto reale dopo la corsa d'integrazione — schema a ledger e
+  tre Edge Function `ACTIVE` — ma mai percorsi da un ordine e mai provati contro
+  Stripe, nemmeno
   in test mode. Restano fuori il KYC oltre l'onboarding ospitato,
   l'interfaccia di gestione delle contestazioni e il recupero automatico di un
   rimborso successivo a un Transfer già creato;
@@ -267,12 +261,11 @@ bun run test
 bun run build
 ```
 
-Lo script `test` esiste ed è eseguito anche in CI, dietro una soglia minima:
-il job imposta `MIN_TESTS` (166 oggi) e fallisce se passano meno casi di così.
-La soglia serve perché `bun test` esce 0 quando i file di test ci sono ma non
-contengono casi: senza di lei una suite che si svuota in silenzio resterebbe
-verde. Si alza di proposito quando si aggiungono test; abbassarla è una
-decisione, non manutenzione.
+Lo script `test` esiste ed è eseguito anche in CI, dietro la soglia minima
+`MIN_TESTS` definita in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml).
+La soglia è volatile e va letta dal workflow: serve perché `bun test` esce 0
+quando i file di test esistono ma non contengono casi. Si alza deliberatamente
+quando si aggiungono test; non si abbassa come manutenzione.
 
 ### `backend/`
 
