@@ -1,9 +1,20 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { CATALOGO_AVATAR, avatarSicuro, inizialiDa } from "@/lib/profilo/avatar";
+import {
+  BUCKET_AVATAR_PROFILI,
+  CATALOGO_AVATAR,
+  avatarSicuro,
+  inizialiDa,
+  percorsoAvatarPersonale,
+  riferimentoAvatarSicuro,
+} from "@/lib/profilo/avatar";
 
 const progetto = join(import.meta.dir, "../../..");
+const PROPRIETARIO = "11111111-1111-4111-8111-111111111111";
+const ALTRO_UTENTE = "22222222-2222-4222-8222-222222222222";
+const OGGETTO = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const FOTO_PROPRIA = `${PROPRIETARIO}/${OGGETTO}.webp`;
 
 describe("catalogo degli avatar", () => {
   it("ogni voce corrisponde a un file davvero servito da noi", () => {
@@ -43,7 +54,21 @@ describe("convalida dell'avatar memorizzato", () => {
    * qualunque stringa. Se la si disegnasse cosi' com'e', aprire quel profilo
    * significherebbe fare una richiesta al dominio scelto da un estraneo.
    */
-  it("rifiuta un URL esterno anche se sembra un avatar", () => {
+  it("accetta una foto Vinea soltanto per il profilo proprietario", () => {
+    expect(percorsoAvatarPersonale(FOTO_PROPRIA, PROPRIETARIO)).toBe(FOTO_PROPRIA);
+    expect(riferimentoAvatarSicuro(FOTO_PROPRIA, PROPRIETARIO)).toBe(FOTO_PROPRIA);
+    expect(avatarSicuro(FOTO_PROPRIA, PROPRIETARIO, "https://vinea.supabase.co/path")).toBe(
+      `https://vinea.supabase.co/storage/v1/object/public/${BUCKET_AVATAR_PROFILI}/${FOTO_PROPRIA}`,
+    );
+  });
+
+  it("rifiuta la foto dichiarata da un altro profilo", () => {
+    expect(percorsoAvatarPersonale(FOTO_PROPRIA, ALTRO_UTENTE)).toBeNull();
+    expect(riferimentoAvatarSicuro(FOTO_PROPRIA, ALTRO_UTENTE)).toBeNull();
+    expect(avatarSicuro(FOTO_PROPRIA, ALTRO_UTENTE, "https://vinea.supabase.co")).toBeNull();
+  });
+
+  it("rifiuta URL esterni, traversal e percorsi personali non canonici", () => {
     for (const valore of [
       "https://i.pravatar.cc/240?img=68",
       "http://tracker.example.com/pixel.png",
@@ -51,9 +76,17 @@ describe("convalida dell'avatar memorizzato", () => {
       "/avatar/../../etc/passwd",
       "/avatar/inesistente.svg",
       "javascript:alert(1)",
+      `${PROPRIETARIO}/../${OGGETTO}.webp`,
+      `${PROPRIETARIO}/${OGGETTO}.png`,
+      `${PROPRIETARIO}/${OGGETTO}.webp/altro`,
     ]) {
-      expect(avatarSicuro(valore)).toBeNull();
+      expect(avatarSicuro(valore, PROPRIETARIO, "https://vinea.supabase.co")).toBeNull();
     }
+  });
+
+  it("non ricompone una foto con una base Storage non HTTP(S)", () => {
+    expect(avatarSicuro(FOTO_PROPRIA, PROPRIETARIO, "javascript:alert(1)")).toBeNull();
+    expect(avatarSicuro(FOTO_PROPRIA, PROPRIETARIO, "non-un-url")).toBeNull();
   });
 });
 

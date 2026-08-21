@@ -18,6 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Wine } from "@/data/wines";
+import { inizialiDa } from "@/lib/profilo/avatar";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
 import { Button } from "@/components/ui/button";
 import {
@@ -148,11 +149,17 @@ export default function AnnuncioDetailPageClient({
           {/* Venditore */}
           <div className="mt-6 rounded-2xl border border-border bg-card p-4">
             <div className="flex items-center gap-3">
-              <img
-                src={wine.venditore.avatar}
-                alt=""
-                className="h-12 w-12 rounded-full object-cover"
-              />
+              {wine.venditore.avatar ? (
+                <img
+                  src={wine.venditore.avatar}
+                  alt=""
+                  className="h-12 w-12 rounded-full object-cover"
+                />
+              ) : (
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-crema font-serif text-sm text-bordeaux">
+                  {inizialiDa(wine.venditore.nome)}
+                </span>
+              )}
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-1 font-semibold">
                   {wine.venditore.nome}

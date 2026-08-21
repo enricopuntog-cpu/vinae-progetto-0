@@ -1,29 +1,16 @@
 /**
  * Catalogo degli avatar disponibili sul profilo.
  *
- * PERCHÉ UN INSIEME CURATO E NON UN CARICAMENTO. La demo storica
- * (`frontend/src/routes/onboarding.tsx`) pescava da `pravatar.cc`, cioè da un
- * servizio esterno: inaccettabile per un dato di produzione, perché ogni
- * visualizzazione di un profilo diventerebbe una richiesta a terzi con l'IP di
- * chi guarda. Qui i file sono **nostri**, serviti da `public/avatar/`.
+ * I preset sono asset Vinea serviti da `public/avatar/`. Una foto personale è
+ * invece un oggetto WebP nel bucket pubblico `avatar-profili`: nel database si
+ * conserva soltanto `<uid>/<uuid>.webp`, mai un URL. L'indirizzo del progetto si
+ * ricompone in lettura da una variabile d'ambiente fidata.
  *
- * Il caricamento di una foto propria non è escluso per sempre: è escluso da
- * questo giro, e non per pigrizia. Un bucket nuovo porta con sé le stesse
- * domande che la Fase 11 dovette chiudere in sessione per `foto-ai` — pubblico
- * o privato, limite di dimensione, elenco MIME, pulizia degli orfani, e lo
- * spoglio EXIF, visto che una foto scattata in casa porta le coordinate GPS del
- * luogo dello scatto. Deciderle qui, fuori da una sessione, sarebbe inventare
- * una decisione; e la migrazione che crea il bucket si applicherebbe da sé al
- * progetto reale al momento del merge (7.10).
- *
- * SICUREZZA. `profiles.avatar_url` è scrivibile dal client — è fra le otto
- * colonne del `GRANT UPDATE` della 9b — quindi il valore che torna dal database
- * non è fidato: un utente può scriverci qualunque stringa, compreso un URL
- * esterno che trasformerebbe la propria scheda in un tracciatore per chi la
- * apre. Per questo la lettura passa sempre da `avatarSicuro()`, che accetta
- * **solo** un percorso del catalogo e altrimenti ricade sulle iniziali. La
- * convalida sta in lettura e non solo in scrittura perché è in lettura che il
- * valore viene reso a un terzo.
+ * `profiles.avatar_url` resta un dato non fidato perché è scrivibile dal client.
+ * Ogni lettura passa quindi da `avatarSicuro()`: un preset deve appartenere al
+ * catalogo e una foto deve avere il percorso canonico della persona che la
+ * dichiara. URL esterni, cartelle altrui e stringhe arbitrarie ricadono sulle
+ * iniziali senza produrre richieste di rete.
  */
 
 export type AvatarId = "calice" | "bottiglia" | "grappolo" | "botte" | "tappo" | "decanter";
@@ -39,16 +26,61 @@ export const CATALOGO_AVATAR: readonly VoceAvatar[] = [
   { id: "decanter", percorso: "/avatar/decanter.svg", etichetta: "Decanter" },
 ] as const;
 
+export const BUCKET_AVATAR_PROFILI = "avatar-profili";
+
 const PERCORSI_AMMESSI = new Set(CATALOGO_AVATAR.map((voce) => voce.percorso));
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+const PERCORSO_FOTO = new RegExp(`^(${UUID})/(${UUID})\\.webp$`);
 
 /**
- * Il percorso da disegnare, oppure `null` se il valore memorizzato non
- * appartiene al catalogo — compreso il caso normale della stringa vuota, che è
- * il default della colonna per chi non ha mai scelto.
+ * Restituisce il percorso Storage soltanto quando la prima cartella coincide
+ * esattamente con il profilo. Il confronto non è case-insensitive: i percorsi
+ * creati dall'app e gli UUID di Supabase sono canonici e minuscoli.
  */
-export function avatarSicuro(valore: string | null | undefined): string | null {
+export function percorsoAvatarPersonale(
+  valore: string | null | undefined,
+  proprietarioId: string | null | undefined,
+): string | null {
+  if (!valore || !proprietarioId) return null;
+  const parti = PERCORSO_FOTO.exec(valore);
+  return parti?.[1] === proprietarioId ? valore : null;
+}
+
+/**
+ * Riferimento che può essere persistito: uno dei preset, una foto nella cartella
+ * del profilo, oppure `null`. È separato dall'URL da disegnare perché il database
+ * non deve dipendere dall'indirizzo del progetto Supabase.
+ */
+export function riferimentoAvatarSicuro(
+  valore: string | null | undefined,
+  proprietarioId?: string | null,
+): string | null {
   if (!valore) return null;
-  return PERCORSI_AMMESSI.has(valore) ? valore : null;
+  if (PERCORSI_AMMESSI.has(valore)) return valore;
+  return percorsoAvatarPersonale(valore, proprietarioId);
+}
+
+/**
+ * Il percorso/URL da disegnare. La base Supabase non viene mai letta dal valore
+ * del profilo: è configurazione Vinea. Se manca o non è un'origine HTTP(S)
+ * valida, la foto personale fallisce chiusa e il componente usa le iniziali.
+ */
+export function avatarSicuro(
+  valore: string | null | undefined,
+  proprietarioId?: string | null,
+  supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL,
+): string | null {
+  const riferimento = riferimentoAvatarSicuro(valore, proprietarioId);
+  if (!riferimento) return null;
+  if (PERCORSI_AMMESSI.has(riferimento)) return riferimento;
+
+  try {
+    const base = new URL(supabaseUrl ?? "");
+    if (base.protocol !== "https:" && base.protocol !== "http:") return null;
+    return `${base.origin}/storage/v1/object/public/${BUCKET_AVATAR_PROFILI}/${riferimento}`;
+  } catch {
+    return null;
+  }
 }
 
 /**

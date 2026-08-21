@@ -10,8 +10,11 @@ import { creaProfileService } from "@/services/profile-service";
 
 type Errore = { code?: string; message: string } | null;
 
+const USER_ID = "11111111-1111-4111-8111-111111111111";
+const FOTO_PROPRIA = `${USER_ID}/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.webp`;
+
 const RIGA = {
-  id: "utente-1",
+  id: USER_ID,
   username: "elena_r",
   bio: "Nebbiolo e bollicine.",
   citta: "Milano",
@@ -75,7 +78,7 @@ const fakeClient = (opzioni: {
   return { client, letture, scritture };
 };
 
-const SESSIONE = { id: "utente-1", email: "elena@esempio.it" };
+const SESSIONE = { id: USER_ID, email: "elena@esempio.it" };
 
 describe("lettura del profilo corrente", () => {
   it("legge la riga di profiles filtrando sull'utente della sessione", async () => {
@@ -88,7 +91,7 @@ describe("lettura del profilo corrente", () => {
     expect(esito.data?.email).toBe("elena@esempio.it");
     expect(letture[0]!.tabella).toBe("profiles");
     // L'identificativo NON arriva da chi chiama: viene dalla sessione.
-    expect(letture[0]!.filtri).toEqual({ id: "utente-1" });
+    expect(letture[0]!.filtri).toEqual({ id: USER_ID });
   });
 
   it("chiede un elenco chiuso di colonne, senza le colonne di moderazione", async () => {
@@ -147,7 +150,7 @@ describe("scrittura del profilo corrente", () => {
     // a meta' con l'eta' dichiarata e il nome no.
     expect(scritture).toHaveLength(1);
     expect(scritture[0]!.payload).toEqual({ username: "elena_rossi", dob: "1990-05-14" });
-    expect(scritture[0]!.filtri).toEqual({ id: "utente-1" });
+    expect(scritture[0]!.filtri).toEqual({ id: USER_ID });
   });
 
   it("manda solo i campi presenti, mai un undefined che azzererebbe la colonna", async () => {
@@ -171,6 +174,37 @@ describe("scrittura del profilo corrente", () => {
       citta: "Milano",
       provincia: "MI",
     });
+  });
+
+  it("accetta un preset e una foto nella cartella della sessione", async () => {
+    const { client, scritture } = fakeClient({ sessione: SESSIONE });
+    expect(
+      await creaProfileService(client).aggiornaProfiloCorrente({
+        avatarUrl: "/avatar/calice.svg",
+      }),
+    ).toMatchObject({ ok: true });
+    expect(
+      await creaProfileService(client).aggiornaProfiloCorrente({
+        avatarUrl: FOTO_PROPRIA,
+      }),
+    ).toMatchObject({ ok: true });
+
+    expect(scritture.map((voce) => voce.payload.avatar_url)).toEqual([
+      "/avatar/calice.svg",
+      FOTO_PROPRIA,
+    ]);
+  });
+
+  it("rifiuta URL esterni e la cartella di un altro profilo prima dell'UPDATE", async () => {
+    const { client, scritture } = fakeClient({ sessione: SESSIONE });
+    for (const avatarUrl of [
+      "https://evil.example/avatar.webp",
+      "22222222-2222-4222-8222-222222222222/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.webp",
+    ]) {
+      const esito = await creaProfileService(client).aggiornaProfiloCorrente({ avatarUrl });
+      expect(esito).toEqual({ ok: false, error: "L'avatar scelto non è valido." });
+    }
+    expect(scritture).toHaveLength(0);
   });
 
   it("traduce l'unicita' case-insensitive del nome utente in un messaggio comprensibile", async () => {
