@@ -6,73 +6,52 @@
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
 - Migration numbering is authoritative: Phase 11 = admitted AI extensions,
   Phase 12 = Club/Community, Phase 13 = Cutover.
-- Phase 12 checkpoints 12a/12b/12c are merged and in production. The production
-  migration ledger was last verified at 32 rows, matching the 32 migration
-  files on `main` after PR #56; PRs #58 and #59 added no migration.
-- `public.clubs` contains `circolo-vinea` since 19 August 2026. The proposed
-  seven-club seed fixture was not executed.
-- PR #59 is merged as squash `7b6f34b`. The two Cantina photo badges now use
-  opaque, measured color pairs; `quasi` remains the documented contrast debt.
-- The real authenticated Cantina flow was exercised on 19 August 2026:
-  cancellation dialogs did not mutate the bottle, opening stored
-  `degustazione_nota` without changing `note_personali`, photo reuse copied
-  bytes into `annunci`, and the `Aperta` badge appeared in grid and list views.
-- Deliberate verification residues remain: one test bottle in state `aperta`,
-  the test account, and three objects in each of its `cantina` and `annunci`
-  folders.
-- The desktop Cantina CTA `Ricerca per abbinamento cibo–vino` now sets the local
-  `text-foreground` token in both frontends; the shared Button variant and the
-  Cantina layout are unchanged. A rendered 1440 px check covered normal, hover,
-  focus-visible and disabled states on the served `/cantina` route.
-- The target owner editor now displays every persisted listing photograph and
-  supports add, upload-first replace, remove, reorder, final-order preview and
-  explicit primary-photo indication. Saving sends the ordered raw `immagini`
-  paths through the existing `ListingService.aggiorna()` boundary.
-- Photo cancellation and post-save cleanup can remove only signer-generated
-  `annunci` paths tracked during the current edit session. Removing or replacing
-  a persisted reference never deletes its Storage object automatically.
-- The existing listing column grant, owner update RLS and `annunci` Storage
-  policy are sufficient for this task. No migration was created or applied, no
-  Supabase object was modified, and no remote Supabase write was made.
-- The relevant local checks pass with Bun 1.3.14: `frontend-next` lint has 13
-  warnings and zero errors, typecheck passes, 535 tests pass, and the production
-  build succeeds; `frontend` lint has 14 warnings and zero errors, typecheck
-  passes, 73 tests pass, and its client, SSR and Nitro builds succeed.
-- Governance is split by responsibility: `CLAUDE.md` is the concise current
-  constitution, `AGENTS.md` is only a startup router, this file is current
-  handoff state, and `CONTESTO_IA/` is on-demand durable history.
-- Current Git and Supabase policy authorizes equipped agents to execute the
-  normal technical lifecycle autonomously, including migration PRs and scoped
-  remote Supabase work. Product scope, new phase admission and Phase 13 cutover
-  remain separate organizational decisions.
-- The historical provider trial 6.6 checkpoint is verified. The 15 August runs
-  made 12 v1 attempts and one v2 canary attempt, produced zero valid outputs and
-  selected no provider. Six sanitized JPEG inputs match their retained hashes,
-  contain zero APP1/EXIF segments and were assigned identically to both
-  providers. A private additive v3 passes 36 offline tests; its 12-request
-  dry-run made zero network calls.
+- PR #62 is merged. The target owner editor displays every persisted listing
+  photograph and supports add, upload-first replace, remove, reorder,
+  final-order preview and explicit primary-photo indication.
+- Branch `feat/case-insensitive-usernames` starts from `origin/main` at
+  `e2d3324a11771d8019ac59401ee6ba313ff544f8` and contains the build-phase
+  implementation for case-insensitive username uniqueness.
+- New additive migration
+  `20260821120000_profiles_username_case_insensitive.sql` detects existing
+  case-insensitive collisions, fails with an explicit error when found, creates
+  a unique index on `lower(username)`, and updates `handle_new_user()` to test
+  candidates with the same comparison while preserving `_1`, `_2`, ... suffixes.
+- Existing usernames are not rewritten. RLS, roles, profile fields, tables and
+  RPCs are unchanged.
+- The account page explains that changing letter case does not free a used
+  username. The profile service remains unchanged because its existing `23505`
+  handling also covers the expression index.
+- Focused verification passes with Bun 1.3.14: 15 tests across the two targeted
+  profile test files, `frontend-next` typecheck, and `git diff --check`.
+- The migration was created locally but was not applied to any Supabase project;
+  no remote Supabase write was made in this build phase.
+- Deliberate historical verification residues remain: one test bottle in state
+  `aperta`, the test account, and three objects in each of its `cantina` and
+  `annunci` folders.
 
 ## ACTIVE TASK
 
-- Deliver the bounded desktop Cantina contrast correction and target listing
-  photo editor through review, CI, squash merge and post-merge verification.
-- Successful authenticated photo upload, replacement, listing save and remote
-  Storage cleanup have not been exercised in this task; local rendered checks
-  covered the editor draft, reorder, removal and unauthenticated upload error.
+- Build phase for a Vinea username that identifies one user independently of
+  letter case is implemented and ready for VERIFY & SHIP.
+- This phase intentionally stops before remote data verification, migration
+  application, full suites, commit, push, PR, CI and merge.
 
 ## NEXT STEPS
 
-1. Complete the branch review, pull request, CI and squash merge lifecycle.
-2. Verify the merge and expected frontend files from `origin/main`.
-3. Verify the payout scheduler successfully while `PAYMENTS_ENABLED=false` before enabling payments.
+1. Verify production profile data for case-insensitive username collisions.
+2. Run the full affected checks and review the exact branch diff.
+3. Apply and verify the migration, then complete commit, push, PR, CI and merge.
 
 ## BLOCKERS / NOTES
 
+- If real profiles already contain usernames that differ only by letter case,
+  the migration will stop with SQLSTATE `23505`; resolving those rows requires
+  an explicit data decision before applying the unique index.
 - Phase 11 implementation is not open: the historical trial failed, and a new
   two-provider F01 canary lacks current authorization and paid-project
-  confirmation. Provider keys/budget,
-  PhotoRoom timing and legal review remain external/product prerequisites as
-  recorded in `docs/PHASE_11_AI_EXTENSIONS_SPEC.md`.
+  confirmation. Provider keys/budget, PhotoRoom timing and legal review remain
+  external/product prerequisites.
 - Phase 13 has not started and must not be inferred from the public beta or from
   green CI.
 - The embedded Supabase test mailer remains unsuitable for real traffic; custom
@@ -83,4 +62,4 @@
 - Remote integration runs are asynchronous: merge is not proof of migration
   application. Verify the ledger and effective objects after deploy.
 - The `quasi` badge (`bg-oro/25 text-antracite`) is still below contrast on a
-  dark photo; it was measured and deliberately left outside PR #59.
+  dark photo and remains outside this task.

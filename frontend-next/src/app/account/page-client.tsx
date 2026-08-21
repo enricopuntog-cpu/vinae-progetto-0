@@ -230,8 +230,12 @@ export default function AccountPageClient() {
                 onChange={(e) => aggiorna("username", e.target.value)}
                 autoComplete="username"
               />
-              {!usernameValido && (
+              {!usernameValido ? (
                 <p className="mt-1 text-xs text-bordeaux">Almeno 3 caratteri.</p>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Un nome già usato non torna disponibile cambiando maiuscole o minuscole.
+                </p>
               )}
             </div>
             <div>
