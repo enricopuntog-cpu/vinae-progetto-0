@@ -6,61 +6,72 @@
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
 - Migration numbering is authoritative: Phase 11 = admitted AI extensions,
   Phase 12 = Club/Community, Phase 13 = Cutover.
-- PR #63 was squash-merged into `main` as
-  `d99f56a92c07ca5825e9b0dd5a1b3c7a95b0b0a9` after all relevant CI checks
-  passed.
-- Migration `20260821120000_profiles_username_case_insensitive.sql` is present
-  in the linked production ledger for project `pijnmcllmfgjmgsvtcej`.
-- Production `profiles_username_lower_key` is a valid, ready unique index on
-  `lower(username)`. The deployed `handle_new_user()` compares candidates with
-  `lower()` and preserves `_1`, `_2`, ... suffixes.
-- The production preflight found no existing case-insensitive username
-  collisions. A minimal update probe was rejected by
-  `profiles_username_lower_key` with SQLSTATE `23505`; PostgreSQL rolled back the
-  failed statement and the residue check remained clean.
-- Existing usernames were not rewritten. The migration does not modify RLS,
-  grants, roles, profile fields, tables or RPCs; effective profile RLS, policies,
-  grants and columns were reread after deployment.
-- The Account page explains that changing letter case does not free a used
-  username. Existing frontend handling translates SQLSTATE `23505` into the
-  established user-facing message.
-- Final local verification with Bun 1.3.14 passed: lint with 13 pre-existing
-  warnings and no errors, typecheck, 538 tests with zero failures, build, and
-  `git diff --check`. Legacy frontend and backend were not run locally; their CI
-  jobs passed on PR #63.
+- Personal profile photos ship on `main` via PR from `feature/profile-photo`,
+  an explicitly admitted named exception. The six curated preset avatars
+  remain available.
+- Prepared photos are decoded in the browser, center-cropped, resized to
+  512 x 512 and freshly encoded as WebP at quality 0.86. Input is limited to
+  JPEG, PNG or WebP and 5 MB; re-encoding decoded pixels removes original
+  EXIF and other source metadata.
+- Stored custom-avatar references use the canonical form
+  `<profile-uuid>/<object-uuid>.webp`. Persistence and rendering accept a
+  custom reference only when its owner folder matches the declaring profile;
+  arbitrary, external, foreign-owner and malformed values fail closed.
+- The Account page has local pre-save preview, upload/replace/remove controls,
+  preset and initials transitions, loading states, readable errors and separate
+  cleanup warnings. The public listing detail renders the validated seller photo
+  or falls back to initials.
+- Migration `20260821183000_profile_avatars.sql` creates the public-read
+  `avatar-profili` bucket, limits objects to WebP and 5 MB, restricts writes to
+  the authenticated user's canonical folder and constrains `profiles.avatar_url`.
+  Merging the PR does not apply it; application and post-deploy verification
+  are the separate next step.
+- Save ordering is upload new object, update profile, then delete the obsolete
+  custom object. Failed profile updates compensate by deleting the new object;
+  failed post-update cleanup preserves the new profile state and surfaces a
+  warning.
+- VERIFY & SHIP preflight on project `pijnmcllmfgjmgsvtcej` found 10 empty
+  `avatar_url` values and 1 `/avatar/calice.svg`, zero values incompatible with
+  the new CHECK, no pre-existing `avatar-profili` bucket and no pre-existing
+  `avatar_profili_*` policies.
+- Final local verification with Bun 1.3.14 passed: lint with 14 warnings (13
+  pre-existing plus the deliberate `<img>` for blob/Storage avatar URLs) and no
+  errors, typecheck, 556 tests with zero failures, build and `git diff --check`.
+  The `frontend-next` CI floor and its regression contract are aligned from
+  538 to the verified 556 tests. Legacy frontend and backend were not run
+  locally; they are not modified.
 - Deliberate historical verification residues remain: one test bottle in state
   `aperta`, the test account, and three objects in each of its `cantina` and
   `annunci` folders.
 
 ## ACTIVE TASK
 
-- Post-merge handoff records the verified production state of case-insensitive
-  username uniqueness.
-- The `frontend-next` CI floor is aligned from 535 to the verified 538 tests,
-  and its regression contract asserts the same value; no product behavior is
-  changed.
+- VERIFY & SHIP for personal profile photos: the PR records the reviewed,
+  preflighted implementation. Remote migration application, the authenticated
+  smoke test and the post-deploy handoff follow the merge.
+- The pre-existing untracked `.wslconfig` remains untouched.
 
 ## NEXT STEPS
 
-1. Remeasure the payment scheduler before enabling payments.
-2. Configure custom SMTP after a verifiable custom domain becomes available.
-3. Obtain an explicit product decision before opening new migration work.
+1. Apply migration `20260821183000_profile_avatars.sql` to project `pijnmcllmfgjmgsvtcej` and verify ledger, bucket, policies and CHECK.
+2. Run the single authenticated smoke test with the existing test account and verify residue cleanup.
+3. Record the verified post-deploy state in a follow-up handoff.
 
 ## BLOCKERS / NOTES
 
+- A merge alone does not prove migration application; reread the production
+  migration ledger and the effective bucket, policies and constraint after
+  deployment.
 - Phase 11 implementation is not open: the historical trial failed, and a new
   two-provider F01 canary lacks current authorization and paid-project
   confirmation. Provider keys/budget, PhotoRoom timing and legal review remain
   external/product prerequisites.
-- Phase 13 has not started and must not be inferred from the public beta or from
-  green CI.
+- Phase 13 has not started and must not be inferred from the public beta or
+  green checks.
 - The embedded Supabase test mailer remains unsuitable for real traffic; custom
   SMTP depends on a verifiable custom domain.
 - Before enabling payments, remeasure the scheduler configuration and obtain a
   successful fail-closed health run; old failure counts are historical, not a
   current measurement.
-- A merge remains insufficient proof of migration application in general; this
-  migration was separately confirmed in the linked production ledger and by
-  rereading its effective objects.
 - The `quasi` badge (`bg-oro/25 text-antracite`) is still below contrast on a
   dark photo and remains outside this task.
