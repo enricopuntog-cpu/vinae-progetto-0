@@ -173,16 +173,16 @@ describe("scrittura del profilo corrente", () => {
     });
   });
 
-  it("traduce l'unicita' del nome utente in un messaggio comprensibile", async () => {
+  it("traduce l'unicita' case-insensitive del nome utente in un messaggio comprensibile", async () => {
     const { client } = fakeClient({
       sessione: SESSIONE,
       errore: {
         code: "23505",
-        message: 'duplicate key value violates unique constraint "profiles_username_key"',
+        message: 'duplicate key value violates unique constraint "profiles_username_lower_key"',
       },
     });
     const esito = await creaProfileService(client).aggiornaProfiloCorrente({
-      username: "elena_r",
+      username: "ELENA_R",
     });
 
     expect(esito.ok).toBe(false);
