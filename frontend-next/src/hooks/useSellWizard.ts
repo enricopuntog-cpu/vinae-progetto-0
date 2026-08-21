@@ -67,8 +67,6 @@ const CATALOGAZIONE_STEPS = [
   "Anteprima",
 ];
 
-export const MAX_FOTO = 6;
-
 /**
  * Wizard /vendi, portato da frontend/src/hooks/useSellWizard.ts.
  *
