@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
-import { Check, LogOut } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Camera, Check, LogOut, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +17,15 @@ import {
 } from "@/components/ui/select";
 import { useVinea } from "@/lib/vinea-store";
 import { esperienzaLabels, type Esperienza } from "@/data/onboarding";
-import { CATALOGO_AVATAR, avatarSicuro, inizialiDa } from "@/lib/profilo/avatar";
+import {
+  CATALOGO_AVATAR,
+  avatarSicuro,
+  inizialiDa,
+  percorsoAvatarPersonale,
+} from "@/lib/profilo/avatar";
+import { preparaFotoAvatar } from "@/lib/profilo/prepara-foto-avatar";
+import { salvaProfiloConAvatar } from "@/lib/profilo/salva-avatar";
+import { supabaseProfileService } from "@/services/profile-service";
 import type { ProfiloCorrente } from "@/services/types";
 
 const ESPERIENZE = Object.keys(esperienzaLabels) as Esperienza[];
@@ -37,9 +45,9 @@ const MAX_BIO = 500;
  * registrato») e non scrive da nessuna parte. Qui ogni campo arriva da
  * `public.profiles` e ci torna, con `auth.uid()` come unico filtro.
  *
- * L'avatar è scelto da un insieme curato servito da noi, mai da un servizio
- * esterno: il perché — e perché il caricamento di una foto propria è rimandato
- * a una decisione sua — sta in `lib/profilo/avatar.ts`.
+ * L'avatar resta sempre Vinea: uno dei sei preset locali oppure una foto
+ * preparata nel browser e salvata nel bucket dedicato. URL esterni e percorsi di
+ * un altro profilo non arrivano né alla persistenza né al rendering.
  */
 export default function AccountPageClient() {
   const {
@@ -56,8 +64,21 @@ export default function AccountPageClient() {
   // campo non viene toccato mostra il valore del database. Derivazione e non
   // effect, per la stessa ragione spiegata in /completa-profilo.
   const [modifiche, setModifiche] = useState<Partial<ProfiloCorrente>>({});
+  const [fotoPreparata, setFotoPreparata] = useState<File | null>(null);
+  const [anteprimaFoto, setAnteprimaFoto] = useState<string | null>(null);
+  const [preparazioneInCorso, setPreparazioneInCorso] = useState(false);
   const [inCorso, setInCorso] = useState(false);
+  const [erroreFoto, setErroreFoto] = useState<string | null>(null);
+  const [avvisoPulizia, setAvvisoPulizia] = useState<string | null>(null);
   const [salvato, setSalvato] = useState(false);
+  const selettoreFoto = useRef<HTMLInputElement>(null);
+
+  useEffect(
+    () => () => {
+      if (anteprimaFoto) URL.revokeObjectURL(anteprimaFoto);
+    },
+    [anteprimaFoto],
+  );
 
   const campo = <K extends keyof ProfiloCorrente>(chiave: K): ProfiloCorrente[K] | undefined =>
     (modifiche[chiave] ?? authProfilo?.[chiave]) as ProfiloCorrente[K] | undefined;
@@ -65,6 +86,38 @@ export default function AccountPageClient() {
   const aggiorna = <K extends keyof ProfiloCorrente>(chiave: K, valore: ProfiloCorrente[K]) => {
     setModifiche((precedenti) => ({ ...precedenti, [chiave]: valore }));
     setSalvato(false);
+    setAvvisoPulizia(null);
+  };
+
+  const scartaFotoPreparata = () => {
+    setFotoPreparata(null);
+    setAnteprimaFoto(null);
+    if (selettoreFoto.current) selettoreFoto.current.value = "";
+  };
+
+  const scegliAvatar = (valore: string) => {
+    scartaFotoPreparata();
+    setErroreFoto(null);
+    aggiorna("avatarUrl", valore);
+  };
+
+  const preparaFoto = async (file: File | undefined) => {
+    if (!file) return;
+    setPreparazioneInCorso(true);
+    setErroreFoto(null);
+    setSalvato(false);
+    setAvvisoPulizia(null);
+    try {
+      const preparata = await preparaFotoAvatar(file);
+      const anteprima = URL.createObjectURL(preparata);
+      setFotoPreparata(preparata);
+      setAnteprimaFoto(anteprima);
+    } catch (errore) {
+      scartaFotoPreparata();
+      setErroreFoto(errore instanceof Error ? errore.message : "Foto non valida.");
+    } finally {
+      setPreparazioneInCorso(false);
+    }
   };
 
   const username = (campo("username") ?? "") as string;
@@ -73,32 +126,52 @@ export default function AccountPageClient() {
   const provincia = (campo("provincia") ?? "") as string;
   const esperienza = (campo("esperienza") ?? "curioso") as Esperienza;
   const avatarUrl = (campo("avatarUrl") ?? "") as string;
-
-  const avatarDaMostrare = avatarSicuro(avatarUrl);
+  const avatarPersonale = percorsoAvatarPersonale(avatarUrl, authProfilo?.userId);
+  const avatarDaMostrare = anteprimaFoto ?? avatarSicuro(avatarUrl, authProfilo?.userId);
   const usernameValido = username.trim().length >= 3;
   const bioValida = bio.length <= MAX_BIO;
-  const modificato = Object.keys(modifiche).length > 0;
-  const puoSalvare = usernameValido && bioValida && modificato && !inCorso;
+  const modificato = Object.keys(modifiche).length > 0 || fotoPreparata !== null;
+  const occupato = inCorso || preparazioneInCorso;
+  const puoSalvare = usernameValido && bioValida && modificato && !occupato;
 
   const salva = async () => {
-    if (!puoSalvare) return;
+    if (!puoSalvare || !authProfilo) return;
     setInCorso(true);
-    const esito = await authAggiornaProfilo({
-      username: username.trim(),
-      bio,
-      citta,
-      provincia,
-      esperienza,
-      avatarUrl,
-    });
+    setErroreFoto(null);
+    setAvvisoPulizia(null);
+    const esito = await salvaProfiloConAvatar(
+      {
+        profiloId: authProfilo.userId,
+        avatarPrecedente: authProfilo.avatarUrl,
+        nuovaFoto: fotoPreparata,
+        patch: {
+          username: username.trim(),
+          bio,
+          citta,
+          provincia,
+          esperienza,
+          avatarUrl,
+        },
+      },
+      {
+        caricaFoto: (file) => supabaseProfileService.caricaFotoAvatar(file),
+        aggiornaProfilo: authAggiornaProfilo,
+        eliminaFoto: (percorso) => supabaseProfileService.eliminaFotoAvatar(percorso),
+      },
+    );
     setInCorso(false);
-    if (esito.ok) {
-      // Le modifiche locali si svuotano solo dopo che il server ha risposto con
-      // la riga vera: da lì in poi `authProfilo` è la fonte, e tenere anche una
-      // copia locale significherebbe due verità sullo stesso campo.
-      setModifiche({});
-      setSalvato(true);
+    if (!esito.ok) {
+      setErroreFoto(esito.error);
+      return;
     }
+
+    // Le modifiche locali si svuotano solo dopo che il server ha risposto con
+    // la riga vera: da lì in poi `authProfilo` è la fonte. La pulizia Storage può
+    // invece fallire dopo un UPDATE valido e resta quindi un avviso separato.
+    scartaFotoPreparata();
+    setModifiche({});
+    setAvvisoPulizia(esito.data.avvisoPulizia);
+    setSalvato(true);
   };
 
   if (authLoading) {
@@ -174,50 +247,101 @@ export default function AccountPageClient() {
           <div>
             <Label>Avatar</Label>
             <div className="mt-2 flex flex-wrap items-center gap-3">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-crema">
+              <div
+                className={`flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-crema ${
+                  anteprimaFoto || avatarPersonale ? "border-bordeaux" : "border-border"
+                }`}
+              >
                 {avatarDaMostrare ? (
-                  <Image
-                    src={avatarDaMostrare}
-                    alt="Avatar scelto"
-                    width={64}
-                    height={64}
-                    className="h-16 w-16"
-                  />
+                  anteprimaFoto || avatarPersonale ? (
+                    <img
+                      src={avatarDaMostrare}
+                      alt="Foto profilo scelta"
+                      className="h-16 w-16 object-cover"
+                    />
+                  ) : (
+                    <Image
+                      src={avatarDaMostrare}
+                      alt="Avatar scelto"
+                      width={64}
+                      height={64}
+                      className="h-16 w-16"
+                    />
+                  )
                 ) : (
                   <span className="font-serif text-lg text-bordeaux">
                     {inizialiDa(username || authProfilo.username)}
                   </span>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2">
-                {CATALOGO_AVATAR.map((voce) => {
-                  const scelto = avatarUrl === voce.percorso;
-                  return (
-                    <button
-                      key={voce.id}
+              <div className="min-w-0 flex-1 space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {CATALOGO_AVATAR.map((voce) => {
+                    const scelto = !fotoPreparata && avatarUrl === voce.percorso;
+                    return (
+                      <button
+                        key={voce.id}
+                        type="button"
+                        onClick={() => scegliAvatar(scelto ? "" : voce.percorso)}
+                        disabled={occupato}
+                        aria-pressed={scelto}
+                        aria-label={voce.etichetta}
+                        title={voce.etichetta}
+                        className={`h-11 w-11 overflow-hidden rounded-full border-2 transition ${
+                          scelto ? "border-bordeaux" : "border-transparent hover:border-oro"
+                        }`}
+                      >
+                        <Image
+                          src={voce.percorso}
+                          alt={voce.etichetta}
+                          width={44}
+                          height={44}
+                          className="h-11 w-11"
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    ref={selettoreFoto}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="sr-only"
+                    onChange={(evento) => preparaFoto(evento.target.files?.[0])}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={occupato}
+                    onClick={() => selettoreFoto.current?.click()}
+                  >
+                    <Camera className="h-4 w-4" />
+                    {preparazioneInCorso
+                      ? "Preparazione…"
+                      : anteprimaFoto || avatarPersonale
+                        ? "Sostituisci foto"
+                        : "Carica una foto"}
+                  </Button>
+                  {(anteprimaFoto || avatarPersonale) && (
+                    <Button
                       type="button"
-                      onClick={() => aggiorna("avatarUrl", scelto ? "" : voce.percorso)}
-                      aria-pressed={scelto}
-                      aria-label={voce.etichetta}
-                      title={voce.etichetta}
-                      className={`h-11 w-11 overflow-hidden rounded-full border-2 transition ${
-                        scelto ? "border-bordeaux" : "border-transparent hover:border-oro"
-                      }`}
+                      size="sm"
+                      variant="ghost"
+                      disabled={occupato}
+                      onClick={() => scegliAvatar("")}
                     >
-                      <Image
-                        src={voce.percorso}
-                        alt={voce.etichetta}
-                        width={44}
-                        height={44}
-                        className="h-11 w-11"
-                      />
-                    </button>
-                  );
-                })}
+                      <Trash2 className="h-4 w-4" /> Rimuovi foto
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Ripremi l&apos;avatar scelto per tornare alle iniziali.
+              JPEG, PNG o WebP fino a 5 MB. La foto viene ritagliata al centro,
+              ridimensionata e ripulita dai metadati prima del caricamento. Ripremi
+              il preset scelto per tornare alle iniziali.
             </p>
           </div>
 
@@ -292,9 +416,15 @@ export default function AccountPageClient() {
             </p>
           </div>
 
-          {authError && (
+          {(erroreFoto || authError) && (
             <p className="rounded-xl border border-bordeaux/30 bg-bordeaux/5 p-3 text-sm text-bordeaux">
-              {authError}
+              {erroreFoto ?? authError}
+            </p>
+          )}
+
+          {avvisoPulizia && (
+            <p className="rounded-xl border border-oro/40 bg-oro/10 p-3 text-sm text-antracite">
+              {avvisoPulizia}
             </p>
           )}
 
@@ -310,7 +440,7 @@ export default function AccountPageClient() {
             className="bg-bordeaux hover:bg-bordeaux/90"
           >
             {inCorso ? (
-              "Salvataggio…"
+              fotoPreparata ? "Caricamento e salvataggio…" : "Salvataggio…"
             ) : (
               <>
                 <Check className="h-4 w-4" /> Salva modifiche

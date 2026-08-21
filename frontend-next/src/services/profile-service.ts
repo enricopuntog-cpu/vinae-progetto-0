@@ -2,6 +2,15 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import {
+  BUCKET_AVATAR_PROFILI,
+  percorsoAvatarPersonale,
+  riferimentoAvatarSicuro,
+} from "@/lib/profilo/avatar";
+import {
+  DIMENSIONE_MASSIMA_FOTO_AVATAR,
+  MIME_FOTO_AVATAR,
+} from "@/lib/profilo/prepara-foto-avatar";
 import type { Esperienza } from "@/data/onboarding";
 import type { ProfileService, ProfiloCorrente, ProfiloModifica, Result } from "./types";
 
@@ -72,6 +81,12 @@ function messaggioErrore(errore: { code?: string; message: string }): string {
   if (errore.code === "23514" && errore.message.includes("dob")) {
     return "Devi avere almeno 18 anni per usare Vinea.";
   }
+  if (
+    errore.code === "23514" &&
+    errore.message.includes("profiles_avatar_url_vinea_check")
+  ) {
+    return "L'avatar scelto non è valido.";
+  }
   return errore.message;
 }
 
@@ -116,7 +131,13 @@ export function creaProfileService(supabase: SupabaseClient): ProfileService {
       if (patch.citta !== undefined) scrittura.citta = patch.citta.trim();
       if (patch.provincia !== undefined) scrittura.provincia = patch.provincia.trim();
       if (patch.esperienza !== undefined) scrittura.esperienza = patch.esperienza;
-      if (patch.avatarUrl !== undefined) scrittura.avatar_url = patch.avatarUrl;
+      if (patch.avatarUrl !== undefined) {
+        const riferimento = riferimentoAvatarSicuro(patch.avatarUrl, utente.id);
+        if (patch.avatarUrl !== "" && !riferimento) {
+          return { ok: false, error: "L'avatar scelto non è valido." };
+        }
+        scrittura.avatar_url = riferimento ?? "";
+      }
       if (patch.dob !== undefined) scrittura.dob = patch.dob;
 
       if (Object.keys(scrittura).length === 0) {
@@ -140,6 +161,45 @@ export function creaProfileService(supabase: SupabaseClient): ProfileService {
 
       return { ok: true, data: mappaProfilo(data as RigaProfilo, utente.email ?? null) };
     },
+
+    async caricaFotoAvatar(file: File): Promise<Result<string>> {
+      const { data: sessione } = await supabase.auth.getSession();
+      const utente = sessione.session?.user;
+      if (!utente) return { ok: false, error: NESSUNA_SESSIONE };
+      if (file.type !== MIME_FOTO_AVATAR) {
+        return { ok: false, error: "La foto preparata non è in formato WebP." };
+      }
+      if (file.size === 0 || file.size > DIMENSIONE_MASSIMA_FOTO_AVATAR) {
+        return { ok: false, error: "La foto preparata supera il limite di 5 MB." };
+      }
+
+      const percorso = `${utente.id}/${crypto.randomUUID()}.webp`;
+      const { error } = await supabase.storage.from(BUCKET_AVATAR_PROFILI).upload(percorso, file, {
+        contentType: MIME_FOTO_AVATAR,
+        upsert: false,
+      });
+      if (error) {
+        console.error("[profilo] caricamento foto avatar fallito:", error);
+        return { ok: false, error: "Non è stato possibile caricare la foto. Riprova." };
+      }
+      return { ok: true, data: percorso };
+    },
+
+    async eliminaFotoAvatar(percorso: string): Promise<Result<void>> {
+      const { data: sessione } = await supabase.auth.getSession();
+      const utente = sessione.session?.user;
+      if (!utente) return { ok: false, error: NESSUNA_SESSIONE };
+      if (!percorsoAvatarPersonale(percorso, utente.id)) {
+        return { ok: false, error: "Percorso della foto non valido." };
+      }
+
+      const { error } = await supabase.storage.from(BUCKET_AVATAR_PROFILI).remove([percorso]);
+      if (error) {
+        console.error("[profilo] eliminazione foto avatar fallita:", error);
+        return { ok: false, error: "Non è stato possibile eliminare la foto." };
+      }
+      return { ok: true, data: undefined };
+    },
   };
 
   return servizio;
@@ -161,5 +221,15 @@ export const supabaseProfileService: ProfileService = {
     const supabase = getSupabaseClient();
     if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };
     return creaProfileService(supabase).aggiornaProfiloCorrente(patch);
+  },
+  async caricaFotoAvatar(file) {
+    const supabase = getSupabaseClient();
+    if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };
+    return creaProfileService(supabase).caricaFotoAvatar(file);
+  },
+  async eliminaFotoAvatar(percorso) {
+    const supabase = getSupabaseClient();
+    if (!supabase) return { ok: false, error: NOT_CONFIGURED_ERROR };
+    return creaProfileService(supabase).eliminaFotoAvatar(percorso);
   },
 } satisfies ProfileService;

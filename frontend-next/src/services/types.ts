@@ -129,6 +129,8 @@ export type ProfiloModifica = Partial<{
 export interface ProfileService {
   leggiProfiloCorrente(): Promise<Result<ProfiloCorrente | null>>;
   aggiornaProfiloCorrente(patch: ProfiloModifica): Promise<Result<ProfiloCorrente>>;
+  caricaFotoAvatar(file: File): Promise<Result<string>>;
+  eliminaFotoAvatar(percorso: string): Promise<Result<void>>;
 }
 
 // ---- Catalogo vini ---------------------------------------------------------

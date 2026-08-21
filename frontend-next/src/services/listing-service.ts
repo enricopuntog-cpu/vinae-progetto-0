@@ -20,6 +20,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { avatarSicuro } from "@/lib/profilo/avatar";
 import type { Wine } from "@/data/wines";
 import type {
   DatiModificaAnnuncio,
@@ -29,7 +30,7 @@ import type {
 } from "@/services/types";
 
 /** Riga della vista public_listings, così come arriva da PostgREST. */
-type PublicListingRow = {
+export type PublicListingRow = {
   id: string;
   slug: string;
   prezzo_cents: number;
@@ -179,7 +180,7 @@ export function rigaAWine(riga: PublicListingRow): Wine {
       rating: 0,
       valutazioni: 0,
       verificato: false,
-      avatar: riga.seller_avatar_url,
+      avatar: avatarSicuro(riga.seller_avatar_url, riga.seller_id) ?? "",
     },
     immagini,
     storia: riga.storia,
