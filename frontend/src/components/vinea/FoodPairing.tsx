@@ -185,7 +185,7 @@ export function FindWineFromCellar() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" className="text-foreground">
           <Search className="h-3.5 w-3.5" /> Ricerca per abbinamento cibo–vino
         </Button>
       </DialogTrigger>

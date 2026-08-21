@@ -20,6 +20,24 @@
 - Deliberate verification residues remain: one test bottle in state `aperta`,
   the test account, and three objects in each of its `cantina` and `annunci`
   folders.
+- The desktop Cantina CTA `Ricerca per abbinamento cibo–vino` now sets the local
+  `text-foreground` token in both frontends; the shared Button variant and the
+  Cantina layout are unchanged. A rendered 1440 px check covered normal, hover,
+  focus-visible and disabled states on the served `/cantina` route.
+- The target owner editor now displays every persisted listing photograph and
+  supports add, upload-first replace, remove, reorder, final-order preview and
+  explicit primary-photo indication. Saving sends the ordered raw `immagini`
+  paths through the existing `ListingService.aggiorna()` boundary.
+- Photo cancellation and post-save cleanup can remove only signer-generated
+  `annunci` paths tracked during the current edit session. Removing or replacing
+  a persisted reference never deletes its Storage object automatically.
+- The existing listing column grant, owner update RLS and `annunci` Storage
+  policy are sufficient for this task. No migration was created or applied, no
+  Supabase object was modified, and no remote Supabase write was made.
+- The relevant local checks pass with Bun 1.3.14: `frontend-next` lint has 13
+  warnings and zero errors, typecheck passes, 535 tests pass, and the production
+  build succeeds; `frontend` lint has 14 warnings and zero errors, typecheck
+  passes, 73 tests pass, and its client, SSR and Nitro builds succeed.
 - Governance is split by responsibility: `CLAUDE.md` is the concise current
   constitution, `AGENTS.md` is only a startup router, this file is current
   handoff state, and `CONTESTO_IA/` is on-demand durable history.
@@ -36,15 +54,17 @@
 
 ## ACTIVE TASK
 
-- No product implementation phase is active. The trial 6.6 evidence is recorded
-  without versioning private inputs or runners, making a provider call, opening
-  Phase 11a, changing application code or modifying Supabase.
+- Deliver the bounded desktop Cantina contrast correction and target listing
+  photo editor through review, CI, squash merge and post-merge verification.
+- Successful authenticated photo upload, replacement, listing save and remote
+  Storage cleanup have not been exercised in this task; local rendered checks
+  covered the editor draft, reorder, removal and unauthenticated upload error.
 
 ## NEXT STEPS
 
-1. Obtain the current F01/two-provider/USD 0.15 canary authorization and Gemini paid-project confirmation.
-2. Verify the payout scheduler successfully while `PAYMENTS_ENABLED=false` before enabling payments.
-3. Decide Phase 13 cutover only after end-to-end parity and a separate product/operational review.
+1. Complete the branch review, pull request, CI and squash merge lifecycle.
+2. Verify the merge and expected frontend files from `origin/main`.
+3. Verify the payout scheduler successfully while `PAYMENTS_ENABLED=false` before enabling payments.
 
 ## BLOCKERS / NOTES
 

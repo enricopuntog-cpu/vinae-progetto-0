@@ -1,19 +1,16 @@
 "use client";
 
-import { useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Check,
   ArrowRight,
   ArrowLeft,
-  Camera,
   Loader2,
   Sparkles,
   Archive,
   Eye,
   Tag,
-  X,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,9 +27,10 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
 import { wineImages } from "@/lib/wine-images";
-import { useSellWizard, MAX_FOTO, type Modalita } from "@/hooks/useSellWizard";
+import { useSellWizard, type Modalita } from "@/hooks/useSellWizard";
 import { confidenzaPercento } from "@/lib/phase10/catalogazione";
 import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
+import { FotoGriglia } from "@/components/vinea/FotoGriglia";
 import { BetaActionNotice } from "@/components/vinea/BetaActionNotice";
 import { BetaDeliverySelector } from "@/components/vinea/BetaDeliverySelector";
 import { BottleSelector } from "@/app/vendi/bottle-selector";
@@ -670,73 +668,6 @@ export default function VendiPageClient() {
         </div>
       </div>
     </div>
-  );
-}
-
-/**
- * Le sei caselle del passo Foto. In frontend/ ognuna apre un toast di demo;
- * qui apre il selettore di file e carica davvero.
- */
-function FotoGriglia({
-  foto,
-  inCorso,
-  onCarica,
-  onRimuovi,
-}: {
-  foto: { percorso: string; anteprima: string }[];
-  inCorso: boolean;
-  onCarica: (file: File) => void;
-  onRimuovi: (indice: number) => void;
-}) {
-  const input = useRef<HTMLInputElement>(null);
-
-  return (
-    <>
-      <input
-        ref={input}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/avif"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onCarica(file);
-          // Azzerato per poter riselezionare lo stesso file dopo averlo tolto.
-          e.target.value = "";
-        }}
-      />
-      <div className="grid grid-cols-3 gap-3">
-        {foto.map((f, i) => (
-          <div key={f.percorso} className="relative aspect-square overflow-hidden rounded-xl border border-border">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={f.anteprima} alt="" className="h-full w-full object-cover" />
-            <button
-              onClick={() => onRimuovi(i)}
-              aria-label="Rimuovi fotografia"
-              className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-antracite/70 text-crema hover:bg-antracite"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ))}
-        {Array.from({ length: Math.max(0, MAX_FOTO - foto.length) }).map((_, i) => (
-          <button
-            key={`vuota-${i}`}
-            onClick={() => input.current?.click()}
-            disabled={inCorso}
-            className="grid aspect-square place-items-center rounded-xl border-2 border-dashed border-border bg-secondary/50 text-muted-foreground hover:border-bordeaux hover:text-bordeaux disabled:opacity-50"
-          >
-            {inCorso && i === 0 ? (
-              <Loader2 className="h-6 w-6 animate-spin" />
-            ) : (
-              <Camera className="h-6 w-6" />
-            )}
-          </button>
-        ))}
-      </div>
-      <p className="text-[11px] text-muted-foreground">
-        JPEG, PNG, WebP o AVIF, fino a 5 MB per fotografia.
-      </p>
-    </>
   );
 }
 

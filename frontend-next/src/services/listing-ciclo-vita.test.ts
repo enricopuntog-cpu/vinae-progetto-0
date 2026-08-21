@@ -42,6 +42,11 @@ const MIGRAZIONE_RLS = "supabase/migrations/20260819090000_annuncio_modifica_att
 const PROPOSTA_VECCHIA =
   "supabase/queries/04_PROPOSTA_NON_ESEGUIRE_MODIFICA_ANNUNCIO_ATTIVO.sql";
 
+const estraiPulsante = (sorgente: string, etichetta: string) => {
+  const fine = sorgente.indexOf("</Button>", sorgente.indexOf(etichetta));
+  return sorgente.slice(sorgente.lastIndexOf("<Button", fine), fine + "</Button>".length);
+};
+
 const rigaMinima = {
   id: "11111111-1111-4111-8111-111111111111",
   slug: "barolo-prova-2018",
@@ -72,6 +77,119 @@ const rigaMinima = {
   },
   profiles: { username: "enrico", citta: "Torino", avatar_url: "/avatar/uno.svg" },
 };
+
+describe("CTA desktop della Cantina", () => {
+  it("usa il foreground Vinea sul pulsante reale in entrambe le frontend", () => {
+    const etichetta = "Ricerca per abbinamento cibo–vino";
+    const beta = estraiPulsante(leggi("src/components/vinea/FoodPairing.tsx"), etichetta);
+    const servita = estraiPulsante(
+      leggiRepo("frontend/src/components/vinea/FoodPairing.tsx"),
+      etichetta,
+    );
+
+    for (const pulsante of [beta, servita]) {
+      expect(pulsante).toInclude('variant="outline"');
+      expect(pulsante).toInclude('className="text-foreground"');
+      expect(pulsante).toInclude(etichetta);
+    }
+  });
+
+  it("mantiene locale la correzione senza alterare la variante Button condivisa", () => {
+    for (const percorso of [
+      "frontend-next/src/components/ui/button.tsx",
+      "frontend/src/components/ui/button.tsx",
+    ]) {
+      const sorgente = leggiRepo(percorso);
+      const outline = sorgente.match(/outline:\s*\n?\s*"([^"]+)"/)?.[1];
+      expect(outline).toBeDefined();
+      expect(outline).not.toInclude("text-foreground");
+      expect(outline).toInclude("hover:text-accent-foreground");
+    }
+  });
+});
+
+describe("editor fotografico del proprietario", () => {
+  const proprietario = () => senzaCommenti(leggi("src/components/vinea/ListingOwnerActions.tsx"));
+  const griglia = () => senzaCommenti(leggi("src/components/vinea/FotoGriglia.tsx"));
+
+  it("riusa la griglia del wizard senza mantenerne una copia locale", () => {
+    const wizard = senzaCommenti(leggi("src/app/vendi/page-client.tsx"));
+
+    expect(wizard).toInclude('import { FotoGriglia } from "@/components/vinea/FotoGriglia"');
+    expect(wizard).not.toMatch(/function\s+FotoGriglia\s*\(/);
+    expect(wizard).toInclude("onCarica={caricaFoto}");
+    expect(wizard).toInclude("onRimuovi={rimuoviFoto}");
+  });
+
+  it("mostra ordine, fotografia principale e controlli espliciti", () => {
+    const sorgente = proprietario();
+
+    expect(sorgente).toInclude("creaBozzaFoto(annuncio.immaginiPercorsi, urlImmagine)");
+    expect(sorgente).toInclude("onSostituisci={sostituisciFotografia}");
+    expect(sorgente).toInclude("onSposta={spostaFotografia}");
+    expect(sorgente).toInclude("mostraPrincipale");
+    expect(griglia()).toInclude("Foto principale");
+  });
+
+  it("salva l'ordine completo come percorsi grezzi tramite il servizio esistente", () => {
+    const sorgente = proprietario();
+
+    expect(sorgente).toInclude("service.aggiorna(listingId");
+    expect(sorgente).toInclude("immagini: percorsiFoto(snapshotFoto)");
+    expect(sorgente).not.toInclude("anteprima: percorsiFoto");
+  });
+
+  it("firma e carica soltanto nel bucket pubblico annunci", () => {
+    const sorgente = proprietario();
+
+    expect(sorgente).toInclude('firmaUploadFoto(file.type, file.size, "annuncio")');
+    expect(sorgente).toInclude("firma.data.bucket !== BUCKET_ANNUNCI");
+    expect(sorgente).toInclude(".from(BUCKET_ANNUNCI)");
+    expect(sorgente).toInclude(".uploadToSignedUrl(");
+  });
+
+  it("fa convergere tutte le chiusure sulla pulizia dei soli upload di sessione", () => {
+    const sorgente = proprietario();
+
+    expect(sorgente).toInclude("onOpenChange={gestisciModificaAperta}");
+    expect(sorgente).toInclude("else void annullaModifica()");
+    expect(sorgente).toInclude("eliminaUploadSessione([...percorsiSessioneRef.current])");
+    expect(sorgente).toInclude("percorsiSessioneNonUsati(");
+    expect(sorgente).not.toMatch(/immaginiPercorsi[^\n]*\.remove\s*\(/);
+  });
+
+  it("mantiene distinti upload, salvataggio e pulizia nella UI", () => {
+    const sorgente = proprietario();
+
+    for (const stato of ["uploadInCorso", "salvataggioInCorso", "puliziaInCorso"]) {
+      expect(sorgente).toInclude(stato);
+    }
+    expect(sorgente).toInclude("Upload: {erroreUpload}");
+    expect(sorgente).toInclude("Salvataggio: {erroreSalvataggio}");
+    expect(sorgente).toInclude("Pulizia: {errorePulizia}");
+  });
+
+  it("media le eccezioni asincrone e sblocca sempre salvataggio e pulizia", () => {
+    const sorgente = proprietario();
+
+    expect(sorgente).toInclude("if (uploadAttivoRef.current) return uploadAttivoRef.current");
+    expect(sorgente).toMatch(
+      /salvataggioAttivoRef\.current \|\|\s*puliziaAttivaRef\.current \|\|\s*chiusuraRichiestaRef\.current/,
+    );
+    expect(sorgente).toMatch(
+      /if \(\s*uploadAttivoRef\.current \|\|\s*salvataggioAttivoRef\.current \|\|\s*puliziaAttivaRef\.current\s*\)/,
+    );
+    expect(sorgente).toInclude("eccezione durante l'upload fotografia");
+    expect(sorgente).toInclude("eccezione durante il salvataggio");
+    expect(sorgente).toInclude("eccezione durante la pulizia fotografie di sessione");
+    expect(sorgente).toMatch(
+      /finally\s*\{\s*salvataggioAttivoRef\.current = false;\s*setSalvataggioInCorso\(false\)/,
+    );
+    expect(sorgente).toMatch(
+      /finally\s*\{\s*percorsiSessioneRef\.current\.clear\(\);\s*chiudiBozza\(\);\s*puliziaAttivaRef\.current = false;\s*setPuliziaInCorso\(false\)/,
+    );
+  });
+});
 
 describe("stati del ciclo di vita di un annuncio", () => {
   it("nomina tutti e nove gli stati dell'enum, nessuno escluso", () => {
