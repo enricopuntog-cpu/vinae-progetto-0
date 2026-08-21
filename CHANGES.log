@@ -36,13 +36,14 @@
 
 - Post-merge handoff records the verified production state of case-insensitive
   username uniqueness.
-- The `frontend-next` CI floor is being aligned from 535 to the verified 538
-  tests added by the merged work; no product behavior changes are included.
+- The `frontend-next` CI floor is aligned from 535 to the verified 538 tests,
+  and its regression contract asserts the same value; no product behavior is
+  changed.
 
 ## NEXT STEPS
 
-1. Merge the post-merge handoff and CI-floor correction.
-2. Remeasure the payment scheduler before enabling payments.
+1. Remeasure the payment scheduler before enabling payments.
+2. Configure custom SMTP after a verifiable custom domain becomes available.
 3. Obtain an explicit product decision before opening new migration work.
 
 ## BLOCKERS / NOTES
