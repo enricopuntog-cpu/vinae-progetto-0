@@ -6,62 +6,69 @@
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
 - Migration numbering is authoritative: Phase 11 = admitted AI extensions,
   Phase 12 = Club/Community, Phase 13 = Cutover.
-- Personal profile photos ship on `main` via PR from `feature/profile-photo`,
-  an explicitly admitted named exception. The six curated preset avatars
-  remain available.
+- PR #65 was squash-merged into `main` as
+  `786f437fc54b8d44c9003a43d7f4bbd097d8455e` after all relevant CI checks
+  passed. Personal profile photos are live in `frontend-next/` as an
+  explicitly admitted named exception; the six curated preset avatars remain
+  available.
 - Prepared photos are decoded in the browser, center-cropped, resized to
   512 x 512 and freshly encoded as WebP at quality 0.86. Input is limited to
   JPEG, PNG or WebP and 5 MB; re-encoding decoded pixels removes original
   EXIF and other source metadata.
 - Stored custom-avatar references use the canonical form
-  `<profile-uuid>/<object-uuid>.webp`. Persistence and rendering accept a
-  custom reference only when its owner folder matches the declaring profile;
-  arbitrary, external, foreign-owner and malformed values fail closed.
-- The Account page has local pre-save preview, upload/replace/remove controls,
-  preset and initials transitions, loading states, readable errors and separate
-  cleanup warnings. The public listing detail renders the validated seller photo
-  or falls back to initials.
-- Migration `20260821183000_profile_avatars.sql` creates the public-read
-  `avatar-profili` bucket, limits objects to WebP and 5 MB, restricts writes to
-  the authenticated user's canonical folder and constrains `profiles.avatar_url`.
-  Merging the PR does not apply it; application and post-deploy verification
-  are the separate next step.
+  `<profile-uuid>/<object-uuid>.webp`; the database never stores a full
+  project URL. Persistence and rendering accept a custom reference only when
+  its owner folder matches the declaring profile; arbitrary, external,
+  foreign-owner and malformed values fail closed to initials.
 - Save ordering is upload new object, update profile, then delete the obsolete
   custom object. Failed profile updates compensate by deleting the new object;
   failed post-update cleanup preserves the new profile state and surfaces a
   warning.
-- VERIFY & SHIP preflight on project `pijnmcllmfgjmgsvtcej` found 10 empty
-  `avatar_url` values and 1 `/avatar/calice.svg`, zero values incompatible with
-  the new CHECK, no pre-existing `avatar-profili` bucket and no pre-existing
-  `avatar_profili_*` policies.
+- Migration `20260821183000_profile_avatars.sql` was applied by the Supabase
+  GitHub integration at merge and is the latest row in the production ledger
+  of project `pijnmcllmfgjmgsvtcej`.
+- Effective production objects were reread after deployment: bucket
+  `avatar-profili` is public with a 5242880-byte limit and `image/webp` as the
+  only allowed MIME type; the four `avatar_profili_*` policies grant public
+  read to anon and authenticated and confine insert/update/delete to the
+  caller's own folder; `profiles_avatar_url_vinea_check` exists and is
+  validated; `profiles` RLS is unchanged (`profiles_select_own`,
+  `profiles_update_own`) and the authenticated UPDATE grant still covers
+  exactly the same eight columns.
+- The pre-merge preflight found 10 empty `avatar_url` values and 1
+  `/avatar/calice.svg`, zero values incompatible with the CHECK, and no
+  pre-existing bucket or avatar policies. No existing data was rewritten.
 - Final local verification with Bun 1.3.14 passed: lint with 14 warnings (13
-  pre-existing plus the deliberate `<img>` for blob/Storage avatar URLs) and no
-  errors, typecheck, 556 tests with zero failures, build and `git diff --check`.
-  The `frontend-next` CI floor and its regression contract are aligned from
-  538 to the verified 556 tests. Legacy frontend and backend were not run
-  locally; they are not modified.
+  pre-existing plus the deliberate `<img>` for blob/Storage avatar URLs) and
+  no errors, typecheck, 556 tests with zero failures, build and
+  `git diff --check`. The `frontend-next` CI floor and its regression
+  contract are aligned at 556.
+- The authenticated browser smoke test was NOT run: no usable session for the
+  existing test account was available in this environment, and no new account
+  or fixture was created.
 - Deliberate historical verification residues remain: one test bottle in state
   `aperta`, the test account, and three objects in each of its `cantina` and
   `annunci` folders.
 
 ## ACTIVE TASK
 
-- VERIFY & SHIP for personal profile photos: the PR records the reviewed,
-  preflighted implementation. Remote migration application, the authenticated
-  smoke test and the post-deploy handoff follow the merge.
+- VERIFY & SHIP for personal profile photos is complete except the
+  authenticated smoke test, which remains NON VERIFIED for lack of a usable
+  test-account session.
 - The pre-existing untracked `.wslconfig` remains untouched.
 
 ## NEXT STEPS
 
-1. Apply migration `20260821183000_profile_avatars.sql` to project `pijnmcllmfgjmgsvtcej` and verify ledger, bucket, policies and CHECK.
-2. Run the single authenticated smoke test with the existing test account and verify residue cleanup.
-3. Record the verified post-deploy state in a follow-up handoff.
+1. Run the single authenticated profile-photo smoke test when a test-account session is available.
+2. Remeasure the payment scheduler before enabling payments.
+3. Configure custom SMTP after a verifiable custom domain becomes available.
 
 ## BLOCKERS / NOTES
 
-- A merge alone does not prove migration application; reread the production
-  migration ledger and the effective bucket, policies and constraint after
-  deployment.
+- The authenticated smoke test is outstanding: upload, save, Account render,
+  seller render, preset/initials switch and old-object cleanup have not been
+  exercised against production. No new accounts or complex fixtures may be
+  created for it.
 - Phase 11 implementation is not open: the historical trial failed, and a new
   two-provider F01 canary lacks current authorization and paid-project
   confirmation. Provider keys/budget, PhotoRoom timing and legal review remain
