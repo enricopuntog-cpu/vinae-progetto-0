@@ -6,48 +6,47 @@
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
 - Migration numbering is authoritative: Phase 11 = admitted AI extensions,
   Phase 12 = Club/Community, Phase 13 = Cutover.
-- PR #62 is merged. The target owner editor displays every persisted listing
-  photograph and supports add, upload-first replace, remove, reorder,
-  final-order preview and explicit primary-photo indication.
-- Branch `feat/case-insensitive-usernames` starts from `origin/main` at
-  `e2d3324a11771d8019ac59401ee6ba313ff544f8` and contains the build-phase
-  implementation for case-insensitive username uniqueness.
-- New additive migration
-  `20260821120000_profiles_username_case_insensitive.sql` detects existing
-  case-insensitive collisions, fails with an explicit error when found, creates
-  a unique index on `lower(username)`, and updates `handle_new_user()` to test
-  candidates with the same comparison while preserving `_1`, `_2`, ... suffixes.
-- Existing usernames are not rewritten. RLS, roles, profile fields, tables and
-  RPCs are unchanged.
-- The account page explains that changing letter case does not free a used
-  username. The profile service remains unchanged because its existing `23505`
-  handling also covers the expression index.
-- Focused verification passes with Bun 1.3.14: 15 tests across the two targeted
-  profile test files, `frontend-next` typecheck, and `git diff --check`.
-- The migration was created locally but was not applied to any Supabase project;
-  no remote Supabase write was made in this build phase.
+- PR #63 was squash-merged into `main` as
+  `d99f56a92c07ca5825e9b0dd5a1b3c7a95b0b0a9` after all relevant CI checks
+  passed.
+- Migration `20260821120000_profiles_username_case_insensitive.sql` is present
+  in the linked production ledger for project `pijnmcllmfgjmgsvtcej`.
+- Production `profiles_username_lower_key` is a valid, ready unique index on
+  `lower(username)`. The deployed `handle_new_user()` compares candidates with
+  `lower()` and preserves `_1`, `_2`, ... suffixes.
+- The production preflight found no existing case-insensitive username
+  collisions. A minimal update probe was rejected by
+  `profiles_username_lower_key` with SQLSTATE `23505`; PostgreSQL rolled back the
+  failed statement and the residue check remained clean.
+- Existing usernames were not rewritten. The migration does not modify RLS,
+  grants, roles, profile fields, tables or RPCs; effective profile RLS, policies,
+  grants and columns were reread after deployment.
+- The Account page explains that changing letter case does not free a used
+  username. Existing frontend handling translates SQLSTATE `23505` into the
+  established user-facing message.
+- Final local verification with Bun 1.3.14 passed: lint with 13 pre-existing
+  warnings and no errors, typecheck, 538 tests with zero failures, build, and
+  `git diff --check`. Legacy frontend and backend were not run locally; their CI
+  jobs passed on PR #63.
 - Deliberate historical verification residues remain: one test bottle in state
   `aperta`, the test account, and three objects in each of its `cantina` and
   `annunci` folders.
 
 ## ACTIVE TASK
 
-- Build phase for a Vinea username that identifies one user independently of
-  letter case is implemented and ready for VERIFY & SHIP.
-- This phase intentionally stops before remote data verification, migration
-  application, full suites, commit, push, PR, CI and merge.
+- Post-merge handoff records the verified production state of case-insensitive
+  username uniqueness.
+- The `frontend-next` CI floor is being aligned from 535 to the verified 538
+  tests added by the merged work; no product behavior changes are included.
 
 ## NEXT STEPS
 
-1. Verify production profile data for case-insensitive username collisions.
-2. Run the full affected checks and review the exact branch diff.
-3. Apply and verify the migration, then complete commit, push, PR, CI and merge.
+1. Merge the post-merge handoff and CI-floor correction.
+2. Remeasure the payment scheduler before enabling payments.
+3. Obtain an explicit product decision before opening new migration work.
 
 ## BLOCKERS / NOTES
 
-- If real profiles already contain usernames that differ only by letter case,
-  the migration will stop with SQLSTATE `23505`; resolving those rows requires
-  an explicit data decision before applying the unique index.
 - Phase 11 implementation is not open: the historical trial failed, and a new
   two-provider F01 canary lacks current authorization and paid-project
   confirmation. Provider keys/budget, PhotoRoom timing and legal review remain
@@ -59,7 +58,8 @@
 - Before enabling payments, remeasure the scheduler configuration and obtain a
   successful fail-closed health run; old failure counts are historical, not a
   current measurement.
-- Remote integration runs are asynchronous: merge is not proof of migration
-  application. Verify the ledger and effective objects after deploy.
+- A merge remains insufficient proof of migration application in general; this
+  migration was separately confirmed in the linked production ledger and by
+  rereading its effective objects.
 - The `quasi` badge (`bg-oro/25 text-antracite`) is still below contrast on a
   dark photo and remains outside this task.
