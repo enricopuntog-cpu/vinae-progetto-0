@@ -1,13 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Grape, Search, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, Grape, Search, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { WineCard } from "@/components/vinea/WineCard";
 import { SectionTitle } from "@/components/vinea/Layout";
 import { Button } from "@/components/ui/button";
 import type { Wine } from "@/data/wines";
 import { wineImages } from "@/lib/wine-images";
 import { useVinea } from "@/lib/vinea-store";
+import { coverSicura } from "@/lib/phase12/club-cover";
+import { clubDaScoprire, clubSeguiti } from "@/lib/phase12/club-home";
+import { assiClub } from "@/lib/phase12/club-view";
+import { formatInteger } from "@/lib/format";
+import type { Club } from "@/services/types";
 
 const REGIONI = [
   "Piemonte",
@@ -76,6 +81,149 @@ const ListingGrid = ({ annunci }: { annunci: Wine[] }) => (
   </section>
 );
 
+// La scheda club della Home non e `ClubCard` di /community, ed e una scelta.
+// Quella scheda porta il pulsante Segui, cioe `useClubFollow`, cioe una
+// scrittura e uno stato client: montarla qui con `onFollow={null}` avrebbe
+// disegnato un pulsante spento, e montarla viva avrebbe portato sulla Home una
+// lista da tenere allineata. Qui il club e un collegamento: si segue dentro
+// /community o nella sua scheda, dove il resto della conversazione gia sta.
+const ClubHomeCard = ({ club }: { club: Club }) => {
+  // La cover si convalida in lettura come nella scheda del club: il percorso
+  // memorizzato non e fidato e l'origine non si legge mai da lui.
+  const cover = coverSicura(club.coverImage, club.ownerId);
+  const assi = assiClub(club);
+
+  return (
+    <Link
+      href={`/community/${club.slug}`}
+      className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card card-lift perf-card"
+      data-testid={`home-club-${club.slug}`}
+    >
+      <div className="relative h-24 bg-antracite">
+        {cover && (
+          /* eslint-disable-next-line @next/next/no-img-element -- il bucket
+             Storage non e fra i domini configurati per next/image, come nella
+             scheda del club. */
+          <img src={cover} alt="" aria-hidden className="h-full w-full object-cover opacity-70" />
+        )}
+      </div>
+      <div className="flex flex-1 flex-col p-4">
+        <h3 className="font-serif text-lg font-semibold group-hover:text-bordeaux">{club.nome}</h3>
+        {assi.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {assi.map((a) => (
+              <span
+                key={a}
+                className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-antracite"
+              >
+                {a}
+              </span>
+            ))}
+          </div>
+        )}
+        <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{club.descrizione}</p>
+        <p className="mt-3 flex items-center gap-1 text-xs text-muted-foreground">
+          <Users className="h-3.5 w-3.5" /> {formatInteger(club.membri)} membri
+        </p>
+      </div>
+    </Link>
+  );
+};
+
+const ClubSection = ({
+  clubs,
+  erroreClub,
+  autenticato,
+}: {
+  clubs: Club[];
+  erroreClub: string | null;
+  autenticato: boolean;
+}) => {
+  // Due derivazioni, nessun effetto e nessuno stato: i club arrivano gia letti
+  // dal componente server, e la Home non li scrive.
+  const seguiti = clubSeguiti(clubs);
+  const daScoprire = clubDaScoprire(clubs);
+
+  return (
+    <section className="space-y-8" data-testid="home-club">
+      <SectionTitle
+        action={
+          <Link href="/community" className="text-sm text-bordeaux hover:underline">
+            Tutti i Club →
+          </Link>
+        }
+      >
+        <span className="inline-flex items-center gap-2">
+          <Users className="h-5 w-5" /> Club
+        </span>
+      </SectionTitle>
+
+      {erroreClub ? (
+        // Un blocco d'errore intero sarebbe pesante per una sezione secondaria
+        // della Home: la sezione dice che non ha letto e lascia la via aperta.
+        <p
+          className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground"
+          data-testid="home-club-errore"
+        >
+          Club non disponibili al momento.{" "}
+          <Link href="/community" className="text-bordeaux hover:underline">
+            Riprova dall&apos;area Club
+          </Link>
+          .
+        </p>
+      ) : (
+        <>
+          {/* La sezione dei seguiti esiste solo con una sessione: a un anonimo
+              "non segui ancora nessun Club" direbbe una cosa vera e inutile,
+              perche `seguito` per lui e falso per costruzione. */}
+          {autenticato && (
+            <div data-testid="home-club-seguiti">
+              <p className="mb-3 text-xs uppercase tracking-wide text-muted-foreground">
+                Club che segui
+              </p>
+              {seguiti.length === 0 ? (
+                <div className="rounded-2xl border border-dashed p-8 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Non segui ancora nessun Club.
+                  </p>
+                  <Button asChild size="sm" className="mt-4 bg-bordeaux hover:bg-bordeaux/90">
+                    <Link href="/community">Scopri i Club</Link>
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-3">
+                  {seguiti.map((c) => (
+                    <ClubHomeCard key={c.slug} club={c} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div data-testid="home-club-scopri">
+            <p className="mb-3 text-xs uppercase tracking-wide text-muted-foreground">
+              Scopri i Club
+            </p>
+            {daScoprire.length === 0 ? (
+              <p className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+                {clubs.length === 0
+                  ? "Nessun Club pubblicato, per ora."
+                  : "Segui già tutti i Club pubblicati."}
+              </p>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-3">
+                {daScoprire.map((c) => (
+                  <ClubHomeCard key={c.slug} club={c} />
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </section>
+  );
+};
+
 const RegionGrid = () => (
   <section>
     <SectionTitle><span className="inline-flex items-center gap-2"><Search className="h-5 w-5" /> Cerca per regione</span></SectionTitle>
@@ -85,13 +233,28 @@ const RegionGrid = () => (
   </section>
 );
 
-const HomePageClient = ({ annunci }: { annunci: Wine[] }) => {
+const HomePageClient = ({
+  annunci,
+  clubs,
+  erroreClub,
+  autenticato,
+}: {
+  annunci: Wine[];
+  clubs: Club[];
+  erroreClub: string | null;
+  // Sessione Supabase reale, risolta dal componente server con getUser(). Non e
+  // `ruolo` dello switcher demo, che qui continua a decidere solo le due
+  // chiamate all'azione dell'hero: i club sono un dominio gia migrato, e il
+  // loro `seguito` viene da auth.uid(), non dal ruolo scelto in un menu.
+  autenticato: boolean;
+}) => {
   const { ruolo } = useVinea();
   return (
     <div className="space-y-14">
       <Hero guest={ruolo === "guest"} />
       <TrustBar />
       <ListingGrid annunci={annunci} />
+      <ClubSection clubs={clubs} erroreClub={erroreClub} autenticato={autenticato} />
       <RegionGrid />
     </div>
   );
