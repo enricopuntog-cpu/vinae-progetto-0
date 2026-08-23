@@ -26,6 +26,11 @@
 //     che il grant concede. L'autore lo mette il DEFAULT del database.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { BUCKET_CLUB_COVERS, percorsoCoverProprio } from "@/lib/phase12/club-cover";
+import {
+  DIMENSIONE_MASSIMA_COVER_CLUB,
+  MIME_COVER_CLUB,
+} from "@/lib/phase12/prepara-cover-club";
 import type {
   Club,
   ClubPost,
@@ -95,6 +100,11 @@ type ClubRow = {
   regole: string[] | null;
   membri: number | null;
   seguito: boolean | null;
+  owner_id: string | null;
+  owner_username: string | null;
+  posting_mode: Club["postingMode"] | null;
+  cover_image: string | null;
+  mio: boolean | null;
   created_at: string;
 };
 
@@ -137,7 +147,7 @@ type RispostaRow = {
 // aggiungera domani alla tabella base, e un `*` qui rimetterebbe quella
 // decisione nelle mani della vista soltanto.
 const COLONNE =
-  "slug, nome, territorio, denominazione, produttore, tipologia, descrizione, regole, membri, seguito, created_at";
+  "slug, nome, territorio, denominazione, produttore, tipologia, descrizione, regole, membri, seguito, owner_id, owner_username, posting_mode, cover_image, mio, created_at";
 
 const COLONNE_POST =
   "id, club_slug, tipo, titolo, corpo, created_at, autore_id, autore_username, autore_avatar_url, vino_slug, vino_produttore, vino_nome, vino_annata, listing_id, listing_slug, listing_prezzo_cents, risposte, mi_piace, piaciuto, mio";
@@ -166,6 +176,13 @@ export const mapClub = (row: ClubRow): Club => ({
   // `seguito` e falso anche quando la vista non lo valorizza: l'assenza di
   // informazione su un follow non e un follow.
   seguito: row.seguito === true,
+  ownerId: row.owner_id ?? null,
+  ownerUsername: row.owner_username ?? null,
+  // Il default del database e OPEN: un valore mancante o inatteso ricade su
+  // OPEN, che e la modalita permissiva e non inventa una restrizione.
+  postingMode: row.posting_mode === "OWNER_ONLY" ? "OWNER_ONLY" : "OPEN",
+  coverImage: row.cover_image ?? null,
+  mio: row.mio === true,
   createdAt: row.created_at,
 });
 
@@ -285,6 +302,78 @@ export const createSupabaseClubService = (client: SupabaseClient | null): ClubSe
         .maybeSingle();
       if (error) return phase12Error("public_clubs dettaglio", error);
       return { ok: true, data: data ? mapClub(data as ClubRow) : null };
+    },
+
+    crea: async (input) => {
+      if (!client) return noPhase12Client();
+      if (!(await conSessione())) {
+        return { ok: false, error: "Accedi per creare un club." };
+      }
+      // La RPC e la sola porta di scrittura su clubs: nessun INSERT diretto.
+      // Il payload e fissato per intero; owner_id non si nomina perche lo
+      // assegna il server (auth.uid() dentro club_crea).
+      const { data, error } = await client.rpc("club_crea", {
+        p_nome: input.nome.trim(),
+        p_descrizione: input.descrizione.trim(),
+        p_regole: input.regole,
+        p_posting_mode: input.postingMode,
+        p_cover_image: input.coverImage ?? null,
+      });
+      if (error) return phase12Error("club_crea", error);
+      const creato = data as { slug?: string } | null;
+      if (!creato?.slug) {
+        return phase12Error("club_crea", {
+          code: "P0001",
+          message: "Club creato ma non rileggibile.",
+        });
+      }
+      // Si rilegge dalla vista: slug, conteggi e `seguito` sono del server.
+      return rileggi(creato.slug, "club_crea rilettura");
+    },
+
+    caricaCoverClub: async (file) => {
+      if (!client) return noPhase12Client();
+      // Stessa disciplina di caricaFotoAvatar: il file arriva GIA preparato
+      // (WebP ricodificato, EXIF rimossi) da lib/phase12/prepara-cover-club.
+      // Qui si controlla solo cio che il bucket controllera: tipo, dimensione
+      // e percorso owner-bound.
+      const { data: sessione } = await client.auth.getSession();
+      const utente = sessione.session?.user;
+      if (!utente) return { ok: false, error: "Accedi per creare un club." };
+      if (file.type !== MIME_COVER_CLUB) {
+        return { ok: false, error: "La cover preparata non e in formato WebP." };
+      }
+      if (file.size === 0 || file.size > DIMENSIONE_MASSIMA_COVER_CLUB) {
+        return { ok: false, error: "La cover preparata supera il limite di 5 MB." };
+      }
+
+      const percorso = `${utente.id}/${crypto.randomUUID()}.webp`;
+      const { error } = await client.storage
+        .from(BUCKET_CLUB_COVERS)
+        .upload(percorso, file, { contentType: MIME_COVER_CLUB, upsert: false });
+      if (error) {
+        console.error("[Phase12] caricamento cover club fallito:", { code: error.name });
+        return { ok: false, error: "Non e stato possibile caricare la cover. Riprova." };
+      }
+      return { ok: true, data: percorso };
+    },
+
+    eliminaCoverClub: async (percorso) => {
+      if (!client) return noPhase12Client();
+      const { data: sessione } = await client.auth.getSession();
+      const utente = sessione.session?.user;
+      if (!utente) return { ok: false, error: "Accedi per creare un club." };
+      // Cleanup dopo un club_crea fallito: si rimuove solo cio che sta nella
+      // propria cartella (la policy Storage lo impone comunque).
+      if (!percorsoCoverProprio(percorso, utente.id)) {
+        return { ok: false, error: "Percorso della cover non valido." };
+      }
+      const { error } = await client.storage.from(BUCKET_CLUB_COVERS).remove([percorso]);
+      if (error) {
+        console.error("[Phase12] eliminazione cover club fallita:", { code: error.name });
+        return { ok: false, error: "Non e stato possibile eliminare la cover." };
+      }
+      return { ok: true, data: undefined };
     },
 
     segui: async (slug) => {

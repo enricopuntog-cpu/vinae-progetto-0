@@ -5,6 +5,7 @@ import {
   FILTRI_VUOTI,
   filtraClub,
   opzioniFiltro,
+  puoPubblicareNelClub,
 } from "@/lib/phase12/club-view";
 import type { Club } from "@/services/types";
 
@@ -18,6 +19,11 @@ const club = (patch: Partial<Club> & { slug: string }): Club => ({
   regole: [],
   membri: 0,
   seguito: false,
+  ownerId: null,
+  ownerUsername: null,
+  postingMode: "OPEN",
+  coverImage: null,
+  mio: false,
   createdAt: "2026-08-17T09:00:00.000Z",
   ...patch,
 });
@@ -117,5 +123,38 @@ describe("assiClub", () => {
     expect(assiClub(catalogo[0]!)).toEqual(["Piemonte", "Barolo DOCG", "Rosso"]);
     expect(assiClub(catalogo[2]!)).toEqual(["Rosso"]);
     expect(assiClub(club({ slug: "nudo" }))).toEqual([]);
+  });
+});
+
+describe("puoPubblicareNelClub", () => {
+  it("in un club OPEN il modulo si monta per chiunque", () => {
+    expect(puoPubblicareNelClub(club({ slug: "aperto", postingMode: "OPEN" }))).toBe(true);
+    expect(puoPubblicareNelClub(club({ slug: "aperto", postingMode: "OPEN", mio: true }))).toBe(
+      true,
+    );
+  });
+
+  it("in un club OWNER_ONLY il modulo non si monta per chi non e il proprietario", () => {
+    // E la sola cosa che questa funzione decide: il rifiuto vero lo danno i
+    // trigger, che valgono anche quando la UI si sbaglia o viene aggirata.
+    expect(
+      puoPubblicareNelClub(club({ slug: "chiuso", postingMode: "OWNER_ONLY", mio: false })),
+    ).toBe(false);
+  });
+
+  it("in un club OWNER_ONLY il proprietario pubblica", () => {
+    expect(
+      puoPubblicareNelClub(club({ slug: "chiuso", postingMode: "OWNER_ONLY", mio: true })),
+    ).toBe(true);
+  });
+
+  it("OWNER_ONLY non e un club privato: la lettura non passa di qui", () => {
+    // Il test esiste per fissare il confine. `puoPubblicareNelClub` guarda solo
+    // `postingMode` e `mio`: non c'e nessun ramo in cui un club diventa
+    // invisibile, ed e la ragione per cui la scheda non chiede il permesso di
+    // mostrare descrizione, regole e discussioni.
+    const chiuso = club({ slug: "chiuso", postingMode: "OWNER_ONLY" });
+    expect(chiuso.descrizione).toBeTruthy();
+    expect(assiClub(chiuso)).toEqual([]);
   });
 });

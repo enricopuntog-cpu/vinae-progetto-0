@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-label="Cantina">
+  <rect width="1200" height="400" fill="#4c1626"/>
+  <g fill="none" stroke="#b59a63" stroke-width="5" opacity="0.6">
+    <path d="M100 400V180a80 80 0 0 1 160 0v220"/>
+    <path d="M340 400V180a80 80 0 0 1 160 0v220"/>
+    <path d="M580 400V180a80 80 0 0 1 160 0v220"/>
+    <path d="M820 400V180a80 80 0 0 1 160 0v220"/>
+    <path d="M1060 400V180a80 80 0 0 1 140 0"/>
+  </g>
+  <g fill="#f7f3ec" opacity="0.75">
+    <circle cx="180" cy="250" r="26"/><circle cx="420" cy="250" r="26"/>
+    <circle cx="660" cy="250" r="26"/><circle cx="900" cy="250" r="26"/>
+  </g>
+  <g fill="#6b2138">
+    <circle cx="180" cy="250" r="14"/><circle cx="420" cy="250" r="14"/>
+    <circle cx="660" cy="250" r="14"/><circle cx="900" cy="250" r="14"/>
+  </g>
+</svg>

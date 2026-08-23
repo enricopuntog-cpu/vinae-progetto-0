@@ -32,10 +32,14 @@ export default async function Page() {
   // Le due letture sono indipendenti e partono insieme: in serie la pagina
   // aspetterebbe la somma di due andate e ritorno per mostrare cose che non si
   // condizionano a vicenda.
-  const [esito, discussioni] = await Promise.all([
+  const [esito, discussioni, utente] = await Promise.all([
     servizio.elenco(),
     // Senza slug: le discussioni piu recenti di tutti i club.
     servizio.discussioni(),
+    // getUser() e non getSession(): la sessione la legge dal cookie, l'utente
+    // lo fa verificare al server. E la stessa scelta di src/app/vendi/actions.ts.
+    // Senza client configurato non c'e utente, e il modulo non si monta.
+    client ? client.auth.getUser() : Promise.resolve(null),
   ]);
 
   return (
@@ -45,6 +49,7 @@ export default async function Page() {
       // Un errore qui non e un errore della pagina: i club si leggono lo
       // stesso, e i due tab mostrano il proprio vuoto.
       discussioni={discussioni.ok ? discussioni.data : []}
+      autenticato={Boolean(utente?.data.user)}
     />
   );
 }

@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ClubDiscussioni } from "@/components/vinea/ClubDiscussioni";
+import { CreaClubForm } from "@/components/vinea/CreaClubForm";
 import { SectionTitle } from "@/components/vinea/Layout";
 import { ErrorState } from "@/components/vinea/States";
 import { wineImages } from "@/lib/wine-images";
@@ -49,10 +50,15 @@ export default function CommunityHubPageClient({
   iniziali,
   erroreLettura,
   discussioni,
+  autenticato,
 }: {
   iniziali: Club[];
   erroreLettura: string | null;
   discussioni: ClubPost[];
+  // Lo risolve il componente server con getUser(). Nasconde il modulo a chi non
+  // ha sessione, ma non e la barriera: `club_crea` pretende comunque un
+  // auth.uid(), e senza sessione rifiuta.
+  autenticato: boolean;
 }) {
   // I club arrivano gia letti dal componente server. Lo stato locale esiste
   // solo perche il follow ne sostituisce una riga: non e una seconda copia da
@@ -125,6 +131,12 @@ export default function CommunityHubPageClient({
           </div>
         </div>
       </section>
+
+      {/* Il modulo di creazione si monta solo con una sessione: a chi legge da
+          anonimo non si offre un pulsante che finirebbe in un rifiuto del
+          database. Sta fuori dall'hero perche aperto e un modulo intero, e in
+          una colonna dell'hero starebbe stretto. */}
+      {autenticato && <CreaClubForm />}
 
       {erroreLettura ? (
         <ErrorState title="Club non disponibili" message={erroreLettura} />
