@@ -47,7 +47,8 @@
   report reason `Fuori tema`, absent from `public.report_reasons` for target
   `post`; the correct label is `Off-topic per il club`), not a migration defect.
 - Case 47 of that grid passes vacuously: `circolo-vinea` is not created by any
-  migration, so the display rename can only be verified on production.
+  migration. The display rename was instead verified on production, where
+  `public_clubs` returns `circolo-vinea` with `nome = 'Club Vinea'`.
 - `frontend-next` measured on the branch: `bun run lint` 0 errors / 14 warnings
   (all pre-existing `<img>` warnings), `bun run typecheck` clean,
   `bun run test` **608 pass / 0 fail** across 43 files, `bun run build`
@@ -68,31 +69,38 @@
 ## ACTIVE TASK
 
 - Club creation by an authenticated user is complete and behaviourally verified
-  on a disposable database. The work is committed on `feat/club-user-creation`.
-- The migration has NOT been applied to any remote database. A merge lets the
-  Supabase GitHub integration distribute it, after which the production ledger
-  and the effective bucket, policies, CHECK, guards and RPC body must be reread.
+  on a disposable database. PR #67 is merged as `bced46b` on `origin/main`, with
+  every check green including the Supabase Preview on project
+  `hkarvwaixdidmddnjxok`.
+- The Supabase GitHub integration distributed the migration to
+  `pijnmcllmfgjmgsvtcej`. Measured there with the anon key alone: `public_clubs`
+  exposes `owner_id`, `owner_username`, `posting_mode` and `cover_image`;
+  `club_crea` exists and rejects `anon` with `42501 permission denied for
+  function club_crea`; the bucket `club-covers` exists and serves public reads,
+  distinguishable from `NoSuchBucket`.
+- The production migration ledger, the Storage policy bodies, the CHECK and the
+  OWNER_ONLY trigger definitions were NOT reread: this environment holds only
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY`, with no service-role key, no access token and
+  no Supabase CLI.
 - No browser session was opened against a database carrying this migration.
 - The pre-existing untracked `.wslconfig` remains untouched.
 
 ## NEXT STEPS
 
-1. Wait for the Supabase GitHub integration after the merge, then reread the production migration ledger and the effective `club_crea`, bucket, policies and triggers on `pijnmcllmfgjmgsvtcej`.
+1. Reread the production migration ledger and the effective bodies of `club_crea`, the Storage policies, the CHECK and the OWNER_ONLY triggers on `pijnmcllmfgjmgsvtcej`, once a service-role key or access token is available.
 2. Run one authenticated browser flow on production: create an OPEN club, verify redirect, cover rendering and the absence of orphan uploads.
 3. Run the single authenticated profile-photo smoke test when a test-account session is available.
 
 ## BLOCKERS / NOTES
 
-- The display rename `Circolo Vinea` → `Club Vinea` is unverified: the grid
-  cannot see it, because no migration seeds that club. Only a production read
-  proves it.
 - The 12d grid never ran against the real project, and must not: it writes
   users, clubs, posts, replies, likes, reports and Storage objects.
 - The 12d grid does not cover PostgREST, the browser image pipeline, or
   concurrency. Two simultaneous creations of the same name are held only by the
   primary key on `clubs.slug`, not by a measured case.
-- The Club-creation migration is unapplied everywhere until the merge is
-  distributed. A ledger row alone would not prove the object bodies are correct.
+- The production readings of the Club migration are anon-level behaviour, not
+  object bodies. A privileged read is still owed before the production
+  `club_crea`, Storage policies, CHECK and triggers count as measured.
 - The authenticated smoke test for profile photos is outstanding: upload, save,
   Account render, seller render, preset/initials switch and old-object cleanup
   have not been exercised against production. No new accounts or complex
