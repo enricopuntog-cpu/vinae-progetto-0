@@ -993,6 +993,8 @@ export interface MessagingService {
 // auth.uid()` e non e nel grant di INSERT, quindi un parametro del genere non
 // avrebbe nemmeno un posto in cui finire.
 
+export type ClubPostingMode = "OPEN" | "OWNER_ONLY";
+
 export type Club = {
   slug: string;
   nome: string;
@@ -1009,6 +1011,19 @@ export type Club = {
   membri: number;
   // Stato del solo chiamante. Per un visitatore anonimo e sempre `false`.
   seguito: boolean;
+  // Proprietario del club: null per i club di sistema/legacy. La vista lo
+  // espone in lettura ma non e scrivibile dal client: lo assegna club_crea.
+  ownerId: string | null;
+  ownerUsername: string | null;
+  // OPEN: tutti gli abilitati scrivono. OWNER_ONLY: solo il proprietario crea
+  // post e risposte; lettura, follow, like e moderazione invariati.
+  postingMode: ClubPostingMode;
+  // Percorso nel bucket club-covers (<uid>/<uuid>.webp), non un URL. Null se il
+  // club usa la UI generica. L'URL si ricompone da configurazione fidata.
+  coverImage: string | null;
+  // Se il club e del chiamante. La UI ci decide se mostrare il composer nei
+  // club OWNER_ONLY. Per un anonimo e sempre `false`.
+  mio: boolean;
   createdAt: string;
 };
 
@@ -1095,10 +1110,29 @@ export type NuovoClubPost = {
   listingId?: string | null;
 };
 
+// Input di creazione di un club utente. Nessun ownerId: lo assegna il server
+// (owner_id = auth.uid() dentro club_crea). coverImage e il percorso nel bucket
+// club-covers gia caricato dal client, oppure null per la UI generica.
+export type NuovoClub = {
+  nome: string;
+  descrizione: string;
+  regole: string[];
+  postingMode: ClubPostingMode;
+  coverImage?: string | null;
+};
+
 export interface ClubService {
   elenco(): Promise<Result<Club[]>>;
   // `null` e una risposta legittima e non un errore: lo slug non esiste.
   dettaglio(slug: string): Promise<Result<Club | null>>;
+  // Crea un club utente via RPC club_crea e restituisce il club riletto dalla
+  // vista: slug e conteggi sono del server, non ricostruiti in locale.
+  crea(input: NuovoClub): Promise<Result<Club>>;
+  // Cover del club: carica un WebP gia preparato nel bucket club-covers sotto
+  // la cartella del chiamante e restituisce il percorso (non un URL).
+  // eliminaCover serve al cleanup quando club_crea fallisce dopo l'upload.
+  caricaCoverClub(file: File): Promise<Result<string>>;
+  eliminaCoverClub(percorso: string): Promise<Result<void>>;
   // Restituiscono il club riletto e non `void`: seguire cambia `membri`, che
   // e un conteggio del server. Farlo indovinare al client significa mostrare
   // un numero che diverge dal database al primo caso concorrente.

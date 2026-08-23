@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-label="Collina">
+  <rect width="1200" height="400" fill="#f7f3ec"/>
+  <circle cx="960" cy="110" r="52" fill="#b59a63"/>
+  <path d="M0 250c180-90 300 40 470-20s330-120 500-40 230 60 230 60v150H0z" fill="#6b2138" opacity="0.35"/>
+  <path d="M0 300c200-70 340 30 520-10s340-80 500-10 180 40 180 40v80H0z" fill="#6b2138" opacity="0.65"/>
+  <path d="M0 350c220-40 380 20 600-4s400-46 600-6v60H0z" fill="#4c1626"/>
+</svg>

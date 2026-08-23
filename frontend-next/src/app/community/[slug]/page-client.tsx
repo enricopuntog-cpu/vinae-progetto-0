@@ -25,7 +25,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ClubDiscussioni } from "@/components/vinea/ClubDiscussioni";
 import { ErrorState } from "@/components/vinea/States";
 import { formatInteger } from "@/lib/format";
-import { assiClub } from "@/lib/phase12/club-view";
+import { assiClub, puoPubblicareNelClub } from "@/lib/phase12/club-view";
+import { coverSicura } from "@/lib/phase12/club-cover";
 import { ordinaPerPopolarita } from "@/lib/phase12/club-post-view";
 import { useClubFollow } from "@/lib/phase12/use-club-follow";
 import type { Club, ClubPost } from "@/services/types";
@@ -41,6 +42,11 @@ export default function CommunityDetailPageClient({
   const { cambiaFollow, inCorso, error } = useClubFollow();
   const attesa = inCorso === club.slug;
   const assi = assiClub(club);
+  // La cover si convalida in lettura: `cover_image` e un percorso scritto da
+  // club_crea, ma qui vale la stessa disciplina dell'avatar - il valore
+  // memorizzato non e fidato e l'origine non si legge mai da lui.
+  const cover = coverSicura(club.coverImage, club.ownerId);
+  const puoScrivere = puoPubblicareNelClub(club);
 
   const onFollow = async () => {
     if (!cambiaFollow) return;
@@ -58,6 +64,21 @@ export default function CommunityDetailPageClient({
       </Link>
 
       <section className="relative overflow-hidden rounded-3xl bg-antracite text-crema hero-glow">
+        {cover && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- il bucket
+                Storage non e fra i domini configurati per next/image, e
+                aggiungerlo e una decisione di configurazione, non di questa PR. */}
+            <img
+              src={cover}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 h-full w-full object-cover opacity-45"
+              data-testid="club-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-antracite via-antracite/80 to-transparent" />
+          </>
+        )}
         <div className="hero-grain" aria-hidden />
         <div className="relative flex flex-col gap-4 p-6 md:p-10">
           <div className="flex flex-wrap gap-2">
@@ -70,9 +91,23 @@ export default function CommunityDetailPageClient({
           </div>
           <h1 className="font-serif text-3xl md:text-5xl">{club.nome}</h1>
           <p className="max-w-2xl text-crema/85">{club.descrizione}</p>
-          <p className="flex items-center gap-1 text-sm">
-            <Users className="h-4 w-4" /> {formatInteger(club.membri)} membri
-          </p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <p className="flex items-center gap-1">
+              <Users className="h-4 w-4" /> {formatInteger(club.membri)} membri
+            </p>
+            {/* Il creatore compare solo se il server lo ha risolto: un club di
+                sistema non ne ha, e "creato da —" non e un'informazione. */}
+            {club.ownerUsername && (
+              <p className="text-crema/80" data-testid="club-creatore">
+                Creato da {club.ownerUsername}
+              </p>
+            )}
+            <p className="text-crema/80" data-testid="club-modalita">
+              {club.postingMode === "OWNER_ONLY"
+                ? "Solo il proprietario pubblica"
+                : "Tutti i membri possono pubblicare"}
+            </p>
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={() => void onFollow()}
@@ -106,7 +141,11 @@ export default function CommunityDetailPageClient({
             <TabsTrigger value="popolari">Post popolari</TabsTrigger>
           </TabsList>
           <TabsContent value="discussioni" className="mt-4">
-            <ClubDiscussioni iniziali={discussioni} clubSlug={club.slug} />
+            <ClubDiscussioni
+              iniziali={discussioni}
+              clubSlug={club.slug}
+              puoScrivere={puoScrivere}
+            />
           </TabsContent>
           <TabsContent value="popolari" className="mt-4">
             {/* Stesse righe, altro ordine: `ordinaPerPopolarita` lavora su una
@@ -115,6 +154,7 @@ export default function CommunityDetailPageClient({
             <ClubDiscussioni
               iniziali={discussioni}
               clubSlug={club.slug}
+              puoScrivere={puoScrivere}
               ordina={ordinaPerPopolarita}
             />
           </TabsContent>

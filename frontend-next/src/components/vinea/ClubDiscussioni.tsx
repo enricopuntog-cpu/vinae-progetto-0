@@ -63,6 +63,7 @@ export function ClubDiscussioni({
   clubSlug,
   ordina,
   mostraClub = false,
+  puoScrivere = true,
 }: {
   iniziali: ClubPost[];
   // Assente all'elenco: senza un club non c'e un posto in cui scrivere, e il
@@ -70,6 +71,17 @@ export function ClubDiscussioni({
   clubSlug?: string;
   ordina?: (post: ClubPost[]) => ClubPost[];
   mostraClub?: boolean;
+  // Falso quando il club e OWNER_ONLY e chi guarda non e il proprietario. E una
+  // cortesia della UI, non la barriera: quella sono i trigger
+  // club_posts_owner_only_guard e club_post_risposte_owner_only_guard, che
+  // valgono per ogni percorso.
+  //
+  // All'elenco di /community resta `true` anche per i post di club OWNER_ONLY:
+  // `public_club_posts` non porta la modalita del club, e portarcela vorrebbe
+  // dire riscrivere una vista della 12b da una PR sulla creazione. In quel caso
+  // il rifiuto arriva dal database con il suo messaggio, che e fra i codici
+  // leggibili e dice esattamente perche.
+  puoScrivere?: boolean;
 }) {
   const [post, setPost] = useState<ClubPost[]>(iniziali);
   const azioni = useClubPosts();
@@ -85,7 +97,7 @@ export function ClubDiscussioni({
 
   return (
     <div className="space-y-4">
-      {clubSlug && azioni.pubblica && (
+      {clubSlug && puoScrivere && azioni.pubblica && (
         <ComponiPost
           clubSlug={clubSlug}
           inCorso={azioni.inCorso === "nuovo"}
@@ -118,6 +130,7 @@ export function ClubDiscussioni({
               post={p}
               mostraClub={mostraClub}
               azioni={azioni}
+              puoScrivere={puoScrivere}
               onAggiornato={sostituisci}
             />
           ))}
@@ -272,11 +285,13 @@ function SchedaPost({
   post,
   mostraClub,
   azioni,
+  puoScrivere,
   onAggiornato,
 }: {
   post: ClubPost;
   mostraClub: boolean;
   azioni: ReturnType<typeof useClubPosts>;
+  puoScrivere: boolean;
   onAggiornato: (post: ClubPost) => void;
 }) {
   const [risposte, setRisposte] = useState<ClubPostRisposta[] | null>(null);
@@ -378,6 +393,7 @@ function SchedaPost({
           post={post}
           risposte={risposte}
           azioni={azioni}
+          puoScrivere={puoScrivere}
           onNuova={(r) => {
             setRisposte((precedenti) => [...(precedenti ?? []), r]);
             // Il conteggio e del server: qui si sposta di uno perche la
@@ -400,11 +416,13 @@ function Risposte({
   post,
   risposte,
   azioni,
+  puoScrivere,
   onNuova,
 }: {
   post: ClubPost;
   risposte: ClubPostRisposta[] | null;
   azioni: ReturnType<typeof useClubPosts>;
+  puoScrivere: boolean;
   onNuova: (risposta: ClubPostRisposta) => void;
 }) {
   const [corpo, setCorpo] = useState("");
@@ -455,7 +473,7 @@ function Risposte({
         ))
       )}
 
-      {azioni.rispondi && (
+      {puoScrivere && azioni.rispondi && (
         <div className="flex flex-col gap-2">
           <Textarea
             value={corpo}

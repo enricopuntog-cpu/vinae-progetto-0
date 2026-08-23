@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-label="Vigna">
+  <rect width="1200" height="400" fill="#6b2138"/>
+  <g stroke="#b59a63" stroke-width="6" stroke-linecap="round" opacity="0.55">
+    <path d="M0 300h1200"/>
+    <path d="M120 300V170M360 300V170M600 300V170M840 300V170M1080 300V170"/>
+    <path d="M60 200h1080"/>
+  </g>
+  <g fill="#f7f3ec" opacity="0.9">
+    <circle cx="120" cy="150" r="12"/><circle cx="102" cy="128" r="12"/><circle cx="138" cy="128" r="12"/><circle cx="120" cy="108" r="12"/>
+    <circle cx="600" cy="150" r="12"/><circle cx="582" cy="128" r="12"/><circle cx="618" cy="128" r="12"/><circle cx="600" cy="108" r="12"/>
+    <circle cx="1080" cy="150" r="12"/><circle cx="1062" cy="128" r="12"/><circle cx="1098" cy="128" r="12"/><circle cx="1080" cy="108" r="12"/>
+  </g>
+  <path d="M0 340c160-30 320 30 480 0s320-40 480-10 240 20 240 20v50H0z" fill="#4c1626"/>
+</svg>

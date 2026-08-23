@@ -76,3 +76,18 @@ export const assiClub = (club: Club): string[] =>
   [club.territorio, club.denominazione, club.produttore, club.tipologia].filter(
     (v): v is string => Boolean(v),
   );
+
+/**
+ * Se la scheda del club deve montare il modulo di composizione.
+ *
+ * E una funzione e non un'espressione dentro la pagina perche la regola vale in
+ * due punti - post e risposte - e perche cosi e verificabile senza montare
+ * nulla. Non e la barriera: quella sono i trigger OWNER_ONLY a database, che
+ * valgono per ogni percorso, questo compreso quando mente.
+ *
+ * `mio` lo calcola la vista con auth.uid(); per un anonimo e sempre falso,
+ * quindi in un club OWNER_ONLY chi non ha sessione non vede il composer - che e
+ * comunque gia nascosto dall'assenza di `azioni.pubblica`.
+ */
+export const puoPubblicareNelClub = (club: Club): boolean =>
+  club.postingMode !== "OWNER_ONLY" || club.mio;

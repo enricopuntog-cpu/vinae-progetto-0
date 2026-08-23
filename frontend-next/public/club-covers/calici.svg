@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-label="Calici">
+  <rect width="1200" height="400" fill="#f7f3ec"/>
+  <rect width="1200" height="120" y="280" fill="#6b2138" opacity="0.12"/>
+  <g fill="none" stroke="#6b2138" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M260 120h120v46a60 60 0 0 1-120 0z"/><path d="M320 226v70"/><path d="M282 300h76"/>
+    <path d="M540 100h120v50a60 60 0 0 1-120 0z"/><path d="M600 210v86"/><path d="M562 300h76"/>
+    <path d="M820 120h120v46a60 60 0 0 1-120 0z"/><path d="M880 226v70"/><path d="M842 300h76"/>
+  </g>
+  <g fill="#b59a63">
+    <path d="M264 132h112a56 56 0 0 1-112 0z"/>
+    <path d="M544 112h112a56 56 0 0 1-112 0z"/>
+    <path d="M824 132h112a56 56 0 0 1-112 0z"/>
+  </g>
+</svg>
