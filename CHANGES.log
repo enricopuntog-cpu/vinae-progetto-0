@@ -49,16 +49,22 @@
 - Case 47 of that grid passes vacuously: `circolo-vinea` is not created by any
   migration. The display rename was instead verified on production, where
   `public_clubs` returns `circolo-vinea` with `nome = 'Club Vinea'`.
-- `frontend-next` measured on the branch: `bun run lint` 0 errors / 14 warnings
-  (all pre-existing `<img>` warnings), `bun run typecheck` clean,
-  `bun run test` **608 pass / 0 fail** across 43 files, `bun run build`
-  successful, `git diff --check` clean.
-- `MIN_TESTS` in `.github/workflows/ci.yml` was raised from 556 to the measured
-  608, together with its regression contract in
+- `frontend-next` measured on the PR #69 branch: `bun run lint` 0 errors / 14
+  warnings (all pre-existing `<img>` warnings), `bun run typecheck` clean,
+  `bun run test` **617 pass / 0 fail** across 44 files, `bun run build`
+  successful, `git diff --check` clean. The Home route `/` stays `ƒ`
+  (server-rendered on demand), as it already was.
+- `MIN_TESTS` in `.github/workflows/ci.yml` is 617, together with its
+  regression contract in
   `frontend-next/src/lib/beta/prelaunch-contract.test.ts`.
-- Personal profile photos are live in `frontend-next/`; migration
-  `20260821183000_profile_avatars.sql` is the latest row in the production
-  ledger of project `pijnmcllmfgjmgsvtcej`.
+- Personal profile photos are live in `frontend-next/`. The latest row in the
+  production migration ledger of project `pijnmcllmfgjmgsvtcej` is
+  `20260822000000_club_user_creation`.
+- The production migration ledger and the effective Club objects on
+  `pijnmcllmfgjmgsvtcej` — the `club_crea` ACL, the `club-covers` Storage
+  policies, `clubs_cover_image_vinea_check` and the two OWNER_ONLY BEFORE
+  INSERT triggers — have been reread and verified. They are no longer
+  anon-level inference.
 - The authenticated browser smoke test for profile photos was NOT run: no
   usable session for the existing test account was available, and no new
   account or fixture was created.
@@ -68,26 +74,34 @@
 
 ## ACTIVE TASK
 
+- Home / Clubs discovery is merged. PR #69 carried no migration, so no Supabase
+  deploy or remote verification was required or performed.
+- Four files changed, two created: `frontend-next/src/app/page.tsx` reads clubs
+  server-side, `frontend-next/src/app/page-client.tsx` renders the section,
+  `frontend-next/src/lib/phase12/club-home.ts` holds the two pure selections
+  and `club-home.test.ts` proves them with 9 cases; `.github/workflows/ci.yml`
+  and `prelaunch-contract.test.ts` carry the test floor.
+- The Home now reads listings, `ClubService.elenco()` and `auth.getUser()` in
+  one `Promise.all`, the same shape as `src/app/community/page.tsx`. No new
+  client state, no effect, no loading skeleton: the section is server-fed and
+  read-only.
+- Followed clubs are `seguito === true` from `public_clubs`, which the view
+  computes with `auth.uid()`. Discovery is the complement — `!seguito` — sorted
+  by the existing `membri` count with a `nome` tiebreak, capped at three. No new
+  RPC, schema, policy, scoring or recommendation path was added.
+- Each card links to `/community/[slug]`; the section header links to
+  `/community`, as does the CTA of the "no clubs followed" empty state. Follow
+  stays in `/community` and in the club page: the Home carries no write.
 - Club creation by an authenticated user is complete and behaviourally verified
   on a disposable database. PR #67 is merged as `bced46b` on `origin/main`, with
   every check green including the Supabase Preview on project
   `hkarvwaixdidmddnjxok`.
-- The Supabase GitHub integration distributed the migration to
-  `pijnmcllmfgjmgsvtcej`. Measured there with the anon key alone: `public_clubs`
-  exposes `owner_id`, `owner_username`, `posting_mode` and `cover_image`;
-  `club_crea` exists and rejects `anon` with `42501 permission denied for
-  function club_crea`; the bucket `club-covers` exists and serves public reads,
-  distinguishable from `NoSuchBucket`.
-- The production migration ledger, the Storage policy bodies, the CHECK and the
-  OWNER_ONLY trigger definitions were NOT reread: this environment holds only
-  `NEXT_PUBLIC_SUPABASE_ANON_KEY`, with no service-role key, no access token and
-  no Supabase CLI.
-- No browser session was opened against a database carrying this migration.
+- No browser session was opened against a database carrying the Club migration.
 - The pre-existing untracked `.wslconfig` remains untouched.
 
 ## NEXT STEPS
 
-1. Reread the production migration ledger and the effective bodies of `club_crea`, the Storage policies, the CHECK and the OWNER_ONLY triggers on `pijnmcllmfgjmgsvtcej`, once a service-role key or access token is available.
+1. Run one authenticated browser smoke of the Home against production: verify the followed-Club section, the discovery section and the links to `/community` and `/community/[slug]`.
 2. Run one authenticated browser flow on production: create an OPEN club, verify redirect, cover rendering and the absence of orphan uploads.
 3. Run the single authenticated profile-photo smoke test when a test-account session is available.
 
@@ -98,9 +112,11 @@
 - The 12d grid does not cover PostgREST, the browser image pipeline, or
   concurrency. Two simultaneous creations of the same name are held only by the
   primary key on `clubs.slug`, not by a measured case.
-- The production readings of the Club migration are anon-level behaviour, not
-  object bodies. A privileged read is still owed before the production
-  `club_crea`, Storage policies, CHECK and triggers count as measured.
+- The Home Club section is proven by lint, typecheck, the full suite and the
+  build, but NOT by a browser: no authenticated session was available, so
+  followed Clubs, discovery and the links were never rendered against real
+  production data. The empty states and the read-error branch are likewise
+  unexercised outside the unit tests.
 - The authenticated smoke test for profile photos is outstanding: upload, save,
   Account render, seller render, preset/initials switch and old-object cleanup
   have not been exercised against production. No new accounts or complex
