@@ -74,8 +74,9 @@
 
 ## ACTIVE TASK
 
-- Home / Clubs discovery is merged. PR #69 carried no migration, so no Supabase
-  deploy or remote verification was required or performed.
+- Home / Clubs discovery is merged as `5504dfe` on `origin/main`. PR #69
+  carried no migration, so no Supabase deploy or remote verification was
+  required or performed. CI read `617 test superati (soglia 617)`.
 - Four files changed, two created: `frontend-next/src/app/page.tsx` reads clubs
   server-side, `frontend-next/src/app/page-client.tsx` renders the section,
   `frontend-next/src/lib/phase12/club-home.ts` holds the two pure selections
@@ -101,7 +102,7 @@
 
 ## NEXT STEPS
 
-1. Run one authenticated browser smoke of the Home against production: verify the followed-Club section, the discovery section and the links to `/community` and `/community/[slug]`.
+1. Run one authenticated browser smoke of the Home against production: verify `Club che segui`, that a followed club disappears from `Scopri i Club`, and the "no clubs followed" empty state. The anonymous half is already verified.
 2. Run one authenticated browser flow on production: create an OPEN club, verify redirect, cover rendering and the absence of orphan uploads.
 3. Run the single authenticated profile-photo smoke test when a test-account session is available.
 
@@ -112,11 +113,15 @@
 - The 12d grid does not cover PostgREST, the browser image pipeline, or
   concurrency. Two simultaneous creations of the same name are held only by the
   primary key on `clubs.slug`, not by a measured case.
-- The Home Club section is proven by lint, typecheck, the full suite and the
-  build, but NOT by a browser: no authenticated session was available, so
-  followed Clubs, discovery and the links were never rendered against real
-  production data. The empty states and the read-error branch are likewise
-  unexercised outside the unit tests.
+- The Home Club section was smoke-tested on production ANONYMOUSLY only:
+  `https://timely-lokum-43a12e.netlify.app/` renders the `Club` heading, the
+  `Tutti i Club →` link, the `Scopri i Club` block and one real card,
+  `Club Vinea` with `1 membri`, pointing at `/community/circolo-vinea`. That
+  proves the server read, the discovery selection and the links.
+- The AUTHENTICATED Home has never been rendered: no usable session existed and
+  none was created. `Club che segui`, the exclusion of a followed club from
+  discovery on real data, the "no clubs followed" empty state and the
+  read-error branch are proven by unit tests only.
 - The authenticated smoke test for profile photos is outstanding: upload, save,
   Account render, seller render, preset/initials switch and old-object cleanup
   have not been exercised against production. No new accounts or complex
