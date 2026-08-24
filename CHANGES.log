@@ -59,24 +59,68 @@
 - No external price provider exists: no key, HTTP call, cron, adapter or flag.
   Activation stays fail-closed and would require a new migration and explicit
   provider/budget authorization.
+- Price Intelligence 1B shipped from branch `feat/price-intelligence-1b-insights`
+  off `main` at `e47a9e96258fc8970261021b3272890be8dfb761`. Pre-existing
+  untracked `.wslconfig` was left out of the commit and remains local work.
+- 1B adds no migration and no remote write. It reads `public.wine_price_history`
+  through the existing 1A adapter and reuses the active listings that
+  `/annuncio/[id]` already loads for its related-wines block; the only new
+  database read is the price history itself.
+- The 1A read contract gained one alternative key: `storico` accepts
+  `wineSlug` instead of `wineId` (mutually exclusive in the type). `Wine` was
+  not widened to carry `wine_id`. Both columns are already exposed by the view,
+  so neither branch touches the base table.
+- 1B analytics live in `frontend-next/src/lib/price-intelligence/insights.ts` as
+  pure deterministic functions: comparables, median, range, coverage band, last
+  observed change, chart series and time domain. Nothing there reads the clock,
+  the network or input order.
+- Reference rule: comparables are active listings with the same wine slug and
+  the exact same format, deduplicated by listing identity. Under 3 comparables
+  no number is produced at all. At 3 or more the reference is the **median** of
+  asking prices, never the arithmetic mean, with min→max range and the
+  comparable count shown.
+- ASKING and SALE are never merged. Sales are counted and plotted; they do not
+  move the 1B reference. Last observed change uses only the two most recent
+  ASKING observations and is labelled "ultima variazione rilevata", not a trend.
+- Coverage bands are 0-2 "In formazione", 3-4 "Bassa", 5-9 "Media", 10+ "Alta",
+  presented as data coverage and not as accuracy or statistical guarantee.
+- The panel always shows source "Dati interni Vinea", the analysed format, the
+  ASKING/SALE observation counts and the active comparable count. A failed
+  history read degrades to "Storico prezzi non disponibile" while the rest of
+  the listing page and the comparable-based reference keep working.
+- `/annuncio/[id]` no longer renders the legacy struck-through `prezzoMercato`
+  next to the asking price. The DB column, the `ListingService` mapping, the
+  `Wine` field and `WineCard` are untouched: only that one reading surface was
+  removed.
 
 ## ACTIVE TASK
 
-- Price Intelligence 1A is implemented, audited, tested, merged, deployed and
-  verified in production. No migration reapplication was attempted after the
-  integration had already added its ledger row.
-- This `CHANGES.log` closure is the final Price Intelligence 1A repository
-  update. Once it reaches `main`, no 1A implementation, deployment or
-  documentation work remains; `.wslconfig` stays excluded.
+- Price Intelligence 1B is delivered. No migration, Supabase write or provider
+  activation was performed: the change is frontend-only.
+- The VERIFY audit found and fixed two concrete defects. The Recharts scatter
+  tooltip read `payload[0].name`, which carries the **axis** name (`t`) whenever
+  `XAxis` has an explicit `dataKey`, so every sale point was labelled "Prezzo
+  richiesto"; `PuntoStorico` now carries its own `tipo` and the tooltip reads it.
+  The adapter chose its lookup column on truthiness, so an empty `wineId` fell
+  through to `wine_slug = ''` and returned an empty history for an unnamed wine;
+  it now selects on a non-empty trimmed value and refuses to query without one.
+- Full verification ran once: `bun run lint` 0 errors with the 14 pre-existing
+  warnings, `bun run typecheck` clean, `bun run test` **717 pass / 0 fail**
+  across 47 files and 17,331 expectation calls, `bun run build` green,
+  `git diff --check` clean.
+- CI `MIN_TESTS` was raised 681 -> 717 in `.github/workflows/ci.yml` and in the
+  prelaunch regression contract, which asserts the literal. Only that contract
+  file was re-run afterwards: 19 pass / 0 fail.
 - No historical SALE backfill was added. Existing completed orders therefore
-  produce no historical SALE observation; whether 1B should use or weight such
-  history, including refunds, remains a product/statistical decision.
+  produce no historical SALE observation; whether sale history and later refunds
+  should weight the reference remains an open product/statistical decision,
+  deliberately left outside 1B.
 
 ## NEXT STEPS
 
-1. Begin Price Intelligence 1B only after its product scope is explicitly admitted.
-2. Decide in 1B whether historical completed orders and later refunds belong in sale statistics.
-3. Obtain an existing authenticated JWT before claiming an authenticated PostgREST runtime proof.
+1. Decide whether completed-order sale history and later refunds belong in the price reference.
+2. Re-check the 1B panel on a listing once a wine reaches 3 comparable active listings.
+3. Start Smart Sell Price in `/vendi` only under an explicit new task.
 
 ## BLOCKERS / NOTES
 
@@ -104,4 +148,12 @@
   inferred from the public beta, green checks or Price Intelligence 1A.
 - External Price Intelligence providers remain OFF and fail-closed. Turning one
   on requires explicit authorization plus a new enum label, CHECK update and
-  controlled write path in a new migration.
+  controlled write path in a new migration. 1B introduced no key, HTTP call,
+  cron, adapter or flag, and its UI names only "Dati interni Vinea".
+- 1B is verified by unit tests, typecheck and a production build; a production
+  smoke on a live listing page is recorded separately once the deploy is up.
+  Production today has 9 ASKING / 0 SALE
+  and one observation per wine+format, so on live data every listing page will
+  show "Storico in formazione" with no numeric reference until a wine reaches 3
+  comparable active listings.
+- Smart Sell Price in `/vendi` was not started and remains out of 1B scope.
