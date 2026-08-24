@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createListingService } from "@/services/listing-service";
+import { createSupabasePriceIntelligenceService } from "@/services/price-intelligence/supabase-price-intelligence-service";
 import { caricaMetaPerVino } from "@/services/wine-meta";
 import { WineMetaProvider } from "@/lib/wine-meta-context";
+import { chiaveVino, componiVista } from "@/lib/price-intelligence/insights";
 import { formatEUR } from "@/lib/format";
 import AnnuncioDetailPageClient from "./page-client";
 
@@ -77,12 +79,46 @@ export default async function Page({
 
   const correlati = tutti.filter((w) => w.id !== daMostrare.id).slice(0, 4);
 
-  // Il vino della scheda più quelli dei correlati: "Quando berlo", gli
-  // abbinamenti e i distintivi delle schede correlate leggono tutti da qui.
-  const metaPerVino = await caricaMetaPerVino(client, [
-    daMostrare.wineSlug ?? daMostrare.id,
-    ...correlati.map((c) => c.wineSlug ?? c.id),
+  // Price Intelligence 1B.
+  //
+  // Lo storico è l'unica lettura in più che questa pagina fa: i comparabili
+  // correnti escono da `tutti`, che è già in memoria perché serviva ai
+  // correlati, e chiederli di nuovo al database sarebbe un viaggio pagato per
+  // righe che abbiamo già. `elenco()` restituisce solo annunci attivi — il
+  // filtro `stato = 'attivo'` sta dentro `public_listings` e non è un parametro
+  // — quindi «attivo» qui non è un predicato da riscrivere ma una proprietà
+  // della sorgente.
+  //
+  // Va in parallelo ai metadati del vino, che non dipendono da lui.
+  const wineKey = chiaveVino(daMostrare);
+  const [metaPerVino, storico] = await Promise.all([
+    // Il vino della scheda più quelli dei correlati: "Quando berlo", gli
+    // abbinamenti e i distintivi delle schede correlate leggono tutti da qui.
+    caricaMetaPerVino(client, [wineKey, ...correlati.map((c) => c.wineSlug ?? c.id)]),
+    createSupabasePriceIntelligenceService(client).storico({
+      // Lo slug e non l'UUID: `Wine` non porta `wine_id` e non deve iniziare a
+      // portarlo per una lettura sola. La vista espone entrambe le colonne.
+      wineSlug: wineKey,
+      formato: daMostrare.formato,
+    }),
   ]);
+
+  // Un guasto dello storico non toglie la pagina a nessuno: il pannello lo dice
+  // in un rigo e il riferimento sui comparabili, che non dipende da questa
+  // lettura, resta in piedi.
+  const vistaPrezzi = componiVista({
+    annunciAttivi: tutti.map((w) => ({
+      // L'identità dell'ANNUNCIO: è ciò che impedisce di contarlo due volte.
+      chiave: w.listingId ?? w.id,
+      wineKey: chiaveVino(w),
+      formato: w.formato,
+      prezzoCents: Math.round(w.prezzo * 100),
+    })),
+    wineKey,
+    formato: daMostrare.formato,
+    osservazioni: storico.ok ? storico.data : [],
+    storicoNonDisponibile: !storico.ok,
+  });
 
   return (
     <WineMetaProvider metaPerVino={metaPerVino}>
@@ -90,6 +126,7 @@ export default async function Page({
         wine={daMostrare}
         correlati={correlati}
         proprio={proprio}
+        vistaPrezzi={vistaPrezzi}
       />
     </WineMetaProvider>
   );

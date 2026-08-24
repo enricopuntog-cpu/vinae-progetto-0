@@ -158,6 +158,39 @@ describe("PriceIntelligenceService — lettura", () => {
     expect(filtri).toEqual({ wine_id: "w", formato: "Magnum 1,5 L" });
   });
 
+  it("cerca per wine_slug quando riceve lo slug invece dell'UUID (1B)", async () => {
+    // La via che usa /annuncio/[id]: il modello `Wine` porta lo slug del vino,
+    // non il suo UUID, e allargarlo per una lettura sola sarebbe un costo
+    // pagato da ogni consumatore di `Wine`. La colonna e esposta dalla stessa
+    // vista, quindi il ramo nuovo non tocca la tabella base.
+    const { client, relazioni, filtri } = fakeClient({ data: [] });
+    await createSupabasePriceIntelligenceService(client).storico({
+      wineSlug: "  conterno-monfortino-2015  ",
+      formato: "0,75 L",
+    });
+
+    expect(relazioni).toEqual(["wine_price_history"]);
+    expect(filtri).toEqual({ wine_slug: "conterno-monfortino-2015", formato: "0,75 L" });
+    // Un solo criterio sul vino: mai i due insieme.
+    expect(filtri).not.toHaveProperty("wine_id");
+  });
+
+  it("senza un vino identificabile non interroga nulla", async () => {
+    // Il tipo dell'input lo vieta, quindi qui si prova cosa succede quando il
+    // divieto viene aggirato: NON deve finire in `wine_slug = ''`, che
+    // tornerebbe zero righe e farebbe sembrare vuota la storia di un vino che
+    // non e stato nemmeno nominato.
+    const { client, relazioni } = fakeClient({ data: [] });
+    const esito = await createSupabasePriceIntelligenceService(client).storico({
+      wineId: "   ",
+    } as never);
+
+    expect(relazioni).toEqual([]);
+    expect(esito.ok).toBe(false);
+    if (esito.ok) return;
+    expect(esito.error).toBe("Storico prezzi non disponibile. Riprova.");
+  });
+
   it("una stringa vuota non e un formato: non filtra invece di svuotare", async () => {
     // «Non lo so» non e «il formato senza nome». Filtrare su '' darebbe zero
     // righe, e una storia piena sembrerebbe vuota.

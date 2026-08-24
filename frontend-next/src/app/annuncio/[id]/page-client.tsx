@@ -41,6 +41,8 @@ import { ProposalAction } from "@/components/vinea/ProposalAction";
 import { ListingOwnerActions } from "@/components/vinea/ListingOwnerActions";
 import { GalleriaVino } from "@/components/vinea/GalleriaVino";
 import { AperturaBottiglia } from "@/components/vinea/AperturaBottiglia";
+import { PriceIntelligencePanel } from "@/components/vinea/PriceIntelligencePanel";
+import type { VistaPriceIntelligence } from "@/lib/price-intelligence/insights";
 import type { AnnuncioProprietario } from "@/services/listing-service";
 import { PAGAMENTI_UI_ABILITATI } from "@/config/features";
 
@@ -48,6 +50,7 @@ export default function AnnuncioDetailPageClient({
   wine,
   correlati,
   proprio,
+  vistaPrezzi,
 }: {
   wine: Wine;
   correlati: Wine[];
@@ -56,6 +59,8 @@ export default function AnnuncioDetailPageClient({
    * ottiene dalla lettura filtrata dalla RLS, non da un confronto fatto qui.
    */
   proprio?: AnnuncioProprietario | null;
+  /** Price Intelligence 1B, già calcolata sul server. */
+  vistaPrezzi: VistaPriceIntelligence;
 }) {
   const router = useRouter();
   const listingId = wine.listingId ?? wine.id;
@@ -90,15 +95,23 @@ export default function AnnuncioDetailPageClient({
             <TrustBadge source="venditore" size="sm" />
           </div>
 
-          <div className="mt-4 flex items-baseline gap-3">
+          {/*
+            Qui accanto al prezzo c'era `prezzoMercato` barrato. È sparito con
+            la 1B, e non per ordine: quel numero era un campo che il venditore
+            scriveva da sé, senza fonte e senza verifica, e barrato accanto al
+            prezzo richiesto diceva «costerebbe di più altrove» con l'autorità
+            di un dato di mercato che non aveva. Il riferimento ora sta nel
+            pannello Price Intelligence più in basso, dove porta con sé quanti
+            annunci lo sostengono e da dove viene.
+
+            La colonna, il mapping in ListingService e il campo su `Wine`
+            restano dove sono: questo task toglie una superficie di lettura, non
+            un contratto.
+          */}
+          <div className="mt-4">
             <p className="font-serif text-4xl font-semibold text-bordeaux">
               {formatEUR(wine.prezzo)}
             </p>
-            {wine.prezzoMercato && wine.prezzoMercato > wine.prezzo && (
-              <p className="text-sm text-muted-foreground line-through">
-                {formatEUR(wine.prezzoMercato)}
-              </p>
-            )}
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             {wine.disponibili} {wine.disponibili === 1 ? "bottiglia disponibile" : "bottiglie disponibili"} • Formato {wine.formato}
@@ -186,6 +199,12 @@ export default function AnnuncioDetailPageClient({
           <MyBottleActions wineId={wine.wineSlug ?? wine.id} nomeVino={wine.nome} />
         </div>
       </div>
+
+      {/* Price Intelligence: subito sotto il blocco principale, prima delle
+          sezioni secondarie. Chi ha appena letto il prezzo richiesto trova qui
+          il contesto per giudicarlo — o l'ammissione che il contesto non c'è
+          ancora. */}
+      <PriceIntelligencePanel vista={vistaPrezzi} />
 
       {/* Quando berlo + abbinamenti. Indicizzati per vino, non per annuncio:
           su dati reali `id` è lo slug dell'annuncio e non troverebbe nulla. */}

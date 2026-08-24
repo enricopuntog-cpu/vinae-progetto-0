@@ -1383,9 +1383,32 @@ export interface PriceIntelligenceService {
    * Non aggrega, non ordina per prezzo, non filtra i valori anomali e non
    * restituisce un intervallo: restituisce ciò che è stato osservato.
    */
-  storico(input: {
-    wineId: string;
-    formato?: string;
-    limite?: number;
-  }): Promise<Result<WinePriceObservation[]>>;
+  storico(input: WinePriceStoricoInput): Promise<Result<WinePriceObservation[]>>;
 }
+
+/**
+ * Come si nomina il vino di cui si chiede la storia — Fase 1B.
+ *
+ * La 1A conosceva solo l'UUID, perché lo scriveva il database. Il primo
+ * chiamante vero, `/annuncio/[id]`, non ce l'ha: il modello `Wine` porta
+ * `wineSlug`, non `wineId`, e allargarlo per trasportare un UUID che serve a
+ * una sola lettura significherebbe far pagare a WineCard, DrinkWindow e a ogni
+ * altro consumatore di `Wine` il costo di una colonna che non useranno mai.
+ *
+ * Lo slug è una chiave altrettanto buona: `public.wine_price_history` espone
+ * `wine_slug` fra le sue undici colonne e il catalogo lo tiene unico. Le due
+ * forme sono alternative e non cumulative — `wineId?: never` sul ramo dello
+ * slug esiste perché passarli entrambi non è una comodità, è un chiamante che
+ * non sa quale dei due crede.
+ */
+export type WinePriceStoricoInput = {
+  /**
+   * Vedi `PriceIntelligenceService.storico`: omesso, la serie mescola capienze
+   * diverse. Il confronto è esatto (a meno degli spazi ai bordi), perché la
+   * stringa è scritta una volta dal catalogo e copiata verbatim
+   * sull'osservazione: allentarlo è l'unico modo per far collassare due formati
+   * davvero diversi in una serie sola.
+   */
+  formato?: string;
+  limite?: number;
+} & ({ wineId: string; wineSlug?: never } | { wineSlug: string; wineId?: never });
