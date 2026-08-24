@@ -6,143 +6,102 @@
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
 - Migration numbering is authoritative: Phase 11 = admitted AI extensions,
   Phase 12 = Club/Community, Phase 13 = Cutover.
-- `origin/main` is `a3ee7ae2db196f498085979f3a643f00b70e43f7` (after PR #73).
-- Work branch `feat/price-intelligence-1a-foundation` carries four commits from
-  that SHA, head `ac6a0e953b0440794ce703a418cd378429084cdd`, open as PR #74
-  toward `main`. The PR touches exactly eight files and does not contain
-  `.wslconfig`, which is pre-existing local work and was left untracked.
-- Price Intelligence 1A adds one migration,
-  `supabase/migrations/20260824120000_price_intelligence_1a_observations.sql`,
-  which has **not** been applied to any Supabase project. It creates
-  `public.wine_price_observations` (append-only history), enums
-  `price_observation_tipo` (`richiesta`, `vendita`) and
-  `price_observation_fonte` (single label `vinea_interno`), the read view
-  `public.wine_price_history`, three append-only triggers, one write door
-  `private.price_observation_registra`, and two domain triggers.
-- ASKING is a trigger on `public.listings`, not an RPC, because since
-  `20260819090000_annuncio_modifica_attivo.sql` a seller UPDATEs
-  `prezzo_cents` directly through PostgREST and at least six code paths write
-  `stato = 'attivo'`. The `riservato` -> `attivo` return is the one deliberate
-  exclusion: it is written by reservation-release paths on checkout expiry and
-  is not a new quotation.
-- SALE is a trigger on `public.orders` firing on the transition to `completato`,
-  reached by four existing paths, with price `orders.prezzo_cents` frozen on the
-  order. `completato` is **not** absorbing: `public.ordine_contesta` accepts it
-  among contestable states while payout has not transferred, so
-  `completato -> contestato -> completato` is the ordinary dispute-resolution
-  path. A `vendita` row therefore means "this order reached `completato` at this
-  price", not "this money can never come back"; re-entry writes no second row
-  and a later refund alters nothing. Weighting refunds statistically is a 1B
-  decision.
-- `anon` and `authenticated` have no privilege on the base table and read only
-  through the view. `service_role` deliberately keeps its GRANT, exactly as on
-  `audit_log`: rewrite, deletion and external source are closed by three
-  triggers and a row CHECK, which bind privileged writers too.
-- The grid `supabase/tests/price_intelligence_1a.sql` was really executed on
-  2026-08-24 on a disposable PostgreSQL 17.10 container, from empty, bootstrap
-  `9c` plus 36 migrations each in its own transaction. First clean run
-  **27 PASSA / 2 FALLISCE**; after correction **30 PASSA / 0 FALLISCE**; after
-  the VERIFY audit added cases 31-32, **32 PASSA / 0 FALLISCE**, with zero
-  fixture residue. It was not run against production.
-- Of the two original failures, case 21 was a defect in the grid (column
-  expectation mis-sorted) and case 27 was a false claim in the migration comment
-  about `service_role`'s privileges. Cases 31-32 came from a reading during the
-  VERIFY audit, not from a failure: they assert that leaving and re-entering
-  `completato` writes no second `vendita`.
-- `frontend-next` gains a read-only contract `PriceIntelligenceService` in
-  `src/services/types.ts` and the adapter
-  `src/services/price-intelligence/supabase-price-intelligence-service.ts`,
-  which reads the view and never the base table and has no write method.
-  No UI consumes it: charts, ranges, suggested price and `/vendi` are 1B.
-- VERIFY on `frontend-next` was green: lint 0 errors / 14 pre-existing warnings,
-  typecheck clean, **681 tests pass / 0 fail**, production build green,
-  `git diff --check` clean. `MIN_TESTS` was raised 669 -> 681 in
-  `.github/workflows/ci.yml` and in the prelaunch regression contract that
-  asserts the same string.
-- All PR #74 checks are green at head `ac6a0e9`: frontend, frontend-next
-  (`681 test superati (soglia 681)`), backend, Supabase Preview, Netlify deploy
-  preview, header and redirect rules.
-- No external price provider exists: no key, no HTTP call, no cron, no adapter,
-  no configuration flag. `/vendi` is unchanged and the 260/300/120 placeholder
-  in `useSellWizard.ts` was not modified.
-- The Cantina drink-window variant `quasi` is `bg-oro-scuro text-crema`,
-  7.38:1 against `--crema`, passing WCAG AA and AAA.
-- Personal profile photos and Club/Community remain live in `frontend-next/`.
-  The latest production migration ledger row for project
-  `pijnmcllmfgjmgsvtcej` remains `20260822000000_club_user_creation`.
-- `Club Vinea` is the display name; historical slug `circolo-vinea` and
-  technical identifiers remain unchanged.
-- Deliberate historical verification residues remain: one test bottle in state
-  `aperta`, the test account, and three objects in each of its `cantina` and
-  `annunci` folders.
+- Price Intelligence 1A shipped through PR #74. Feature head
+  `1b7f93e10bcb859a5e5cd5c0a3384494fa964c99` was squash-merged as
+  `f2469958a855ebfc6e37f99bdc292f6c423bb1a8`; the PR contains nine task files
+  and excludes `.wslconfig`, which is pre-existing local work.
+- Price Intelligence 1A consists of the migration
+  `20260824120000_price_intelligence_1a_observations.sql`, a read-only service
+  contract/adapter and deterministic adapter tests. It adds no UI, no smart
+  price in `/vendi`, no external provider and no paid API.
+- `public.wine_price_observations` is append-only and stores integer cents plus
+  snapshots of `wine_id` and `formato`. ASKING observations are written only on
+  real activation or an active price change; reservation release
+  `riservato -> attivo`, same-price changes and metadata-only changes write
+  nothing. SALE is written when an order first reaches `completato`; the partial
+  unique index on `origine_ref` prevents a second SALE after
+  `completato -> contestato -> completato`.
+- The public `security_invoker = off` view `public.wine_price_history` exposes
+  exactly 11 closed columns and excludes `origine_ref` and personal/domain
+  identifiers. `anon` and `authenticated` can SELECT the view but have no base
+  table privilege. The base table has RLS enabled and zero client policies.
+- Three privileged writer/trigger functions are `SECURITY DEFINER`, have an
+  empty `search_path` and no client/service-role EXECUTE ACL. UPDATE, DELETE and
+  TRUNCATE are also rejected by append-only triggers even for `service_role`.
+- The SQL grid ran on disposable PostgreSQL 17.10 from bootstrap `9c` through
+  all 36 migrations: final result **32 PASSA / 0 FALLISCE**, zero fixture
+  residue, never production. Cases 31-32 prove the real post-completion dispute
+  route does not duplicate SALE.
+- Full `frontend-next` verification was green: lint 0 errors / 14 pre-existing
+  warnings, typecheck clean, **681 pass / 0 fail** across 46 files and 17,238
+  expectation calls, production build green and `git diff --check` clean.
+  `MIN_TESTS` is 681 in CI and the prelaunch regression contract.
+- PR #74 and post-merge CI run `32734863290` were green for frontend,
+  frontend-next and backend. The merge commit's Supabase Preview check was also
+  green.
+- Production project ref was verified as `pijnmcllmfgjmgsvtcej`. The pre-merge
+  PostgREST baseline had 9 active public listings while both new objects were
+  absent (404). The post-merge Supabase integration applied only migration
+  `20260824120000`; the live ledger now ends at that version.
+- Production backfill is **9 ASKING / 0 SALE** for 9 active listings. All nine
+  ASKING rows match current `listings.prezzo_cents`; none was imported from
+  `prezzo_mercato_cents`. Every row has truthful acquisition timestamp
+  `2026-08-24 13:49:02.895298+00`, 35.895298 seconds after the merge timestamp.
+- Production catalogs confirm the expected table, enums, five enabled domain
+  and append-only triggers, CHECK constraints, unique partial SALE index,
+  zero policies, closed 11-column view, RLS and role privilege matrix.
+  Rollback-wrapped SQL proofs rejected anon/authenticated INSERT and rejected
+  service-role UPDATE/DELETE/TRUNCATE; row count remained 9.
+- Anonymous PostgREST SELECT/POST/PATCH/DELETE on the base table all fail with
+  HTTP 401 / PostgreSQL `42501`; anonymous view SELECT succeeds and reports 9
+  rows. Authenticated PostgREST was **NON VERIFICATO** because no existing
+  authenticated JWT was available and no account/fixture was created.
+- No external price provider exists: no key, HTTP call, cron, adapter or flag.
+  Activation stays fail-closed and would require a new migration and explicit
+  provider/budget authorization.
 
 ## ACTIVE TASK
 
-- Price Intelligence 1A VERIFY & SHIP is at the merge boundary: audit done,
-  grid re-run, full VERIFY green, PR #74 open with all checks green. No merge
-  and no production migration apply has happened yet.
-- The audit found one concrete defect and corrected it: the migration described
-  `completato` as terminal, which `public.ordine_contesta` contradicts. The
-  behaviour was already right — the partial unique index holds — but was
-  neither proven nor accurately described. Fixed in the migration comment, the
-  trigger's function comment, grid case 11's detail, new grid cases 31-32 and
-  `supabase/tests/README.md`.
-- Scope respected: no chart, trend, price range, suggested price, reliability
-  score, ranking or Price Intelligence UI. Those are 1B.
-- The listings state machine, the order lifecycle, payout, Stripe, release,
-  auto-release and disputes were not modified. Price Intelligence observes the
-  order domain and does not govern it.
-- The backfill dates to the real moment of acquisition (`now()`), never to
-  `published_at` or `created_at`, and never converts `prezzo_mercato_cents`
-  into authoritative market data.
-- No SALE backfill exists: historical `completato` orders produce no `vendita`
-  rows. `paid_at` and `orders.prezzo_cents` would make one provable, but a
-  backfill is a product decision, not a defect fix, and is left to 1B.
+- Price Intelligence 1A is implemented, audited, tested, merged, deployed and
+  verified in production. No migration reapplication was attempted after the
+  integration had already added its ledger row.
+- This `CHANGES.log` closure is the final Price Intelligence 1A repository
+  update. Once it reaches `main`, no 1A implementation, deployment or
+  documentation work remains; `.wslconfig` stays excluded.
+- No historical SALE backfill was added. Existing completed orders therefore
+  produce no historical SALE observation; whether 1B should use or weight such
+  history, including refunds, remains a product/statistical decision.
 
 ## NEXT STEPS
 
-1. Squash-merge PR #74 with green checks, then fetch and verify the final `origin/main` files and merge SHA.
-2. After merge, apply only `20260824120000_price_intelligence_1a_observations.sql` to production ref `pijnmcllmfgjmgsvtcej`, halting without writing if ref or environment do not match.
-3. Reread the production ledger and verify the effective table, triggers, view columns, ACLs, function search_path and the real ASKING backfill count against the pre-apply count of active listings.
+1. Begin Price Intelligence 1B only after its product scope is explicitly admitted.
+2. Decide in 1B whether historical completed orders and later refunds belong in sale statistics.
+3. Obtain an existing authenticated JWT before claiming an authenticated PostgREST runtime proof.
 
 ## BLOCKERS / NOTES
 
-- The migration has never run on production. The backfill's effect on real data
-  is unmeasured: how many active listings it will convert into `richiesta`
-  observations is known only for the disposable database.
-- The grid does not cover PostgREST: it proves `authenticated` cannot write in
-  SQL, not that the browser receives the correct `403`. It also proves sale
-  idempotency against a repetition, not against two simultaneous completions;
-  that case rests on the partial unique index alone.
-- `wine_price_history` is a `security_invoker = off` view, so the Supabase
-  linter will report `security_definer_view`. It is the expected signal, the
-  same as for `public_listings` and `public_clubs`.
-- The 12b and 12d grids are absent from `supabase/tests/README.md`. That gap
-  predates this task and was not filled from here.
-- No usable authenticated browser session was available. Authenticated
-  `/vendite`, the Seller Dashboard and the `quasi` badge over a real photograph
-  remain unobserved in a browser.
-- The authenticated Home has not been rendered. `Club che segui`, followed-club
-  exclusion, empty state and read-error behavior are proven by tests only.
-- The authenticated profile-photo smoke remains outstanding: upload, save,
-  Account and seller rendering, preset/initials switch and old-object cleanup.
-- The authenticated OPEN club-creation flow on production also remains unrun.
-- `oltre` (`bg-destructive/20 text-destructive`) remains a translucent badge
-  over an unknown photograph. It was outside PR #72 and remains uncorrected.
-- The seller dashboard has one data-model gap: no order completion timestamp is
-  client-readable, so both temporal series group by month of order receipt.
-- The Club 12d grid must not run against production: it writes users, clubs,
-  posts, replies, likes, reports and Storage objects. It does not cover
-  PostgREST, the browser image pipeline or concurrent same-name creation.
-- Phase 11 implementation is not open. A new two-provider F01 canary lacks
-  current authorization and paid-project confirmation.
-- Phase 13 has not started and must not be inferred from the public beta or
-  green checks.
-- The embedded Supabase test mailer remains unsuitable for real traffic; custom
-  SMTP depends on a verifiable custom domain.
-- Before enabling payments, remeasure scheduler configuration and obtain a
-  successful fail-closed health run; old failure counts are historical.
+- Price Intelligence 1A has no shipping blocker. Authenticated PostgREST remains
+  explicitly unverified at runtime; SQL role proofs and anonymous PostgREST
+  proofs are green.
+- The exact production migration ledger was not independently queried before
+  merge. The prior verified handoff recorded `20260822000000`; pre-merge 404s
+  proved the new objects absent, and the post-merge ledger records
+  `20260824120000` with a matching acquisition-time backfill.
+- A Supabase CLI dry-run exposed a temporary CLI database credential in local
+  command output during verification. It was never committed or documented;
+  all temporary credential and schema-dump files were deleted. The credential
+  was short-lived CLI material and was not reused after cleanup.
+- The grid does not simulate two simultaneous SALE transitions. Concurrency
+  safety rests on the live unique partial index, while the grid proves repeated
+  and post-dispute transitions serially.
+- `wine_price_history` intentionally uses `security_invoker = off`, so the
+  Supabase linter's `security_definer_view` signal is expected, as for the other
+  public closed-column views.
+- Deliberate historical verification residues unrelated to this task remain:
+  one test bottle in state `aperta`, the test account, and three objects in each
+  of its `cantina` and `annunci` folders.
+- Phase 11 implementation is not open. Phase 13 has not started and must not be
+  inferred from the public beta, green checks or Price Intelligence 1A.
 - External Price Intelligence providers remain OFF and fail-closed. Turning one
-  on requires three explicit acts in a NEW migration — an enum label, the row
-  CHECK, and a write path — plus cabin authorization of provider, plan, budget
-  and credentials. None of the three can happen by accident.
+  on requires explicit authorization plus a new enum label, CHECK update and
+  controlled write path in a new migration.
