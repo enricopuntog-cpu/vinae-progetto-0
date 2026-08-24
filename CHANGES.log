@@ -6,189 +6,102 @@
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
 - Migration numbering is authoritative: Phase 11 = admitted AI extensions,
   Phase 12 = Club/Community, Phase 13 = Cutover.
-- Migration `20260822000000_club_user_creation.sql` adds `clubs.owner_id`
-  (nullable, so system/legacy clubs keep working), `clubs.posting_mode`
-  (`OPEN` default, CHECK `OPEN|OWNER_ONLY`) and `clubs.cover_image`; creates the
-  dedicated public bucket `club-covers` (5242880 bytes, `image/webp` only) with
-  four owner-folder policies; adds `clubs_cover_image_vinea_check`; adds two
-  BEFORE INSERT guards enforcing OWNER_ONLY on `club_posts` and
-  `club_post_risposte`; creates `public.club_crea`; and rebuilds `public_clubs`
-  with `drop view` + `create view`, because `create or replace view` cannot
-  insert columns into an existing column list.
-- `public.club_crea(p_nome text, p_descrizione text, p_regole text[],
-  p_posting_mode text, p_cover_image text) returns public.clubs` is
-  `SECURITY DEFINER` with `search_path = public`, revoked from `public` and
-  granted only to `authenticated`. Its measured ACL is
-  `{postgres=X, service_role=X, authenticated=X}`, the same shape as
-  `segnalazione_invia`; `anon` has no execute. It requires `auth.uid()`, an
-  existing profile and a non-suspended, non-removed account; consumes the
-  rate-limit bucket `club:crea` at 5/hour per user; validates nome,
-  descrizione, regole, posting_mode and the cover path; assigns
-  `owner_id = auth.uid()`; generates the slug server-side with progressive
-  numeric suffixes on collision; and inserts the creator's `club_memberships`
-  row in the same transaction. `clubs` has no client INSERT grant.
-- Cover references are stored as the path `<uid>/<uuid>.webp`, never an HTTP
-  URL. The DB CHECK, the Storage policy regex, the RPC regex and
-  `coverSicura()` agree on the same anchored form; the public origin is
-  recomposed from `NEXT_PUBLIC_SUPABASE_URL` and fails closed when it is
-  missing or not an HTTP origin.
-- The frontend flow is prepare, upload, call `club_crea`, and delete the
-  just-created object when the RPC fails. Preset Vinea covers are prepared and
-  uploaded like any other cover, so the database holds one reference format.
-  Covers are decoded, redrawn and re-encoded as WebP, so original metadata does
-  not survive; there is no manual crop editor.
-- `Circolo Vinea` is renamed to `Club Vinea` as a display name only; the
-  historical slug `circolo-vinea` and all technical identifiers are unchanged.
-- `supabase/tests/12d_club_creazione_utente.sql` WAS EXECUTED on 2026-08-24 on
-  PostgreSQL 17.10 in a disposable container, from empty, with the 9c bootstrap
-  and all 35 repository migrations applied in order, each in its own
-  transaction: first run 47 pass / 1 fail, second and definitive run
-  **48 pass / 0 fail**. The single failure was a grid defect (case 43 used the
-  report reason `Fuori tema`, absent from `public.report_reasons` for target
-  `post`; the correct label is `Off-topic per il club`), not a migration defect.
-- Case 47 of that grid passes vacuously: `circolo-vinea` is not created by any
-  migration. The display rename was instead verified on production, where
-  `public_clubs` returns `circolo-vinea` with `nome = 'Club Vinea'`.
-- `frontend-next` measured on the seller-dashboard branch: `bun run lint`
-  0 errors / 14 warnings (all pre-existing `<img>` warnings), `bun run
-  typecheck` clean, `bun run test` **650 pass / 0 fail** across 45 files,
-  `bun run build` successful, `git diff --check` clean. The Home route `/`
-  stays `ƒ` (server-rendered on demand) and `/vendite` stays `○`.
-- `MIN_TESTS` in `.github/workflows/ci.yml` is 650, together with its
-  regression contract in
-  `frontend-next/src/lib/beta/prelaunch-contract.test.ts`.
-- Personal profile photos are live in `frontend-next/`. The latest row in the
-  production migration ledger of project `pijnmcllmfgjmgsvtcej` is
-  `20260822000000_club_user_creation`.
-- The production migration ledger and the effective Club objects on
-  `pijnmcllmfgjmgsvtcej` — the `club_crea` ACL, the `club-covers` Storage
-  policies, `clubs_cover_image_vinea_check` and the two OWNER_ONLY BEFORE
-  INSERT triggers — have been reread and verified. They are no longer
-  anon-level inference.
-- The authenticated browser smoke test for profile photos was NOT run: no
-  usable session for the existing test account was available, and no new
-  account or fixture was created.
+- FAST UX cleanup is merged on `origin/main` as
+  `9764d5df92bbf377c7f367921ab557eb3e8f0629`, PR #72. `/vendite` now has a
+  local server-side guard: `await connection()` prevents static prerender,
+  `getSupabaseServerClient()` + `auth.getUser()` verifies the session, and an
+  anonymous request receives `307 Location: /accedi`. No `middleware.ts` or
+  `proxy.ts` exists; the Seller Dashboard implementation is unchanged.
+- The production build reports `/vendite` as `ƒ` (dynamic), not `○` (static).
+  The anonymous production smoke on
+  `https://timely-lokum-43a12e.netlify.app/vendite` returned `307` to
+  `/accedi`, with a private/no-store cache policy.
+- The Cantina drink-window variant `quasi` is now
+  `bg-oro-scuro text-crema`. The opaque `--oro-scuro: #5e4d2c` gives 7.38:1
+  against `--crema` on every underlying photograph, passing WCAG AA and AAA.
+  The replaced translucent form measured 1.10:1 on black and 13.12:1 on
+  white. `attesa`, `pronto`, `ideale`, `presto`, `oltre` and `none` were not
+  changed.
+- `MIN_TESTS` in `.github/workflows/ci.yml` and its regression contract are
+  aligned to the measured suite total, 669.
+- Local VERIFY was green: lint 0 errors / 14 pre-existing warnings, typecheck
+  clean, 669 tests pass / 0 fail, production build green, `/vendite` shown as
+  `ƒ`, and `git diff --check` clean. After the threshold micro-change, the
+  focused prelaunch contract passed 19 / 0.
+- PR #72 checks were green at head `848ba46f3488319604d241462bc863b7286dea42`:
+  frontend, frontend-next, backend, Netlify deploy preview and Netlify rules.
+  The post-merge CI run 32708754289 on `9764d5d` is also green in all three
+  jobs. Supabase Preview was skipped on the PR and succeeded post-merge; the
+  change contains no migration and required no Supabase verification.
+- Personal profile photos and Club/Community remain live in `frontend-next/`.
+  The latest production migration ledger row for project
+  `pijnmcllmfgjmgsvtcej` remains `20260822000000_club_user_creation`.
+- Migration `20260822000000_club_user_creation.sql` adds user-owned clubs,
+  OWNER_ONLY posting, WebP cover Storage and `public.club_crea`. Its disposable
+  PostgreSQL 17.10 grid passed 48 / 0 after applying all 35 migrations in
+  order. Production objects, ACLs, policies, checks and triggers were reread
+  and verified after deployment.
+- `Club Vinea` is the display name; historical slug `circolo-vinea` and
+  technical identifiers remain unchanged. Anonymous production smoke proved
+  the Home Club discovery block and its real link.
 - Deliberate historical verification residues remain: one test bottle in state
   `aperta`, the test account, and three objects in each of its `cantina` and
   `annunci` folders.
 
 ## ACTIVE TASK
 
-- The seller dashboard is merged on `origin/main`. The PR carried no migration,
-  RPC, schema or policy change, so no Supabase deploy or remote verification was
-  required or performed.
-- `/vendite` is the seller dashboard. `src/app/vendite/page.tsx` keeps the
-  metadata and renders the new `src/app/vendite/page-client.tsx`; derivations
-  live in `src/lib/vendite/dashboard.ts` and are proven by
-  `src/lib/vendite/dashboard.test.ts` with 33 cases.
-- One read of the orders feeds everything. `OrderList.tsx` is split into the
-  fetching `OrderList` (still used by `/acquisti`) and the presentational
-  `OrderListView`; the dashboard loads `OrderService.vendite()` and
-  `ListingService.mieiAnnunci()` in one `Promise.all` and hands the rows to the
-  view. `sellerStatusDaOrdine` stays the single derivation.
-- `ListingService.mieiAnnunci()` is the only new read: `listings` filtered by
-  `.eq("seller_id", user.id)` with the existing `COLONNE_PROPRIETARIO`, ordered
-  by `created_at` desc, returning `[]` without a session and on error. The
-  explicit `seller_id` filter is defence in depth over `listings_select_own`;
-  `seller_id` and `created_at` are both in the closed column GRANT of
-  `20260729230000`. `annuncioProprietarioDaRiga()` is extracted so
-  `mioAnnuncio()` and `mieiAnnunci()` map rows identically.
-- Four KPI, all from real columns: annunci in `stato = 'attivo'`; orders whose
-  seller status is `nuovo`, `da_preparare`, `da_spedire` or `contestato`;
-  orders whose seller status is `completato`; and the sum of `prezzo_cents`
-  over those completed orders. The last is labelled `Valore completate` with
-  the hint `Prezzo venditore, non un incassato` — it is not an incassato, a
-  payout or a balance, and a test forbids those words in the page.
-- Two charts reuse `src/components/ui/chart.tsx` and the `recharts ^2.15.4`
-  already in `package.json`; no library was added. One is orders per seller
-  status, the other orders received per month over a six-month window.
-- **Both** temporal series are bucketed by the UTC month of `created_at`, read
-  from the ISO string. The gold series is therefore the share of the orders
-  received in that month that is completed *today*, not the completions that
-  happened in that month: no completion timestamp is readable by the client,
-  because `ricezione_confermata_at` covers only explicit confirmation and stays
-  null when auto-release closes the order. It is labelled `Di cui oggi
-  completati`, the caption repeats it to the reader, and a test forbids the bare
-  label `Completati`.
-- `bun run build` compiled `recharts` and `src/components/ui/chart.tsx` for the
-  first time in this repository; the dashboard is their first consumer.
-  `/vendite` stays `○` (prerendered static shell).
-- Home / Clubs discovery is merged as `5504dfe` on `origin/main`. PR #69
-  carried no migration, so no Supabase deploy or remote verification was
-  required or performed. CI read `617 test superati (soglia 617)`.
-- Four files changed, two created: `frontend-next/src/app/page.tsx` reads clubs
-  server-side, `frontend-next/src/app/page-client.tsx` renders the section,
-  `frontend-next/src/lib/phase12/club-home.ts` holds the two pure selections
-  and `club-home.test.ts` proves them with 9 cases; `.github/workflows/ci.yml`
-  and `prelaunch-contract.test.ts` carry the test floor.
-- The Home now reads listings, `ClubService.elenco()` and `auth.getUser()` in
-  one `Promise.all`, the same shape as `src/app/community/page.tsx`. No new
-  client state, no effect, no loading skeleton: the section is server-fed and
-  read-only.
-- Followed clubs are `seguito === true` from `public_clubs`, which the view
-  computes with `auth.uid()`. Discovery is the complement — `!seguito` — sorted
-  by the existing `membri` count with a `nome` tiebreak, capped at three. No new
-  RPC, schema, policy, scoring or recommendation path was added.
-- Each card links to `/community/[slug]`; the section header links to
-  `/community`, as does the CTA of the "no clubs followed" empty state. Follow
-  stays in `/community` and in the club page: the Home carries no write.
-- Club creation by an authenticated user is complete and behaviourally verified
-  on a disposable database. PR #67 is merged as `bced46b` on `origin/main`, with
-  every check green including the Supabase Preview on project
-  `hkarvwaixdidmddnjxok`.
-- No browser session was opened against a database carrying the Club migration.
-- The pre-existing untracked `.wslconfig` remains untouched.
+- VERIFY & SHIP for `/vendite` auth guard and the `quasi` contrast correction is
+  complete. No implementation, CI, merge or anonymous-smoke failure remains.
+- Audit found no concrete defect to correct. The route guard is local and
+  server-side; an anonymous request redirects to bare `/accedi`; the dashboard
+  renders only after a verified user; `connection()` is effective; no global
+  interceptor exists; KPI, charts, `ListingService`, `OrderService` and listing
+  lifecycle are untouched.
+- The `quasi` change is isolated to its phase mapping plus one additive Tailwind
+  colour token. The token has one `:root` definition and one `@theme` mapping;
+  no theme override or unrelated runtime use exists. Other `bg-oro/25` uses are
+  separate non-`quasi` UI and were intentionally not changed.
+- Commit `848ba46f3488319604d241462bc863b7286dea42` was pushed on
+  `fast/vendite-guard-badge-quasi`; PR #72 was squash-merged. Final
+  `origin/main` is `9764d5df92bbf377c7f367921ab557eb3e8f0629` and contains the
+  guard, badge, tests and `MIN_TESTS: "669"`.
+- No migration, RPC, schema or policy change was made. No Supabase data was
+  written. No Price Intelligence work was started.
 
 ## NEXT STEPS
 
-1. Run one authenticated browser smoke of `/vendite` on the beta with an existing account: the four KPI, the two charts, the listing cards and the sales list must agree with that account's real data.
-2. In the same session, close the two older authenticated debts on the same account: the Home `Club che segui` block and the profile-photo flow (upload, save, Account and seller render, preset/initials switch, old-object cleanup).
-3. Decide whether `/vendite` gets a middleware guard: today an anonymous visitor reaches the route and sees the `vendite()` error text, a branch proven by unit test only.
+1. With an already-existing authenticated session, smoke-test `/vendite`: dashboard content and the `quasi` badge over a real photograph.
+2. With the same existing session, smoke-test the Home `Club che segui` block and followed-club exclusion from discovery.
+3. With the same existing session, smoke-test profile-photo upload/save/render, preset-or-initials switch and old-object cleanup.
 
 ## BLOCKERS / NOTES
 
-- The 12d grid never ran against the real project, and must not: it writes
-  users, clubs, posts, replies, likes, reports and Storage objects.
-- The 12d grid does not cover PostgREST, the browser image pipeline, or
-  concurrency. Two simultaneous creations of the same name are held only by the
-  primary key on `clubs.slug`, not by a measured case.
-- The Home Club section was smoke-tested on production ANONYMOUSLY only:
-  `https://timely-lokum-43a12e.netlify.app/` renders the `Club` heading, the
-  `Tutti i Club →` link, the `Scopri i Club` block and one real card,
-  `Club Vinea` with `1 membri`, pointing at `/community/circolo-vinea`. That
-  proves the server read, the discovery selection and the links.
-- The AUTHENTICATED Home has never been rendered: no usable session existed and
-  none was created. `Club che segui`, the exclusion of a followed club from
-  discovery on real data, the "no clubs followed" empty state and the
-  read-error branch are proven by unit tests only.
-- The authenticated smoke test for profile photos is outstanding: upload, save,
-  Account render, seller render, preset/initials switch and old-object cleanup
-  have not been exercised against production. No new accounts or complex
-  fixtures may be created for it.
-- The authenticated Club and avatar smokes stay open debt and were deliberately
-  outside the dashboard task: the authenticated Home, the OPEN club creation
-  flow on production and the profile-photo smoke are still unrun.
-- The seller dashboard was NOT smoke-tested authenticated either: no usable
-  session for an existing account was available, and none was created. The KPI,
-  the two charts, the listing cards and the sales list are proven by unit tests
-  and by a green build only, never against real seller data in a browser.
-- The seller dashboard has one real data gap: no order completion timestamp is
-  readable by the client, so both temporal series count orders by month of
-  receipt. A true "completed per month" series would need a new column or view
-  and was not invented.
-- `/vendite` has no middleware guard. Without a session the page renders the
-  `vendite()` error text, not zeroed KPI; that branch is proven by unit test
-  only, never in a browser.
-- Phase 11 implementation is not open: the historical trial failed, and a new
-  two-provider F01 canary lacks current authorization and paid-project
-  confirmation. Provider keys/budget, PhotoRoom timing and legal review remain
-  external/product prerequisites.
+- No usable authenticated browser session was available. Per scope, no account
+  or fixture was created. Authenticated `/vendite`, the Seller Dashboard and the
+  `quasi` badge over a real photograph remain unobserved in a browser, although
+  the server guard, contrast arithmetic, full suite, build, CI and anonymous
+  production redirect are verified.
+- `oltre` (`bg-destructive/20 text-destructive`) remains a translucent badge
+  over an unknown photograph. It was outside PR #72 and is not part of the
+  completed `quasi` task.
+- The authenticated Home has not been rendered. `Club che segui`, followed-club
+  exclusion, empty state and read-error behavior are proven by tests only.
+- The authenticated profile-photo smoke remains outstanding: upload, save,
+  Account and seller rendering, preset/initials switch and old-object cleanup.
+- The authenticated OPEN club-creation flow on production also remains unrun.
+- The seller dashboard has one data-model gap: no order completion timestamp is
+  client-readable, so both temporal series group by month of order receipt. A
+  true completed-per-month series needs a new column or view and was not
+  invented.
+- The Club 12d grid must not run against production: it writes users, clubs,
+  posts, replies, likes, reports and Storage objects. It does not cover
+  PostgREST, the browser image pipeline or concurrent same-name creation.
+- Phase 11 implementation is not open. A new two-provider F01 canary lacks
+  current authorization and paid-project confirmation; provider keys/budget,
+  PhotoRoom timing and legal review remain external product prerequisites.
 - Phase 13 has not started and must not be inferred from the public beta or
   green checks.
 - The embedded Supabase test mailer remains unsuitable for real traffic; custom
   SMTP depends on a verifiable custom domain.
-- Before enabling payments, remeasure the scheduler configuration and obtain a
-  successful fail-closed health run; old failure counts are historical, not a
-  current measurement.
-- The `quasi` badge (`bg-oro/25 text-antracite`) is still below contrast on a
-  dark photo and remains outside this task.
+- Before enabling payments, remeasure scheduler configuration and obtain a
+  successful fail-closed health run; old failure counts are historical.
