@@ -251,22 +251,38 @@ async function scrittura(
 }
 
 export function createListingService(client: SupabaseClient | null): ListingService {
+  /**
+   * Un'unica query alimenta entrambe le firme di lettura. `elenco()` conserva la
+   * tolleranza storica delle pagine catalogo; `elencoConEsito()` lascia invece al
+   * chiamante la possibilità di distinguere un elenco davvero vuoto da una
+   * lettura fallita, senza propagare dettagli PostgREST.
+   */
+  const leggiElenco = async (): Promise<Result<Wine[]>> => {
+    if (!client) return NESSUN_CLIENT;
+
+    const { data, error } = await client
+      .from("public_listings")
+      .select(COLONNE)
+      .order("pubblicato_at", { ascending: false });
+
+    if (error) {
+      segnalaErrore("elenco", error);
+      return { ok: false, error: "Annunci attivi non disponibili." };
+    }
+
+    return {
+      ok: true,
+      data: (data as unknown as PublicListingRow[]).map(rigaAWine),
+    };
+  };
+
   return {
     async elenco(): Promise<Wine[]> {
-      if (!client) return [];
-
-      const { data, error } = await client
-        .from("public_listings")
-        .select(COLONNE)
-        .order("pubblicato_at", { ascending: false });
-
-      if (error) {
-        segnalaErrore("elenco", error);
-        return [];
-      }
-
-      return (data as unknown as PublicListingRow[]).map(rigaAWine);
+      const esito = await leggiElenco();
+      return esito.ok ? esito.data : [];
     },
+
+    elencoConEsito: leggiElenco,
 
     async dettaglio(slug: string): Promise<Wine | null> {
       if (!client) return null;

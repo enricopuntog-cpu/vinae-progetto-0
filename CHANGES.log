@@ -92,9 +92,52 @@
   next to the asking price. The DB column, the `ListingService` mapping, the
   `Wine` field and `WineCard` are untouched: only that one reading surface was
   removed.
+- Smart Sell Price is live in the `/vendi` price step. The hard-coded
+  `260 / 300 / 120` producer placeholder is gone from the panel and from the
+  price-field placeholder; no other numeric fallback replaced it.
+- `frontend-next/src/lib/price-intelligence/smart-sell-price.ts` defines no
+  algorithm. It composes the existing 1B primitives `comparabiliAttivi`,
+  `riferimentoRichieste` and `copertura`. Threshold, median, exact-format rule,
+  listing-identity dedup and coverage band exist in exactly one place.
+- Comparables are the active public listings in `public_listings` for the same
+  wine key and the same exact format. Under 3 comparables no number is produced;
+  at 3 or more the panel shows the 1B median, the min→max range, the comparable
+  count and the coverage band, always sourced as "Dati interni Vinea".
+- SALE observations have no input path: `smartSellPrice` takes no observations
+  parameter, so sale history cannot move the suggestion.
+- The suggestion never writes the price field. Only "Usa questo prezzo" applies
+  it, and it applies the median exactly. The manual field stays usable in the
+  loading, insufficient-data and failed-read states.
+- `richiedeConfermaPrezzoPrecedente` separates "prefilled" from "chosen": an
+  untouched inherited price still requires confirmation, while typing a price or
+  applying the suggestion counts as an explicit choice and skips it.
+- `ListingService` gained `elencoConEsito()` over the same query as `elenco()`.
+  A failed read is distinct from an empty list, so a PostgREST error no longer
+  reads as "no comparables"; `elenco()` stays tolerant for the catalog pages and
+  the provider error detail stays internal.
+- The Smart Sell Price read is keyed by `[wineKey, formato]`, so a response for
+  the previous bottle cannot survive a bottle change or overwrite the current
+  one, and loading, insufficient-data and error remain three distinct states.
 
 ## ACTIVE TASK
 
+- Smart Sell Price for `/vendi` is delivered on branch `feat/smart-sell-price`
+  off `main` at `6fe86e566738cdb6b97df7227e903d14d0bb3717`, as PR #78. The PR
+  carries exactly twelve task files and excludes `.wslconfig`, which stays
+  pre-existing local work. No migration, Supabase write or provider activation
+  was performed: the change is frontend-only.
+- Full `frontend-next` verification ran once: `bun run lint` 0 errors with the
+  14 pre-existing `<img>` warnings, `bun run typecheck` clean, `bun run test`
+  **736 pass / 0 fail** across 48 files and 17,363 expectation calls,
+  `bun run build` green, `git diff --check` clean.
+- CI `MIN_TESTS` was raised 717 -> 736 in `.github/workflows/ci.yml` and in the
+  prelaunch regression contract, which asserts the literal. Only that contract
+  file was re-run afterwards: 19 pass / 0 fail.
+- The VERIFY audit found no further concrete defect to fix: the placeholder
+  removal, the 1B reuse, the sub-threshold silence, the explicit-application
+  path and the keyed async state were already correct in the BUILD.
+- Production smoke on the deployed beta is recorded separately below once the
+  merge has been deployed.
 - Price Intelligence 1B is delivered. PR #76 was squash-merged as
   `b57aa0b5a444b95253ed88efbc0d1eb0b83804ef`; it carried exactly eleven task
   files and excluded `.wslconfig`. PR checks and post-merge run `32764270537`
@@ -132,8 +175,8 @@
 ## NEXT STEPS
 
 1. Decide whether completed-order sale history and later refunds belong in the price reference.
-2. Re-check the 1B panel on a listing once a wine reaches 3 comparable active listings.
-3. Start Smart Sell Price in `/vendi` only under an explicit new task.
+2. Re-check the Smart Sell Price suggested branch once a wine reaches 3 comparable active listings.
+3. Configure the Phase 7g scheduler variables before any merge that can reactivate `payouts-release`.
 
 ## BLOCKERS / NOTES
 
@@ -169,4 +212,13 @@
   nine active listings are nine distinct wines. Every listing page therefore
   shows "Storico in formazione" with no numeric reference, as the smoke
   confirmed, until some wine reaches 3 comparable active listings.
-- Smart Sell Price in `/vendi` was not started and remains out of 1B scope.
+- The Phase 7g payout scheduler remains unconfigured. `gh variable list` and
+  `gh secret list` were both empty on 11 August 2026 and `Phase 7 - auto-release
+  payouts` stood at 18 runs out of 18 in `failure`. Configuring those values
+  requires the real project credentials and is outside any assisted session; the
+  environment must be readable before a merge that can reactivate the function.
+  Smart Sell Price does not touch payments, payouts or that workflow.
+- With production at 9 ASKING / 0 SALE across nine distinct wines, no wine has
+  3 comparable active listings, so `/vendi` is expected to show "Dati
+  insufficienti per suggerire un prezzo". The suggested branch stays covered by
+  the deterministic tests until a real market reaches the threshold.
