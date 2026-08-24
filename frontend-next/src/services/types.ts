@@ -239,7 +239,19 @@ export interface CellarService {
  * singolo annuncio per slug senza scaricare l'intero elenco.
  */
 export interface ListingReadService {
+  /**
+   * Lettura tollerante usata dalle pagine catalogo: un errore diventa un elenco
+   * vuoto, così la pagina resta disponibile senza esporre dettagli tecnici.
+   */
   elenco(): Promise<Wine[]>;
+  /**
+   * La stessa lettura, ma con l'esito distinto dall'elenco vuoto.
+   *
+   * Serve ai chiamanti per cui «nessuna riga» e «lettura fallita» producono due
+   * messaggi diversi, come Smart Sell Price. L'errore resta mediato e non porta
+   * mai il messaggio di PostgreSQL.
+   */
+  elencoConEsito(): Promise<Result<Wine[]>>;
   dettaglio(slug: string): Promise<Wine | null>;
 }
 

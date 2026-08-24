@@ -369,7 +369,10 @@ describe("riuso delle fotografie fra cantina e annunci", () => {
 
   it("chiede conferma del prezzo ereditato invece di applicarlo in silenzio", () => {
     const wizard = senzaCommenti(leggi("src/hooks/useSellWizard.ts"));
-    expect(wizard).toInclude("prezzoPrecedente !== null && !prezzoConfermato");
+    expect(wizard).toInclude("richiedeConfermaPrezzoPrecedente({");
+    expect(wizard).toInclude("prezzoPrecedenteCents: prezzoPrecedente");
+    expect(wizard).toInclude("sceltaEsplicita: prezzoSceltoDaUtente");
+    expect(wizard).toInclude("confermato: prezzoConfermato");
     expect(wizard).toInclude("Conferma il prezzo prima di pubblicare.");
   });
 

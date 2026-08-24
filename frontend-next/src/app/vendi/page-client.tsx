@@ -34,6 +34,8 @@ import { FotoGriglia } from "@/components/vinea/FotoGriglia";
 import { BetaActionNotice } from "@/components/vinea/BetaActionNotice";
 import { BetaDeliverySelector } from "@/components/vinea/BetaDeliverySelector";
 import { BottleSelector } from "@/app/vendi/bottle-selector";
+import { SmartSellPricePanel } from "@/components/vinea/SmartSellPricePanel";
+import { chiaveVino } from "@/lib/price-intelligence/insights";
 import { AI_UI } from "@/config/features";
 
 /**
@@ -85,13 +87,17 @@ export default function VendiPageClient() {
     isVendita,
     d,
     set,
-    suggerito,
+    impostaPrezzo,
+    smartPrice,
+    smartPriceInCorso,
+    usaPrezzoSuggerito,
     foto,
     fotoInCorso,
     caricaFoto,
     rimuoviFoto,
     riusoInCorso,
     prezzoPrecedente,
+    prezzoPrecedenteDaConfermare,
     prezzoConfermato,
     setPrezzoConfermato,
     inviando,
@@ -109,6 +115,9 @@ export default function VendiPageClient() {
     initialMode,
     onNavigate: (path) => router.push(path),
     bottleUnitId,
+    identitaVino: vinoBottiglia
+      ? { wineKey: chiaveVino(vinoBottiglia), formato: vinoBottiglia.formato }
+      : null,
     onCantinaCambiata: ricaricaCantina,
   });
 
@@ -547,12 +556,11 @@ export default function VendiPageClient() {
         {isVendita && step === 5 && (
           <div className="space-y-4">
             <h2 className="font-serif text-2xl">Prezzo</h2>
-            <div className="rounded-xl border border-oro/40 bg-oro/10 p-4">
-              <p className="flex items-center gap-2 text-sm">
-                <Tag className="h-4 w-4 text-oro" /> Riferimento beta locale basato sui dati
-                disponibili: <b>{formatEUR(suggerito)}</b>
-              </p>
-            </div>
+            <SmartSellPricePanel
+              suggerimento={smartPrice}
+              inCorso={smartPriceInCorso}
+              onUsaPrezzo={usaPrezzoSuggerito}
+            />
             {/*
               Il prezzo dell'annuncio precedente di questa bottiglia è già nel
               campo: chi rimette in vendita non lo ridigita. Ma non si pubblica
@@ -560,7 +568,7 @@ export default function VendiPageClient() {
               tempo, e un prezzo ereditato in silenzio è un prezzo che nessuno
               ha deciso.
             */}
-            {prezzoPrecedente !== null ? (
+            {prezzoPrecedenteDaConfermare && prezzoPrecedente !== null ? (
               <label className="flex items-start gap-2 rounded-xl border border-border bg-card p-3 text-sm">
                 <input
                   type="checkbox"
@@ -581,8 +589,8 @@ export default function VendiPageClient() {
                 <Input
                   type="number"
                   value={d.prezzo}
-                  onChange={(e) => set("prezzo")(e.target.value)}
-                  placeholder={String(suggerito)}
+                  onChange={(e) => impostaPrezzo(e.target.value)}
+                  placeholder="Inserisci il prezzo"
                 />
               </Field>
               <Field label="Bottiglie disponibili">

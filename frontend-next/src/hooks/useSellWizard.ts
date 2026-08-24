@@ -8,6 +8,11 @@ import { createCellarService } from "@/services/cellar-service";
 import { createListingService } from "@/services/listing-service";
 import { createSupabaseAiService } from "@/services/phase10/supabase-ai-service";
 import { campiDaSuggerimento } from "@/lib/phase10/catalogazione";
+import {
+  smartSellPriceDaLettura,
+  type SmartSellPrice,
+} from "@/lib/price-intelligence/smart-sell-price";
+import { euroDaCents, richiedeConfermaPrezzoPrecedente } from "@/lib/vendi/prezzo";
 import { AI_UI, AZIONI_IA_ABILITATE } from "@/config/features";
 import type {
   CatalogazioneSuggerimento,
@@ -34,6 +39,18 @@ type SellWizardOptions = {
    * Quando c'è, il wizard non descrive più un vino: lo ha già.
    */
   bottleUnitId?: string | null;
+  /**
+   * L'identità reale del vino dell'unità che si sta vendendo, per Smart Sell
+   * Price: la chiave con cui due annunci sono lo stesso vino e il formato
+   * esatto della bottiglia.
+   *
+   * Arriva dalla pagina e non si ricava qui: il vino dell'unità vive nello
+   * store della Cantina, che la pagina ha già letto. Chiederlo di nuovo da
+   * dentro il wizard sarebbe una seconda lettura per righe già in memoria.
+   *
+   * `null` finché la Cantina non è arrivata, o quando non si sta vendendo.
+   */
+  identitaVino?: { wineKey: string; formato: string } | null;
   /**
    * Da chiamare quando il wizard ha cambiato la cantina, cioè quando ha coniato
    * una bottiglia nuova o cambiato lo stato di un annuncio.
@@ -100,6 +117,7 @@ export function useSellWizard({
   initialMode,
   onNavigate,
   bottleUnitId,
+  identitaVino,
   onCantinaCambiata,
 }: SellWizardOptions) {
   const daCantina = Boolean(bottleUnitId);
@@ -145,6 +163,11 @@ export function useSellWizard({
   const [riusoInCorso, setRiusoInCorso] = useState(daCantina);
   const [prezzoPrecedente, setPrezzoPrecedente] = useState<number | null>(null);
   const [prezzoConfermato, setPrezzoConfermato] = useState(false);
+  // «L'utente ha scelto un prezzo», che non è «nel campo c'è un prezzo».
+  // Il precompilato dell'annuncio precedente non lo accende (lo scrive
+  // l'effetto qui sotto con `setD`, non `impostaPrezzo`); digitare o applicare
+  // il suggerimento sì. Vedi `richiedeConfermaPrezzoPrecedente`.
+  const [prezzoSceltoDaUtente, setPrezzoSceltoDaUtente] = useState(false);
   // Marcatore di "già chiesto" in un ref e non in state: in state il setState
   // provoca un render, il render rifà l'effetto perché il marcatore è fra le
   // sue dipendenze, e la pulizia annulla la richiesta appena partita. È la
@@ -184,8 +207,9 @@ export function useSellWizard({
     };
   }, [bottleUnitId]);
 
-  const listingService = useMemo(() => createListingService(getSupabaseClient()), []);
-  const cellarService = useMemo(() => createCellarService(getSupabaseClient()), []);
+  const supabase = useMemo(() => getSupabaseClient(), []);
+  const listingService = useMemo(() => createListingService(supabase), [supabase]);
+  const cellarService = useMemo(() => createCellarService(supabase), [supabase]);
   const aiService = useMemo(
     () =>
       AI_UI.catalogazione && AZIONI_IA_ABILITATE
@@ -241,6 +265,117 @@ export function useSellWizard({
   }, [aiSuggerimento]);
 
   const isVendita = modalita === "vendita";
+
+  // -- Smart Sell Price -------------------------------------------------------
+  //
+  // Il suggerimento del passo Prezzo. Il calcolo non è qui: è la composizione
+  // 1B in `@/lib/price-intelligence/smart-sell-price`, che riusa soglia,
+  // mediana, filtro vino/formato, deduplica e copertura senza riscriverli.
+  // Qui c'è solo la lettura che gliela fornisce.
+  //
+  // La sorgente è `ListingService.elencoConEsito()`, cioè `public_listings`:
+  // annunci pubblici e attivi, con il filtro `stato = 'attivo'` dentro la vista.
+  // L'esito esplicito impedisce di raccontare «zero comparabili» quando invece
+  // è fallita la lettura. Lo storico prezzi NON viene letto — il suggerimento
+  // nasce dai comparabili ASKING correnti, come la 1B ha deciso, e le vendite non
+  // hanno da qui una strada per entrare.
+  const wineKeyVino = identitaVino?.wineKey ?? null;
+  const formatoVino = identitaVino?.formato ?? null;
+  const chiaveSmartPrice =
+    isVendita && wineKeyVino && formatoVino
+      ? JSON.stringify([wineKeyVino, formatoVino])
+      : null;
+  const [smartPriceLetto, setSmartPriceLetto] = useState<{
+    chiave: string;
+    suggerimento: SmartSellPrice;
+  } | null>(null);
+
+  useEffect(() => {
+    // Una bottiglia non ancora risolta sul catalogo non ha una chiave con cui
+    // confrontare gli annunci. Senza client non c'è invece una lettura riuscita.
+    // In entrambi i casi lo stato derivato sotto è `non_disponibile` e il campo
+    // manuale resta utilizzabile, senza setState sincroni dentro l'effetto.
+    if (!chiaveSmartPrice || !wineKeyVino || !formatoVino || !supabase) return;
+
+    let attivo = true;
+
+    void (async () => {
+      try {
+        const esito = await listingService.elencoConEsito();
+        if (!attivo) return;
+
+        // Nessun numero di ripiego e nessun blocco su errore: il passo Prezzo
+        // resta utilizzabile a mano. Il mapper distingue l'errore dall'elenco
+        // davvero vuoto senza copiare nell'interfaccia il dettaglio PostgREST.
+        setSmartPriceLetto({
+          chiave: chiaveSmartPrice,
+          suggerimento: smartSellPriceDaLettura({
+            esito,
+            wineKey: wineKeyVino,
+            formato: formatoVino,
+          }),
+        });
+      } catch (errore) {
+        // Copre errori inattesi del trasporto senza trasformarli in «zero
+        // comparabili» e senza impedire l'inserimento manuale.
+        console.error("[vendi] comparabili non disponibili:", errore);
+        if (attivo) {
+          setSmartPriceLetto({
+            chiave: chiaveSmartPrice,
+            suggerimento: { stato: "non_disponibile" },
+          });
+        }
+      }
+    })();
+
+    return () => {
+      attivo = false;
+    };
+  }, [chiaveSmartPrice, wineKeyVino, formatoVino, listingService, supabase]);
+
+  // La chiave impedisce che il risultato della bottiglia precedente resti
+  // visibile mentre cambia vino o formato. `null` rappresenta solo la lettura in
+  // corso; le condizioni in cui non si può leggere sono terminali e manuali.
+  const smartPrice = useMemo<SmartSellPrice | null>(
+    () =>
+      !isVendita
+        ? null
+        : !chiaveSmartPrice || !supabase
+          ? { stato: "non_disponibile" }
+          : smartPriceLetto?.chiave === chiaveSmartPrice
+            ? smartPriceLetto.suggerimento
+            : null,
+    [isVendita, chiaveSmartPrice, smartPriceLetto, supabase],
+  );
+  const smartPriceInCorso = Boolean(
+    chiaveSmartPrice && supabase && smartPriceLetto?.chiave !== chiaveSmartPrice,
+  );
+
+  /**
+   * Il prezzo lo scrive l'utente, sempre: digitandolo o applicando il
+   * suggerimento. Entrambe le vie passano di qui, ed entrambe valgono come
+   * scelta esplicita — è ciò che spegne la conferma del prezzo precedente.
+   */
+  const impostaPrezzo = useCallback((valore: string) => {
+    setPrezzoSceltoDaUtente(true);
+    setD((s) => ({ ...s, prezzo: valore }));
+  }, []);
+
+  /** L'unico punto in cui il suggerimento entra nel campo prezzo. */
+  const usaPrezzoSuggerito = useCallback(() => {
+    if (!smartPrice || smartPrice.stato !== "suggerito") return;
+    impostaPrezzo(euroDaCents(smartPrice.medianaCents));
+    toast.success("Prezzo suggerito applicato");
+  }, [smartPrice, impostaPrezzo]);
+
+  const prezzoPrecedenteDaConfermare =
+    prezzoPrecedente !== null && !prezzoSceltoDaUtente;
+  const confermaPrezzoRichiesta = richiedeConfermaPrezzoPrecedente({
+    prezzoPrecedenteCents: prezzoPrecedente,
+    sceltaEsplicita: prezzoSceltoDaUtente,
+    confermato: prezzoConfermato,
+  });
+
   const steps = isVendita ? VENDITA_STEPS : CATALOGAZIONE_STEPS;
   /** Quanti passi vede davvero l'utente, e a quale è arrivato. */
   const passiVisibili = steps.length - primoPasso;
@@ -381,7 +516,12 @@ export function useSellWizard({
     // venditore non lo guarda. Il campo è già compilato — il lavoro che si
     // risparmia resta risparmiato — ma la conferma è un gesto suo, perché fra
     // il vecchio annuncio e questo può essere passato molto tempo.
-    if (prezzoPrecedente !== null && !prezzoConfermato) {
+    //
+    // «Guardarlo» però include averlo cambiato: chi ha digitato un altro
+    // numero o ha applicato il suggerimento ha già scelto, e chiedergli di
+    // confermare il vecchio prezzo sarebbe chiedergli di confermare un numero
+    // che non è più nel campo.
+    if (confermaPrezzoRichiesta) {
       toast.error("Conferma il prezzo prima di pubblicare.");
       return;
     }
@@ -415,8 +555,7 @@ export function useSellWizard({
     onNavigate,
     listingService,
     onCantinaCambiata,
-    prezzoPrecedente,
-    prezzoConfermato,
+    confermaPrezzoRichiesta,
   ]);
 
   const salvaBozza = useCallback(async () => {
@@ -444,12 +583,6 @@ export function useSellWizard({
     }
   }, [aggiungiInCantina, assicuraBozza, isVendita, onNavigate]);
 
-  const suggerito = d.produttore.toLowerCase().includes("sassicaia")
-    ? 260
-    : d.produttore.toLowerCase().includes("barolo")
-      ? 300
-      : 120;
-
   return {
     modalita,
     setModalita,
@@ -465,15 +598,20 @@ export function useSellWizard({
     isVendita,
     d,
     set,
-    suggerito,
+    impostaPrezzo,
+    smartPrice,
+    smartPriceInCorso,
+    usaPrezzoSuggerito,
     foto,
     fotoInCorso,
     caricaFoto,
     rimuoviFoto,
     riusoInCorso,
     prezzoPrecedente,
+    prezzoPrecedenteDaConfermare,
     prezzoConfermato,
     setPrezzoConfermato,
+    confermaPrezzoRichiesta,
     inviando,
     bozzaId,
     pubblica,

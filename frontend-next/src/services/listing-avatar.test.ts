@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  createListingService,
   rigaAWine,
   type PublicListingRow,
 } from "@/services/listing-service";
@@ -39,6 +41,30 @@ const RIGA: PublicListingRow = {
   wine_provenienza: "staff",
 };
 
+type RispostaElenco = {
+  data: unknown;
+  error: {
+    code: string;
+    details: string;
+    hint: string;
+    message: string;
+  } | null;
+};
+
+const clientElenco = (risposta: RispostaElenco): SupabaseClient => {
+  const query: Record<string, unknown> = {};
+  query.select = () => query;
+  query.order = () => query;
+  query.then = (
+    onOk: (valore: RispostaElenco) => unknown,
+    onErrore?: (errore: unknown) => unknown,
+  ) => Promise.resolve(risposta).then(onOk, onErrore);
+
+  return {
+    from: () => query,
+  } as unknown as SupabaseClient;
+};
+
 describe("avatar pubblico del venditore", () => {
   it("ricompone una foto Vinea appartenente al venditore", () => {
     const precedente = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -72,5 +98,54 @@ describe("avatar pubblico del venditore", () => {
       if (precedente === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
       else process.env.NEXT_PUBLIC_SUPABASE_URL = precedente;
     }
+  });
+});
+
+describe("lettura degli annunci attivi", () => {
+  it("distingue un elenco riuscito ma vuoto", async () => {
+    const servizio = createListingService(
+      clientElenco({ data: [], error: null }),
+    );
+
+    expect(await servizio.elencoConEsito()).toEqual({ ok: true, data: [] });
+  });
+
+  it("media un errore PostgREST senza trasformarlo in zero comparabili", async () => {
+    const messaggioDatabase = "relation public_listings does not exist";
+    const servizio = createListingService(
+      clientElenco({
+        data: null,
+        error: {
+          code: "42P01",
+          details: "dettaglio interno",
+          hint: "hint interno",
+          message: messaggioDatabase,
+        },
+      }),
+    );
+
+    const esito = await servizio.elencoConEsito();
+
+    expect(esito).toEqual({
+      ok: false,
+      error: "Annunci attivi non disponibili.",
+    });
+    if (!esito.ok) expect(esito.error).not.toContain(messaggioDatabase);
+  });
+
+  it("conserva la lettura tollerante per i chiamanti esistenti", async () => {
+    const servizio = createListingService(
+      clientElenco({
+        data: null,
+        error: {
+          code: "PGRST000",
+          details: "dettaglio interno",
+          hint: "hint interno",
+          message: "connessione non disponibile",
+        },
+      }),
+    );
+
+    expect(await servizio.elenco()).toEqual([]);
   });
 });
