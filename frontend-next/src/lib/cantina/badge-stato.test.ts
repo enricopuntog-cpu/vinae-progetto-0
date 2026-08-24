@@ -5,6 +5,8 @@ import {
   COLORE_BADGE_APERTA,
   COLORE_BADGE_PRONTO,
   COLORE_BADGE_PRONTO_PRIMA,
+  COLORE_BADGE_QUASI,
+  COLORE_BADGE_QUASI_PRIMA,
   SFONDO_CHIARO,
   SFONDO_SCURO,
   SOGLIA_CONTRASTO_AA,
@@ -334,19 +336,141 @@ describe("cio' che il Gruppo 3 non doveva toccare, e non ha toccato", () => {
     expect(contrastoWcag("#f7f3ec", "#6b2138")).toBeGreaterThanOrEqual(SOGLIA_CONTRASTO_AA);
   });
 
-  it("gli altri fondi traslucidi restano dove sono, e «quasi» e' misurato", () => {
-    // Non e' approvazione: e' il perimetro, che chiedeva «Pronto ora» e basta.
-    // Ma il numero va scritto, perche' su foto scura `quasi` sta PEGGIO del
-    // badge appena corretto — 1,10:1 contro i 3,96:1 che hanno motivato questa
-    // sessione — e chi decide se riaprirlo deve vederlo, non dedurlo.
-    const cellar = senzaCommenti(leggi("src/data/cellar.ts"));
-    expect(cellar).toInclude('quasi: "bg-oro/25 text-antracite"');
-    expect(cellar).toInclude('oltre: "bg-destructive/20 text-destructive"');
+  it("«oltre» resta traslucido, ed e' un debito con un nome e non un'assenza", () => {
+    // Non e' approvazione: e' il perimetro. `quasi` era nella stessa riga fino
+    // al 24 agosto 2026 ed e' stato corretto proprio perche' il suo numero era
+    // scritto qui invece che dedotto; questo caso tiene in vita l'unico rimasto.
+    expect(senzaCommenti(leggi("src/data/cellar.ts"))).toInclude(
+      'oltre: "bg-destructive/20 text-destructive"',
+    );
+  });
+});
 
-    const ORO = "#b59a63";
-    expect(leggi("src/app/globals.css")).toInclude(`--oro: ${ORO};`);
-    const quasiSuScuro = contrastoWcag("#202020", componiAlpha(ORO, 0.25, SFONDO_SCURO));
-    expect(arrotonda(quasiSuScuro)).toBe(1.1);
-    expect(quasiSuScuro).toBeLessThan(SOGLIA_CONTRASTO_AA);
+// ============================================================
+// «Quasi pronto»: l'ultimo traslucido della finestra, e il peggiore
+// ============================================================
+
+describe("il difetto di «Quasi pronto», misurato invece che ricordato", () => {
+  const { base: ORO, alpha: ALPHA, testo: ANTRACITE } = COLORE_BADGE_QUASI_PRIMA;
+
+  it("su una foto scura era praticamente invisibile", () => {
+    // 1,10:1. Il numero peggiore della tavolozza: il fondo oro al 25% su nero
+    // diventa quasi nero, e il testo lo era gia'. E' la misura che ha riaperto
+    // il caso dopo che la sessione del 19 agosto l'aveva lasciato fuori.
+    const suScuro = contrastoWcag(ANTRACITE, componiAlpha(ORO, ALPHA, SFONDO_SCURO));
+    expect(arrotonda(suScuro)).toBe(1.1);
+    expect(suScuro).toBeLessThan(SOGLIA_CONTRASTO_AA);
+  });
+
+  it("su una foto chiara passava, ed e' esattamente il difetto", () => {
+    // 13,12:1: non un caso fortunato ma la prova che quel contrasto era una
+    // proprieta' della FOTOGRAFIA e non del badge. Chi provava su sfondi chiari
+    // non poteva vedere il difetto, e chi caricava una bottiglia in penombra lo
+    // vedeva sempre.
+    const suChiaro = contrastoWcag(ANTRACITE, componiAlpha(ORO, ALPHA, SFONDO_CHIARO));
+    expect(arrotonda(suChiaro)).toBe(13.12);
+    expect(suChiaro).toBeGreaterThanOrEqual(SOGLIA_CONTRASTO_AA);
+    expect(suChiaro).not.toBe(contrastoWcag(ANTRACITE, componiAlpha(ORO, ALPHA, SFONDO_SCURO)));
+  });
+
+  it("era peggiore del badge che aveva motivato la correzione precedente", () => {
+    // La ragione per cui questo lavoro non e' un ritocco estetico: 1,10 contro
+    // 3,96. Se un giorno qualcuno riordinasse la tavolozza, questo caso dice
+    // quale dei due numeri veniva prima.
+    const quasi = contrastoWcag(ANTRACITE, componiAlpha(ORO, ALPHA, SFONDO_SCURO));
+    const pronto = contrastoWcag(
+      COLORE_BADGE_PRONTO_PRIMA.base,
+      componiAlpha(COLORE_BADGE_PRONTO_PRIMA.base, COLORE_BADGE_PRONTO_PRIMA.alpha, SFONDO_SCURO),
+    );
+    expect(quasi).toBeLessThan(pronto);
+  });
+
+  it("quel valore non e' piu' in `phaseColor`", () => {
+    // Come per «Pronto ora»: i casi qui sopra passerebbero identici anche senza
+    // la correzione, perche' calcolano su costanti. Questo guarda il file.
+    expect(senzaCommenti(leggi("src/data/cellar.ts"))).not.toInclude(COLORE_BADGE_QUASI_PRIMA.classi);
+  });
+});
+
+describe("«Quasi pronto» dopo la correzione", () => {
+  it("supera la soglia AA, e passa anche AAA", () => {
+    const c = contrastoWcag(COLORE_BADGE_QUASI.testo, COLORE_BADGE_QUASI.sfondo);
+    expect(arrotonda(c)).toBe(7.38);
+    expect(c).toBeGreaterThanOrEqual(SOGLIA_CONTRASTO_AA);
+  });
+
+  it("da' lo stesso identico numero sulle due foto estreme, perche' e' opaco", () => {
+    const suChiaro = contrastoWcag(
+      COLORE_BADGE_QUASI.testo,
+      componiAlpha(COLORE_BADGE_QUASI.sfondo, 1, SFONDO_CHIARO),
+    );
+    const suScuro = contrastoWcag(
+      COLORE_BADGE_QUASI.testo,
+      componiAlpha(COLORE_BADGE_QUASI.sfondo, 1, SFONDO_SCURO),
+    );
+    expect(suChiaro).toBe(suScuro);
+    expect(suScuro).toBeGreaterThanOrEqual(SOGLIA_CONTRASTO_AA);
+  });
+
+  it("non porta modificatori di trasparenza nelle sue classi", () => {
+    expect(COLORE_BADGE_QUASI.classi).not.toMatch(/\/\d/);
+  });
+
+  it("ha gli esadecimali allineati ai token di globals.css", () => {
+    // `--oro-scuro` e' un token NUOVO: se qualcuno lo ridefinisce, il 7,38 qui
+    // sopra smette di essere vero senza che nulla protesti.
+    const css = leggi("src/app/globals.css");
+    expect(css).toInclude(`--oro-scuro: ${COLORE_BADGE_QUASI.sfondo};`);
+    expect(css).toInclude(`--crema: ${COLORE_BADGE_QUASI.testo};`);
+    // E la utility deve esistere nel blocco @theme, altrimenti Tailwind non
+    // genera `bg-oro-scuro` e il badge resta senza fondo — il difetto di
+    // partenza in forma peggiore.
+    expect(css).toInclude("--color-oro-scuro: var(--oro-scuro);");
+    // Il token di partenza resta dov'era: `presto` continua a usarlo.
+    expect(css).toInclude(`--oro: ${COLORE_BADGE_QUASI_PRIMA.base};`);
+  });
+
+  it("conserva la tinta dell'oro invece di diventare un secondo bordeaux", () => {
+    // La ragione per cui `--oro-scuro` non e' semplicemente `--bordeaux`: hanno
+    // la stessa L, e senza questo caso «tanto e' scuro uguale» basterebbe a
+    // fondere due pastiglie che dicono cose diverse.
+    expect(COLORE_BADGE_QUASI.sfondo).not.toBe("#6b2138");
+    const [r, g, b] = [1, 3, 5].map((i) =>
+      parseInt(COLORE_BADGE_QUASI.sfondo.slice(i, i + 2), 16),
+    ) as [number, number, number];
+    // Tinta calda a dominante rossa e verde alto: e' oro, non vinaccia.
+    expect(r).toBeGreaterThan(g);
+    expect(g).toBeGreaterThan(b);
+    expect(g - b).toBeGreaterThan(r - g);
+  });
+
+  it("non riusa la pastiglia di «Bere presto», che direbbe il contrario", () => {
+    // `bg-oro text-antracite` passerebbe la soglia (6,03:1): il motivo per cui
+    // non e' stato riusato non e' il contrasto, e' che `quasi` e `presto` sono
+    // le due estremita' opposte della scala.
+    const ORO = COLORE_BADGE_QUASI_PRIMA.base;
+    expect(contrastoWcag(COLORE_BADGE_QUASI_PRIMA.testo, ORO)).toBeGreaterThanOrEqual(
+      SOGLIA_CONTRASTO_AA,
+    );
+    const cellar = senzaCommenti(leggi("src/data/cellar.ts"));
+    expect(cellar).toInclude('presto: "bg-oro text-antracite"');
+    expect(COLORE_BADGE_QUASI.classi).not.toBe("bg-oro text-antracite");
+  });
+
+  it("`phaseColor.quasi` e la costante misurata dicono la stessa cosa", () => {
+    expect(senzaCommenti(leggi("src/data/cellar.ts"))).toInclude(
+      `quasi: "${COLORE_BADGE_QUASI.classi}"`,
+    );
+  });
+
+  it("non ridisegna le altre pastiglie della finestra di bevuta", () => {
+    // Il perimetro chiedeva `quasi` e basta. `attesa` e `presto` sono gia'
+    // opachi e leggibili, `ideale` misura 9,99:1, `pronto` e' stato corretto
+    // nella sessione precedente.
+    const cellar = senzaCommenti(leggi("src/data/cellar.ts"));
+    expect(cellar).toInclude('attesa: "bg-secondary text-antracite"');
+    expect(cellar).toInclude(`pronto: "${COLORE_BADGE_PRONTO.classi}"`);
+    expect(cellar).toInclude('ideale: "bg-bordeaux text-crema"');
+    expect(cellar).toInclude('none: "bg-muted text-muted-foreground"');
   });
 });

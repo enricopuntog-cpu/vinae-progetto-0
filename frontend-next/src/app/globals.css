@@ -35,6 +35,7 @@
   --color-salvia: var(--salvia);
   --color-salvia-scuro: var(--salvia-scuro);
   --color-oro: var(--oro);
+  --color-oro-scuro: var(--oro-scuro);
 
   --font-serif: "Cormorant Garamond", "Playfair Display", ui-serif, Georgia, serif;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -61,6 +62,13 @@
      foto scura, cioe sotto soglia su entrambe. Dettaglio in badge-stato.ts. */
   --salvia-scuro: #4a5344;
   --oro: #b59a63;
+  /* Oro scurito, e lo sfondo OPACO del badge «Quasi pronto». Stessa tinta e
+     stessa saturazione di --oro (H40, S36%) portate a L27%, cioe al peso di
+     --bordeaux: cosi la pastiglia resta oro e non diventa un secondo bordeaux.
+     Su --crema misura 7,38:1, che passa AA e anche AAA. La versione traslucida
+     bg-oro/25 dava 1,10:1 su foto scura — il numero peggiore dell'intera
+     tavolozza. Dettaglio in badge-stato.ts. */
+  --oro-scuro: #5e4d2c;
 
   /* Shadcn semantic */
   --background: #f7f3ec;

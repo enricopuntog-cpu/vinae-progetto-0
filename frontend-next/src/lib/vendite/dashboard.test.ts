@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   andamentoMensile,
@@ -302,6 +302,73 @@ describe("contratto della dashboard", () => {
       dependencies: Record<string, string>;
     };
     expect(dipendenze.dependencies.recharts).toBeTruthy();
+  });
+});
+
+describe("la guardia di /vendite", () => {
+  const route = leggi("src/app/vendite/page.tsx");
+  const senzaCommenti = route
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+
+  it("verifica la sessione sul server, prima di rendere la dashboard", () => {
+    // La verifica deve stare nella route (server), non nel page-client: un
+    // controllo fatto dopo il primo paint e' un cartello, non una guardia.
+    expect(senzaCommenti).toInclude("getSupabaseServerClient()");
+    expect(senzaCommenti).toMatch(/auth\.getUser\(\)/);
+    const guardia = senzaCommenti.indexOf("if (!utente)");
+    const render = senzaCommenti.indexOf("<VenditePageClient />");
+    expect(guardia).toBeGreaterThan(-1);
+    expect(guardia).toBeLessThan(render);
+  });
+
+  it("manda l'anonimo ad /accedi, e non gli mostra un testo d'errore", () => {
+    // Il comportamento precedente: la route rendeva comunque, e `vendite()`
+    // senza sessione produceva il proprio errore. Una pagina privata che si
+    // presenta come rotta invece che come chiusa.
+    expect(senzaCommenti).toInclude('from "next/navigation"');
+    expect(senzaCommenti).toInclude('const PERCORSO_ACCESSO = "/accedi"');
+    expect(senzaCommenti).toInclude("redirect(PERCORSO_ACCESSO)");
+  });
+
+  it("non inventa un `?next=`, perche' /accedi non lo legge", () => {
+    // `percorsoRelativoSicuro` esiste, ma la convenzione vale per
+    // /auth/callback: dopo il login /accedi manda sempre a /home. Un parametro
+    // che nessuno legge sarebbe un redirect che sembra funzionare e non
+    // funziona.
+    expect(senzaCommenti).not.toInclude("next=");
+    expect(senzaCommenti).not.toInclude("percorsoRelativoSicuro");
+    expect(leggi("src/app/accedi/page-client.tsx")).not.toInclude("percorsoRelativoSicuro");
+  });
+
+  it("chiude anche il ramo in cui Supabase non e' configurato", () => {
+    // `getSupabaseServerClient()` torna null senza variabili d'ambiente. Su una
+    // pagina privata quel ramo deve cadere nello stesso redirect: nessuna
+    // sessione verificabile significa nessun accesso, non accesso libero.
+    expect(senzaCommenti).toMatch(/client \?[\s\S]*?: null/);
+  });
+
+  it("ferma il prerender, altrimenti il redirect verrebbe cotto nella build", () => {
+    // In CI `bun run build` gira senza variabili d'ambiente: senza questo, il
+    // ramo `client === null` valuterebbe `redirect()` durante la generazione
+    // statica e /vendite rimanderebbe ad /accedi anche a sessione valida.
+    expect(senzaCommenti).toInclude("await connection()");
+    expect(senzaCommenti).toInclude('from "next/server"');
+  });
+
+  it("non introduce un middleware globale per una route sola", () => {
+    // Un intercettore su ogni richiesta del sito per risolvere un percorso solo.
+    for (const file of ["src/middleware.ts", "middleware.ts", "src/proxy.ts", "proxy.ts"]) {
+      expect(existsSync(join(progetto, file))).toBe(false);
+    }
+  });
+
+  it("non tocca KPI, grafici o ciclo di vita: la dashboard e' invariata", () => {
+    // La route ora decide chi entra. Che cosa si vede una volta entrati resta
+    // esattamente dov'era, cioe' nel page-client.
+    for (const estraneo of ["Kpi", "recharts", "OrderService", "ListingService", "riepilogoVenditore"]) {
+      expect(senzaCommenti).not.toInclude(estraneo);
+    }
   });
 });
 

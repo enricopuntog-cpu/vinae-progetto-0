@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { connection } from "next/server";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 import VenditePageClient from "./page-client";
 
 export const metadata: Metadata = {
@@ -8,6 +11,18 @@ export const metadata: Metadata = {
 };
 
 /**
+ * Dove va chi arriva su `/vendite` senza sessione.
+ *
+ * `/accedi` nudo, senza `?next=`: nel repository quella convenzione **non
+ * esiste** su questa pagina. `percorsoRelativoSicuro` la implementa, ma solo per
+ * `/auth/callback`, cioè per i flussi che tornano con un `code` da scambiare;
+ * `/accedi` dopo il login manda sempre a `/home` (`accedi/page-client.tsx`).
+ * Inventarne una qui vorrebbe dire aggiungere un parametro che nessuno legge, e
+ * un redirect che sembra funzionare e non funziona è peggio di uno onesto.
+ */
+const PERCORSO_ACCESSO = "/accedi";
+
+/**
  * Privata come la Cantina e come `/acquisti`: senza sessione non c'è nulla da
  * rendere sul server. Ordini e annunci arrivano dal browser, filtrati da RLS su
  * `seller_id`.
@@ -15,7 +30,42 @@ export const metadata: Metadata = {
  * Lo stato mostrato per gli ordini è quello **derivato** per il venditore: non
  * esiste una colonna `seller_stato`, e le nove etichette di frontend/ si
  * ricavano dallo stato dell'ordine più `preparazione_avviata_at`.
+ *
+ * ## La guardia
+ *
+ * Prima di questa correzione un anonimo raggiungeva la route e leggeva il testo
+ * d'errore di `vendite()` — non i KPI a zero: una pagina privata che si presenta
+ * come rotta invece che come chiusa. Ora la sessione si verifica **sul server**,
+ * prima di rendere alcunché.
+ *
+ * La guardia sta qui e non in un `middleware.ts`: nel repository quel file non
+ * esiste, e introdurlo per una sola route metterebbe un intercettore su ogni
+ * richiesta del sito per risolvere un problema che riguarda un percorso solo.
+ * Non è comunque un confine di fiducia — la RLS su `seller_id` resta l'unica
+ * cosa che decide quali righe esistono. È il comportamento giusto per chi non ha
+ * fatto il login, non la ragione per cui i dati di un altro venditore non si
+ * vedono.
  */
-export default function Page() {
+export default async function Page() {
+  // Il prerender si ferma qui. Serve al ramo in cui Supabase non è configurato
+  // (`getSupabaseServerClient()` torna null **senza** leggere i cookie): in CI
+  // `bun run build` gira senza variabili d'ambiente, e un `redirect()` valutato
+  // durante la generazione statica verrebbe cotto nella pagina, rimandando ad
+  // `/accedi` anche chi in produzione la sessione ce l'ha.
+  //
+  // `connection()` e non `export const dynamic = "force-dynamic"`: dalla 15 è la
+  // forma preferita, perché lega il rendering dinamico alla richiesta in
+  // arrivo invece che dichiararlo per l'intero segmento.
+  await connection();
+
+  const client = await getSupabaseServerClient();
+
+  // `getUser()` e non `getSession()`: la sessione arriva dai cookie, che sono un
+  // dato della richiesta; `getUser()` la fa verificare al server di Supabase.
+  // Con Supabase non configurato non esiste alcuna sessione verificabile, quindi
+  // il ramo `client === null` cade nello stesso redirect: chiuso, non aperto.
+  const utente = client ? (await client.auth.getUser()).data.user : null;
+  if (!utente) redirect(PERCORSO_ACCESSO);
+
   return <VenditePageClient />;
 }
