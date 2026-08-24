@@ -317,6 +317,13 @@ export interface ListingService extends ListingReadService {
    * significherebbe che i mock debbano conoscere gli stati reali.
    */
   mioAnnuncio(idOrSlug: string): Promise<import("./listing-service").AnnuncioProprietario | null>;
+  /**
+   * Gli annunci di chi chiede, in qualunque stato, dal più recente. Come
+   * `mioAnnuncio` non prende un identificativo di utente: la sessione lo
+   * risolve dentro il servizio. Un errore di lettura torna `[]` e non lo
+   * propaga, come `elenco()`.
+   */
+  mieiAnnunci(): Promise<import("./listing-service").AnnuncioProprietario[]>;
   aggiorna(id: string, dati: Partial<DatiModificaAnnuncio>): Promise<Result<void>>;
   pubblica(id: string): Promise<Result<void>>;
   sospendi(id: string, motivo?: string): Promise<Result<void>>;

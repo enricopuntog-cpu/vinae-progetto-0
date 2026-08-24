@@ -383,17 +383,52 @@ export function createListingService(client: SupabaseClient | null): ListingServ
       }
       if (!data) return null;
 
-      const riga = data as unknown as RigaAnnuncioProprietario;
-      const wine = rigaProprietarioAWine(riga);
-      if (!wine) return null;
+      return annuncioProprietarioDaRiga(data as unknown as RigaAnnuncioProprietario);
+    },
 
-      return {
-        wine,
-        stato: riga.stato,
-        immaginiPercorsi: riga.immagini ?? [],
-        modificabile: STATI_MODIFICABILI.includes(riga.stato),
-        sospendibile: STATI_SOSPENDIBILI.includes(riga.stato),
-      };
+    /**
+     * Tutti gli annunci di chi chiede, in qualunque stato: è la lista che
+     * `mioAnnuncio()` restituisce una riga alla volta.
+     *
+     * Il filtro `seller_id` è esplicito e non delegato alla RLS, benché oggi
+     * `listings_select_own` dica esattamente la stessa cosa. La ragione è
+     * scritta nella 20260729230000: le policy di questa tabella sono destinate
+     * a crescere — la Fase 7 deve mostrare al compratore l'annuncio che sta
+     * riservando, la Fase 9 la coda di moderazione — e il giorno in cui una di
+     * quelle policy renderà raggiungibili righe altrui, una lista senza `eq`
+     * smetterebbe di essere «i miei annunci» senza che nessuna riga di questo
+     * file cambi. `seller_id` è nel GRANT per colonna di `authenticated`,
+     * quindi il filtro è eseguibile.
+     *
+     * Errori ed elenco vuoto collassano entrambi su `[]`, come `elenco()`: una
+     * dashboard non ha un posto in cui mostrare un messaggio di PostgreSQL, e
+     * il dettaglio resta nei log.
+     */
+    async mieiAnnunci(): Promise<AnnuncioProprietario[]> {
+      if (!client) return [];
+
+      // Stessa ragione di `mioAnnuncio`: `anon` non ha nessun grant su
+      // `public.listings`, quindi senza sessione la domanda tornerebbe `42501`
+      // e non un elenco vuoto.
+      const {
+        data: { user },
+      } = await client.auth.getUser();
+      if (!user) return [];
+
+      const { data, error } = await client
+        .from("listings")
+        .select(COLONNE_PROPRIETARIO)
+        .eq("seller_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        segnalaErrore("mieiAnnunci", error);
+        return [];
+      }
+
+      return (data as unknown as RigaAnnuncioProprietario[])
+        .map(annuncioProprietarioDaRiga)
+        .filter((annuncio): annuncio is AnnuncioProprietario => annuncio !== null);
     },
 
     /** bozza | modifiche_richieste → attivo. */
@@ -560,6 +595,27 @@ const COLONNE_PROPRIETARIO = [
   "bottle_units!inner(wines!inner(id,slug,produttore,nome,annata,regione,denominazione,tipo,formato,provenienza))",
   "profiles!listings_seller_id_fkey(username,citta,avatar_url)",
 ].join(",");
+
+/**
+ * Da riga della tabella ad `AnnuncioProprietario`, per la scheda singola e per
+ * la lista. Una riga senza vino innestato torna `null`: l'innesto è `!inner` e
+ * non dovrebbe accadere, ma un `wine` mancante renderebbe la scheda una carta
+ * senza nome.
+ */
+export function annuncioProprietarioDaRiga(
+  riga: RigaAnnuncioProprietario,
+): AnnuncioProprietario | null {
+  const wine = rigaProprietarioAWine(riga);
+  if (!wine) return null;
+
+  return {
+    wine,
+    stato: riga.stato,
+    immaginiPercorsi: riga.immagini ?? [],
+    modificabile: STATI_MODIFICABILI.includes(riga.stato),
+    sospendibile: STATI_SOSPENDIBILI.includes(riga.stato),
+  };
+}
 
 export function rigaProprietarioAWine(riga: RigaAnnuncioProprietario): Wine | null {
   const vino = riga.bottle_units?.wines;

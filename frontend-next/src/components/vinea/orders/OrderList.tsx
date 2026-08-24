@@ -39,11 +39,19 @@ const TAB_VENDITORE = [
   "contestato",
 ] as const;
 
+/**
+ * La lista che carica da sé i propri ordini. Resta la porta di `/acquisti`,
+ * dove nessun altro blocco della pagina ha bisogno delle stesse righe.
+ *
+ * `/vendite` non passa più di qui: la dashboard legge gli ordini una volta sola
+ * per i KPI e i grafici, e consegna quelle righe a `OrderListView`. Due
+ * componenti che chiedono a PostgREST lo stesso elenco nello stesso istante
+ * sono due elenchi che possono anche divergere.
+ */
 export function OrderList({ lato }: { lato: "acquisti" | "vendite" }) {
   const venditore = lato === "vendite";
   const [ordini, setOrdini] = useState<OrderRecord[] | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
-  const [tab, setTab] = useState<string>("tutti");
 
   useEffect(() => {
     const servizio = createOrderService(getSupabaseClient());
@@ -57,6 +65,29 @@ export function OrderList({ lato }: { lato: "acquisti" | "vendite" }) {
       vivo = false;
     };
   }, [venditore]);
+
+  return <OrderListView lato={lato} ordini={ordini} errore={errore} />;
+}
+
+/**
+ * Le schede, il filtro e le righe, su ordini che qualcun altro ha già letto.
+ *
+ * `ordini === null` è il caricamento, non «nessun ordine»: la distinzione
+ * esisteva già nella versione che faceva la fetch da sé e sopravvive qui,
+ * perché una lista vuota mostrata durante il caricamento direbbe al venditore
+ * che non ha venduto niente.
+ */
+export function OrderListView({
+  lato,
+  ordini,
+  errore,
+}: {
+  lato: "acquisti" | "vendite";
+  ordini: OrderRecord[] | null;
+  errore: string | null;
+}) {
+  const venditore = lato === "vendite";
+  const [tab, setTab] = useState<string>("tutti");
 
   const schede = venditore ? TAB_VENDITORE : TAB_COMPRATORE;
 
