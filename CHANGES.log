@@ -49,12 +49,12 @@
 - Case 47 of that grid passes vacuously: `circolo-vinea` is not created by any
   migration. The display rename was instead verified on production, where
   `public_clubs` returns `circolo-vinea` with `nome = 'Club Vinea'`.
-- `frontend-next` measured on the PR #69 branch: `bun run lint` 0 errors / 14
-  warnings (all pre-existing `<img>` warnings), `bun run typecheck` clean,
-  `bun run test` **617 pass / 0 fail** across 44 files, `bun run build`
-  successful, `git diff --check` clean. The Home route `/` stays `ƒ`
-  (server-rendered on demand), as it already was.
-- `MIN_TESTS` in `.github/workflows/ci.yml` is 617, together with its
+- `frontend-next` measured on the seller-dashboard branch: `bun run lint`
+  0 errors / 14 warnings (all pre-existing `<img>` warnings), `bun run
+  typecheck` clean, `bun run test` **650 pass / 0 fail** across 45 files,
+  `bun run build` successful, `git diff --check` clean. The Home route `/`
+  stays `ƒ` (server-rendered on demand) and `/vendite` stays `○`.
+- `MIN_TESTS` in `.github/workflows/ci.yml` is 650, together with its
   regression contract in
   `frontend-next/src/lib/beta/prelaunch-contract.test.ts`.
 - Personal profile photos are live in `frontend-next/`. The latest row in the
@@ -74,6 +74,45 @@
 
 ## ACTIVE TASK
 
+- The seller dashboard is merged on `origin/main`. The PR carried no migration,
+  RPC, schema or policy change, so no Supabase deploy or remote verification was
+  required or performed.
+- `/vendite` is the seller dashboard. `src/app/vendite/page.tsx` keeps the
+  metadata and renders the new `src/app/vendite/page-client.tsx`; derivations
+  live in `src/lib/vendite/dashboard.ts` and are proven by
+  `src/lib/vendite/dashboard.test.ts` with 33 cases.
+- One read of the orders feeds everything. `OrderList.tsx` is split into the
+  fetching `OrderList` (still used by `/acquisti`) and the presentational
+  `OrderListView`; the dashboard loads `OrderService.vendite()` and
+  `ListingService.mieiAnnunci()` in one `Promise.all` and hands the rows to the
+  view. `sellerStatusDaOrdine` stays the single derivation.
+- `ListingService.mieiAnnunci()` is the only new read: `listings` filtered by
+  `.eq("seller_id", user.id)` with the existing `COLONNE_PROPRIETARIO`, ordered
+  by `created_at` desc, returning `[]` without a session and on error. The
+  explicit `seller_id` filter is defence in depth over `listings_select_own`;
+  `seller_id` and `created_at` are both in the closed column GRANT of
+  `20260729230000`. `annuncioProprietarioDaRiga()` is extracted so
+  `mioAnnuncio()` and `mieiAnnunci()` map rows identically.
+- Four KPI, all from real columns: annunci in `stato = 'attivo'`; orders whose
+  seller status is `nuovo`, `da_preparare`, `da_spedire` or `contestato`;
+  orders whose seller status is `completato`; and the sum of `prezzo_cents`
+  over those completed orders. The last is labelled `Valore completate` with
+  the hint `Prezzo venditore, non un incassato` — it is not an incassato, a
+  payout or a balance, and a test forbids those words in the page.
+- Two charts reuse `src/components/ui/chart.tsx` and the `recharts ^2.15.4`
+  already in `package.json`; no library was added. One is orders per seller
+  status, the other orders received per month over a six-month window.
+- **Both** temporal series are bucketed by the UTC month of `created_at`, read
+  from the ISO string. The gold series is therefore the share of the orders
+  received in that month that is completed *today*, not the completions that
+  happened in that month: no completion timestamp is readable by the client,
+  because `ricezione_confermata_at` covers only explicit confirmation and stays
+  null when auto-release closes the order. It is labelled `Di cui oggi
+  completati`, the caption repeats it to the reader, and a test forbids the bare
+  label `Completati`.
+- `bun run build` compiled `recharts` and `src/components/ui/chart.tsx` for the
+  first time in this repository; the dashboard is their first consumer.
+  `/vendite` stays `○` (prerendered static shell).
 - Home / Clubs discovery is merged as `5504dfe` on `origin/main`. PR #69
   carried no migration, so no Supabase deploy or remote verification was
   required or performed. CI read `617 test superati (soglia 617)`.
@@ -102,9 +141,9 @@
 
 ## NEXT STEPS
 
-1. Run one authenticated browser smoke of the Home against production: verify `Club che segui`, that a followed club disappears from `Scopri i Club`, and the "no clubs followed" empty state. The anonymous half is already verified.
-2. Run one authenticated browser flow on production: create an OPEN club, verify redirect, cover rendering and the absence of orphan uploads.
-3. Run the single authenticated profile-photo smoke test when a test-account session is available.
+1. Run one authenticated browser smoke of `/vendite` on the beta with an existing account: the four KPI, the two charts, the listing cards and the sales list must agree with that account's real data.
+2. In the same session, close the two older authenticated debts on the same account: the Home `Club che segui` block and the profile-photo flow (upload, save, Account and seller render, preset/initials switch, old-object cleanup).
+3. Decide whether `/vendite` gets a middleware guard: today an anonymous visitor reaches the route and sees the `vendite()` error text, a branch proven by unit test only.
 
 ## BLOCKERS / NOTES
 
@@ -126,6 +165,20 @@
   Account render, seller render, preset/initials switch and old-object cleanup
   have not been exercised against production. No new accounts or complex
   fixtures may be created for it.
+- The authenticated Club and avatar smokes stay open debt and were deliberately
+  outside the dashboard task: the authenticated Home, the OPEN club creation
+  flow on production and the profile-photo smoke are still unrun.
+- The seller dashboard was NOT smoke-tested authenticated either: no usable
+  session for an existing account was available, and none was created. The KPI,
+  the two charts, the listing cards and the sales list are proven by unit tests
+  and by a green build only, never against real seller data in a browser.
+- The seller dashboard has one real data gap: no order completion timestamp is
+  readable by the client, so both temporal series count orders by month of
+  receipt. A true "completed per month" series would need a new column or view
+  and was not invented.
+- `/vendite` has no middleware guard. Without a session the page renders the
+  `vendite()` error text, not zeroed KPI; that branch is proven by unit test
+  only, never in a browser.
 - Phase 11 implementation is not open: the historical trial failed, and a new
   two-provider F01 canary lacks current authorization and paid-project
   confirmation. Provider keys/budget, PhotoRoom timing and legal review remain
