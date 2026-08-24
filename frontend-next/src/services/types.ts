@@ -1297,3 +1297,95 @@ export interface AiService {
     onDelta: (delta: string) => void,
   ): Promise<Result<SommelierEsito>>;
 }
+
+// ---- Price Intelligence — Fase 1A (sola lettura) ----------------------------
+//
+// Il contratto della fondazione prezzi, e nient'altro che quello. La 1A
+// raccoglie storia; la 1A NON la interpreta. Qui non compaiono - e non vanno
+// aggiunti in questa fase - fascia di prezzo, tendenza, prezzo suggerito,
+// punteggio di affidabilità, ranking o media: sono decisioni della 1B, e una
+// firma che le anticipasse costringerebbe la 1B a nascere già vincolata a una
+// forma scelta prima di avere i dati per sceglierla.
+//
+// Tre vincoli che chi tocca questo blocco deve rispettare:
+//
+//   * il contratto è AGNOSTICO RISPETTO ALLA FONTE. `fonte` è oggi un solo
+//     valore, `vinea_interno`, perché oggi esiste una sola fonte. Il giorno in
+//     cui la cabina autorizzasse un fornitore esterno, quel giorno si aggiunge
+//     un'etichetta all'enum di dominio e questo tipo la riceve: nessuna firma
+//     va riscritta, nessun chiamante va toccato. Fino ad allora il valore
+//     unico non è un segnaposto da riempire, è la misura di quante fonti sono
+//     accese;
+//   * la lettura interna a Vinea NON dipende da alcun flag. Non esiste un
+//     `PRICE_INTELLIGENCE_ENABLED` da consultare prima di chiamare `storico`:
+//     lo storico dei prezzi Vinea è dato di Vinea e funziona sempre. I flag,
+//     se un giorno serviranno, riguarderanno i fornitori esterni, non questo;
+//   * il tipo NON contiene `sellerId`, `buyerId`, `orderId`, `listingId`, né
+//     alcun identificativo di persona. Non per scelta di questo file: la vista
+//     `public.wine_price_history` non li espone, e la tabella base non ha
+//     grant per i ruoli client. Aggiungerli qui sarebbe impossibile prima
+//     ancora che sbagliato.
+
+/**
+ * Che cosa dice un'osservazione. `richiesta` è un prezzo esposto in vetrina —
+ * qualcuno lo chiede, nessuno l'ha ancora pagato. `vendita` è un prezzo
+ * effettivamente pagato in una compravendita conclusa. Sono due informazioni
+ * diverse e la 1B dovrà decidere se e come combinarle: mediarle senza deciderlo
+ * significherebbe far scendere il mercato ogni volta che qualcuno vende, e
+ * salire ogni volta che qualcuno sogna.
+ */
+export type PriceObservationTipo = "richiesta" | "vendita";
+
+/** Da dove viene l'osservazione. Oggi Vinea, e soltanto Vinea. */
+export type PriceObservationFonte = "vinea_interno";
+
+/**
+ * Una riga di storia, immutabile. Rispecchia esattamente le undici colonne di
+ * `public.wine_price_history`.
+ */
+export type WinePriceObservation = {
+  wineId: string;
+  wineSlug: string;
+  produttore: string;
+  nome: string;
+  annata: number;
+  /**
+   * Copiato sull'osservazione quando è nata, non letto in join al momento
+   * della lettura: `wines.formato` è modificabile e non fa parte del vincolo
+   * di unicità del catalogo, quindi una magnum e una 0,75 L possono essere la
+   * stessa riga di catalogo. Un fatto avvenuto non si aggiorna.
+   */
+  formato: string;
+  tipo: PriceObservationTipo;
+  fonte: PriceObservationFonte;
+  /** Intero positivo in centesimi. Mai un float, mai un prezzo formattato. */
+  prezzoCents: number;
+  /** Oggi sempre `"eur"`: il vincolo di riga non ammette altro. */
+  valuta: string;
+  /**
+   * L'istante ECONOMICO, non quello in cui Vinea l'ha saputo. Per una vendita è
+   * il momento del pagamento; per un backfill è il momento reale
+   * dell'acquisizione, mai una data di pubblicazione usata all'indietro come
+   * se fosse storia del prezzo.
+   */
+  observedAt: string;
+};
+
+export interface PriceIntelligenceService {
+  /**
+   * Storia grezza di un vino, dalla più recente alla più vecchia.
+   *
+   * `formato` è opzionale ma raramente omettibile per davvero: senza, la serie
+   * mescola bottiglie di capienza diversa, e confrontare una magnum con una
+   * 0,75 L non è un arrotondamento, è un altro mercato. Chi chiama senza
+   * `formato` sta chiedendo TUTTA la storia del vino e deve saperlo.
+   *
+   * Non aggrega, non ordina per prezzo, non filtra i valori anomali e non
+   * restituisce un intervallo: restituisce ciò che è stato osservato.
+   */
+  storico(input: {
+    wineId: string;
+    formato?: string;
+    limite?: number;
+  }): Promise<Result<WinePriceObservation[]>>;
+}
