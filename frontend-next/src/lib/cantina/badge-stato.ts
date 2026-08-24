@@ -37,10 +37,16 @@
  * vita la misura del difetto perché nessuno possa tornarci sopra per
  * distrazione.
  *
- * Gli altri fondi traslucidi di `phaseColor` restano come sono: sono fuori dal
- * perimetro chiesto. Non è approvazione — `quasi` è misurato in questo file, e
- * il suo numero su foto scura è **peggiore** di quello che ha motivato questa
- * correzione. È una decisione di un'altra sessione, non di chi implementa.
+ * ## E il 24 agosto 2026 anche «Quasi pronto»
+ *
+ * Quella sessione lasciò `quasi` fuori perimetro, ma ne scrisse il numero
+ * proprio perché non restasse un'omissione silenziosa: **1,10:1** su foto scura,
+ * peggiore dei 3,96:1 che avevano motivato la correzione di «Pronto ora». Quel
+ * numero è stato la ragione per riaprirlo, ed è ciò che `COLORE_BADGE_QUASI` e
+ * `COLORE_BADGE_QUASI_PRIMA` tengono ora misurabile.
+ *
+ * `oltre` (`bg-destructive/20 text-destructive`) resta traslucido: è fuori dal
+ * perimetro chiesto qui. Non è approvazione — è un debito con un nome.
  */
 
 // Gli stati vivono accanto a `CellarBottle`, che è il tipo di cui sono un
@@ -107,6 +113,51 @@ export const COLORE_BADGE_PRONTO_PRIMA = {
   classi: "bg-salvia/25 text-salvia",
   base: "#74806c",
   alpha: 0.25,
+} as const;
+
+/**
+ * I colori di «Quasi pronto», nella stessa forma e per la stessa ragione.
+ *
+ * È l'ultima pastiglia della finestra di bevuta che stesse **peggio** di quella
+ * corretta il 19 agosto: `bg-oro/25 text-antracite` è oro traslucido con testo
+ * scuro, e su una foto scura il fondo diventa quasi nero mentre il testo lo è
+ * già — 1,10:1, cioè praticamente invisibile. Su una foto chiara misurava
+ * 13,12:1, il che è il punto: il contrasto non era una proprietà del badge, era
+ * una proprietà della fotografia.
+ *
+ * `--oro-scuro` è un token **nuovo**, per una ragione misurata e non estetica.
+ * `--oro` pieno (`#b59a63`) con `antracite` dà 6,03:1 e passerebbe — ma è
+ * *identico* a `phaseColor.presto`, e `quasi` («troppo giovane, aspetta») e
+ * `presto` («bevila entro pochi anni») sono le due estremità opposte della
+ * stessa scala. Oggi si distinguono solo per la trasparenza, che è l'unica cosa
+ * che questa correzione deve togliere: renderlo opaco riusando `--oro` avrebbe
+ * chiuso il difetto di contrasto cancellando l'informazione.
+ *
+ * `#5e4d2c` conserva tinta e saturazione di `--oro` (H40, S36%, identiche) e le
+ * porta a L27%, cioè al peso di `--bordeaux`. Su `--crema` misura 7,38:1: passa
+ * AA e anche AAA, come `--salvia-scuro` accanto.
+ */
+export const COLORE_BADGE_QUASI = {
+  classi: "bg-oro-scuro text-crema",
+  sfondo: "#5e4d2c",
+  testo: "#f7f3ec",
+} as const;
+
+/**
+ * Il valore che `phaseColor.quasi` aveva prima della correzione, tenuto qui per
+ * la stessa ragione del gemello di «Pronto ora»: 1,10:1 è la misura che ha
+ * riaperto il caso, e un test che la ricalcola è ciò che impedisce di rimettere
+ * un fondo traslucido «tanto sulle mie foto si legge».
+ *
+ * `testo` è esplicito e non implicito: questa pastiglia falliva con testo
+ * **scuro** su fondo che si scurisce, che è una forma diversa dal difetto di
+ * `pronto`, dove testo e fondo erano lo stesso colore.
+ */
+export const COLORE_BADGE_QUASI_PRIMA = {
+  classi: "bg-oro/25 text-antracite",
+  base: "#b59a63",
+  alpha: 0.25,
+  testo: "#202020",
 } as const;
 
 export type BadgeStatoBottiglia = {

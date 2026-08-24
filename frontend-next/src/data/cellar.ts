@@ -511,13 +511,27 @@ export const phaseShort: Record<DrinkPhase, string> = {
  * semplicemente opaco non sarebbe bastato, ed è la ragione per cui questa
  * correzione tocca `globals.css` mentre quella del badge «Aperta» no.
  *
+ * `quasi` è **opaco** dal 24 agosto 2026, per lo stesso motivo e con lo stesso
+ * rimedio. Valeva `bg-oro/25 text-antracite`, cioè oro al 25% e testo scuro: su
+ * una foto chiara dava 13,12:1, su una scura **1,10:1** — il numero peggiore
+ * dell'intera tavolozza, e ben sotto i 3,96:1 che avevano motivato la correzione
+ * di `pronto`. Era stato misurato allora e lasciato fuori perimetro; ora è
+ * `bg-oro-scuro text-crema`, 7,38:1 qualunque sia la foto.
+ *
+ * `--oro-scuro` è un token nuovo e non un riuso, e la ragione è la stessa
+ * misurata per `--salvia-scuro`: nessuna coppia esistente reggeva *e* restava
+ * distinguibile. `--oro` pieno con `antracite` passerebbe (6,03:1), ma è già la
+ * pastiglia di `presto`, e `quasi` («troppo giovane») e `presto` («bevila
+ * adesso») direbbero due cose opposte con lo stesso colore. Oggi differiscono
+ * solo per la trasparenza, che è esattamente ciò che va tolto.
+ *
  * `ideale` **non** è toccato: `bg-bordeaux text-crema` misura 9,99:1 ed era già
- * leggibile. Gli altri traslucidi restano come sono — sono fuori dal perimetro
- * chiesto, e la loro misura sta in `badge-stato.test.ts` invece che qui.
+ * leggibile. `oltre` resta traslucido — è fuori dal perimetro chiesto, e la sua
+ * misura sta in `badge-stato.test.ts` invece che qui.
  */
 export const phaseColor: Record<DrinkPhase, string> = {
   attesa: "bg-secondary text-antracite",
-  quasi: "bg-oro/25 text-antracite",
+  quasi: "bg-oro-scuro text-crema",
   pronto: "bg-salvia-scuro text-crema",
   ideale: "bg-bordeaux text-crema",
   presto: "bg-oro text-antracite",
