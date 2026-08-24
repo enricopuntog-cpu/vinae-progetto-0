@@ -95,8 +95,11 @@
 
 ## ACTIVE TASK
 
-- Price Intelligence 1B is delivered. No migration, Supabase write or provider
-  activation was performed: the change is frontend-only.
+- Price Intelligence 1B is delivered. PR #76 was squash-merged as
+  `b57aa0b5a444b95253ed88efbc0d1eb0b83804ef`; it carried exactly eleven task
+  files and excluded `.wslconfig`. PR checks and post-merge run `32764270537`
+  were green for frontend, frontend-next and backend. No migration, Supabase
+  write or provider activation was performed: the change is frontend-only.
 - The VERIFY audit found and fixed two concrete defects. The Recharts scatter
   tooltip read `payload[0].name`, which carries the **axis** name (`t`) whenever
   `XAxis` has an explicit `dataKey`, so every sale point was labelled "Prezzo
@@ -111,6 +114,16 @@
 - CI `MIN_TESTS` was raised 681 -> 717 in `.github/workflows/ci.yml` and in the
   prelaunch regression contract, which asserts the literal. Only that contract
   file was re-run afterwards: 19 pass / 0 fail.
+- Production smoke ran on the live beta listing `/annuncio/monfortino-2015`,
+  chosen because its `prezzo_mercato_cents` (135000) exceeds its
+  `prezzo_cents` (118000). The page is intact with no error markers; the panel
+  is present and reads "Dati interni Vinea · 1 annuncio comparabile attivo ·
+  1 osservazione di richiesta · 0 osservazioni di vendita"; "Storico in
+  formazione" appears and no "Riferimento richieste" number is shown, as the
+  sample is 1; the legacy `1.350` and every `line-through` are gone from that
+  page. The single ASKING point is drawn client-side, so the scatter symbol is
+  not observable in the server HTML; what the HTML proves is that the panel
+  took the chart branch with one observation, not the empty-history branch.
 - No historical SALE backfill was added. Existing completed orders therefore
   produce no historical SALE observation; whether sale history and later refunds
   should weight the reference remains an open product/statistical decision,
@@ -149,11 +162,11 @@
 - External Price Intelligence providers remain OFF and fail-closed. Turning one
   on requires explicit authorization plus a new enum label, CHECK update and
   controlled write path in a new migration. 1B introduced no key, HTTP call,
-  cron, adapter or flag, and its UI names only "Dati interni Vinea".
-- 1B is verified by unit tests, typecheck and a production build; a production
-  smoke on a live listing page is recorded separately once the deploy is up.
-  Production today has 9 ASKING / 0 SALE
-  and one observation per wine+format, so on live data every listing page will
-  show "Storico in formazione" with no numeric reference until a wine reaches 3
-  comparable active listings.
+  cron, adapter or flag, and its UI names only "Dati interni Vinea". The merged
+  diff adds no `fetch`, no URL, no API key, no cron and no `process.env` read:
+  zero traffic and zero cost.
+- Production has 9 ASKING / 0 SALE and one observation per wine+format, and the
+  nine active listings are nine distinct wines. Every listing page therefore
+  shows "Storico in formazione" with no numeric reference, as the smoke
+  confirmed, until some wine reaches 3 comparable active listings.
 - Smart Sell Price in `/vendi` was not started and remains out of 1B scope.
