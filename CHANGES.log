@@ -65,9 +65,9 @@
 - Price Intelligence 1A is implemented, audited, tested, merged, deployed and
   verified in production. No migration reapplication was attempted after the
   integration had already added its ledger row.
-- The only post-merge repository work is this factual `CHANGES.log` closure on
-  dedicated branch `docs/price-intelligence-1a-closure`; it must ship alone in
-  a documentation PR with `.wslconfig` excluded.
+- This `CHANGES.log` closure is the final Price Intelligence 1A repository
+  update. Once it reaches `main`, no 1A implementation, deployment or
+  documentation work remains; `.wslconfig` stays excluded.
 - No historical SALE backfill was added. Existing completed orders therefore
   produce no historical SALE observation; whether 1B should use or weight such
   history, including refunds, remains a product/statistical decision.
