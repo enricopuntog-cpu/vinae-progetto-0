@@ -6,102 +6,143 @@
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
 - Migration numbering is authoritative: Phase 11 = admitted AI extensions,
   Phase 12 = Club/Community, Phase 13 = Cutover.
-- FAST UX cleanup is merged on `origin/main` as
-  `9764d5df92bbf377c7f367921ab557eb3e8f0629`, PR #72. `/vendite` now has a
-  local server-side guard: `await connection()` prevents static prerender,
-  `getSupabaseServerClient()` + `auth.getUser()` verifies the session, and an
-  anonymous request receives `307 Location: /accedi`. No `middleware.ts` or
-  `proxy.ts` exists; the Seller Dashboard implementation is unchanged.
-- The production build reports `/vendite` as `ƒ` (dynamic), not `○` (static).
-  The anonymous production smoke on
-  `https://timely-lokum-43a12e.netlify.app/vendite` returned `307` to
-  `/accedi`, with a private/no-store cache policy.
-- The Cantina drink-window variant `quasi` is now
-  `bg-oro-scuro text-crema`. The opaque `--oro-scuro: #5e4d2c` gives 7.38:1
-  against `--crema` on every underlying photograph, passing WCAG AA and AAA.
-  The replaced translucent form measured 1.10:1 on black and 13.12:1 on
-  white. `attesa`, `pronto`, `ideale`, `presto`, `oltre` and `none` were not
-  changed.
-- `MIN_TESTS` in `.github/workflows/ci.yml` and its regression contract are
-  aligned to the measured suite total, 669.
-- Local VERIFY was green: lint 0 errors / 14 pre-existing warnings, typecheck
-  clean, 669 tests pass / 0 fail, production build green, `/vendite` shown as
-  `ƒ`, and `git diff --check` clean. After the threshold micro-change, the
-  focused prelaunch contract passed 19 / 0.
-- PR #72 checks were green at head `848ba46f3488319604d241462bc863b7286dea42`:
-  frontend, frontend-next, backend, Netlify deploy preview and Netlify rules.
-  The post-merge CI run 32708754289 on `9764d5d` is also green in all three
-  jobs. Supabase Preview was skipped on the PR and succeeded post-merge; the
-  change contains no migration and required no Supabase verification.
+- `origin/main` is `a3ee7ae2db196f498085979f3a643f00b70e43f7` (after PR #73).
+- Work branch `feat/price-intelligence-1a-foundation` carries four commits from
+  that SHA, head `ac6a0e953b0440794ce703a418cd378429084cdd`, open as PR #74
+  toward `main`. The PR touches exactly eight files and does not contain
+  `.wslconfig`, which is pre-existing local work and was left untracked.
+- Price Intelligence 1A adds one migration,
+  `supabase/migrations/20260824120000_price_intelligence_1a_observations.sql`,
+  which has **not** been applied to any Supabase project. It creates
+  `public.wine_price_observations` (append-only history), enums
+  `price_observation_tipo` (`richiesta`, `vendita`) and
+  `price_observation_fonte` (single label `vinea_interno`), the read view
+  `public.wine_price_history`, three append-only triggers, one write door
+  `private.price_observation_registra`, and two domain triggers.
+- ASKING is a trigger on `public.listings`, not an RPC, because since
+  `20260819090000_annuncio_modifica_attivo.sql` a seller UPDATEs
+  `prezzo_cents` directly through PostgREST and at least six code paths write
+  `stato = 'attivo'`. The `riservato` -> `attivo` return is the one deliberate
+  exclusion: it is written by reservation-release paths on checkout expiry and
+  is not a new quotation.
+- SALE is a trigger on `public.orders` firing on the transition to `completato`,
+  reached by four existing paths, with price `orders.prezzo_cents` frozen on the
+  order. `completato` is **not** absorbing: `public.ordine_contesta` accepts it
+  among contestable states while payout has not transferred, so
+  `completato -> contestato -> completato` is the ordinary dispute-resolution
+  path. A `vendita` row therefore means "this order reached `completato` at this
+  price", not "this money can never come back"; re-entry writes no second row
+  and a later refund alters nothing. Weighting refunds statistically is a 1B
+  decision.
+- `anon` and `authenticated` have no privilege on the base table and read only
+  through the view. `service_role` deliberately keeps its GRANT, exactly as on
+  `audit_log`: rewrite, deletion and external source are closed by three
+  triggers and a row CHECK, which bind privileged writers too.
+- The grid `supabase/tests/price_intelligence_1a.sql` was really executed on
+  2026-08-24 on a disposable PostgreSQL 17.10 container, from empty, bootstrap
+  `9c` plus 36 migrations each in its own transaction. First clean run
+  **27 PASSA / 2 FALLISCE**; after correction **30 PASSA / 0 FALLISCE**; after
+  the VERIFY audit added cases 31-32, **32 PASSA / 0 FALLISCE**, with zero
+  fixture residue. It was not run against production.
+- Of the two original failures, case 21 was a defect in the grid (column
+  expectation mis-sorted) and case 27 was a false claim in the migration comment
+  about `service_role`'s privileges. Cases 31-32 came from a reading during the
+  VERIFY audit, not from a failure: they assert that leaving and re-entering
+  `completato` writes no second `vendita`.
+- `frontend-next` gains a read-only contract `PriceIntelligenceService` in
+  `src/services/types.ts` and the adapter
+  `src/services/price-intelligence/supabase-price-intelligence-service.ts`,
+  which reads the view and never the base table and has no write method.
+  No UI consumes it: charts, ranges, suggested price and `/vendi` are 1B.
+- VERIFY on `frontend-next` was green: lint 0 errors / 14 pre-existing warnings,
+  typecheck clean, **681 tests pass / 0 fail**, production build green,
+  `git diff --check` clean. `MIN_TESTS` was raised 669 -> 681 in
+  `.github/workflows/ci.yml` and in the prelaunch regression contract that
+  asserts the same string.
+- All PR #74 checks are green at head `ac6a0e9`: frontend, frontend-next
+  (`681 test superati (soglia 681)`), backend, Supabase Preview, Netlify deploy
+  preview, header and redirect rules.
+- No external price provider exists: no key, no HTTP call, no cron, no adapter,
+  no configuration flag. `/vendi` is unchanged and the 260/300/120 placeholder
+  in `useSellWizard.ts` was not modified.
+- The Cantina drink-window variant `quasi` is `bg-oro-scuro text-crema`,
+  7.38:1 against `--crema`, passing WCAG AA and AAA.
 - Personal profile photos and Club/Community remain live in `frontend-next/`.
   The latest production migration ledger row for project
   `pijnmcllmfgjmgsvtcej` remains `20260822000000_club_user_creation`.
-- Migration `20260822000000_club_user_creation.sql` adds user-owned clubs,
-  OWNER_ONLY posting, WebP cover Storage and `public.club_crea`. Its disposable
-  PostgreSQL 17.10 grid passed 48 / 0 after applying all 35 migrations in
-  order. Production objects, ACLs, policies, checks and triggers were reread
-  and verified after deployment.
 - `Club Vinea` is the display name; historical slug `circolo-vinea` and
-  technical identifiers remain unchanged. Anonymous production smoke proved
-  the Home Club discovery block and its real link.
+  technical identifiers remain unchanged.
 - Deliberate historical verification residues remain: one test bottle in state
   `aperta`, the test account, and three objects in each of its `cantina` and
   `annunci` folders.
 
 ## ACTIVE TASK
 
-- VERIFY & SHIP for `/vendite` auth guard and the `quasi` contrast correction is
-  complete. No implementation, CI, merge or anonymous-smoke failure remains.
-- Audit found no concrete defect to correct. The route guard is local and
-  server-side; an anonymous request redirects to bare `/accedi`; the dashboard
-  renders only after a verified user; `connection()` is effective; no global
-  interceptor exists; KPI, charts, `ListingService`, `OrderService` and listing
-  lifecycle are untouched.
-- The `quasi` change is isolated to its phase mapping plus one additive Tailwind
-  colour token. The token has one `:root` definition and one `@theme` mapping;
-  no theme override or unrelated runtime use exists. Other `bg-oro/25` uses are
-  separate non-`quasi` UI and were intentionally not changed.
-- Commit `848ba46f3488319604d241462bc863b7286dea42` was pushed on
-  `fast/vendite-guard-badge-quasi`; PR #72 was squash-merged. Final
-  `origin/main` is `9764d5df92bbf377c7f367921ab557eb3e8f0629` and contains the
-  guard, badge, tests and `MIN_TESTS: "669"`.
-- No migration, RPC, schema or policy change was made. No Supabase data was
-  written. No Price Intelligence work was started.
+- Price Intelligence 1A VERIFY & SHIP is at the merge boundary: audit done,
+  grid re-run, full VERIFY green, PR #74 open with all checks green. No merge
+  and no production migration apply has happened yet.
+- The audit found one concrete defect and corrected it: the migration described
+  `completato` as terminal, which `public.ordine_contesta` contradicts. The
+  behaviour was already right — the partial unique index holds — but was
+  neither proven nor accurately described. Fixed in the migration comment, the
+  trigger's function comment, grid case 11's detail, new grid cases 31-32 and
+  `supabase/tests/README.md`.
+- Scope respected: no chart, trend, price range, suggested price, reliability
+  score, ranking or Price Intelligence UI. Those are 1B.
+- The listings state machine, the order lifecycle, payout, Stripe, release,
+  auto-release and disputes were not modified. Price Intelligence observes the
+  order domain and does not govern it.
+- The backfill dates to the real moment of acquisition (`now()`), never to
+  `published_at` or `created_at`, and never converts `prezzo_mercato_cents`
+  into authoritative market data.
+- No SALE backfill exists: historical `completato` orders produce no `vendita`
+  rows. `paid_at` and `orders.prezzo_cents` would make one provable, but a
+  backfill is a product decision, not a defect fix, and is left to 1B.
 
 ## NEXT STEPS
 
-1. With an already-existing authenticated session, smoke-test `/vendite`: dashboard content and the `quasi` badge over a real photograph.
-2. With the same existing session, smoke-test the Home `Club che segui` block and followed-club exclusion from discovery.
-3. With the same existing session, smoke-test profile-photo upload/save/render, preset-or-initials switch and old-object cleanup.
+1. Squash-merge PR #74 with green checks, then fetch and verify the final `origin/main` files and merge SHA.
+2. After merge, apply only `20260824120000_price_intelligence_1a_observations.sql` to production ref `pijnmcllmfgjmgsvtcej`, halting without writing if ref or environment do not match.
+3. Reread the production ledger and verify the effective table, triggers, view columns, ACLs, function search_path and the real ASKING backfill count against the pre-apply count of active listings.
 
 ## BLOCKERS / NOTES
 
-- No usable authenticated browser session was available. Per scope, no account
-  or fixture was created. Authenticated `/vendite`, the Seller Dashboard and the
-  `quasi` badge over a real photograph remain unobserved in a browser, although
-  the server guard, contrast arithmetic, full suite, build, CI and anonymous
-  production redirect are verified.
-- `oltre` (`bg-destructive/20 text-destructive`) remains a translucent badge
-  over an unknown photograph. It was outside PR #72 and is not part of the
-  completed `quasi` task.
+- The migration has never run on production. The backfill's effect on real data
+  is unmeasured: how many active listings it will convert into `richiesta`
+  observations is known only for the disposable database.
+- The grid does not cover PostgREST: it proves `authenticated` cannot write in
+  SQL, not that the browser receives the correct `403`. It also proves sale
+  idempotency against a repetition, not against two simultaneous completions;
+  that case rests on the partial unique index alone.
+- `wine_price_history` is a `security_invoker = off` view, so the Supabase
+  linter will report `security_definer_view`. It is the expected signal, the
+  same as for `public_listings` and `public_clubs`.
+- The 12b and 12d grids are absent from `supabase/tests/README.md`. That gap
+  predates this task and was not filled from here.
+- No usable authenticated browser session was available. Authenticated
+  `/vendite`, the Seller Dashboard and the `quasi` badge over a real photograph
+  remain unobserved in a browser.
 - The authenticated Home has not been rendered. `Club che segui`, followed-club
   exclusion, empty state and read-error behavior are proven by tests only.
 - The authenticated profile-photo smoke remains outstanding: upload, save,
   Account and seller rendering, preset/initials switch and old-object cleanup.
 - The authenticated OPEN club-creation flow on production also remains unrun.
+- `oltre` (`bg-destructive/20 text-destructive`) remains a translucent badge
+  over an unknown photograph. It was outside PR #72 and remains uncorrected.
 - The seller dashboard has one data-model gap: no order completion timestamp is
-  client-readable, so both temporal series group by month of order receipt. A
-  true completed-per-month series needs a new column or view and was not
-  invented.
+  client-readable, so both temporal series group by month of order receipt.
 - The Club 12d grid must not run against production: it writes users, clubs,
   posts, replies, likes, reports and Storage objects. It does not cover
   PostgREST, the browser image pipeline or concurrent same-name creation.
 - Phase 11 implementation is not open. A new two-provider F01 canary lacks
-  current authorization and paid-project confirmation; provider keys/budget,
-  PhotoRoom timing and legal review remain external product prerequisites.
+  current authorization and paid-project confirmation.
 - Phase 13 has not started and must not be inferred from the public beta or
   green checks.
 - The embedded Supabase test mailer remains unsuitable for real traffic; custom
   SMTP depends on a verifiable custom domain.
 - Before enabling payments, remeasure scheduler configuration and obtain a
   successful fail-closed health run; old failure counts are historical.
+- External Price Intelligence providers remain OFF and fail-closed. Turning one
+  on requires three explicit acts in a NEW migration — an enum label, the row
+  CHECK, and a write path — plus cabin authorization of provider, plan, budget
+  and credentials. None of the three can happen by accident.
