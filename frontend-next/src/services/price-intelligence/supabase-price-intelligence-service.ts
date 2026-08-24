@@ -89,9 +89,10 @@ const LIMITE_MASSIMO = 1000;
 export const createSupabasePriceIntelligenceService = (
   client: SupabaseClient | null,
 ): PriceIntelligenceService => ({
-  async storico({ wineId, formato, limite }) {
+  async storico(input) {
     if (!client) return noPriceIntelligenceClient();
 
+    const { formato, limite } = input;
     const richiesto = limite ?? LIMITE_PREDEFINITO;
     const tetto = Math.min(Math.max(1, Math.trunc(richiesto)), LIMITE_MASSIMO);
 
@@ -100,12 +101,33 @@ export const createSupabasePriceIntelligenceService = (
     // restituirebbe zero righe facendo sembrare vuota una storia che non lo e.
     const formatoNormalizzato = formato?.trim();
 
+    // Uno dei due, mai entrambi: il tipo dell'input lo impone e qui si legge
+    // nello stesso ordine. Lo slug e la via che usa /annuncio/[id], dove
+    // l'UUID del vino non arriva mai fino alla pagina; l'UUID resta per chi
+    // parte da una riga di catalogo e ce l'ha gia in mano. Entrambe le colonne
+    // sono esposte dalla vista, quindi nessuno dei due rami tocca la tabella
+    // base.
+    //
+    // Si sceglie su una stringa non vuota, e senza chiave non si interroga
+    // affatto: un identificativo vuoto che scivola nell'altro ramo
+    // interrogherebbe `wine_slug = ''`, cioe una colonna che il chiamante non
+    // ha mai nominato, e tornerebbe zero righe. Una storia vuota e una
+    // risposta; qui la risposta vera e "non so di quale vino stai parlando", e
+    // la pagina la mostra gia come storico non disponibile.
+    const wineId = input.wineId?.trim();
+    const wineSlug = input.wineSlug?.trim();
+
+    let chiaveVino: { colonna: string; valore: string };
+    if (wineId) chiaveVino = { colonna: "wine_id", valore: wineId };
+    else if (wineSlug) chiaveVino = { colonna: "wine_slug", valore: wineSlug };
+    else return priceIntelligenceError("storico", { code: "vino_non_identificato" });
+
     let query = client
       .from("wine_price_history")
       .select(
         "wine_id, wine_slug, produttore, nome, annata, formato, tipo, fonte, prezzo_cents, valuta, observed_at",
       )
-      .eq("wine_id", wineId);
+      .eq(chiaveVino.colonna, chiaveVino.valore);
 
     if (formatoNormalizzato) query = query.eq("formato", formatoNormalizzato);
 
