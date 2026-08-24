@@ -121,11 +121,14 @@
 
 ## ACTIVE TASK
 
-- Smart Sell Price for `/vendi` is delivered on branch `feat/smart-sell-price`
-  off `main` at `6fe86e566738cdb6b97df7227e903d14d0bb3717`, as PR #78. The PR
-  carries exactly twelve task files and excludes `.wslconfig`, which stays
-  pre-existing local work. No migration, Supabase write or provider activation
-  was performed: the change is frontend-only.
+- Smart Sell Price for `/vendi` is delivered. Branch `feat/smart-sell-price` off
+  `main` at `6fe86e566738cdb6b97df7227e903d14d0bb3717` became PR #78, squash-merged
+  as `1ae18a4`. The merge carries thirteen files — twelve task files plus
+  `CHANGES.log` — and excludes `.wslconfig`, which stays pre-existing local work.
+  No migration, Supabase write or provider activation was performed: the change
+  is frontend-only.
+- PR checks on head `bc32fa209f6068642afda8ce7dbc8df4950e7084` and post-merge run
+  `32788411557` were green for frontend, frontend-next and backend.
 - Full `frontend-next` verification ran once: `bun run lint` 0 errors with the
   14 pre-existing `<img>` warnings, `bun run typecheck` clean, `bun run test`
   **736 pass / 0 fail** across 48 files and 17,363 expectation calls,
@@ -136,8 +139,20 @@
 - The VERIFY audit found no further concrete defect to fix: the placeholder
   removal, the 1B reuse, the sub-threshold silence, the explicit-application
   path and the keyed async state were already correct in the BUILD.
-- Production smoke on the deployed beta is recorded separately below once the
-  merge has been deployed.
+- Production smoke on `https://timely-lokum-43a12e.netlify.app` verified the
+  deployed bundle, not an authenticated run. `/vendi` returns HTTP 200 and its
+  client chunk contains "Prezzo suggerito Vinea", "Dati insufficienti per
+  suggerire un prezzo", "servono almeno", "Usa questo prezzo", "Fonte: Dati
+  interni Vinea", "Copertura dati", "Cerco annunci comparabili" and "Inserisci il
+  prezzo". The chunk contains no `sassicaia`, no "riferimento beta locale" and no
+  external provider name: the placeholder is gone from what is actually served.
+- Anonymous PostgREST on `public_listings` reports **9 active listings across 9
+  distinct wine+format pairs, at most 1 comparable per pair**. Every `/vendi`
+  price step in production therefore takes the insufficient-data branch and shows
+  no number, which is the expected state until a wine reaches 3 comparables.
+- The authenticated `/vendi` wizard run is **NON VERIFICATO**: no existing
+  authenticated session or bottle was available, and no account, fixture or
+  listing was created for the smoke.
 - Price Intelligence 1B is delivered. PR #76 was squash-merged as
   `b57aa0b5a444b95253ed88efbc0d1eb0b83804ef`; it carried exactly eleven task
   files and excluded `.wslconfig`. PR checks and post-merge run `32764270537`
