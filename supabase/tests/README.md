@@ -660,3 +660,78 @@ protezioni tecniche. Non sta in `supabase/migrations/` perché il seed non è
 schema evolution e non deve essere applicato implicitamente dall'integrazione;
 non si chiama `supabase/seed.sql` perché `config.toml` ha `[db.seed]` abilitato
 su quel nome e lo caricherebbe a ogni `db reset` e sulle preview branch.
+
+## Price Intelligence 1A — la fondazione dei prezzi
+
+[`price_intelligence_1a.sql`](price_intelligence_1a.sql) — 32 casi
+**comportamentali** sulla migrazione
+`20260824120000_price_intelligence_1a_observations.sql`: quando un prezzo
+chiesto diventa storia e quando deliberatamente non lo diventa, quale
+transizione dell'ordine è una vendita, il prezzo congelato, l'append-only
+contro il client e contro il proprietario della tabella, ciò che il modello di
+lettura non lascia uscire, il backfill che non inventa storia, e le fonti
+esterne spente.
+
+**Eseguita davvero il 2026-08-24**, su PostgreSQL 17.10 (`postgres:17.10`),
+container usa e getta, database **dal vuoto**, bootstrap `9c` e poi 36
+migrazioni nell'ordine reale, ciascuna nella propria transazione.
+
+| esecuzione | esito |
+| --- | --- |
+| prima, pulita | **27 PASSA / 2 FALLISCE** |
+| dopo le correzioni | **30 PASSA / 0 FALLISCE** |
+| riesecuzione in VERIFY, con i casi 31-32 | **32 PASSA / 0 FALLISCE** |
+
+I due fallimenti non erano equivalenti, ed è la distinzione che conta:
+
+* il **caso 21** falliva per un difetto *della griglia* — l'elenco atteso delle
+  colonne della vista era ordinato a mano come `annata,formato,fonte,…` mentre
+  `order by column_name` produce `annata,fonte,formato,…`. La vista era già
+  corretta;
+* il **caso 27** falliva per un'affermazione *falsa nella migrazione*: un
+  commento sosteneva che `service_role` non avesse `INSERT` sulla tabella. Ce
+  l'ha, perché `9c_bootstrap_postgres_locale.sql` contiene un
+  `alter default privileges … grant all on tables to … service_role` e la
+  `revoke all` della migrazione nominava solo `anon` e `authenticated`. La
+  verifica su `audit_log` — la tabella append-only canonica del repository — ha
+  mostrato che lì `service_role` conserva l'intero insieme di privilegi per la
+  stessa ragione. Il GRANT **non** è stato revocato: toglierlo romperebbe la
+  chiave di back-office senza chiudere nessuna delle tre porte che contano —
+  riscrittura, cancellazione, fonte esterna — già chiuse da tre trigger e da un
+  `CHECK`. È stato corretto il commento, la sotto-asserzione (d) del caso 27 è
+  diventata una prova comportamentale, ed è stato aggiunto il caso 30 che
+  misura la posizione reale di `service_role`.
+
+Vale la pena dirlo perché è il caso limite che questo README predica: una
+griglia che fallisce ha trovato *o* un difetto proprio *o* un difetto nel
+codice, e sono due esiti da non confondere. Qui è successo uno per parte.
+
+I **casi 31 e 32**, aggiunti in fase di VERIFY, non nascono da un fallimento ma
+da una lettura: un commento della migrazione chiamava `completato` uno stato
+«terminale», mentre `public.ordine_contesta` (7b riga 1204) lo accetta
+esplicitamente fra gli stati contestabili finché il payout non è stato
+trasferito. Il percorso `completato → contestato → completato` è quindi la
+risoluzione ordinaria di una contestazione (7c/7f riga 1125), non un caso di
+laboratorio. Il comportamento era già corretto — l'indice unico parziale regge —
+ma non era né provato né descritto con precisione: una griglia che passa su un
+invariante che nessuno ha scritto non lo sta verificando.
+
+**Non eseguirla sul progetto reale.** Scrive: crea utenti, vini, bottiglie,
+annunci e un ordine, e fa passare quell'ordine per `completato`. Appartiene
+alla categoria «usa e getta» della 12bc/12d, non alla «sola lettura» della 12a.
+Residui dopo la pulizia: zero su tutte le fixture. Gli otto vini che restano in
+un `count(*)` nudo su `wines` sono il seed di catalogo di
+`20260728193937_listings_catalog.sql`, non residui.
+
+### Quello che non misura
+
+* **Niente PostgREST.** La traduzione dei `42501` in `403` e la lettura via
+  HTTP non passano di qui: i casi 15-17 provano che il ruolo `authenticated`
+  non può scrivere *in SQL*, non che il client riceva l'errore giusto.
+* **Nessuna concorrenza.** Tutti i casi sono sequenziali. In particolare
+  l'idempotenza della vendita è provata contro una **ripetizione**, non contro
+  due completamenti simultanei dello stesso ordine: lì la rete è l'indice unico
+  parziale, non questa griglia.
+* **Nessuna interfaccia**, perché non esiste: è la Fase 1B.
+* **Nessun fornitore esterno**, perché non ne esiste nessuno. Il caso 27 misura
+  l'**assenza di una via d'ingresso**, che è ciò che si può misurare.
