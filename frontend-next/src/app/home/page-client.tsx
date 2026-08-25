@@ -35,7 +35,13 @@ const HomeContent = ({ annunci, nome }: { annunci: Wine[]; nome: string }) => {
     <div className="space-y-10">
       <section className="rounded-3xl bg-gradient-to-br from-bordeaux to-antracite p-6 text-crema">
         <p className="text-xs uppercase tracking-[0.3em] text-oro">La tua Vinea</p>
-        <h1 className="mt-2 font-serif text-4xl">{nome}</h1>
+        {/* D6. Il saluto usa il nome del profilo reale, quello di
+            `public.profiles.username`: `HomeUtentePageClient` ha gia mostrato
+            "Profilo non disponibile" se non era leggibile, quindi qui `nome` non
+            e mai un segnaposto. */}
+        <h1 className="mt-2 font-serif text-4xl" data-testid="home-saluto">
+          Bentornato, {nome}
+        </h1>
         <p className="mt-2 text-sm text-crema/80">Dati personali letti dalla sessione e dai servizi collegati.</p>
         <Button asChild variant="outline" className="mt-5 border-crema/40 bg-transparent text-crema hover:bg-crema/10"><Link href="/esplora"><Search className="h-4 w-4" /> Cerca nel catalogo</Link></Button>
       </section>

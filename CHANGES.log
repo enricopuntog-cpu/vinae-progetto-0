@@ -4,9 +4,10 @@
 
 - `frontend/` + `backend/` remain the served product. The public
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
-- `origin/main` is `bdfd2c75c1b4527533827ed3ee8bc61c7597d14e` (PR #84,
-  "Esegui la suite del payout runner in CI"), which follows `2050e25` (PR #83)
-  and `e14daed` (PR #82, "Gate fail-closed per lo scheduler dei payout").
+- `origin/main` is `72aeff8a91f0831aa80923ae4dc82321b399090a` (PR #85,
+  "Riconcilia CHANGES.log dopo il merge della suite payout runner in CI"), which
+  follows `bdfd2c7` (PR #84, "Esegui la suite del payout runner in CI"),
+  `2050e25` (PR #83) and `e14daed` (PR #82).
 - CI runs four jobs: `frontend`, `frontend-next`, `payout-runner`, `backend`.
 - Production project ref is `pijnmcllmfgjmgsvtcej`. Verified by the cabin after
   PR #81: the production migration ledger really ends at `20260825120000`
@@ -15,8 +16,9 @@
   inspected directly through a read-only management SQL channel.
 - The former blocker "production ledger and internal objects not inspectable"
   is therefore CLOSED. Profile Certifications is closed and is not reopened.
-- CI `MIN_TESTS` is 760 in `.github/workflows/ci.yml` and its regression
-  contract.
+- CI `MIN_TESTS` is 798 in `.github/workflows/ci.yml` and in its regression
+  contract `frontend-next/src/lib/beta/prelaunch-contract.test.ts`. Raised from
+  760 by D6 against a measured full-suite total of 798, stable over four runs.
 - Phase 7g payout scheduler: the workflow `Phase 7 - auto-release payouts` runs
   `0 */6 * * *`. Until PR #82 it attempted the invocation on every run and
   failed before the request because `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
@@ -29,6 +31,119 @@
   OFF. Payments remain OFF.
 
 ## ACTIVE TASK
+
+### D6.1–D6.5 Authenticated Mobile Shell & Home
+
+- Shipped as PR #86 from branch `feat/d6-mobile-auth-shell-home`.
+- Branch based on `72aeff8`, which was still
+  `origin/main` at VERIFY time: no divergence, no rebase or merge was needed. No
+  migration, no schema/RLS/Storage change, no production write, no external
+  provider call.
+- The BUILD audit found: header, bottom-nav and Home already existed; the real
+  gaps were
+  four. The header had no avatar and put the search lens where the third action
+  belongs; the mobile bar had `Account` and no `Cantina`; there was no avatar
+  fallback below the initials; the Home hero printed the bare username.
+- Reused, not rebuilt: `useVinea()` (`authProfilo.avatarUrl`, `authProfilo.userId`,
+  `authProfileName`) as the auth/profile source of truth; `avatarSicuro()` /
+  `percorsoAvatarPersonale()` / `riferimentoAvatarSicuro()` from the CLOSED
+  avatar foundation; `HeaderInboxActions` for Messaggi + Notifiche; the existing
+  `/messaggi`, `/notifiche`, `/account`, `/cantina`, `/esplora`, `/vendi`,
+  `/community`, `/home` routes. No second shell, no new Home, no new Account
+  route, no duplicated resolver or storage helper.
+- New `src/lib/shell/navigazione-mobile.ts`: the two bar models plus
+  `voceNavAttiva()` and `classiRicercaHeader()`. Authenticated bar is exactly
+  Home (`/home`) / Ricerca / Vendi / Club / Cantina; the guest bar is unchanged
+  and keeps `Account`. Extracting the model is what makes the shell verifiable
+  without mounting React, which is this suite's existing convention.
+- Fixed while there: the mobile bar used a bare `startsWith`, so `/vendite` — a
+  real route — lit up `Vendi`. Now it matches on the `/` boundary, as the
+  desktop bar already did.
+- New `src/components/vinea/AvatarPersona.tsx`: priority foto → preset →
+  silhouette, with `SilhouettePersona` exported separately so the fallback is
+  not header-only. The silhouette is an inline SVG, so the bottom of the chain
+  is never itself a network request. Initials are no longer the final fallback;
+  `inizialiDa()` stays for `/account`, which was not touched.
+- New `risolviAvatarPersona()` in `src/lib/profilo/avatar.ts` returns a
+  discriminated `fonte`. It fails closed onto the silhouette for an absent
+  value, a foreign user's folder, an off-catalogue preset, an external URL, and
+  a photo whose Storage base is unusable — so no broken image and no invalid
+  `src` can be emitted.
+- Measured and worth recording: foto and preset can never both apply, because
+  `profiles.avatar_url` is one column and the two shapes are disjoint
+  (`/avatar/*.svg` vs `<uuid>/<uuid>.webp`). The stated priority is therefore
+  explicit in code and observable through `fonte`, but cannot be violated at
+  runtime. That mutual exclusivity is pinned by its own test.
+- Header authenticated mobile: Messaggi, Notifiche, avatar, in that order, with
+  the avatar last in the left-to-right actions row and therefore at the far
+  right. The lens is `hidden md:inline-flex` when authenticated and keeps its
+  exact previous classes when guest. The avatar is `md:hidden`, so the desktop
+  shell — which already carries an `Account` link — is untouched.
+- Home authenticated hero now reads `Bentornato, {nome}` from
+  `authProfileName`. Loading, `AccessRequired` and `ProfileMissing` states, the
+  hero visual language, the KPI row and the Cantina access are unchanged. No
+  dashboard, no seller statistics, no Balance.
+- The independent VERIFY audit read the real working tree, including the two
+  untracked files `git diff` does not show until staged, and found three defects
+  the BUILD report did not list. All three are corrected on the branch:
+  1. the new avatar link set `aria-current` from a bare
+     `pathname.startsWith("/account")` — the same defect class D6 had just
+     removed from the bar. No `/account`-prefixed sibling route exists today, so
+     it was latent, not observable. `percorsoAttivo()` is now the exported form
+     of the `/`-boundary comparison, `voceNavAttiva()` is written on top of it,
+     and the avatar uses it too;
+  2. no test proved the shell actually branches on the role: replacing
+     `navMobile(autenticato)` with a fixed list passed the whole suite. That is
+     coverage the task required. Three assertions now pin the wiring, including
+     that neither bar constant is named inside the component;
+  3. `expect(azioni.indexOf("</div>", posAvatar)).toBeGreaterThan(posAvatar)`
+     was vacuous — any later `</div>` satisfied it. The tail after the avatar is
+     now delimited and asserted empty.
+- Test-shape decision, measured rather than assumed: the suite is 51 files, all
+  `.ts`, with no DOM library, no `bunfig.toml` preload and no rendering test.
+  React-level assertions are therefore not available without adding a dependency
+  and moving the lockfile, which is out of scope. Behaviour that can be pure
+  logic — the two bar models, the active state, the header lens classes, the
+  avatar priority — is tested directly; only the JSX wiring is a source
+  contract, which is this suite's existing convention.
+- Coverage moved, not lost: `prelaunch-contract`'s "no visible link to a
+  nonexistent route" scan only reads `.tsx`, so lifting the bar model into a
+  `.ts` module took the five destinations out of its reach. The new suite checks
+  each one against a real `src/app/<rotta>/page.tsx` instead, which is stricter
+  for these entries than the regex sweep was.
+- Verification on the branch, all six required checks: full `bun run lint` is
+  **0 errors / 14 warnings**, every warning a pre-existing `<img>` notice in a
+  file D6 does not touch; `bun run typecheck` clean; full `bun test` **798 pass
+  / 0 fail** across 51 files; `bun run build` completes with all 24 routes
+  emitted; `git diff --check` clean; targeted D6 suites **50 pass / 0 fail**.
+- Nine control runs proved the assertions bite. Six from the BUILD: always
+  visible lens, `Account` back in place of `Cantina`, bare `startsWith` on the
+  bar, an action after the avatar, a greeting without `Bentornato`, and a photo
+  emitting an empty `src` instead of the silhouette. Three added by VERIFY, one
+  per corrected defect: bare `startsWith` on the avatar, a fixed bar in place of
+  `navMobile(autenticato)`, and an element inserted after the avatar. Each fails
+  exactly the intended test and `Layout.tsx` was diffed byte-identical after
+  every revert. A tenth control — swapping the foto/preset order — did **not**
+  fail, which is the mutual exclusivity recorded above and not a hole.
+- `MIN_TESTS` is raised **760 → 798** in `.github/workflows/ci.yml` and in its
+  regression contract `prelaunch-contract.test.ts`. 798 is the measured total,
+  identical across four consecutive full runs; 760 was the pre-D6 total, so the
+  38 tests D6 adds are exactly the increase. The gate was re-simulated locally
+  against the new floor.
+- Files in the PR: `.github/workflows/ci.yml`,
+  `frontend-next/src/components/vinea/Layout.tsx`,
+  `frontend-next/src/components/vinea/AvatarPersona.tsx` (new),
+  `frontend-next/src/lib/shell/navigazione-mobile.ts` (new),
+  `frontend-next/src/lib/shell/navigazione-mobile.test.ts` (new),
+  `frontend-next/src/lib/profilo/avatar.ts`,
+  `frontend-next/src/lib/profilo/avatar.test.ts`,
+  `frontend-next/src/lib/beta/prelaunch-contract.test.ts`,
+  `frontend-next/src/app/home/page-client.tsx`, this file. Pre-existing
+  untracked `.wslconfig` and the pre-existing
+  `codex-transfer-phase-6d-1-worktree` stash are not mine, were not touched and
+  are not in the PR.
+
+### Phase 7g payout scheduler — shipped, historical
 
 - Phase 7g payout scheduler readiness gate, shipped as PR #82, squash-merged to
   `e14daed`. All three CI jobs passed on head `a46cd2a`; Supabase Preview
@@ -124,27 +239,42 @@
   `payout-runner`, `backend`, the Node 22 pin, the root working directory and
   the absence of a job- or step-level `if:`. The full frontend suite and builds
   were deliberately not run.
-- `MIN_TESTS` for `frontend-next` remains **760**, re-read from the modified
-  file after the edit. No `frontend-next` test was added or removed.
+- `MIN_TESTS` for `frontend-next` was left at **760** by that PR, re-read from
+  the modified file after the edit; no `frontend-next` test was added or
+  removed. D6 has since raised it to 798, as recorded in CURRENT STATE.
 - No secret or Actions variable was created, read by value or configured. The
   payout scheduler and payments both remain OFF.
 
 ## NEXT STEPS
 
-1. Configure the Actions variable `SUPABASE_URL` and the secrets `SUPABASE_ANON_KEY` (legacy anon JWT) and `PAYOUTS_JOB_TOKEN`, verifying the token matches the Edge Function secret, before setting `PAYOUTS_SCHEDULER_ENABLED=true`.
-2. Run the first `workflow_dispatch` with `PAYOUTS_SCHEDULER_ENABLED=true` and `PAYMENTS_ENABLED=false` and confirm it returns queue health only, with zero release actions.
-3. Run the authenticated `/account` smoke only if an already-existing browser session becomes available.
+1. Cabina: audit indipendente del report finale e chiusura D6.
+2. Cabina: selezione del prossimo BUILD dalla ROADMAP ATTIVA in base a dipendenze/stato reale.
+3. Eseguire soltanto il prossimo BUILD esplicitamente approvato dalla Cabina.
 
 ## BLOCKERS / NOTES
 
-- The payout scheduler is still neither authorized nor configured. Setting
-  `PAYOUTS_SCHEDULER_ENABLED` remote, creating or rotating the secrets, and
-  enabling `PAYMENTS_ENABLED` were all outside this task and were not performed.
-- The first real `workflow_dispatch` with `PAYOUTS_SCHEDULER_ENABLED=true` and
-  `PAYMENTS_ENABLED=false` remains a mandatory protection before payments are
-  enabled: it must return health only and zero release actions.
+- Deferred readiness, not active roadmap: the payout scheduler is still neither
+  authorized nor configured. Setting `PAYOUTS_SCHEDULER_ENABLED` remote,
+  creating or rotating the secrets, and enabling `PAYMENTS_ENABLED` were all
+  outside this task and were not performed. When it is taken up, it needs the
+  Actions variable `SUPABASE_URL` and the secrets `SUPABASE_ANON_KEY` (legacy
+  anon JWT) and `PAYOUTS_JOB_TOKEN`, with the token verified against the Edge
+  Function secret, before `PAYOUTS_SCHEDULER_ENABLED=true` is set.
+- Deferred readiness, not active roadmap: the first real `workflow_dispatch`
+  with `PAYOUTS_SCHEDULER_ENABLED=true` and `PAYMENTS_ENABLED=false` remains a
+  mandatory protection before payments are enabled — it must return health only
+  and zero release actions.
 - `AUTH SMOKE = NON VERIFICATO.` No already-authenticated browser session was
-  available; no account or fixture was created for smoke testing.
+  available; no account or fixture was created for smoke testing. This also
+  covers D6: the authenticated mobile shell is verified by unit and source
+  contract tests only. Nobody has seen the header, the bar or the avatar render
+  in a browser, and no real photo or preset has been loaded from Storage.
+- D6 branches the shell on `ruolo !== "guest"`, the signal the mobile bar
+  already used to send Home to `/home`. With the demo switcher on, selecting
+  "Utente" without a real session shows the authenticated shell with the
+  silhouette avatar, because `authProfilo` stays null. That is intended and
+  fail-closed — no profile data can be inferred from the demo role — but it
+  means the demo switcher is still not a proxy for real authentication.
 - Do not run the destructive certification grid in production and do not create
   an account, certification, or other fixture for smoke testing.
 - `my_certifications` and `public_listings` intentionally use

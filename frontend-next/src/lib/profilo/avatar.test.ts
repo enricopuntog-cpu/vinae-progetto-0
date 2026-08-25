@@ -8,6 +8,7 @@ import {
   inizialiDa,
   percorsoAvatarPersonale,
   riferimentoAvatarSicuro,
+  risolviAvatarPersona,
 } from "@/lib/profilo/avatar";
 
 const progetto = join(import.meta.dir, "../../..");
@@ -105,5 +106,79 @@ describe("iniziali di riserva", () => {
     expect(inizialiDa("")).toBe("?");
     expect(inizialiDa(null)).toBe("?");
     expect(inizialiDa("   ")).toBe("?");
+  });
+});
+
+// D6. La priorita richiesta dalla shell autenticata: foto, poi preset, poi la
+// silhouette generica. Le iniziali non sono piu il fondo della catena.
+describe("priorita dell'avatar della persona", () => {
+  const BASE = "https://vinea.supabase.co";
+
+  it("la foto personale viene prima di tutto", () => {
+    const avatar = risolviAvatarPersona(FOTO_PROPRIA, PROPRIETARIO, BASE);
+    expect(avatar.fonte).toBe("foto");
+    expect(avatar.url).toBe(
+      `${BASE}/storage/v1/object/public/${BUCKET_AVATAR_PROFILI}/${FOTO_PROPRIA}`,
+    );
+  });
+
+  it("il preset del catalogo viene quando la foto non c'e'", () => {
+    for (const voce of CATALOGO_AVATAR) {
+      const avatar = risolviAvatarPersona(voce.percorso, PROPRIETARIO, BASE);
+      expect(avatar.fonte).toBe("preset");
+      expect(avatar.url).toBe(voce.percorso);
+    }
+  });
+
+  it("la silhouette e' il terzo stato quando non c'e' ne' foto ne' preset", () => {
+    for (const valore of [null, undefined, "", "   "]) {
+      const avatar = risolviAvatarPersona(valore, PROPRIETARIO, BASE);
+      expect(avatar.fonte).toBe("silhouette");
+      expect(avatar.url).toBeNull();
+    }
+  });
+
+  it("non disegna mai un URL esterno o la cartella di un altro profilo", () => {
+    for (const valore of [
+      "https://esempio.invalido/foto.png",
+      "//esempio.invalido/foto.png",
+      "javascript:alert(1)",
+      "/avatar/inesistente.svg",
+      `${ALTRO_UTENTE}/${OGGETTO}.webp`,
+    ]) {
+      const avatar = risolviAvatarPersona(valore, PROPRIETARIO, BASE);
+      expect(avatar.fonte).toBe("silhouette");
+      expect(avatar.url).toBeNull();
+    }
+  });
+
+  // Una foto legittima ma non indirizzabile deve ricadere sulla silhouette, non
+  // produrre un `src` a meta': e' il caso "niente immagine rotta".
+  it("ricade sulla silhouette se la base Storage non e' utilizzabile", () => {
+    for (const base of ["", "non-un-url", "javascript:alert(1)"]) {
+      const avatar = risolviAvatarPersona(FOTO_PROPRIA, PROPRIETARIO, base);
+      expect(avatar.fonte).toBe("silhouette");
+      expect(avatar.url).toBeNull();
+    }
+  });
+
+  // L'ordine "prima la foto, poi il preset" e' scritto nel resolver, ma non puo'
+  // essere violato a runtime: `profiles.avatar_url` e' una colonna sola e le due
+  // forme sono disgiunte - `/avatar/*.svg` contro `<uuid>/<uuid>.webp`. Questo
+  // e' l'invariante che rende la priorita' sicura, ed e' quello da difendere: se
+  // un giorno un preset assumesse la forma di una foto, la priorita' comincerebbe
+  // davvero a decidere qualcosa e questo test lo direbbe.
+  it("foto e preset non possono valere insieme sullo stesso valore", () => {
+    for (const voce of CATALOGO_AVATAR) {
+      expect(percorsoAvatarPersonale(voce.percorso, PROPRIETARIO)).toBeNull();
+    }
+    expect(riferimentoAvatarSicuro(FOTO_PROPRIA, PROPRIETARIO)).toBe(FOTO_PROPRIA);
+    expect(CATALOGO_AVATAR.map((v) => v.percorso)).not.toContain(FOTO_PROPRIA);
+  });
+
+  it("senza proprietario nessuna foto e' attribuibile", () => {
+    expect(risolviAvatarPersona(FOTO_PROPRIA, null, BASE).fonte).toBe("silhouette");
+    // Il preset invece non appartiene a nessuno e resta valido.
+    expect(risolviAvatarPersona("/avatar/calice.svg", null, BASE).fonte).toBe("preset");
   });
 });
