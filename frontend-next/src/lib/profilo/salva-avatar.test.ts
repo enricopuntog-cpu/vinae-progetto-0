@@ -18,6 +18,13 @@ const profilo = (avatarUrl: string): ProfiloCorrente => ({
   esperienza: "appassionato",
   avatarUrl,
   dob: "1990-01-01",
+  // Il salvataggio dell'avatar non tocca le certificazioni: qui stanno spente
+  // perché nessuna delle prove sotto ha bisogno di accenderle.
+  certificazioni: {
+    emailConfermata: true,
+    identitaVerificata: false,
+    venditoreVerificato: false,
+  },
 });
 
 const scenario = (opzioni?: {

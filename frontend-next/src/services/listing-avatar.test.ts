@@ -39,6 +39,7 @@ const RIGA: PublicListingRow = {
   seller_citta: "Milano",
   seller_avatar_url: FOTO_PROPRIA,
   wine_provenienza: "staff",
+  seller_verificato: false,
 };
 
 type RispostaElenco = {

@@ -12,7 +12,13 @@ import {
   MIME_FOTO_AVATAR,
 } from "@/lib/profilo/prepara-foto-avatar";
 import type { Esperienza } from "@/data/onboarding";
-import type { ProfileService, ProfiloCorrente, ProfiloModifica, Result } from "./types";
+import type {
+  CertificazioniProfilo,
+  ProfileService,
+  ProfiloCorrente,
+  ProfiloModifica,
+  Result,
+} from "./types";
 
 const NOT_CONFIGURED_ERROR =
   "Supabase non configurato: imposta NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY in frontend-next/.env.local.";
@@ -27,6 +33,26 @@ const NESSUNA_SESSIONE = "Nessuna sessione attiva.";
  * nomina qui.
  */
 const COLONNE_PROFILO = "id, username, bio, citta, provincia, esperienza, avatar_url, dob";
+
+/**
+ * `public.my_certifications` (migrazione 20260825120000) espone tre colonne e
+ * la riga della sola persona collegata: il filtro su `auth.uid()` è dentro la
+ * definizione della vista, quindi qui non serve — e non servirebbe comunque,
+ * perché un `eq` sul client non è mai la barriera.
+ *
+ * `user_id` resta fuori dall'elenco: è già noto a chi chiama.
+ */
+const COLONNE_CERTIFICAZIONI = "identita_verificata, venditore_verificato";
+
+/**
+ * Che cosa vale quando non si sa. Tre `false`: una certificazione che non è
+ * stata letta non è una certificazione.
+ */
+export const NESSUNA_CERTIFICAZIONE: CertificazioniProfilo = {
+  emailConfermata: false,
+  identitaVerificata: false,
+  venditoreVerificato: false,
+};
 
 const ESPERIENZE: readonly Esperienza[] = [
   "curioso",
@@ -51,7 +77,11 @@ function testo(valore: unknown): string {
 
 type RigaProfilo = Record<string, unknown>;
 
-function mappaProfilo(riga: RigaProfilo, email: string | null): ProfiloCorrente {
+function mappaProfilo(
+  riga: RigaProfilo,
+  email: string | null,
+  certificazioni: CertificazioniProfilo,
+): ProfiloCorrente {
   return {
     userId: testo(riga.id),
     email,
@@ -62,6 +92,57 @@ function mappaProfilo(riga: RigaProfilo, email: string | null): ProfiloCorrente 
     esperienza: esperienzaValida(riga.esperienza),
     avatarUrl: testo(riga.avatar_url),
     dob: typeof riga.dob === "string" ? riga.dob : null,
+    certificazioni,
+  };
+}
+
+/**
+ * La conferma dell'email, letta dove viene scritta.
+ *
+ * `email_confirmed_at` arriva dall'utente restituito da `auth.getUser()`, che
+ * interroga GoTrue; NON da `auth.getSession()`, che restituisce il JSON tenuto
+ * dal browser. La differenza conta esattamente qui: la sessione è materiale che
+ * sta sulla macchina di chi guarda, e questo è l'unico dei nostri campi che
+ * qualcuno avrebbe interesse a ritoccare.
+ *
+ * Nessuna copia di questo fatto viene tenuta in `public.profiles` né altrove:
+ * ha già un proprietario.
+ */
+function emailConfermata(utente: { email_confirmed_at?: string | null }): boolean {
+  return typeof utente.email_confirmed_at === "string" && utente.email_confirmed_at !== "";
+}
+
+/**
+ * Le due certificazioni forti della persona collegata.
+ *
+ * Fallisce **chiusa** e in silenzio: se la vista non risponde — errore di rete,
+ * migrazione non ancora applicata, privilegio revocato — questa funzione
+ * restituisce due `false` invece di propagare l'errore. È deliberato in
+ * entrambe le direzioni. Verso l'alto, perché una verifica che non si riesce a
+ * leggere non è una verifica, e un errore trasformato in badge sarebbe il
+ * difetto peggiore che questo file possa avere. Verso il basso, perché il
+ * profilo — nome, città, avatar — deve restare leggibile e modificabile anche
+ * quando la parte delle certificazioni non c'è: è la stessa scelta che
+ * `/annuncio/[id]` fa con lo storico prezzi.
+ */
+async function leggiCertificazioniForti(
+  supabase: SupabaseClient,
+): Promise<Pick<CertificazioniProfilo, "identitaVerificata" | "venditoreVerificato">> {
+  const { data, error } = await supabase
+    .from("my_certifications")
+    .select(COLONNE_CERTIFICAZIONI)
+    .maybeSingle();
+  if (error || !data) {
+    if (error) console.error("[profilo] lettura certificazioni fallita:", error);
+    return { identitaVerificata: false, venditoreVerificato: false };
+  }
+  const riga = data as RigaProfilo;
+  // `=== true` e non `Boolean(...)`: qualunque cosa non sia esattamente il
+  // booleano vero — una stringa, un `null`, un campo assente — vale non
+  // verificato.
+  return {
+    identitaVerificata: riga.identita_verificata === true,
+    venditoreVerificato: riga.venditore_verificato === true,
   };
 }
 
@@ -102,8 +183,11 @@ function messaggioErrore(errore: { code?: string; message: string }): string {
 export function creaProfileService(supabase: SupabaseClient): ProfileService {
   const servizio: ProfileService = {
     async leggiProfiloCorrente(): Promise<Result<ProfiloCorrente | null>> {
-      const { data: sessione } = await supabase.auth.getSession();
-      const utente = sessione.session?.user;
+      // `getUser()` e non `getSession()`: da qui esce anche
+      // `email_confirmed_at`, e quel campo va preso dal server. Vedi
+      // `emailConfermata()`.
+      const { data: utenteAuth } = await supabase.auth.getUser();
+      const utente = utenteAuth.user;
       if (!utente) return { ok: true, data: null };
 
       const { data, error } = await supabase
@@ -114,12 +198,20 @@ export function creaProfileService(supabase: SupabaseClient): ProfileService {
       if (error) return { ok: false, error: messaggioErrore(error) };
       if (!data) return { ok: true, data: null };
 
-      return { ok: true, data: mappaProfilo(data as RigaProfilo, utente.email ?? null) };
+      const certificazioni: CertificazioniProfilo = {
+        emailConfermata: emailConfermata(utente),
+        ...(await leggiCertificazioniForti(supabase)),
+      };
+
+      return {
+        ok: true,
+        data: mappaProfilo(data as RigaProfilo, utente.email ?? null, certificazioni),
+      };
     },
 
     async aggiornaProfiloCorrente(patch: ProfiloModifica): Promise<Result<ProfiloCorrente>> {
-      const { data: sessione } = await supabase.auth.getSession();
-      const utente = sessione.session?.user;
+      const { data: utenteAuth } = await supabase.auth.getUser();
+      const utente = utenteAuth.user;
       if (!utente) return { ok: false, error: NESSUNA_SESSIONE };
 
       // Solo le chiavi davvero presenti finiscono nell'UPDATE: un `undefined`
@@ -159,7 +251,20 @@ export function creaProfileService(supabase: SupabaseClient): ProfileService {
       if (error) return { ok: false, error: messaggioErrore(error) };
       if (!data) return { ok: false, error: "Profilo non trovato." };
 
-      return { ok: true, data: mappaProfilo(data as RigaProfilo, utente.email ?? null) };
+      // Le certificazioni si rileggono anche qui. Non perché un UPDATE su
+      // `profiles` possa cambiarle — non può, e il database non lo
+      // permetterebbe — ma perché il profilo restituito da questa funzione
+      // sostituisce quello in memoria: costruirlo con tre `false` di comodo
+      // spegnerebbe i badge a ogni salvataggio.
+      const certificazioni: CertificazioniProfilo = {
+        emailConfermata: emailConfermata(utente),
+        ...(await leggiCertificazioniForti(supabase)),
+      };
+
+      return {
+        ok: true,
+        data: mappaProfilo(data as RigaProfilo, utente.email ?? null, certificazioni),
+      };
     },
 
     async caricaFotoAvatar(file: File): Promise<Result<string>> {

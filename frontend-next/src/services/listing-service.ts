@@ -60,6 +60,13 @@ export type PublicListingRow = {
   seller_citta: string;
   seller_avatar_url: string;
   wine_provenienza: "staff" | "utente";
+  /**
+   * Booleano derivato dalla 20260825120000: vero solo se questo venditore ha
+   * **entrambe** le certificazioni forti — identità e venditore — valide in
+   * questo istante. La vista non espone, e non può esporre, che cosa le
+   * sostiene: né email, né data di nascita, né fonte, né date.
+   */
+  seller_verificato: boolean;
 };
 
 const COLONNE = [
@@ -92,6 +99,7 @@ const COLONNE = [
   "seller_citta",
   "seller_avatar_url",
   "wine_provenienza",
+  "seller_verificato",
 ].join(",");
 
 /** Immagine mostrata quando un annuncio non ne ha nessuna. */
@@ -135,14 +143,17 @@ export function urlImmagine(percorso: string): string {
 /**
  * Da riga della vista a `Wine`, la forma che i componenti già si aspettano.
  *
- * Tre campi non hanno ancora una sorgente reale e vanno letti sapendolo:
+ * Due campi non hanno ancora una sorgente reale e vanno letti sapendolo:
+ * `venditore.rating` e `venditore.valutazioni` restano a 0 perché le recensioni
+ * nascono dagli ordini, che sono Fase 7. Un venditore appena arrivato ha
+ * davvero zero valutazioni: non è un difetto di caricamento.
  *
- * - `venditore.rating` e `venditore.valutazioni` restano a 0 perché le
- *   recensioni nascono dagli ordini, che sono Fase 7. Un venditore appena
- *   arrivato ha davvero zero valutazioni: non è un difetto di caricamento.
- * - `venditore.verificato` resta false perché la verifica identità/venditore
- *   non è ancora un dominio migrato. Meglio non attestare nulla che attestare
- *   il falso: il badge "Verificato" è una promessa fatta a chi compra.
+ * `venditore.verificato` era il terzo, ed era cablato a `false` perché la
+ * verifica non era un dominio migrato: meglio non attestare nulla che attestare
+ * il falso. Adesso una sorgente esiste — `public_listings.seller_verificato`,
+ * migrazione 20260825120000 — e il campo la legge. Il valore che arriva in
+ * produzione resta `false` per tutti, ma per una ragione diversa e migliore:
+ * non perché sia scritto qui, ma perché nessuno è ancora stato certificato.
  */
 export function rigaAWine(riga: PublicListingRow): Wine {
   const immagini =
@@ -179,7 +190,10 @@ export function rigaAWine(riga: PublicListingRow): Wine {
       citta: riga.seller_citta,
       rating: 0,
       valutazioni: 0,
-      verificato: false,
+      // `=== true` e non `Boolean(...)`: se la colonna mancasse — vista non
+      // ancora aggiornata, campo assente dalla risposta — il badge deve
+      // spegnersi, non accendersi su un valore vagamente vero.
+      verificato: riga.seller_verificato === true,
       avatar: avatarSicuro(riga.seller_avatar_url, riga.seller_id) ?? "",
     },
     immagini,
@@ -633,6 +647,19 @@ export function annuncioProprietarioDaRiga(
   };
 }
 
+/**
+ * L'anteprima che il proprietario ha dei **propri** annunci, letta da
+ * `listings` e non dal catalogo pubblico.
+ *
+ * `venditore.verificato` resta `false` qui, e non è una dimenticanza. Questa
+ * riga non passa da `public_listings`, quindi non porta `seller_verificato`, e
+ * la certificazione non è raggiungibile per altra via: `profile_certifications`
+ * non ha alcun privilegio client. Il costo è nullo — nessuno compra da questa
+ * schermata e nessun estraneo la vede, quindi un badge spento qui non è un
+ * falso negativo che qualcuno possa leggere come attestazione mancata.
+ * Accenderlo, invece, avrebbe richiesto una seconda sorgente di verità per lo
+ * stesso fatto.
+ */
 export function rigaProprietarioAWine(riga: RigaAnnuncioProprietario): Wine | null {
   const vino = riga.bottle_units?.wines;
   if (!vino) return null;

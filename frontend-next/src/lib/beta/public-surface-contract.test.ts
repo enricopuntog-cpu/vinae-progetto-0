@@ -183,7 +183,11 @@ describe("superfici pubbliche della beta", () => {
   it("legge il profilo dalla riga profiles canonica, risolvendo l'utente dalla sessione", () => {
     const profilo = leggi("src/services/profile-service.ts");
     expect(profilo).toInclude('.from("profiles")');
-    expect(profilo).toInclude("auth.getSession()");
+    // Le due firme del profilo risolvono l'utente con `getUser()`, che
+    // interroga GoTrue, e non con `getSession()`, che legge il JSON tenuto dal
+    // browser: da lì esce anche `email_confirmed_at`, che è l'unico campo di
+    // questa schermata che qualcuno avrebbe interesse a ritoccare in locale.
+    expect(profilo).toInclude("auth.getUser()");
     expect(profilo).toInclude('.eq("id", utente.id)');
     // L'identificativo esce dalla sessione e non da un argomento: le due firme
     // pubbliche non hanno parametri oltre al patch da scrivere. (`userId`

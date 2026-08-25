@@ -79,11 +79,43 @@ export interface AuthService {
 
 // ---- Profili ---------------------------------------------------------------
 /**
- * Il profilo dell'utente collegato, come lo espone `public.profiles`.
+ * Che cosa di questa persona è stato **accertato**, in contrapposizione a che
+ * cosa ha dichiarato. Tutto il resto di `ProfiloCorrente` — nome, città, bio,
+ * esperienza, perfino `dob` — è dichiarazione: l'utente lo scrive e nessuno lo
+ * controlla. Questi tre booleani no.
+ *
+ * I tre campi hanno **tre sorgenti diverse** e non vanno mai fatti collassare:
+ *
+ * - `emailConfermata` viene da `auth.users.email_confirmed_at`, che appartiene
+ *   a Supabase Auth. Non è copiato in nessuna tabella di questo progetto,
+ *   perché un fatto con due scrittori prima o poi ne ha due versioni. Prova che
+ *   qualcuno controlla quella casella di posta, e nient'altro.
+ * - `identitaVerificata` e `venditoreVerificato` vengono da
+ *   `public.my_certifications` (migrazione 20260825120000), che a sua volta li
+ *   deriva da certificazioni forti **non scadute**. L'utente non può
+ *   scriverle: non ha alcun privilegio sulla tabella e un trigger rifiuta
+ *   comunque ogni riga emessa dalla stessa sessione che ne è oggetto.
+ *
+ * Che l'email sia confermata non rende vera nessuna delle altre due, e
+ * `venditoreVerificato` richiede `identitaVerificata`. Oggi, in produzione,
+ * le ultime due sono `false` per tutti: nessun percorso di verifica identità
+ * esiste ancora, e questo tipo non ne inventa uno.
+ */
+export type CertificazioniProfilo = {
+  emailConfermata: boolean;
+  identitaVerificata: boolean;
+  venditoreVerificato: boolean;
+};
+
+/**
+ * Il profilo dell'utente collegato, come lo espone `public.profiles`, più le
+ * sue certificazioni.
  *
  * `dob` può essere `null`: è la finestra fra il primo accesso OAuth e la
  * dichiarazione dell'età raccolta da /completa-profilo (migrazione
- * 20260728073915_oauth_profile_without_dob.sql).
+ * 20260728073915_oauth_profile_without_dob.sql). Anche quando c'è, resta una
+ * dichiarazione — non è un accertamento d'identità, e non alimenta
+ * `certificazioni`.
  */
 export type ProfiloCorrente = {
   userId: string;
@@ -95,6 +127,7 @@ export type ProfiloCorrente = {
   esperienza: Esperienza;
   avatarUrl: string;
   dob: string | null;
+  certificazioni: CertificazioniProfilo;
 };
 
 /** Solo i campi che l'utente può cambiare di sé. */
@@ -124,7 +157,12 @@ export type ProfiloModifica = Partial<{
  * Fase 10 con `AiService`, e stessa soluzione: il contratto reale prende il
  * posto della bozza invece di affiancarla. `stati()` e `aggiornaObiettivi()`
  * descrivevano stati (identità, venditore) che nel percorso Supabase non
- * esistono ancora: reggerli qui avrebbe promesso dati che nessuno scrive.
+ * esistevano: reggerli qui avrebbe promesso dati che nessuno scriveva.
+ *
+ * Quegli stati adesso esistono, e stanno in `ProfiloCorrente.certificazioni` —
+ * in **lettura e basta**. Non sono tornati come metodi perché non c'è niente da
+ * chiamare: l'utente non può chiedere, avviare né modificare una propria
+ * certificazione, e un metodo qui suggerirebbe il contrario.
  */
 export interface ProfileService {
   leggiProfiloCorrente(): Promise<Result<ProfiloCorrente | null>>;

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Camera, Check, LogOut, Trash2 } from "lucide-react";
+import { Camera, Check, Clock, LogOut, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,12 +25,53 @@ import {
 } from "@/lib/profilo/avatar";
 import { preparaFotoAvatar } from "@/lib/profilo/prepara-foto-avatar";
 import { salvaProfiloConAvatar } from "@/lib/profilo/salva-avatar";
+import {
+  vociCertificazione,
+  type VoceCertificazione,
+} from "@/lib/profilo/certificazioni";
 import { supabaseProfileService } from "@/services/profile-service";
 import type { ProfiloCorrente } from "@/services/types";
 
 const ESPERIENZE = Object.keys(esperienzaLabels) as Esperienza[];
 
 const MAX_BIO = 500;
+
+/**
+ * Una riga della sezione «Certificazioni».
+ *
+ * Il colore fa lavorare solo lo stato `confermata`. Gli altri due restano
+ * neutri — grigio, non rosso — perché un'identità non verificata in beta non è
+ * un errore dell'utente e non deve somigliare a un avviso.
+ */
+function RigaCertificazione({ voce }: { voce: VoceCertificazione }) {
+  const confermata = voce.stato === "confermata";
+
+  return (
+    <li
+      className="flex items-start gap-3 rounded-2xl border border-border/70 p-3"
+      data-testid={`certificazione-${voce.chiave}`}
+    >
+      <span
+        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+          confermata ? "bg-salvia/15 text-salvia" : "bg-muted text-muted-foreground"
+        }`}
+        aria-hidden
+      >
+        {confermata ? <ShieldCheck className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm">
+          <b>{voce.titolo}</b>
+          <span className={confermata ? "text-salvia" : "text-muted-foreground"}>
+            {" — "}
+            {voce.etichetta}
+          </span>
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{voce.dettaglio}</p>
+      </div>
+    </li>
+  );
+}
 
 /**
  * Modifica del proprio profilo su dati reali.
@@ -448,6 +489,25 @@ export default function AccountPageClient() {
             )}
           </Button>
         </div>
+      </div>
+
+      {/*
+        Una scheda separata, non un blocco dentro il modulo di modifica: tutto
+        quello che sta sopra si cambia, questo si legge e basta. Metterlo fra i
+        campi avrebbe suggerito che si possa toccare.
+      */}
+      <div className="rounded-3xl border border-border bg-card p-5 md:p-8">
+        <h2 className="font-serif text-xl md:text-2xl">Certificazioni</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Che cosa di te è stato accertato. Il resto del profilo — nome, città,
+          presentazione, esperienza — è quello che hai dichiarato tu, e resta tale.
+        </p>
+
+        <ul className="mt-5 space-y-2">
+          {vociCertificazione(authProfilo.certificazioni).map((voce) => (
+            <RigaCertificazione key={voce.chiave} voce={voce} />
+          ))}
+        </ul>
       </div>
     </div>
   );
