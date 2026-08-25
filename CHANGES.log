@@ -23,39 +23,46 @@
   PostgreSQL, maps database failures to application messages, reuses the
   fail-closed avatar sanitizer and reads active listings separately from the
   existing `public_listings` projection. A profile exists with zero listings.
-- D8 verification measured **31 pass / 0 fail / 97 assertions** in the targeted
-  service suite and **829 pass / 0 fail / 17673 assertions** in the complete
-  `frontend-next` suite with Bun 1.3.14. The CI `MIN_TESTS` floor and its
-  regression contract are aligned to **829**.
+- The D8 foundation verification measured **31 pass / 0 fail / 97 assertions**
+  in the targeted service suite and **829 pass / 0 fail / 17673 assertions** in
+  the then-complete `frontend-next` suite with Bun 1.3.14. The D8 UI Core adds
+  six tests; its stable complete-suite count is **835 pass / 0 fail / 17705
+  assertions**, and the CI `MIN_TESTS` floor plus regression contract are aligned
+  to **835**.
 - The D8 PostgreSQL 17.10 disposable grid applied all 38 migrations and produced
   **16 PASSA / 0 FALLISCE**, with zero user, profile, role or audit residues
   after rollback. It was not executed against production.
-- Production project ref is `pijnmcllmfgjmgsvtcej`. Before the D8 production
-  apply, its migration ledger must end at `20260825120000`
-  `profile_certifications`; only migration `20260825180000` may then be applied.
+- PR #87, `D8 Public user profile data foundation`, was merged into `main` at
+  `73d5c7bf857f8bcfee387cf0ee4da2c2513be9e7`; its post-merge CI completed
+  successfully. The D8 data/security foundation is CLOSED.
+- Production project ref is `pijnmcllmfgjmgsvtcej`. Inclusion of migration
+  `20260825180000 public_profile_foundation` in the production ledger remains
+  **DA VERIFICARE**; the merge alone does not prove its application.
 - The payout scheduler repository gate remains fail-closed and external Price
   Intelligence providers, KYC/identity providers, SMTP and payments remain OFF.
 
 ## ACTIVE TASK
 
-### D8 Public User Profile Data/Security Foundation — VERIFY & SHIP
+### D8 Public User Profile UI Core — VERIFY & SHIP
 
-- Ship the verified append-only migration, service contract, adapter, tests and
-  CI floor through the normal branch, PR, CI, merge and production-verification
-  lifecycle.
-- Supabase Preview must validate the D8 migration before merge. Production apply
-  is migration-only: no deployed migration edits, production fixture creation
-  or execution of the destructive behavioral grid.
-- After production apply, verify the ledger and effective RPC, projection,
-  grants, public allowlist, unchanged `profiles` policies, non-client-readable
-  `profile_certifications` and advisor findings attributable to D8.
-- The pre-existing untracked `.wslconfig` is unrelated and must remain excluded.
+- Branch `d8-public-profile-ui-core` adds the server-rendered route
+  `/profilo/[id]` above the CLOSED D8 service, without database, migration or
+  production changes.
+- The page exposes only avatar, username, optional city/province, experience and
+  optional bio. Malformed, nonexistent and non-visible identifiers share the
+  same unavailable surface; technical failures use a generic message.
+- `Annunci attivi` reuses `PublicProfileService.annunciAttivi()` and the existing
+  `WineCard` list variant. Zero listings and listing-read failures do not hide a
+  valid profile, and no people directory, social action or trust field is added.
+- Targeted verification produced **37 pass / 0 fail / 129 assertions**; full
+  `frontend-next` lint, typecheck, **835-test** suite and production build passed.
+  The pre-existing untracked `.wslconfig` remains excluded.
 
 ## NEXT STEPS
 
-1. Cabina: audit finale e chiusura D8 foundation.
-2. Cabina: selezione del prossimo BUILD dalla ROADMAP ATTIVA.
-3. Eseguire soltanto il prossimo BUILD approvato dalla Cabina.
+1. Cabina: audit finale e chiusura D8 Public User Profile UI Core.
+2. Cabina: selezione del successivo BUILD dalla ROADMAP ATTIVA.
+3. Eseguire soltanto il successivo BUILD approvato dalla Cabina.
 
 ## BLOCKERS / NOTES
 
