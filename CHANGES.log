@@ -4,8 +4,10 @@
 
 - `frontend/` + `backend/` remain the served product. The public
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
-- `origin/main` is `e14daed3e3321b92d5d206423599b2b5f8c83110` (PR #82,
-  "Gate fail-closed per lo scheduler dei payout"). Local `main` matches it.
+- `origin/main` is `2050e25e88db9f8e67cc1dffeb170e44f74da7cc` (PR #83,
+  "Registra il merge del gate e lo smoke disabled"), which follows
+  `e14daed` (PR #82, "Gate fail-closed per lo scheduler dei payout"). The
+  working branch `ci/payout-runner-tests` starts from that baseline.
 - Production project ref is `pijnmcllmfgjmgsvtcej`. Verified by the cabin after
   PR #81: the production migration ledger really ends at `20260825120000`
   profile_certifications; `profile_certifications` holds 0 rows; RLS is ON with
@@ -71,17 +73,46 @@
   installing anything: the gate reaches the step as
   `vars.PAYOUTS_SCHEDULER_ENABLED`, there is no job- or step-level `if:`, and
   `service_role` appears nowhere in the file.
-- `.github/workflows/ci.yml` does **not** run this test file; the runner suite is
-  executed manually. `MIN_TESTS` stays 760 and was not touched, since the gate
-  adds no `frontend-next` test.
-- Modified: `payouts-release-job.mjs`, `payouts-release-job.test.mjs`,
+- Modified by PR #82: `payouts-release-job.mjs`, `payouts-release-job.test.mjs`,
   `payouts-auto-release.yml`, `docs/ENVIRONMENT.md`,
   `docs/PHASE_7G_OPERATIONAL_CLOSEOUT.md`, this file. Pre-existing untracked
   `.wslconfig` remains untouched and must not enter any stage, commit or PR.
 
+### Payout runner suite in CI — gap CLOSED
+
+- The gap left open by PR #82 — `.github/workflows/ci.yml` did **not** run
+  `node --test .github/scripts/payouts-release-job.test.mjs`, so the suite
+  guarding the fail-closed gate was executed only by hand — is **CLOSED**. The
+  suite now runs in CI on every pull request and on every push to `main`.
+- Added one repository-level job `payout-runner` / "Payout runner - tests" in
+  `.github/workflows/ci.yml`: `ubuntu-latest`, `actions/checkout@v4`,
+  `actions/setup-node@v4` with `node-version: "22"`, then the single step
+  `node --test .github/scripts/payouts-release-job.test.mjs` run from the
+  repository root. No dependency install: the suite uses only Node built-ins.
+  The job carries no `if:`, so it runs on both `pull_request` and `push` to
+  `main` through the existing triggers.
+- The suite was not inserted into the `frontend`, `frontend-next` or `backend`
+  jobs, and neither those jobs nor the payout runner logic were touched.
+  `payouts-auto-release.yml` was not modified.
+- The job uses no secret and no Actions variable, invokes no Edge Function and
+  emits no payout. `.github/workflows/ci.yml` contains zero `secrets.`
+  references and zero `service_role` occurrences.
+- Only file modified besides this one: `.github/workflows/ci.yml`.
+- Local verification: `node --test .github/scripts/payouts-release-job.test.mjs`
+  gives **15 passed / 0 failed**; `git diff --check` is clean; `ci.yml` was
+  parsed with the `js-yaml` already present in `frontend/node_modules`, without
+  installing anything, confirming the four jobs `frontend`, `frontend-next`,
+  `payout-runner`, `backend`, the Node 22 pin, the root working directory and
+  the absence of a job- or step-level `if:`. The full frontend suite and builds
+  were deliberately not run.
+- `MIN_TESTS` for `frontend-next` remains **760**, re-read from the modified
+  file after the edit. No `frontend-next` test was added or removed.
+- No secret or Actions variable was created, read by value or configured. The
+  payout scheduler and payments both remain OFF.
+
 ## NEXT STEPS
 
-1. Decide whether `.github/workflows/ci.yml` should run `node --test .github/scripts/payouts-release-job.test.mjs`, since CI does not execute the suite that guards the gate.
+1. After the squash merge, verify on the resulting `main` commit that `Payout runner - tests` is really executed and passes on the push run, not only on the pull request.
 2. Configure the Actions variable `SUPABASE_URL` and the secrets `SUPABASE_ANON_KEY` (legacy anon JWT) and `PAYOUTS_JOB_TOKEN`, verifying the token matches the Edge Function secret, before setting `PAYOUTS_SCHEDULER_ENABLED=true`.
 3. Run the authenticated `/account` smoke only if an already-existing browser session becomes available.
 
