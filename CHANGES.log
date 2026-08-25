@@ -4,8 +4,10 @@
 
 - `frontend/` + `backend/` remain the served product. The public
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
-- `origin/main` was `fc86ff6b2cdc6683c598c1fddbdc83cdb691827d` when the Profile
-  Certifications branch was verified; the branch is `feat/profile-certifications`.
+- Profile Certifications is published as PR #80 from
+  `feat/profile-certifications`, based on `origin/main`
+  `fc86ff6b2cdc6683c598c1fddbdc83cdb691827d`. The exact verified task head was
+  `419d5d7b06ea78531c7774bd9f58e822ba6fc99b` before this final handoff update.
 - Production project ref is `pijnmcllmfgjmgsvtcej`. Before this task its migration
   ledger ended at `20260824120000_price_intelligence_1a_observations.sql`;
   `20260825120000_profile_certifications.sql` has not yet been verified in
@@ -41,9 +43,12 @@
 
 ## ACTIVE TASK
 
-- Profile Certifications / Trust Foundation is in VERIFY & SHIP. The implementation
-  and concrete-defect audit are complete; no additional feature or general
-  refactor is in scope.
+- Profile Certifications / Trust Foundation is in VERIFY & SHIP. PR #80 is open;
+  the exact GitHub file list matches the 17 task files, excludes `.wslconfig`, and
+  all three CI jobs, Supabase Preview, and the relevant Netlify checks are green.
+  GitHub reported the PR clean and mergeable before this final handoff update.
+  The implementation and concrete-defect audit are complete; no additional
+  feature or general refactor is in scope.
 - A fresh PostgreSQL 17.10 container applied bootstrap plus all 37 migrations and
   ran `supabase/tests/profile_certifications.sql`: **33 PASSA / 0 FALLISCE**.
   All seven fixture residue counters were zero and the container was removed.
@@ -62,8 +67,8 @@
 
 ## NEXT STEPS
 
-1. Commit the task-only diff, push `feat/profile-certifications`, open the PR, and verify its exact head and file diff.
-2. Wait for green relevant CI, merge only while clean and mergeable, then verify the resulting `origin/main` SHA.
+1. Commit and push this factual handoff update, then reverify PR #80's exact head, green checks, and clean mergeability.
+2. Squash-merge PR #80 and verify the resulting `origin/main` SHA and files.
 3. Check whether the GitHub/Supabase integration applied migration `20260825120000`, apply it once only if absent, and complete read-only production verification.
 
 ## BLOCKERS / NOTES
