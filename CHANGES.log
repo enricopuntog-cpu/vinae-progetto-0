@@ -2,238 +2,90 @@
 
 ## CURRENT STATE
 
-- `frontend/` + `backend/` remain the served product. The public Netlify
+- `frontend/` + `backend/` remain the served product. The public
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
-- Migration numbering is authoritative: Phase 11 = admitted AI extensions,
-  Phase 12 = Club/Community, Phase 13 = Cutover.
-- Price Intelligence 1A shipped through PR #74. Feature head
-  `1b7f93e10bcb859a5e5cd5c0a3384494fa964c99` was squash-merged as
-  `f2469958a855ebfc6e37f99bdc292f6c423bb1a8`; the PR contains nine task files
-  and excludes `.wslconfig`, which is pre-existing local work.
-- Price Intelligence 1A consists of the migration
-  `20260824120000_price_intelligence_1a_observations.sql`, a read-only service
-  contract/adapter and deterministic adapter tests. It adds no UI, no smart
-  price in `/vendi`, no external provider and no paid API.
-- `public.wine_price_observations` is append-only and stores integer cents plus
-  snapshots of `wine_id` and `formato`. ASKING observations are written only on
-  real activation or an active price change; reservation release
-  `riservato -> attivo`, same-price changes and metadata-only changes write
-  nothing. SALE is written when an order first reaches `completato`; the partial
-  unique index on `origine_ref` prevents a second SALE after
-  `completato -> contestato -> completato`.
-- The public `security_invoker = off` view `public.wine_price_history` exposes
-  exactly 11 closed columns and excludes `origine_ref` and personal/domain
-  identifiers. `anon` and `authenticated` can SELECT the view but have no base
-  table privilege. The base table has RLS enabled and zero client policies.
-- Three privileged writer/trigger functions are `SECURITY DEFINER`, have an
-  empty `search_path` and no client/service-role EXECUTE ACL. UPDATE, DELETE and
-  TRUNCATE are also rejected by append-only triggers even for `service_role`.
-- The SQL grid ran on disposable PostgreSQL 17.10 from bootstrap `9c` through
-  all 36 migrations: final result **32 PASSA / 0 FALLISCE**, zero fixture
-  residue, never production. Cases 31-32 prove the real post-completion dispute
-  route does not duplicate SALE.
-- Full `frontend-next` verification was green: lint 0 errors / 14 pre-existing
-  warnings, typecheck clean, **681 pass / 0 fail** across 46 files and 17,238
-  expectation calls, production build green and `git diff --check` clean.
-  `MIN_TESTS` is 681 in CI and the prelaunch regression contract.
-- PR #74 and post-merge CI run `32734863290` were green for frontend,
-  frontend-next and backend. The merge commit's Supabase Preview check was also
-  green.
-- Production project ref was verified as `pijnmcllmfgjmgsvtcej`. The pre-merge
-  PostgREST baseline had 9 active public listings while both new objects were
-  absent (404). The post-merge Supabase integration applied only migration
-  `20260824120000`; the live ledger now ends at that version.
-- Production backfill is **9 ASKING / 0 SALE** for 9 active listings. All nine
-  ASKING rows match current `listings.prezzo_cents`; none was imported from
-  `prezzo_mercato_cents`. Every row has truthful acquisition timestamp
-  `2026-08-24 13:49:02.895298+00`, 35.895298 seconds after the merge timestamp.
-- Production catalogs confirm the expected table, enums, five enabled domain
-  and append-only triggers, CHECK constraints, unique partial SALE index,
-  zero policies, closed 11-column view, RLS and role privilege matrix.
-  Rollback-wrapped SQL proofs rejected anon/authenticated INSERT and rejected
-  service-role UPDATE/DELETE/TRUNCATE; row count remained 9.
-- Anonymous PostgREST SELECT/POST/PATCH/DELETE on the base table all fail with
-  HTTP 401 / PostgreSQL `42501`; anonymous view SELECT succeeds and reports 9
-  rows. Authenticated PostgREST was **NON VERIFICATO** because no existing
-  authenticated JWT was available and no account/fixture was created.
-- No external price provider exists: no key, HTTP call, cron, adapter or flag.
-  Activation stays fail-closed and would require a new migration and explicit
-  provider/budget authorization.
-- Price Intelligence 1B shipped from branch `feat/price-intelligence-1b-insights`
-  off `main` at `e47a9e96258fc8970261021b3272890be8dfb761`. Pre-existing
-  untracked `.wslconfig` was left out of the commit and remains local work.
-- 1B adds no migration and no remote write. It reads `public.wine_price_history`
-  through the existing 1A adapter and reuses the active listings that
-  `/annuncio/[id]` already loads for its related-wines block; the only new
-  database read is the price history itself.
-- The 1A read contract gained one alternative key: `storico` accepts
-  `wineSlug` instead of `wineId` (mutually exclusive in the type). `Wine` was
-  not widened to carry `wine_id`. Both columns are already exposed by the view,
-  so neither branch touches the base table.
-- 1B analytics live in `frontend-next/src/lib/price-intelligence/insights.ts` as
-  pure deterministic functions: comparables, median, range, coverage band, last
-  observed change, chart series and time domain. Nothing there reads the clock,
-  the network or input order.
-- Reference rule: comparables are active listings with the same wine slug and
-  the exact same format, deduplicated by listing identity. Under 3 comparables
-  no number is produced at all. At 3 or more the reference is the **median** of
-  asking prices, never the arithmetic mean, with min→max range and the
-  comparable count shown.
-- ASKING and SALE are never merged. Sales are counted and plotted; they do not
-  move the 1B reference. Last observed change uses only the two most recent
-  ASKING observations and is labelled "ultima variazione rilevata", not a trend.
-- Coverage bands are 0-2 "In formazione", 3-4 "Bassa", 5-9 "Media", 10+ "Alta",
-  presented as data coverage and not as accuracy or statistical guarantee.
-- The panel always shows source "Dati interni Vinea", the analysed format, the
-  ASKING/SALE observation counts and the active comparable count. A failed
-  history read degrades to "Storico prezzi non disponibile" while the rest of
-  the listing page and the comparable-based reference keep working.
-- `/annuncio/[id]` no longer renders the legacy struck-through `prezzoMercato`
-  next to the asking price. The DB column, the `ListingService` mapping, the
-  `Wine` field and `WineCard` are untouched: only that one reading surface was
-  removed.
-- Smart Sell Price is live in the `/vendi` price step. The hard-coded
-  `260 / 300 / 120` producer placeholder is gone from the panel and from the
-  price-field placeholder; no other numeric fallback replaced it.
-- `frontend-next/src/lib/price-intelligence/smart-sell-price.ts` defines no
-  algorithm. It composes the existing 1B primitives `comparabiliAttivi`,
-  `riferimentoRichieste` and `copertura`. Threshold, median, exact-format rule,
-  listing-identity dedup and coverage band exist in exactly one place.
-- Comparables are the active public listings in `public_listings` for the same
-  wine key and the same exact format. Under 3 comparables no number is produced;
-  at 3 or more the panel shows the 1B median, the min→max range, the comparable
-  count and the coverage band, always sourced as "Dati interni Vinea".
-- SALE observations have no input path: `smartSellPrice` takes no observations
-  parameter, so sale history cannot move the suggestion.
-- The suggestion never writes the price field. Only "Usa questo prezzo" applies
-  it, and it applies the median exactly. The manual field stays usable in the
-  loading, insufficient-data and failed-read states.
-- `richiedeConfermaPrezzoPrecedente` separates "prefilled" from "chosen": an
-  untouched inherited price still requires confirmation, while typing a price or
-  applying the suggestion counts as an explicit choice and skips it.
-- `ListingService` gained `elencoConEsito()` over the same query as `elenco()`.
-  A failed read is distinct from an empty list, so a PostgREST error no longer
-  reads as "no comparables"; `elenco()` stays tolerant for the catalog pages and
-  the provider error detail stays internal.
-- The Smart Sell Price read is keyed by `[wineKey, formato]`, so a response for
-  the previous bottle cannot survive a bottle change or overwrite the current
-  one, and loading, insufficient-data and error remain three distinct states.
+- Profile Certifications is published as PR #80 from
+  `feat/profile-certifications`, based on `origin/main`
+  `fc86ff6b2cdc6683c598c1fddbdc83cdb691827d`. The exact verified task head was
+  `419d5d7b06ea78531c7774bd9f58e822ba6fc99b` before this final handoff update.
+- Production project ref is `pijnmcllmfgjmgsvtcej`. Before this task its migration
+  ledger ended at `20260824120000_price_intelligence_1a_observations.sql`;
+  `20260825120000_profile_certifications.sql` has not yet been verified in
+  production.
+- CI `MIN_TESTS` is raised from 736 to the measured **760** in
+  `.github/workflows/ci.yml` and its regression contract.
+- Profile Certifications keeps three independent facts: confirmed email comes
+  only from `auth.users.email_confirmed_at`; verified identity and verified
+  seller are strong certifications stored outside self-declared profiles.
+- The migration adds provider-agnostic certification enums,
+  `public.profile_certifications`, `private.certificazioni_valide`, a guarded
+  trigger, `public.my_certifications`, and the appended closed-projection column
+  `public_listings.seller_verificato`. It creates no certification rows.
+- `profile_certifications` has RLS enabled, zero policies, and no `anon` or
+  `authenticated` table privileges. The trigger is `SECURITY DEFINER` with an
+  empty `search_path`, cannot be executed directly by client roles, rejects
+  self-certification, and requires a currently valid identity before a seller
+  certification.
+- Current validity means already effective and not expired. Public seller
+  verification is true only while both identity and seller certifications are
+  currently valid; expiry, revocation, invalid intervals, and future-effective
+  identity fail closed.
+- Public and personal projections have explicit closed column lists. They expose
+  no email, DOB, source, private dates, documents, provider payload, or KYC data.
+- `ProfileService` obtains the authoritative Auth user with `getUser()`, reads
+  strong facts from `my_certifications`, and fails closed on read or type errors.
+  The buyer-facing listing adapter enables the badge only for the exact boolean
+  `seller_verificato === true`.
+- `/account` renders the three facts in a separate read-only card. It offers no
+  certification request, provider link, upload, or verification action.
+- No KYC provider is selected or enabled: zero key, HTTP call, webhook, upload,
+  scheduled job, or cost.
 
 ## ACTIVE TASK
 
-- Smart Sell Price for `/vendi` is delivered. Branch `feat/smart-sell-price` off
-  `main` at `6fe86e566738cdb6b97df7227e903d14d0bb3717` became PR #78, squash-merged
-  as `1ae18a4`. The merge carries thirteen files — twelve task files plus
-  `CHANGES.log` — and excludes `.wslconfig`, which stays pre-existing local work.
-  No migration, Supabase write or provider activation was performed: the change
-  is frontend-only.
-- PR checks on head `bc32fa209f6068642afda8ce7dbc8df4950e7084` and post-merge run
-  `32788411557` were green for frontend, frontend-next and backend.
-- Full `frontend-next` verification ran once: `bun run lint` 0 errors with the
-  14 pre-existing `<img>` warnings, `bun run typecheck` clean, `bun run test`
-  **736 pass / 0 fail** across 48 files and 17,363 expectation calls,
-  `bun run build` green, `git diff --check` clean.
-- CI `MIN_TESTS` was raised 717 -> 736 in `.github/workflows/ci.yml` and in the
-  prelaunch regression contract, which asserts the literal. Only that contract
-  file was re-run afterwards: 19 pass / 0 fail.
-- The VERIFY audit found no further concrete defect to fix: the placeholder
-  removal, the 1B reuse, the sub-threshold silence, the explicit-application
-  path and the keyed async state were already correct in the BUILD.
-- Production smoke on `https://timely-lokum-43a12e.netlify.app` verified the
-  deployed bundle, not an authenticated run. `/vendi` returns HTTP 200 and its
-  client chunk contains "Prezzo suggerito Vinea", "Dati insufficienti per
-  suggerire un prezzo", "servono almeno", "Usa questo prezzo", "Fonte: Dati
-  interni Vinea", "Copertura dati", "Cerco annunci comparabili" and "Inserisci il
-  prezzo". The chunk contains no `sassicaia`, no "riferimento beta locale" and no
-  external provider name: the placeholder is gone from what is actually served.
-- Anonymous PostgREST on `public_listings` reports **9 active listings across 9
-  distinct wine+format pairs, at most 1 comparable per pair**. Every `/vendi`
-  price step in production therefore takes the insufficient-data branch and shows
-  no number, which is the expected state until a wine reaches 3 comparables.
-- The authenticated `/vendi` wizard run is **NON VERIFICATO**: no existing
-  authenticated session or bottle was available, and no account, fixture or
-  listing was created for the smoke.
-- Price Intelligence 1B is delivered. PR #76 was squash-merged as
-  `b57aa0b5a444b95253ed88efbc0d1eb0b83804ef`; it carried exactly eleven task
-  files and excluded `.wslconfig`. PR checks and post-merge run `32764270537`
-  were green for frontend, frontend-next and backend. No migration, Supabase
-  write or provider activation was performed: the change is frontend-only.
-- The VERIFY audit found and fixed two concrete defects. The Recharts scatter
-  tooltip read `payload[0].name`, which carries the **axis** name (`t`) whenever
-  `XAxis` has an explicit `dataKey`, so every sale point was labelled "Prezzo
-  richiesto"; `PuntoStorico` now carries its own `tipo` and the tooltip reads it.
-  The adapter chose its lookup column on truthiness, so an empty `wineId` fell
-  through to `wine_slug = ''` and returned an empty history for an unnamed wine;
-  it now selects on a non-empty trimmed value and refuses to query without one.
-- Full verification ran once: `bun run lint` 0 errors with the 14 pre-existing
-  warnings, `bun run typecheck` clean, `bun run test` **717 pass / 0 fail**
-  across 47 files and 17,331 expectation calls, `bun run build` green,
-  `git diff --check` clean.
-- CI `MIN_TESTS` was raised 681 -> 717 in `.github/workflows/ci.yml` and in the
-  prelaunch regression contract, which asserts the literal. Only that contract
-  file was re-run afterwards: 19 pass / 0 fail.
-- Production smoke ran on the live beta listing `/annuncio/monfortino-2015`,
-  chosen because its `prezzo_mercato_cents` (135000) exceeds its
-  `prezzo_cents` (118000). The page is intact with no error markers; the panel
-  is present and reads "Dati interni Vinea · 1 annuncio comparabile attivo ·
-  1 osservazione di richiesta · 0 osservazioni di vendita"; "Storico in
-  formazione" appears and no "Riferimento richieste" number is shown, as the
-  sample is 1; the legacy `1.350` and every `line-through` are gone from that
-  page. The single ASKING point is drawn client-side, so the scatter symbol is
-  not observable in the server HTML; what the HTML proves is that the panel
-  took the chart branch with one observation, not the empty-history branch.
-- No historical SALE backfill was added. Existing completed orders therefore
-  produce no historical SALE observation; whether sale history and later refunds
-  should weight the reference remains an open product/statistical decision,
-  deliberately left outside 1B.
+- Profile Certifications / Trust Foundation is in VERIFY & SHIP. PR #80 is open;
+  the exact GitHub file list matches the 17 task files, excludes `.wslconfig`, and
+  all three CI jobs, Supabase Preview, and the relevant Netlify checks are green.
+  GitHub reported the PR clean and mergeable before this final handoff update.
+  The implementation and concrete-defect audit are complete; no additional
+  feature or general refactor is in scope.
+- A fresh PostgreSQL 17.10 container applied bootstrap plus all 37 migrations and
+  ran `supabase/tests/profile_certifications.sql`: **33 PASSA / 0 FALLISCE**.
+  All seven fixture residue counters were zero and the container was removed.
+- Disposable catalog-advisor equivalents found zero client grants and zero RLS
+  policies on the private certification table, no task-specific unsafe
+  `SECURITY DEFINER` function, no duplicate index, and a covering primary-key
+  index for its foreign key. Intentional closed-column `security_invoker = off`
+  projections were retained rather than weakened to silence linter signals.
+- The full `frontend-next` verification ran exactly once with Bun 1.3.14: lint
+  completed with 0 errors and 14 warnings, typecheck passed, **760 tests passed / 0
+  failed across 50 files**, and the production build succeeded. After raising the
+  floor to 760, only the floor contract was rerun: **19 passed / 0 failed**.
+  `git diff --check` is clean.
+- Pre-existing untracked `.wslconfig` remains untouched and must not enter any
+  stage, commit, or PR.
 
 ## NEXT STEPS
 
-1. Decide whether completed-order sale history and later refunds belong in the price reference.
-2. Re-check the Smart Sell Price suggested branch once a wine reaches 3 comparable active listings.
-3. Configure the Phase 7g scheduler variables before any merge that can reactivate `payouts-release`.
+1. Commit and push this factual handoff update, then reverify PR #80's exact head, green checks, and clean mergeability.
+2. Squash-merge PR #80 and verify the resulting `origin/main` SHA and files.
+3. Check whether the GitHub/Supabase integration applied migration `20260825120000`, apply it once only if absent, and complete read-only production verification.
 
 ## BLOCKERS / NOTES
 
-- Price Intelligence 1A has no shipping blocker. Authenticated PostgREST remains
-  explicitly unverified at runtime; SQL role proofs and anonymous PostgREST
-  proofs are green.
-- The exact production migration ledger was not independently queried before
-  merge. The prior verified handoff recorded `20260822000000`; pre-merge 404s
-  proved the new objects absent, and the post-merge ledger records
-  `20260824120000` with a matching acquisition-time backfill.
-- A Supabase CLI dry-run exposed a temporary CLI database credential in local
-  command output during verification. It was never committed or documented;
-  all temporary credential and schema-dump files were deleted. The credential
-  was short-lived CLI material and was not reused after cleanup.
-- The grid does not simulate two simultaneous SALE transitions. Concurrency
-  safety rests on the live unique partial index, while the grid proves repeated
-  and post-dispute transitions serially.
-- `wine_price_history` intentionally uses `security_invoker = off`, so the
-  Supabase linter's `security_definer_view` signal is expected, as for the other
-  public closed-column views.
-- Deliberate historical verification residues unrelated to this task remain:
-  one test bottle in state `aperta`, the test account, and three objects in each
-  of its `cantina` and `annunci` folders.
-- Phase 11 implementation is not open. Phase 13 has not started and must not be
-  inferred from the public beta, green checks or Price Intelligence 1A.
-- External Price Intelligence providers remain OFF and fail-closed. Turning one
-  on requires explicit authorization plus a new enum label, CHECK update and
-  controlled write path in a new migration. 1B introduced no key, HTTP call,
-  cron, adapter or flag, and its UI names only "Dati interni Vinea". The merged
-  diff adds no `fetch`, no URL, no API key, no cron and no `process.env` read:
-  zero traffic and zero cost.
-- Production has 9 ASKING / 0 SALE and one observation per wine+format, and the
-  nine active listings are nine distinct wines. Every listing page therefore
-  shows "Storico in formazione" with no numeric reference, as the smoke
-  confirmed, until some wine reaches 3 comparable active listings.
-- The Phase 7g payout scheduler remains unconfigured. `gh variable list` and
-  `gh secret list` were both empty on 11 August 2026 and `Phase 7 - auto-release
-  payouts` stood at 18 runs out of 18 in `failure`. Configuring those values
-  requires the real project credentials and is outside any assisted session; the
-  environment must be readable before a merge that can reactivate the function.
-  Smart Sell Price does not touch payments, payouts or that workflow.
-- With production at 9 ASKING / 0 SALE across nine distinct wines, no wine has
-  3 comparable active listings, so `/vendi` is expected to show "Dati
-  insufficienti per suggerire un prezzo". The suggested branch stays covered by
-  the deterministic tests until a real market reaches the threshold.
+- There is no known implementation blocker. The production migration state is
+  deliberately unresolved until after the PR merge and integration run.
+- Do not run the destructive certification grid in production and do not create
+  an account, certification, or other fixture for smoke testing.
+- An authenticated `/account` smoke may use only an already-existing browser
+  session. If none is available, report exactly `AUTH SMOKE = NON VERIFICATO.`
+- `my_certifications` and `public_listings` intentionally use
+  `security_invoker = off` closed projections; the expected
+  `security_definer_view` advisor signal is not grounds to expose base tables.
+- External Price Intelligence providers and KYC/identity providers remain OFF.
+  Enabling either requires a separately authorized product decision and a new
+  controlled migration path.
+- The Phase 7g payout scheduler remains an unresolved historical operational
+  blocker outside this task; it must not be inferred fixed by this PR.
+- Phase 11 implementation is not open. Phase 13 cutover has not started and must
+  not be inferred from the public beta or green certification checks.

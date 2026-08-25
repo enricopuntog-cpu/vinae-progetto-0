@@ -453,9 +453,15 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
       return vuoto;
     }
 
-    // rating, valutazioni e verificato restano a zero/false per la stessa
-    // ragione dichiarata in 6a: nascono da ordini e verifica identità, domini
-    // non ancora migrati. Meglio non attestare nulla che attestare il falso.
+    // `rating` e `valutazioni` restano a zero per la ragione dichiarata in 6a:
+    // nascono dagli ordini, dominio non ancora migrato.
+    //
+    // `verificato` resta `false` per la stessa ragione di
+    // `rigaProprietarioAWine`: è la propria cantina, non il catalogo. Questa
+    // lettura non passa da `public_listings` e la certificazione non è
+    // raggiungibile da altrove — `profile_certifications` non ha privilegi
+    // client. Il proprio stato di verifica si legge in /account, dove ha un
+    // senso, e non da un `Venditore` che serve a comporre un'anteprima.
     return {
       ...vuoto,
       nome: data.username as string,
