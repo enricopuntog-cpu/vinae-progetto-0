@@ -97,7 +97,17 @@
 - The job uses no secret and no Actions variable, invokes no Edge Function and
   emits no payout. `.github/workflows/ci.yml` contains zero `secrets.`
   references and zero `service_role` occurrences.
-- Only file modified besides this one: `.github/workflows/ci.yml`.
+- Hooking the suite to CI exposed a real defect the manual runs had hidden: on
+  **Node 22** the test `fallisce al timeout` hung and the run ended 6 passed /
+  9 cancelled. `AbortSignal.timeout()` in `payouts-release-job.mjs` uses an
+  unref'd timer, and in that test the stub `fetchImpl` promise was the only
+  pending work, so the event loop drained before the abort. Node 24, used
+  locally, happened to survive it. Fixed **in the test only**, with a ref'd
+  keep-alive timer cleared on abort: the runner logic was not touched, and if
+  the abort ever stopped arriving the promise now rejects with a different
+  message and the assertion fails instead of hanging.
+- Files modified besides this one: `.github/workflows/ci.yml` and
+  `.github/scripts/payouts-release-job.test.mjs`.
 - Local verification: `node --test .github/scripts/payouts-release-job.test.mjs`
   gives **15 passed / 0 failed**; `git diff --check` is clean; `ci.yml` was
   parsed with the `js-yaml` already present in `frontend/node_modules`, without

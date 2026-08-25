@@ -118,9 +118,27 @@ test("fallisce se restano ordini trattenuti e scaduti da oltre 24 ore", async ()
 
 test("fallisce al timeout", async () => {
   const env = { ...ENV, PAYOUTS_REQUEST_TIMEOUT_MS: "10" };
+  // `AbortSignal.timeout()` usa un timer unref'd: da solo non tiene vivo
+  // l'event loop. Qui la promessa della finta fetch e' l'unico lavoro pendente,
+  // quindi su Node 22 il loop si svuota prima dell'abort e il test resta
+  // appeso. Un timer di appoggio ref'd, spento appena l'abort arriva, tiene
+  // vivo il loop senza toccare la logica del runner; se l'abort non arrivasse
+  // piu' la promessa viene rifiutata con un messaggio diverso e
+  // l'asserzione sotto fallisce invece di bloccarsi.
   const fetchImpl = async (_url, { signal }) =>
     new Promise((_resolve, reject) => {
-      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      const attesaAbort = setTimeout(
+        () => reject(new Error("L'abort non e' mai arrivato")),
+        1000,
+      );
+      signal.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(attesaAbort);
+          reject(signal.reason);
+        },
+        { once: true },
+      );
     });
 
   await assert.rejects(runPayoutsRelease({ env, fetchImpl }), /Timeout dopo 10 ms/);
