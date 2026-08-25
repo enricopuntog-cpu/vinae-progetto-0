@@ -102,6 +102,16 @@ const COLONNE = [
   "seller_verificato",
 ].join(",");
 
+/**
+ * La stessa allowlist, esportata per chi legge `public_listings` da un altro
+ * servizio — oggi il profilo pubblico, che mostra gli annunci attivi di una
+ * persona e li mappa con `rigaAWine`. Esportarla invece di ricopiarla è ciò
+ * che impedisce alle due letture di divergere: `PublicListingRow` e `rigaAWine`
+ * presuppongono queste colonne, e una copia dimenticata indietro di una voce
+ * produrrebbe un `undefined` là dove il tipo promette un valore.
+ */
+export { COLONNE as COLONNE_ANNUNCIO_PUBBLICO };
+
 /** Immagine mostrata quando un annuncio non ne ha nessuna. */
 const IMMAGINE_ASSENTE = "/images/vinea-bottle-1.jpg";
 

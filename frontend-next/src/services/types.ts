@@ -171,6 +171,87 @@ export interface ProfileService {
   eliminaFotoAvatar(percorso: string): Promise<Result<void>>;
 }
 
+// ---- Profilo pubblico di un'altra persona ----------------------------------
+/**
+ * Ciò che di una persona può vedere chiunque, e nient'altro.
+ *
+ * NON È `ProfiloCorrente` CON MENO CAMPI, ed è la distinzione che tiene in piedi
+ * il tipo. `ProfiloCorrente` descrive la propria riga — include `email`, include
+ * `dob`, include `certificazioni` — e la RLS garantisce che sia la propria.
+ * Questo tipo descrive la riga di qualcun altro: i sette campi qui sotto sono
+ * l'elenco chiuso che `public.profilo_pubblico(uuid)` restituisce, e non esiste
+ * un ottavo campo che il database sappia dare. Derivarlo con un `Omit<>` da
+ * `ProfiloCorrente` avrebbe legato la superficie pubblica a quella privata: il
+ * giorno in cui la seconda cresce, la prima crescerebbe con lei.
+ *
+ * È UN PROFILO UTENTE, NON UN PROFILO VENDITORE. Non ha un conteggio di annunci,
+ * non ha un ruolo, non ha nulla che dipenda dall'aver mai venduto: chi scrive
+ * soltanto nel Club ha questo profilo esattamente come chi vende. Gli annunci
+ * attivi si chiedono a parte, e la risposta `[]` è normale.
+ *
+ * NESSUN CAMPO DI FIDUCIA, e l'assenza è deliberata. Non c'è `verificato`, non
+ * c'è `rating`, non ci sono `valutazioni`, non c'è alcun badge. La spunta che
+ * questo profilo mostrerà un giorno dipenderà da qualifiche professionali
+ * approvate, un dominio che non è aperto; `public_listings.seller_verificato`
+ * dice un'altra cosa, resta dov'è e non va portato qui. Un campo booleano
+ * aggiunto ora, per quanto cablato a `false`, sarebbe una promessa fatta a chi
+ * legge un profilo prima che esista qualcosa che la mantenga.
+ */
+export type ProfiloPubblico = {
+  /**
+   * La chiave stabile, ed è quella che le superfici sorgente già pubblicano:
+   * `public_listings.seller_id`, `public_club_posts.autore_id`,
+   * `public_club_post_risposte.autore_id`. Non lo username, che l'interessato
+   * può cambiare da /account.
+   */
+  userId: string;
+  username: string;
+  bio: string;
+  citta: string;
+  provincia: string;
+  esperienza: Esperienza;
+  /**
+   * Riferimento, non URL: `<uid>/<uuid>.webp` oppure il percorso di un preset.
+   * Va passato a `risolviAvatarPersona(avatarUrl, userId)` — o direttamente ad
+   * `AvatarPersona` — che verifica la cartella e ricompone l'indirizzo. Stringa
+   * vuota quando il valore memorizzato non supera quella verifica.
+   */
+  avatarUrl: string;
+};
+
+/**
+ * La lettura pubblica di un profilo altrui. Sola lettura: non esiste, e non
+ * deve esistere, un metodo che scriva la riga di un'altra persona.
+ *
+ * NESSUN METODO DI ELENCO. Non c'è un `cerca`, non c'è un `elenco`, non c'è una
+ * directory di persone — e non è un pezzo mancante da aggiungere dopo: il
+ * database non ha una porta che li renda scrivibili, perché la proiezione
+ * pubblica sta nello schema `private` e l'unico accesso è una funzione che
+ * prende un identificativo e restituisce al massimo una riga.
+ */
+export interface PublicProfileService {
+  /**
+   * Tre esiti distinti, e vanno tenuti distinti:
+   *
+   * - `{ ok: true, data: ProfiloPubblico }` — trovato e visibile;
+   * - `{ ok: true, data: null }` — non trovato **oppure** non visibile. I due
+   *   casi sono deliberatamente indistinguibili: il database restituisce zero
+   *   righe per una persona inesistente e per una rimossa, e distinguerli in
+   *   superficie rivelerebbe uno stato di moderazione che non è pubblico;
+   * - `{ ok: false, error }` — la lettura è fallita. Diverso da `null`, perché
+   *   «questo profilo non c'è» e «non sono riuscito a leggerlo» sono due
+   *   messaggi diversi per chi guarda, e trattare il secondo come il primo
+   *   trasformerebbe un guasto di rete in una pagina «non trovato».
+   */
+  profilo(userId: string): Promise<Result<ProfiloPubblico | null>>;
+  /**
+   * Gli annunci attivi di quella persona, da `public_listings`. Sezione
+   * eventuale: `[]` è una risposta normale e non un errore, perché il profilo
+   * pubblico esiste anche per chi non ha mai venduto nulla.
+   */
+  annunciAttivi(userId: string): Promise<Result<Wine[]>>;
+}
+
 // ---- Catalogo vini ---------------------------------------------------------
 export interface WineCatalogService {
   cerca(query: string, filtri?: Record<string, unknown>): Promise<unknown[]>;

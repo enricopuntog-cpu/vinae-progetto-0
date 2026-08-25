@@ -661,6 +661,41 @@ schema evolution e non deve essere applicato implicitamente dall'integrazione;
 non si chiama `supabase/seed.sql` perché `config.toml` ha `[db.seed]` abilitato
 su quel nome e lo caricherebbe a ogni `db reset` e sulle preview branch.
 
+## D8 — fondazione del profilo pubblico utente
+
+[`public_profile_foundation.sql`](public_profile_foundation.sql) — 16 casi
+**strutturali e comportamentali** sulla migrazione append-only
+`20260825180000_public_profile_foundation.sql`. La griglia prova la projection
+chiusa di sette colonne, la sola porta RPC per UUID, i privilegi client, il
+profilo USER-level anche con zero annunci e la decisione 7.6b: `rimosso` non e
+visibile in uscita, un chiamante `rimosso` non legge in entrata e `sospeso`
+resta visibile. Profilo nascosto e UUID inesistente hanno lo stesso esito.
+
+**Eseguita davvero il 2026-08-25**, esclusivamente su PostgreSQL 17.10
+(`postgres:17.10`) in un container usa e getta. Il database e stato ricostruito
+dal vuoto con `9c_bootstrap_postgres_locale.sql` e tutte le **38 migrazioni**
+del repository nell'ordine dei filename, invocando ogni file separatamente con
+`psql -1`. La griglia ha poi racchiuso sei utenti fixture, tre provvedimenti e
+le relative righe di audit append-only in una sola transazione, annullata
+atomicamente con `ROLLBACK`.
+
+| misura | esito |
+| --- | --- |
+| casi della griglia | **16 PASSA / 0 FALLISCE** |
+| utenti fixture residui | **0** |
+| profili fixture residui | **0** |
+| ruoli fixture residui | **0** |
+| audit fixture residui | **0** |
+
+Il ramo sentinella di fallimento e stato provato separatamente sullo stesso
+PostgreSQL: con `ON_ERROR_STOP` termina `psql` con exit code non-zero invece di
+limitarsi a stampare `FALLISCE`. Il container D8 e stato rimosso dopo le prove;
+nessuna migrazione o fixture D8 e stata applicata al progetto Supabase reale.
+
+Questa e una prova SQL diretta: misura catalogo, privilegi PostgreSQL e
+comportamento della funzione. **Non** prova PostgREST, la traduzione HTTP, un
+browser o il rendering della futura UI; D8 BUILD non crea alcuna pagina profilo.
+
 ## Price Intelligence 1A — la fondazione dei prezzi
 
 [`price_intelligence_1a.sql`](price_intelligence_1a.sql) — 32 casi
