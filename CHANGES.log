@@ -4,10 +4,10 @@
 
 - `frontend/` + `backend/` remain the served product. The public
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
-- `origin/main` is `2050e25e88db9f8e67cc1dffeb170e44f74da7cc` (PR #83,
-  "Registra il merge del gate e lo smoke disabled"), which follows
-  `e14daed` (PR #82, "Gate fail-closed per lo scheduler dei payout"). The
-  working branch `ci/payout-runner-tests` starts from that baseline.
+- `origin/main` is `bdfd2c75c1b4527533827ed3ee8bc61c7597d14e` (PR #84,
+  "Esegui la suite del payout runner in CI"), which follows `2050e25` (PR #83)
+  and `e14daed` (PR #82, "Gate fail-closed per lo scheduler dei payout").
+- CI runs four jobs: `frontend`, `frontend-next`, `payout-runner`, `backend`.
 - Production project ref is `pijnmcllmfgjmgsvtcej`. Verified by the cabin after
   PR #81: the production migration ledger really ends at `20260825120000`
   profile_certifications; `profile_certifications` holds 0 rows; RLS is ON with
@@ -108,11 +108,15 @@
   message and the assertion fails instead of hanging.
 - Files modified besides this one: `.github/workflows/ci.yml` and
   `.github/scripts/payouts-release-job.test.mjs`.
-- Shipped as PR #84, `ci/payout-runner-tests`. On the head `5c91535` the job
-  `Payout runner - tests` reported **15 tests / 15 pass / 0 fail / 0 cancelled**
-  on the runner's Node 22, read from the job log and not merely from the green
-  check. Netlify and Supabase Preview stayed skipped: the PR touches no
-  migration and no application source.
+- Shipped as PR #84, squash-merged to `bdfd2c7`. All four CI jobs passed on the
+  final head `7a97286`, and `Payout runner - tests` reported **15 tests / 15
+  pass / 0 fail / 0 cancelled** on `node-version: 22`, read from the job log and
+  not merely from the green check. Netlify and Supabase Preview stayed skipped:
+  the PR touches no migration and no application source.
+- Verified after the merge, on the `push` run of `main` at `bdfd2c7` and not
+  only on the pull request: all four jobs green, and `Payout runner - tests`
+  again **15 / 15 pass / 0 fail / 0 cancelled** on Node 22. The job therefore
+  really executes on both triggers.
 - Local verification: `node --test .github/scripts/payouts-release-job.test.mjs`
   gives **15 passed / 0 failed**; `git diff --check` is clean; `ci.yml` was
   parsed with the `js-yaml` already present in `frontend/node_modules`, without
@@ -127,8 +131,8 @@
 
 ## NEXT STEPS
 
-1. After the squash merge, verify on the resulting `main` commit that `Payout runner - tests` is really executed and passes on the push run, not only on the pull request.
-2. Configure the Actions variable `SUPABASE_URL` and the secrets `SUPABASE_ANON_KEY` (legacy anon JWT) and `PAYOUTS_JOB_TOKEN`, verifying the token matches the Edge Function secret, before setting `PAYOUTS_SCHEDULER_ENABLED=true`.
+1. Configure the Actions variable `SUPABASE_URL` and the secrets `SUPABASE_ANON_KEY` (legacy anon JWT) and `PAYOUTS_JOB_TOKEN`, verifying the token matches the Edge Function secret, before setting `PAYOUTS_SCHEDULER_ENABLED=true`.
+2. Run the first `workflow_dispatch` with `PAYOUTS_SCHEDULER_ENABLED=true` and `PAYMENTS_ENABLED=false` and confirm it returns queue health only, with zero release actions.
 3. Run the authenticated `/account` smoke only if an already-existing browser session becomes available.
 
 ## BLOCKERS / NOTES
