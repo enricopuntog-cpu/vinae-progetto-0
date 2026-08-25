@@ -10,12 +10,22 @@ import {
   User,
   Search,
   Shield,
+  Wine,
+  type LucideIcon,
 } from "lucide-react";
 import { type ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
+import { AvatarPersona } from "@/components/vinea/AvatarPersona";
 import { HeaderInboxActions } from "@/components/vinea/notifications/HeaderInboxActions";
 import { AI_UI, DEMO_UI_ABILITATA } from "@/config/features";
+import {
+  classiRicercaHeader,
+  navMobile,
+  percorsoAttivo,
+  voceNavAttiva,
+  type IconaNavMobile,
+} from "@/lib/shell/navigazione-mobile";
 import { useVinea, type DemoRuolo } from "@/lib/vinea-store";
 
 // Fase 10c. Il pannello Sommelier era rimasto fuori dalla Fase 3 perché
@@ -36,23 +46,27 @@ const SommelierChat = dynamic(() => import("@/components/vinea/SommelierChat"), 
   ssr: false,
 });
 
-// Fase 12a. La voce Club torna in entrambe le navigazioni, nella posizione che
+// D6. Le voci della barra mobile stanno in `@/lib/shell/navigazione-mobile`,
+// che tiene anche lo stato attivo: sono le due cose della shell che si possono
+// verificare senza montare React. Qui resta solo la traduzione da nome
+// dell'icona a componente, che React deve comunque avere sotto mano.
+//
+// Fase 12a. La voce Club sta in entrambe le navigazioni, nella posizione che
 // aveva prima della #44: quella PR l'aveva tolta perche /community era una
 // community finta e diventava un notFound(), non perche la voce fosse di
-// troppo. La griglia mobile e rimasta `grid-cols-5` da allora con quattro sole
-// voci - questo la riporta a cinque, che e il numero per cui e scritta.
-const nav = [
-  { to: "/", label: "Home", icon: Home, exact: true },
-  { to: "/esplora", label: "Ricerca", icon: Search, exact: false },
-  { to: "/vendi", label: "Vendi", icon: PlusCircle, exact: false },
-  { to: "/community", label: "Club", icon: Users, exact: false },
-  // La voce Account porta al profilo e non piu a /accedi: da autenticati
-  // quest'ultima mostrava soltanto "Sei autenticato" ed "Esci", cioe una
-  // schermata di accesso a chi era gia dentro. /account rimanda a /accedi da
-  // solo quando la sessione manca, quindi la voce resta valida in entrambi gli
-  // stati e non serve una voce condizionale.
-  { to: "/account", label: "Account", icon: User, exact: false },
-] as const;
+// troppo.
+const ICONE_NAV: Record<IconaNavMobile, LucideIcon> = {
+  home: Home,
+  ricerca: Search,
+  vendi: PlusCircle,
+  club: Users,
+  cantina: Wine,
+  // Da ospiti la quinta voce resta Account e porta al profilo, non a /accedi:
+  // /account rimanda da solo alla schermata di accesso quando la sessione
+  // manca. Da autenticati quel posto e della Cantina, perche l'avatar
+  // dell'header porta gia al profilo.
+  account: User,
+};
 
 const desktopLinks = [
   { to: "/", label: "Home", exact: true },
@@ -65,7 +79,13 @@ const desktopLinks = [
 
 export function VineaLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { ruolo, setRuolo } = useVinea();
+  const { ruolo, setRuolo, authProfilo } = useVinea();
+  // Lo stesso segnale che la barra mobile usava gia per mandare Home su /home:
+  // non ne serve un secondo. Con lo switcher demo acceso `ruolo` e quello
+  // scelto a mano, e l'avatar ricade sulla silhouette perche `authProfilo` resta
+  // nullo senza una sessione vera - che e esattamente cio che deve succedere.
+  const autenticato = ruolo !== "guest";
+  const vociMobile = navMobile(autenticato);
 
   return (
     <div className="min-h-dvh bg-background text-foreground pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
@@ -157,11 +177,37 @@ export function VineaLayout({ children }: { children: ReactNode }) {
               href="/esplora"
               aria-label="Ricerca"
               data-testid="header-search-link"
-              className="rounded-full p-2 hover:bg-secondary"
+              className={`rounded-full p-2 hover:bg-secondary ${classiRicercaHeader(autenticato)}`}
             >
               <Search className="h-5 w-5" />
             </Link>
+            {/* Messaggi e Notifiche, in quest'ordine, dall'infrastruttura della
+                Fase 8 gia in uso: nessuna messaggistica nuova passa di qui. */}
             <HeaderInboxActions />
+            {autenticato && (
+              // Ultimo elemento di una riga che scorre da sinistra a destra:
+              // e cosi che l'avatar sta all'estrema destra, senza posizionamento
+              // assoluto che poi litiga con il resto.
+              //
+              // Solo mobile: su desktop la barra principale ha gia la voce
+              // Account, e questo task non tocca quella shell.
+              <Link
+                href="/account"
+                aria-label="Account"
+                data-testid="header-avatar-link"
+                // Stesso confronto della barra: `startsWith` nudo direbbe
+                // "pagina corrente" anche su una futura rotta che comincia per
+                // /account senza esserlo, ed e' la bugia che gli screen reader
+                // leggono per prima.
+                aria-current={percorsoAttivo("/account", pathname) ? "page" : undefined}
+                className="rounded-full p-0.5 hover:bg-secondary md:hidden"
+              >
+                <AvatarPersona
+                  avatarUrl={authProfilo?.avatarUrl}
+                  proprietarioId={authProfilo?.userId}
+                />
+              </Link>
+            )}
           </div>
         </div>
       </header>
@@ -182,17 +228,14 @@ export function VineaLayout({ children }: { children: ReactNode }) {
         data-testid="mobile-nav"
       >
         <ul className="grid grid-cols-5">
-          {nav.map((n) => {
-            const to = n.to === "/" && ruolo !== "guest" ? "/home" : n.to;
-            const active = n.exact
-              ? pathname === to || (n.to === "/" && pathname === "/home")
-              : pathname.startsWith(n.to);
-            const Icon = n.icon;
+          {vociMobile.map((n) => {
+            const active = voceNavAttiva(n, pathname);
+            const Icon = ICONE_NAV[n.icona];
             const isSell = n.to === "/vendi";
             return (
               <li key={n.to} className="flex">
                 <Link
-                  href={to}
+                  href={n.to}
                   aria-current={active ? "page" : undefined}
                   aria-label={n.label}
                   data-testid={`mobile-nav-${n.label.toLowerCase()}`}

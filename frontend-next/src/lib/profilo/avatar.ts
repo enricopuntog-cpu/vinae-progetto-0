@@ -84,6 +84,51 @@ export function avatarSicuro(
 }
 
 /**
+ * L'avatar da disegnare, con la sua provenienza dichiarata.
+ *
+ * `profiles.avatar_url` è una colonna sola e tiene o il percorso Storage della
+ * foto personale o il percorso di un preset del catalogo: i due casi non
+ * possono coesistere sulla stessa riga. La priorità richiesta — foto, poi
+ * preset, poi silhouette — si applica quindi nell'ordine dei controlli, e la
+ * `fonte` la rende osservabile invece di lasciarla dedurre dalla forma dell'URL.
+ *
+ * La silhouette non è un caso d'errore: è il terzo stato normale, ed è dove
+ * finiscono anche il valore assente, il preset fuori catalogo, la cartella di
+ * un'altra persona e la configurazione Supabase non valida. Nessuno di questi
+ * produce una richiesta di rete, quindi non esiste il riquadro rotto.
+ *
+ * Le iniziali non compaiono qui di proposito: `inizialiDa()` resta per la
+ * schermata profilo, ma non è più il fondo della catena.
+ */
+export type AvatarPersona =
+  | { fonte: "foto"; url: string }
+  | { fonte: "preset"; url: string }
+  | { fonte: "silhouette"; url: null };
+
+const SILHOUETTE: AvatarPersona = { fonte: "silhouette", url: null };
+
+export function risolviAvatarPersona(
+  valore: string | null | undefined,
+  proprietarioId?: string | null,
+  supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL,
+): AvatarPersona {
+  const foto = percorsoAvatarPersonale(valore, proprietarioId);
+  if (foto) {
+    // `avatarSicuro()` ricompone l'indirizzo del progetto e può fallire chiusa
+    // se la variabile d'ambiente manca o non è un'origine HTTP(S): in quel caso
+    // la foto esiste ma non è indirizzabile, e disegnarla sarebbe l'immagine
+    // rotta che questa funzione deve impedire.
+    const url = avatarSicuro(foto, proprietarioId, supabaseUrl);
+    return url ? { fonte: "foto", url } : SILHOUETTE;
+  }
+
+  // Qui resta soltanto il preset: `riferimentoAvatarSicuro()` accetta il
+  // catalogo o la cartella del proprietario, e la cartella è già stata esclusa.
+  const preset = riferimentoAvatarSicuro(valore, proprietarioId);
+  return preset ? { fonte: "preset", url: preset } : SILHOUETTE;
+}
+
+/**
  * Iniziali da mostrare quando non c'è un avatar valido. Una lettera sola se il
  * nome non ne offre due: meglio di un riquadro vuoto, e non inventa caratteri.
  */
