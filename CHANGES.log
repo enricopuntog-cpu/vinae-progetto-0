@@ -4,288 +4,83 @@
 
 - `frontend/` + `backend/` remain the served product. The public
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
-- `origin/main` is `72aeff8a91f0831aa80923ae4dc82321b399090a` (PR #85,
-  "Riconcilia CHANGES.log dopo il merge della suite payout runner in CI"), which
-  follows `bdfd2c7` (PR #84, "Esegui la suite del payout runner in CI"),
-  `2050e25` (PR #83) and `e14daed` (PR #82).
-- CI runs four jobs: `frontend`, `frontend-next`, `payout-runner`, `backend`.
-- Production project ref is `pijnmcllmfgjmgsvtcej`. Verified by the cabin after
-  PR #81: the production migration ledger really ends at `20260825120000`
-  profile_certifications; `profile_certifications` holds 0 rows; RLS is ON with
-  0 client policies; trigger, function, check, enum and view definitions were
-  inspected directly through a read-only management SQL channel.
-- The former blocker "production ledger and internal objects not inspectable"
-  is therefore CLOSED. Profile Certifications is closed and is not reopened.
-- CI `MIN_TESTS` is 798 in `.github/workflows/ci.yml` and in its regression
-  contract `frontend-next/src/lib/beta/prelaunch-contract.test.ts`. Raised from
-  760 by D6 against a measured full-suite total of 798, stable over four runs.
-- Phase 7g payout scheduler: the workflow `Phase 7 - auto-release payouts` runs
-  `0 */6 * * *`. Until PR #82 it attempted the invocation on every run and
-  failed before the request because `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
-  `PAYOUTS_JOB_TOKEN` are not configured. Those scheduled failures were never a
-  recent regression. The gate shipped in PR #82 now ends those runs cleanly.
-- The Edge Function `payouts-release` is already fail-closed: with
-  `PAYMENTS_ENABLED=false` it authenticates the job, claims no order, creates no
-  Transfer, and only measures queue health.
-- External Price Intelligence providers, KYC/identity providers and SMTP remain
-  OFF. Payments remain OFF.
+- D8 adds the read-only, user-level public-profile foundation. Its only public
+  database door is `public.profilo_pubblico(p_user_id uuid)`, backed by a closed
+  seven-column projection in `private.profili_pubblici`.
+- The public allowlist is exactly user UUID, username, bio, city, province,
+  experience and avatar reference. D8 does not expose email, date of birth,
+  roles, moderation internals, certification/trust data, metadata, future
+  columns or the superseded `seller_verificato` semantic.
+- Visibility reuses decision 7.6b: a removed target is absent, a removed
+  authenticated caller reads no public profile, and a suspended user remains
+  visible. Hidden and nonexistent UUIDs have the same zero-row response.
+- D8 introduces no client `SELECT` on `profiles` or
+  `profile_certifications`, no base-table RLS/grant relaxation and no general
+  people directory. The RPC is `STABLE`, `SECURITY DEFINER`, has an empty
+  `search_path`, returns at most one row and is executable only by `anon` and
+  `authenticated`.
+- `PublicProfileService` is server-compatible, rejects malformed UUIDs before
+  PostgreSQL, maps database failures to application messages, reuses the
+  fail-closed avatar sanitizer and reads active listings separately from the
+  existing `public_listings` projection. A profile exists with zero listings.
+- D8 verification measured **31 pass / 0 fail / 97 assertions** in the targeted
+  service suite and **829 pass / 0 fail / 17673 assertions** in the complete
+  `frontend-next` suite with Bun 1.3.14. The CI `MIN_TESTS` floor and its
+  regression contract are aligned to **829**.
+- The D8 PostgreSQL 17.10 disposable grid applied all 38 migrations and produced
+  **16 PASSA / 0 FALLISCE**, with zero user, profile, role or audit residues
+  after rollback. It was not executed against production.
+- Production project ref is `pijnmcllmfgjmgsvtcej`. Before the D8 production
+  apply, its migration ledger must end at `20260825120000`
+  `profile_certifications`; only migration `20260825180000` may then be applied.
+- The payout scheduler repository gate remains fail-closed and external Price
+  Intelligence providers, KYC/identity providers, SMTP and payments remain OFF.
 
 ## ACTIVE TASK
 
-### D6.1–D6.5 Authenticated Mobile Shell & Home
+### D8 Public User Profile Data/Security Foundation — VERIFY & SHIP
 
-- Shipped as PR #86 from branch `feat/d6-mobile-auth-shell-home`.
-- Branch based on `72aeff8`, which was still
-  `origin/main` at VERIFY time: no divergence, no rebase or merge was needed. No
-  migration, no schema/RLS/Storage change, no production write, no external
-  provider call.
-- The BUILD audit found: header, bottom-nav and Home already existed; the real
-  gaps were
-  four. The header had no avatar and put the search lens where the third action
-  belongs; the mobile bar had `Account` and no `Cantina`; there was no avatar
-  fallback below the initials; the Home hero printed the bare username.
-- Reused, not rebuilt: `useVinea()` (`authProfilo.avatarUrl`, `authProfilo.userId`,
-  `authProfileName`) as the auth/profile source of truth; `avatarSicuro()` /
-  `percorsoAvatarPersonale()` / `riferimentoAvatarSicuro()` from the CLOSED
-  avatar foundation; `HeaderInboxActions` for Messaggi + Notifiche; the existing
-  `/messaggi`, `/notifiche`, `/account`, `/cantina`, `/esplora`, `/vendi`,
-  `/community`, `/home` routes. No second shell, no new Home, no new Account
-  route, no duplicated resolver or storage helper.
-- New `src/lib/shell/navigazione-mobile.ts`: the two bar models plus
-  `voceNavAttiva()` and `classiRicercaHeader()`. Authenticated bar is exactly
-  Home (`/home`) / Ricerca / Vendi / Club / Cantina; the guest bar is unchanged
-  and keeps `Account`. Extracting the model is what makes the shell verifiable
-  without mounting React, which is this suite's existing convention.
-- Fixed while there: the mobile bar used a bare `startsWith`, so `/vendite` — a
-  real route — lit up `Vendi`. Now it matches on the `/` boundary, as the
-  desktop bar already did.
-- New `src/components/vinea/AvatarPersona.tsx`: priority foto → preset →
-  silhouette, with `SilhouettePersona` exported separately so the fallback is
-  not header-only. The silhouette is an inline SVG, so the bottom of the chain
-  is never itself a network request. Initials are no longer the final fallback;
-  `inizialiDa()` stays for `/account`, which was not touched.
-- New `risolviAvatarPersona()` in `src/lib/profilo/avatar.ts` returns a
-  discriminated `fonte`. It fails closed onto the silhouette for an absent
-  value, a foreign user's folder, an off-catalogue preset, an external URL, and
-  a photo whose Storage base is unusable — so no broken image and no invalid
-  `src` can be emitted.
-- Measured and worth recording: foto and preset can never both apply, because
-  `profiles.avatar_url` is one column and the two shapes are disjoint
-  (`/avatar/*.svg` vs `<uuid>/<uuid>.webp`). The stated priority is therefore
-  explicit in code and observable through `fonte`, but cannot be violated at
-  runtime. That mutual exclusivity is pinned by its own test.
-- Header authenticated mobile: Messaggi, Notifiche, avatar, in that order, with
-  the avatar last in the left-to-right actions row and therefore at the far
-  right. The lens is `hidden md:inline-flex` when authenticated and keeps its
-  exact previous classes when guest. The avatar is `md:hidden`, so the desktop
-  shell — which already carries an `Account` link — is untouched.
-- Home authenticated hero now reads `Bentornato, {nome}` from
-  `authProfileName`. Loading, `AccessRequired` and `ProfileMissing` states, the
-  hero visual language, the KPI row and the Cantina access are unchanged. No
-  dashboard, no seller statistics, no Balance.
-- The independent VERIFY audit read the real working tree, including the two
-  untracked files `git diff` does not show until staged, and found three defects
-  the BUILD report did not list. All three are corrected on the branch:
-  1. the new avatar link set `aria-current` from a bare
-     `pathname.startsWith("/account")` — the same defect class D6 had just
-     removed from the bar. No `/account`-prefixed sibling route exists today, so
-     it was latent, not observable. `percorsoAttivo()` is now the exported form
-     of the `/`-boundary comparison, `voceNavAttiva()` is written on top of it,
-     and the avatar uses it too;
-  2. no test proved the shell actually branches on the role: replacing
-     `navMobile(autenticato)` with a fixed list passed the whole suite. That is
-     coverage the task required. Three assertions now pin the wiring, including
-     that neither bar constant is named inside the component;
-  3. `expect(azioni.indexOf("</div>", posAvatar)).toBeGreaterThan(posAvatar)`
-     was vacuous — any later `</div>` satisfied it. The tail after the avatar is
-     now delimited and asserted empty.
-- Test-shape decision, measured rather than assumed: the suite is 51 files, all
-  `.ts`, with no DOM library, no `bunfig.toml` preload and no rendering test.
-  React-level assertions are therefore not available without adding a dependency
-  and moving the lockfile, which is out of scope. Behaviour that can be pure
-  logic — the two bar models, the active state, the header lens classes, the
-  avatar priority — is tested directly; only the JSX wiring is a source
-  contract, which is this suite's existing convention.
-- Coverage moved, not lost: `prelaunch-contract`'s "no visible link to a
-  nonexistent route" scan only reads `.tsx`, so lifting the bar model into a
-  `.ts` module took the five destinations out of its reach. The new suite checks
-  each one against a real `src/app/<rotta>/page.tsx` instead, which is stricter
-  for these entries than the regex sweep was.
-- Verification on the branch, all six required checks: full `bun run lint` is
-  **0 errors / 14 warnings**, every warning a pre-existing `<img>` notice in a
-  file D6 does not touch; `bun run typecheck` clean; full `bun test` **798 pass
-  / 0 fail** across 51 files; `bun run build` completes with all 24 routes
-  emitted; `git diff --check` clean; targeted D6 suites **50 pass / 0 fail**.
-- Nine control runs proved the assertions bite. Six from the BUILD: always
-  visible lens, `Account` back in place of `Cantina`, bare `startsWith` on the
-  bar, an action after the avatar, a greeting without `Bentornato`, and a photo
-  emitting an empty `src` instead of the silhouette. Three added by VERIFY, one
-  per corrected defect: bare `startsWith` on the avatar, a fixed bar in place of
-  `navMobile(autenticato)`, and an element inserted after the avatar. Each fails
-  exactly the intended test and `Layout.tsx` was diffed byte-identical after
-  every revert. A tenth control — swapping the foto/preset order — did **not**
-  fail, which is the mutual exclusivity recorded above and not a hole.
-- `MIN_TESTS` is raised **760 → 798** in `.github/workflows/ci.yml` and in its
-  regression contract `prelaunch-contract.test.ts`. 798 is the measured total,
-  identical across four consecutive full runs; 760 was the pre-D6 total, so the
-  38 tests D6 adds are exactly the increase. The gate was re-simulated locally
-  against the new floor.
-- Files in the PR: `.github/workflows/ci.yml`,
-  `frontend-next/src/components/vinea/Layout.tsx`,
-  `frontend-next/src/components/vinea/AvatarPersona.tsx` (new),
-  `frontend-next/src/lib/shell/navigazione-mobile.ts` (new),
-  `frontend-next/src/lib/shell/navigazione-mobile.test.ts` (new),
-  `frontend-next/src/lib/profilo/avatar.ts`,
-  `frontend-next/src/lib/profilo/avatar.test.ts`,
-  `frontend-next/src/lib/beta/prelaunch-contract.test.ts`,
-  `frontend-next/src/app/home/page-client.tsx`, this file. Pre-existing
-  untracked `.wslconfig` and the pre-existing
-  `codex-transfer-phase-6d-1-worktree` stash are not mine, were not touched and
-  are not in the PR.
-
-### Phase 7g payout scheduler — shipped, historical
-
-- Phase 7g payout scheduler readiness gate, shipped as PR #82, squash-merged to
-  `e14daed`. All three CI jobs passed on head `a46cd2a`; Supabase Preview
-  skipped because the PR carries no migration. No migration, Supabase write,
-  Stripe call or secret/variable change was performed.
-- Post-merge smoke executed once on `main`, run `32833173688`,
-  `workflow_dispatch` on `e14daed`: **SUCCESS**, with the annotation
-  `PAYOUTS_SCHEDULER_ENABLED non vale "true": nessuna invocazione, nessun
-  payout.` and the marker `[payouts-release] disabilitato: scheduler non
-  autorizzato`. No HTTP request, no payout, no `Configurazione mancante`, no
-  error line; every secret slot was empty, so none was needed or exposed. The
-  contrast is recorded: the last scheduled run before the merge, `32817376374`
-  on `b52dd06`, failed with `Configurazione mancante: SUPABASE_URL`.
-- The enabled branch was deliberately not exercised against production.
-- Added the fail-closed repository gate `PAYOUTS_SCHEDULER_ENABLED`, read by
-  `.github/scripts/payouts-release-job.mjs` before any configuration lookup or
-  HTTP call and passed in by `.github/workflows/payouts-auto-release.yml` as
-  `vars.PAYOUTS_SCHEDULER_ENABLED`.
-- Absent, empty or any value other than the exact string `true`: no secret is
-  read, no request is issued, no payout occurs, and the run ends successfully
-  with the notice `Payouts scheduler disabilitato` and the marker
-  `[payouts-release] disabilitato`. Exactly `true`: the pre-existing path runs
-  unchanged and missing configuration, non-2xx HTTP, unexpected payload,
-  timeout, `falliti > 0` and the >24h backlog all remain failures.
-- The two gates stay independent: `PAYOUTS_SCHEDULER_ENABLED` authorizes the
-  runner to call the function, `PAYMENTS_ENABLED` authorizes the real payout.
-  Neither was enabled; the remote variable was not set.
-- Remote state read during this task, by name only and without exposing values:
-  the repository has **no** Actions variables and **no** Actions secrets. So
-  `PAYOUTS_SCHEDULER_ENABLED` is absent and the shipped gate is closed, and the
-  historical six-hourly failures are explained: `SUPABASE_URL`,
-  `SUPABASE_ANON_KEY` and `PAYOUTS_JOB_TOKEN` never existed.
-- `payout_prepara`, `payout_coda`, `ordine_auto_rilascio_esegui`,
-  `payout_registra_esito`, the Stripe transfer logic and the order state machine
-  are untouched. The runner still sends only anon key, job token and batch; no
-  service role reaches GitHub Actions.
-- Targeted verification: `node --test .github/scripts/payouts-release-job.test.mjs`
-  gives **15 passed / 0 failed**. Two control runs proved the new assertions
-  bite: loosening the comparison to case-insensitive/trimmed fails 1 test,
-  removing the gate fails 5. `git diff --check` is clean. The workflow YAML was
-  parsed with the `js-yaml` already present in `frontend/node_modules`, without
-  installing anything: the gate reaches the step as
-  `vars.PAYOUTS_SCHEDULER_ENABLED`, there is no job- or step-level `if:`, and
-  `service_role` appears nowhere in the file.
-- Modified by PR #82: `payouts-release-job.mjs`, `payouts-release-job.test.mjs`,
-  `payouts-auto-release.yml`, `docs/ENVIRONMENT.md`,
-  `docs/PHASE_7G_OPERATIONAL_CLOSEOUT.md`, this file. Pre-existing untracked
-  `.wslconfig` remains untouched and must not enter any stage, commit or PR.
-
-### Payout runner suite in CI — gap CLOSED
-
-- The gap left open by PR #82 — `.github/workflows/ci.yml` did **not** run
-  `node --test .github/scripts/payouts-release-job.test.mjs`, so the suite
-  guarding the fail-closed gate was executed only by hand — is **CLOSED**. The
-  suite now runs in CI on every pull request and on every push to `main`.
-- Added one repository-level job `payout-runner` / "Payout runner - tests" in
-  `.github/workflows/ci.yml`: `ubuntu-latest`, `actions/checkout@v4`,
-  `actions/setup-node@v4` with `node-version: "22"`, then the single step
-  `node --test .github/scripts/payouts-release-job.test.mjs` run from the
-  repository root. No dependency install: the suite uses only Node built-ins.
-  The job carries no `if:`, so it runs on both `pull_request` and `push` to
-  `main` through the existing triggers.
-- The suite was not inserted into the `frontend`, `frontend-next` or `backend`
-  jobs, and neither those jobs nor the payout runner logic were touched.
-  `payouts-auto-release.yml` was not modified.
-- The job uses no secret and no Actions variable, invokes no Edge Function and
-  emits no payout. `.github/workflows/ci.yml` contains zero `secrets.`
-  references and zero `service_role` occurrences.
-- Hooking the suite to CI exposed a real defect the manual runs had hidden: on
-  **Node 22** the test `fallisce al timeout` hung and the run ended 6 passed /
-  9 cancelled. `AbortSignal.timeout()` in `payouts-release-job.mjs` uses an
-  unref'd timer, and in that test the stub `fetchImpl` promise was the only
-  pending work, so the event loop drained before the abort. Node 24, used
-  locally, happened to survive it. Fixed **in the test only**, with a ref'd
-  keep-alive timer cleared on abort: the runner logic was not touched, and if
-  the abort ever stopped arriving the promise now rejects with a different
-  message and the assertion fails instead of hanging.
-- Files modified besides this one: `.github/workflows/ci.yml` and
-  `.github/scripts/payouts-release-job.test.mjs`.
-- Shipped as PR #84, squash-merged to `bdfd2c7`. All four CI jobs passed on the
-  final head `7a97286`, and `Payout runner - tests` reported **15 tests / 15
-  pass / 0 fail / 0 cancelled** on `node-version: 22`, read from the job log and
-  not merely from the green check. Netlify and Supabase Preview stayed skipped:
-  the PR touches no migration and no application source.
-- Verified after the merge, on the `push` run of `main` at `bdfd2c7` and not
-  only on the pull request: all four jobs green, and `Payout runner - tests`
-  again **15 / 15 pass / 0 fail / 0 cancelled** on Node 22. The job therefore
-  really executes on both triggers.
-- Local verification: `node --test .github/scripts/payouts-release-job.test.mjs`
-  gives **15 passed / 0 failed**; `git diff --check` is clean; `ci.yml` was
-  parsed with the `js-yaml` already present in `frontend/node_modules`, without
-  installing anything, confirming the four jobs `frontend`, `frontend-next`,
-  `payout-runner`, `backend`, the Node 22 pin, the root working directory and
-  the absence of a job- or step-level `if:`. The full frontend suite and builds
-  were deliberately not run.
-- `MIN_TESTS` for `frontend-next` was left at **760** by that PR, re-read from
-  the modified file after the edit; no `frontend-next` test was added or
-  removed. D6 has since raised it to 798, as recorded in CURRENT STATE.
-- No secret or Actions variable was created, read by value or configured. The
-  payout scheduler and payments both remain OFF.
+- Ship the verified append-only migration, service contract, adapter, tests and
+  CI floor through the normal branch, PR, CI, merge and production-verification
+  lifecycle.
+- Supabase Preview must validate the D8 migration before merge. Production apply
+  is migration-only: no deployed migration edits, production fixture creation
+  or execution of the destructive behavioral grid.
+- After production apply, verify the ledger and effective RPC, projection,
+  grants, public allowlist, unchanged `profiles` policies, non-client-readable
+  `profile_certifications` and advisor findings attributable to D8.
+- The pre-existing untracked `.wslconfig` is unrelated and must remain excluded.
 
 ## NEXT STEPS
 
-1. Cabina: audit indipendente del report finale e chiusura D6.
-2. Cabina: selezione del prossimo BUILD dalla ROADMAP ATTIVA in base a dipendenze/stato reale.
-3. Eseguire soltanto il prossimo BUILD esplicitamente approvato dalla Cabina.
+1. Cabina: audit finale e chiusura D8 foundation.
+2. Cabina: selezione del prossimo BUILD dalla ROADMAP ATTIVA.
+3. Eseguire soltanto il prossimo BUILD approvato dalla Cabina.
 
 ## BLOCKERS / NOTES
 
 - Deferred readiness, not active roadmap: the payout scheduler is still neither
-  authorized nor configured. Setting `PAYOUTS_SCHEDULER_ENABLED` remote,
-  creating or rotating the secrets, and enabling `PAYMENTS_ENABLED` were all
-  outside this task and were not performed. When it is taken up, it needs the
-  Actions variable `SUPABASE_URL` and the secrets `SUPABASE_ANON_KEY` (legacy
-  anon JWT) and `PAYOUTS_JOB_TOKEN`, with the token verified against the Edge
-  Function secret, before `PAYOUTS_SCHEDULER_ENABLED=true` is set.
-- Deferred readiness, not active roadmap: the first real `workflow_dispatch`
-  with `PAYOUTS_SCHEDULER_ENABLED=true` and `PAYMENTS_ENABLED=false` remains a
-  mandatory protection before payments are enabled — it must return health only
-  and zero release actions.
+  authorized nor configured. Before enabling it, configure and verify
+  `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `PAYOUTS_JOB_TOKEN`, then perform the
+  first real `workflow_dispatch` with `PAYOUTS_SCHEDULER_ENABLED=true` and
+  `PAYMENTS_ENABLED=false`; it must return health only and zero release actions.
 - `AUTH SMOKE = NON VERIFICATO.` No already-authenticated browser session was
-  available; no account or fixture was created for smoke testing. This also
-  covers D6: the authenticated mobile shell is verified by unit and source
-  contract tests only. Nobody has seen the header, the bar or the avatar render
-  in a browser, and no real photo or preset has been loaded from Storage.
-- D6 branches the shell on `ruolo !== "guest"`, the signal the mobile bar
-  already used to send Home to `/home`. With the demo switcher on, selecting
-  "Utente" without a real session shows the authenticated shell with the
-  silhouette avatar, because `authProfilo` stays null. That is intended and
-  fail-closed — no profile data can be inferred from the demo role — but it
-  means the demo switcher is still not a proxy for real authentication.
-- Do not run the destructive certification grid in production and do not create
-  an account, certification, or other fixture for smoke testing.
-- `my_certifications` and `public_listings` intentionally use
-  `security_invoker = off` closed projections; the expected
-  `security_definer_view` advisor signal is not grounds to expose base tables.
-- The SMTP debt is still open: no own transactional sender is configured, so
-  confirmation email relies on Supabase's built-in test mailer and can fail with
-  `over_email_send_rate_limit`. Own SMTP waits on a custom domain, since the
-  Netlify-assigned beta host cannot pass sender DNS verification.
+  available and no account or fixture was created for smoke testing. D6 remains
+  verified by unit/source contracts rather than an authenticated browser.
+- With the demo switcher on, selecting `Utente` without a real session shows the
+  authenticated D6 shell with the silhouette because `authProfilo` is null.
+  This is fail-closed and the demo role is not a proxy for real authentication.
+- Do not run the destructive certification or D8 grids in production and do not
+  create an account, certification or other fixture merely for smoke testing.
+- `my_certifications`, `public_listings` and the D8 private public-profile
+  projection intentionally use `security_invoker = off` closed projections; an
+  expected `security_definer_view` advisor signal is not grounds to expose base
+  tables.
+- SMTP debt remains open: no own transactional sender is configured.
+  Confirmation email still relies on Supabase's built-in test mailer and may hit
+  `over_email_send_rate_limit`; own SMTP waits on a custom domain.
 - External Price Intelligence providers and KYC/identity providers remain OFF.
   Enabling either requires a separately authorized product decision and a new
-  controlled migration path.
+  controlled migration path. Payments remain OFF.
 - Phase 11 implementation is not open. Phase 13 cutover has not started and must
-  not be inferred from the public beta or from green checks.
+  not be inferred from the public beta, D8 or green checks.
