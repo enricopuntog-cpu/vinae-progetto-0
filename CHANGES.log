@@ -34,7 +34,8 @@
 
 ### D6.1–D6.5 Authenticated Mobile Shell & Home
 
-- Branch `feat/d6-mobile-auth-shell-home`, based on `72aeff8`, which was still
+- Shipped as PR #86 from branch `feat/d6-mobile-auth-shell-home`.
+- Branch based on `72aeff8`, which was still
   `origin/main` at VERIFY time: no divergence, no rebase or merge was needed. No
   migration, no schema/RLS/Storage change, no production write, no external
   provider call.
