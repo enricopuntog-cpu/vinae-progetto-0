@@ -4,8 +4,8 @@
 
 - `frontend/` + `backend/` remain the served product. The public
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
-- `origin/main` is `b52dd062e87858caa4dfb21946358b8bc81d3e21` (PR #81,
-  "Documenta la verifica produzione certificazioni"). Local `main` matches it.
+- `origin/main` is `e14daed3e3321b92d5d206423599b2b5f8c83110` (PR #82,
+  "Gate fail-closed per lo scheduler dei payout"). Local `main` matches it.
 - Production project ref is `pijnmcllmfgjmgsvtcej`. Verified by the cabin after
   PR #81: the production migration ledger really ends at `20260825120000`
   profile_certifications; `profile_certifications` holds 0 rows; RLS is ON with
@@ -16,10 +16,10 @@
 - CI `MIN_TESTS` is 760 in `.github/workflows/ci.yml` and its regression
   contract.
 - Phase 7g payout scheduler: the workflow `Phase 7 - auto-release payouts` runs
-  `0 */6 * * *`. Until this task it attempted the invocation on every run and
+  `0 */6 * * *`. Until PR #82 it attempted the invocation on every run and
   failed before the request because `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
   `PAYOUTS_JOB_TOKEN` are not configured. Those scheduled failures were never a
-  recent regression.
+  recent regression. The gate shipped in PR #82 now ends those runs cleanly.
 - The Edge Function `payouts-release` is already fail-closed: with
   `PAYMENTS_ENABLED=false` it authenticates the job, claims no order, creates no
   Transfer, and only measures queue health.
@@ -28,9 +28,19 @@
 
 ## ACTIVE TASK
 
-- Phase 7g payout scheduler readiness gate, shipped from branch
-  `phase7g-payout-scheduler-gate` on top of `b52dd062`. No migration, Supabase
-  write, Stripe call or secret/variable change was performed.
+- Phase 7g payout scheduler readiness gate, shipped as PR #82, squash-merged to
+  `e14daed`. All three CI jobs passed on head `a46cd2a`; Supabase Preview
+  skipped because the PR carries no migration. No migration, Supabase write,
+  Stripe call or secret/variable change was performed.
+- Post-merge smoke executed once on `main`, run `32833173688`,
+  `workflow_dispatch` on `e14daed`: **SUCCESS**, with the annotation
+  `PAYOUTS_SCHEDULER_ENABLED non vale "true": nessuna invocazione, nessun
+  payout.` and the marker `[payouts-release] disabilitato: scheduler non
+  autorizzato`. No HTTP request, no payout, no `Configurazione mancante`, no
+  error line; every secret slot was empty, so none was needed or exposed. The
+  contrast is recorded: the last scheduled run before the merge, `32817376374`
+  on `b52dd06`, failed with `Configurazione mancante: SUPABASE_URL`.
+- The enabled branch was deliberately not exercised against production.
 - Added the fail-closed repository gate `PAYOUTS_SCHEDULER_ENABLED`, read by
   `.github/scripts/payouts-release-job.mjs` before any configuration lookup or
   HTTP call and passed in by `.github/workflows/payouts-auto-release.yml` as
@@ -71,7 +81,7 @@
 
 ## NEXT STEPS
 
-1. Run one `workflow_dispatch` of `Phase 7 - auto-release payouts` on the default branch with the gate still absent, and confirm it ends SUCCESS with the `Payouts scheduler disabilitato` notice, no HTTP request and no payout.
+1. Decide whether `.github/workflows/ci.yml` should run `node --test .github/scripts/payouts-release-job.test.mjs`, since CI does not execute the suite that guards the gate.
 2. Configure the Actions variable `SUPABASE_URL` and the secrets `SUPABASE_ANON_KEY` (legacy anon JWT) and `PAYOUTS_JOB_TOKEN`, verifying the token matches the Edge Function secret, before setting `PAYOUTS_SCHEDULER_ENABLED=true`.
 3. Run the authenticated `/account` smoke only if an already-existing browser session becomes available.
 
