@@ -1,3 +1,15 @@
+// Due gate distinti, e la distinzione è il punto:
+//
+//   `PAYOUTS_SCHEDULER_ENABLED` (variabile Actions) autorizza *questo runner* a
+//   chiamare la Edge Function. Spento, non esiste nessuna richiesta e nessun
+//   secret è necessario: il fallimento schedulato di uno scheduler mai
+//   autorizzato smette di somigliare a uno scheduler rotto.
+//
+//   `PAYMENTS_ENABLED` (ambiente della function) autorizza il *payout reale*.
+//
+// Sono indipendenti per costruzione: scheduler acceso e pagamenti spenti è la
+// combinazione che permette di provare invocazione, autenticazione e sanità in
+// produzione con zero trasferimenti.
 import { pathToFileURL } from "node:url";
 
 const COUNTERS = [
@@ -47,6 +59,17 @@ const validatePayload = (value, expectedBatch) => {
 };
 
 export const runPayoutsRelease = async ({ env = process.env, fetchImpl = fetch } = {}) => {
+  // Confronto esatto, senza `trim` e senza varianti maiuscole: la variabile è
+  // assente finché qualcuno non la scrive, e ogni altro valore resta spento.
+  if (env.PAYOUTS_SCHEDULER_ENABLED !== "true") {
+    console.log(
+      "::notice title=Payouts scheduler disabilitato::" +
+        'PAYOUTS_SCHEDULER_ENABLED non vale "true": nessuna invocazione, nessun payout.',
+    );
+    console.log("[payouts-release] disabilitato: scheduler non autorizzato");
+    return { stato: "disabilitato" };
+  }
+
   const baseUrl = required(env, "SUPABASE_URL");
   const anonKey = required(env, "SUPABASE_ANON_KEY");
   const jobToken = required(env, "PAYOUTS_JOB_TOKEN");
@@ -106,7 +129,7 @@ export const runPayoutsRelease = async ({ env = process.env, fetchImpl = fetch }
       `auto=${payload.auto_rilasciati} trasferiti=${payload.trasferiti} ` +
       `gia=${payload.gia_trasferiti} bloccati=${payload.bloccati}`,
   );
-  return payload;
+  return { stato: "eseguito", payload };
 };
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

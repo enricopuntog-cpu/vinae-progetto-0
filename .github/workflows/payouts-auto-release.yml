@@ -27,8 +27,13 @@ jobs:
         with:
           node-version: "22"
 
+      # Il gate resta una variabile di repository e la decisione vive nel runner,
+      # in un solo punto coperto da test, invece di essere duplicata in un `if:`
+      # YAML che nessuna suite può eseguire. Assente o diversa da "true", lo
+      # script esce prima di leggere i secret e prima di qualsiasi richiesta.
       - name: Invoke payouts-release
         env:
+          PAYOUTS_SCHEDULER_ENABLED: ${{ vars.PAYOUTS_SCHEDULER_ENABLED }}
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           PAYOUTS_JOB_TOKEN: ${{ secrets.PAYOUTS_JOB_TOKEN }}
