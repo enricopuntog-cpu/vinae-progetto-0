@@ -4,82 +4,85 @@
 
 - `frontend/` + `backend/` remain the served product. The public
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
-- Profile Certifications / Trust Foundation was squash-merged as PR #80. Local
-  `main`, `origin/main`, and the successful post-merge CI run `32796017615` all
-  point to `b044a59b4d8926d2da78f2250348f2a045e7d486`.
-- Production project ref is `pijnmcllmfgjmgsvtcej`. The post-merge public
-  PostgREST surface proves that the deployed schema exposes the new closed
-  `public_listings.seller_verificato` projection; direct inspection of the
-  production migration ledger and internal PostgreSQL definitions remains
-  unavailable from this environment.
-- CI `MIN_TESTS` is raised from 736 to the measured **760** in
-  `.github/workflows/ci.yml` and its regression contract.
-- Profile Certifications keeps three independent facts: confirmed email comes
-  only from `auth.users.email_confirmed_at`; verified identity and verified
-  seller are strong certifications stored outside self-declared profiles.
-- The migration adds provider-agnostic certification enums,
-  `public.profile_certifications`, `private.certificazioni_valide`, a guarded
-  trigger, `public.my_certifications`, and the appended closed-projection column
-  `public_listings.seller_verificato`. It contains no positive backfill.
-- `profile_certifications` has RLS enabled, zero policies, and no `anon` or
-  `authenticated` table privileges. The trigger is `SECURITY DEFINER` with an
-  empty `search_path`, cannot be executed directly by client roles, rejects
-  self-certification, and requires a currently valid identity before a seller
-  certification.
-- Current validity means already effective and not expired. Public seller
-  verification is true only while both identity and seller certifications are
-  currently valid; expiry, revocation, invalid intervals, and future-effective
-  identity fail closed.
-- Public and personal projections have explicit closed column lists. They expose
-  no email, DOB, source, private dates, documents, provider payload, or KYC data.
-- Production public verification on 2026-08-25 returned all 9 catalog rows with
-  the exact 31-column projection, `seller_verificato=false`, and no malformed
-  values. Sensitive-column probes were rejected, and anonymous reads of
-  `profile_certifications` and `my_certifications` returned `401` / `42501`.
-- `ProfileService` obtains the authoritative Auth user with `getUser()`, reads
-  strong facts from `my_certifications`, and fails closed on read or type errors.
-  The buyer-facing listing adapter enables the badge only for the exact boolean
-  `seller_verificato === true`.
-- `/account` renders the three facts in a separate read-only card. It offers no
-  certification request, provider link, upload, or verification action.
-- No KYC provider is selected or enabled: zero key, HTTP call, webhook, upload,
-  scheduled job, or cost.
+- `origin/main` is `b52dd062e87858caa4dfb21946358b8bc81d3e21` (PR #81,
+  "Documenta la verifica produzione certificazioni"). Local `main` matches it.
+- Production project ref is `pijnmcllmfgjmgsvtcej`. Verified by the cabin after
+  PR #81: the production migration ledger really ends at `20260825120000`
+  profile_certifications; `profile_certifications` holds 0 rows; RLS is ON with
+  0 client policies; trigger, function, check, enum and view definitions were
+  inspected directly through a read-only management SQL channel.
+- The former blocker "production ledger and internal objects not inspectable"
+  is therefore CLOSED. Profile Certifications is closed and is not reopened.
+- CI `MIN_TESTS` is 760 in `.github/workflows/ci.yml` and its regression
+  contract.
+- Phase 7g payout scheduler: the workflow `Phase 7 - auto-release payouts` runs
+  `0 */6 * * *`. Until this task it attempted the invocation on every run and
+  failed before the request because `SUPABASE_URL`, `SUPABASE_ANON_KEY` and
+  `PAYOUTS_JOB_TOKEN` are not configured. Those scheduled failures were never a
+  recent regression.
+- The Edge Function `payouts-release` is already fail-closed: with
+  `PAYMENTS_ENABLED=false` it authenticates the job, claims no order, creates no
+  Transfer, and only measures queue health.
+- External Price Intelligence providers, KYC/identity providers and SMTP remain
+  OFF. Payments remain OFF.
 
 ## ACTIVE TASK
 
-- The implementation, concrete-defect audit, disposable verification, full
-  frontend verification, PR lifecycle, merge, and post-merge CI are complete.
-- A fresh PostgreSQL 17.10 container applied bootstrap plus all 37 migrations and
-  ran `supabase/tests/profile_certifications.sql`: **33 PASSA / 0 FALLISCE**.
-  All seven fixture residue counters were zero and the container was removed.
-- Disposable catalog-advisor equivalents found zero client grants and zero RLS
-  policies on the private certification table, no task-specific unsafe
-  `SECURITY DEFINER` function, no duplicate index, and a covering primary-key
-  index for its foreign key. Intentional closed-column `security_invoker = off`
-  projections were retained rather than weakened to silence linter signals.
-- The full `frontend-next` verification ran exactly once with Bun 1.3.14: lint
-  completed with 0 errors and 14 warnings, typecheck passed, **760 tests passed / 0
-  failed across 50 files**, and the production build succeeded. After raising the
-  floor to 760, only the floor contract was rerun: **19 passed / 0 failed**.
-  `git diff --check` is clean.
-- The remaining work is this factual handoff reconciliation. Pre-existing
-  untracked `.wslconfig` remains untouched and must not enter any stage, commit,
-  or PR.
+- Phase 7g payout scheduler readiness gate, shipped from branch
+  `phase7g-payout-scheduler-gate` on top of `b52dd062`. No migration, Supabase
+  write, Stripe call or secret/variable change was performed.
+- Added the fail-closed repository gate `PAYOUTS_SCHEDULER_ENABLED`, read by
+  `.github/scripts/payouts-release-job.mjs` before any configuration lookup or
+  HTTP call and passed in by `.github/workflows/payouts-auto-release.yml` as
+  `vars.PAYOUTS_SCHEDULER_ENABLED`.
+- Absent, empty or any value other than the exact string `true`: no secret is
+  read, no request is issued, no payout occurs, and the run ends successfully
+  with the notice `Payouts scheduler disabilitato` and the marker
+  `[payouts-release] disabilitato`. Exactly `true`: the pre-existing path runs
+  unchanged and missing configuration, non-2xx HTTP, unexpected payload,
+  timeout, `falliti > 0` and the >24h backlog all remain failures.
+- The two gates stay independent: `PAYOUTS_SCHEDULER_ENABLED` authorizes the
+  runner to call the function, `PAYMENTS_ENABLED` authorizes the real payout.
+  Neither was enabled; the remote variable was not set.
+- Remote state read during this task, by name only and without exposing values:
+  the repository has **no** Actions variables and **no** Actions secrets. So
+  `PAYOUTS_SCHEDULER_ENABLED` is absent and the shipped gate is closed, and the
+  historical six-hourly failures are explained: `SUPABASE_URL`,
+  `SUPABASE_ANON_KEY` and `PAYOUTS_JOB_TOKEN` never existed.
+- `payout_prepara`, `payout_coda`, `ordine_auto_rilascio_esegui`,
+  `payout_registra_esito`, the Stripe transfer logic and the order state machine
+  are untouched. The runner still sends only anon key, job token and batch; no
+  service role reaches GitHub Actions.
+- Targeted verification: `node --test .github/scripts/payouts-release-job.test.mjs`
+  gives **15 passed / 0 failed**. Two control runs proved the new assertions
+  bite: loosening the comparison to case-insensitive/trimmed fails 1 test,
+  removing the gate fails 5. `git diff --check` is clean. The workflow YAML was
+  parsed with the `js-yaml` already present in `frontend/node_modules`, without
+  installing anything: the gate reaches the step as
+  `vars.PAYOUTS_SCHEDULER_ENABLED`, there is no job- or step-level `if:`, and
+  `service_role` appears nowhere in the file.
+- `.github/workflows/ci.yml` does **not** run this test file; the runner suite is
+  executed manually. `MIN_TESTS` stays 760 and was not touched, since the gate
+  adds no `frontend-next` test.
+- Modified: `payouts-release-job.mjs`, `payouts-release-job.test.mjs`,
+  `payouts-auto-release.yml`, `docs/ENVIRONMENT.md`,
+  `docs/PHASE_7G_OPERATIONAL_CLOSEOUT.md`, this file. Pre-existing untracked
+  `.wslconfig` remains untouched and must not enter any stage, commit or PR.
 
 ## NEXT STEPS
 
-1. Commit, push, and merge this final factual `CHANGES.log` reconciliation through a green documentation PR.
-2. Reinspect the production migration ledger and internal certification objects when a legitimate SQL or Supabase management read channel becomes available.
+1. Run one `workflow_dispatch` of `Phase 7 - auto-release payouts` on the default branch with the gate still absent, and confirm it ends SUCCESS with the `Payouts scheduler disabilitato` notice, no HTTP request and no payout.
+2. Configure the Actions variable `SUPABASE_URL` and the secrets `SUPABASE_ANON_KEY` (legacy anon JWT) and `PAYOUTS_JOB_TOKEN`, verifying the token matches the Edge Function secret, before setting `PAYOUTS_SCHEDULER_ENABLED=true`.
 3. Run the authenticated `/account` smoke only if an already-existing browser session becomes available.
 
 ## BLOCKERS / NOTES
 
-- Direct production ledger, enum, ACL, RLS-policy catalog, trigger, function body,
-  and view-definition inspection is blocked: no Supabase MCP, CLI, access token,
-  database credential, or management SQL channel is configured in this
-  environment. No manual migration was attempted because the public deployed
-  surface already proves the schema change is active and duplicate application
-  is forbidden.
+- The payout scheduler is still neither authorized nor configured. Setting
+  `PAYOUTS_SCHEDULER_ENABLED` remote, creating or rotating the secrets, and
+  enabling `PAYMENTS_ENABLED` were all outside this task and were not performed.
+- The first real `workflow_dispatch` with `PAYOUTS_SCHEDULER_ENABLED=true` and
+  `PAYMENTS_ENABLED=false` remains a mandatory protection before payments are
+  enabled: it must return health only and zero release actions.
 - `AUTH SMOKE = NON VERIFICATO.` No already-authenticated browser session was
   available; no account or fixture was created for smoke testing.
 - Do not run the destructive certification grid in production and do not create
@@ -87,10 +90,12 @@
 - `my_certifications` and `public_listings` intentionally use
   `security_invoker = off` closed projections; the expected
   `security_definer_view` advisor signal is not grounds to expose base tables.
+- The SMTP debt is still open: no own transactional sender is configured, so
+  confirmation email relies on Supabase's built-in test mailer and can fail with
+  `over_email_send_rate_limit`. Own SMTP waits on a custom domain, since the
+  Netlify-assigned beta host cannot pass sender DNS verification.
 - External Price Intelligence providers and KYC/identity providers remain OFF.
   Enabling either requires a separately authorized product decision and a new
   controlled migration path.
-- The Phase 7g payout scheduler remains an unresolved historical operational
-  blocker outside this task; it must not be inferred fixed by this PR.
 - Phase 11 implementation is not open. Phase 13 cutover has not started and must
-  not be inferred from the public beta or green certification checks.
+  not be inferred from the public beta or from green checks.

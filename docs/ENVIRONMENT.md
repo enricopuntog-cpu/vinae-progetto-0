@@ -51,6 +51,7 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `PAYMENTS_WEBHOOK_RATE_WINDOW_SECONDS` | Route Handler | Finestra del bucket, default `60`. |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | client | Chiave publishable del Payment Element. Solo `pk_test_…` fuori produzione. |
 | `CONNECT_ACCOUNT_COUNTRY` | Edge Function | Paese degli account Connect Express aperti per i venditori. Default `IT`. |
+| `PAYOUTS_SCHEDULER_ENABLED` | variabile GitHub Actions | Autorizza lo scheduler a **invocare** `payouts-release`. **Fallisce chiusa**: soltanto la stringa esatta `true`. Non autorizza nessun payout: quello resta `PAYMENTS_ENABLED`. |
 | `PAYOUTS_JOB_TOKEN` | Edge Function | Secondo fattore di `payouts-release`. Indipendente dalla service role key e revocabile da solo. |
 | `PAYOUTS_BATCH_LIMIT` | Edge Function | Ordini rilasciati per esecuzione, default `50`, massimo `500`. |
 | `PACKAGING_ENABLED` | solo server | Gate della selezione imballaggio (Fase 7c). Indipendente da `PAYMENTS_ENABLED`. |
@@ -333,9 +334,24 @@ controllo read-only degli ordini trattenuti oltre 24 ore, ma non reclama ordini 
 non chiama Stripe. L'onboarding resta bloccato perché apre account veri presso il
 fornitore, anche in test mode.
 
-Il workflow `.github/workflows/payouts-auto-release.yml` richiede la variabile
-GitHub Actions `SUPABASE_URL` e i secret `SUPABASE_ANON_KEY` e
-`PAYOUTS_JOB_TOKEN`. Con `verify_jwt=true`, `SUPABASE_ANON_KEY` deve essere la
+Il workflow `.github/workflows/payouts-auto-release.yml` è governato dalla
+variabile GitHub Actions `PAYOUTS_SCHEDULER_ENABLED`, che **fallisce chiusa**:
+assente, vuota o diversa dalla stringa esatta `true`, il runner non legge nessun
+secret, non emette nessuna richiesta HTTP e termina con successo registrando una
+notice `Payouts scheduler disabilitato`. Uno scheduler mai autorizzato smette
+così di produrre fallimenti schedulati indistinguibili da uno scheduler rotto.
+
+Con la variabile a `true` il workflow richiede anche la variabile `SUPABASE_URL`
+e i secret `SUPABASE_ANON_KEY` e `PAYOUTS_JOB_TOKEN`: la configurazione mancante
+diventa un fallimento, non un silenzio.
+
+I due gate sono indipendenti. `PAYOUTS_SCHEDULER_ENABLED` autorizza lo scheduler
+a **chiamare** la Edge Function; `PAYMENTS_ENABLED` autorizza la function a
+**pagare**. La combinazione `PAYOUTS_SCHEDULER_ENABLED=true` con
+`PAYMENTS_ENABLED=false` è quella prevista per verificare invocazione,
+autenticazione e sanità della coda in produzione con zero trasferimenti reali.
+
+Con `verify_jwt=true`, `SUPABASE_ANON_KEY` deve essere la
 legacy anon JWT: una nuova chiave `sb_publishable_...` non è un JWT e richiederebbe
 una decisione separata sulla configurazione del gateway. La service role key non
 entra mai in GitHub Actions; resta nell'ambiente server della Edge Function.

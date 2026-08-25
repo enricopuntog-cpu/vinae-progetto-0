@@ -68,6 +68,30 @@ da completare:
    fu eseguita in 7g e resta una protezione obbligatoria prima di abilitare i
    pagamenti.
 
+## Gate dello scheduler — 2026-08-25
+
+Il punto 1 sopra restò aperto, e per mesi il workflow provò comunque a invocare
+la function a ogni cadenza: i secret mancavano, il runner falliva prima della
+richiesta, e ogni sei ore comparve un fallimento schedulato indistinguibile da
+uno scheduler rotto. Non era una regressione: era uno scheduler mai autorizzato
+che non sapeva dirlo.
+
+La variabile Actions `PAYOUTS_SCHEDULER_ENABLED` rende esplicita la differenza
+fra i due casi:
+
+- assente, vuota o diversa dalla stringa esatta `true`: nessun secret letto,
+  nessuna richiesta HTTP, nessun payout, uscita pulita con notice
+  `Payouts scheduler disabilitato`;
+- esattamente `true`: percorso reale invariato, con `SUPABASE_URL`,
+  `SUPABASE_ANON_KEY` e `PAYOUTS_JOB_TOKEN` obbligatori. Configurazione
+  mancante, HTTP non 2xx, payload inatteso, timeout, `falliti > 0` e backlog
+  oltre 24 ore restano fallimenti pieni. Il gate non nasconde errori: sceglie
+  soltanto se lo scheduler ha il diritto di partire.
+
+Il gate vive nel runner e non in un `if:` YAML perché la decisione resti in un
+solo punto eseguibile dai test. La variabile remota non è stata impostata in
+questo build, e il gate resta quindi chiuso. Restano validi i punti 1-3 sopra.
+
 La sessione 7g registrò inoltre come non autorizzati SQL e fixture remoti, deploy
 manuali, impostazioni Supabase, configurazione o rotazione secret, chiamate
 Stripe, push, PR, merge e `PAYMENTS_ENABLED`. È un confine storico di quel
