@@ -111,6 +111,26 @@ jobs:
       - name: Build
         run: bun run build
 
+  payout-runner:
+    name: Payout runner - tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # La suite usa solo il test runner integrato di Node: nessuna dipendenza
+      # da installare, nessun secret, nessuna chiamata di rete. Il runner dei
+      # payout non viene invocato contro Supabase e nessun payout viene emesso.
+      - name: Test payout runner
+        run: node --test .github/scripts/payouts-release-job.test.mjs
+
   backend:
     name: Backend - lint, syntax and tests
     runs-on: ubuntu-latest
