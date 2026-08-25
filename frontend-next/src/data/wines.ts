@@ -37,12 +37,40 @@ export type Wine = {
   condizione: "Perfetto" | "Ottimo" | "Buono";
   conservazione: string;
   venditore: {
+    /**
+     * UUID reale del venditore, quando la scheda viene da una riga vera.
+     *
+     * È l'unica cosa che serve per raggiungere `/profilo/<id>`, e arriva da
+     * `public_listings.seller_id`: nessuna query nuova, nessuna proiezione
+     * nuova. Resta opzionale di proposito, perché i dati dimostrativi di
+     * `wines` non hanno una persona dietro: obbligarli a un UUID vorrebbe dire
+     * inventare un profilo che non esiste, e il link finirebbe su una pagina
+     * non disponibile. Assente qui significa esattamente "nessun profilo da
+     * collegare", ed è così che le superfici devono leggerlo.
+     *
+     * Non ha nulla a che vedere con `verificato`: l'esistenza di un profilo
+     * pubblico e la spunta professionale sono due fatti distinti, e il secondo
+     * non decide il primo.
+     */
+    userId?: string;
     nome: string;
     citta: string;
     rating: number;
     valutazioni: number;
     verificato: boolean;
     avatar: string;
+    /**
+     * Il riferimento dell'avatar — `<uid>/<uuid>.webp` o il percorso di un
+     * preset — da passare ad `AvatarPersona`, non l'indirizzo da disegnare.
+     *
+     * Esiste accanto ad `avatar` perché i due valori rispondono a due domande
+     * diverse, come la foundation stessa distingue `riferimentoAvatarSicuro()`
+     * da `avatarSicuro()`: `avatar` è già un URL ricomposto, e ridarlo in pasto
+     * al resolver lo farebbe cadere sulla silhouette perché un URL non è né un
+     * preset del catalogo né una cartella. Chi disegna una persona usa questo;
+     * `avatar` resta per i chiamanti che si aspettano un indirizzo.
+     */
+    avatarRef?: string;
   };
   immagini: string[];
   storia: string;

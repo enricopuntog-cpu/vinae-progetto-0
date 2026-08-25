@@ -25,16 +25,26 @@
   existing `public_listings` projection. A profile exists with zero listings.
 - The D8 foundation verification measured **31 pass / 0 fail / 97 assertions**
   in the targeted service suite and **829 pass / 0 fail / 17673 assertions** in
-  the then-complete `frontend-next` suite with Bun 1.3.14. The D8 UI Core adds
-  six tests; its stable complete-suite count is **835 pass / 0 fail / 17705
-  assertions**, and the CI `MIN_TESTS` floor plus regression contract are aligned
-  to **835**.
+  the then-complete `frontend-next` suite with Bun 1.3.14. The D8 UI Core raised
+  that to **835 pass / 0 fail / 17705 assertions**. Public Profile Identity &
+  Entry Points adds 28 tests: the stable complete-suite count measured twice with
+  Bun 1.3.14 is **863 pass / 0 fail / 17793 assertions across 54 files**, and the
+  CI `MIN_TESTS` floor plus the `prelaunch-contract` regression assertion are
+  aligned to **863**.
 - The D8 PostgreSQL 17.10 disposable grid applied all 38 migrations and produced
   **16 PASSA / 0 FALLISCE**, with zero user, profile, role or audit residues
   after rollback. It was not executed against production.
 - PR #87, `D8 Public user profile data foundation`, was merged into `main` at
   `73d5c7bf857f8bcfee387cf0ee4da2c2513be9e7`; its post-merge CI completed
   successfully. The D8 data/security foundation is CLOSED.
+- PR #88, `Add D8 public profile UI core`, was merged into `main` at
+  `3de888e5c6b5409492707f4be71d4e02be0750de`, verified on the remote default
+  branch. The D8 Public User Profile UI Core is CLOSED; the route
+  `/profilo/[id]` and its service are reused, not rebuilt.
+- The avatar foundation (`risolviAvatarPersona` / `AvatarPersona`, photo →
+  preset → silhouette, fail-closed) and the listing preview reused by the
+  profile (`WineCard` list variant over `public_listings`) were already
+  implemented before this work package and were reused unchanged.
 - Production project ref is `pijnmcllmfgjmgsvtcej`. Inclusion of migration
   `20260825180000 public_profile_foundation` in the production ledger remains
   **DA VERIFICARE**; the merge alone does not prove its application.
@@ -43,25 +53,55 @@
 
 ## ACTIVE TASK
 
-### D8 Public User Profile UI Core — VERIFY & SHIP
+### Public Profile Identity & Entry Points — VERIFY & SHIP
 
-- Branch `d8-public-profile-ui-core` adds the server-rendered route
-  `/profilo/[id]` above the CLOSED D8 service, without database, migration or
-  production changes.
-- The page exposes only avatar, username, optional city/province, experience and
-  optional bio. Malformed, nonexistent and non-visible identifiers share the
-  same unavailable surface; technical failures use a generic message.
-- `Annunci attivi` reuses `PublicProfileService.annunciAttivi()` and the existing
-  `WineCard` list variant. Zero listings and listing-read failures do not hide a
-  valid profile, and no people directory, social action or trust field is added.
-- Targeted verification produced **37 pass / 0 fail / 129 assertions**; full
-  `frontend-next` lint, typecheck, **835-test** suite and production build passed.
-  The pre-existing untracked `.wslconfig` remains excluded.
+- Branch `d8-public-profile-entry-points`, cut from `origin/main` at
+  `3de888e5c6b5409492707f4be71d4e02be0750de`, which had not advanced at verify
+  time. No migration, schema, RLS or production write.
+- Independent verification found and corrected one real defect: the listing
+  seller card still ended its avatar chain on `inizialiDa()`, which the closed
+  avatar foundation had already demoted — the documented order is photo →
+  preset → silhouette. The card now draws `AvatarPersona`. Because
+  `Wine.venditore.avatar` is an already recomposed URL, and feeding a URL back
+  to the resolver would silhouette even a genuine photo, `rigaAWine` now also
+  carries `venditore.avatarRef`, the safe reference produced by
+  `riferimentoAvatarSicuro`. The pre-existing `venditore.avatar` contract and
+  its `listing-avatar.test.ts` proof are unchanged. No new avatar logic, query
+  or projection was introduced.
+- `rigaProprietarioAWine` deliberately carries no `avatarRef`: its row has no
+  seller UUID and adding one would mean widening a projection. The owner's own
+  preview therefore falls to the silhouette instead of the broken relative
+  `<img>` it drew before — fail-closed, and still not a public entry point.
+- Listing detail, Messaggi and Club now reach `/profilo/[id]` using identifiers
+  the read models already carried: `public_listings.seller_id`,
+  `ConversationSummary.counterpart.userId`, `ClubPost.autoreId`,
+  `ClubPostRisposta.autoreId` and `Club.ownerId`. No new query, projection or
+  public-profile service was created.
+- `Wine.venditore.userId` is optional. `rigaAWine()` fills it from `seller_id`;
+  the demo `wines` data leaves it absent, so mock sellers produce no link
+  instead of an invented profile. The owner's own preview
+  (`rigaProprietarioAWine`) also leaves it absent and is not an entry point.
+- `seller_verificato` is neither read nor reinterpreted by the new links; the
+  professional-badge semantic stays out of scope and does not decide whether a
+  profile is reachable.
+- `ConversationHeader` and `ConversationList` now draw the counterpart avatar
+  through `AvatarPersona` with `proprietarioId = counterpart.userId`, replacing
+  a raw `<img>` over the client-writable `profiles.avatar_url`. The header
+  carries the profile links; the list stays a selector with no nested
+  interactive markup. The linked-listing image and link were already correct and
+  were left untouched.
+- Verification measured **28 pass / 0 fail** in
+  `src/lib/profilo/ingressi-profilo-pubblico.test.ts`, full `frontend-next` lint
+  at **0 errors / 11 warnings** — every warning pre-existing on `origin/main`,
+  with one `<img>` warning removed net — a clean `tsc --noEmit`, a successful
+  `bun run build` and a clean `git diff --check`. Browser smoke, DB grid,
+  backend and payout runs were deliberately not executed.
+- The pre-existing untracked `.wslconfig` remains excluded and untouched.
 
 ## NEXT STEPS
 
-1. Cabina: audit finale e chiusura D8 Public User Profile UI Core.
-2. Cabina: selezione del successivo BUILD dalla ROADMAP ATTIVA.
+1. Cabina: audit finale e chiusura del Public Profile Identity & Entry Points.
+2. Cabina: selezione del successivo WORK PACKAGE dalla ROADMAP ATTIVA.
 3. Eseguire soltanto il successivo BUILD approvato dalla Cabina.
 
 ## BLOCKERS / NOTES

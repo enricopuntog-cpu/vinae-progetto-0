@@ -1,6 +1,7 @@
 "use client";
 
 import { formatPhase8Time } from "@/lib/phase8/format";
+import { AvatarPersona } from "@/components/vinea/AvatarPersona";
 import type { ConversationSummary } from "@/services/types";
 
 export const ConversationList = ({
@@ -22,10 +23,16 @@ export const ConversationList = ({
             onClick={() => onSelect(conversation.id)}
             className={`flex w-full items-center gap-3 border-b border-border p-3 text-left last:border-0 ${selectedId === conversation.id ? "bg-secondary" : ""}`}
           >
-            <img
-              src={conversation.counterpart.avatarUrl}
-              alt=""
-              className="h-10 w-10 rounded-full object-cover"
+            {/* Stessa foundation dell'intestazione, così la stessa persona non
+                ha due facce diverse a due centimetri di distanza. Qui non c'è
+                nessun link al profilo di proposito: questa riga è un bottone, e
+                il suo mestiere è scegliere la conversazione. L'ingresso al
+                profilo sta nell'intestazione, dove non deve annidarsi dentro un
+                comando. */}
+            <AvatarPersona
+              avatarUrl={conversation.counterpart.avatarUrl}
+              proprietarioId={conversation.counterpart.userId}
+              className="h-10 w-10"
             />
             <span className="min-w-0 flex-1">
               <span className="flex items-center justify-between gap-2">

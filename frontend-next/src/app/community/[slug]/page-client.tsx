@@ -99,7 +99,22 @@ export default function CommunityDetailPageClient({
                 sistema non ne ha, e "creato da —" non e un'informazione. */}
             {club.ownerUsername && (
               <p className="text-crema/80" data-testid="club-creatore">
-                Creato da {club.ownerUsername}
+                {/* `ownerId` e `ownerUsername` si accendono insieme — un club di
+                    sistema non ha ne l'uno ne l'altro — ma la condizione resta
+                    esplicita: e l'id che rende raggiungibile il profilo, non il
+                    nome. Senza id il creatore resta scritto e non linkato. */}
+                Creato da{" "}
+                {club.ownerId ? (
+                  <Link
+                    href={`/profilo/${club.ownerId}`}
+                    className="hover:underline"
+                    data-testid="club-creatore-profilo"
+                  >
+                    {club.ownerUsername}
+                  </Link>
+                ) : (
+                  club.ownerUsername
+                )}
               </p>
             )}
             <p className="text-crema/80" data-testid="club-modalita">
