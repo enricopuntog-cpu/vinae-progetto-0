@@ -4,14 +4,14 @@
 
 - `frontend/` + `backend/` remain the served product. The public
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
-- Profile Certifications is published as PR #80 from
-  `feat/profile-certifications`, based on `origin/main`
-  `fc86ff6b2cdc6683c598c1fddbdc83cdb691827d`. The exact verified task head was
-  `419d5d7b06ea78531c7774bd9f58e822ba6fc99b` before this final handoff update.
-- Production project ref is `pijnmcllmfgjmgsvtcej`. Before this task its migration
-  ledger ended at `20260824120000_price_intelligence_1a_observations.sql`;
-  `20260825120000_profile_certifications.sql` has not yet been verified in
-  production.
+- Profile Certifications / Trust Foundation was squash-merged as PR #80. Local
+  `main`, `origin/main`, and the successful post-merge CI run `32796017615` all
+  point to `b044a59b4d8926d2da78f2250348f2a045e7d486`.
+- Production project ref is `pijnmcllmfgjmgsvtcej`. The post-merge public
+  PostgREST surface proves that the deployed schema exposes the new closed
+  `public_listings.seller_verificato` projection; direct inspection of the
+  production migration ledger and internal PostgreSQL definitions remains
+  unavailable from this environment.
 - CI `MIN_TESTS` is raised from 736 to the measured **760** in
   `.github/workflows/ci.yml` and its regression contract.
 - Profile Certifications keeps three independent facts: confirmed email comes
@@ -20,7 +20,7 @@
 - The migration adds provider-agnostic certification enums,
   `public.profile_certifications`, `private.certificazioni_valide`, a guarded
   trigger, `public.my_certifications`, and the appended closed-projection column
-  `public_listings.seller_verificato`. It creates no certification rows.
+  `public_listings.seller_verificato`. It contains no positive backfill.
 - `profile_certifications` has RLS enabled, zero policies, and no `anon` or
   `authenticated` table privileges. The trigger is `SECURITY DEFINER` with an
   empty `search_path`, cannot be executed directly by client roles, rejects
@@ -32,6 +32,10 @@
   identity fail closed.
 - Public and personal projections have explicit closed column lists. They expose
   no email, DOB, source, private dates, documents, provider payload, or KYC data.
+- Production public verification on 2026-08-25 returned all 9 catalog rows with
+  the exact 31-column projection, `seller_verificato=false`, and no malformed
+  values. Sensitive-column probes were rejected, and anonymous reads of
+  `profile_certifications` and `my_certifications` returned `401` / `42501`.
 - `ProfileService` obtains the authoritative Auth user with `getUser()`, reads
   strong facts from `my_certifications`, and fails closed on read or type errors.
   The buyer-facing listing adapter enables the badge only for the exact boolean
@@ -43,12 +47,8 @@
 
 ## ACTIVE TASK
 
-- Profile Certifications / Trust Foundation is in VERIFY & SHIP. PR #80 is open;
-  the exact GitHub file list matches the 17 task files, excludes `.wslconfig`, and
-  all three CI jobs, Supabase Preview, and the relevant Netlify checks are green.
-  GitHub reported the PR clean and mergeable before this final handoff update.
-  The implementation and concrete-defect audit are complete; no additional
-  feature or general refactor is in scope.
+- The implementation, concrete-defect audit, disposable verification, full
+  frontend verification, PR lifecycle, merge, and post-merge CI are complete.
 - A fresh PostgreSQL 17.10 container applied bootstrap plus all 37 migrations and
   ran `supabase/tests/profile_certifications.sql`: **33 PASSA / 0 FALLISCE**.
   All seven fixture residue counters were zero and the container was removed.
@@ -62,23 +62,28 @@
   failed across 50 files**, and the production build succeeded. After raising the
   floor to 760, only the floor contract was rerun: **19 passed / 0 failed**.
   `git diff --check` is clean.
-- Pre-existing untracked `.wslconfig` remains untouched and must not enter any
-  stage, commit, or PR.
+- The remaining work is this factual handoff reconciliation. Pre-existing
+  untracked `.wslconfig` remains untouched and must not enter any stage, commit,
+  or PR.
 
 ## NEXT STEPS
 
-1. Commit and push this factual handoff update, then reverify PR #80's exact head, green checks, and clean mergeability.
-2. Squash-merge PR #80 and verify the resulting `origin/main` SHA and files.
-3. Check whether the GitHub/Supabase integration applied migration `20260825120000`, apply it once only if absent, and complete read-only production verification.
+1. Commit, push, and merge this final factual `CHANGES.log` reconciliation through a green documentation PR.
+2. Reinspect the production migration ledger and internal certification objects when a legitimate SQL or Supabase management read channel becomes available.
+3. Run the authenticated `/account` smoke only if an already-existing browser session becomes available.
 
 ## BLOCKERS / NOTES
 
-- There is no known implementation blocker. The production migration state is
-  deliberately unresolved until after the PR merge and integration run.
+- Direct production ledger, enum, ACL, RLS-policy catalog, trigger, function body,
+  and view-definition inspection is blocked: no Supabase MCP, CLI, access token,
+  database credential, or management SQL channel is configured in this
+  environment. No manual migration was attempted because the public deployed
+  surface already proves the schema change is active and duplicate application
+  is forbidden.
+- `AUTH SMOKE = NON VERIFICATO.` No already-authenticated browser session was
+  available; no account or fixture was created for smoke testing.
 - Do not run the destructive certification grid in production and do not create
   an account, certification, or other fixture for smoke testing.
-- An authenticated `/account` smoke may use only an already-existing browser
-  session. If none is available, report exactly `AUTH SMOKE = NON VERIFICATO.`
 - `my_certifications` and `public_listings` intentionally use
   `security_invoker = off` closed projections; the expected
   `security_definer_view` advisor signal is not grounds to expose base tables.
