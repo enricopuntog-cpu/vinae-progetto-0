@@ -20,7 +20,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { avatarSicuro } from "@/lib/profilo/avatar";
+import { avatarSicuro, riferimentoAvatarSicuro } from "@/lib/profilo/avatar";
 import type { Wine } from "@/data/wines";
 import type {
   DatiModificaAnnuncio,
@@ -196,6 +196,12 @@ export function rigaAWine(riga: PublicListingRow): Wine {
     condizione: riga.condizione as Wine["condizione"],
     conservazione: riga.conservazione,
     venditore: {
+      // L'identità del venditore era già in questa riga — `seller_id` serviva
+      // a decidere se la foto dell'avatar è davvero sua — ma si fermava qui e
+      // non arrivava alla scheda. Conservarla è tutto ciò che mancava per
+      // rendere raggiungibile `/profilo/<id>`: il dato è lo stesso, la lettura
+      // è la stessa, cambia soltanto che non viene più buttato via.
+      userId: riga.seller_id,
       nome: riga.seller_username,
       citta: riga.seller_citta,
       rating: 0,
@@ -205,6 +211,12 @@ export function rigaAWine(riga: PublicListingRow): Wine {
       // spegnersi, non accendersi su un valore vagamente vero.
       verificato: riga.seller_verificato === true,
       avatar: avatarSicuro(riga.seller_avatar_url, riga.seller_id) ?? "",
+      // Lo stesso valore, fermato un passo prima: la scheda venditore disegna
+      // la persona con `AvatarPersona`, che vuole il riferimento e ricompone
+      // l'indirizzo da sé. La verifica della cartella è già qui, quindi la
+      // foto di un altro venditore non arriva alla scheda in nessuna delle due
+      // forme.
+      avatarRef: riferimentoAvatarSicuro(riga.seller_avatar_url, riga.seller_id) ?? "",
     },
     immagini,
     storia: riga.storia,

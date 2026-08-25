@@ -325,7 +325,16 @@ function SchedaPost({
             {post.clubSlug}
           </Link>
         )}
-        <span>{post.autoreUsername}</span>
+        {/* `autoreId` era gia sulla riga del post: chi ha scritto e un dato che
+            la vista porta da sempre, e la scheda ne mostrava soltanto il nome.
+            Renderlo un link non aggiunge nessuna lettura. */}
+        <Link
+          href={`/profilo/${post.autoreId}`}
+          className="hover:text-foreground hover:underline"
+          data-testid={`club-post-autore-${post.id}`}
+        >
+          {post.autoreUsername}
+        </Link>
         <span>·</span>
         <time dateTime={post.createdAt}>{quando(post.createdAt)}</time>
       </div>
@@ -452,7 +461,16 @@ function Risposte({
         risposte.map((r) => (
           <div key={r.id} className="rounded-xl bg-secondary/40 p-3" data-testid={`club-risposta-${r.id}`}>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span>{r.autoreUsername}</span>
+              {/* Stessa cosa per chi risponde: `autoreId` sta gia sulla riga
+                  della risposta. Un commento non e meno di una persona di
+                  quanto lo sia un post. */}
+              <Link
+                href={`/profilo/${r.autoreId}`}
+                className="hover:text-foreground hover:underline"
+                data-testid={`club-risposta-autore-${r.id}`}
+              >
+                {r.autoreUsername}
+              </Link>
               <span>·</span>
               <time dateTime={r.createdAt}>{quando(r.createdAt)}</time>
               {/* Anche la risposta e segnalabile, con il bersaglio `commento`.

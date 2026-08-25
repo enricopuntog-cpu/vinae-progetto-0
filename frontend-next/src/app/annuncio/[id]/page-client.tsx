@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Wine } from "@/data/wines";
-import { inizialiDa } from "@/lib/profilo/avatar";
+import { AvatarPersona } from "@/components/vinea/AvatarPersona";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,6 +65,24 @@ export default function AnnuncioDetailPageClient({
   const router = useRouter();
   const listingId = wine.listingId ?? wine.id;
   const sonoIlVenditore = Boolean(proprio);
+
+  // Calcolati una volta sola perché la scheda venditore li usa due volte, e
+  // perché la condizione dev'essere una: o esiste il profilo e allora sono
+  // linkabili sia l'avatar sia il nome, o non esiste e non lo è nessuno dei due.
+  const profiloVenditore = wine.venditore.userId ? `/profilo/${wine.venditore.userId}` : null;
+  // La persona si disegna con la foundation chiusa, che finisce sulla
+  // silhouette e non sulle iniziali: `inizialiDa()` è rimasto alla schermata
+  // profilo e non è più il fondo della catena. Qui passa il riferimento —
+  // `avatar` è già un URL ricomposto e il resolver lo rifiuterebbe — insieme
+  // all'`userId`, che è ciò che rende una foto attribuibile a questa persona e
+  // non a un'altra.
+  const avatarVenditore = (
+    <AvatarPersona
+      avatarUrl={wine.venditore.avatarRef}
+      proprietarioId={wine.venditore.userId}
+      className="h-12 w-12"
+    />
+  );
 
   return (
     <div className="space-y-8">
@@ -162,20 +180,45 @@ export default function AnnuncioDetailPageClient({
           {/* Venditore */}
           <div className="mt-6 rounded-2xl border border-border bg-card p-4">
             <div className="flex items-center gap-3">
-              {wine.venditore.avatar ? (
-                <img
-                  src={wine.venditore.avatar}
-                  alt=""
-                  className="h-12 w-12 rounded-full object-cover"
-                />
+              {/* Il profilo pubblico si raggiunge solo quando dietro la scheda
+                  c'è davvero una persona: `userId` arriva da `public_listings`
+                  e sui dati dimostrativi non esiste. Senza di lui la scheda
+                  resta esattamente com'era — nessun link inventato verso una
+                  pagina che risponderebbe "profilo non disponibile".
+
+                  L'avatar continua a disegnarsi come prima. Il valore che
+                  arriva qui è già passato da `avatarSicuro()` nel mapper, e le
+                  iniziali sono il fondo della catena della stessa foundation:
+                  sostituirlo con un secondo resolver non aggiungerebbe una
+                  difesa, toglierebbe soltanto la foto ai dati dimostrativi. */}
+              {profiloVenditore ? (
+                <Link
+                  href={profiloVenditore}
+                  aria-label={`Profilo di ${wine.venditore.nome}`}
+                  className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  data-testid="annuncio-venditore-avatar"
+                >
+                  {avatarVenditore}
+                </Link>
               ) : (
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-crema font-serif text-sm text-bordeaux">
-                  {inizialiDa(wine.venditore.nome)}
-                </span>
+                avatarVenditore
               )}
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-1 font-semibold">
-                  {wine.venditore.nome}
+                  {profiloVenditore ? (
+                    <Link
+                      href={profiloVenditore}
+                      className="hover:underline"
+                      data-testid="annuncio-venditore-username"
+                    >
+                      {wine.venditore.nome}
+                    </Link>
+                  ) : (
+                    wine.venditore.nome
+                  )}
+                  {/* Fuori dal link di proposito: la spunta è un attestato sul
+                      venditore, non una parte del suo nome, e non è ciò che
+                      decide se il profilo è raggiungibile. */}
                   {wine.venditore.verificato && <ShieldCheck className="h-4 w-4 text-salvia" />}
                 </p>
                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
