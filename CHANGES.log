@@ -10,6 +10,9 @@
   squash commit `9586405bce40bc3f3b84f3e51b4cafd38b33c17d` from PR #91.
 - D2 Region Sell + Explore + Search + AI is CLOSED. PR #93 was merged into
   `main` at `68282dc4d0205964403bfe87b704690990c3797a`, the D5 BUILD baseline.
+- D5 Auth Entry Flow is CLOSED. PR #94 was merged into `main` at
+  `548a1da5599556260f87985c77442e2c1bd2f8d4`; post-merge CI run
+  `32966918500` completed successfully.
 - Production project ref `pijnmcllmfgjmgsvtcej` is `ACTIVE_HEALTHY` on
   PostgreSQL 17. The repository's normal Supabase integration applied D2; the
   production migration ledger contains version `20260826120000` exactly once.
@@ -80,7 +83,7 @@
   product integration the full `frontend-next` suite produces **929 pass /
   0 fail / 18,012 expect() calls across 57 files**, and CI `MIN_TESTS` is 929.
   Lint has zero errors and 13 pre-existing unrelated warnings; typecheck and
-  build are clean.
+  build are clean. The floor was later raised to 989 by D5 and remains 989.
 - No destructive grid or fixture ran in production. No manual production
   insert, update or delete occurred; only the two authorized updates ran inside
   the normal D2 integration. Read-only temporary production dumps used for
@@ -92,85 +95,31 @@
 
 ## ACTIVE TASK
 
-- D5 — Auth Entry Flow: Google + Login + Magic Link + Safe Redirects — VERIFY &
-  SHIP, on branch `d5-auth-entry-flow`, created from `origin/main` at
-  `68282dc4d0205964403bfe87b704690990c3797a`. `origin/main` had not advanced at
-  verification time, so that commit is also the branch merge-base.
-- Auth errors now have one closed application vocabulary, in the new pure module
-  `frontend-next/src/lib/auth/errori-auth.ts`: eleven codes, one Italian message
-  each, plus `classificaErroreAuth` for Supabase failures and
-  `classificaErroreProvider` for an OAuth return. No provider or Supabase text
-  reaches the user any more. `auth-service.ts` returns a code instead of
-  `error.message`, and the previous "not configured" string that named the two
-  environment variables and their file is gone.
-- `/auth/callback` stays server-side and keeps `exchangeCodeForSession`, the
-  server-resolved public origin and the relative-redirect guard. Its five
-  returns are unchanged in shape; what travels in the redirect is now only
-  `?errore=<codice>`. The technical detail goes to `console.error`
-  `[auth/callback]` on the server and is never serialized into the URL.
-- The flow remembers where it started. `/accedi` and `/registrati` declare their
-  own `superficie`, it travels in the validated `redirectTo` query and the
-  callback returns to `PERCORSO_SUPERFICIE_AUTH[superficie]`, so a Google error
-  begun on `/registrati` no longer lands on `/accedi`.
-- There is one destination contract, not a second one: `PARAMETRO_NEXT`, always
-  relative and always validated by the existing `percorsoRelativoSicuro`, with
-  `/home` as fallback. Absolute, protocol-relative and malformed values are
-  dropped. Password login, magic link and the OAuth round trip share it, and
-  `/vendite` now asks to come back to itself through it. No cookie, no
-  `localStorage`, no trust in an absolute URL from the browser.
-- `/accedi` distinguishes which operation is running (`"password" |
-  "magic-link" | null`) instead of one shared boolean, and the Google button
-  owns its own start state. Each gesture has its own error slot and clears only
-  its own; an error still named in the URL is discarded on the next attempt, so
-  it cannot reappear later. No operation can start twice, and a failure releases
-  the control for an immediate retry. Google reads `Continua con Google` on
-  `/accedi` and `Registrati con Google` on `/registrati`.
-- An authenticated visitor still sees no active form and is not redirected
-  automatically; the proposed destination is the requested `next` and logout
-  stays available.
-- Every private gate that stops a visitor now also says where to bring them
-  back. `/vendite` already did; VERIFY added the same shape to `/account`,
-  `/cantina`, `/completa-profilo` and `/vendi`, each with its own written
-  destination and never one deduced from incoming data. `/checkout/[id]` was
-  deliberately left as it was: its destination is dynamic and reconstructing it
-  from the route id could send the visitor to the wrong listing. `/home` was
-  left alone because its `next` would be the fallback itself.
-- The audit of the BUILD diff found no concrete defect in the error, redirect,
-  coordination, AgeGate or Facebook confirmations, so nothing was corrected
-  under that heading; the entry-point gap above is the only functional change
-  VERIFY added.
-- Twenty-two files changed inside `frontend-next/`: nineteen modified plus three
-  new (`src/lib/auth/errori-auth.ts` and the two test files
-  `src/lib/auth/errori-auth.test.ts` and `src/lib/auth/flusso-ingresso.test.ts`).
-  Outside `frontend-next/` the change set is `.github/workflows/ci.yml` and
-  `CHANGES.log`.
-- Full validation, all executed: the targeted `bun test src/lib/auth/` produced
-  **93 pass / 0 fail / 479 expect() calls across 4 files**; the full
-  `frontend-next` suite produced **989 pass / 0 fail / 18,379 expect() calls
-  across 59 files**; `bun run lint` reported zero errors and 13 pre-existing
-  unrelated warnings; `bun run typecheck` and `bun run build` were clean;
-  `git diff --check` was clean. `/accedi`, `/registrati`, `/account`,
-  `/cantina`, `/completa-profilo` and `/vendi` still prerender static;
-  `/auth/callback` and `/vendite` stay dynamic.
-- CI `MIN_TESTS` was raised from **929** to the measured **989**, in
-  `.github/workflows/ci.yml` and in the contract assertion that mirrors it in
-  `src/lib/beta/prelaunch-contract.test.ts`.
-- The Supabase Redirect URLs allowlist was re-measured read-only before ship,
-  with the non-mutating `GET /auth/v1/verify` probe on project
-  `pijnmcllmfgjmgsvtcej`: the plain callback, the callback with `?next=...` and
-  the callback with `?superficie=...&next=...` were each echoed back verbatim
-  with the query preserved, while an `evil.example.com` control fell back to the
-  Site URL. The wildcard is in place and the query-carrying `redirectTo` is not
-  silently rewritten.
-- No migration, schema, RLS, grant or production write. No Supabase, Google
-  Console, environment or provider change. Facebook stays absent, the D4
-  AgeGate/DOB path is untouched, no legal consent is inferred from a Google
-  click and the Google-plus-password model stays undecided.
+- D3-A — Price Intelligence Detail + Price Context Consistency — VERIFY & SHIP,
+  on branch `d3-price-intelligence-detail`, created from `origin/main` at
+  `548a1da5599556260f87985c77442e2c1bd2f8d4`, which is still the merge-base.
+- `/annuncio/[id]` now composes the requested-price comparison in the existing
+  pure Price Intelligence read-model. It keeps the listing price first, exposes
+  a Vinea request reference only from at least three active same-wine,
+  same-format listings, and classifies requested price versus median and range.
+- The near-price summary and the extended history panel consume the same
+  server-composed read-model for seller and buyer. The history panel keeps the
+  request/sale scatter, isolated historical-read failure, observation counts,
+  coverage and internal source without repeating the reference summary.
+- No migration, schema, RLS, provider, production write, new query or client
+  fetch is part of D3-A. The route still performs exactly one `elenco()` and one
+  `storico()`, both pre-existing. External Price Intelligence providers remain
+  off; Cellar Value/Performance has not started.
+- The full `frontend-next` suite produces **989 pass / 0 fail / 18,406 expect()
+  calls across 59 files**. The total equals the existing CI `MIN_TESTS` floor of
+  989, so neither `.github/workflows/ci.yml` nor `prelaunch-contract.test.ts`
+  was changed. Lint has zero errors and the same 13 pre-existing unrelated
+  warnings; typecheck and build are clean; `git diff --check` is clean.
 
 ## NEXT STEPS
 
-1. Cabina: audit finale e chiusura D5.
-2. Cabina: selezione del prossimo WORK PACKAGE.
+1. Cabina: audit finale e chiusura D3-A.
+2. Cabina: audit dati D3-B Cellar Value/Performance.
 3. Eseguire soltanto il prossimo BUILD approvato.
 
 ## BLOCKERS / NOTES

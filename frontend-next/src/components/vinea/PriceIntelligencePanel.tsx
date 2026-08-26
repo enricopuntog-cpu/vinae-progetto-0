@@ -1,28 +1,11 @@
 "use client";
 
 /**
- * Il pannello Price Intelligence della pagina annuncio — Fase 1B.
+ * Price Intelligence della pagina annuncio — Fase 1B.
  *
- * Non decide niente: tutto ciò che mostra arriva già calcolato da
- * `@/lib/price-intelligence/insights`, che è puro e testato. Qui c'è solo la
- * scelta di come dirlo, ed è una scelta che pesa quanto il calcolo.
- *
- * TRE REGOLE DI LINGUA che questo file deve rispettare, perché sono la
- * differenza fra un dato e una promessa:
- *
- *   * si dice «riferimento richieste Vinea», mai «valore di mercato» né
- *     «quotazione». È la mediana di ciò che alcuni venditori stanno chiedendo
- *     su Vinea in questo momento: non è quanto vale la bottiglia, è quanto la
- *     si chiede qui;
- *   * si dice «ultima variazione rilevata», mai «tendenza» o «trend». Due
- *     osservazioni non fanno una direzione;
- *   * si dice «Dati interni Vinea», sempre e in chiaro. Nessuna fonte esterna è
- *     accesa — nessuna chiave, nessuna chiamata HTTP, nessun costo — e
- *     l'interfaccia non deve lasciar intendere una copertura che non esiste.
- *
- * Quando il campione non basta il pannello NON mostra un numero più prudente:
- * non mostra un numero. Un riferimento debole scritto in grigio piccolo resta
- * un riferimento, e chi lo legge lo userà per fissare un prezzo.
+ * Il read-model puro calcola riferimento, confronto, range, copertura e storico.
+ * Questo componente li presenta senza modificare i dati e mantiene richieste e
+ * vendite come serie distinte.
  */
 
 import { Scatter, ScatterChart, CartesianGrid, XAxis, YAxis, ZAxis } from "recharts";
@@ -42,8 +25,64 @@ const euro = (cents: number) => formatEUR(cents / 100);
 const giornoBreve = (t: number) =>
   new Date(t).toLocaleDateString("it-IT", { day: "2-digit", month: "short" });
 
-export function PriceIntelligencePanel({ vista }: { vista: VistaPriceIntelligence }) {
+export function PriceIntelligenceSummary({ vista }: { vista: VistaPriceIntelligence }) {
   const { riferimento } = vista;
+
+  return (
+    <section aria-label="Contesto del prezzo richiesto" className="mt-4 rounded-xl border border-border bg-secondary/30 p-4">
+      {riferimento.disponibile ? (
+        <>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            Riferimento richieste Vinea
+          </p>
+          <p className="mt-1 font-serif text-2xl font-semibold text-bordeaux">
+            {euro(riferimento.medianaCents)}
+          </p>
+          {vista.confronto ? (
+            <p className="mt-1 text-sm font-medium">
+              {vista.confronto.posizione === "uguale"
+                ? "Coincide con il riferimento richieste Vinea"
+                : `${euro(vista.confronto.scartoCents)} ${vista.confronto.posizione} il riferimento richieste Vinea`}
+              {vista.confronto.posizione !== "uguale" ? (
+                <span className="font-normal text-muted-foreground">
+                  {" "}({Math.abs(vista.confronto.scartoPercentuale).toFixed(1).replace(".", ",")}%)
+                </span>
+              ) : null}
+            </p>
+          ) : null}
+          {vista.posizioneRange ? (
+            <p className="mt-1 text-sm text-muted-foreground">
+              Prezzo richiesto {vista.posizioneRange} il range dei comparabili, da{" "}
+              {euro(riferimento.minimoCents)} a {euro(riferimento.massimoCents)}.
+            </p>
+          ) : null}
+          <p className="mt-2 text-xs text-muted-foreground">
+            Comparabili: {vista.comparabili} · Copertura dati: {vista.copertura.etichetta} · Dati
+            interni Vinea
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="flex items-center gap-2 text-sm font-medium">
+            <Info className="h-4 w-4 text-salvia" aria-hidden />
+            Storico in formazione
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Comparabili: {vista.comparabili}.{" "}
+            {vista.comparabiliMancanti === 1
+              ? "Manca 1 comparabile per raggiungere la soglia richiesta."
+              : `Mancano ${vista.comparabiliMancanti} comparabili per raggiungere la soglia richiesta.`}
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Copertura dati: {vista.copertura.etichetta} · Dati interni Vinea
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
+export function PriceIntelligencePanel({ vista }: { vista: VistaPriceIntelligence }) {
   const haPunti = vista.richieste.length + vista.vendite.length > 0;
 
   return (
@@ -60,36 +99,6 @@ export function PriceIntelligencePanel({ vista }: { vista: VistaPriceIntelligenc
         </p>
       </div>
 
-      {/* -- Riferimento ---------------------------------------------------- */}
-      <div className="mt-4">
-        {riferimento.disponibile ? (
-          <>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              Riferimento richieste Vinea
-            </p>
-            <p className="mt-1 font-serif text-3xl font-semibold text-bordeaux">
-              {euro(riferimento.medianaCents)}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Mediana di {riferimento.comparabili} annunci comparabili · da{" "}
-              {euro(riferimento.minimoCents)} a {euro(riferimento.massimoCents)}
-            </p>
-          </>
-        ) : (
-          <div className="rounded-xl border border-dashed border-border bg-secondary/40 p-4">
-            <p className="flex items-center gap-2 text-sm font-medium">
-              <Info className="h-4 w-4 text-salvia" aria-hidden />
-              Storico in formazione
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {riferimento.comparabili === 0
-                ? "Nessun altro annuncio attivo di questo vino in questo formato."
-                : `${riferimento.comparabili} ${riferimento.comparabili === 1 ? "annuncio comparabile" : "annunci comparabili"} attivi: servono almeno 3 annunci dello stesso vino e formato prima di indicare un riferimento.`}
-            </p>
-          </div>
-        )}
-      </div>
-
       {/* -- Variazione e copertura ------------------------------------------ */}
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <Riquadro etichetta="Ultima variazione rilevata">
@@ -98,7 +107,7 @@ export function PriceIntelligencePanel({ vista }: { vista: VistaPriceIntelligenc
               <VariazioneValore pct={vista.variazione.variazionePct} />
               <p className="mt-1 text-xs text-muted-foreground">
                 Da {euro(vista.variazione.daCents)} a {euro(vista.variazione.aCents)} fra le ultime
-                due richieste osservate. Non è una tendenza di mercato.
+                due richieste osservate.
               </p>
             </>
           ) : (
@@ -111,8 +120,8 @@ export function PriceIntelligencePanel({ vista }: { vista: VistaPriceIntelligenc
         <Riquadro etichetta="Copertura dati">
           <p className="font-serif text-xl font-semibold">{vista.copertura.etichetta}</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Basata sugli annunci attivi comparabili ({vista.comparabili}). Indica quanti dati
-            esistono, non l&apos;accuratezza di una stima.
+            Basata sugli annunci attivi comparabili ({vista.comparabili}). Indica la quantità di
+            dati disponibili per questo vino e formato.
           </p>
         </Riquadro>
       </div>

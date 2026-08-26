@@ -41,7 +41,10 @@ import { ProposalAction } from "@/components/vinea/ProposalAction";
 import { ListingOwnerActions } from "@/components/vinea/ListingOwnerActions";
 import { GalleriaVino } from "@/components/vinea/GalleriaVino";
 import { AperturaBottiglia } from "@/components/vinea/AperturaBottiglia";
-import { PriceIntelligencePanel } from "@/components/vinea/PriceIntelligencePanel";
+import {
+  PriceIntelligencePanel,
+  PriceIntelligenceSummary,
+} from "@/components/vinea/PriceIntelligencePanel";
 import type { VistaPriceIntelligence } from "@/lib/price-intelligence/insights";
 import type { AnnuncioProprietario } from "@/services/listing-service";
 import { PAGAMENTI_UI_ABILITATI } from "@/config/features";
@@ -113,27 +116,18 @@ export default function AnnuncioDetailPageClient({
             <TrustBadge source="venditore" size="sm" />
           </div>
 
-          {/*
-            Qui accanto al prezzo c'era `prezzoMercato` barrato. È sparito con
-            la 1B, e non per ordine: quel numero era un campo che il venditore
-            scriveva da sé, senza fonte e senza verifica, e barrato accanto al
-            prezzo richiesto diceva «costerebbe di più altrove» con l'autorità
-            di un dato di mercato che non aveva. Il riferimento ora sta nel
-            pannello Price Intelligence più in basso, dove porta con sé quanti
-            annunci lo sostengono e da dove viene.
-
-            La colonna, il mapping in ListingService e il campo su `Wine`
-            restano dove sono: questo task toglie una superficie di lettura, non
-            un contratto.
-          */}
           <div className="mt-4">
-            <p className="font-serif text-4xl font-semibold text-bordeaux">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Prezzo richiesto</p>
+            <p className="mt-1 font-serif text-4xl font-semibold text-bordeaux">
               {formatEUR(wine.prezzo)}
             </p>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            {wine.disponibili} {wine.disponibili === 1 ? "bottiglia disponibile" : "bottiglie disponibili"} • Formato {wine.formato}
+            {wine.disponibili}{" "}
+            {wine.disponibili === 1 ? "bottiglia disponibile" : "bottiglie disponibili"} •
+            Formato {wine.formato}
           </p>
+          <PriceIntelligenceSummary vista={vistaPrezzi} />
 
           {/*
             Al venditore la propria scheda mostra i comandi di gestione al posto
