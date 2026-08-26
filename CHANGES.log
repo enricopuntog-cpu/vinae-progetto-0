@@ -49,15 +49,41 @@
   spelling and returns readable `P0001` for unknown values instead of raw
   FK/PostgreSQL internals. The canonical helper remains private and unavailable
   to client roles.
-- `WineRegionsService` is a minimal server/client-compatible read adapter. No
-  Region UI is connected: `/vendi`, `/esplora`, text search and AI suggestions
-  remain unchanged.
+- `WineRegionsService` is a minimal server/client-compatible read adapter and is
+  now the only frontend door to the registry. Both consumers read through it:
+  `/esplora/page.tsx` on the server and `useSellWizard` in the browser. No
+  component queries `wine_regions` directly.
+- The 17 region names are no longer duplicated in TypeScript. The hardcoded
+  `/esplora` array was deleted; `Tutte` survives only as an Explore UI
+  pseudo-value in `src/lib/esplora/filtri.ts`, never in service or props data.
+- `/vendi` Region is a canonical Select, required, with no free-text fallback.
+  It is disabled unless the registry read succeeded non-empty; loading, empty
+  success and read error are three distinguishable states. One wizard visit
+  performs at most one registry read (promise held in a ref, Strict-Mode safe),
+  and the Cantina path performs none because wine identity stays read-only.
+  Step `Identificazione` cannot be left without a canonical Region: the guard is
+  in the hook, not only in the markup.
+- The AI catalog suggestion can no longer write arbitrary Region text.
+  `campiDaSuggerimento` accepts the registry names and applies a Region only on
+  an exact match after trim and case folding, writing the registry spelling
+  (`toscana` and ` TOSCANA ` -> `Toscana`). `Toscanaa` and `Tuscany` are not
+  applied and the current Region is preserved, empty included. No fuzzy
+  matching, typo correction, translation or alias was introduced. Other AI
+  fields are unchanged.
+- `/esplora` starts listings and registry reads together and isolates the
+  registry: an unexpected rejection is caught, so a registry failure or an empty
+  registry never hides listings and never disables ordinary text search — the
+  Region control degrades to a readable unavailable state. Ordinary search now
+  matches a local in-memory haystack of `produttore`, `nome`, `denominazione`,
+  `annata` and `regione`; Region filter, type, price, sorting, pairing mode and
+  AI pairing are unchanged and Region and text compose.
 - The fresh disposable PostgreSQL 17 proof produced **25 PASSA / 0 FALLISCE**
   and cleaned every fixture and generated observation. The targeted Bun 1.3.14
-  suite produced **16 pass / 0 fail / 61 expect() calls**; the full
-  `frontend-next` suite produced **909 pass / 0 fail / 17,973 expect() calls**.
-  CI `MIN_TESTS` is 909. Lint had zero errors and 13 pre-existing unrelated
-  warnings; typecheck and build were clean.
+  suite produced **16 pass / 0 fail / 61 expect() calls**. After the Region
+  product integration the full `frontend-next` suite produces **929 pass /
+  0 fail / 18,012 expect() calls across 57 files**, and CI `MIN_TESTS` is 929.
+  Lint has zero errors and 13 pre-existing unrelated warnings; typecheck and
+  build are clean.
 - No destructive grid or fixture ran in production. No manual production
   insert, update or delete occurred; only the two authorized updates ran inside
   the normal D2 integration. Read-only temporary production dumps used for
@@ -69,22 +95,53 @@
 
 ## ACTIVE TASK
 
-- D2 — Region Canonical Data Foundation — CLOSED after implementation, full
-  verification, PR #91 squash merge, normal production integration and
-  read-only post-merge verification.
-- No Region UI, provider, payment, payout, Phase 11 or Phase 13 implementation
-  is active.
+- D2 — Region Sell + Explore + Search + AI — VERIFY & SHIP, on branch
+  `d2-region-product-integration`, created from `origin/main` at
+  `359fb47d58844a0d38dbe1d81699e253052c971a`. `origin/main` had not advanced at
+  VERIFY time, so the branch merge-base is still that baseline.
+- VERIFY found and corrected one concrete defect in the BUILD diff. `next()` in
+  `useSellWizard` ran `toast.error` inside the `setStep` updater, which React
+  re-executes in development, so the block message would have appeared twice.
+  The guard now sits outside the updater, which stays pure. The same change
+  removed the hardcoded step index `2` from the hook and from
+  `/vendi/page-client.tsx`: the guarded step is now recognised by its name
+  (`Identificazione`), because the two step lists have different lengths and a
+  step inserted earlier would have moved the guard onto a screen without a
+  Region.
+- Full validation, all executed: `bun run test` produced **929 pass / 0 fail /
+  18,012 expect() calls across 57 files**; `bun run typecheck` was clean;
+  `bun run lint` reported **0 errors and 13 pre-existing unrelated warnings**,
+  none in a touched file; `bun run build` completed; `git diff --check` was
+  clean. No DB grid, production audit, backend or payout run was needed: this
+  task changes no database object.
+- CI `MIN_TESTS` was raised from 909 to the measured **929**, in
+  `.github/workflows/ci.yml` and in the contract that pins it,
+  `src/lib/beta/prelaunch-contract.test.ts`.
+- Twelve files changed in total: ten modified plus the two new files in
+  `frontend-next/src/lib/esplora/`. Outside `frontend-next/` the change set is
+  only `CHANGES.log` and the `MIN_TESTS` line in `.github/workflows/ci.yml`.
+  No migration, schema, FK, RLS or grant was touched; no production write ran;
+  no Edge Function, provider, AI prompt or feature flag was modified.
+- D2 Region Canonical Data Foundation remains CLOSED, with PR #91 and
+  production migration ledger version `20260826120000` verified. That migration
+  is distributed and frozen and was not reopened.
 
 ## NEXT STEPS
 
-1. Cabina: audit finale e chiusura D2 Region Canonical Data Foundation.
-2. Cabina: approvazione del WORK PACKAGE D2 Region Sell + Explore + Search + AI.
+1. Cabina: audit finale e chiusura completa D2.
+2. Cabina: selezione del successivo WORK PACKAGE dalla ROADMAP ATTIVA.
 3. Eseguire soltanto il successivo BUILD approvato dalla Cabina.
 
 ## BLOCKERS / NOTES
 
-- No technical D2 blocker remains. The next gate is the Cabina audit and any
-  explicit approval of the separate Region UI work package.
+- No technical D2 blocker remains.
+- Two hardcoded region lists survive outside this task's scope, in
+  `src/data/onboarding.ts` and the landing `src/app/page-client.tsx`. They are
+  pre-existing, were not touched, and do not feed `/vendi`, `/esplora`, search
+  or the AI mapping. Routing them through the registry is a separate work
+  package for the Cabina to schedule, not a D2 defect.
+- Task documentation travels in the same functional PR. No separate PR is to be
+  opened only to update `CHANGES.log` or to chase a SHA.
 - Deferred readiness, not active roadmap: the payout scheduler is still neither
   authorized nor configured. External Price Intelligence providers,
   KYC/identity providers, SMTP and payments remain OFF.

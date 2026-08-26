@@ -18,6 +18,11 @@ import { useCercaMeta } from "@/lib/wine-meta-context";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { createSupabaseAiService } from "@/services/phase10/supabase-ai-service";
 import { risolviScelte, type SceltaRisolta } from "@/lib/phase10/abbinamento";
+import {
+  corrispondeRicercaTesto,
+  REGIONE_TUTTE,
+  risolviRegioneIniziale,
+} from "@/lib/esplora/filtri";
 import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
 import { BetaActionNotice } from "@/components/vinea/BetaActionNotice";
 import { AI_UI, AZIONI_IA_ABILITATE } from "@/config/features";
@@ -42,42 +47,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const regioni = [
-  "Tutte",
-  "Piemonte",
-  "Toscana",
-  "Veneto",
-  "Sicilia",
-  "Friuli-Venezia Giulia",
-  "Trentino-Alto Adige",
-  "Abruzzo",
-  "Emilia-Romagna",
-  "Lombardia",
-  "Campania",
-  "Puglia",
-  "Marche",
-  "Umbria",
-  "Liguria",
-  "Sardegna",
-  "Lazio",
-  "Champagne",
-];
 const tipi = ["Tutti", "Rosso", "Bianco", "Bollicine", "Rosato", "Dolce"];
 
 type Mode = "testo" | "abbinamento";
 
 export default function EsploraPageClient({
   annunci,
-  initialRegion = "Tutte",
+  initialRegion,
+  regioniCanoniche,
 }: {
   annunci: Wine[];
   initialRegion?: string;
+  regioniCanoniche: string[] | null;
 }) {
   const [mode, setMode] = useState<Mode>("testo");
   const abbinamentoAttivo = AI_UI.abbinamento && mode === "abbinamento";
   const [q, setQ] = useState("");
-  const [regione, setRegione] = useState(
-    regioni.includes(initialRegion) ? initialRegion : "Tutte",
+  const [regione, setRegione] = useState(() =>
+    risolviRegioneIniziale(initialRegion, regioniCanoniche),
   );
   const [tipo, setTipo] = useState("Tutti");
   const [prezzo, setPrezzo] = useState<[number, number]>([0, 1500]);
@@ -151,14 +138,14 @@ export default function EsploraPageClient({
   const risultatiValidi = abbinamentoAttivo && q.trim() === aiPerQuery;
 
   const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
+    const term = q.trim().toLocaleLowerCase("it-IT");
     let r = annunci.filter((w) => {
-      if (regione !== "Tutte" && w.regione !== regione) return false;
+      if (regione !== REGIONE_TUTTE && w.regione !== regione) return false;
       if (tipo !== "Tutti" && w.tipo !== tipo) return false;
       if (w.prezzo < prezzo[0] || w.prezzo > prezzo[1]) return false;
       if (term) {
         if (!abbinamentoAttivo) {
-          if (!`${w.produttore} ${w.nome}`.toLowerCase().includes(term)) return false;
+          if (!corrispondeRicercaTesto(w, term)) return false;
         } else {
           // I metadati di abbinamento sono indicizzati per vino, non per
           // annuncio: su dati reali `id` è lo slug dell'annuncio.
@@ -280,7 +267,14 @@ export default function EsploraPageClient({
                 <div>
                   <p className="mb-2 text-sm font-medium">Regione</p>
                   <div className="flex flex-wrap gap-2">
-                    {regioni.map((r) => (
+                    <button
+                      key={REGIONE_TUTTE}
+                      onClick={() => setRegione(REGIONE_TUTTE)}
+                      className={`rounded-full border px-3 py-1 text-xs ${regione === REGIONE_TUTTE ? "border-bordeaux bg-bordeaux text-crema" : "border-border bg-card"}`}
+                    >
+                      Tutte
+                    </button>
+                    {regioniCanoniche?.map((r) => (
                       <button
                         key={r}
                         onClick={() => setRegione(r)}
@@ -290,6 +284,12 @@ export default function EsploraPageClient({
                       </button>
                     ))}
                   </div>
+                  {regioniCanoniche === null && (
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Il registro delle regioni non è al momento disponibile: filtra
+                      solo per testo, tipo e prezzo.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="mb-2 text-sm font-medium">Tipologia</p>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createListingService } from "@/services/listing-service";
+import { creaWineRegionsService } from "@/services/wine-regions-service";
 import { caricaMetaPerVino } from "@/services/wine-meta";
 import { WineMetaProvider } from "@/lib/wine-meta-context";
 import EsploraPageClient from "./page-client";
@@ -33,7 +34,18 @@ const Page = async ({
 }) => {
   const { regione } = await searchParams;
   const client = await getSupabaseServerClient();
-  const annunci = await createListingService(client).elenco();
+  const listingService = createListingService(client);
+  const wineRegionsService = creaWineRegionsService(client);
+
+  // Le due letture sono indipendenti e partono insieme. Un guasto inatteso del
+  // registro non deve respingere anche gli annunci: il filtro Regione diventa
+  // indisponibile, mentre catalogo e ricerca ordinaria restano utilizzabili.
+  const annunciPromise = listingService.elenco();
+  const regioniPromise = wineRegionsService.elenco().catch((errore: unknown) => {
+    console.error("[esplora] lettura regioni fallita:", errore);
+    return { ok: false as const, error: "Regioni temporaneamente non disponibili." };
+  });
+  const [annunci, esitoRegioni] = await Promise.all([annunciPromise, regioniPromise]);
 
   // Finestra di bevuta e abbinamenti stanno su `wines` dalla Fase 6c-1. Si
   // caricano qui e non nei componenti: `DrinkBadge` compare su ogni scheda, e
@@ -46,7 +58,11 @@ const Page = async ({
 
   return (
     <WineMetaProvider metaPerVino={metaPerVino}>
-      <EsploraPageClient annunci={annunci} initialRegion={regione ?? "Tutte"} />
+      <EsploraPageClient
+        annunci={annunci}
+        initialRegion={regione}
+        regioniCanoniche={esitoRegioni.ok && esitoRegioni.data.length > 0 ? esitoRegioni.data : null}
+      />
     </WineMetaProvider>
   );
 };

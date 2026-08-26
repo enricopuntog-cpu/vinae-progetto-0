@@ -1,18 +1,19 @@
 /**
  * Le regioni vinicole canoniche, in sola lettura.
  *
- * PERCHÉ ESISTE ORA, PRIMA DI AVERE UN CONSUMATORE. La fondazione D2 crea una
- * tassonomia unica in `public.wine_regions` e vincola `wines.regione` a essa.
- * Senza questo modulo il pacchetto successivo — il selettore di `/vendi` e il
- * filtro di `/esplora` — si troverebbe davanti alla stessa scelta che ha
- * prodotto il problema: interrogare la tabella direttamente da una pagina, o
- * ricablare l'ennesima lista di stringhe. Il contratto è qui perché quella
- * scelta non debba essere rifatta.
+ * PERCHÉ ESISTE. La fondazione D2 crea una tassonomia unica in
+ * `public.wine_regions` e vincola `wines.regione` a essa. Senza questo modulo
+ * i consumatori — il selettore di `/vendi` e il filtro di `/esplora` — si
+ * troverebbero davanti alla stessa scelta che ha prodotto il problema:
+ * interrogare la tabella direttamente da una pagina, o ricablare l'ennesima
+ * lista di stringhe. Il contratto è qui perché quella scelta non debba essere
+ * rifatta.
  *
  * NON HA `"use client"`, per la stessa ragione di `public-profile-service`: il
  * client Supabase arriva da fuori (`creaWineRegionsService`), così che la lista
  * possa essere letta dal server nel rendere `/esplora` oppure nel browser dal
- * wizard. Nessuna delle due strade è cablata qui.
+ * wizard di `/vendi`. Entrambe le strade sono ora percorse, ed è la ragione per
+ * cui il client resta un argomento invece che un import.
  *
  * PERCHÉ UNA TABELLA E NON UNA RPC. La differenza con il profilo pubblico è
  * reale: lì la tabella di base non è leggibile e l'unica porta è una funzione;

@@ -29,6 +29,8 @@ const VUOTO: CatalogazioneSuggerimento = {
   confidence: 0,
 };
 
+const REGIONI = ["Piemonte", "Toscana", "Veneto"] as const;
+
 describe("suggerimento di catalogazione applicato ai campi", () => {
   it("riempie i campi che il modello ha valorizzato", () => {
     const risultato = campiDaSuggerimento(
@@ -44,6 +46,7 @@ describe("suggerimento di catalogazione applicato ai campi", () => {
         confidence: 0.82,
       },
       CORRENTI,
+      REGIONI,
     );
 
     expect(risultato).toEqual({
@@ -60,11 +63,15 @@ describe("suggerimento di catalogazione applicato ai campi", () => {
   it("un campo vuoto nel suggerimento non cancella quello che l'utente ha scritto", () => {
     // È il comportamento del legacy (`aiSug.produttore || s.produttore`): il
     // modello che non sa una cosa non deve poterla togliere.
-    expect(campiDaSuggerimento(VUOTO, CORRENTI)).toEqual(CORRENTI);
+    expect(campiDaSuggerimento(VUOTO, CORRENTI, REGIONI)).toEqual(CORRENTI);
   });
 
   it("annata assente lascia l'annata già inserita", () => {
-    const risultato = campiDaSuggerimento({ ...VUOTO, annata: null }, CORRENTI);
+    const risultato = campiDaSuggerimento(
+      { ...VUOTO, annata: null },
+      CORRENTI,
+      REGIONI,
+    );
     expect(risultato.annata).toBe("2019");
   });
 
@@ -73,7 +80,11 @@ describe("suggerimento di catalogazione applicato ai campi", () => {
     // toast dimostrativo e un valore inventato al più svuota la tendina. Qui il
     // wizard scrive davvero e quel valore finirebbe in `bottiglia_crea`.
     for (const inventata of ["Rosso fermo", "Red", "rosso", "Vino rosso", "  "]) {
-      const risultato = campiDaSuggerimento({ ...VUOTO, tipologia: inventata }, CORRENTI);
+      const risultato = campiDaSuggerimento(
+        { ...VUOTO, tipologia: inventata },
+        CORRENTI,
+        REGIONI,
+      );
       expect(risultato.tipo).toBe("Rosso");
     }
   });
@@ -83,9 +94,51 @@ describe("suggerimento di catalogazione applicato ai campi", () => {
       const risultato = campiDaSuggerimento(
         { ...VUOTO, tipologia: tipo },
         { ...CORRENTI, tipo: "Bianco" },
+        REGIONI,
       );
       expect(risultato.tipo).toBe(tipo);
     }
+  });
+
+  it("applica la grafia canonica con confronto esatto dopo trim e case folding", () => {
+    for (const suggerita of ["toscana", " TOSCANA "]) {
+      const risultato = campiDaSuggerimento(
+        { ...VUOTO, regione: suggerita },
+        CORRENTI,
+        REGIONI,
+      );
+      expect(risultato.regione).toBe("Toscana");
+    }
+  });
+
+  it("non interpreta refusi, traduzioni o alias della Regione", () => {
+    for (const suggerita of ["Toscanaa", "Tuscany"]) {
+      const risultato = campiDaSuggerimento(
+        { ...VUOTO, regione: suggerita },
+        CORRENTI,
+        REGIONI,
+      );
+      expect(risultato.regione).toBe(CORRENTI.regione);
+    }
+  });
+
+  it("lascia vuota la Regione corrente quando il suggerimento non è canonico", () => {
+    const risultato = campiDaSuggerimento(
+      { ...VUOTO, regione: "Toscanaa" },
+      { ...CORRENTI, regione: "" },
+      REGIONI,
+    );
+    expect(risultato.regione).toBe("");
+  });
+
+  it("scarta soltanto la Regione non canonica e applica gli altri campi AI", () => {
+    const risultato = campiDaSuggerimento(
+      { ...VUOTO, produttore: "Nuovo produttore", regione: "Tuscany" },
+      CORRENTI,
+      REGIONI,
+    );
+    expect(risultato.produttore).toBe("Nuovo produttore");
+    expect(risultato.regione).toBe(CORRENTI.regione);
   });
 
   it("la confidenza si mostra come percentuale intera e resta dentro [0,100]", () => {
