@@ -73,20 +73,17 @@ export function useCellarOverview({
     [bottiglieCantina],
   );
 
-  const prezzoPerVino = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const w of viniCantina) m.set(w.wineSlug ?? w.id, w.prezzo);
-    return m;
-  }, [viniCantina]);
-
-  const valore = useMemo(
-    () =>
-      bottiglieCantina.reduce(
-        (s, b) => s + (prezzoPerVino.get(b.wineVintageId) ?? 0) * b.quantita,
-        0,
-      ),
-    [bottiglieCantina, prezzoPerVino],
-  );
+  /*
+   * Qui non si fa contabilità.
+   *
+   * `Wine` è il modello della scheda — produttore, annata, foto, prezzo
+   * dell'annuncio collegato — e non conosce esborsi, payout né snapshot di
+   * riferimento. Il capitale, gli incassi e la performance vivono su un'altra
+   * identità (l'unità in cantina, `bottle_unit_id`) e arrivano già calcolati
+   * dalla RPC owner-only attraverso `AnaliticaPortafoglio`. Derivarli da qui
+   * significherebbe fondere due modelli che il database tiene distinti e
+   * ricavare numeri di denaro da un oggetto di presentazione.
+   */
 
   const totSlot = useMemo(
     () =>
@@ -114,7 +111,6 @@ export function useCellarOverview({
     daAttendere,
     aperture,
     totBottiglie,
-    valore,
     totSlot,
     occSlot,
     nonCollocate,

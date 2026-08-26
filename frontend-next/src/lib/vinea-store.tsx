@@ -8,6 +8,7 @@ import {
   type WineVintageMeta,
 } from "@/data/cellar";
 import { type Wine } from "@/data/wines";
+import type { AnaliticaPortafoglio } from "@/lib/cantina/portfolio";
 import { DEMO_UI_ABILITATA } from "@/config/features";
 import { useAuthDomain, type DemoRuolo } from "@/lib/store/auth-domain";
 import {
@@ -82,6 +83,10 @@ type StoreState = {
   viniCantina: Wine[];
   metaPerVino: Record<string, WineVintageMeta>;
   cantinaLoading: boolean;
+  /** Contabilità del portafoglio: `null` finché non arriva o se non arriva. */
+  analitica: AnaliticaPortafoglio | null;
+  analiticaErrore: string | null;
+  analiticaLoading: boolean;
   ricaricaCantina: () => Promise<void>;
   ambienti: StorageEnvironment[];
   moduli: StorageModule[];

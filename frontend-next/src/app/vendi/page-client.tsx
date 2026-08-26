@@ -587,6 +587,31 @@ export default function VendiPageClient() {
                 placeholder="Regalata da mio nonno, dalla verticale di famiglia…"
               />
             </Field>
+            {!isVendita ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field label="Prezzo di acquisto (€, opzionale)">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={d.prezzoAcquisto}
+                    onChange={(e) => set("prezzoAcquisto")(e.target.value)}
+                    placeholder="Quanto l'hai pagata"
+                  />
+                </Field>
+                <Field label="Data di acquisto (opzionale)">
+                  <Input
+                    type="date"
+                    value={d.dataAcquisto}
+                    onChange={(e) => set("dataAcquisto")(e.target.value)}
+                  />
+                </Field>
+                <p className="text-[11px] text-muted-foreground md:col-span-2">
+                  Servono solo a calcolare la performance della tua cantina. Se non li ricordi,
+                  lasciali vuoti: Vinea non inventa il costo e puoi continuare lo stesso.
+                </p>
+              </div>
+            ) : null}
           </div>
         )}
 

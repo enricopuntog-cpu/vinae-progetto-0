@@ -27,6 +27,11 @@ import type {
   WineVintageMeta,
 } from "@/data/cellar";
 import type { Wine } from "@/data/wines";
+import {
+  calcolaAnaliticaPortafoglio,
+  type AnaliticaPortafoglio,
+  type PortfolioAnaliticaRisposta,
+} from "@/lib/cantina/portfolio";
 import { rigaAMeta, type RigaMetaVino } from "@/services/wine-meta";
 import { urlImmagine } from "@/services/listing-service";
 import { STATI_BLOCCANTI_APERTURA } from "@/lib/cantina/apertura";
@@ -398,8 +403,10 @@ function segnalaErrore(operazione: string, errore: unknown): void {
   console.error(`[CellarService] ${operazione} fallita:`, errore);
 }
 
-/** Stessa regola di ListingService: all'utente solo i messaggi scritti da noi. */
-const CODICI_LEGGIBILI = new Set(["P0001", "42501"]);
+/** Stessa regola di ListingService: all'utente solo i messaggi scritti da noi.
+ *  42501 (insufficient_privilege) NON è incluso: i messaggi del database
+ *  su permessi non vanno esposti all'utente, va mediato a errore generico. */
+const CODICI_LEGGIBILI = new Set(["P0001"]);
 const ERRORE_GENERICO = "Non è stato possibile completare l'operazione. Riprova.";
 
 type ErrorePostgrest = { code?: string; message?: string };
@@ -408,6 +415,38 @@ function messaggioPerUtente(operazione: string, errore: ErrorePostgrest): string
   segnalaErrore(operazione, errore);
   if (errore.code && CODICI_LEGGIBILI.has(errore.code) && errore.message) return errore.message;
   return ERRORE_GENERICO;
+}
+
+/** Un solo testo per ogni modo in cui l'analitica può non esserci: all'utente
+ *  interessa che il dato manchi, non quale passaggio è mancato. */
+const ERRORE_ANALITICA = "Analitica non disponibile al momento.";
+
+/** I messaggi applicativi ammessi appartengono alla singola RPC, non al solo
+ *  codice P0001. Questa RPC oggi non ne emette: l'allowlist resta vuota. */
+const MESSAGGI_ANALITICA_LEGGIBILI = new Set<string>();
+
+function messaggioAnaliticaPerUtente(errore: ErrorePostgrest): string {
+  segnalaErrore("analitica", errore);
+  if (
+    errore.code === "P0001" &&
+    errore.message &&
+    MESSAGGI_ANALITICA_LEGGIBILI.has(errore.message)
+  ) {
+    return errore.message;
+  }
+  return ERRORE_ANALITICA;
+}
+
+/** La RPC promette `generatoAt`, `posizioni` e `storico`: se non li mantiene, il
+ *  modulo puro non deve nemmeno essere chiamato. */
+function formaAnaliticaValida(data: unknown): data is PortfolioAnaliticaRisposta {
+  if (data === null || typeof data !== "object") return false;
+  const payload = data as Record<string, unknown>;
+  return (
+    typeof payload.generatoAt === "string" &&
+    Array.isArray(payload.posizioni) &&
+    Array.isArray(payload.storico)
+  );
 }
 
 const NESSUN_CLIENT: Result<never> = {
@@ -570,6 +609,10 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
         p_tipo: dati.tipo,
         p_visibilita: dati.visibilita,
         p_immagini: dati.immagini,
+        // Assenza e zero vanno inoltrati distinti: `null` resta «sconosciuto»,
+        // non un default che il wizard abbia dimenticato di compilare.
+        p_acquisition_cost_cents: dati.acquisitionCostCents ?? null,
+        p_acquired_at: dati.acquiredAt ?? null,
       });
 
       if (error) return { ok: false, error: messaggioPerUtente("aggiungiBottiglia", error) };
@@ -695,6 +738,35 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
           p_colonne: dati.colonne,
         }),
       );
+    },
+
+    /**
+     * L'analitica owner-only del portafoglio (D3-B).
+     *
+     * Legge la sola RPC: niente table reads, niente N+1, niente provider fetches.
+     * Il modulo puro `@/lib/cantina/portfolio` calcola dal payload; qui si valida
+     * la forma e si media l'errore.
+     */
+    async analitica(): Promise<Result<AnaliticaPortafoglio>> {
+      if (!client) return NESSUN_CLIENT;
+
+      const { data, error } = await client.rpc("cellar_portfolio_analitica");
+      if (error) return { ok: false, error: messaggioAnaliticaPerUtente(error) };
+
+      // La forma si controlla prima di calcolare: un payload inatteso deve
+      // diventare un esito negativo dichiarato, non un'eccezione da intercettare
+      // né una somma su dati che non sono quelli promessi.
+      if (!formaAnaliticaValida(data)) {
+        segnalaErrore("analitica", "Payload RPC malformato");
+        return { ok: false, error: ERRORE_ANALITICA };
+      }
+
+      try {
+        return { ok: true, data: calcolaAnaliticaPortafoglio(data) };
+      } catch (errore) {
+        segnalaErrore("analitica", errore);
+        return { ok: false, error: ERRORE_ANALITICA };
+      }
     },
   };
 }

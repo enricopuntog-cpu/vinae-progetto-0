@@ -9,6 +9,7 @@ import {
   type WineVintageMeta,
 } from "@/data/cellar";
 import type { Wine } from "@/data/wines";
+import type { AnaliticaPortafoglio } from "@/lib/cantina/portfolio";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { createCellarService, leggiPosizione } from "@/services/cellar-service";
 import type { DatiNuovoAmbiente, Result } from "@/services/types";
@@ -54,6 +55,15 @@ export function useCellarDomain() {
   const [dati, setDati] = useState(VUOTO);
   const [cantinaLoading, setCantinaLoading] = useState(() => getSupabaseClient() !== null);
 
+  /**
+   * L'analitica (D3-B) è uno stato separato, non un campo di `dati`, perché può
+   * mancare mentre la cantina c'è: è un'altra lettura, con un altro privilegio,
+   * e il suo errore non deve poter nascondere le bottiglie.
+   */
+  const [analitica, setAnalitica] = useState<AnaliticaPortafoglio | null>(null);
+  const [analiticaErrore, setAnaliticaErrore] = useState<string | null>(null);
+  const [analiticaLoading, setAnaliticaLoading] = useState(() => getSupabaseClient() !== null);
+
   const servizio = useMemo(() => createCellarService(getSupabaseClient()), []);
 
   const caricaCantina = useCallback(
@@ -62,11 +72,27 @@ export function useCellarDomain() {
         // Nessuna sessione, nessuna cantina: un ospite non ne ha una. Si azzera
         // invece di lasciare in vista quella di chi ha appena chiuso la sessione.
         setDati(VUOTO);
+        setAnalitica(null);
+        setAnaliticaErrore(null);
         setCantinaLoading(false);
+        setAnaliticaLoading(false);
         return;
       }
+
+      // Le due letture partono insieme — una sola andata e ritorno ciascuna, non
+      // una per bottiglia — ma l'elenco non aspetta la contabilità: `/cantina`
+      // si mostra appena le bottiglie sono qui, e l'analitica arriva dopo o non
+      // arriva affatto.
+      setAnaliticaLoading(true);
+      const promessaAnalitica = servizio.analitica();
+
       setDati(await servizio.carica());
       setCantinaLoading(false);
+
+      const esito = await promessaAnalitica;
+      setAnalitica(esito.ok ? esito.data : null);
+      setAnaliticaErrore(esito.ok ? null : esito.error);
+      setAnaliticaLoading(false);
     },
     [servizio],
   );
@@ -244,6 +270,9 @@ export function useCellarDomain() {
     viniCantina,
     metaPerVino,
     cantinaLoading,
+    analitica,
+    analiticaErrore,
+    analiticaLoading,
     ricaricaCantina: ricarica,
     ambienti,
     moduli,
