@@ -23,7 +23,15 @@ import type { Wine } from "@/data/wines";
 import { WineCard } from "@/components/vinea/WineCard";
 import { AperturaBottiglia } from "@/components/vinea/AperturaBottiglia";
 import { Kpi } from "@/components/vinea/Layout";
-import { formatEUR, useVinea } from "@/lib/vinea-store";
+import { ValoreNelTempo } from "@/components/vinea/ValoreNelTempo";
+import type { AnaliticaPortafoglio } from "@/lib/cantina/portfolio";
+import {
+  voceCapitaleNoto,
+  voceIncassiTrasferiti,
+  vocePerformance,
+  voceValoreRiferimento,
+} from "@/lib/cantina/presentazione";
+import { useVinea } from "@/lib/vinea-store";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -74,8 +82,12 @@ import { useCellarOverview, useEnvironmentConfigurator } from "@/hooks/useCellar
  * - **La vista 3D si carica con `next/dynamic`** invece di `ClientOnly` +
  *   `React.lazy`: è l'equivalente App Router dello stesso rinvio, e il chunk
  *   Three.js resta fuori dal bundle finché non si sceglie la vista 3D.
- * - **Il valore stimato usa il prezzo dell'annuncio** di ogni bottiglia: in
- *   `wines` un prezzo non esiste, appartiene a `listings`.
+ * - **Il valore non viene più dai prezzi degli annunci.** Il KPI «Valore
+ *   annunci» sommava i prezzi richiesti delle bottiglie in vendita, che sono
+ *   una domanda e non un valore, e ignorava tutto il resto della cantina. Al
+ *   suo posto c'è la contabilità D3-B: riferimento Vinea, capitale, incassi e
+ *   performance, letti da una sola RPC owner-only e mostrati solo per i fatti
+ *   che esistono davvero.
  */
 export default function CantinaPageClient() {
   const { metaPerVino } = useVinea();
@@ -110,6 +122,9 @@ function Cantina() {
     drinkWindowOverrides,
     reduceMotion,
     setReduceMotion,
+    analitica,
+    analiticaErrore,
+    analiticaLoading,
   } = useVinea();
 
   const {
@@ -119,7 +134,6 @@ function Cantina() {
     daAttendere,
     aperture,
     totBottiglie,
-    valore,
     totSlot,
     occSlot,
     nonCollocate,
@@ -216,10 +230,9 @@ function Cantina() {
         </div>
       </section>
 
-      {/* KPI + capacità */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      {/* Cantina: quante bottiglie e quanto spazio. Non dipende dall'analitica. */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <Kpi label="Bottiglie" value={String(totBottiglie)} />
-        <Kpi label="Valore annunci" value={formatEUR(valore)} hint="Somma dei prezzi collegati" />
         <Kpi
           label="Capacità utilizzata"
           value={`${usoPct}%`}
@@ -231,6 +244,13 @@ function Cantina() {
           hint="Indicatore orientativo locale"
         />
       </div>
+
+      {/* Contabilità (D3-B): un blocco a parte perché può mancare da solo. */}
+      <ContabilitaCantina
+        analitica={analitica}
+        errore={analiticaErrore}
+        inCorso={analiticaLoading}
+      />
 
       {/* Bottiglie: 3 viste */}
       <Tabs defaultValue="tutte">
@@ -368,6 +388,67 @@ function Cantina() {
         />
         Riduci animazioni (disattiva l&apos;auto-rotazione della vista 3D)
       </label>
+    </div>
+  );
+}
+
+/**
+ * La contabilità della cantina: valore di riferimento, capitale, incassi e
+ * performance.
+ *
+ * Vive in un blocco suo e non fra i KPI di capienza per una ragione di
+ * sostanza: arriva da un'altra lettura, con un altro privilegio, e può mancare
+ * mentre le bottiglie ci sono. Se manca, questo riquadro lo dice e il resto
+ * della pagina resta intero — nessun numero di denaro viene sostituito da uno
+ * zero, e il messaggio del database non arriva mai fin qui.
+ */
+function ContabilitaCantina({
+  analitica,
+  errore,
+  inCorso,
+}: {
+  analitica: AnaliticaPortafoglio | null;
+  errore: string | null;
+  inCorso: boolean;
+}) {
+  if (inCorso && !analitica) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
+        <Loader2 className="mr-2 inline h-4 w-4 animate-spin text-bordeaux" />
+        Calcolo il valore della cantina…
+      </div>
+    );
+  }
+
+  if (!analitica) {
+    return (
+      <div
+        role="status"
+        className="rounded-2xl border border-dashed border-border bg-card p-4 text-sm text-muted-foreground"
+      >
+        <p className="font-medium text-antracite">Contabilità non disponibile</p>
+        <p className="mt-1">
+          {errore ?? "Il valore della cantina non è consultabile in questo momento."} Le tue
+          bottiglie restano tutte qui sotto.
+        </p>
+      </div>
+    );
+  }
+
+  const valore = voceValoreRiferimento(analitica);
+  const capitale = voceCapitaleNoto(analitica);
+  const incassi = voceIncassiTrasferiti(analitica);
+  const performance = vocePerformance(analitica);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Kpi label="Valore di riferimento Vinea" value={valore.valore} hint={valore.nota} />
+        <Kpi label="Capitale noto" value={capitale.valore} hint={capitale.nota} />
+        <Kpi label="Incassi trasferiti" value={incassi.valore} hint={incassi.nota} />
+        <Kpi label="Performance netta" value={performance.valore} hint={performance.nota} />
+      </div>
+      <ValoreNelTempo serie={analitica.serieValore} />
     </div>
   );
 }

@@ -271,7 +271,11 @@ describe("superfici pubbliche della beta", () => {
   it("rimuove personalizzazioni e storico inventato dalla cantina", () => {
     const cantina = leggi("src/app/cantina/page-client.tsx");
     expect(cantina).not.toMatch(/PreferenzeCantina|SfondoDialog|ANDAMENTO|ultimi 12 mesi/);
-    expect(cantina).toInclude("Somma dei prezzi collegati");
+    expect(cantina).not.toInclude("Somma dei prezzi collegati");
+    expect(cantina).toInclude("Valore di riferimento Vinea");
+    expect(cantina).toInclude("Capitale noto");
+    expect(cantina).toInclude("Incassi trasferiti");
+    expect(cantina).toInclude("Performance netta");
   });
 
   it("blocca il punto logistico demo senza renderlo raggiungibile", () => {

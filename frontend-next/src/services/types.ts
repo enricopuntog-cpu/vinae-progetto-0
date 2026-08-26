@@ -385,6 +385,13 @@ export interface CellarService {
     override: OverrideFinestra,
   ): Promise<Result<void>>;
   creaAmbiente(dati: DatiNuovoAmbiente): Promise<Result<void>>;
+  /**
+   * L'analitica owner-only del portafoglio: posizioni con costo, esborso,
+   * incasso trasferito, ciclo di vita, riferimento corrente e storico del
+   * riferimento dei propri vini. Lettura; non scrive. Niente anon, niente
+   * parametri di proprietà: chi chiama è il proprietario.
+   */
+  analitica(): Promise<Result<import("@/lib/cantina/portfolio").AnaliticaPortafoglio>>;
 }
 
 // ---- Annunci ---------------------------------------------------------------
@@ -428,11 +435,22 @@ export interface DatiVinoUtente {
   tipo: Wine["tipo"];
 }
 
-/** Aggiunta alla Cantina: non contiene prezzo né campi di un annuncio. */
+/**
+ * Aggiunta alla Cantina: non contiene il prezzo né i campi di un annuncio.
+ *
+ * I due fatti di acquisizione sono opzionali e sono altra cosa: descrivono da
+ * dove viene la bottiglia, non a quanto la si vende. `null` significa
+ * «sconosciuto» e non va mai inventato: uno zero qui è un dato scelto, non un
+ * ripiego per un campo vuoto.
+ */
 export interface DatiNuovaBottiglia extends DatiVinoUtente {
   visibilita: "privata" | "cantina_pubblica";
   /** Percorsi nel bucket privato `cantina`. */
   immagini: string[];
+  /** In centesimi interi, se noto. `null` = non lo so. */
+  acquisitionCostCents?: number | null;
+  /** Timestamp dell'acquisto, se noto. `null` = non lo so. */
+  acquiredAt?: string | null;
 }
 
 /** Campi di contenuto di una vendita, sempre riferita a una bottle_unit. */

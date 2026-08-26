@@ -2,149 +2,73 @@
 
 ## CURRENT STATE
 
-- `frontend/` + `backend/` remain the served product. The public
-  `frontend-next/` beta is separate and is not the Phase 13 cutover.
-- D1 Account Seller Overview is CLOSED. PR #90 was merged into `main` at
-  `df5265d09fbec7723aab406187a828fa3854f653`, the D2 BUILD baseline.
-- D2 Region Canonical Data Foundation is CLOSED. `origin/main` contains its
-  squash commit `9586405bce40bc3f3b84f3e51b4cafd38b33c17d` from PR #91.
-- D2 Region Sell + Explore + Search + AI is CLOSED. PR #93 was merged into
-  `main` at `68282dc4d0205964403bfe87b704690990c3797a`, the D5 BUILD baseline.
-- D5 Auth Entry Flow is CLOSED. PR #94 was merged into `main` at
-  `548a1da5599556260f87985c77442e2c1bd2f8d4`; post-merge CI run
-  `32966918500` completed successfully.
-- Production project ref `pijnmcllmfgjmgsvtcej` is `ACTIVE_HEALTHY` on
-  PostgreSQL 17. The repository's normal Supabase integration applied D2; the
-  production migration ledger contains version `20260826120000` exactly once.
-  No manual or alternative migration application was used.
-- `public.wine_regions` contains exactly the 17 current `/esplora` region names,
-  excluding the UI pseudo-value `Tutte`, in the defined `(ordine, nome)` order.
-  Its unique index on `lower(nome)` prevents logical case-insensitive
-  duplicates. `anon` and `authenticated` have public `SELECT` through the
-  explicit RLS policy and no client write grant.
-- Production contains 12 wines, all canonical: `Champagne` 1,
-  `Emilia-Romagna` 2, `Lombardia` 1, `Piemonte` 3 and `Toscana` 5. No `ciao`,
-  `Toscanaa` or other noncanonical value remains.
-- The two authorized production normalizations preserved identities and
-  relationships. `sabbioni-i-rifugi-2017` remains wine
-  `e1587ba1-69a1-47ec-9e79-e90f1429bad7`, now `Emilia-Romagna`, with bottle
-  `1b21d076-a05c-4bb9-ac59-3bdcc11827ae` and listings
-  `9d7494a6-a0e5-40a6-8d7f-1e72aa98386a` (`sospeso`) and
-  `00e4cb07-1a9d-446d-b5fc-f809e71e0ec5` (`attivo`). The QA wine remains
-  `8f1366e7-5f33-47a3-893f-2be684052f97`, now `Toscana`, with bottle
-  `0f6c66cb-0b2e-4a43-9451-b03dcefc1798` and zero listings.
-- `wines.regione` remains `text NOT NULL`; `wines_regione_idx` remains present;
-  `wines_regione_fkey` is validated with `ON UPDATE CASCADE` and `ON DELETE
-  RESTRICT`.
-- D2 contains no grant, policy or RLS alteration for `wines`, `bottle_units` or
-  `listings`. The disposable PostgreSQL 17 proof compared deterministic pre/post
-  table and column grants and complete RLS policy bodies and passed both
-  comparisons. The post-merge production schema shows the expected existing
-  policies and grants. This is no evidence claim of a retained privileged
-  production schema fingerprint from both before and after D2.
-- The authoritative `/vendi` chain remains `CellarService.aggiungiBottiglia()`
-  -> `public.cellar_bottiglia_aggiungi()` ->
-  `private.catalogo_risolvi_vino_utente(...)`. It validates region before
-  existing-wine reuse, trims outer whitespace, canonicalizes case to registry
-  spelling and returns readable `P0001` for unknown values instead of raw
-  FK/PostgreSQL internals. The canonical helper remains private and unavailable
-  to client roles.
-- `WineRegionsService` is a minimal server/client-compatible read adapter and is
-  now the only frontend door to the registry. Both consumers read through it:
-  `/esplora/page.tsx` on the server and `useSellWizard` in the browser. No
-  component queries `wine_regions` directly.
-- The 17 region names are no longer duplicated in TypeScript. The hardcoded
-  `/esplora` array was deleted; `Tutte` survives only as an Explore UI
-  pseudo-value in `src/lib/esplora/filtri.ts`, never in service or props data.
-- `/vendi` Region is a canonical Select, required, with no free-text fallback.
-  It is disabled unless the registry read succeeded non-empty; loading, empty
-  success and read error are three distinguishable states. One wizard visit
-  performs at most one registry read (promise held in a ref, Strict-Mode safe),
-  and the Cantina path performs none because wine identity stays read-only.
-  Step `Identificazione` cannot be left without a canonical Region: the guard is
-  in the hook, not only in the markup.
-- The AI catalog suggestion can no longer write arbitrary Region text.
-  `campiDaSuggerimento` accepts the registry names and applies a Region only on
-  an exact match after trim and case folding, writing the registry spelling
-  (`toscana` and ` TOSCANA ` -> `Toscana`). `Toscanaa` and `Tuscany` are not
-  applied and the current Region is preserved, empty included. No fuzzy
-  matching, typo correction, translation or alias was introduced. Other AI
-  fields are unchanged.
-- `/esplora` starts listings and registry reads together and isolates the
-  registry: an unexpected rejection is caught, so a registry failure or an empty
-  registry never hides listings and never disables ordinary text search — the
-  Region control degrades to a readable unavailable state. Ordinary search now
-  matches a local in-memory haystack of `produttore`, `nome`, `denominazione`,
-  `annata` and `regione`; Region filter, type, price, sorting, pairing mode and
-  AI pairing are unchanged and Region and text compose.
-- The fresh disposable PostgreSQL 17 proof produced **25 PASSA / 0 FALLISCE**
-  and cleaned every fixture and generated observation. The targeted Bun 1.3.14
-  suite produced **16 pass / 0 fail / 61 expect() calls**. After the Region
-  product integration the full `frontend-next` suite produces **929 pass /
-  0 fail / 18,012 expect() calls across 57 files**, and CI `MIN_TESTS` is 929.
-  Lint has zero errors and 13 pre-existing unrelated warnings; typecheck and
-  build are clean. The floor was later raised to 989 by D5 and remains 989.
-- No destructive grid or fixture ran in production. No manual production
-  insert, update or delete occurred; only the two authorized updates ran inside
-  the normal D2 integration. Read-only temporary production dumps used for
-  verification were deleted. The unrelated `.wslconfig`, stash and other
-  worktrees remain excluded and untouched.
-- Migration `supabase/migrations/20260826120000_wine_regions_canonical.sql` is
-  committed, merged and applied, so it is frozen. Any correction requires a new
-  timestamped migration.
+- `frontend/` + `backend/` remain the served product. The public `frontend-next/`
+  beta is separate and is not the Phase 13 cutover.
+- D1 Account Seller Overview, D2 Region Canonical Data Foundation, D2 Region Sell
+  + Explore + Search + AI, D3-A requested-price context/history and D5 Auth Entry
+  Flow are closed on `origin/main`. The D3-B branch baseline and merge-base is
+  `58275d8f08c5b5af6eb8d8e715ac674be3091c9d`.
+- D3-B adds cellar acquisition facts, forward-only D3-A reference snapshots and
+  an owner-only `cellar_portfolio_analitica()` RPC. Browser analytics use exactly
+  that RPC: no analytics table reads, query per bottle, query per graph point or
+  external provider call was introduced.
+- Accounting preserves `NULL` as unknown and zero as known zero. Vinea purchases
+  use authoritative paid net outflow after refunds and override manual cost;
+  realized seller income requires transferred payout state, transfer timestamp
+  and amount. Net performance is current known D3-A reference value plus realized
+  transferred income minus known acquisition outflow; incomplete facts reduce
+  coverage instead of becoming zero.
+- D3-A reference semantics remain same wine, same format, active asking prices,
+  at least three comparables and median price. No `prezzoMercato`, linked-listing,
+  completed-sale or payment-price fallback was added.
+- Snapshot history is append-only and forward-only. A real snapshot with a null
+  median interrupts coverage from that instant; no prior median is carried
+  forward and no historical value is invented before the first observation.
+  Opening `/cantina` does not write snapshots.
+- `Wine` remains the catalog/presentation model and
+  `PosizionePortafoglioRow` remains the accounting read model. `/cantina` shows
+  D3-B reference value, known capital, transferred income, net performance and
+  an accessible value-over-time chart/table. Analytics failure is fail-soft and
+  leaves ordinary cellar data, layout, 3D view and drinking-window information
+  available. Database permission, timeout, unknown and arbitrary `P0001` errors
+  are mediated and do not reach the UI.
+- Migration `20260826130000_d3b_cellar_accounting.sql` follows the frozen D2
+  migration `20260826120000_wine_regions_canonical.sql`. A fresh disposable
+  PostgreSQL 17 replay after the rename applied 40 migrations plus the genuine
+  pre-migration fixture and produced **39 PASSA / 0 FALLISCE**, with every
+  fixture and generated observation removed and every residue counter at zero.
+- Bun 1.3.14 validation is green: frozen install unchanged; targeted D3-B tests
+  **46 pass / 0 fail**; full `frontend-next` suite **1035 pass / 0 fail / 18,528
+  expect() calls across 63 files**; typecheck and build pass. Lint has zero errors
+  and 13 unrelated existing warnings. CI `MIN_TESTS` is raised from 989 to the
+  measured passing count, 1035. `git diff --check` is clean.
+- No production order, bottle or other fixture was created. No production write,
+  provider activation, manual migration application, commit, push, PR or merge
+  has occurred yet. The unrelated `.wslconfig`, stash and other worktrees remain
+  excluded and untouched.
 
 ## ACTIVE TASK
 
-- D3-A — Price Intelligence Detail + Price Context Consistency — VERIFY & SHIP,
-  on branch `d3-price-intelligence-detail`, created from `origin/main` at
-  `548a1da5599556260f87985c77442e2c1bd2f8d4`, which is still the merge-base.
-- `/annuncio/[id]` now composes the requested-price comparison in the existing
-  pure Price Intelligence read-model. It keeps the listing price first, exposes
-  a Vinea request reference only from at least three active same-wine,
-  same-format listings, and classifies requested price versus median and range.
-- The near-price summary and the extended history panel consume the same
-  server-composed read-model for seller and buyer. The history panel keeps the
-  request/sale scatter, isolated historical-read failure, observation counts,
-  coverage and internal source without repeating the reference summary.
-- No migration, schema, RLS, provider, production write, new query or client
-  fetch is part of D3-A. The route still performs exactly one `elenco()` and one
-  `storico()`, both pre-existing. External Price Intelligence providers remain
-  off; Cellar Value/Performance has not started.
-- The full `frontend-next` suite produces **989 pass / 0 fail / 18,406 expect()
-  calls across 59 files**. The total equals the existing CI `MIN_TESTS` floor of
-  989, so neither `.github/workflows/ci.yml` nor `prelaunch-contract.test.ts`
-  was changed. Lint has zero errors and the same 13 pre-existing unrelated
-  warnings; typecheck and build are clean; `git diff --check` is clean.
+D3-B — Cellar Value/Performance — VERIFY & SHIP
 
 ## NEXT STEPS
 
-1. Cabina: audit finale e chiusura D3-A.
-2. Cabina: audit dati D3-B Cellar Value/Performance.
+1. Cabina: audit finale e chiusura COMPLETA D3.
+2. Cabina: selezione del prossimo WORK PACKAGE dalla ROADMAP ATTIVA.
 3. Eseguire soltanto il prossimo BUILD approvato.
 
 ## BLOCKERS / NOTES
 
-- No technical D2 blocker remains.
-- The two D5 items left open at BUILD are closed by measurement: the test floor
-  is now 989, and the Supabase Redirect URLs wildcard
-  `https://timely-lokum-43a12e.netlify.app/**` was re-measured on 26 Aug 2026
-  and still accepts the query-carrying callback. That wildcard remains a
-  dependency: if it were removed, Supabase would fall back to the Site URL in
-  silence rather than reject the redirect, so any change to it must be
-  re-measured with the same read-only probe.
-- Two product decisions stay open and were not taken inside D5: whether a click
-  on Google constitutes legal consent (and how it would be versioned and
-  stored), and whether a Google account can also gain a password or a dedicated
-  recovery path.
-- Two hardcoded region lists survive outside this task's scope, in
-  `src/data/onboarding.ts` and the landing `src/app/page-client.tsx`. They are
-  pre-existing, were not touched, and do not feed `/vendi`, `/esplora`, search
-  or the AI mapping. Routing them through the registry is a separate work
-  package for the Cabina to schedule, not a D2 defect.
-- Task documentation travels in the same functional PR. No separate PR is to be
-  opened only to update `CHANGES.log` or to chase a SHA.
-- Deferred readiness, not active roadmap: the payout scheduler is still neither
-  authorized nor configured. External Price Intelligence providers,
-  KYC/identity providers, SMTP and payments remain OFF.
-- Phase 11 implementation is not open. Phase 13 cutover has not started and must
-  not be inferred from the public beta, D8, D1, D2 or green checks.
+- No demonstrated D3-B implementation or validation blocker remains. Shipping,
+  CI observation and post-merge production ledger/effective-object verification
+  are the remaining lifecycle operations for this task.
+- Production project ref `pijnmcllmfgjmgsvtcej` was last verified
+  `ACTIVE_HEALTHY` on PostgreSQL 17. A PR merge will not prove D3-B was applied:
+  wait for Supabase integration, then verify the production migration ledger and
+  effective columns, snapshot objects, trigger/RLS protections, RPC body,
+  volatility, `SECURITY DEFINER`, safe `search_path` and authenticated-only
+  execute grants read-only. Do not manufacture an order or bottle smoke fixture.
+- External Price Intelligence providers, KYC/identity providers, SMTP, payments
+  and the payout scheduler remain off or unconfigured as previously recorded.
+  D3-B does not change checkout, payment, payout or provider semantics.
+- Phase 13 cutover has not started. No later work package is admitted by D3-B.

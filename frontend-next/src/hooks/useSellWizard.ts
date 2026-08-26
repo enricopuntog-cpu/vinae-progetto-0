@@ -14,6 +14,7 @@ import {
   type SmartSellPrice,
 } from "@/lib/price-intelligence/smart-sell-price";
 import { euroDaCents, richiedeConfermaPrezzoPrecedente } from "@/lib/vendi/prezzo";
+import { acquisizioneDaCampi } from "@/lib/vendi/acquisizione";
 import { AI_UI, AZIONI_IA_ABILITATE } from "@/config/features";
 import type {
   CatalogazioneSuggerimento,
@@ -143,6 +144,11 @@ export function useSellWizard({
     storia: "",
     prezzo: "",
     disponibili: "1",
+    // I due fatti di acquisizione restano testo finché non si cataloga: la
+    // conversione è nel modulo dedicato, perché lo sbaglio possibile qui è
+    // invisibile — trasformare «non lo so» in un costo noto di zero.
+    prezzoAcquisto: "",
+    dataAcquisto: "",
   });
   const set = (k: keyof typeof d) => (v: string) => setD((s) => ({ ...s, [k]: v }));
 
@@ -532,6 +538,12 @@ export function useSellWizard({
       tipo: d.tipo as Wine["tipo"],
       visibilita: modalita === "pubblica" ? "cantina_pubblica" : "privata",
       immagini: foto.map((f) => f.percorso),
+      // Assenza e zero restano distinti fino alla RPC: il prezzo dell'annuncio
+      // non c'entra, e un campo vuoto non è un costo noto di zero.
+      ...acquisizioneDaCampi({
+        prezzoEuro: d.prezzoAcquisto,
+        data: d.dataAcquisto,
+      }),
     };
   }, [d, foto, modalita]);
 
