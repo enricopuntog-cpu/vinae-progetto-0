@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
+import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
 import { wineImages } from "@/lib/wine-images";
 import { useSellWizard, type Modalita } from "@/hooks/useSellWizard";
 import { confidenzaPercento } from "@/lib/phase10/catalogazione";
@@ -146,7 +147,12 @@ export default function VendiPageClient() {
           Serve un account per usare il wizard di vendita e la tua cantina.
         </p>
         <Button asChild className="bg-bordeaux hover:bg-bordeaux/90">
-          <Link href="/registrati">Crea un account</Link>
+          {/*
+            Con `?next=`: il wizard di vendita è il motivo per cui l'utente sta
+            creando l'account, e farglielo ritrovare dopo la registrazione vale
+            più che riportarlo alla Home.
+          */}
+          <Link href={`/registrati?${PARAMETRO_NEXT}=%2Fvendi`}>Crea un account</Link>
         </Button>
       </div>
     );

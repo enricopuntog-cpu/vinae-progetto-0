@@ -25,7 +25,9 @@ import type {
   ProfiloCorrente,
   ProfiloModifica,
   Result,
+  ResultAuth,
 } from "@/services/types";
+import type { ContestoRitornoAuth } from "@/lib/auth/ritorno-auth";
 
 export type { DrinkOverride } from "@/lib/store/cellar-domain";
 export type { DemoRuolo } from "@/lib/store/auth-domain";
@@ -39,18 +41,32 @@ type StoreState = {
   authProfilo: ProfiloCorrente | null;
   authProfileName: string | null;
   authProfileLoading: boolean;
+  /**
+   * Errore del solo dominio profilo. I gesti di ingresso restituiscono il
+   * proprio esito a chi li chiama (D5): un campo condiviso non sa distinguere
+   * un fallimento della password da uno di Google, e le superfici di ingresso
+   * ne hanno tre vivi insieme. Vedi `lib/store/real-auth-domain.ts`.
+   */
   authError: string | null;
   authClearError: () => void;
-  authRegistra: (input: {
-    email: string;
-    password: string;
-    dataNascita: string;
-    username: string;
-  }) => Promise<Result<{ userId: string; sessioneAttiva: boolean; confermaEmailRichiesta: boolean }>>;
-  authLogin: (email: string, password: string) => Promise<Result<{ userId: string }>>;
-  authInviaMagicLink: (email: string) => Promise<Result<void>>;
-  authVerificaEmail: (tokenHash: string) => Promise<Result<void>>;
-  authAccediConOAuth: (provider: OAuthProvider) => Promise<Result<void>>;
+  authRegistra: (
+    input: {
+      email: string;
+      password: string;
+      dataNascita: string;
+      username: string;
+    },
+    contesto?: ContestoRitornoAuth,
+  ) => Promise<
+    ResultAuth<{ userId: string; sessioneAttiva: boolean; confermaEmailRichiesta: boolean }>
+  >;
+  authLogin: (email: string, password: string) => Promise<ResultAuth<{ userId: string }>>;
+  authInviaMagicLink: (email: string, contesto?: ContestoRitornoAuth) => Promise<ResultAuth<void>>;
+  authVerificaEmail: (tokenHash: string) => Promise<ResultAuth<void>>;
+  authAccediConOAuth: (
+    provider: OAuthProvider,
+    contesto?: ContestoRitornoAuth,
+  ) => Promise<ResultAuth<void>>;
   authStatoEta: StatoEta;
   /**
    * Scrittura unica del proprio profilo. Nessun `userId` in firma: la riga è

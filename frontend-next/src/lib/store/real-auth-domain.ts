@@ -4,7 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { supabaseAuthService } from "@/services/auth-service";
 import { supabaseProfileService } from "@/services/profile-service";
-import type { OAuthProvider, ProfiloCorrente, ProfiloModifica, Result } from "@/services/types";
+import type {
+  OAuthProvider,
+  ProfiloCorrente,
+  ProfiloModifica,
+  Result,
+  ResultAuth,
+} from "@/services/types";
+import type { ContestoRitornoAuth } from "@/lib/auth/ritorno-auth";
 import { ruoloDaSessione } from "@/lib/auth/role";
 
 export type AuthUser = { userId: string; email: string | null };
@@ -40,6 +47,7 @@ export const useRealAuthDomain = () => {
   // Se Supabase non è configurato non c'è nulla da caricare: parte già a
   // false. Evita una setState sincrona nel corpo dell'effect sotto.
   const [authLoading, setAuthLoading] = useState(() => getSupabaseClient() !== null);
+  // Errore del solo dominio profilo: vedi il commento su `authClearError`.
   const [authError, setAuthError] = useState<string | null>(null);
   const [profiloLetto, setProfiloLetto] = useState<ProfiloInMemoria | null>(null);
   const [ruoliLetti, setRuoliLetti] = useState<{ userId: string; ruoli: string[] } | null>(null);
@@ -130,41 +138,49 @@ export const useRealAuthDomain = () => {
 
   const authClearError = useCallback(() => setAuthError(null), []);
 
+  /**
+   * I quattro gesti di ingresso **non** scrivono più in `authError` (D5).
+   *
+   * `authError` era uno solo per tutto il dominio, e le superfici di ingresso ne
+   * hanno tre contemporaneamente vivi: password, magic link e social. Con un
+   * campo solo, un fallimento di Google compariva nello stesso riquadro sotto il
+   * campo password — e ci restava anche dopo che l'utente aveva ricominciato da
+   * un'altra strada. Ora l'esito torna a chi lo ha chiesto, tipizzato, e la
+   * pagina lo mostra accanto al pulsante che lo ha prodotto.
+   *
+   * `authError` sopravvive per il solo dominio profilo (`authAggiornaProfilo`),
+   * che ha una superficie sola e un errore alla volta: /account e
+   * /completa-profilo continuano a leggerlo come prima.
+   */
   const authRegistra = useCallback(
-    async (input: { email: string; password: string; dataNascita: string; username: string }) => {
-      setAuthError(null);
-      const result = await supabaseAuthService.registra(input);
-      if (!result.ok) setAuthError(result.error);
-      return result;
-    },
+    (
+      input: { email: string; password: string; dataNascita: string; username: string },
+      contesto?: ContestoRitornoAuth,
+    ) => supabaseAuthService.registra(input, contesto),
     [],
   );
 
-  const authLogin = useCallback(async (email: string, password: string) => {
-    setAuthError(null);
-    const result = await supabaseAuthService.login(email, password);
-    if (!result.ok) setAuthError(result.error);
-    return result;
-  }, []);
+  const authLogin = useCallback(
+    (email: string, password: string) => supabaseAuthService.login(email, password),
+    [],
+  );
 
-  const authInviaMagicLink = useCallback(async (email: string) => {
-    setAuthError(null);
-    const result = await supabaseAuthService.inviaMagicLink(email);
-    if (!result.ok) setAuthError(result.error);
-    return result;
-  }, []);
+  const authInviaMagicLink = useCallback(
+    (email: string, contesto?: ContestoRitornoAuth) =>
+      supabaseAuthService.inviaMagicLink(email, contesto),
+    [],
+  );
 
   const authVerificaEmail = useCallback(
-    (tokenHash: string): Promise<Result<void>> => supabaseAuthService.verificaEmail(tokenHash),
+    (tokenHash: string): Promise<ResultAuth<void>> => supabaseAuthService.verificaEmail(tokenHash),
     [],
   );
 
-  const authAccediConOAuth = useCallback(async (provider: OAuthProvider) => {
-    setAuthError(null);
-    const result = await supabaseAuthService.accediConOAuth(provider);
-    if (!result.ok) setAuthError(result.error);
-    return result;
-  }, []);
+  const authAccediConOAuth = useCallback(
+    (provider: OAuthProvider, contesto?: ContestoRitornoAuth) =>
+      supabaseAuthService.accediConOAuth(provider, contesto),
+    [],
+  );
 
   /**
    * Scrittura unica del profilo: chi la chiama passa i campi che cambia e li

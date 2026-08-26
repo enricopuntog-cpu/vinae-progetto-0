@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConsentCheckbox } from "@/components/vinea/ConsentCheckbox";
 import { useVinea } from "@/lib/vinea-store";
+import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
 import { isMaggiorenne } from "@/lib/age";
 
 /**
@@ -101,7 +102,14 @@ export default function CompletaProfiloPageClient() {
             Questa pagina completa un profilo già autenticato.
           </p>
           <Button asChild className="mt-5 bg-bordeaux hover:bg-bordeaux/90">
-            <Link href="/accedi">Vai all&apos;accesso</Link>
+            {/*
+              Con `?next=`: questa pagina completa un profilo già autenticato,
+              quindi chi arriva senza sessione deve poterci tornare subito dopo
+              averla aperta, senza ripassare da un'altra pagina.
+            */}
+            <Link href={`/accedi?${PARAMETRO_NEXT}=%2Fcompleta-profilo`}>
+              Vai all&apos;accesso
+            </Link>
           </Button>
         </div>
       </div>
