@@ -248,7 +248,15 @@ export default function RegistratiPageClient() {
           </div>
 
           <ConsentCheckbox checked={terms} onCheckedChange={setTerms} testId="consenso-termini">
-            Accetto i Termini e la Privacy di Vinea.
+            Accetto i{" "}
+            <Link href="/legale#termini" className="text-bordeaux underline-offset-2 hover:underline">
+              Termini
+            </Link>{" "}
+            e la{" "}
+            <Link href="/legale#privacy" className="text-bordeaux underline-offset-2 hover:underline">
+              Privacy
+            </Link>{" "}
+            di Vinea.
           </ConsentCheckbox>
           <ConsentCheckbox
             checked={maggiorenne}
@@ -256,7 +264,7 @@ export default function RegistratiPageClient() {
             icon={<ShieldAlert className="h-3.5 w-3.5 text-bordeaux" />}
             testId="consenso-eta"
           >
-            Confermo di avere più di 18 anni. Vinea è vietato ai minori di 18 anni.
+            Confermo di avere almeno 18 anni. Vinea è vietato ai minori di 18 anni.
           </ConsentCheckbox>
 
           {/*

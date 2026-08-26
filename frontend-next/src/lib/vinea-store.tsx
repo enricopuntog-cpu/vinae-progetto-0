@@ -69,6 +69,8 @@ type StoreState = {
     contesto?: ContestoRitornoAuth,
   ) => Promise<ResultAuth<void>>;
   authStatoEta: StatoEta;
+  /** Rilegge una volta la riga completa del profilo per la sessione corrente. */
+  authRicaricaProfilo: () => Promise<void>;
   /**
    * Scrittura unica del proprio profilo. Nessun `userId` in firma: la riga è
    * sempre quella di `auth.uid()`, risolta dal servizio a partire dalla

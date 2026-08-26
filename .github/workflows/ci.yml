@@ -96,7 +96,7 @@ jobs:
       # che si svuota in silenzio.
       - name: Test
         env:
-          MIN_TESTS: "1035"
+          MIN_TESTS: "1072"
         run: |
           set -o pipefail
           bun run test 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
