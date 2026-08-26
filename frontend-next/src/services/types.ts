@@ -252,6 +252,32 @@ export interface PublicProfileService {
   annunciAttivi(userId: string): Promise<Result<Wine[]>>;
 }
 
+// ---- Regioni canoniche -----------------------------------------------------
+
+/**
+ * La tassonomia delle regioni vinicole, in sola lettura.
+ *
+ * Esiste una sola sorgente — `public.wine_regions` — e da qui in avanti è
+ * quella: il selettore di `/vendi`, il filtro di `/esplora` e qualunque
+ * normalizzazione successiva devono leggere questa lista invece di ricablarne
+ * una propria. La fondazione D2 la introduce e la lascia deliberatamente non
+ * collegata: il cablaggio è il pacchetto dopo.
+ *
+ * Il contratto restituisce nomi già ordinati. L'ordine non è alfabetico ed è
+ * una scelta del dato, non della UI: chi consuma questa lista la rende com'è.
+ */
+export interface WineRegionsService {
+  /**
+   * I nomi canonici, nell'ordine di presentazione stabilito dal registro.
+   *
+   * Un elenco vuoto non è una risposta normale — il registro è seminato dalla
+   * migrazione e non è svuotabile da un client — quindi resta `Result`: chi
+   * chiama deve poter distinguere «non ho potuto leggere» da «non c'è niente»,
+   * invece di mostrare un menù a tendina vuoto come se fosse un fatto.
+   */
+  elenco(): Promise<Result<string[]>>;
+}
+
 // ---- Catalogo vini ---------------------------------------------------------
 export interface WineCatalogService {
   cerca(query: string, filtri?: Record<string, unknown>): Promise<unknown[]>;

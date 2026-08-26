@@ -4,174 +4,95 @@
 
 - `frontend/` + `backend/` remain the served product. The public
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
-- D8 adds the read-only, user-level public-profile foundation. Its only public
-  database door is `public.profilo_pubblico(p_user_id uuid)`, backed by a closed
-  seven-column projection in `private.profili_pubblici`.
-- The public allowlist is exactly user UUID, username, bio, city, province,
-  experience and avatar reference. D8 does not expose email, date of birth,
-  roles, moderation internals, certification/trust data, metadata, future
-  columns or the superseded `seller_verificato` semantic.
-- Visibility reuses decision 7.6b: a removed target is absent, a removed
-  authenticated caller reads no public profile, and a suspended user remains
-  visible. Hidden and nonexistent UUIDs have the same zero-row response.
-- D8 introduces no client `SELECT` on `profiles` or
-  `profile_certifications`, no base-table RLS/grant relaxation and no general
-  people directory. The RPC is `STABLE`, `SECURITY DEFINER`, has an empty
-  `search_path`, returns at most one row and is executable only by `anon` and
-  `authenticated`.
-- `PublicProfileService` is server-compatible, rejects malformed UUIDs before
-  PostgreSQL, maps database failures to application messages, reuses the
-  fail-closed avatar sanitizer and reads active listings separately from the
-  existing `public_listings` projection. A profile exists with zero listings.
-- The D8 foundation verification measured **31 pass / 0 fail / 97 assertions**
-  in the targeted service suite and **829 pass / 0 fail / 17673 assertions** in
-  the then-complete `frontend-next` suite with Bun 1.3.14. The D8 UI Core raised
-  that to **835 pass / 0 fail / 17705 assertions**. Public Profile Identity &
-  Entry Points adds 28 tests: the stable complete-suite count measured twice with
-  Bun 1.3.14 is **863 pass / 0 fail / 17793 assertions across 54 files**, and the
-  CI `MIN_TESTS` floor plus the `prelaunch-contract` regression assertion are
-  aligned to **863**.
-- The D8 PostgreSQL 17.10 disposable grid applied all 38 migrations and produced
-  **16 PASSA / 0 FALLISCE**, with zero user, profile, role or audit residues
-  after rollback. It was not executed against production.
-- PR #87, `D8 Public user profile data foundation`, was merged into `main` at
-  `73d5c7bf857f8bcfee387cf0ee4da2c2513be9e7`; its post-merge CI completed
-  successfully. The D8 data/security foundation is CLOSED.
-- PR #88, `Add D8 public profile UI core`, was merged into `main` at
-  `3de888e5c6b5409492707f4be71d4e02be0750de`, verified on the remote default
-  branch. The D8 Public User Profile UI Core is CLOSED; the route
-  `/profilo/[id]` and its service are reused, not rebuilt.
-- PR #89, `Public Profile Identity & Entry Points`, was merged into `main` at
-  `662c33d158901309bf32eb87438a4015d39bcac9`, which is the current
-  `origin/main`. Public Profile Identity & Entry Points is CLOSED.
-- `/account` no longer renders the `Certificazioni` card. Its place is taken by
-  `Attività di vendita`, which reads `OrderService.vendite()` and
-  `ListingService.mieiAnnunci()` once each and derives its four measures from
-  `riepilogoVenditore()`, the same function behind the `/vendite` KPIs. The
-  fourth measure stays the frozen seller price of completed orders — not a
-  balance, an incasso or a payout. `profile_certifications`,
-  `my_certifications`, `vociCertificazione()` and the profile service are
-  unchanged; only an Account surface was replaced.
-- The avatar foundation (`risolviAvatarPersona` / `AvatarPersona`, photo →
-  preset → silhouette, fail-closed) and the listing preview reused by the
-  profile (`WineCard` list variant over `public_listings`) were already
-  implemented before this work package and were reused unchanged.
-- Production project ref is `pijnmcllmfgjmgsvtcej`. Inclusion of migration
-  `20260825180000 public_profile_foundation` in the production ledger remains
-  **DA VERIFICARE**; the merge alone does not prove its application.
-- The payout scheduler repository gate remains fail-closed and external Price
-  Intelligence providers, KYC/identity providers, SMTP and payments remain OFF.
+- D1 Account Seller Overview is CLOSED. PR #90 was merged into `main` at
+  `df5265d09fbec7723aab406187a828fa3854f653`, the D2 branch baseline.
+- Production project ref `pijnmcllmfgjmgsvtcej` is `ACTIVE_HEALTHY` on
+  PostgreSQL 17. The read-only migration ledger audit directly confirms
+  `20260825180000 public_profile_foundation`; the prior D8 uncertainty is
+  resolved. D2 migration `20260826120000` is not in that ledger before ship.
+- D2 adds `public.wine_regions` with the 17 current `/esplora` region names,
+  excluding the UI pseudo-value `Tutte`, and deterministic data-defined order.
+  A unique index on `lower(nome)` prevents logical case-insensitive duplicates.
+  `anon` and `authenticated` receive `SELECT` only through an explicit RLS
+  policy; no client write grant exists.
+- The migration changes only the two authorized legacy values: every exact
+  `Toscanaa` becomes `Toscana`; exact `ciao` becomes `Emilia-Romagna` only for
+  `slug = 'sabbioni-i-rifugi-2017'`. A residual-value gate aborts before the
+  constraint if any other noncanonical value exists.
+- `wines.regione` remains `text NOT NULL` and `wines_regione_idx` remains in
+  place. The foreign key to `wine_regions(nome)` is added `NOT VALID` and then
+  explicitly validated, with `ON UPDATE CASCADE` and `ON DELETE RESTRICT`.
+  Existing grants and RLS policies for `wines`, `bottle_units` and `listings`
+  are unchanged.
+- The authoritative `/vendi` chain remains `CellarService.aggiungiBottiglia()`
+  -> `public.cellar_bottiglia_aggiungi()` ->
+  `private.catalogo_risolvi_vino_utente(...)`. The private writer now validates
+  the submitted region before reusing an existing wine, resolves outer
+  whitespace and case to the exact registry spelling, and raises readable
+  `P0001` for unknown values instead of exposing a raw FK/PostgreSQL error. Its
+  schema-qualified canonical helper has `search_path = ''` and is not
+  executable by `public`, `anon` or `authenticated`.
+- `WineRegionsService` is a minimal server/client-compatible read adapter. It
+  accepts an injected Supabase client, reads only `wine_regions`, orders by
+  `(ordine, nome)`, returns `Result<string[]>` and sanitizes failures. No Region
+  UI is connected: `/vendi`, `/esplora`, text search and AI suggestions remain
+  unchanged.
+- The fresh disposable PostgreSQL 17 proof applied the pre-D2 migration chain,
+  D2 fixtures and migration, then produced **25 PASSA / 0 FALLISCE**. It proved
+  the exact seed and order, duplicate prevention, fail-closed access, the two
+  authorized updates only, stable wine/bottle/listing IDs and relationships,
+  preserved listing history, the validated FK/index/nullability, canonical and
+  rejected writer paths, unchanged ACL/RLS, and a closed helper door. Cleanup
+  left zero fixture users, profiles, wines, bottle units, listings or orphan
+  price observations; the append-only guard was enabled. The grid was never run
+  in production.
+- The D2 targeted Bun 1.3.14 test produced **16 pass / 0 fail / 61 expect()
+  calls**. The full `frontend-next` suite produced **909 pass / 0 fail / 17,973
+  expect() calls** across 56 files, so CI `MIN_TESTS` and its source-contract
+  test are raised from 893 to the measured 909. Lint has zero errors and 13
+  pre-existing unrelated warnings; typecheck and build are clean.
+- The privileged read-only production precheck matched the Cabina snapshot
+  exactly: 12 wines distributed as `Champagne` 1, `ciao` 1,
+  `Emilia-Romagna` 1, `Lombardia` 1, `Piemonte` 3, `Toscana` 4 and
+  `Toscanaa` 1, with no additional nonmappable region. I Rifugi remains `ciao`
+  with one bottle unit and two listings; the QA wine remains `Toscanaa` with one
+  bottle unit and no listing. The local temporary dump used for this narrow
+  audit was deleted.
+- No production row was inserted, updated, deleted or recreated during BUILD or
+  pre-ship verification. No production fixture or migration application was
+  performed. No Region UI, provider, payment, payout, Phase 11 or Phase 13 work
+  was introduced. The unrelated `.wslconfig`, stash and other worktrees remain
+  excluded and untouched.
 
 ## ACTIVE TASK
 
-### D1 — Account Seller Overview — VERIFY & SHIP
-
-- Branch `d1-account-seller-overview`, cut from `origin/main` at
-  `662c33d158901309bf32eb87438a4015d39bcac9`. No migration, schema, RLS,
-  production write, payment, payout or provider change.
-- The audit confirmed the five premises before any edit: `/vendite` already had
-  a real Seller Dashboard; it already used exactly one order read and one
-  listing read; `riepilogoVenditore()` already derived active listings, orders
-  awaiting the seller, completed sales and their value; that value is not a
-  balance, an incasso or a payout; `/account` still rendered `Certificazioni`.
-  The foundation was reused, not rebuilt.
-- New file `frontend-next/src/app/account/attivita-vendita.tsx`, an
-  Account-specific client component, colocated the way `app/vendi/
-  bottle-selector.tsx` already is. It performs the same two reads as `/vendite`
-  — `createOrderService(client).vendite()` and
-  `createListingService(client).mieiAnnunci()` — in one `Promise.all`, and
-  passes both to `riepilogoVenditore()`. There is no per-KPI query, no `.from()`
-  or `.rpc()` of its own, no `profiles` read and no duplicated KPI rule.
-- The four KPIs reuse the existing `Kpi` component and the dashboard's own
-  labels and hints, including `Prezzo venditore, non un incassato` for the
-  monetary one. No `Saldo`, `Disponibile`, `Incassato`, `Guadagno`, `Payout`,
-  `Balance`, `Credito` or `Prelievo` semantic was introduced.
-- Loading, zero and error are three distinct states. While the reads are in
-  flight nothing numeric is rendered, so no false zero is shown as if it were
-  data. Zero activity renders four real zeros and is a valid state. A failed
-  order read renders a compact generic sentence inside that section only and
-  does not expose the service message.
-- The section exists for any authenticated account. No role, no
-  `seller_verificato`, no certification and no listing count decides whether it
-  is shown.
-- The profile-editing module is untouched and cannot be broken by the section:
-  `page-client.tsx` imports neither service nor the dashboard module, holds no
-  state for those reads, and renders `<AttivitaVendita />` as a sibling card
-  after the form.
-- The old `Certificazioni` card, its `RigaCertificazione` row component and the
-  now-unused `vociCertificazione`, `VoceCertificazione`, `ShieldCheck` and
-  `Clock` imports were removed from the Account UI only. `certificazioni.ts`,
-  its tests, `my_certifications`, `profile_certifications` and the profile
-  service are unchanged. No professional badge or qualification surface was
-  created; Professional Qualifications remains a separate, out-of-scope work
-  package.
-- VERIFY found one real defect in the BUILD and corrected it.
-  `ListingService.mieiAnnunci()` deliberately collapses a failed read and a
-  genuinely empty list onto the same `[]`. That contract is right for the
-  listing-management surfaces, which show that emptiness; it is wrong as the
-  source of a *number*. The Account section consumed it directly, so a failed
-  listings read would have rendered `Annunci attivi 0 su 0` as a fact.
-- The correction reuses the pattern this same file already established for
-  `elenco()` / `elencoConEsito()`: one closure, `leggiMieiAnnunci`, holds the
-  single `from("listings")` query with its explicit `.eq("seller_id", user.id)`
-  filter; `mieiAnnunci()` keeps its historical collapse for existing consumers
-  and `mieiAnnunciConEsito()` returns the undecayed `Result`. No new query, no
-  direct query from the Account, no migration, no RLS change. `/vendite` still
-  calls `mieiAnnunci()` and its behaviour is unchanged.
-- The Account section now writes its KPI state only when *both* reads
-  succeeded, and shows its generic in-section message when either fails. No
-  PostgreSQL or PostgREST message reaches the page: a listings failure is
-  mediated as `Annunci non disponibili.` and the raw error stays in the logs.
-- The two `dashboard.test.ts` source assertions on `mieiAnnunci` were re-anchored
-  to `leggiMieiAnnunci`, preserving their intent — explicit `seller_id` filter,
-  session guard before the table query — and a third pins that both signatures
-  descend from that one read.
-- VERIFY measured **75 pass / 0 fail / 256 assertions** across
-  `app/account/attivita-vendita`, `lib/vendite/dashboard` and
-  `services/listing-avatar`; a clean `tsc --noEmit`; full `frontend-next` ESLint
-  at **0 errors / 13 warnings**, all pre-existing; and a clean
-  `git diff --check`. The full `frontend-next` build succeeded.
-- The complete suite measured **893 pass / 0 fail / 17912 assertions across 55
-  files** with Bun 1.3.14, identical on two consecutive runs. The CI
-  `MIN_TESTS` floor and the `prelaunch-contract` regression assertion were
-  raised together from **863** to **893**, and the suite was re-run green
-  against the raised floor.
-- Browser smoke, Supabase grids, backend and payout runs were deliberately not
-  executed: this work package changes no schema, no policy and no production
-  state.
-- The pre-existing untracked `.wslconfig`, the pre-existing stash and the other
-  worktrees remain excluded and untouched.
+- D2 — Region Canonical Data Foundation — VERIFY & SHIP
+- Branch `d2-region-canonical-foundation`, cut from and still based on
+  `origin/main` at `df5265d09fbec7723aab406187a828fa3854f653` before ship.
+- Intentional scope is migration `20260826120000`, its two-phase disposable SQL
+  proof, the read service and contract, D2 TypeScript tests, and the measured CI
+  test-floor alignment.
+- Ship requires a focused commit and PR, all triggered relevant checks green and
+  GitHub clean/mergeable, squash merge, then post-merge ledger/schema/data and
+  relationship verification through the normal deployment path. Git merge alone
+  does not prove production migration application.
 
 ## NEXT STEPS
 
-1. Cabina: audit finale e chiusura D1 Account Seller Overview.
-2. Cabina: selezione del successivo WORK PACKAGE dalla ROADMAP ATTIVA.
+1. Cabina: audit finale e chiusura D2 Region Canonical Data Foundation.
+2. Cabina: approvazione del WORK PACKAGE D2 Region Sell + Explore + Search + AI.
 3. Eseguire soltanto il successivo BUILD approvato dalla Cabina.
 
 ## BLOCKERS / NOTES
 
+- No D2 code, disposable-database, production-precheck or local-validation
+  blocker remains before PR creation. D2 must still stop before merge if a
+  relevant check fails or GitHub is not clean/mergeable.
+- Do not manually apply D2 immediately after merge. First wait for and inspect
+  the repository's normal Supabase integration; use no alternative deployment
+  path unless the existing path is unequivocal.
 - Deferred readiness, not active roadmap: the payout scheduler is still neither
-  authorized nor configured. Before enabling it, configure and verify
-  `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `PAYOUTS_JOB_TOKEN`, then perform the
-  first real `workflow_dispatch` with `PAYOUTS_SCHEDULER_ENABLED=true` and
-  `PAYMENTS_ENABLED=false`; it must return health only and zero release actions.
-- `AUTH SMOKE = NON VERIFICATO.` No already-authenticated browser session was
-  available and no account or fixture was created for smoke testing. D6 remains
-  verified by unit/source contracts rather than an authenticated browser.
-- With the demo switcher on, selecting `Utente` without a real session shows the
-  authenticated D6 shell with the silhouette because `authProfilo` is null.
-  This is fail-closed and the demo role is not a proxy for real authentication.
-- Do not run the destructive certification or D8 grids in production and do not
-  create an account, certification or other fixture merely for smoke testing.
-- `my_certifications`, `public_listings` and the D8 private public-profile
-  projection intentionally use `security_invoker = off` closed projections; an
-  expected `security_definer_view` advisor signal is not grounds to expose base
-  tables.
-- SMTP debt remains open: no own transactional sender is configured.
-  Confirmation email still relies on Supabase's built-in test mailer and may hit
-  `over_email_send_rate_limit`; own SMTP waits on a custom domain.
-- External Price Intelligence providers and KYC/identity providers remain OFF.
-  Enabling either requires a separately authorized product decision and a new
-  controlled migration path. Payments remain OFF.
+  authorized nor configured. External Price Intelligence providers,
+  KYC/identity providers, SMTP and payments remain OFF.
 - Phase 11 implementation is not open. Phase 13 cutover has not started and must
-  not be inferred from the public beta, D8 or green checks.
+  not be inferred from the public beta, D8, D1, D2 or green checks.
