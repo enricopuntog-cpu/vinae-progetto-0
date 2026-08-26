@@ -5,77 +5,75 @@
 - `frontend/` + `backend/` remain the served product. The public
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
 - D1 Account Seller Overview is CLOSED. PR #90 was merged into `main` at
-  `df5265d09fbec7723aab406187a828fa3854f653`, the D2 branch baseline.
+  `df5265d09fbec7723aab406187a828fa3854f653`, the D2 BUILD baseline.
+- D2 Region Canonical Data Foundation is CLOSED. Feature commit
+  `a5f7055d4a6922fa75889db1128d9db5aefb08d9` was pushed without force in PR
+  #91, which was clean and mergeable before its squash merge. `origin/main`
+  contains the D2 squash commit `9586405bce40bc3f3b84f3e51b4cafd38b33c17d`.
+- Every triggered PR check was inspected. Relevant checks passed; the neutral
+  Netlify `Pages changed` check reported four uploaded assets and no generated
+  page. Post-merge CI run `32947745913` completed successfully.
 - Production project ref `pijnmcllmfgjmgsvtcej` is `ACTIVE_HEALTHY` on
-  PostgreSQL 17. The read-only migration ledger audit directly confirms
-  `20260825180000 public_profile_foundation`; the prior D8 uncertainty is
-  resolved. D2 migration `20260826120000` is not in that ledger before ship.
-- D2 adds `public.wine_regions` with the 17 current `/esplora` region names,
-  excluding the UI pseudo-value `Tutte`, and deterministic data-defined order.
-  A unique index on `lower(nome)` prevents logical case-insensitive duplicates.
-  `anon` and `authenticated` receive `SELECT` only through an explicit RLS
-  policy; no client write grant exists.
-- The migration changes only the two authorized legacy values: every exact
-  `Toscanaa` becomes `Toscana`; exact `ciao` becomes `Emilia-Romagna` only for
-  `slug = 'sabbioni-i-rifugi-2017'`. A residual-value gate aborts before the
-  constraint if any other noncanonical value exists.
-- `wines.regione` remains `text NOT NULL` and `wines_regione_idx` remains in
-  place. The foreign key to `wine_regions(nome)` is added `NOT VALID` and then
-  explicitly validated, with `ON UPDATE CASCADE` and `ON DELETE RESTRICT`.
-  Existing grants and RLS policies for `wines`, `bottle_units` and `listings`
-  are unchanged.
+  PostgreSQL 17. The repository's normal Supabase integration applied D2; the
+  production migration ledger contains version `20260826120000` exactly once.
+  No manual or alternative migration application was used.
+- `public.wine_regions` contains exactly the 17 current `/esplora` region names,
+  excluding the UI pseudo-value `Tutte`, in the defined `(ordine, nome)` order.
+  Its unique index on `lower(nome)` prevents logical case-insensitive
+  duplicates. `anon` and `authenticated` have public `SELECT` through the
+  explicit RLS policy and no client write grant.
+- Production contains 12 wines, all canonical: `Champagne` 1,
+  `Emilia-Romagna` 2, `Lombardia` 1, `Piemonte` 3 and `Toscana` 5. No `ciao`,
+  `Toscanaa` or other noncanonical value remains.
+- The two authorized production normalizations preserved identities and
+  relationships. `sabbioni-i-rifugi-2017` remains wine
+  `e1587ba1-69a1-47ec-9e79-e90f1429bad7`, now `Emilia-Romagna`, with bottle
+  `1b21d076-a05c-4bb9-ac59-3bdcc11827ae` and listings
+  `9d7494a6-a0e5-40a6-8d7f-1e72aa98386a` (`sospeso`) and
+  `00e4cb07-1a9d-446d-b5fc-f809e71e0ec5` (`attivo`). The QA wine remains
+  `8f1366e7-5f33-47a3-893f-2be684052f97`, now `Toscana`, with bottle
+  `0f6c66cb-0b2e-4a43-9451-b03dcefc1798` and zero listings.
+- `wines.regione` remains `text NOT NULL`; `wines_regione_idx` remains present;
+  `wines_regione_fkey` is validated with `ON UPDATE CASCADE` and `ON DELETE
+  RESTRICT`.
+- D2 contains no grant, policy or RLS alteration for `wines`, `bottle_units` or
+  `listings`. The disposable PostgreSQL 17 proof compared deterministic pre/post
+  table and column grants and complete RLS policy bodies and passed both
+  comparisons. The post-merge production schema shows the expected existing
+  policies and grants. This is no evidence claim of a retained privileged
+  production schema fingerprint from both before and after D2.
 - The authoritative `/vendi` chain remains `CellarService.aggiungiBottiglia()`
   -> `public.cellar_bottiglia_aggiungi()` ->
-  `private.catalogo_risolvi_vino_utente(...)`. The private writer now validates
-  the submitted region before reusing an existing wine, resolves outer
-  whitespace and case to the exact registry spelling, and raises readable
-  `P0001` for unknown values instead of exposing a raw FK/PostgreSQL error. Its
-  schema-qualified canonical helper has `search_path = ''` and is not
-  executable by `public`, `anon` or `authenticated`.
-- `WineRegionsService` is a minimal server/client-compatible read adapter. It
-  accepts an injected Supabase client, reads only `wine_regions`, orders by
-  `(ordine, nome)`, returns `Result<string[]>` and sanitizes failures. No Region
-  UI is connected: `/vendi`, `/esplora`, text search and AI suggestions remain
-  unchanged.
-- The fresh disposable PostgreSQL 17 proof applied the pre-D2 migration chain,
-  D2 fixtures and migration, then produced **25 PASSA / 0 FALLISCE**. It proved
-  the exact seed and order, duplicate prevention, fail-closed access, the two
-  authorized updates only, stable wine/bottle/listing IDs and relationships,
-  preserved listing history, the validated FK/index/nullability, canonical and
-  rejected writer paths, unchanged ACL/RLS, and a closed helper door. Cleanup
-  left zero fixture users, profiles, wines, bottle units, listings or orphan
-  price observations; the append-only guard was enabled. The grid was never run
-  in production.
-- The D2 targeted Bun 1.3.14 test produced **16 pass / 0 fail / 61 expect()
-  calls**. The full `frontend-next` suite produced **909 pass / 0 fail / 17,973
-  expect() calls** across 56 files, so CI `MIN_TESTS` and its source-contract
-  test are raised from 893 to the measured 909. Lint has zero errors and 13
-  pre-existing unrelated warnings; typecheck and build are clean.
-- The privileged read-only production precheck matched the Cabina snapshot
-  exactly: 12 wines distributed as `Champagne` 1, `ciao` 1,
-  `Emilia-Romagna` 1, `Lombardia` 1, `Piemonte` 3, `Toscana` 4 and
-  `Toscanaa` 1, with no additional nonmappable region. I Rifugi remains `ciao`
-  with one bottle unit and two listings; the QA wine remains `Toscanaa` with one
-  bottle unit and no listing. The local temporary dump used for this narrow
-  audit was deleted.
-- No production row was inserted, updated, deleted or recreated during BUILD or
-  pre-ship verification. No production fixture or migration application was
-  performed. No Region UI, provider, payment, payout, Phase 11 or Phase 13 work
-  was introduced. The unrelated `.wslconfig`, stash and other worktrees remain
-  excluded and untouched.
+  `private.catalogo_risolvi_vino_utente(...)`. It validates region before
+  existing-wine reuse, trims outer whitespace, canonicalizes case to registry
+  spelling and returns readable `P0001` for unknown values instead of raw
+  FK/PostgreSQL internals. The canonical helper remains private and unavailable
+  to client roles.
+- `WineRegionsService` is a minimal server/client-compatible read adapter. No
+  Region UI is connected: `/vendi`, `/esplora`, text search and AI suggestions
+  remain unchanged.
+- The fresh disposable PostgreSQL 17 proof produced **25 PASSA / 0 FALLISCE**
+  and cleaned every fixture and generated observation. The targeted Bun 1.3.14
+  suite produced **16 pass / 0 fail / 61 expect() calls**; the full
+  `frontend-next` suite produced **909 pass / 0 fail / 17,973 expect() calls**.
+  CI `MIN_TESTS` is 909. Lint had zero errors and 13 pre-existing unrelated
+  warnings; typecheck and build were clean.
+- No destructive grid or fixture ran in production. No manual production
+  insert, update or delete occurred; only the two authorized updates ran inside
+  the normal D2 integration. Read-only temporary production dumps used for
+  verification were deleted. The unrelated `.wslconfig`, stash and other
+  worktrees remain excluded and untouched.
+- Migration `supabase/migrations/20260826120000_wine_regions_canonical.sql` is
+  committed, merged and applied, so it is frozen. Any correction requires a new
+  timestamped migration.
 
 ## ACTIVE TASK
 
-- D2 — Region Canonical Data Foundation — VERIFY & SHIP
-- Branch `d2-region-canonical-foundation`, cut from and still based on
-  `origin/main` at `df5265d09fbec7723aab406187a828fa3854f653` before ship.
-- Intentional scope is migration `20260826120000`, its two-phase disposable SQL
-  proof, the read service and contract, D2 TypeScript tests, and the measured CI
-  test-floor alignment.
-- Ship requires a focused commit and PR, all triggered relevant checks green and
-  GitHub clean/mergeable, squash merge, then post-merge ledger/schema/data and
-  relationship verification through the normal deployment path. Git merge alone
-  does not prove production migration application.
+- D2 — Region Canonical Data Foundation — CLOSED after implementation, full
+  verification, PR #91 squash merge, normal production integration and
+  read-only post-merge verification.
+- No Region UI, provider, payment, payout, Phase 11 or Phase 13 implementation
+  is active.
 
 ## NEXT STEPS
 
@@ -85,12 +83,8 @@
 
 ## BLOCKERS / NOTES
 
-- No D2 code, disposable-database, production-precheck or local-validation
-  blocker remains before PR creation. D2 must still stop before merge if a
-  relevant check fails or GitHub is not clean/mergeable.
-- Do not manually apply D2 immediately after merge. First wait for and inspect
-  the repository's normal Supabase integration; use no alternative deployment
-  path unless the existing path is unequivocal.
+- No technical D2 blocker remains. The next gate is the Cabina audit and any
+  explicit approval of the separate Region UI work package.
 - Deferred readiness, not active roadmap: the payout scheduler is still neither
   authorized nor configured. External Price Intelligence providers,
   KYC/identity providers, SMTP and payments remain OFF.
