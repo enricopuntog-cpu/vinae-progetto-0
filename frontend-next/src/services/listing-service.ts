@@ -312,6 +312,53 @@ export function createListingService(client: SupabaseClient | null): ListingServ
     };
   };
 
+  /**
+   * Stessa struttura, stessa ragione: `mieiAnnunci()` conserva il collasso su
+   * `[]` per i consumer che quel collasso lo vogliono, `mieiAnnunciConEsito()`
+   * lascia distinguibili una lettura fallita e un elenco davvero vuoto. La
+   * query è una sola e resta una sola.
+   *
+   * Il filtro `seller_id` è esplicito e non delegato alla RLS, benché oggi
+   * `listings_select_own` dica esattamente la stessa cosa. La ragione è
+   * scritta nella 20260729230000: le policy di questa tabella sono destinate
+   * a crescere — la Fase 7 deve mostrare al compratore l'annuncio che sta
+   * riservando, la Fase 9 la coda di moderazione — e il giorno in cui una di
+   * quelle policy renderà raggiungibili righe altrui, una lista senza `eq`
+   * smetterebbe di essere «i miei annunci» senza che nessuna riga di questo
+   * file cambi. `seller_id` è nel GRANT per colonna di `authenticated`,
+   * quindi il filtro è eseguibile.
+   */
+  const leggiMieiAnnunci = async (): Promise<Result<AnnuncioProprietario[]>> => {
+    if (!client) return NESSUN_CLIENT;
+
+    // Stessa ragione di `mioAnnuncio`: `anon` non ha nessun grant su
+    // `public.listings`, quindi senza sessione la domanda tornerebbe `42501`
+    // e non un elenco vuoto. Nessuna sessione non è però un errore di lettura:
+    // è zero annunci, e i chiamanti sono comunque dietro una route autenticata.
+    const {
+      data: { user },
+    } = await client.auth.getUser();
+    if (!user) return { ok: true, data: [] };
+
+    const { data, error } = await client
+      .from("listings")
+      .select(COLONNE_PROPRIETARIO)
+      .eq("seller_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      segnalaErrore("mieiAnnunci", error);
+      return { ok: false, error: "Annunci non disponibili." };
+    }
+
+    return {
+      ok: true,
+      data: (data as unknown as RigaAnnuncioProprietario[])
+        .map(annuncioProprietarioDaRiga)
+        .filter((annuncio): annuncio is AnnuncioProprietario => annuncio !== null),
+    };
+  };
+
   return {
     async elenco(): Promise<Wine[]> {
       const esito = await leggiElenco();
@@ -452,36 +499,18 @@ export function createListingService(client: SupabaseClient | null): ListingServ
      * file cambi. `seller_id` è nel GRANT per colonna di `authenticated`,
      * quindi il filtro è eseguibile.
      *
-     * Errori ed elenco vuoto collassano entrambi su `[]`, come `elenco()`: una
-     * dashboard non ha un posto in cui mostrare un messaggio di PostgreSQL, e
-     * il dettaglio resta nei log.
+     * Errori ed elenco vuoto collassano entrambi su `[]`, come `elenco()`: la
+     * gestione annunci non ha un posto in cui mostrare un messaggio di
+     * PostgreSQL, e il dettaglio resta nei log. Chi invece userebbe quel vuoto
+     * come un numero — «annunci attivi: 0» — deve poter distinguere i due casi,
+     * e chiede `mieiAnnunciConEsito()`: stessa query, esito non collassato.
      */
     async mieiAnnunci(): Promise<AnnuncioProprietario[]> {
-      if (!client) return [];
-
-      // Stessa ragione di `mioAnnuncio`: `anon` non ha nessun grant su
-      // `public.listings`, quindi senza sessione la domanda tornerebbe `42501`
-      // e non un elenco vuoto.
-      const {
-        data: { user },
-      } = await client.auth.getUser();
-      if (!user) return [];
-
-      const { data, error } = await client
-        .from("listings")
-        .select(COLONNE_PROPRIETARIO)
-        .eq("seller_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        segnalaErrore("mieiAnnunci", error);
-        return [];
-      }
-
-      return (data as unknown as RigaAnnuncioProprietario[])
-        .map(annuncioProprietarioDaRiga)
-        .filter((annuncio): annuncio is AnnuncioProprietario => annuncio !== null);
+      const esito = await leggiMieiAnnunci();
+      return esito.ok ? esito.data : [];
     },
+
+    mieiAnnunciConEsito: leggiMieiAnnunci,
 
     /** bozza | modifiche_richieste → attivo. */
     async pubblica(id: string): Promise<Result<void>> {

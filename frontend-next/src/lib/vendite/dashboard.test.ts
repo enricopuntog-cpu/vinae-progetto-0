@@ -375,20 +375,33 @@ describe("la guardia di /vendite", () => {
 describe("mieiAnnunci", () => {
   const servizio = leggi("src/services/listing-service.ts");
 
+  // La query vive in `leggiMieiAnnunci`, condivisa fra `mieiAnnunci()` — che
+  // collassa l'errore su `[]` — e `mieiAnnunciConEsito()`, che lo lascia
+  // distinguibile per chi da quel vuoto ricaverebbe un numero da mostrare.
+  // Le due firme cambiano solo quello: la lettura sotto è una sola, ed è questa.
+  const corpo = servizio.slice(
+    servizio.indexOf("const leggiMieiAnnunci"),
+    servizio.indexOf("  return {", servizio.indexOf("const leggiMieiAnnunci")),
+  );
+
   it("filtra per seller_id invece di affidarsi alla sola RLS", () => {
-    const corpo = servizio.slice(
-      servizio.indexOf("async mieiAnnunci"),
-      servizio.indexOf("/** bozza | modifiche_richieste → attivo. */"),
-    );
     expect(corpo).toInclude('.eq("seller_id", user.id)');
   });
 
   it("non interroga la tabella senza sessione", () => {
-    const corpo = servizio.slice(servizio.indexOf("async mieiAnnunci"));
-    const guardia = corpo.indexOf("if (!user) return []");
+    const guardia = corpo.indexOf("if (!user) return");
     const query = corpo.indexOf('.from("listings")');
     expect(guardia).toBeGreaterThan(-1);
+    expect(query).toBeGreaterThan(-1);
     expect(guardia).toBeLessThan(query);
+  });
+
+  it("entrambe le firme escono da quell'unica lettura", () => {
+    // Se una delle due tornasse a interrogare per conto proprio, i due
+    // percorsi potrebbero divergere sul filtro del proprietario.
+    expect(servizio).toInclude("mieiAnnunciConEsito: leggiMieiAnnunci");
+    expect(servizio).toInclude("const esito = await leggiMieiAnnunci();");
+    expect(corpo).toInclude('.from("listings")');
   });
 
   it("chiede solo colonne che il GRANT per authenticated concede", () => {

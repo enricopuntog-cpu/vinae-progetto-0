@@ -41,6 +41,17 @@
   `3de888e5c6b5409492707f4be71d4e02be0750de`, verified on the remote default
   branch. The D8 Public User Profile UI Core is CLOSED; the route
   `/profilo/[id]` and its service are reused, not rebuilt.
+- PR #89, `Public Profile Identity & Entry Points`, was merged into `main` at
+  `662c33d158901309bf32eb87438a4015d39bcac9`, which is the current
+  `origin/main`. Public Profile Identity & Entry Points is CLOSED.
+- `/account` no longer renders the `Certificazioni` card. Its place is taken by
+  `Attività di vendita`, which reads `OrderService.vendite()` and
+  `ListingService.mieiAnnunci()` once each and derives its four measures from
+  `riepilogoVenditore()`, the same function behind the `/vendite` KPIs. The
+  fourth measure stays the frozen seller price of completed orders — not a
+  balance, an incasso or a payout. `profile_certifications`,
+  `my_certifications`, `vociCertificazione()` and the profile service are
+  unchanged; only an Account surface was replaced.
 - The avatar foundation (`risolviAvatarPersona` / `AvatarPersona`, photo →
   preset → silhouette, fail-closed) and the listing preview reused by the
   profile (`WineCard` list variant over `public_listings`) were already
@@ -53,54 +64,87 @@
 
 ## ACTIVE TASK
 
-### Public Profile Identity & Entry Points — VERIFY & SHIP
+### D1 — Account Seller Overview — VERIFY & SHIP
 
-- Branch `d8-public-profile-entry-points`, cut from `origin/main` at
-  `3de888e5c6b5409492707f4be71d4e02be0750de`, which had not advanced at verify
-  time. No migration, schema, RLS or production write.
-- Independent verification found and corrected one real defect: the listing
-  seller card still ended its avatar chain on `inizialiDa()`, which the closed
-  avatar foundation had already demoted — the documented order is photo →
-  preset → silhouette. The card now draws `AvatarPersona`. Because
-  `Wine.venditore.avatar` is an already recomposed URL, and feeding a URL back
-  to the resolver would silhouette even a genuine photo, `rigaAWine` now also
-  carries `venditore.avatarRef`, the safe reference produced by
-  `riferimentoAvatarSicuro`. The pre-existing `venditore.avatar` contract and
-  its `listing-avatar.test.ts` proof are unchanged. No new avatar logic, query
-  or projection was introduced.
-- `rigaProprietarioAWine` deliberately carries no `avatarRef`: its row has no
-  seller UUID and adding one would mean widening a projection. The owner's own
-  preview therefore falls to the silhouette instead of the broken relative
-  `<img>` it drew before — fail-closed, and still not a public entry point.
-- Listing detail, Messaggi and Club now reach `/profilo/[id]` using identifiers
-  the read models already carried: `public_listings.seller_id`,
-  `ConversationSummary.counterpart.userId`, `ClubPost.autoreId`,
-  `ClubPostRisposta.autoreId` and `Club.ownerId`. No new query, projection or
-  public-profile service was created.
-- `Wine.venditore.userId` is optional. `rigaAWine()` fills it from `seller_id`;
-  the demo `wines` data leaves it absent, so mock sellers produce no link
-  instead of an invented profile. The owner's own preview
-  (`rigaProprietarioAWine`) also leaves it absent and is not an entry point.
-- `seller_verificato` is neither read nor reinterpreted by the new links; the
-  professional-badge semantic stays out of scope and does not decide whether a
-  profile is reachable.
-- `ConversationHeader` and `ConversationList` now draw the counterpart avatar
-  through `AvatarPersona` with `proprietarioId = counterpart.userId`, replacing
-  a raw `<img>` over the client-writable `profiles.avatar_url`. The header
-  carries the profile links; the list stays a selector with no nested
-  interactive markup. The linked-listing image and link were already correct and
-  were left untouched.
-- Verification measured **28 pass / 0 fail** in
-  `src/lib/profilo/ingressi-profilo-pubblico.test.ts`, full `frontend-next` lint
-  at **0 errors / 11 warnings** — every warning pre-existing on `origin/main`,
-  with one `<img>` warning removed net — a clean `tsc --noEmit`, a successful
-  `bun run build` and a clean `git diff --check`. Browser smoke, DB grid,
-  backend and payout runs were deliberately not executed.
-- The pre-existing untracked `.wslconfig` remains excluded and untouched.
+- Branch `d1-account-seller-overview`, cut from `origin/main` at
+  `662c33d158901309bf32eb87438a4015d39bcac9`. No migration, schema, RLS,
+  production write, payment, payout or provider change.
+- The audit confirmed the five premises before any edit: `/vendite` already had
+  a real Seller Dashboard; it already used exactly one order read and one
+  listing read; `riepilogoVenditore()` already derived active listings, orders
+  awaiting the seller, completed sales and their value; that value is not a
+  balance, an incasso or a payout; `/account` still rendered `Certificazioni`.
+  The foundation was reused, not rebuilt.
+- New file `frontend-next/src/app/account/attivita-vendita.tsx`, an
+  Account-specific client component, colocated the way `app/vendi/
+  bottle-selector.tsx` already is. It performs the same two reads as `/vendite`
+  — `createOrderService(client).vendite()` and
+  `createListingService(client).mieiAnnunci()` — in one `Promise.all`, and
+  passes both to `riepilogoVenditore()`. There is no per-KPI query, no `.from()`
+  or `.rpc()` of its own, no `profiles` read and no duplicated KPI rule.
+- The four KPIs reuse the existing `Kpi` component and the dashboard's own
+  labels and hints, including `Prezzo venditore, non un incassato` for the
+  monetary one. No `Saldo`, `Disponibile`, `Incassato`, `Guadagno`, `Payout`,
+  `Balance`, `Credito` or `Prelievo` semantic was introduced.
+- Loading, zero and error are three distinct states. While the reads are in
+  flight nothing numeric is rendered, so no false zero is shown as if it were
+  data. Zero activity renders four real zeros and is a valid state. A failed
+  order read renders a compact generic sentence inside that section only and
+  does not expose the service message.
+- The section exists for any authenticated account. No role, no
+  `seller_verificato`, no certification and no listing count decides whether it
+  is shown.
+- The profile-editing module is untouched and cannot be broken by the section:
+  `page-client.tsx` imports neither service nor the dashboard module, holds no
+  state for those reads, and renders `<AttivitaVendita />` as a sibling card
+  after the form.
+- The old `Certificazioni` card, its `RigaCertificazione` row component and the
+  now-unused `vociCertificazione`, `VoceCertificazione`, `ShieldCheck` and
+  `Clock` imports were removed from the Account UI only. `certificazioni.ts`,
+  its tests, `my_certifications`, `profile_certifications` and the profile
+  service are unchanged. No professional badge or qualification surface was
+  created; Professional Qualifications remains a separate, out-of-scope work
+  package.
+- VERIFY found one real defect in the BUILD and corrected it.
+  `ListingService.mieiAnnunci()` deliberately collapses a failed read and a
+  genuinely empty list onto the same `[]`. That contract is right for the
+  listing-management surfaces, which show that emptiness; it is wrong as the
+  source of a *number*. The Account section consumed it directly, so a failed
+  listings read would have rendered `Annunci attivi 0 su 0` as a fact.
+- The correction reuses the pattern this same file already established for
+  `elenco()` / `elencoConEsito()`: one closure, `leggiMieiAnnunci`, holds the
+  single `from("listings")` query with its explicit `.eq("seller_id", user.id)`
+  filter; `mieiAnnunci()` keeps its historical collapse for existing consumers
+  and `mieiAnnunciConEsito()` returns the undecayed `Result`. No new query, no
+  direct query from the Account, no migration, no RLS change. `/vendite` still
+  calls `mieiAnnunci()` and its behaviour is unchanged.
+- The Account section now writes its KPI state only when *both* reads
+  succeeded, and shows its generic in-section message when either fails. No
+  PostgreSQL or PostgREST message reaches the page: a listings failure is
+  mediated as `Annunci non disponibili.` and the raw error stays in the logs.
+- The two `dashboard.test.ts` source assertions on `mieiAnnunci` were re-anchored
+  to `leggiMieiAnnunci`, preserving their intent — explicit `seller_id` filter,
+  session guard before the table query — and a third pins that both signatures
+  descend from that one read.
+- VERIFY measured **75 pass / 0 fail / 256 assertions** across
+  `app/account/attivita-vendita`, `lib/vendite/dashboard` and
+  `services/listing-avatar`; a clean `tsc --noEmit`; full `frontend-next` ESLint
+  at **0 errors / 13 warnings**, all pre-existing; and a clean
+  `git diff --check`. The full `frontend-next` build succeeded.
+- The complete suite measured **893 pass / 0 fail / 17912 assertions across 55
+  files** with Bun 1.3.14, identical on two consecutive runs. The CI
+  `MIN_TESTS` floor and the `prelaunch-contract` regression assertion were
+  raised together from **863** to **893**, and the suite was re-run green
+  against the raised floor.
+- Browser smoke, Supabase grids, backend and payout runs were deliberately not
+  executed: this work package changes no schema, no policy and no production
+  state.
+- The pre-existing untracked `.wslconfig`, the pre-existing stash and the other
+  worktrees remain excluded and untouched.
 
 ## NEXT STEPS
 
-1. Cabina: audit finale e chiusura del Public Profile Identity & Entry Points.
+1. Cabina: audit finale e chiusura D1 Account Seller Overview.
 2. Cabina: selezione del successivo WORK PACKAGE dalla ROADMAP ATTIVA.
 3. Eseguire soltanto il successivo BUILD approvato dalla Cabina.
 
