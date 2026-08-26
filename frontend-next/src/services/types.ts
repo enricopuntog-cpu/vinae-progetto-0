@@ -455,6 +455,12 @@ export interface ListingService extends ListingReadService {
    * propaga, come `elenco()`.
    */
   mieiAnnunci(): Promise<import("./listing-service").AnnuncioProprietario[]>;
+  /**
+   * La stessa lettura di `mieiAnnunci()`, con l'esito ancora distinguibile.
+   * Serve a chi trasformerebbe quel `[]` in un numero mostrato — un conteggio
+   * di annunci attivi — dove un errore di lettura diventerebbe uno zero falso.
+   */
+  mieiAnnunciConEsito(): Promise<Result<import("./listing-service").AnnuncioProprietario[]>>;
   aggiorna(id: string, dati: Partial<DatiModificaAnnuncio>): Promise<Result<void>>;
   pubblica(id: string): Promise<Result<void>>;
   sospendi(id: string, motivo?: string): Promise<Result<void>>;
