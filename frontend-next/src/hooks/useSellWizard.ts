@@ -6,6 +6,7 @@ import { firmaUploadFoto, riusaFotoDellaBottiglia } from "@/app/vendi/actions";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { createCellarService } from "@/services/cellar-service";
 import { createListingService } from "@/services/listing-service";
+import { creaWineRegionsService } from "@/services/wine-regions-service";
 import { createSupabaseAiService } from "@/services/phase10/supabase-ai-service";
 import { campiDaSuggerimento } from "@/lib/phase10/catalogazione";
 import {
@@ -210,6 +211,59 @@ export function useSellWizard({
   const supabase = useMemo(() => getSupabaseClient(), []);
   const listingService = useMemo(() => createListingService(supabase), [supabase]);
   const cellarService = useMemo(() => createCellarService(supabase), [supabase]);
+  const wineRegionsService = useMemo(() => creaWineRegionsService(supabase), [supabase]);
+
+  // Il registro distingue quattro stati: un successo vuoto non è un errore, ma
+  // nessuno dei due può abilitare la scelta. La promise nel ref garantisce una
+  // sola lettura per visita anche quando React riesegue l'effetto in sviluppo:
+  // ogni setup si collega alla stessa richiesta invece di crearne una seconda.
+  const [regioni, setRegioni] = useState<
+    | { stato: "non_richiesto" }
+    | { stato: "caricamento" }
+    | { stato: "disponibili"; nomi: string[] }
+    | { stato: "vuoto" }
+    | { stato: "errore"; messaggio: string }
+  >(daCantina ? { stato: "non_richiesto" } : { stato: "caricamento" });
+  const richiestaRegioni = useRef<ReturnType<typeof wineRegionsService.elenco> | null>(null);
+
+  useEffect(() => {
+    if (daCantina) return;
+
+    richiestaRegioni.current ??= wineRegionsService.elenco();
+    let attivo = true;
+
+    void richiestaRegioni.current
+      .then((esito) => {
+        if (!attivo) return;
+        if (!esito.ok) {
+          setRegioni({ stato: "errore", messaggio: esito.error });
+        } else if (esito.data.length === 0) {
+          setRegioni({ stato: "vuoto" });
+        } else {
+          setRegioni({ stato: "disponibili", nomi: esito.data });
+        }
+      })
+      .catch((errore: unknown) => {
+        console.error("[vendi] lettura regioni fallita:", errore);
+        if (attivo) {
+          setRegioni({
+            stato: "errore",
+            messaggio: "Non è stato possibile leggere l'elenco delle regioni.",
+          });
+        }
+      });
+
+    return () => {
+      attivo = false;
+    };
+  }, [daCantina, wineRegionsService]);
+
+  const regioniCanoniche = useMemo(
+    () => (regioni.stato === "disponibili" ? regioni.nomi : []),
+    [regioni],
+  );
+  const regioneValida = daCantina || regioniCanoniche.includes(d.regione);
+
   const aiService = useMemo(
     () =>
       AI_UI.catalogazione && AZIONI_IA_ABILITATE
@@ -260,9 +314,12 @@ export function useSellWizard({
 
   const applicaSuggerimento = useCallback(() => {
     if (!aiSuggerimento) return;
-    setD((s) => ({ ...s, ...campiDaSuggerimento(aiSuggerimento, s) }));
+    setD((s) => ({
+      ...s,
+      ...campiDaSuggerimento(aiSuggerimento, s, regioniCanoniche),
+    }));
     toast.success("Suggerimenti AI applicati");
-  }, [aiSuggerimento]);
+  }, [aiSuggerimento, regioniCanoniche]);
 
   const isVendita = modalita === "vendita";
 
@@ -381,7 +438,22 @@ export function useSellWizard({
   const passiVisibili = steps.length - primoPasso;
   const numeroPasso = step - primoPasso + 1;
   const progress = (numeroPasso / passiVisibili) * 100;
-  const next = useCallback(() => setStep((s) => Math.min(steps.length - 1, s + 1)), [steps.length]);
+  /**
+   * Il passo si riconosce dal nome, non da un indice: i due elenchi hanno
+   * lunghezze diverse e un passo aggiunto prima di questo sposterebbe in
+   * silenzio il guard su una schermata che non ha una Regione.
+   */
+  const suIdentificazione = steps[step] === "Identificazione";
+  // Il guard sta fuori dall'updater di `setStep`: un updater deve essere puro,
+  // e React lo riesegue in sviluppo — un `toast` al suo interno comparirebbe
+  // due volte.
+  const next = useCallback(() => {
+    if (suIdentificazione && !regioneValida) {
+      toast.error("Scegli una Regione dall'elenco prima di continuare.");
+      return;
+    }
+    setStep((corrente) => Math.min(steps.length - 1, corrente + 1));
+  }, [regioneValida, suIdentificazione, steps.length]);
   const prev = useCallback(() => setStep((s) => Math.max(primoPasso, s - 1)), [primoPasso]);
 
   const caricaFoto = useCallback(async (file: File) => {
@@ -598,6 +670,9 @@ export function useSellWizard({
     isVendita,
     d,
     set,
+    regioni,
+    regioneValida,
+    suIdentificazione,
     impostaPrezzo,
     smartPrice,
     smartPriceInCorso,

@@ -202,12 +202,18 @@ describe("D2 — la fondazione che il servizio legge", () => {
   // Il pacchetto UI successivo deve trovare nel registro tutto cio che
   // `/esplora` gia oggi sa filtrare: se un nome sparisse, un filtro esistente
   // smetterebbe di avere corrispondenze senza che nulla lo segnali.
-  it("il seed copre le regioni gia sostenute da /esplora, escluso Tutte", () => {
-    const elencoEsplora = ESPLORA.match(/const regioni = \[([\s\S]*?)\];/);
-    expect(elencoEsplora).not.toBeNull();
-    const nomi = [...elencoEsplora![1].matchAll(/"([^"]+)"/g)]
-      .map((m) => m[1])
-      .filter((nome) => nome !== "Tutte");
+  it("il seed copre le 17 regioni canoniche che /esplora filtra", () => {
+    // La migrazione è il seed unico. /esplora non cablista più nomi: legge dal
+    // registro tramite WineRegionsService. Il vincolo qui è che i 17 nomi
+    // sostenuti dal vecchio array siano tutti presenti nel seed: se un nome
+    // sparisse, un filtro esistente smetterebbe di avere corrispondenze senza
+    // che nulla lo segnali.
+    const nomi = [
+      "Piemonte", "Toscana", "Veneto", "Sicilia", "Friuli-Venezia Giulia",
+      "Trentino-Alto Adige", "Abruzzo", "Emilia-Romagna", "Lombardia",
+      "Campania", "Puglia", "Marche", "Umbria", "Liguria", "Sardegna",
+      "Lazio", "Champagne",
+    ];
     expect(nomi.length).toBe(17);
     for (const nome of nomi) expect(SQL).toContain(`('${nome}'`);
     // `Tutte` non e una regione e non deve essere seminata.
@@ -225,11 +231,45 @@ describe("D2 — la fondazione che il servizio legge", () => {
 describe("D2 — cio che questa fondazione non tocca", () => {
   // Il selettore, il filtro e la traduzione AI sono il pacchetto dopo. Qui si
   // fissa il confine: la fondazione e collegabile, non collegata.
-  it("nessun consumatore e stato cablato", () => {
-    expect(ESPLORA).not.toContain("wine-regions-service");
-    expect(WIZARD).not.toContain("wine-regions-service");
-    // Il campo del wizard resta libero finche il selettore non esiste.
-    expect(WIZARD).toContain("regione: d.regione.trim()");
+  it("/vendi e /esplora usano WineRegionsService e non interrogano wine_regions direttamente", () => {
+    // /esplora pagina server
+    const esploraServer = leggi("src/app/esplora/page.tsx");
+    expect(esploraServer).toContain("creaWineRegionsService");
+    expect(esploraServer).not.toContain('.from("wine_regions")');
+    // /esplora pagina client
+    expect(ESPLORA).not.toContain('.from("wine_regions")');
+    // /vendi wizard
+    expect(WIZARD).toContain("creaWineRegionsService");
+    expect(WIZARD).not.toContain('.from("wine_regions")');
+  });
+
+  // Il `.trim()` in `datiBottiglia()` resta ed e corretto: normalizza, non apre
+  // una porta. La porta era il campo libero, e quella e chiusa qui — il valore
+  // puo entrare solo da una voce del registro.
+  it("/vendi non ha piu un campo Regione a testo libero", () => {
+    const vendiClient = leggi("src/app/vendi/page-client.tsx");
+    expect(vendiClient).toContain('onValueChange={set("regione")}');
+    expect(vendiClient).not.toMatch(/<Input[^>]*value=\{d\.regione\}/);
+    expect(vendiClient).not.toContain('set("regione")(e.target.value)');
+  });
+
+  it("/vendi non include Tutte nel selettore e rende Region obbligatoria", () => {
+    const vendiClient = leggi("src/app/vendi/page-client.tsx");
+    expect(vendiClient).not.toContain('"Tutte"');
+    // Il selettore è disabilitato finché il registro non è letto con successo
+    expect(vendiClient).toContain("disabled={regioni.stato !== \"disponibili\"}");
+    // La navigazione blocca senza Region canonica
+    expect(vendiClient).toContain("regioneValida");
+    expect(WIZARD).toContain("regioneValida");
+  });
+
+  it("/esplora mantiene Tutte solo come pseudo-valore UI e non dal registro", () => {
+    expect(ESPLORA).toContain("REGIONE_TUTTE");
+    expect(ESPLORA).toContain('risolviRegioneIniziale');
+    expect(ESPLORA).not.toContain('const regioni = [');
+    // Il filtro "Tutte" è solo UI: non arriva dal server
+    const esploraServer = leggi("src/app/esplora/page.tsx");
+    expect(esploraServer).not.toContain('"Tutte"');
   });
 
   it("la migrazione non allarga privilegi o policy delle tabelle esistenti", () => {

@@ -45,14 +45,33 @@ const tipoAmmesso = (valore: string): boolean =>
  * 1800–2100 o `null` (`supabase/functions/ai-catalogo/index.ts`), e un `null`
  * lascia il campo com'era.
  */
+const regioneCanonicaDaSuggerimento = (
+  suggerita: string,
+  regioniCanoniche: readonly string[],
+): string | null => {
+  const normalizzata = suggerita.trim().toLocaleLowerCase("it-IT");
+  if (!normalizzata) return null;
+
+  return (
+    regioniCanoniche.find(
+      (regione) => regione.trim().toLocaleLowerCase("it-IT") === normalizzata,
+    ) ?? null
+  );
+};
+
 export const campiDaSuggerimento = (
   suggerimento: CatalogazioneSuggerimento,
   correnti: CampiIdentificazione,
+  regioniCanoniche: readonly string[],
 ): CampiIdentificazione => ({
   produttore: suggerimento.produttore || correnti.produttore,
   nome: suggerimento.nome || correnti.nome,
   annata: suggerimento.annata ? String(suggerimento.annata) : correnti.annata,
-  regione: suggerimento.regione || correnti.regione,
+  // Il modello non è una fonte canonica: solo un match esatto dopo trim/case
+  // entra nel campo, usando l'ortografia restituita dal registro. Refusi,
+  // traduzioni e alias non vengono corretti né interpretati.
+  regione:
+    regioneCanonicaDaSuggerimento(suggerimento.regione, regioniCanoniche) ?? correnti.regione,
   tipo: tipoAmmesso(suggerimento.tipologia) ? suggerimento.tipologia : correnti.tipo,
   storia: suggerimento.noteDegustazione || correnti.storia,
   conservazione: suggerimento.condizioniSuggerite || correnti.conservazione,

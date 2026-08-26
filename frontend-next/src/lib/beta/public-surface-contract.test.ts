@@ -50,8 +50,10 @@ describe("superfici pubbliche della beta", () => {
     const pagina = leggi("src/app/esplora/page.tsx");
     const catalogo = leggi("src/app/esplora/page-client.tsx");
     expect(landing).toInclude("/esplora?regione=");
-    expect(pagina).toInclude('initialRegion={regione ?? "Tutte"}');
-    expect(catalogo).toInclude("regioni.includes(initialRegion)");
+    // Il valore grezzo della query attraversa server e client per la
+    // validazione canonica. Non viene più pre-impostato a "Tutte" sul server.
+    expect(pagina).toInclude("initialRegion={regione}");
+    expect(catalogo).toInclude("risolviRegioneIniziale");
   });
 
   // Fase 12a. Questo blocco sostituisce "rende irraggiungibile la community

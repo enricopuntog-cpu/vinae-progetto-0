@@ -87,6 +87,9 @@ export default function VendiPageClient() {
     isVendita,
     d,
     set,
+    regioni,
+    regioneValida,
+    suIdentificazione,
     impostaPrezzo,
     smartPrice,
     smartPriceInCorso,
@@ -491,12 +494,40 @@ export default function VendiPageClient() {
                   placeholder="Es. 2019"
                 />
               </Field>
-              <Field label="Regione">
-                <Input
-                  value={d.regione}
-                  onChange={(e) => set("regione")(e.target.value)}
-                  placeholder="Es. Toscana"
-                />
+              <Field label="Regione (obbligatoria)">
+                <Select
+                  value={d.regione || undefined}
+                  onValueChange={set("regione")}
+                  disabled={regioni.stato !== "disponibili"}
+                >
+                  <SelectTrigger aria-label="Regione" aria-required="true">
+                    <SelectValue
+                      placeholder={
+                        regioni.stato === "caricamento"
+                          ? "Caricamento regioni…"
+                          : "Scegli una Regione"
+                      }
+                    />
+                  </SelectTrigger>
+                  {regioni.stato === "disponibili" ? (
+                    <SelectContent>
+                      {regioni.nomi.map((regione) => (
+                        <SelectItem key={regione} value={regione}>
+                          {regione}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  ) : null}
+                </Select>
+                {regioni.stato === "caricamento" ? (
+                  <p className="text-[11px] text-muted-foreground">Carico il registro delle regioni…</p>
+                ) : regioni.stato === "vuoto" ? (
+                  <p className="text-[11px] text-destructive">
+                    Il registro delle regioni è vuoto. Non puoi continuare per ora.
+                  </p>
+                ) : regioni.stato === "errore" ? (
+                  <p className="text-[11px] text-destructive">{regioni.messaggio}</p>
+                ) : null}
               </Field>
               <Field label="Tipologia">
                 <Select value={d.tipo} onValueChange={set("tipo")}>
@@ -656,7 +687,11 @@ export default function VendiPageClient() {
             </Button>
           )}
           {step < steps.length - 1 ? (
-            <Button className="bg-bordeaux hover:bg-bordeaux/90" onClick={next}>
+            <Button
+              className="bg-bordeaux hover:bg-bordeaux/90"
+              onClick={next}
+              disabled={suIdentificazione && !regioneValida}
+            >
               Continua <ArrowRight className="h-4 w-4" />
             </Button>
           ) : (
