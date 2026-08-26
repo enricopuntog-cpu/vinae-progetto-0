@@ -135,6 +135,61 @@ export type RiferimentoRichieste =
       massimoCents: number;
     };
 
+export type ConfrontoRiferimento = {
+  posizione: "sopra" | "sotto" | "uguale";
+  /** Scarto assoluto, sempre positivo o zero. */
+  scartoCents: number;
+  /** Scarto percentuale con segno: negativo sotto, positivo sopra. */
+  scartoPercentuale: number;
+};
+
+export type PosizioneRange = "sotto" | "dentro" | "sopra";
+
+const prezzoValido = (prezzoCents: number): boolean =>
+  Number.isFinite(prezzoCents) && prezzoCents > 0;
+
+/**
+ * Confronta il prezzo richiesto con un riferimento già sostenuto dalla soglia.
+ *
+ * La percentuale segue `(prezzo - mediana) / mediana * 100`. Un prezzo o una
+ * mediana non positivi o non finiti non producono un confronto parziale: il
+ * chiamante riceve `null` e la superficie non mostra né scarto né percentuale.
+ */
+export const confrontoRiferimento = (
+  prezzoRichiestoCents: number,
+  riferimento: RiferimentoRichieste,
+): ConfrontoRiferimento | null => {
+  if (!riferimento.disponibile) return null;
+  if (!prezzoValido(prezzoRichiestoCents) || !prezzoValido(riferimento.medianaCents)) return null;
+
+  const differenza = prezzoRichiestoCents - riferimento.medianaCents;
+  const scartoPercentuale = (differenza / riferimento.medianaCents) * 100;
+  if (!Number.isFinite(scartoPercentuale)) return null;
+
+  return {
+    posizione: differenza > 0 ? "sopra" : differenza < 0 ? "sotto" : "uguale",
+    scartoCents: Math.abs(differenza),
+    scartoPercentuale: Object.is(scartoPercentuale, -0) ? 0 : scartoPercentuale,
+  };
+};
+
+export const posizioneNelRange = (
+  prezzoRichiestoCents: number,
+  riferimento: RiferimentoRichieste,
+): PosizioneRange | null => {
+  if (!riferimento.disponibile) return null;
+  if (
+    !prezzoValido(prezzoRichiestoCents) ||
+    !prezzoValido(riferimento.minimoCents) ||
+    !prezzoValido(riferimento.massimoCents)
+  ) {
+    return null;
+  }
+  if (prezzoRichiestoCents < riferimento.minimoCents) return "sotto";
+  if (prezzoRichiestoCents > riferimento.massimoCents) return "sopra";
+  return "dentro";
+};
+
 /**
  * Il riferimento sulle richieste correnti, o l'ammissione che non c'è.
  *
@@ -304,7 +359,11 @@ export const dominioTemporale = (punti: readonly { t: number }[]): [number, numb
 export type VistaPriceIntelligence = {
   /** Il formato analizzato, come va mostrato. */
   formato: string;
+  prezzoRichiestoCents: number;
   riferimento: RiferimentoRichieste;
+  confronto: ConfrontoRiferimento | null;
+  posizioneRange: PosizioneRange | null;
+  comparabiliMancanti: number;
   copertura: Copertura;
   variazione: UltimaVariazione | null;
   richieste: PuntoStorico[];
@@ -333,6 +392,7 @@ export const componiVista = (input: {
   annunciAttivi: readonly AnnuncioComparabile[];
   wineKey: string;
   formato: string;
+  prezzoRichiestoCents: number;
   osservazioni: readonly WinePriceObservation[];
   storicoNonDisponibile?: boolean;
 }): VistaPriceIntelligence => {
@@ -340,13 +400,18 @@ export const componiVista = (input: {
     wineKey: input.wineKey,
     formato: input.formato,
   });
+  const riferimento = riferimentoRichieste(comparabili);
 
   const richieste = puntiStorico(input.osservazioni, "richiesta");
   const vendite = puntiStorico(input.osservazioni, "vendita");
 
   return {
     formato: input.formato,
-    riferimento: riferimentoRichieste(comparabili),
+    prezzoRichiestoCents: input.prezzoRichiestoCents,
+    riferimento,
+    confronto: confrontoRiferimento(input.prezzoRichiestoCents, riferimento),
+    posizioneRange: posizioneNelRange(input.prezzoRichiestoCents, riferimento),
+    comparabiliMancanti: Math.max(0, SOGLIA_COMPARABILI - comparabili.length),
     copertura: copertura(comparabili.length),
     variazione: ultimaVariazione(input.osservazioni),
     richieste,

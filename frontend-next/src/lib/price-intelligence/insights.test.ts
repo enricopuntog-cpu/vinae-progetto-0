@@ -3,9 +3,11 @@ import {
   chiaveVino,
   comparabiliAttivi,
   componiVista,
+  confrontoRiferimento,
   copertura,
   dominioTemporale,
   medianaCents,
+  posizioneNelRange,
   puntiStorico,
   riferimentoRichieste,
   SOGLIA_COMPARABILI,
@@ -195,6 +197,58 @@ describe("riferimentoRichieste", () => {
   });
 });
 
+describe("confronto del prezzo richiesto", () => {
+  const riferimento = riferimentoRichieste([
+    annuncio("a", 100_000),
+    annuncio("b", 110_000),
+    annuncio("c", 120_000),
+  ]);
+
+  it("confronta con la mediana e classifica il range senza clamp", () => {
+    expect(confrontoRiferimento(122_000, riferimento)).toEqual({
+      posizione: "sopra",
+      scartoCents: 12_000,
+      scartoPercentuale: (12_000 / 110_000) * 100,
+    });
+    expect(confrontoRiferimento(102_000, riferimento)).toEqual({
+      posizione: "sotto",
+      scartoCents: 8_000,
+      scartoPercentuale: (-8_000 / 110_000) * 100,
+    });
+    expect(confrontoRiferimento(110_000, riferimento)).toEqual({
+      posizione: "uguale",
+      scartoCents: 0,
+      scartoPercentuale: 0,
+    });
+
+    expect(posizioneNelRange(99_999, riferimento)).toBe("sotto");
+    expect(posizioneNelRange(100_000, riferimento)).toBe("dentro");
+    expect(posizioneNelRange(115_000, riferimento)).toBe("dentro");
+    expect(posizioneNelRange(120_001, riferimento)).toBe("sopra");
+
+    const insufficiente = riferimentoRichieste([annuncio("a", 100_000)]);
+    expect(confrontoRiferimento(100_000, insufficiente)).toBeNull();
+    expect(posizioneNelRange(100_000, insufficiente)).toBeNull();
+
+    for (const prezzo of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(confrontoRiferimento(prezzo, riferimento)).toBeNull();
+      expect(posizioneNelRange(prezzo, riferimento)).toBeNull();
+    }
+
+    for (const medianaCents of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(
+        confrontoRiferimento(100_000, {
+          disponibile: true,
+          comparabili: 3,
+          medianaCents,
+          minimoCents: 90_000,
+          massimoCents: 110_000,
+        }),
+      ).toBeNull();
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Copertura dati
 // ---------------------------------------------------------------------------
@@ -368,28 +422,27 @@ describe("componiVista", () => {
   const base = {
     wineKey: VINO,
     formato: FORMATO,
+    prezzoRichiestoCents: 110_000,
     annunciAttivi: [] as AnnuncioComparabile[],
     osservazioni: [] as WinePriceObservation[],
   };
 
-  it("con una sola osservazione mostra il punto e dichiara lo storico in formazione", () => {
-    const vista = componiVista({ ...base, osservazioni: [osservazione()] });
-    expect(vista.richieste).toHaveLength(1);
-    expect(vista.storicoInFormazione).toBe(true);
-    expect(vista.dominio).not.toBeNull();
-    expect(vista.riferimento.disponibile).toBe(false);
-  });
+  it("distingue uno storico in formazione da uno con più osservazioni", () => {
+    const unaOsservazione = componiVista({ ...base, osservazioni: [osservazione()] });
+    expect(unaOsservazione.richieste).toHaveLength(1);
+    expect(unaOsservazione.storicoInFormazione).toBe(true);
+    expect(unaOsservazione.dominio).not.toBeNull();
+    expect(unaOsservazione.riferimento.disponibile).toBe(false);
 
-  it("con due osservazioni lo storico non è più in formazione", () => {
-    const vista = componiVista({
+    const dueOsservazioni = componiVista({
       ...base,
       osservazioni: [
         osservazione({ observedAt: "2026-08-01T10:00:00.000Z" }),
         osservazione({ observedAt: "2026-08-05T10:00:00.000Z", prezzoCents: 120_000 }),
       ],
     });
-    expect(vista.storicoInFormazione).toBe(false);
-    expect(vista.variazione?.variazionePct).toBeCloseTo(1.7, 5);
+    expect(dueOsservazioni.storicoInFormazione).toBe(false);
+    expect(dueOsservazioni.variazione?.variazionePct).toBeCloseTo(1.7, 5);
   });
 
   it("le vendite si contano e si disegnano ma NON spostano il riferimento", () => {
@@ -434,6 +487,9 @@ describe("componiVista", () => {
     expect(vista.osservazioniRichiesta).toBe(5);
     expect(vista.comparabili).toBe(1);
     expect(vista.riferimento.disponibile).toBe(false);
+    expect(vista.confronto).toBeNull();
+    expect(vista.posizioneRange).toBeNull();
+    expect(vista.comparabiliMancanti).toBe(2);
     expect(vista.copertura.livello).toBe("in_formazione");
   });
 
@@ -453,6 +509,9 @@ describe("componiVista", () => {
     expect(vista.dominio).toBeNull();
     if (!vista.riferimento.disponibile) throw new Error("atteso un riferimento");
     expect(vista.riferimento.medianaCents).toBe(110_000);
+    expect(vista.confronto).toEqual({ posizione: "uguale", scartoCents: 0, scartoPercentuale: 0 });
+    expect(vista.posizioneRange).toBe("dentro");
+    expect(vista.comparabiliMancanti).toBe(0);
     expect(vista.copertura.livello).toBe("bassa");
   });
 

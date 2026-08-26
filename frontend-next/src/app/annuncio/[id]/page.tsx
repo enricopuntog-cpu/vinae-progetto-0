@@ -116,6 +116,7 @@ export default async function Page({
     })),
     wineKey,
     formato: daMostrare.formato,
+    prezzoRichiestoCents: Math.round(daMostrare.prezzo * 100),
     osservazioni: storico.ok ? storico.data : [],
     storicoNonDisponibile: !storico.ok,
   });
