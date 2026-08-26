@@ -6,13 +6,10 @@
   `frontend-next/` beta is separate and is not the Phase 13 cutover.
 - D1 Account Seller Overview is CLOSED. PR #90 was merged into `main` at
   `df5265d09fbec7723aab406187a828fa3854f653`, the D2 BUILD baseline.
-- D2 Region Canonical Data Foundation is CLOSED. Feature commit
-  `a5f7055d4a6922fa75889db1128d9db5aefb08d9` was pushed without force in PR
-  #91, which was clean and mergeable before its squash merge. `origin/main`
-  contains the D2 squash commit `9586405bce40bc3f3b84f3e51b4cafd38b33c17d`.
-- Every triggered PR check was inspected. Relevant checks passed; the neutral
-  Netlify `Pages changed` check reported four uploaded assets and no generated
-  page. Post-merge CI run `32947745913` completed successfully.
+- D2 Region Canonical Data Foundation is CLOSED. `origin/main` contains its
+  squash commit `9586405bce40bc3f3b84f3e51b4cafd38b33c17d` from PR #91.
+- D2 Region Sell + Explore + Search + AI is CLOSED. PR #93 was merged into
+  `main` at `68282dc4d0205964403bfe87b704690990c3797a`, the D5 BUILD baseline.
 - Production project ref `pijnmcllmfgjmgsvtcej` is `ACTIVE_HEALTHY` on
   PostgreSQL 17. The repository's normal Supabase integration applied D2; the
   production migration ledger contains version `20260826120000` exactly once.
@@ -95,46 +92,101 @@
 
 ## ACTIVE TASK
 
-- D2 — Region Sell + Explore + Search + AI — VERIFY & SHIP, on branch
-  `d2-region-product-integration`, created from `origin/main` at
-  `359fb47d58844a0d38dbe1d81699e253052c971a`. `origin/main` had not advanced at
-  VERIFY time, so the branch merge-base is still that baseline.
-- VERIFY found and corrected one concrete defect in the BUILD diff. `next()` in
-  `useSellWizard` ran `toast.error` inside the `setStep` updater, which React
-  re-executes in development, so the block message would have appeared twice.
-  The guard now sits outside the updater, which stays pure. The same change
-  removed the hardcoded step index `2` from the hook and from
-  `/vendi/page-client.tsx`: the guarded step is now recognised by its name
-  (`Identificazione`), because the two step lists have different lengths and a
-  step inserted earlier would have moved the guard onto a screen without a
-  Region.
-- Full validation, all executed: `bun run test` produced **929 pass / 0 fail /
-  18,012 expect() calls across 57 files**; `bun run typecheck` was clean;
-  `bun run lint` reported **0 errors and 13 pre-existing unrelated warnings**,
-  none in a touched file; `bun run build` completed; `git diff --check` was
-  clean. No DB grid, production audit, backend or payout run was needed: this
-  task changes no database object.
-- CI `MIN_TESTS` was raised from 909 to the measured **929**, in
-  `.github/workflows/ci.yml` and in the contract that pins it,
+- D5 — Auth Entry Flow: Google + Login + Magic Link + Safe Redirects — VERIFY &
+  SHIP, on branch `d5-auth-entry-flow`, created from `origin/main` at
+  `68282dc4d0205964403bfe87b704690990c3797a`. `origin/main` had not advanced at
+  verification time, so that commit is also the branch merge-base.
+- Auth errors now have one closed application vocabulary, in the new pure module
+  `frontend-next/src/lib/auth/errori-auth.ts`: eleven codes, one Italian message
+  each, plus `classificaErroreAuth` for Supabase failures and
+  `classificaErroreProvider` for an OAuth return. No provider or Supabase text
+  reaches the user any more. `auth-service.ts` returns a code instead of
+  `error.message`, and the previous "not configured" string that named the two
+  environment variables and their file is gone.
+- `/auth/callback` stays server-side and keeps `exchangeCodeForSession`, the
+  server-resolved public origin and the relative-redirect guard. Its five
+  returns are unchanged in shape; what travels in the redirect is now only
+  `?errore=<codice>`. The technical detail goes to `console.error`
+  `[auth/callback]` on the server and is never serialized into the URL.
+- The flow remembers where it started. `/accedi` and `/registrati` declare their
+  own `superficie`, it travels in the validated `redirectTo` query and the
+  callback returns to `PERCORSO_SUPERFICIE_AUTH[superficie]`, so a Google error
+  begun on `/registrati` no longer lands on `/accedi`.
+- There is one destination contract, not a second one: `PARAMETRO_NEXT`, always
+  relative and always validated by the existing `percorsoRelativoSicuro`, with
+  `/home` as fallback. Absolute, protocol-relative and malformed values are
+  dropped. Password login, magic link and the OAuth round trip share it, and
+  `/vendite` now asks to come back to itself through it. No cookie, no
+  `localStorage`, no trust in an absolute URL from the browser.
+- `/accedi` distinguishes which operation is running (`"password" |
+  "magic-link" | null`) instead of one shared boolean, and the Google button
+  owns its own start state. Each gesture has its own error slot and clears only
+  its own; an error still named in the URL is discarded on the next attempt, so
+  it cannot reappear later. No operation can start twice, and a failure releases
+  the control for an immediate retry. Google reads `Continua con Google` on
+  `/accedi` and `Registrati con Google` on `/registrati`.
+- An authenticated visitor still sees no active form and is not redirected
+  automatically; the proposed destination is the requested `next` and logout
+  stays available.
+- Every private gate that stops a visitor now also says where to bring them
+  back. `/vendite` already did; VERIFY added the same shape to `/account`,
+  `/cantina`, `/completa-profilo` and `/vendi`, each with its own written
+  destination and never one deduced from incoming data. `/checkout/[id]` was
+  deliberately left as it was: its destination is dynamic and reconstructing it
+  from the route id could send the visitor to the wrong listing. `/home` was
+  left alone because its `next` would be the fallback itself.
+- The audit of the BUILD diff found no concrete defect in the error, redirect,
+  coordination, AgeGate or Facebook confirmations, so nothing was corrected
+  under that heading; the entry-point gap above is the only functional change
+  VERIFY added.
+- Twenty-two files changed inside `frontend-next/`: nineteen modified plus three
+  new (`src/lib/auth/errori-auth.ts` and the two test files
+  `src/lib/auth/errori-auth.test.ts` and `src/lib/auth/flusso-ingresso.test.ts`).
+  Outside `frontend-next/` the change set is `.github/workflows/ci.yml` and
+  `CHANGES.log`.
+- Full validation, all executed: the targeted `bun test src/lib/auth/` produced
+  **93 pass / 0 fail / 479 expect() calls across 4 files**; the full
+  `frontend-next` suite produced **989 pass / 0 fail / 18,379 expect() calls
+  across 59 files**; `bun run lint` reported zero errors and 13 pre-existing
+  unrelated warnings; `bun run typecheck` and `bun run build` were clean;
+  `git diff --check` was clean. `/accedi`, `/registrati`, `/account`,
+  `/cantina`, `/completa-profilo` and `/vendi` still prerender static;
+  `/auth/callback` and `/vendite` stay dynamic.
+- CI `MIN_TESTS` was raised from **929** to the measured **989**, in
+  `.github/workflows/ci.yml` and in the contract assertion that mirrors it in
   `src/lib/beta/prelaunch-contract.test.ts`.
-- Twelve files changed in total: ten modified plus the two new files in
-  `frontend-next/src/lib/esplora/`. Outside `frontend-next/` the change set is
-  only `CHANGES.log` and the `MIN_TESTS` line in `.github/workflows/ci.yml`.
-  No migration, schema, FK, RLS or grant was touched; no production write ran;
-  no Edge Function, provider, AI prompt or feature flag was modified.
-- D2 Region Canonical Data Foundation remains CLOSED, with PR #91 and
-  production migration ledger version `20260826120000` verified. That migration
-  is distributed and frozen and was not reopened.
+- The Supabase Redirect URLs allowlist was re-measured read-only before ship,
+  with the non-mutating `GET /auth/v1/verify` probe on project
+  `pijnmcllmfgjmgsvtcej`: the plain callback, the callback with `?next=...` and
+  the callback with `?superficie=...&next=...` were each echoed back verbatim
+  with the query preserved, while an `evil.example.com` control fell back to the
+  Site URL. The wildcard is in place and the query-carrying `redirectTo` is not
+  silently rewritten.
+- No migration, schema, RLS, grant or production write. No Supabase, Google
+  Console, environment or provider change. Facebook stays absent, the D4
+  AgeGate/DOB path is untouched, no legal consent is inferred from a Google
+  click and the Google-plus-password model stays undecided.
 
 ## NEXT STEPS
 
-1. Cabina: audit finale e chiusura completa D2.
-2. Cabina: selezione del successivo WORK PACKAGE dalla ROADMAP ATTIVA.
-3. Eseguire soltanto il successivo BUILD approvato dalla Cabina.
+1. Cabina: audit finale e chiusura D5.
+2. Cabina: selezione del prossimo WORK PACKAGE.
+3. Eseguire soltanto il prossimo BUILD approvato.
 
 ## BLOCKERS / NOTES
 
 - No technical D2 blocker remains.
+- The two D5 items left open at BUILD are closed by measurement: the test floor
+  is now 989, and the Supabase Redirect URLs wildcard
+  `https://timely-lokum-43a12e.netlify.app/**` was re-measured on 26 Aug 2026
+  and still accepts the query-carrying callback. That wildcard remains a
+  dependency: if it were removed, Supabase would fall back to the Site URL in
+  silence rather than reject the redirect, so any change to it must be
+  re-measured with the same read-only probe.
+- Two product decisions stay open and were not taken inside D5: whether a click
+  on Google constitutes legal consent (and how it would be versioned and
+  stored), and whether a Google account can also gain a password or a dedicated
+  recovery path.
 - Two hardcoded region lists survive outside this task's scope, in
   `src/data/onboarding.ts` and the landing `src/app/page-client.tsx`. They are
   pre-existing, were not touched, and do not feed `/vendi`, `/esplora`, search

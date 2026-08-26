@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
 import VenditePageClient from "./page-client";
 
 export const metadata: Metadata = {
@@ -13,14 +14,18 @@ export const metadata: Metadata = {
 /**
  * Dove va chi arriva su `/vendite` senza sessione.
  *
- * `/accedi` nudo, senza `?next=`: nel repository quella convenzione **non
- * esiste** su questa pagina. `percorsoRelativoSicuro` la implementa, ma solo per
- * `/auth/callback`, cioè per i flussi che tornano con un `code` da scambiare;
- * `/accedi` dopo il login manda sempre a `/home` (`accedi/page-client.tsx`).
- * Inventarne una qui vorrebbe dire aggiungere un parametro che nessuno legge, e
- * un redirect che sembra funzionare e non funziona è peggio di uno onesto.
+ * Con `?next=/vendite`, da D5. Prima il parametro non c'era, e per una ragione
+ * buona: `/accedi` non lo leggeva, e un redirect che sembra funzionare e non
+ * funziona è peggio di uno onesto. Ora lo leggono `/accedi`, `/registrati` e
+ * `/auth/callback` — è lo stesso valore, validato dalla stessa
+ * `percorsoRelativoSicuro` in tutti e tre — quindi chi viene rimandato da qui
+ * torna qui: con la password, con il magic link o con Google.
+ *
+ * È scritto per esteso e non ricavato dall'URL della richiesta: la
+ * destinazione è nota staticamente, e dedurla da un dato in arrivo aprirebbe
+ * una porta che non serve a nessuno.
  */
-const PERCORSO_ACCESSO = "/accedi";
+const PERCORSO_ACCESSO = `/accedi?${PARAMETRO_NEXT}=%2Fvendite`;
 
 /**
  * Privata come la Cantina e come `/acquisti`: senza sessione non c'è nulla da

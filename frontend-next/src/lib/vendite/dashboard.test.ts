@@ -327,18 +327,23 @@ describe("la guardia di /vendite", () => {
     // senza sessione produceva il proprio errore. Una pagina privata che si
     // presenta come rotta invece che come chiusa.
     expect(senzaCommenti).toInclude('from "next/navigation"');
-    expect(senzaCommenti).toInclude('const PERCORSO_ACCESSO = "/accedi"');
+    expect(senzaCommenti).toInclude("const PERCORSO_ACCESSO = ");
     expect(senzaCommenti).toInclude("redirect(PERCORSO_ACCESSO)");
   });
 
-  it("non inventa un `?next=`, perche' /accedi non lo legge", () => {
-    // `percorsoRelativoSicuro` esiste, ma la convenzione vale per
-    // /auth/callback: dopo il login /accedi manda sempre a /home. Un parametro
-    // che nessuno legge sarebbe un redirect che sembra funzionare e non
-    // funziona.
-    expect(senzaCommenti).not.toInclude("next=");
-    expect(senzaCommenti).not.toInclude("percorsoRelativoSicuro");
-    expect(leggi("src/app/accedi/page-client.tsx")).not.toInclude("percorsoRelativoSicuro");
+  it("chiede il ritorno qui con `?next=`, ora che /accedi lo legge davvero", () => {
+    // Il contratto precedente era l'opposto — e aveva ragione allora: /accedi
+    // mandava sempre a /home, quindi un `?next=` sarebbe stato un parametro
+    // che nessuno legge. Da D5 lo leggono /accedi, /registrati e la callback,
+    // validandolo con la stessa `percorsoRelativoSicuro`, quindi il ritorno
+    // qui e' reale e va chiesto.
+    expect(senzaCommenti).toInclude("PARAMETRO_NEXT");
+    expect(senzaCommenti).toInclude("%2Fvendite");
+    // La destinazione e' scritta, non dedotta dall'URL in arrivo.
+    expect(senzaCommenti).not.toInclude("request");
+    const accedi = leggi("src/app/accedi/page-client.tsx");
+    expect(accedi).toInclude("percorsoRelativoSicuro");
+    expect(accedi).toInclude("router.push(destinazione)");
   });
 
   it("chiude anche il ramo in cui Supabase non e' configurato", () => {

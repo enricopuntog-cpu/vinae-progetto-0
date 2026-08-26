@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Check, Mail, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,10 +11,37 @@ import { ConsentCheckbox } from "@/components/vinea/ConsentCheckbox";
 import { SocialAuthButtons } from "@/components/vinea/SocialAuthButtons";
 import { useVinea } from "@/lib/vinea-store";
 import { isMaggiorenne } from "@/lib/age";
+import { percorsoRelativoSicuro } from "@/lib/auth/origine-redirect";
+import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
+import {
+  codiceErroreAuth,
+  messaggioErroreAuth,
+  type CodiceErroreAuth,
+} from "@/lib/auth/errori-auth";
 
+/**
+ * Superficie di registrazione. Vale qui la stessa divisione di /accedi: il
+ * form email/password e il giro social sono due gesti, e ognuno mostra il
+ * proprio errore accanto al proprio pulsante.
+ *
+ * Chi si registra con Google non dichiara qui la data di nascita — non ce
+ * n'è una da chiedere prima di aprire il provider. Il profilo può nascere con
+ * `dob` vuoto e sono AgeGate e /completa-profilo a occuparsene, esattamente
+ * come prima di D5: qui non si duplica quel controllo.
+ */
 export default function RegistratiPageClient() {
   const router = useRouter();
-  const { authUser, authLoading, authError, authRegistra, authLogin, authLogout } = useVinea();
+  const { authUser, authLoading, authRegistra, authLogin, authLogout } = useVinea();
+
+  const parametri = useSearchParams();
+  /** Stesso contratto di /accedi: relativo, validato, altrimenti assente. */
+  const next = percorsoRelativoSicuro(parametri.get(PARAMETRO_NEXT));
+  const destinazione = next ?? "/home";
+  const parametroErrore = parametri.get("errore");
+  const erroreRitorno = parametroErrore ? codiceErroreAuth(parametroErrore) : null;
+  const erroreSocialIniziale =
+    erroreRitorno && erroreRitorno.startsWith("oauth-") ? erroreRitorno : null;
+  const erroreRitornoNonSocial = erroreRitorno && !erroreSocialIniziale ? erroreRitorno : null;
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -27,7 +54,10 @@ export default function RegistratiPageClient() {
   const [terms, setTerms] = useState(false);
   const [maggiorenne, setMaggiorenne] = useState(false);
   const [inCorso, setInCorso] = useState(false);
+  const [erroreRegistrazione, setErroreRegistrazione] = useState<CodiceErroreAuth | null>(null);
   const [confermaEmail, setConfermaEmail] = useState(false);
+  const [ritornoScartato, setRitornoScartato] = useState(false);
+  const ritornoDaMostrare = ritornoScartato ? null : erroreRitornoNonSocial;
 
   const aggiornaDob = (value: string) => {
     setDob(value);
@@ -49,22 +79,35 @@ export default function RegistratiPageClient() {
     terms &&
     maggiorenne;
 
+  const percorsoAccesso = next
+    ? `/accedi?${PARAMETRO_NEXT}=${encodeURIComponent(next)}`
+    : "/accedi";
+
   const invia = async () => {
+    if (inCorso) return;
     if (!valid) return;
+    setRitornoScartato(true);
+    setErroreRegistrazione(null);
     setInCorso(true);
-    const esito = await authRegistra({
-      email: email.trim(),
-      password,
-      dataNascita: dob,
-      username: username.trim(),
-    });
+    const esito = await authRegistra(
+      {
+        email: email.trim(),
+        password,
+        dataNascita: dob,
+        username: username.trim(),
+      },
+      // La conferma via email rientra da /auth/callback: se l'utente stava
+      // andando da qualche parte, quel percorso viaggia con il link.
+      { superficie: "registrati", next },
+    );
     if (!esito.ok) {
       setInCorso(false);
+      setErroreRegistrazione(esito.error);
       return;
     }
     if (esito.data.sessioneAttiva) {
       setInCorso(false);
-      router.push("/home");
+      router.push(destinazione);
       return;
     }
     if (esito.data.confermaEmailRichiesta) {
@@ -77,7 +120,7 @@ export default function RegistratiPageClient() {
     // credenziali appena inserite invece di mostrare un'attesa inesistente.
     const accesso = await authLogin(email.trim(), password);
     setInCorso(false);
-    router.push(accesso.ok ? "/home" : "/accedi");
+    router.push(accesso.ok ? destinazione : percorsoAccesso);
   };
 
   if (authLoading) {
@@ -100,9 +143,9 @@ export default function RegistratiPageClient() {
           </p>
           <div className="mt-5 flex flex-col gap-2 sm:flex-row">
             <Button asChild className="bg-bordeaux hover:bg-bordeaux/90">
-              <Link href="/home">Vai alla Home</Link>
+              <Link href={destinazione}>{next ? "Continua" : "Vai alla Home"}</Link>
             </Button>
-            <Button variant="outline" onClick={() => authLogout()}>
+            <Button variant="outline" data-testid="logout" onClick={() => authLogout()}>
               Esci
             </Button>
           </div>
@@ -127,7 +170,7 @@ export default function RegistratiPageClient() {
             </p>
           </div>
           <Button asChild className="mt-5 bg-bordeaux hover:bg-bordeaux/90">
-            <Link href="/accedi">Vai all&apos;accesso</Link>
+            <Link href={percorsoAccesso}>Vai all&apos;accesso</Link>
           </Button>
         </div>
       </div>
@@ -141,6 +184,16 @@ export default function RegistratiPageClient() {
         <p className="mt-2 text-sm text-muted-foreground">
           Ti serve un&apos;email valida: riceverai un link di conferma prima di poter accedere.
         </p>
+
+        {ritornoDaMostrare && (
+          <p
+            role="alert"
+            data-testid="errore-ritorno"
+            className="mt-4 rounded-xl border border-bordeaux/30 bg-bordeaux/5 p-3 text-sm text-bordeaux"
+          >
+            {messaggioErroreAuth(ritornoDaMostrare)}
+          </p>
+        )}
 
         <div className="mt-5 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -160,7 +213,10 @@ export default function RegistratiPageClient() {
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setErroreRegistrazione(null);
+                }}
                 placeholder="nome@esempio.it"
                 autoComplete="email"
               />
@@ -171,7 +227,10 @@ export default function RegistratiPageClient() {
                 id="password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setErroreRegistrazione(null);
+                }}
                 placeholder="almeno 6 caratteri"
                 autoComplete="new-password"
               />
@@ -212,15 +271,21 @@ export default function RegistratiPageClient() {
             questa fase.
           </p>
 
-          {authError && (
-            <p className="rounded-xl border border-bordeaux/30 bg-bordeaux/5 p-3 text-sm text-bordeaux">
-              {authError}
+          {erroreRegistrazione && (
+            <p
+              role="alert"
+              data-testid="errore-registrazione"
+              className="rounded-xl border border-bordeaux/30 bg-bordeaux/5 p-3 text-sm text-bordeaux"
+            >
+              {messaggioErroreAuth(erroreRegistrazione)}
             </p>
           )}
 
           <Button
             onClick={invia}
             disabled={!valid || inCorso}
+            aria-busy={inCorso}
+            data-testid="crea-account"
             className="w-full bg-bordeaux hover:bg-bordeaux/90 sm:w-auto"
           >
             {inCorso ? (
@@ -232,11 +297,16 @@ export default function RegistratiPageClient() {
             )}
           </Button>
 
-          <SocialAuthButtons etichetta="oppure registrati con" />
+          <SocialAuthButtons
+            etichetta="oppure registrati con"
+            superficie="registrati"
+            next={next}
+            erroreIniziale={erroreSocialIniziale}
+          />
 
           <p className="text-sm text-muted-foreground">
             Hai già un account?{" "}
-            <Link href="/accedi" className="text-bordeaux hover:underline">
+            <Link href={percorsoAccesso} className="text-bordeaux hover:underline">
               Accedi
             </Link>
             .

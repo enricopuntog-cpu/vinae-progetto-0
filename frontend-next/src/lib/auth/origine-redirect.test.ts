@@ -320,11 +320,13 @@ describe("la route di callback usa l'origine risolta e mai quella della richiest
   });
 
   it("copre tutti e cinque i rientri della route, non il solo successo", () => {
+    // I quattro rami d'errore nominano ora un codice del vocabolario
+    // applicativo, non il testo che avevano ricevuto: vedi lib/auth/errori-auth.
     for (const ramo of [
-      "errore=${encodeURIComponent(errorDescription)}",
-      "Callback senza codice di autorizzazione.",
-      "Supabase non configurato su questo ambiente.",
-      "errore=${encodeURIComponent(error.message)}",
+      "classificaErroreProvider(",
+      'vaiAErrore("callback-senza-codice")',
+      'vaiAErrore("configurazione-assente")',
+      'vaiAErrore("scambio-non-riuscito"',
       "return vaiA(destinazione);",
     ]) {
       expect(sorgenteRoute).toInclude(ramo);

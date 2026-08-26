@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useVinea } from "@/lib/vinea-store";
+import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
 import { esperienzaLabels, type Esperienza } from "@/data/onboarding";
 import {
   CATALOGO_AVATAR,
@@ -194,7 +195,13 @@ export default function AccountPageClient() {
             Il profilo è personale: accedi per vederlo e modificarlo.
           </p>
           <Button asChild className="mt-5 bg-bordeaux hover:bg-bordeaux/90">
-            <Link href="/accedi">Vai all&apos;accesso</Link>
+            {/*
+              Con `?next=`: chi è stato fermato qui torna qui dopo l'accesso,
+              con la password, con il magic link o con Google. Il percorso è
+              scritto per esteso perché è noto staticamente — stessa forma e
+              stessa ragione di /vendite.
+            */}
+            <Link href={`/accedi?${PARAMETRO_NEXT}=%2Faccount`}>Vai all&apos;accesso</Link>
           </Button>
         </div>
       </div>

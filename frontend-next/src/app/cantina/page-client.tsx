@@ -44,6 +44,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { wineImages } from "@/lib/wine-images";
+import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
 import {
   SHAPE_LABELS,
   THEME_LABELS,
@@ -166,7 +167,12 @@ function Cantina() {
           aperta.
         </p>
         <Button asChild className="bg-bordeaux hover:bg-bordeaux/90">
-          <Link href="/registrati">Crea un account</Link>
+          {/*
+            Con `?next=`: la registrazione, la conferma via email e il giro
+            Google riportano tutti qui, invece di lasciare l'utente sulla Home
+            dopo essersi appena creato l'account per vedere la cantina.
+          */}
+          <Link href={`/registrati?${PARAMETRO_NEXT}=%2Fcantina`}>Crea un account</Link>
         </Button>
       </div>
     );

@@ -3,12 +3,20 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useVinea } from "@/lib/vinea-store";
+import { messaggioErroreAuth, type CodiceErroreAuth } from "@/lib/auth/errori-auth";
+import type { SuperficieAuth } from "@/lib/auth/ritorno-auth";
 import type { OAuthProvider } from "@/services/types";
 
 /**
- * Pulsanti di accesso social (Fase 5b), condivisi da /registrati e /accedi:
- * con OAuth registrazione e accesso sono lo stesso gesto, cambia solo
- * l'etichetta introduttiva.
+ * Pulsanti di accesso social (Fase 5b), condivisi da /registrati e /accedi.
+ *
+ * Con OAuth registrazione e accesso sono lo stesso gesto tecnico, ma non sono
+ * la stessa promessa: chi è su /registrati sta creando un account, chi è su
+ * /accedi sta rientrando nel suo. Fino a D5 il pulsante diceva "Google" a
+ * entrambi e la differenza viveva solo nel testo del separatore sopra — cioè
+ * nell'unica parte che si legge per ultima. Ora l'etichetta la decide
+ * `superficie`, che è lo stesso valore che accompagna il giro dal provider e
+ * riporta un eventuale errore sulla pagina giusta.
  *
  * Nessun Client ID o Secret qui: vivono solo nella dashboard Supabase, il
  * codice nomina soltanto il provider.
@@ -53,17 +61,57 @@ function GoogleIcon() {
 // provider viene riattivato (vedi commento sopra). Ultima versione nel
 // controllo versione di questo file.
 
-export function SocialAuthButtons({ etichetta }: { etichetta: string }) {
+/** L'etichetta dice che cosa sta per succedere, non quale marchio si apre. */
+const ETICHETTA_GOOGLE: Record<SuperficieAuth, string> = {
+  accedi: "Continua con Google",
+  registrati: "Registrati con Google",
+};
+
+export function SocialAuthButtons({
+  etichetta,
+  superficie,
+  next,
+  erroreIniziale = null,
+}: {
+  /** Testo del separatore sopra i pulsanti. */
+  etichetta: string;
+  /** Pagina che ospita i pulsanti: decide copy e ritorno d'errore. */
+  superficie: SuperficieAuth;
+  /** Destinazione richiesta dall'utente, già validata dalla pagina. */
+  next?: string | null;
+  /**
+   * Errore di un tentativo social **precedente**, riportato dalla callback
+   * nell'URL. Vive qui e non nel riquadro del form perché è di questo gesto:
+   * un fallimento di Google mostrato sotto il campo password è un errore che
+   * accusa la cosa sbagliata.
+   */
+  erroreIniziale?: CodiceErroreAuth | null;
+}) {
   const { authAccediConOAuth } = useVinea();
-  const [inCorso, setInCorso] = useState<OAuthProvider | null>(null);
+  const [avvio, setAvvio] = useState<OAuthProvider | null>(null);
+  const [errore, setErrore] = useState<CodiceErroreAuth | null>(null);
+  /**
+   * L'errore che arriva dall'URL appartiene al tentativo di prima. Resta finché
+   * l'utente non ne comincia un altro, e da quel momento non torna: `scartato`
+   * è ciò che impedisce a un errore superato di riapparire perché il parametro
+   * nell'indirizzo, quello, è ancora lì.
+   */
+  const [scartato, setScartato] = useState(false);
+  const daMostrare = errore ?? (scartato ? null : erroreIniziale);
 
   const avvia = async (provider: OAuthProvider) => {
-    setInCorso(provider);
-    const esito = await authAccediConOAuth(provider);
+    if (avvio) return;
+    setScartato(true);
+    setErrore(null);
+    setAvvio(provider);
+    const esito = await authAccediConOAuth(provider, { superficie, next });
     // In caso di successo il browser sta già navigando verso il provider, non
     // c'è nulla da ripristinare. Se è fallito, riabilitiamo i pulsanti così
-    // l'errore mostrato dalla pagina è azionabile.
-    if (!esito.ok) setInCorso(null);
+    // il retry è immediato e l'errore mostrato è azionabile.
+    if (!esito.ok) {
+      setErrore(esito.error);
+      setAvvio(null);
+    }
   };
 
   return (
@@ -74,16 +122,27 @@ export function SocialAuthButtons({ etichetta }: { etichetta: string }) {
         <span className="h-px flex-1 bg-border" />
       </div>
 
+      {daMostrare && (
+        <p
+          role="alert"
+          data-testid="errore-oauth"
+          className="rounded-xl border border-bordeaux/30 bg-bordeaux/5 p-3 text-sm text-bordeaux"
+        >
+          {messaggioErroreAuth(daMostrare)}
+        </p>
+      )}
+
       <div className="grid gap-2">
         <Button
           variant="outline"
           onClick={() => avvia("google")}
-          disabled={inCorso !== null}
+          disabled={avvio !== null}
+          aria-busy={avvio === "google"}
           data-testid="oauth-google"
           className="w-full"
         >
           <GoogleIcon />
-          {inCorso === "google" ? "Apertura Google…" : "Google"}
+          {avvio === "google" ? "Apertura Google…" : ETICHETTA_GOOGLE[superficie]}
         </Button>
       </div>
     </div>

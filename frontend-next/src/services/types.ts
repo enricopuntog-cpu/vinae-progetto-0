@@ -25,6 +25,8 @@ import type {
   WineVintageMeta,
 } from "@/data/cellar";
 import type { Wine } from "@/data/wines";
+import type { CodiceErroreAuth } from "@/lib/auth/errori-auth";
+import type { ContestoRitornoAuth } from "@/lib/auth/ritorno-auth";
 
 export type Result<T, E = string> = { ok: true; data: T } | { ok: false; error: E };
 
@@ -32,6 +34,16 @@ export type Result<T, E = string> = { ok: true; data: T } | { ok: false; error: 
 // Google e Facebook aggiunti in Fase 5b. Client ID/Secret vivono solo nella
 // dashboard Supabase: qui si nomina soltanto il provider.
 export type OAuthProvider = "google" | "facebook";
+
+/**
+ * Il canale d'errore dei flussi di ingresso porta un **codice** e non un testo
+ * (D5). Prima portava `error.message` di Supabase, che le pagine mostravano
+ * così com'era: inglese, tecnico, e a volte con dettagli di configurazione
+ * dentro. Il codice si valida e non trasporta nulla; le parole le sceglie
+ * `lib/auth/errori-auth`. Restano `string` soltanto i canali che nessuna
+ * superficie mostra all'utente, come `ruoliProfilo`.
+ */
+export type ResultAuth<T> = Result<T, CodiceErroreAuth>;
 
 export interface AuthService {
   /**
@@ -47,23 +59,30 @@ export interface AuthService {
    *   "controlla la posta" sarebbe fuorviante e bloccherebbe l'utente su uno
    *   schermo che aspetta un'email che non arriverà mai.
    */
-  registra(input: {
-    email: string;
-    password: string;
-    dataNascita: string;
-    username: string;
-  }): Promise<Result<{ userId: string; sessioneAttiva: boolean; confermaEmailRichiesta: boolean }>>;
-  verificaEmail(tokenHash: string): Promise<Result<void>>;
-  login(email: string, password: string): Promise<Result<{ userId: string }>>;
-  inviaMagicLink(email: string): Promise<Result<void>>;
+  registra(
+    input: {
+      email: string;
+      password: string;
+      dataNascita: string;
+      username: string;
+    },
+    contesto?: ContestoRitornoAuth,
+  ): Promise<ResultAuth<{ userId: string; sessioneAttiva: boolean; confermaEmailRichiesta: boolean }>>;
+  verificaEmail(tokenHash: string): Promise<ResultAuth<void>>;
+  login(email: string, password: string): Promise<ResultAuth<{ userId: string }>>;
+  inviaMagicLink(email: string, contesto?: ContestoRitornoAuth): Promise<ResultAuth<void>>;
   /**
    * Avvia il flusso OAuth. Non ritorna una sessione: il browser viene
    * reindirizzato al provider e rientra su /auth/callback, che completa lo
    * scambio del code. Un esito `ok` significa solo "redirect avviato".
+   *
+   * `contesto` è ciò che deve sopravvivere al giro dal provider — superficie di
+   * partenza e destinazione richiesta — e viaggia nel `redirectTo`, l'unico
+   * canale che il provider ci restituisce. Vedi `lib/auth/ritorno-auth`.
    */
-  accediConOAuth(provider: OAuthProvider): Promise<Result<void>>;
-  signInWithGoogle(): Promise<Result<void>>;
-  signInWithFacebook(): Promise<Result<void>>;
+  accediConOAuth(provider: OAuthProvider, contesto?: ContestoRitornoAuth): Promise<ResultAuth<void>>;
+  signInWithGoogle(contesto?: ContestoRitornoAuth): Promise<ResultAuth<void>>;
+  signInWithFacebook(contesto?: ContestoRitornoAuth): Promise<ResultAuth<void>>;
   logout(): Promise<void>;
   utenteCorrente(): Promise<{ userId: string; email: string | null } | null>;
   /** Ruoli della sola riga corrente, filtrati dalla RLS su `user_roles`. */
