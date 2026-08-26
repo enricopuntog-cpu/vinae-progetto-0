@@ -2,46 +2,104 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { percorsoRelativoSicuro } from "@/lib/auth/origine-redirect";
+import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
 import { useVinea } from "@/lib/vinea-store";
 
 /**
- * Guardia di dichiarazione età.
- *
- * REGOLA UNIVERSALE, non specifica di un metodo di accesso: qualunque
- * sessione autenticata il cui profilo non ha una data di nascita salvata
- * viene rimandata a /completa-profilo prima di poter usare il resto del
- * sito. Non si guarda mai come l'utente è entrato — email, magic link,
- * Google o Facebook sono trattati allo stesso modo. L'accesso social è
- * semplicemente il caso in cui la cosa capita più spesso, perché salta il
- * form email e con esso il banner età, ma non è l'unico contemplato: dopo
- * che `profiles.dob` è diventata annullabile, un profilo email privo di
- * data ricade nella stessa guardia.
- *
- * Volutamente NON blocca gli utenti anonimi: la navigazione da ospite resta
- * quella di sempre, come nelle fasi precedenti.
+ * Guardia universale sul profilo autenticato. Gli ospiti navigano come prima;
+ * una sessione, invece, passa soltanto dopo una lettura riuscita della riga
+ * completa. Attesa ed errore coprono il contenuto, senza query locali.
  */
+const PERCORSI_CONSENTITI = [
+  "/completa-profilo",
+  "/accedi",
+  "/registrati",
+  "/auth",
+  "/legale",
+];
 
-// Percorsi raggiungibili anche con il profilo incompleto: la schermata di
-// completamento stessa, e le pagine di autenticazione (altrimenti non si
-// potrebbe uscire o rientrare con un altro account).
-const PERCORSI_CONSENTITI = ["/completa-profilo", "/accedi", "/registrati", "/auth"];
+const percorsoConsentito = (pathname: string) =>
+  PERCORSI_CONSENTITI.some((percorso) =>
+    pathname === percorso || pathname.startsWith(`${percorso}/`),
+  );
 
 export function AgeGate() {
   const pathname = usePathname();
   const router = useRouter();
-  const { authUser, authLoading, authStatoEta } = useVinea();
+  const {
+    authUser,
+    authLoading,
+    authStatoEta,
+    authRicaricaProfilo,
+    authLogout,
+  } = useVinea();
+  const consentito = percorsoConsentito(pathname);
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!authUser) return;
-    // "sconosciuto" copre sia la lettura non ancora conclusa sia un errore di
-    // lettura: in entrambi i casi non blocchiamo l'utente su un dato che non
-    // abbiamo verificato.
-    if (authStatoEta !== "da_completare") return;
-    if (PERCORSI_CONSENTITI.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return;
+    if (authLoading || !authUser || consentito || authStatoEta !== "da_completare") return;
 
-    router.replace("/completa-profilo");
-  }, [authUser, authLoading, authStatoEta, pathname, router]);
+    const next = percorsoRelativoSicuro(pathname) ?? "/home";
+    router.replace(`/completa-profilo?${PARAMETRO_NEXT}=${encodeURIComponent(next)}`);
+  }, [authUser, authLoading, authStatoEta, consentito, pathname, router]);
 
-  return null;
+  // Le route pubbliche necessarie restano disponibili anche mentre Supabase
+  // risolve la sessione. Altrove, finché non sappiamo se il visitatore è un
+  // ospite o un utente autenticato, il contenuto resta coperto: altrimenti una
+  // sessione persistita vedrebbe per un istante una pagina protetta.
+  if (consentito) return null;
+
+  if (authLoading) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="fixed inset-0 z-50 grid place-items-center bg-background/95 p-4"
+      >
+        <p className="rounded-2xl border border-border bg-card px-5 py-4 text-sm text-muted-foreground shadow-lg">
+          Verifica dell&apos;accesso…
+        </p>
+      </div>
+    );
+  }
+
+  if (!authUser || authStatoEta === "completo") return null;
+
+  if (authStatoEta === "errore_lettura") {
+    return (
+      <div
+        role="alert"
+        aria-live="assertive"
+        className="fixed inset-0 z-50 grid place-items-center bg-background/95 p-4"
+      >
+        <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-xl">
+          <h2 className="font-serif text-2xl">Non riusciamo a verificare il tuo profilo.</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Riprova la lettura oppure esci dall&apos;account.
+          </p>
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+            <Button onClick={() => void authRicaricaProfilo()} className="bg-bordeaux hover:bg-bordeaux/90">
+              Riprova
+            </Button>
+            <Button variant="outline" onClick={() => void authLogout()}>
+              Esci
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed inset-0 z-50 grid place-items-center bg-background/95 p-4"
+    >
+      <p className="rounded-2xl border border-border bg-card px-5 py-4 text-sm text-muted-foreground shadow-lg">
+        Verifica del profilo…
+      </p>
+    </div>
+  );
 }

@@ -1,19 +1,15 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 
 /**
  * Riga di consenso esplicito: spunta + testo, usata per i consensi
  * privacy/termini e per la dichiarazione di maggiore età.
  *
- * Estratta perché lo stesso markup era ripetuto inline in /registrati (due
- * volte) e in /completa-profilo: averlo in un posto solo evita che le tre
- * copie divergano fra loro, cosa che su un consenso conta più che su un
- * bottone qualsiasi.
- *
- * Non impone nulla sulla logica di validazione: chi la usa decide se e come
- * il consenso sblocca l'azione successiva.
+ * Il testo descrive la spunta tramite `aria-labelledby`, ma non è un `<label>`
+ * che contiene i link: seguire Termini o Privacy non può quindi cambiare lo
+ * stato del consenso.
  */
 export function ConsentCheckbox({
   checked,
@@ -29,22 +25,21 @@ export function ConsentCheckbox({
   icon?: ReactNode;
   testId?: string;
 }) {
+  const idTesto = useId();
+
   return (
-    <label className="flex items-start gap-2 text-sm">
+    <div className="flex items-start gap-2 text-sm">
       <Checkbox
         checked={checked}
         onCheckedChange={(v) => onCheckedChange(v === true)}
         className="mt-0.5"
         data-testid={testId}
+        aria-labelledby={idTesto}
       />
-      {icon ? (
-        <span className="flex items-center gap-1">
-          {icon}
-          {children}
-        </span>
-      ) : (
-        <span>{children}</span>
-      )}
-    </label>
+      <span id={idTesto} className={icon ? "flex items-center gap-1" : undefined}>
+        {icon}
+        {children}
+      </span>
+    </div>
   );
 }

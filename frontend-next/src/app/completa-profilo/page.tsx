@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import CompletaProfiloPageClient from "./page-client";
 
 export const metadata: Metadata = {
@@ -8,5 +9,17 @@ export const metadata: Metadata = {
 };
 
 export default function Page() {
-  return <CompletaProfiloPageClient />;
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-2xl">
+          <div className="rounded-3xl border border-border bg-card p-5 md:p-8">
+            <p className="text-sm text-muted-foreground">Caricamento…</p>
+          </div>
+        </div>
+      }
+    >
+      <CompletaProfiloPageClient />
+    </Suspense>
+  );
 }

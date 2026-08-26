@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Check, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConsentCheckbox } from "@/components/vinea/ConsentCheckbox";
 import { useVinea } from "@/lib/vinea-store";
+import { percorsoRelativoSicuro } from "@/lib/auth/origine-redirect";
 import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
 import { isMaggiorenne } from "@/lib/age";
 
@@ -35,6 +36,9 @@ import { isMaggiorenne } from "@/lib/age";
  */
 export default function CompletaProfiloPageClient() {
   const router = useRouter();
+  const parametri = useSearchParams();
+  const next = percorsoRelativoSicuro(parametri.get(PARAMETRO_NEXT));
+  const destinazione = next ?? "/home";
   const {
     authUser,
     authLoading,
@@ -42,6 +46,7 @@ export default function CompletaProfiloPageClient() {
     authStatoEta,
     authProfilo,
     authProfileLoading,
+    authRicaricaProfilo,
     authAggiornaProfilo,
     authLogout,
   } = useVinea();
@@ -80,7 +85,7 @@ export default function CompletaProfiloPageClient() {
     // scritta a metà.
     const esito = await authAggiornaProfilo({ username: username.trim(), dob });
     setInCorso(false);
-    if (esito.ok) router.push("/home");
+    if (esito.ok) router.push(destinazione);
   };
 
   if (authLoading) {
@@ -116,6 +121,42 @@ export default function CompletaProfiloPageClient() {
     );
   }
 
+  if (authStatoEta === "in_verifica") {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <div className="rounded-3xl border border-border bg-card p-5 md:p-8">
+          <p className="text-sm text-muted-foreground">Verifica del profilo…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (authStatoEta === "errore_lettura") {
+    return (
+      <div className="mx-auto max-w-2xl space-y-6">
+        <div className="rounded-3xl border border-border bg-card p-5 md:p-8">
+          <h1 className="font-serif text-2xl md:text-3xl">
+            Non riusciamo a verificare il tuo profilo.
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Riprova la lettura oppure esci dall&apos;account.
+          </p>
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+            <Button
+              onClick={() => void authRicaricaProfilo()}
+              className="bg-bordeaux hover:bg-bordeaux/90"
+            >
+              Riprova
+            </Button>
+            <Button variant="outline" onClick={() => void authLogout()}>
+              Esci
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (authStatoEta === "completo") {
     return (
       <div className="mx-auto max-w-2xl space-y-6">
@@ -126,7 +167,7 @@ export default function CompletaProfiloPageClient() {
           </p>
           <div className="mt-5 flex flex-col gap-2 sm:flex-row">
             <Button asChild className="bg-bordeaux hover:bg-bordeaux/90">
-              <Link href="/home">Vai alla Home</Link>
+              <Link href={destinazione}>{next ? "Continua" : "Vai alla Home"}</Link>
             </Button>
             <Button asChild variant="outline">
               <Link href="/account">Modifica il profilo</Link>
@@ -176,7 +217,15 @@ export default function CompletaProfiloPageClient() {
           </div>
 
           <ConsentCheckbox checked={terms} onCheckedChange={setTerms} testId="consenso-termini">
-            Accetto i Termini e la Privacy di Vinea.
+            Accetto i{" "}
+            <Link href="/legale#termini" className="text-bordeaux underline-offset-2 hover:underline">
+              Termini
+            </Link>{" "}
+            e la{" "}
+            <Link href="/legale#privacy" className="text-bordeaux underline-offset-2 hover:underline">
+              Privacy
+            </Link>{" "}
+            di Vinea.
           </ConsentCheckbox>
           <ConsentCheckbox
             checked={maggiorenne}
@@ -184,7 +233,7 @@ export default function CompletaProfiloPageClient() {
             icon={<ShieldAlert className="h-3.5 w-3.5 text-bordeaux" />}
             testId="consenso-eta"
           >
-            Confermo di avere più di 18 anni. Vinea è vietato ai minori di 18 anni.
+            Confermo di avere almeno 18 anni. Vinea è vietato ai minori di 18 anni.
           </ConsentCheckbox>
 
           <p className="rounded-xl border border-oro/30 bg-oro/5 p-3 text-xs text-antracite/80">

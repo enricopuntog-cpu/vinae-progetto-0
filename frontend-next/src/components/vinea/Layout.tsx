@@ -222,6 +222,12 @@ export function VineaLayout({ children }: { children: ReactNode }) {
         {children}
       </main>
 
+      <footer className="mx-auto max-w-6xl px-4 pb-6 text-center text-xs text-muted-foreground">
+        <Link href="/legale" className="underline-offset-2 hover:text-bordeaux hover:underline">
+          Centro legale
+        </Link>
+      </footer>
+
       <nav
         className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-crema/90 pb-safe header-blur md:hidden"
         aria-label="Navigazione principale"
