@@ -27,7 +27,13 @@ const CheckoutFlow = ({ wine, email, proposalId }: { wine: Wine; email: string; 
           {checkout.passo === "contatti" && <ContattiStep {...checkout} />}
           {checkout.passo === "consegna" && <ConsegnaStep {...checkout} />}
           {checkout.passo === "imballaggio" && <ImballaggioStep {...checkout} />}
-          {checkout.passo === "pagamento" && <PagamentoStep {...checkout} />}
+          {checkout.passo === "pagamento" && (
+            <PagamentoStep
+              {...checkout}
+              usaSaldo={checkout.usaSaldo}
+              setUsaSaldo={checkout.setUsaSaldo}
+            />
+          )}
           {checkout.bloccato && <BetaActionNotice tipo="pagamento" />}
           {checkout.erroreAzione && <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-700">{checkout.erroreAzione}</p>}
           <div className="flex justify-between gap-3 border-t border-border pt-4">

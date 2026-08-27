@@ -4,7 +4,19 @@ import { stimaCheckout, type DatiCheckoutBeta } from "@/lib/beta/checkout";
 
 const euroCents = (cents: number) => formatEUR(cents / 100);
 
-export const CheckoutSummary = ({ wine, dati }: { wine: Wine; dati: DatiCheckoutBeta }) => {
+export const CheckoutSummary = ({
+  wine,
+  dati,
+  saldoApplicatoCents,
+  importoProviderCents,
+  saldoOnly,
+}: {
+  wine: Wine;
+  dati: DatiCheckoutBeta;
+  saldoApplicatoCents?: number;
+  importoProviderCents?: number;
+  saldoOnly?: boolean;
+}) => {
   const stima = stimaCheckout(wine.prezzo, dati.imballaggioCodice);
 
   return (
@@ -24,6 +36,18 @@ export const CheckoutSummary = ({ wine, dati }: { wine: Wine; dati: DatiCheckout
         <div className="border-t border-border pt-2">
           <Riga label="Totale stimato" value={euroCents(stima.totaleCents)} forte />
         </div>
+        {saldoOnly && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 mt-2">
+            <p className="text-sm font-medium text-emerald-800">Coperto dal saldo Vinea</p>
+            <p className="text-xs text-emerald-700 mt-0.5">Nessun addebito sul metodo di pagamento.</p>
+          </div>
+        )}
+        {!saldoOnly && saldoApplicatoCents !== undefined && saldoApplicatoCents > 0 && (
+          <>
+            <Riga label="Saldo Vinea applicato" value={`−${euroCents(saldoApplicatoCents)}`} />
+            <Riga label="Resto sul metodo scelto" value={euroCents(importoProviderCents ?? 0)} forte />
+          </>
+        )}
       </div>
       <p className="text-xs leading-relaxed text-muted-foreground">
         Il totale vincolante sarà calcolato dal server e mostrato dal provider prima del pagamento.

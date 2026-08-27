@@ -10,15 +10,20 @@ export const createPaymentService = (client: SupabaseClient | null): PaymentServ
         listingId: input.listingId,
         proposalId: input.proposalId ?? null,
         deliveryMode: input.deliveryMode,
+        // Un'intenzione, non un importo: la quantità di saldo la decide il
+        // server dentro la transazione di prenotazione.
+        usaSaldo: input.usaSaldo === true,
       },
       headers: { "x-idempotency-key": input.idempotencyKey },
     });
     if (error) return serviceError("payments-checkout", error);
     const aperto = data as CheckoutAperto | null;
-    // Uno dei due basta: `clientSecret` per il componente in pagina,
-    // `checkoutUrl` per un fornitore che offra solo una pagina ospitata.
-    // Nessuno dei due significa che non c'è niente da mostrare.
-    return aperto && (aperto.clientSecret || aperto.checkoutUrl)
+    // Con il saldo che copre tutto non esiste nessun pagamento da montare:
+    // `saldoOnly` è un esito valido senza `clientSecret` né `checkoutUrl`.
+    // Negli altri casi uno dei due basta — `clientSecret` per il componente in
+    // pagina, `checkoutUrl` per un fornitore che offra solo una pagina ospitata.
+    // Nessuno dei tre significa che non c'è niente da mostrare.
+    return aperto && (aperto.saldoOnly || aperto.clientSecret || aperto.checkoutUrl)
       ? { ok: true, data: aperto }
       : { ok: false, error: "Il checkout non ha restituito un pagamento valido." };
   },

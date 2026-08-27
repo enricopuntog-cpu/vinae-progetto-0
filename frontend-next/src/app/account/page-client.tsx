@@ -29,6 +29,7 @@ import { salvaProfiloConAvatar } from "@/lib/profilo/salva-avatar";
 import { supabaseProfileService } from "@/services/profile-service";
 import type { ProfiloCorrente } from "@/services/types";
 import AttivitaVendita from "./attivita-vendita";
+import SaldoVineaPanel from "./saldo-vinea";
 
 const ESPERIENZE = Object.keys(esperienzaLabels) as Esperienza[];
 
@@ -468,6 +469,7 @@ export default function AccountPageClient() {
         falliscono, qui sopra non cambia nulla.
       */}
       <AttivitaVendita />
+      <SaldoVineaPanel />
     </div>
   );
 }

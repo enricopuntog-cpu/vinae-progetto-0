@@ -7,6 +7,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { eseguiAzioneBeta } from "@/lib/beta/external-actions";
 import {
   creaDatiCheckout,
+  destinazioneSaldoOnly,
   passiCheckout,
   validaPassoCheckout,
   type DatiCheckoutBeta,
@@ -17,6 +18,7 @@ import { createPaymentService } from "@/services/phase7/payment-service";
 
 export const useBetaCheckout = (wine: Wine, email: string, proposalId?: string) => {
   const router = useRouter();
+  const [usaSaldo, setUsaSaldo] = useState(false);
   const [dati, setDati] = useState(() => creaDatiCheckout(email));
   const [indice, setIndice] = useState(0);
   const [errori, setErrori] = useState<ErroriCheckout>({});
@@ -56,6 +58,7 @@ export const useBetaCheckout = (wine: Wine, email: string, proposalId?: string) 
         proposalId,
         deliveryMode: dati.deliveryMode,
         idempotencyKey: idempotencyKey.current,
+        usaSaldo,
       });
     });
     setInCorso(false);
@@ -69,9 +72,20 @@ export const useBetaCheckout = (wine: Wine, email: string, proposalId?: string) 
       setErroreAzione(esito.valore.error);
       return;
     }
+    if (esito.valore.data.saldoOnly) {
+      // Il saldo Vinea ha coperto l'intero importo: nessun provider, nessuna
+      // pagina di pagamento. Si atterra sulla lista degli acquisti, che è la
+      // pagina in cui l'ordine appena creato esiste davvero.
+      setErroreAzione(null);
+      router.push(destinazioneSaldoOnly(esito.valore.data.orderId));
+      return;
+    }
     if (esito.valore.data.checkoutUrl) window.location.assign(esito.valore.data.checkoutUrl);
     else setErroreAzione("Il metodo di pagamento incorporato non è disponibile in questa build.");
   };
 
-  return { dati, set, errori, passi, indice, passo, avanti, indietro, conferma, bloccato, erroreAzione, inCorso };
+  return {
+    dati, set, errori, passi, indice, passo, avanti, indietro, conferma,
+    bloccato, erroreAzione, inCorso, usaSaldo, setUsaSaldo,
+  };
 };

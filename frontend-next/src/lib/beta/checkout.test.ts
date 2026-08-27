@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   creaDatiCheckout,
+  destinazioneSaldoOnly,
   OPZIONI_IMBALLAGGIO_BETA,
   passiCheckout,
   stimaCheckout,
@@ -79,5 +80,20 @@ describe("checkout beta deterministico", () => {
       imballaggioCents: 0,
       totaleCents: 10686,
     });
+  });
+});
+
+describe("atterraggio di un ordine pagato interamente con il saldo Vinea", () => {
+  it("porta sulla lista degli acquisti, che è una pagina che esiste", () => {
+    expect(destinazioneSaldoOnly("ord-1")).toBe("/acquisti?checkout=saldo&orderId=ord-1");
+  });
+
+  it("non rimanda più al dettaglio ordine usato prima di questa modifica", () => {
+    expect(destinazioneSaldoOnly("ord-1").startsWith("/acquisti?")).toBe(true);
+    expect(destinazioneSaldoOnly("ord-1")).not.toInclude("/ordine/");
+  });
+
+  it("codifica l'identificativo invece di lasciarlo aggiungere parametri", () => {
+    expect(destinazioneSaldoOnly("a&b=c")).toBe("/acquisti?checkout=saldo&orderId=a%26b%3Dc");
   });
 });
