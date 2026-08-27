@@ -1,14 +1,13 @@
 ## CURRENT STATE
-- D1 Professional Qualifications is independently verified for shipping on `d1-vinea-balance-complete`: the new lifecycle is separate from the frozen `20260825120000_profile_certifications.sql`, does not use `seller_verificato` as source of truth, and introduces no directory, search, bulk or probing endpoint.
-- Migrations `20260827160000_d1_professional_qualifications.sql` and `20260827160500_d1_public_profile_qualifiche.sql` add owner-scoped qualification management, the private `professional-qualifications` bucket, an append-only private review ledger, the service-role-only idempotent review RPC, and the D8 public profile projection with the canonical green check plus the five-field badge allowlist.
+- D1 Professional Qualifications shipped through PR #99 and squash commit `8418c6b95617bbd43dacd16b2bdf4e5c1d755333`: all triggered CI jobs and Supabase Preview passed, and `origin/main` contains migrations `20260827160000_d1_professional_qualifications.sql` and `20260827160500_d1_public_profile_qualifiche.sql`.
+- Production project `pijnmcllmfgjmgsvtcej` (`vinea wine club`, default branch `main`) is healthy and its migration ledger contains both D1 migrations; no manual migration application was needed. The frozen legacy `20260825120000_profile_certifications.sql` is unchanged and `seller_verificato` is not the new source of truth.
+- Targeted production verification confirmed the private `professional-qualifications` bucket (`public = false`, 10 MiB, PDF/JPEG/PNG only), the canonical `approvata` plus non-expiry predicate, the five-field public badge allowlist, owner-scoped RLS, an append-only private review ledger, and a service-role-only review RPC. Anonymous Data API calls received permission denial for the review RPC and document table; the private review table is not exposed in the public schema cache.
 - Lifecycle `bozza -> inviata -> approvata/rifiutata/ritirata` is enforced in PostgreSQL. The browser cannot approve or review; raw payload/reasoning is not owner-readable; documents and `storage_path` remain private; draft deletion reports success only after both the Storage object and metadata are removed.
-- The canonical green check requires at least one `approvata` qualification whose `expires_on` is null or not before `current_date`. `/account` exposes the independent “Qualifiche professionali” panel and `/profilo/[id]` consumes only the canonical public projection.
-- Disposable PostgreSQL verification passed 75/75 cases with all 9 residue counters at zero and the container/volume removed. `frontend-next` passed 91/91 targeted tests, typecheck, 1146/1146 full-suite tests across 72 files, the production build, and `git diff --check`.
-- The CI floor is deliberately raised from `MIN_TESTS = 1092` to `MIN_TESTS = 1146`, matching the measured passing suite.
-- No production fixture, qualification, document, provider call, API key, background worker or AI approval was created; the provider-neutral trusted review boundary remains OFF.
+- Disposable PostgreSQL verification passed 75/75 cases with all 9 residue counters at zero and the container/volume removed. `frontend-next` passed 91/91 targeted tests, typecheck, 1146/1146 full-suite tests across 72 files, the production build, and `git diff --check`; the CI floor is now `MIN_TESTS = 1146`.
+- No production fixture, qualification, document, review, provider call, background worker, AI approval, payment or payout was created or activated; the provider-neutral trusted review boundary remains OFF and Phase 13 cutover has not started.
 
 ## ACTIVE TASK
-D1 Professional Qualifications — local VERIFY complete; GitHub CI, Supabase Preview, merge and controlled production verification are the remaining shipping gates.
+D1 Professional Qualifications — shipped and verified in production; awaiting Cabina final audit and closure.
 
 ## NEXT STEPS
 1. Cabina: audit finale e chiusura D1.
@@ -16,7 +15,7 @@ D1 Professional Qualifications — local VERIFY complete; GitHub CI, Supabase Pr
 3. Eseguire soltanto il work package esplicitamente approvato dalla Cabina.
 
 ## BLOCKERS / NOTES
-- Once the D1 migrations are pushed or applied to Supabase Preview they are frozen; every later SQL correction must use a newer append-only migration.
+- D1 migrations `20260827160000` and `20260827160500` are merged, Preview-applied and production-applied; they are frozen, so every later SQL correction requires a newer append-only migration.
 - The distributed migrations `20260826163000_d1_vinea_balance.sql` and `20260827104500_d1_balance_prelievo_e_freeze.sql` remain frozen; correct either only with a newer timestamped migration.
 - Readiness debt unchanged: external AI provider OFF, payments/provider/scheduler OFF, final legal text pending, Phase 13 cutover not started.
 - `.wslconfig` and `.d3b-production-schema.sql` are unrelated local files and must remain preserved and unstaged.
