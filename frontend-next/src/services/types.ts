@@ -190,6 +190,66 @@ export interface ProfileService {
   eliminaFotoAvatar(percorso: string): Promise<Result<void>>;
 }
 
+// ---- Qualifiche professionali della persona collegata ----------------------
+
+export type QualificaProfessionaleStato =
+  | "bozza"
+  | "inviata"
+  | "approvata"
+  | "rifiutata"
+  | "ritirata";
+
+export type QualificaProfessionaleInput = {
+  titolo: string;
+  enteEmittente: string;
+  paese: string | null;
+  credentialReference: string | null;
+  issuedOn: string | null;
+  expiresOn: string | null;
+};
+
+/**
+ * Il metadato di una prova, **owner-only**. `storagePath` arriva qui perché
+ * togliere un documento da una bozza richiede due gesti — la riga di metadato
+ * e l'oggetto nel bucket privato — e il secondo ha bisogno del percorso. Non
+ * è un URL: il bucket è privato, e il percorso non compare in nessuna
+ * proiezione pubblica.
+ */
+export type QualificaDocumento = {
+  id: string;
+  storagePath: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+};
+
+export type QualificaProfessionale = QualificaProfessionaleInput & {
+  id: string;
+  stato: QualificaProfessionaleStato;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  documenti: QualificaDocumento[];
+  /** Approvata e non scaduta: la stessa regola che accende la spunta pubblica. */
+  valida: boolean;
+};
+
+/**
+ * Superficie owner-only del dominio professionale. Non contiene e non accetta
+ * verdetti: approvazione e rifiuto appartengono esclusivamente alla porta
+ * fidata del database. `CertificazioniProfilo` e `seller_verificato` restano
+ * contratti legacy distinti e non alimentano questo lifecycle.
+ */
+export interface ProfessionalQualificationService {
+  elenco(): Promise<Result<QualificaProfessionale[]>>;
+  crea(input: QualificaProfessionaleInput): Promise<Result<string>>;
+  aggiorna(id: string, input: QualificaProfessionaleInput): Promise<Result<void>>;
+  caricaDocumento(qualificationId: string, file: File): Promise<Result<void>>;
+  eliminaDocumento(documento: QualificaDocumento): Promise<Result<void>>;
+  invia(id: string): Promise<Result<QualificaProfessionaleStato>>;
+  ritira(id: string): Promise<Result<QualificaProfessionaleStato>>;
+}
+
 // ---- Profilo pubblico di un'altra persona ----------------------------------
 /**
  * Ciò che di una persona può vedere chiunque, e nient'altro.
@@ -197,9 +257,9 @@ export interface ProfileService {
  * NON È `ProfiloCorrente` CON MENO CAMPI, ed è la distinzione che tiene in piedi
  * il tipo. `ProfiloCorrente` descrive la propria riga — include `email`, include
  * `dob`, include `certificazioni` — e la RLS garantisce che sia la propria.
- * Questo tipo descrive la riga di qualcun altro: i sette campi qui sotto sono
+ * Questo tipo descrive la riga di qualcun altro: i campi qui sotto sono
  * l'elenco chiuso che `public.profilo_pubblico(uuid)` restituisce, e non esiste
- * un ottavo campo che il database sappia dare. Derivarlo con un `Omit<>` da
+ * un campo in più che il database sappia dare. Derivarlo con un `Omit<>` da
  * `ProfiloCorrente` avrebbe legato la superficie pubblica a quella privata: il
  * giorno in cui la seconda cresce, la prima crescerebbe con lei.
  *
@@ -208,13 +268,12 @@ export interface ProfileService {
  * soltanto nel Club ha questo profilo esattamente come chi vende. Gli annunci
  * attivi si chiedono a parte, e la risposta `[]` è normale.
  *
- * NESSUN CAMPO DI FIDUCIA, e l'assenza è deliberata. Non c'è `verificato`, non
- * c'è `rating`, non ci sono `valutazioni`, non c'è alcun badge. La spunta che
- * questo profilo mostrerà un giorno dipenderà da qualifiche professionali
- * approvate, un dominio che non è aperto; `public_listings.seller_verificato`
- * dice un'altra cosa, resta dov'è e non va portato qui. Un campo booleano
- * aggiunto ora, per quanto cablato a `false`, sarebbe una promessa fatta a chi
- * legge un profilo prima che esista qualcosa che la mantenga.
+ * L'UNICO SEGNALE DI FIDUCIA è `professionistaVerificato`, e ha una sola
+ * sorgente: almeno una qualifica professionale **approvata e non scaduta**. Non
+ * c'è `rating`, non ci sono `valutazioni`, non c'è nessun altro badge.
+ * `public_listings.seller_verificato` dice un'altra cosa, resta dov'è e non va
+ * portato qui; nemmeno `ProfiloCorrente.certificazioni`, che è un contratto
+ * legacy distinto, alimenta questa spunta.
  */
 export type ProfiloPubblico = {
   /**
@@ -236,6 +295,32 @@ export type ProfiloPubblico = {
    * vuota quando il valore memorizzato non supera quella verifica.
    */
   avatarUrl: string;
+  /**
+   * Vero quando esiste almeno una qualifica approvata e non scaduta. Calcolato
+   * dal database dalla stessa vista che produce `qualificheProfessionali`:
+   * regola scritta in un posto solo. Una qualifica scaduta non lo accende.
+   */
+  professionistaVerificato: boolean;
+  /**
+   * I soli badge pubblici. `[]` è una risposta normale — la maggior parte delle
+   * persone non ha qualifiche — e non va sostituita da un segnaposto.
+   */
+  qualificheProfessionali: QualificaProfessionalePubblica[];
+};
+
+/**
+ * La allowlist pubblica di una qualifica, e nient'altro. L'identificativo non
+ * c'è: sarebbe una chiave verso righe private senza aggiungere nulla a chi
+ * legge. Non ci sono, e non devono mai comparire, `credential_reference`, i
+ * documenti (id, percorso, bucket, tipo, dimensione) né alcun dato della
+ * verifica (fornitore, modello, confidenza, risposta grezza, ragionamento).
+ */
+export type QualificaProfessionalePubblica = {
+  titolo: string;
+  enteEmittente: string;
+  paese: string | null;
+  issuedOn: string | null;
+  expiresOn: string | null;
 };
 
 /**

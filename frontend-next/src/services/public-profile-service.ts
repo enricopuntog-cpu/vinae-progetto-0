@@ -30,7 +30,12 @@ import { riferimentoAvatarSicuro } from "@/lib/profilo/avatar";
 import { COLONNE_ANNUNCIO_PUBBLICO, rigaAWine, type PublicListingRow } from "./listing-service";
 import type { Esperienza } from "@/data/onboarding";
 import type { Wine } from "@/data/wines";
-import type { ProfiloPubblico, PublicProfileService, Result } from "./types";
+import type {
+  ProfiloPubblico,
+  PublicProfileService,
+  QualificaProfessionalePubblica,
+  Result,
+} from "./types";
 
 const NOT_CONFIGURED_ERROR =
   "Supabase non configurato: imposta NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY in frontend-next/.env.local.";
@@ -73,6 +78,10 @@ function testo(valore: unknown): string {
   return typeof valore === "string" ? valore : "";
 }
 
+function testoOpzionale(valore: unknown): string | null {
+  return typeof valore === "string" && valore !== "" ? valore : null;
+}
+
 /**
  * Errori: al chiamante arriva un messaggio in italiano, mai quello di
  * PostgreSQL. Il dettaglio resta nei log, dove serve a chi ripara.
@@ -95,9 +104,15 @@ function segnalaErrore(operazione: string, errore: unknown): void {
  * vuota, che `risolviAvatarPersona` traduce nella silhouette: nessuna richiesta
  * di rete verso un indirizzo scelto da un utente, e nessuna immagine rotta.
  *
- * Le sette colonne sono quelle che la funzione dichiara. Non c'è una mappatura
- * per `email`, `dob`, `stato_utente` o le certificazioni perché la RPC non le
+ * Le colonne sono quelle che la funzione dichiara. Non c'è una mappatura per
+ * `email`, `dob`, `stato_utente` o le certificazioni perché la RPC non le
  * restituisce: non sono state omesse qui, non arrivano proprio.
+ *
+ * La spunta e i badge arrivano dalla STESSA riga. Non c'è una seconda chiamata
+ * per le qualifiche, e non deve nascerne una: una pagina di profilo è un uuid e
+ * una lettura, e una RPC di badge interrogabile su un elenco di uuid sarebbe una
+ * sonda su chi è verificato. `seller_verificato` non entra qui in nessuna forma:
+ * è un attributo di annuncio e dice un'altra cosa.
  */
 function mappaProfiloPubblico(riga: Record<string, unknown>): ProfiloPubblico {
   const userId = testo(riga.user_id);
@@ -109,7 +124,38 @@ function mappaProfiloPubblico(riga: Record<string, unknown>): ProfiloPubblico {
     provincia: testo(riga.provincia),
     esperienza: esperienzaValida(riga.esperienza),
     avatarUrl: riferimentoAvatarSicuro(testo(riga.avatar_url), userId) ?? "",
+    professionistaVerificato: riga.professionista_verificato === true,
+    qualificheProfessionali: mappaQualifichePubbliche(riga.qualifiche_professionali),
   };
+}
+
+/**
+ * I badge pubblici, copiati campo per campo.
+ *
+ * COPIA ESPLICITA E NON UN CAST. Il database restituisce già la sola allowlist —
+ * `private.qualifiche_professionali_valide` non contiene nemmeno
+ * `credential_reference` — ma qui si riscrive comunque l'oggetto: una colonna
+ * aggiunta un giorno alla vista non arriverebbe in interfaccia per il solo fatto
+ * di essere stata aggiunta. Un elemento che non è un oggetto o che non ha un
+ * titolo viene scartato invece di diventare un badge vuoto.
+ */
+function mappaQualifichePubbliche(valore: unknown): QualificaProfessionalePubblica[] {
+  if (!Array.isArray(valore)) return [];
+  const badge: QualificaProfessionalePubblica[] = [];
+  for (const voce of valore) {
+    if (typeof voce !== "object" || voce === null) continue;
+    const riga = voce as Record<string, unknown>;
+    const titolo = testo(riga.titolo);
+    if (titolo === "") continue;
+    badge.push({
+      titolo,
+      enteEmittente: testo(riga.ente_emittente),
+      paese: testoOpzionale(riga.paese),
+      issuedOn: testoOpzionale(riga.issued_on),
+      expiresOn: testoOpzionale(riga.expires_on),
+    });
+  }
+  return badge;
 }
 
 export function creaPublicProfileService(client: SupabaseClient | null): PublicProfileService {

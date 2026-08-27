@@ -39,7 +39,36 @@ describe("/profilo/[id]", () => {
     expect(pagina).toInclude("profilo.provincia");
     expect(pagina).toInclude("profilo.bio");
     expect(codice).not.toMatch(
-      /seller_verificato|verificato|TrustBadge|ShieldCheck|rating|recension|qualific|certific|email|dob|ruol|stato_utente/i,
+      /seller_verificato|TrustBadge|ShieldCheck|rating|recension|certific|email|dob|ruol|stato_utente/i,
+    );
+  });
+
+  it("la spunta e i badge vengono dalla riga del profilo, non da una seconda lettura", () => {
+    // Un solo servizio e una sola chiamata al profilo: la spunta arriva con la
+    // riga. Una lettura per badge sarebbe un N+1 sulla pagina, e una porta
+    // interrogabile su un elenco di uuid sarebbe una sonda su chi e verificato.
+    expect(pagina).toInclude("profilo.professionistaVerificato");
+    expect(pagina).toInclude("profilo.qualificheProfessionali");
+    expect(pagina.match(/await service\./g)).toHaveLength(2);
+    expect(codice).not.toMatch(/qualific\w*\(|professional_qualification|\.rpc\(/i);
+  });
+
+  it("nomina la qualifica professionale, non l'identita ne una certificazione Vinea", () => {
+    expect(pagina).toInclude("Qualifica professionale verificata");
+    expect(codice).not.toMatch(/KYC|verifica d.identit|certificazione vinea/i);
+  });
+
+  it("zero qualifiche non disegna nulla: nessun segnaposto su chi non ne ha", () => {
+    expect(pagina).toInclude("profilo.qualificheProfessionali.length > 0 &&");
+    expect(codice).not.toMatch(/nessuna qualifica|non verificat/i);
+  });
+
+  it("il badge pubblico mostra la sola allowlist, e nessun dato privato", () => {
+    for (const campo of ["q.titolo", "q.enteEmittente", "q.paese", "q.issuedOn"]) {
+      expect(pagina).toInclude(campo);
+    }
+    expect(codice).not.toMatch(
+      /credentialReference|storagePath|documenti|provider|confidence|reasoning|q\.id/i,
     );
   });
 

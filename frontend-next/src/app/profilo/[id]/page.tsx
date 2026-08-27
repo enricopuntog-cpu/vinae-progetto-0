@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MapPin } from "lucide-react";
+import { BadgeCheck, MapPin } from "lucide-react";
 import { notFound } from "next/navigation";
 import { AvatarPersona } from "@/components/vinea/AvatarPersona";
 import { WineCard } from "@/components/vinea/WineCard";
@@ -47,8 +47,23 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
             className="h-24 w-24 shrink-0 md:h-28 md:w-28"
           />
           <div className="min-w-0 flex-1">
-            <h1 className="break-words font-serif text-3xl font-semibold md:text-4xl">
+            <h1 className="flex flex-wrap items-center justify-center gap-2 break-words font-serif text-3xl font-semibold sm:justify-start md:text-4xl">
               {profilo.username}
+              {/*
+                La spunta sta accanto al nome perché è di quella persona, non di
+                un annuncio. `aria-hidden` sull'icona e il testo accessibile
+                accanto: chi usa uno screen reader sente la stessa cosa che gli
+                altri vedono, e non «immagine».
+              */}
+              {profilo.professionistaVerificato && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-sm font-medium text-emerald-800"
+                  data-testid="spunta-professionista"
+                >
+                  <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden />
+                  Qualifica professionale verificata
+                </span>
+              )}
             </h1>
             <p className="mt-2 text-sm font-medium text-salvia">
               {esperienzaLabels[profilo.esperienza]}
@@ -61,6 +76,34 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
             )}
           </div>
         </div>
+
+        {/*
+          Solo qualifiche approvate e non scadute: la funzione pubblica non ne
+          restituisce altre. Zero qualifiche non produce nessun blocco — nessun
+          «nessuna qualifica», che sarebbe un giudizio su chi non ne ha — e non
+          costa una seconda lettura: i badge arrivano nella stessa riga del
+          profilo.
+        */}
+        {profilo.qualificheProfessionali.length > 0 && (
+          <div className="mt-7 border-t border-border pt-6">
+            <h2 className="font-serif text-xl font-semibold">Qualifiche professionali</h2>
+            <ul className="mt-3 space-y-2" data-testid="qualifiche-pubbliche">
+              {profilo.qualificheProfessionali.map((q) => (
+                <li
+                  key={`${q.titolo}-${q.enteEmittente}-${q.issuedOn ?? ""}`}
+                  className="rounded-2xl border border-border px-4 py-3"
+                >
+                  <p className="text-sm font-medium break-words">{q.titolo}</p>
+                  <p className="text-xs text-muted-foreground break-words">
+                    {q.enteEmittente}
+                    {q.paese ? ` · ${q.paese}` : ""}
+                    {q.issuedOn ? ` · ${q.issuedOn.slice(0, 4)}` : ""}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {profilo.bio && (
           <div className="mt-7 border-t border-border pt-6">
