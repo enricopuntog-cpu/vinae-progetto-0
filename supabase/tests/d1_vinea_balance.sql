@@ -188,15 +188,19 @@ $$;
 -- Prelievo richiesto dal titolare: si passa da `authenticated`, perche' e' li'
 -- che vive `auth.uid()`. Il ruolo si abbandona prima di toccare le tabelle
 -- temporanee della griglia, che appartengono a postgres.
+-- `p_idem` e' la chiave di idempotenza del chiamante. Per difetto ne discende
+-- una dalla chiave della griglia, cosi' ogni richiesta distinta resta distinta;
+-- i casi che provano il replay la passano esplicitamente uguale a un'altra.
 create or replace function pg_temp.chiedi_prelievo(
-  p_chiave text, p_uid uuid, p_importo integer
+  p_chiave text, p_uid uuid, p_importo integer, p_idem text default null
 ) returns text language plpgsql as $$
 declare v jsonb; v_esito text;
 begin
   perform set_config('vinea.uid', p_uid::text, true);
   set local role authenticated;
   begin
-    v := public.balance_prelievo_richiedi(p_importo);
+    v := public.balance_prelievo_richiedi(
+      p_importo, coalesce(p_idem, 'd1-idem-' || p_chiave));
     v_esito := 'NESSUN_ERRORE';
   exception when others then
     v := null;
@@ -1008,6 +1012,189 @@ select pg_temp.registra(65, 'LEDGER',
   and pg_temp.conto('d1000000-0000-0000-0000-000000000001', 'reserved_cents') = 5000
   and pg_temp.spendibile('d1000000-0000-0000-0000-000000000001') = 12000,
   '17000 disponibili, 5000 ancora impegnati da un prelievo fallito');
+
+-- ---------------------------------------------------------------------------
+-- IDEMPOTENZA DEL PRELIEVO
+-- ---------------------------------------------------------------------------
+--
+-- Da qui in avanti si prova il seguito della migrazione: la chiave di
+-- idempotenza del chiamante, il recupero di un trasferimento caduto e il
+-- congelamento della scelta sul saldo. Il caso 65 ha gia' fotografato i conti,
+-- quindi questi movimenti non toccano nessuna verifica precedente.
+--
+-- V1 arriva qui con 17000 disponibili, 5000 impegnati da w1 (fallito) e
+-- 12000 spendibili.
+
+select pg_temp.chiedi_prelievo('w6', 'd1000000-0000-0000-0000-000000000001',
+  2000, 'd1-idem-replay');
+select pg_temp.chiedi_prelievo('w6bis', 'd1000000-0000-0000-0000-000000000001',
+  2000, 'd1-idem-replay');
+
+select pg_temp.registra(66, 'IDEMPOTENZA',
+  'La stessa chiave con lo stesso importo restituisce lo stesso prelievo',
+  pg_temp.wd('w6') = pg_temp.wd('w6bis')
+  and (select count(*) from public.balance_withdrawals
+       where owner_id = 'd1000000-0000-0000-0000-000000000001'
+         and idempotency_key like '%d1-idem-replay') = 1
+  and pg_temp.conto('d1000000-0000-0000-0000-000000000001', 'reserved_cents') = 7000
+  and pg_temp.spendibile('d1000000-0000-0000-0000-000000000001') = 10000,
+  'un secondo click non impegna una seconda volta gli stessi centesimi');
+
+select pg_temp.chiedi_prelievo('w7', 'd1000000-0000-0000-0000-000000000001',
+  3000, 'd1-idem-replay');
+
+select pg_temp.registra(67, 'IDEMPOTENZA',
+  'La stessa chiave con un importo diverso viene rifiutata',
+  pg_temp.esito('prelievo:w7')
+    like 'P0001|Questa richiesta di prelievo era per un importo diverso.%'
+  and pg_temp.conto('d1000000-0000-0000-0000-000000000001', 'reserved_cents') = 7000,
+  'meglio un rifiuto che restituire un prelievo per una cifra mai chiesta');
+
+select pg_temp.chiedi_prelievo('w8', 'd1000000-0000-0000-0000-000000000004',
+  2000, 'd1-idem-replay');
+
+select pg_temp.registra(68, 'IDEMPOTENZA',
+  'Due titolari che scelgono la stessa chiave non si incontrano mai',
+  pg_temp.esito('prelievo:w8') like 'P0001|Saldo Vinea insufficiente.%'
+  and (select count(*) from public.balance_withdrawals
+       where idempotency_key like '%d1-idem-replay') = 1
+  and (select owner_id from public.balance_withdrawals where id = pg_temp.wd('w6'))
+      = 'd1000000-0000-0000-0000-000000000001',
+  'la chiave e'' scoperchiata dal titolare prima di toccare l''unicita');
+
+-- ---------------------------------------------------------------------------
+-- RECUPERO DEL PRELIEVO
+-- ---------------------------------------------------------------------------
+
+select pg_temp.registra(69, 'RECUPERO',
+  'Un trasferimento caduto torna in coda invece di restare fermo',
+  (select stato::text from public.balance_withdrawals where id = pg_temp.wd('w1')) = 'fallito'
+  and exists (select 1 from public.prelievo_coda(500) q where q = pg_temp.wd('w1')),
+  'un errore di rete non e'' una condanna definitiva');
+
+select pg_temp.esegui('annulla_w1',
+  'select public.balance_prelievo_annulla(''' || pg_temp.wd('w1')::text || ''')',
+  'd1000000-0000-0000-0000-000000000001');
+select pg_temp.esegui('annulla_w1_bis',
+  'select public.balance_prelievo_annulla(''' || pg_temp.wd('w1')::text || ''')',
+  'd1000000-0000-0000-0000-000000000001');
+
+select pg_temp.registra(70, 'RECUPERO',
+  'Un prelievo fallito e' || ' annullabile, e il rilascio avviene una volta sola',
+  pg_temp.esito('annulla_w1') = 'NESSUN_ERRORE'
+  and pg_temp.esito('annulla_w1_bis') = 'NESSUN_ERRORE'
+  and (select stato::text from public.balance_withdrawals where id = pg_temp.wd('w1')) = 'annullato'
+  and pg_temp.conto('d1000000-0000-0000-0000-000000000001', 'reserved_cents') = 2000
+  and pg_temp.spendibile('d1000000-0000-0000-0000-000000000001') = 15000,
+  'e'' la via d''uscita di centesimi che nessuno riuscirebbe piu'' a spostare');
+
+select public.prelievo_prepara(pg_temp.wd('w6'));
+select pg_temp.esegui('annulla_in_corso',
+  'select public.balance_prelievo_annulla(''' || pg_temp.wd('w6')::text || ''')',
+  'd1000000-0000-0000-0000-000000000001');
+
+select pg_temp.registra(71, 'RECUPERO',
+  'Un prelievo in trasferimento non si annulla piu',
+  (select stato::text from public.balance_withdrawals where id = pg_temp.wd('w6')) = 'in_corso'
+  and pg_temp.esito('annulla_in_corso') like 'P0001|%in trasferimento e non pu%'
+  and pg_temp.conto('d1000000-0000-0000-0000-000000000001', 'reserved_cents') = 2000,
+  'il bonifico puo'' essere gia'' in volo: sciogliere qui aprirebbe la doppia uscita');
+
+select pg_temp.esegui('esito_senza_prova',
+  'select public.prelievo_registra_esito(''' || pg_temp.wd('w6')::text || ''', true, null, null)',
+  null, 'postgres');
+select pg_temp.esegui('esito_prova_vuota',
+  'select public.prelievo_registra_esito(''' || pg_temp.wd('w6')::text || ''', true, ''   '', null)',
+  null, 'postgres');
+
+select pg_temp.registra(72, 'RECUPERO',
+  'Un trasferimento riuscito senza identificativo del fornitore e' || ' rifiutato',
+  pg_temp.esito('esito_senza_prova') like '22023|%'
+  and pg_temp.esito('esito_prova_vuota') like '22023|%'
+  and (select stato::text from public.balance_withdrawals where id = pg_temp.wd('w6')) = 'in_corso'
+  and pg_temp.conto('d1000000-0000-0000-0000-000000000001', 'available_cents') = 17000,
+  'consumare la prenotazione senza traccia lascerebbe il denaro irrintracciabile');
+
+select pg_temp.registra(73, 'RECUPERO',
+  'Un successo registrato su un prelievo annullato non addebita niente',
+  public.prelievo_registra_esito(pg_temp.wd('w1'), true, 'tr_d1_fantasma', null) = 'non_dovuto'
+  and pg_temp.conto('d1000000-0000-0000-0000-000000000001', 'available_cents') = 17000
+  and (select count(*) from public.balance_movimenti
+       where withdrawal_id = pg_temp.wd('w1') and tipo = 'prelievo_eseguito') = 0,
+  'la prenotazione e'' gia'' sciolta: il movimento non si scriverebbe mai');
+
+select public.prelievo_registra_esito(pg_temp.wd('w6'), true, 'tr_d1_w6', null);
+
+select pg_temp.registra(74, 'RECUPERO',
+  'Il successo con la sua prova addebita una volta sola',
+  public.prelievo_registra_esito(pg_temp.wd('w6'), true, 'tr_d1_w6', null) = 'duplicate'
+  and (select provider_transfer_id from public.balance_withdrawals
+       where id = pg_temp.wd('w6')) = 'tr_d1_w6'
+  and pg_temp.conto('d1000000-0000-0000-0000-000000000001', 'available_cents') = 15000
+  and pg_temp.conto('d1000000-0000-0000-0000-000000000001', 'reserved_cents') = 0,
+  'replay dell''esecutore: stesso stato, nessun secondo addebito');
+
+-- ---------------------------------------------------------------------------
+-- CONGELAMENTO DELLA SCELTA SUL SALDO
+-- ---------------------------------------------------------------------------
+--
+-- V1 compra da C2 con 15000 spendibili in tasca: e' l'unico modo per provare
+-- che un «no» ripetuto in «si'» resta un no per decisione e non per mancanza
+-- di fondi.
+
+insert into public.bottle_units (id, owner_id, wine_id) values
+  ('d1200000-0000-0000-0000-000000000011',
+   'd1000000-0000-0000-0000-000000000003', 'd1100000-0000-0000-0000-000000000001'),
+  ('d1200000-0000-0000-0000-000000000012',
+   'd1000000-0000-0000-0000-000000000003', 'd1100000-0000-0000-0000-000000000001');
+
+insert into public.listings (id, slug, seller_id, bottle_unit_id, prezzo_cents, stato) values
+  ('d1300000-0000-0000-0000-000000000011', 'd1-l11',
+   'd1000000-0000-0000-0000-000000000003', 'd1200000-0000-0000-0000-000000000011', 5000, 'attivo'),
+  ('d1300000-0000-0000-0000-000000000012', 'd1-l12',
+   'd1000000-0000-0000-0000-000000000003', 'd1200000-0000-0000-0000-000000000012', 5000, 'attivo');
+
+select pg_temp.prenota('d1-ord-f1', 'd1000000-0000-0000-0000-000000000001',
+  'd1300000-0000-0000-0000-000000000011', false);
+select pg_temp.prenota('d1-ord-f1', 'd1000000-0000-0000-0000-000000000001',
+  'd1300000-0000-0000-0000-000000000011', true);
+
+select pg_temp.registra(75, 'CONGELAMENTO',
+  'Un «no» al saldo resta un no anche se la ripetizione dice di si',
+  (select balance_decided_at is not null from public.orders where id = pg_temp.ord('d1-ord-f1'))
+  and (select balance_applied_cents from public.orders where id = pg_temp.ord('d1-ord-f1')) = 0
+  and (select balance_reservation_id is null from public.orders where id = pg_temp.ord('d1-ord-f1'))
+  and pg_temp.spendibile('d1000000-0000-0000-0000-000000000001') = 15000,
+  'zero applicato e' || ' una decisione, non un esito da ricalcolare');
+
+select pg_temp.registra(76, 'CONGELAMENTO',
+  'La ripetizione non apre una seconda prenotazione di saldo',
+  (select count(*) from public.balance_reservations
+   where idempotency_key = 'order:' || replace(pg_temp.ord('d1-ord-f1')::text, '-', '') || ':saldo') = 0
+  and (select count(*) from public.orders where idempotency_key = 'd1-ord-f1') = 1,
+  'una chiave, un ordine, nessun impegno nato dal replay');
+
+select pg_temp.prenota('d1-ord-f2', 'd1000000-0000-0000-0000-000000000001',
+  'd1300000-0000-0000-0000-000000000012', true);
+select pg_temp.prenota('d1-ord-f2', 'd1000000-0000-0000-0000-000000000001',
+  'd1300000-0000-0000-0000-000000000012', false);
+
+select pg_temp.registra(77, 'CONGELAMENTO',
+  'Un «si» al saldo resta un si anche se la ripetizione dice di no',
+  (select balance_applied_cents from public.orders where id = pg_temp.ord('d1-ord-f2')) > 0
+  and (select balance_reservation_id is not null from public.orders where id = pg_temp.ord('d1-ord-f2'))
+  and (select count(*) from public.balance_reservations
+       where idempotency_key
+         = 'order:' || replace(pg_temp.ord('d1-ord-f2')::text, '-', '') || ':saldo') = 1
+  and pg_temp.conto('d1000000-0000-0000-0000-000000000001', 'reserved_cents')
+      = (select balance_applied_cents from public.orders where id = pg_temp.ord('d1-ord-f2')),
+  'la seconda chiamata rilegge la decisione, non la disfa');
+
+select pg_temp.registra(78, 'CONGELAMENTO',
+  'L''istante della decisione resta un fatto interno',
+  pg_temp.leggi('select count(*) from public.orders where balance_decided_at is not null',
+                'd1000000-0000-0000-0000-000000000001', 'authenticated') like '42501|%',
+  'nessun grant di colonna espone al client quando si e'' deciso');
 
 -- ---------------------------------------------------------------------------
 -- ESITO
