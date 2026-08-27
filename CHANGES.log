@@ -1,18 +1,20 @@
 ## CURRENT STATE
-- D4 CLOSED: PR #97 merged; `main = 89603fb41ebbf7ae2dec7df4b407b95bd1ef9710`; post-merge CI `33009641132` succeeded.
-- D1 Vinea Balance COMPLETE implemented locally in BUILD; database grid 65/65, 0 failures and 0 fixture residues; migration `20260826163000_d1_vinea_balance.sql`.
-- Targeted Balance/checkout/D3 tests: 142 passed, 0 failed. `frontend-next` typecheck passed. Touched-file lint passed with 0 errors and 2 existing image warnings. Payout-runner tests: 15 passed, 0 failed.
-- No production writes. `PAYMENTS_ENABLED` remains false. Provider and scheduler were not activated. No commit, push, PR or merge performed.
+- D1 Vinea Balance shipped via PR #98 from `d1-vinea-balance-complete`; baseline `main = 89603fb41ebbf7ae2dec7df4b407b95bd1ef9710` was unchanged on balance/payments/checkout at branch time.
+- Five follow-up findings closed: withdrawal beta gate with a real amount input, withdrawal idempotency key, withdrawal recovery states, checkout balance freeze, saldo-only landing on `/acquisti?checkout=saldo&orderId=<id>`.
+- SQL lands in the new migration `20260827104500_d1_balance_prelievo_e_freeze.sql`; `20260826163000_d1_vinea_balance.sql` stayed frozen because its preview branch had already applied it.
+- Database grid `supabase/tests/d1_vinea_balance.sql` extended to cases 66-78 and rerun on postgres:17 with all 42 migrations: 78 passed, 0 failed, 9 residue counters at 0.
+- `frontend-next`: 1092 tests passed across 68 files, 0 failed; typecheck, lint and build passed. Payout-runner tests: 15 passed, 0 failed. MIN_TESTS raised 1072 -> 1092 in CI and in the pre-launch contract.
+- No production writes. `PAYMENTS_ENABLED` remains false; provider and scheduler were not activated and no real transfer was executed.
 
 ## ACTIVE TASK
-D1 — Vinea Balance COMPLETE — BUILD ready for VERIFY
+None — D1 Vinea Balance closed.
 
 ## NEXT STEPS
-1. VERIFY & SHIP indipendente D1 Vinea Balance.
-2. Cabina: audit finale Balance e selezione D1 Professional Qualifications COMPLETE.
-3. Eseguire soltanto il prossimo BUILD approvato.
+1. Verify the new migration reaches the production ledger on the next Supabase integration run.
+2. Cabina: select the next approved BUILD.
+3. Execute only that approved BUILD.
 
 ## BLOCKERS / NOTES
-- The distributed migration `20260826163000_d1_vinea_balance.sql` is frozen and must not be edited; Gate A must not be rerun unless a later SQL migration is required.
+- The distributed migrations `20260826163000_d1_vinea_balance.sql` and `20260827104500_d1_balance_prelievo_e_freeze.sql` are frozen; correct either only with a newer timestamped migration.
 - `.wslconfig` and `.d3b-production-schema.sql` are unrelated local files and must remain preserved.
-- BUILD-only handoff: production state was not remeasured and no real transfer was executed.
+- `/ordine/[id]` still exists as a route; the saldo-only landing was moved off it by product decision, not because the route was missing.
