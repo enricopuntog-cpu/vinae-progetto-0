@@ -13,6 +13,13 @@
 // function la trasporta e non la ricalcola. L'incasso non porta istruzioni di
 // trasferimento, quindi i fondi restano sul balance della piattaforma finché
 // `payouts-release` non crea il Transfer.
+//
+// Da D1 quel totale può essere coperto in parte o del tutto dal saldo Vinea del
+// compratore. Il fornitore vede allora soltanto il RESTO, e quando il resto è
+// zero non viene chiamato affatto. Anche in quel caso l'importo autorevole non
+// arriva mai dal browser: la richiesta porta una preferenza booleana, e il
+// database decide `min(spendibile, totale)` nella stessa transazione in cui
+// prenota l'ordine.
 
 import { createClient } from "@supabase/supabase-js";
 import { corsHeadersFor } from "../_shared/cors.ts";
@@ -23,12 +30,22 @@ type CheckoutInput = {
   listingId?: string;
   proposalId?: string | null;
   deliveryMode?: "consegna_mano" | "spedizione";
+  /**
+   * Il browser dichiara un'INTENZIONE, non un importo. Quanto saldo si applichi
+   * lo decide il database dentro la stessa transazione che prenota l'ordine;
+   * qui passa soltanto il sì o il no.
+   */
+  usaSaldo?: boolean;
 };
 
 type Reservation = {
   order_id: string;
   /** Quanto paga il compratore: prezzo del venditore più commissione. */
   amount_cents: number;
+  /** Saldo Vinea congelato sull'ordine dal server. */
+  balance_applied_cents?: number;
+  /** Il resto a carico del fornitore: totale meno saldo applicato. */
+  provider_amount_cents?: number;
   prezzo_venditore_cents?: number;
   commissione_cents?: number;
   margine_obiettivo_bps?: number;
@@ -98,6 +115,12 @@ const rispostaCheckout = (
   riferimentoStripePercentualeBps: reservation.riferimento_stripe_percentuale_bps ?? null,
   riferimentoStripeFissoCents: reservation.riferimento_stripe_fisso_cents ?? null,
   currency: reservation.currency,
+  // Le due metà dell'incasso viaggiano separate perché il compratore deve
+  // vedere che cosa ha coperto il suo saldo e che cosa resta sulla carta.
+  // `amountCents` continua a essere il totale dell'ordine.
+  saldoApplicatoCents: reservation.balance_applied_cents ?? 0,
+  importoProviderCents: reservation.provider_amount_cents ?? reservation.amount_cents,
+  saldoOnly: false,
 });
 
 Deno.serve(async (request) => {
@@ -132,12 +155,17 @@ Deno.serve(async (request) => {
     return json({ error: "Dati checkout non validi." }, 400, corsHeaders);
   }
 
-  const { data, error } = await supabase.rpc("order_checkout_reserve", {
+  // Una sola chiamata: la prenotazione dell'ordine e l'impegno del saldo sono
+  // la stessa decisione e vivono nella stessa transazione. Leggere il saldo qui
+  // e impegnarlo con una seconda RPC significherebbe decidere due volte su uno
+  // stato che nel frattempo può essere cambiato.
+  const { data, error } = await supabase.rpc("order_checkout_reserve_saldo", {
     p_buyer_id: authData.user.id,
     p_listing_id: input.listingId,
     p_proposal_id: input.proposalId ?? null,
     p_delivery_mode: input.deliveryMode,
     p_idempotency_key: idempotencyKey,
+    p_usa_saldo: input.usaSaldo === true,
   });
   if (error) {
     const readable = new Set(["P0001", "42501", "23505", "22023", "PGRST"]);
@@ -150,6 +178,42 @@ Deno.serve(async (request) => {
   const reservation = data as Reservation;
   if (reservation.order_status === "annullato" || reservation.payment_status === "failed") {
     return json({ error: "Checkout precedente chiuso; usa una nuova chiave idempotenza." }, 409, corsHeaders);
+  }
+
+  // Ordine coperto per intero dal saldo Vinea: non c'è niente da addebitare e
+  // quindi nessun fornitore da chiamare. La liquidazione avviene in una
+  // transazione autorevole del database, che porta l'ordine allo stesso stato
+  // 'pagato' passando dallo stesso nucleo dell'evento firmato — non da un
+  // webhook simulato.
+  const importoProvider = reservation.provider_amount_cents ?? reservation.amount_cents;
+  if (importoProvider === 0) {
+    const { error: saldoError } = await supabase.rpc("order_saldo_conferma", {
+      p_order_id: reservation.order_id,
+      p_buyer_id: authData.user.id,
+    });
+    if (saldoError) {
+      // Nessuna compensazione da fare qui: la RPC è transazionale, quindi o ha
+      // liquidato tutto o non ha toccato niente. L'ordine resta prenotato e la
+      // sua scadenza lo scioglierà, restituendo il saldo impegnato.
+      const readable = new Set(["P0001", "42501", "22023"]);
+      return json(
+        {
+          error: readable.has(saldoError.code ?? "")
+            ? saldoError.message
+            : "Pagamento con saldo non disponibile.",
+        },
+        409,
+        corsHeaders,
+      );
+    }
+    return json(
+      {
+        ...rispostaCheckout(reservation, { clientSecret: null, redirectUrl: null }),
+        saldoOnly: true,
+      },
+      201,
+      corsHeaders,
+    );
   }
 
   // Ritentativo con la stessa chiave: l'incasso è già aperto presso il
@@ -183,7 +247,9 @@ Deno.serve(async (request) => {
     buyerId: authData.user.id,
     listingId: input.listingId,
     descrizione: reservation.wine_name ?? "Ordine Vinea",
-    amountCents: reservation.amount_cents,
+    // Al fornitore va soltanto il resto: il saldo Vinea è già stato impegnato
+    // dentro la transazione di prenotazione e non transita da qui.
+    amountCents: importoProvider,
     currency: reservation.currency,
     successUrl: `${redirectOrigin}/ordini/${reservation.order_id}?checkout=success`,
     cancelUrl: `${redirectOrigin}/annuncio/${input.listingId}?checkout=cancelled`,

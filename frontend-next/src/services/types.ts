@@ -722,6 +722,12 @@ export interface OrderService {
  *
  * La scomposizione arriva dal server ed è quella congelata sull'ordine: il
  * browser la mostra e non la ricalcola.
+ *
+ * Da D1 il totale può essere coperto in parte o del tutto dal saldo Vinea del
+ * compratore: `saldoApplicatoCents` e `importoProviderCents` sono le due metà
+ * decise dal server, e `saldoOnly` dice che non esiste nessun pagamento da
+ * montare perché il saldo ha coperto tutto. In quel caso `clientSecret` e
+ * `checkoutUrl` sono entrambi `null` per costruzione, non per errore.
  */
 export type CheckoutAperto = {
   clientSecret: string | null;
@@ -734,6 +740,9 @@ export type CheckoutAperto = {
   riferimentoStripePercentualeBps: number | null;
   riferimentoStripeFissoCents: number | null;
   currency: string;
+  saldoApplicatoCents: number;
+  importoProviderCents: number;
+  saldoOnly: boolean;
 };
 
 export interface PaymentService {
@@ -742,8 +751,92 @@ export interface PaymentService {
     proposalId?: string;
     deliveryMode: OrderDeliveryMode;
     idempotencyKey: string;
+    /**
+     * Un'intenzione, non un importo: quanto saldo si applichi lo decide il
+     * server come min(spendibile, totale) dentro la transazione di
+     * prenotazione. Il browser non ha un campo importo da poter sbagliare.
+     */
+    usaSaldo?: boolean;
   }): Promise<Result<CheckoutAperto>>;
   perOrdine(orderId: string): Promise<Result<PaymentRecord | null>>;
+}
+
+// ---- Saldo Vinea (D1) -------------------------------------------------------
+//
+// Il saldo è contabilità autoritativa del database, non un numero derivato dal
+// browser. Il client legge soltanto dalla porta `balance_riepilogo` e scrive
+// soltanto attraverso le due porte dei prelievi: nessuna lettura diretta delle
+// tabelle, nessuna scrittura sul ledger.
+
+/** I tipi di movimento esposti da `balance_riepilogo`, nell'ordine del dominio. */
+export type MovimentoSaldoTipo =
+  | "vendita_pending"
+  | "vendita_disponibile"
+  | "vendita_storno"
+  | "rettifica_rimborso"
+  | "acquisto_prenotato"
+  | "acquisto_addebito"
+  | "acquisto_rilascio"
+  | "acquisto_rimborso"
+  | "prelievo_prenotato"
+  | "prelievo_eseguito"
+  | "prelievo_annullato";
+
+export type MovimentoSaldo = {
+  id: string;
+  tipo: MovimentoSaldoTipo;
+  deltaPendingCents: number;
+  deltaAvailableCents: number;
+  deltaReservedCents: number;
+  createdAt: string;
+};
+
+export type PrelievoSaldoStato =
+  | "richiesto"
+  | "in_corso"
+  | "trasferito"
+  | "fallito"
+  | "annullato";
+
+export type PrelievoSaldo = {
+  id: string;
+  stato: PrelievoSaldoStato;
+  amountCents: number;
+  createdAt: string;
+  transferredAt: string | null;
+};
+
+/**
+ * La fotografia del proprio conto. `spendableCents` è già il disponibile meno
+ * l'impegnato, calcolato dal server: chi lo mostra non deve rifare la sottrazione.
+ */
+export type SaldoVinea = {
+  currency: "eur";
+  pendingCents: number;
+  availableCents: number;
+  reservedCents: number;
+  spendableCents: number;
+  movimenti: MovimentoSaldo[];
+  prelievi: PrelievoSaldo[];
+};
+
+export type PrelievoRichiesto = {
+  id: string;
+  stato: PrelievoSaldoStato;
+  amountCents: number;
+  createdAt: string;
+};
+
+export interface BalanceService {
+  /** Saldo e storia del solo titolare autenticato. */
+  riepilogo(limiteMovimenti?: number): Promise<Result<SaldoVinea>>;
+  /**
+   * Impegna i centesimi e accoda il bonifico. L'importo è l'unica scelta del
+   * chiamante; la destinazione la conosce soltanto il server.
+   */
+  richiediPrelievo(amountCents: number): Promise<Result<PrelievoRichiesto>>;
+  /** Scioglie la prenotazione di un prelievo ancora fermo in coda. */
+  annullaPrelievo(withdrawalId: string): Promise<Result<void>>;
 }
 
 // ---- Incassi del venditore -------------------------------------------------

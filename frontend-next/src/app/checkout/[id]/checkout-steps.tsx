@@ -92,7 +92,7 @@ export const ImballaggioStep = ({ dati, set }: StepProps) => (
   </section>
 );
 
-export const PagamentoStep = ({ dati, set }: StepProps) => (
+export const PagamentoStep = ({ dati, set, usaSaldo, setUsaSaldo }: StepProps & { usaSaldo?: boolean; setUsaSaldo?: (v: boolean) => void }) => (
   <section className="space-y-4" data-testid="checkout-step-pagamento">
     <div>
       <h2 className="font-serif text-2xl">Metodo di pagamento</h2>
@@ -102,6 +102,20 @@ export const PagamentoStep = ({ dati, set }: StepProps) => (
       <Scelta id="carta" icona={CreditCard} titolo="Carta di pagamento" nota="Disponibilità verificata dal provider all'attivazione" />
       <Scelta id="wallet" icona={CreditCard} titolo="Wallet digitale" nota="Disponibilità verificata dal provider all'attivazione" />
     </RadioGroup>
+    {setUsaSaldo && (
+      <label className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={!!usaSaldo}
+          onChange={(e) => setUsaSaldo(e.target.checked)}
+          className="h-4 w-4 accent-bordeaux"
+        />
+        <div>
+          <span className="block text-sm font-medium">Usa saldo Vinea</span>
+          <span className="block text-xs text-muted-foreground">Se hai credito disponibile verrà applicato automaticamente.</span>
+        </div>
+      </label>
+    )}
   </section>
 );
 

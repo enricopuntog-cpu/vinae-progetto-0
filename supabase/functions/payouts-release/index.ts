@@ -14,6 +14,17 @@
 // `payout_prepara`, in transazione, guardando contestazione, incasso, rimborsi
 // e abilitazione del venditore. Questa function esegue e riferisce.
 //
+// Da D1 la coda degli ordini non è più l'unica sorgente. I proventi di una
+// vendita nuova NON entrano più qui: il rilascio li rende disponibili nel saldo
+// Vinea del venditore, e `payout_coda` li esclude proprio guardando quel fatto.
+// Ciò che resta nella prima coda sono gli ordini precedenti a quella
+// contabilità. La seconda coda è quella dei PRELIEVI: soldi che escono da Vinea
+// perché qualcuno lo ha chiesto, mai perché il tempo è passato.
+//
+// Le due code condividono lo stesso `TransferProvider`, deliberatamente. Un
+// secondo esecutore di bonifici sarebbe un secondo posto in cui sbagliare la
+// chiave di idempotenza, ed è esattamente l'errore che paga due volte.
+//
 // La schedulazione vive in GitHub Actions. Con `PAYMENTS_ENABLED=false` la
 // function autentica il job e misura soltanto la coda scaduta: non reclama
 // ordini e non chiama il provider, così lo scheduler può essere verificato prima
@@ -35,6 +46,17 @@ type Preparazione = {
   motivo?: string;
 };
 
+type PreparazionePrelievo = {
+  esito: "da_trasferire" | "gia_trasferito" | "bloccato" | "non_dovuto";
+  withdrawal_id?: string;
+  provider?: string;
+  destination_account_id?: string;
+  amount_cents?: number;
+  currency?: string;
+  idempotency_key?: string;
+  motivo?: string;
+};
+
 type Esito = {
   payments_enabled: boolean;
   batch_limit: number;
@@ -44,6 +66,9 @@ type Esito = {
   falliti: number;
   auto_rilasciati: number;
   trattenuti_scaduti_oltre_24h: number;
+  prelievi_trasferiti: number;
+  prelievi_bloccati: number;
+  prelievi_falliti: number;
 };
 
 type LimiteInput = { limit?: unknown };
@@ -174,6 +199,72 @@ const rilascia = async (
   else esito.falliti += 1;
 };
 
+/**
+ * Esecuzione di un prelievo richiesto. Stessa forma del rilascio di un ordine e
+ * stesso provider; cambia soltanto che cosa autorizza l'uscita del denaro.
+ *
+ * Il fallimento NON restituisce i centesimi allo spendibile: la prenotazione
+ * resta aperta perché il trasferimento è ritentabile, e rendere quel denaro di
+ * nuovo spendibile aprirebbe la finestra in cui lo stesso importo esce due
+ * volte. Solo un annullamento esplicito del titolare la scioglie.
+ */
+const preleva = async (
+  supabase: SupabaseClient,
+  withdrawalId: string,
+  esito: Esito,
+): Promise<void> => {
+  const { data, error } = await supabase.rpc("prelievo_prepara", {
+    p_withdrawal_id: withdrawalId,
+  });
+  if (error) {
+    console.error("[payouts-release] preparazione prelievo fallita", {
+      withdrawalId,
+      code: error.code,
+    });
+    esito.prelievi_falliti += 1;
+    return;
+  }
+
+  const preparazione = data as PreparazionePrelievo;
+  if (preparazione.esito === "gia_trasferito") {
+    esito.gia_trasferiti += 1;
+    return;
+  }
+  if (preparazione.esito !== "da_trasferire") {
+    // 'saldo_insufficiente' finisce qui: una rettifica di rimborso ha reso il
+    // saldo incapiente e il bonifico non parte. Non è un errore da ritentare
+    // subito, è un debito da riassorbire.
+    esito.prelievi_bloccati += 1;
+    return;
+  }
+
+  const transfer = await provider.creaTransfer({
+    orderId: preparazione.withdrawal_id!,
+    destinationAccountId: preparazione.destination_account_id!,
+    amountCents: preparazione.amount_cents!,
+    currency: preparazione.currency!,
+    idempotencyKey: preparazione.idempotency_key!,
+  });
+
+  const { error: registrazioneError } = await supabase.rpc("prelievo_registra_esito", {
+    p_withdrawal_id: preparazione.withdrawal_id,
+    p_ok: transfer.ok,
+    p_provider_transfer_id: transfer.ok ? transfer.data.transferId : null,
+    p_errore: transfer.ok ? null : transfer.error,
+  });
+  if (registrazioneError) {
+    console.error("[payouts-release] registrazione prelievo fallita", {
+      withdrawalId,
+      code: registrazioneError.code,
+    });
+    esito.prelievi_falliti += 1;
+    return;
+  }
+
+  if (transfer.ok) esito.prelievi_trasferiti += 1;
+  else esito.prelievi_falliti += 1;
+};
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") return json({ error: "Metodo non consentito." }, 405);
 
@@ -215,6 +306,9 @@ Deno.serve(async (request) => {
     falliti: 0,
     auto_rilasciati: 0,
     trattenuti_scaduti_oltre_24h: 0,
+    prelievi_trasferiti: 0,
+    prelievi_bloccati: 0,
+    prelievi_falliti: 0,
   };
 
   if (!esito.payments_enabled) {
@@ -249,6 +343,19 @@ Deno.serve(async (request) => {
   // più contesa sullo stesso pool di connessioni.
   for (const orderId of (coda as string[] | null) ?? []) {
     await rilascia(supabase, orderId, esito);
+  }
+
+  const { data: codaPrelievi, error: prelieviError } = await supabase.rpc("prelievo_coda", {
+    p_limit: limite,
+  });
+  if (prelieviError) {
+    console.error("[payouts-release] lettura coda prelievi fallita", {
+      code: prelieviError.code,
+    });
+    return json({ error: "Rilascio non disponibile." }, 502);
+  }
+  for (const withdrawalId of (codaPrelievi as string[] | null) ?? []) {
+    await preleva(supabase, withdrawalId, esito);
   }
 
   try {
