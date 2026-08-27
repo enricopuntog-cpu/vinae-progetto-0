@@ -89,6 +89,18 @@ const rigaRpc = (over: Record<string, unknown> = {}) => ({
   provincia: "SI",
   esperienza: "appassionato",
   avatar_url: "/avatar/calice.svg",
+  professionista_verificato: false,
+  qualifiche_professionali: [],
+  ...over,
+});
+
+/** Un badge come la funzione pubblica lo restituisce: cinque chiavi, non una di piu. */
+const badgeRpc = (over: Record<string, unknown> = {}) => ({
+  titolo: "Sommelier professionista",
+  ente_emittente: "Associazione Italiana Sommelier",
+  paese: "IT",
+  issued_on: "2019-06-01",
+  expires_on: null,
   ...over,
 });
 
@@ -317,7 +329,7 @@ describe("PublicProfileService.profilo", () => {
     expect(relazioni).not.toContain("profiles");
   });
 
-  it("mappa le sette colonne e nient'altro", async () => {
+  it("mappa le colonne dichiarate e nient'altro", async () => {
     // La riga arriva con dei campi che la funzione SQL non restituisce: se un
     // giorno li restituisse per errore, il servizio non deve consegnarli.
     const { client } = fakeClient({
@@ -337,17 +349,19 @@ describe("PublicProfileService.profilo", () => {
         provincia: "SI",
         esperienza: "appassionato",
         avatarUrl: "/avatar/calice.svg",
+        professionistaVerificato: false,
+        qualificheProfessionali: [],
       },
     });
-    expect(Object.keys(esito.ok ? (esito.data ?? {}) : {})).toHaveLength(7);
+    expect(Object.keys(esito.ok ? (esito.data ?? {}) : {})).toHaveLength(9);
   });
 
-  it("non promette fiducia: niente verificato, rating, recensioni o livello", async () => {
+  it("non promette fiducia oltre la qualifica: niente rating, recensioni o livello", async () => {
     const { client } = fakeClient({ data: [rigaRpc()], error: null });
     const esito = await creaPublicProfileService(client).profilo(ALICE);
     const profilo = esito.ok ? esito.data! : null;
 
-    for (const inventato of ["verificato", "rating", "valutazioni", "recensioni", "livello"]) {
+    for (const inventato of ["rating", "valutazioni", "recensioni", "livello"]) {
       expect(profilo).not.toHaveProperty(inventato);
     }
   });
@@ -368,6 +382,123 @@ describe("PublicProfileService.profilo", () => {
       const esito = await creaPublicProfileService(client).profilo(ALICE);
       expect(esito.ok && esito.data?.avatarUrl).toBe(atteso);
     }
+  });
+
+  it("porta la spunta e i badge dalla stessa riga, senza una seconda lettura", async () => {
+    const { client, chiamateRpc, relazioni } = fakeClient({
+      data: [
+        rigaRpc({
+          professionista_verificato: true,
+          qualifiche_professionali: [badgeRpc(), badgeRpc({ titolo: "Enologo", paese: null })],
+        }),
+      ],
+      error: null,
+    });
+
+    const esito = await creaPublicProfileService(client).profilo(ALICE);
+
+    expect(esito.ok && esito.data?.professionistaVerificato).toBe(true);
+    expect(esito.ok && esito.data?.qualificheProfessionali).toEqual([
+      {
+        titolo: "Sommelier professionista",
+        enteEmittente: "Associazione Italiana Sommelier",
+        paese: "IT",
+        issuedOn: "2019-06-01",
+        expiresOn: null,
+      },
+      {
+        titolo: "Enologo",
+        enteEmittente: "Associazione Italiana Sommelier",
+        paese: null,
+        issuedOn: "2019-06-01",
+        expiresOn: null,
+      },
+    ]);
+    // Due qualifiche, una sola chiamata: la pagina del profilo non fa una
+    // lettura per badge, e non esiste una seconda porta da interrogare.
+    expect(chiamateRpc).toHaveLength(1);
+    expect(relazioni).toEqual([]);
+  });
+
+  it("il badge copia la sola allowlist: id, credenziali e verifica non passano", async () => {
+    const { client } = fakeClient({
+      data: [
+        rigaRpc({
+          professionista_verificato: true,
+          qualifiche_professionali: [
+            badgeRpc({
+              id: "d1a00000-0000-0000-0000-000000000009",
+              credential_reference: "AIS-99887",
+              storage_path: "owner/qualifica/file.pdf",
+              provider: "acme",
+              confidence: 0.99,
+              reasoning: "documento leggibile",
+            }),
+          ],
+        }),
+      ],
+      error: null,
+    });
+
+    const esito = await creaPublicProfileService(client).profilo(ALICE);
+    const badge = esito.ok ? (esito.data?.qualificheProfessionali[0] ?? {}) : {};
+
+    expect(Object.keys(badge).sort()).toEqual([
+      "enteEmittente",
+      "expiresOn",
+      "issuedOn",
+      "paese",
+      "titolo",
+    ]);
+    for (const privato of [
+      "id",
+      "credentialReference",
+      "credential_reference",
+      "storagePath",
+      "storage_path",
+      "provider",
+      "confidence",
+      "reasoning",
+    ]) {
+      expect(badge).not.toHaveProperty(privato);
+    }
+  });
+
+  it("nessuna qualifica: array vuoto e spunta spenta, non un segnaposto", async () => {
+    const { client } = fakeClient({
+      data: [rigaRpc({ professionista_verificato: false, qualifiche_professionali: [] })],
+      error: null,
+    });
+
+    const esito = await creaPublicProfileService(client).profilo(ALICE);
+
+    expect(esito.ok && esito.data?.professionistaVerificato).toBe(false);
+    expect(esito.ok && esito.data?.qualificheProfessionali).toEqual([]);
+  });
+
+  it("la spunta e vera solo se il database dice vero, non se ci somiglia", async () => {
+    for (const finto of ["true", 1, "si", null, undefined, {}]) {
+      const { client } = fakeClient({
+        data: [rigaRpc({ professionista_verificato: finto })],
+        error: null,
+      });
+      const esito = await creaPublicProfileService(client).profilo(ALICE);
+      expect(esito.ok && esito.data?.professionistaVerificato).toBe(false);
+    }
+  });
+
+  it("un badge malformato viene scartato, non disegnato vuoto", async () => {
+    const { client } = fakeClient({
+      data: [
+        rigaRpc({
+          qualifiche_professionali: [null, "Sommelier", { ente_emittente: "AIS" }, badgeRpc()],
+        }),
+      ],
+      error: null,
+    });
+
+    const esito = await creaPublicProfileService(client).profilo(ALICE);
+    expect(esito.ok && esito.data?.qualificheProfessionali).toHaveLength(1);
   });
 
   it("riporta un'esperienza fuori catalogo al primo gradino", async () => {

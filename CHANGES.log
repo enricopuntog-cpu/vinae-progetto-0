@@ -1,20 +1,22 @@
 ## CURRENT STATE
-- D1 Vinea Balance shipped via PR #98 from `d1-vinea-balance-complete`; baseline `main = 89603fb41ebbf7ae2dec7df4b407b95bd1ef9710` was unchanged on balance/payments/checkout at branch time.
-- Five follow-up findings closed: withdrawal beta gate with a real amount input, withdrawal idempotency key, withdrawal recovery states, checkout balance freeze, saldo-only landing on `/acquisti?checkout=saldo&orderId=<id>`.
-- SQL lands in the new migration `20260827104500_d1_balance_prelievo_e_freeze.sql`; `20260826163000_d1_vinea_balance.sql` stayed frozen because its preview branch had already applied it.
-- Database grid `supabase/tests/d1_vinea_balance.sql` extended to cases 66-78 and rerun on postgres:17 with all 42 migrations: 78 passed, 0 failed, 9 residue counters at 0.
-- `frontend-next`: 1092 tests passed across 68 files, 0 failed; typecheck, lint and build passed. Payout-runner tests: 15 passed, 0 failed. MIN_TESTS raised 1072 -> 1092 in CI and in the pre-launch contract.
-- No production writes. `PAYMENTS_ENABLED` remains false; provider and scheduler were not activated and no real transfer was executed.
+- D1 Professional Qualifications is independently verified for shipping on `d1-vinea-balance-complete`: the new lifecycle is separate from the frozen `20260825120000_profile_certifications.sql`, does not use `seller_verificato` as source of truth, and introduces no directory, search, bulk or probing endpoint.
+- Migrations `20260827160000_d1_professional_qualifications.sql` and `20260827160500_d1_public_profile_qualifiche.sql` add owner-scoped qualification management, the private `professional-qualifications` bucket, an append-only private review ledger, the service-role-only idempotent review RPC, and the D8 public profile projection with the canonical green check plus the five-field badge allowlist.
+- Lifecycle `bozza -> inviata -> approvata/rifiutata/ritirata` is enforced in PostgreSQL. The browser cannot approve or review; raw payload/reasoning is not owner-readable; documents and `storage_path` remain private; draft deletion reports success only after both the Storage object and metadata are removed.
+- The canonical green check requires at least one `approvata` qualification whose `expires_on` is null or not before `current_date`. `/account` exposes the independent “Qualifiche professionali” panel and `/profilo/[id]` consumes only the canonical public projection.
+- Disposable PostgreSQL verification passed 75/75 cases with all 9 residue counters at zero and the container/volume removed. `frontend-next` passed 91/91 targeted tests, typecheck, 1146/1146 full-suite tests across 72 files, the production build, and `git diff --check`.
+- The CI floor is deliberately raised from `MIN_TESTS = 1092` to `MIN_TESTS = 1146`, matching the measured passing suite.
+- No production fixture, qualification, document, provider call, API key, background worker or AI approval was created; the provider-neutral trusted review boundary remains OFF.
 
 ## ACTIVE TASK
-None — D1 Vinea Balance closed.
+D1 Professional Qualifications — local VERIFY complete; GitHub CI, Supabase Preview, merge and controlled production verification are the remaining shipping gates.
 
 ## NEXT STEPS
-1. Verify the new migration reaches the production ledger on the next Supabase integration run.
-2. Cabina: select the next approved BUILD.
-3. Execute only that approved BUILD.
+1. Cabina: audit finale e chiusura D1.
+2. Cabina: selezione del prossimo work package dalla ROADMAP ATTIVA.
+3. Eseguire soltanto il work package esplicitamente approvato dalla Cabina.
 
 ## BLOCKERS / NOTES
-- The distributed migrations `20260826163000_d1_vinea_balance.sql` and `20260827104500_d1_balance_prelievo_e_freeze.sql` are frozen; correct either only with a newer timestamped migration.
-- `.wslconfig` and `.d3b-production-schema.sql` are unrelated local files and must remain preserved.
-- `/ordine/[id]` still exists as a route; the saldo-only landing was moved off it by product decision, not because the route was missing.
+- Once the D1 migrations are pushed or applied to Supabase Preview they are frozen; every later SQL correction must use a newer append-only migration.
+- The distributed migrations `20260826163000_d1_vinea_balance.sql` and `20260827104500_d1_balance_prelievo_e_freeze.sql` remain frozen; correct either only with a newer timestamped migration.
+- Readiness debt unchanged: external AI provider OFF, payments/provider/scheduler OFF, final legal text pending, Phase 13 cutover not started.
+- `.wslconfig` and `.d3b-production-schema.sql` are unrelated local files and must remain preserved and unstaged.
