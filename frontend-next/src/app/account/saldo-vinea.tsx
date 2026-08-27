@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RefreshCcw, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createBalanceService } from "@/services/phase7/balance-service";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatEUR } from "@/lib/format";
 import { etichettaMovimento, etichettaStatoPrelievo, deltaLeggibili } from "@/lib/balance/etichette";
+import { importoPrelievoInCentesimi, prelievoAnnullabile } from "@/lib/balance/prelievo";
+import { eseguiAzioneBeta } from "@/lib/beta/external-actions";
+import { AZIONI_PAGAMENTO_ABILITATE } from "@/config/features";
 import type { SaldoVinea } from "@/services/types";
 
 const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
@@ -18,6 +21,13 @@ export default function SaldoVineaPanel() {
   const [caricamento, setCaricamento] = useState(true);
   const [errore, setErrore] = useState<string | null>(null);
   const [prelievoInCorso, setPrelievoInCorso] = useState(false);
+  const [importo, setImporto] = useState("");
+  const [errorePrelievo, setErrorePrelievo] = useState<string | null>(null);
+  const [avvisoBeta, setAvvisoBeta] = useState<string | null>(null);
+  // La chiave sopravvive al ritentativo: è ciò che distingue «riprova la stessa
+  // richiesta» da «apri un secondo prelievo». Si azzera solo quando la richiesta
+  // è arrivata a destinazione, o quando l'utente cambia l'importo.
+  const chiaveRichiesta = useRef<string | null>(null);
 
   const carica = () => {
     setCaricamento(true);
@@ -57,20 +67,53 @@ export default function SaldoVineaPanel() {
     };
   }, []);
 
+  const cambiaImporto = (valore: string) => {
+    setImporto(valore);
+    setErrorePrelievo(null);
+    setAvvisoBeta(null);
+    // Importo diverso, richiesta diversa: riusare la chiave farebbe rifiutare
+    // la seconda dal server, che è il comportamento giusto ma per la ragione
+    // sbagliata — la persona ha davvero cambiato idea.
+    chiaveRichiesta.current = null;
+  };
+
   const richiediPrelievo = async () => {
-    const importo = 5000; // valore demo — in una schermata reale l'importo
-    // proviene da un input verificato, mai dal browser come decisione autonoma.
+    if (!saldo) return;
+    setAvvisoBeta(null);
+    const letto = importoPrelievoInCentesimi(importo, saldo.spendableCents);
+    if (!letto.ok) {
+      setErrorePrelievo(letto.errore);
+      return;
+    }
+
+    setErrorePrelievo(null);
     setPrelievoInCorso(true);
-    const r = await createBalanceService(getSupabaseClient()).richiediPrelievo(importo);
+    const esito = await eseguiAzioneBeta("pagamento", AZIONI_PAGAMENTO_ABILITATE, async () => {
+      chiaveRichiesta.current ??= crypto.randomUUID();
+      return createBalanceService(getSupabaseClient()).richiediPrelievo(
+        letto.cents,
+        chiaveRichiesta.current,
+      );
+    });
     setPrelievoInCorso(false);
-    if (r.ok) carica();
-    else setErrore(r.error);
+
+    if (!esito.eseguita) {
+      setAvvisoBeta(esito.messaggio);
+      return;
+    }
+    if (!esito.valore.ok) {
+      setErrorePrelievo(esito.valore.error);
+      return;
+    }
+    chiaveRichiesta.current = null;
+    setImporto("");
+    carica();
   };
 
   const annullaPrelievo = async (id: string) => {
     const r = await createBalanceService(getSupabaseClient()).annullaPrelievo(id);
     if (r.ok) carica();
-    else setErrore(r.error);
+    else setErrorePrelievo(r.error);
   };
 
   return (
@@ -127,17 +170,48 @@ export default function SaldoVineaPanel() {
                       <p className="text-sm font-medium">{etichettaStatoPrelievo(p.stato)}</p>
                       <p className="text-xs text-muted-foreground">{formatEUR(p.amountCents / 100)} · {new Date(p.createdAt).toLocaleDateString("it-IT")}</p>
                     </div>
-                    {(p.stato === "richiesto" || p.stato === "in_corso") && (
+                    {prelievoAnnullabile(p.stato) && (
                       <Button size="sm" variant="outline" onClick={() => annullaPrelievo(p.id)} disabled={prelievoInCorso}>Annulla</Button>
                     )}
                   </li>
                 ))}
               </ul>
             )}
-            <div className="mt-4 pt-4 border-t border-border flex gap-3">
-              <Button size="sm" variant="outline" onClick={richiediPrelievo} disabled={prelievoInCorso}>
-                <Wallet className="h-3.5 w-3.5 mr-1.5" /> Richiedi prelievo (demo)
-              </Button>
+
+            <div className="mt-4 pt-4 border-t border-border space-y-3">
+              <label className="block text-sm font-medium" htmlFor="prelievo-importo">
+                Importo da prelevare
+              </label>
+              <div className="flex flex-wrap items-start gap-3">
+                <div className="relative">
+                  <input
+                    id="prelievo-importo"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    placeholder="0,00"
+                    value={importo}
+                    onChange={(e) => cambiaImporto(e.target.value)}
+                    disabled={prelievoInCorso}
+                    aria-invalid={errorePrelievo !== null}
+                    aria-describedby={errorePrelievo ? "prelievo-errore" : undefined}
+                    className="w-40 rounded-xl border border-border bg-background px-3 py-2 pr-8 text-sm"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                    €
+                  </span>
+                </div>
+                <Button size="sm" variant="outline" onClick={richiediPrelievo} disabled={prelievoInCorso}>
+                  <Wallet className="h-3.5 w-3.5 mr-1.5" /> Richiedi prelievo
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Minimo 10 €, fino al saldo spendibile. Il server rivaluta l’importo prima di
+                impegnare i centesimi.
+              </p>
+              {errorePrelievo && (
+                <p id="prelievo-errore" className="text-sm text-red-700">{errorePrelievo}</p>
+              )}
+              {avvisoBeta && <p className="text-sm text-amber-700">{avvisoBeta}</p>}
             </div>
           </Card>
 

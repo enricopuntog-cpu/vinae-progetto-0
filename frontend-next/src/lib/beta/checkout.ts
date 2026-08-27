@@ -37,6 +37,19 @@ export const passiCheckout = (imballaggioVisibile: boolean): CheckoutPasso[] =>
     ? ["contatti", "consegna", "imballaggio", "pagamento"]
     : ["contatti", "consegna", "pagamento"];
 
+/**
+ * Dove atterra chi ha pagato interamente con il saldo Vinea.
+ *
+ * Non c'è nessuna pagina del fornitore da mostrare, quindi la conferma è tutta
+ * nostra: si atterra su `/acquisti`, la lista degli ordini dell'acquirente, con
+ * l'ordine appena creato indicato dai due parametri. Nessuna rotta nuova.
+ *
+ * L'identificativo viene codificato: finisce in una query string, e un valore
+ * inatteso non deve poter aggiungere parametri che nessuno ha scritto.
+ */
+export const destinazioneSaldoOnly = (orderId: string): string =>
+  `/acquisti?checkout=saldo&orderId=${encodeURIComponent(orderId)}`;
+
 const obbligatorio = (valore: string): boolean => valore.trim().length > 0;
 
 export const validaPassoCheckout = (

@@ -7,6 +7,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { eseguiAzioneBeta } from "@/lib/beta/external-actions";
 import {
   creaDatiCheckout,
+  destinazioneSaldoOnly,
   passiCheckout,
   validaPassoCheckout,
   type DatiCheckoutBeta,
@@ -73,9 +74,10 @@ export const useBetaCheckout = (wine: Wine, email: string, proposalId?: string) 
     }
     if (esito.valore.data.saldoOnly) {
       // Il saldo Vinea ha coperto l'intero importo: nessun provider, nessuna
-      // pagina di pagamento. Mostriamo una conferma locale.
+      // pagina di pagamento. Si atterra sulla lista degli acquisti, che è la
+      // pagina in cui l'ordine appena creato esiste davvero.
       setErroreAzione(null);
-      router.push(`/ordine/${esito.valore.data.orderId}?checkout=saldo`);
+      router.push(destinazioneSaldoOnly(esito.valore.data.orderId));
       return;
     }
     if (esito.valore.data.checkoutUrl) window.location.assign(esito.valore.data.checkoutUrl);

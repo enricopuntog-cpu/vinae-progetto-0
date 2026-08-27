@@ -833,8 +833,15 @@ export interface BalanceService {
   /**
    * Impegna i centesimi e accoda il bonifico. L'importo è l'unica scelta del
    * chiamante; la destinazione la conosce soltanto il server.
+   *
+   * `idempotencyKey` è obbligatoria: senza, un secondo click o un ritentativo
+   * dopo un errore di rete aprirebbe un secondo prelievo. Chi ritenta la stessa
+   * richiesta deve rimandare la stessa chiave, e riceverà lo stesso prelievo.
    */
-  richiediPrelievo(amountCents: number): Promise<Result<PrelievoRichiesto>>;
+  richiediPrelievo(
+    amountCents: number,
+    idempotencyKey: string,
+  ): Promise<Result<PrelievoRichiesto>>;
   /** Scioglie la prenotazione di un prelievo ancora fermo in coda. */
   annullaPrelievo(withdrawalId: string): Promise<Result<void>>;
 }

@@ -83,10 +83,14 @@ export const createBalanceService = (client: SupabaseClient | null): BalanceServ
     }
     return { ok: true, data: mapRiepilogo(data as RiepilogoRpc) };
   },
-  richiediPrelievo: async (amountCents) => {
+  richiediPrelievo: async (amountCents, idempotencyKey) => {
     if (!client) return noClient();
+    // La chiave viaggia come la manda il chiamante: è il server a scoperchiarla
+    // con l'identità del titolare, così due persone che scelgono la stessa
+    // stringa non si ritrovano mai sul prelievo dell'altra.
     const { data, error } = await client.rpc("balance_prelievo_richiedi", {
       p_amount_cents: amountCents,
+      p_idempotency_key: idempotencyKey,
     });
     if (error) return serviceError("balance_prelievo_richiedi", error);
     const riga = data as RigaPrelievo | null;
