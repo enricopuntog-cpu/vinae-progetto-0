@@ -36,6 +36,17 @@ export type { DemoRuolo } from "@/lib/store/auth-domain";
 type StoreState = {
   ruolo: DemoRuolo;
   setRuolo: (ruolo: DemoRuolo) => void;
+  /**
+   * D10. Il ruolo **reale**, derivato da `user_roles` e mai dal selettore demo.
+   *
+   * `ruolo` qui sopra e questo campo coincidono quando lo switcher è spento;
+   * con lo switcher acceso `ruolo` è quello scelto a mano, e chi decide un
+   * accesso deve leggere questo. Il dominio lo esponeva già
+   * (`real-auth-domain.ts` lo restituisce come `authRuolo`) ma non era nel
+   * tipo, quindi nessuna superficie poteva consumarlo: lo spread del provider
+   * lo portava a runtime e TypeScript non lo vedeva.
+   */
+  authRuolo: DemoRuolo;
   authUser: AuthUser | null;
   authLoading: boolean;
   /** Riga completa di `public.profiles` per l'utente collegato. */

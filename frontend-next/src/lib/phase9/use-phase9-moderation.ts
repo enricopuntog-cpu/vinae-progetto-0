@@ -18,8 +18,10 @@ import {
   azionePratica,
   codaContestazioni,
   createSupabaseModerationService,
+  risolviContestazione,
   type AzionePraticaInput,
   type DisputeQueueRow,
+  type EsitoContestazioneAdmin,
   type TransizioneAnnuncio,
 } from "@/services/phase9/supabase-moderation-service";
 import type { AuditEntry, Report } from "@/data/moderation";
@@ -37,6 +39,14 @@ export type Phase9ModerationState = {
   agisci: ((input: AzionePraticaInput) => Promise<void>) | null;
   transizioneAnnuncio:
     | ((listingId: string, transizione: TransizioneAnnuncio, motivazione: string) => Promise<void>)
+    | null;
+  /**
+   * D10. Chiude una controversia dalla scheda Controversie. Null senza
+   * servizio, come le altre due azioni: un comando che non arriva al database
+   * non e un comando.
+   */
+  risolviControversia:
+    | ((orderId: string, esito: EsitoContestazioneAdmin, nota: string) => Promise<void>)
     | null;
   inCorso: string | null;
 };
@@ -138,6 +148,33 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
     [client, reload, service],
   );
 
+  // Stessa forma di `agisci`: dopo la chiamata si rilegge tutto. Una
+  // risoluzione tocca la pratica, l'ordine, il payout e il tracking, e
+  // ricostruire quel risultato dal client significherebbe riscrivere la
+  // semantica della RPC - e sbagliarla proprio dove c'e del denaro.
+  //
+  // `inCorso` e per ordine e non globale: la coda ha piu righe, e un flag unico
+  // spegnerebbe i comandi di tutte. E la stessa chiave che la scheda controlla
+  // per disabilitare i due pulsanti, quindi il doppio invio si ferma qui e non
+  // in un `useRef` accanto.
+  const risolviControversia = useCallback(
+    async (orderId: string, esito: EsitoContestazioneAdmin, nota: string) => {
+      if (!service) return;
+      setInCorso(`${orderId}:${esito}`);
+      try {
+        await risolviContestazione(client, { orderId, esito, nota });
+        setError(null);
+        await reload();
+      } catch (e) {
+        setError(messaggio(e));
+        throw e;
+      } finally {
+        setInCorso(null);
+      }
+    },
+    [client, reload, service],
+  );
+
   useEffect(() => {
     const richiesta = ++epoch.current;
     queueMicrotask(() => {
@@ -170,6 +207,7 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
         reload: async () => {},
         agisci: null,
         transizioneAnnuncio: null,
+        risolviControversia: null,
         inCorso: null,
       };
     }
@@ -184,6 +222,7 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
       reload,
       agisci,
       transizioneAnnuncio,
+      risolviControversia,
       inCorso,
     };
   }, [
@@ -196,6 +235,7 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
     loading,
     mieSegnalazioni,
     reload,
+    risolviControversia,
     service,
     transizioneAnnuncio,
   ]);

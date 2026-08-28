@@ -575,6 +575,68 @@ export const codaContestazioni = async (
   return (data ?? []).map((row) => mapDisputeRow(row as Parameters<typeof mapDisputeRow>[0]));
 };
 
+// ---------------------------------------------------------------------------
+// D10 - la risoluzione di una contestazione dal pannello
+// ---------------------------------------------------------------------------
+// La coda contestazioni era in sola lettura: la vista la mostrava e non
+// esisteva alcuna porta di scrittura raggiungibile dal browser. Il motore -
+// public.ordine_contestazione_risolvi - e concesso al solo service_role, e
+// resta li: `moderazione_contestazione_risolvi` e una porta nuova e piu
+// stretta che lo riusa senza duplicarne la semantica.
+//
+// Due esiti soli. `rimborsata` non e nella firma della porta - non e escluso
+// qui e ammesso la: il database non sa nemmeno riceverlo da questa strada,
+// finche refund e provider restano spenti. Il tipo qui sotto e la stessa lista
+// del `check` in SQL, non una copia che possa divergere in silenzio: se un
+// giorno divergesse, il database rifiuterebbe con 22023 invece di eseguire.
+
+export type EsitoContestazioneAdmin = "risolta" | "respinta";
+
+export type EsitoRisoluzione = {
+  orderId: string;
+  disputeStato: DisputeQueueRow["stato"];
+  chiusuraAt: string | null;
+  /** Vero quando la pratica era gia terminale: nessuna seconda scrittura. */
+  giaChiusa: boolean;
+};
+
+export const risolviContestazione = async (
+  client: SupabaseClient | null,
+  input: { orderId: string; esito: EsitoContestazioneAdmin; nota: string },
+): Promise<EsitoRisoluzione> => {
+  if (!client) return noPhase9Client("risolviContestazione");
+  // La motivazione e obbligatoria a database. Fermarla qui risparmia un giro di
+  // rete; il vincolo autoritativo resta quello, come per azionePratica.
+  if (input.nota.trim().length === 0) {
+    return phase9Throw("risolviContestazione", {
+      code: "22023",
+      message: "Una motivazione e obbligatoria.",
+    });
+  }
+
+  const { data, error } = await client.rpc("moderazione_contestazione_risolvi", {
+    p_order_id: input.orderId,
+    p_esito: input.esito,
+    p_nota: input.nota.trim(),
+  });
+  if (error) return phase9Throw("moderazione_contestazione_risolvi", error);
+
+  // La RPC torna un jsonb stretto e non la riga di orders: quattro campi, per
+  // costruzione, cosi nessuna colonna dell'ordine attraversa questa porta.
+  const riga = (data ?? {}) as {
+    order_id?: string;
+    dispute_stato?: DisputeQueueRow["stato"];
+    chiusura_at?: string | null;
+    gia_chiusa?: boolean;
+  };
+  return {
+    orderId: riga.order_id ?? input.orderId,
+    disputeStato: riga.dispute_stato ?? input.esito,
+    chiusuraAt: riga.chiusura_at ?? null,
+    giaChiusa: riga.gia_chiusa === true,
+  };
+};
+
 // I motivi ammessi per tipo di bersaglio vengono dal database, non dalla copia
 // TypeScript: reportReasons in data/moderation.ts e la stessa lista, ma se le
 // due divergessero il vincolo referenziale di reports.motivo rifiuterebbe la

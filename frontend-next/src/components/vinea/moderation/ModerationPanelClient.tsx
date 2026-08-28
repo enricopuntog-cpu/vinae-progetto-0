@@ -58,6 +58,7 @@ import type { AuditEntry, ModAction, Priorita, Report } from "@/data/moderation"
 import type {
   AzionePraticaInput,
   DisputeQueueRow,
+  EsitoContestazioneAdmin,
   TransizioneAnnuncio,
 } from "@/services/phase9/supabase-moderation-service";
 
@@ -294,29 +295,111 @@ const RigaSegnalazione = ({
   </Card>
 );
 
-const RigaContestazione = ({ riga }: { riga: DisputeQueueRow }) => (
-  <Card className="space-y-2 p-4">
-    <div className="flex flex-wrap items-start justify-between gap-2">
-      <div>
-        <p className="font-medium">{riga.motivo}</p>
-        <p className="text-sm text-muted-foreground">
-          {riga.apertaDaUsername} contro {riga.sellerUsername}
-        </p>
+// D10. Una pratica si lavora finche e aperta o in valutazione: gli altri tre
+// stati sono terminali, e la porta li rifiuta uscendo senza scrivere. Mostrare
+// comandi che il database ignora sarebbe la stessa promessa vuota che `chiusa`
+// evita per le segnalazioni.
+const contestazioneLavorabile = (riga: DisputeQueueRow) =>
+  riga.stato === "aperta" || riga.stato === "in_valutazione";
+
+const RigaContestazione = ({
+  riga,
+  inCorso,
+  onRisolvi,
+}: {
+  riga: DisputeQueueRow;
+  inCorso: string | null;
+  onRisolvi: ((orderId: string, esito: EsitoContestazioneAdmin, nota: string) => Promise<void>) | null;
+}) => {
+  const [nota, setNota] = useState("");
+  const pronta = nota.trim().length > 0;
+  // `inCorso` e la chiave dell'azione in volo, per ordine. Non un booleano
+  // locale: la coda ha piu righe, e il controller la spegne da solo quando la
+  // rilettura e finita — cosi il pulsante non si riaccende prima dei dati.
+  const occupato = inCorso !== null;
+  const lavorabile = contestazioneLavorabile(riga);
+
+  const esegui = async (esito: EsitoContestazioneAdmin) => {
+    if (!onRisolvi || !pronta || occupato) return;
+    try {
+      await onRisolvi(riga.orderId, esito, nota);
+      setNota("");
+    } catch {
+      // L'errore e gia nello stato del controller e la pagina lo mostra. Qui
+      // conta solo non azzerare la nota: chi riprova non deve riscriverla.
+    }
+  };
+
+  return (
+    <Card className="space-y-2 p-4" data-testid={`controversia-${riga.orderId}`}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="font-medium">{riga.motivo}</p>
+          <p className="text-sm text-muted-foreground">
+            {riga.apertaDaUsername} contro {riga.sellerUsername}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge>{riga.stato}</Badge>
+          <Badge className="bg-muted text-muted-foreground">payout {riga.ordinePayoutStato}</Badge>
+        </div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <Badge>{riga.stato}</Badge>
-        <Badge className="bg-muted text-muted-foreground">payout {riga.ordinePayoutStato}</Badge>
-      </div>
-    </div>
-    {riga.descrizione ? <p className="text-sm">{riga.descrizione}</p> : null}
-    <p className="text-xs text-muted-foreground">
-      {/* I due totali restano distinti: l'imballaggio della 7c e nel secondo. */}
-      Ordine {euro(riga.totaleCents)} · addebitato {euro(riga.addebitoTotaleCents)} · aperta il{" "}
-      {data(riga.aperturaAt)}
-    </p>
-    {riga.esitoNota ? <p className="text-xs">Esito: {riga.esitoNota}</p> : null}
-  </Card>
-);
+      {riga.descrizione ? <p className="text-sm">{riga.descrizione}</p> : null}
+      <p className="text-xs text-muted-foreground">
+        {/* I due totali restano distinti: l'imballaggio della 7c e nel secondo. */}
+        Ordine {euro(riga.totaleCents)} · addebitato {euro(riga.addebitoTotaleCents)} · aperta il{" "}
+        {data(riga.aperturaAt)}
+      </p>
+      {riga.esitoNota ? <p className="text-xs">Esito: {riga.esitoNota}</p> : null}
+
+      {onRisolvi && lavorabile ? (
+        <div className="space-y-2 border-t pt-3">
+          <Label htmlFor={`controversia-nota-${riga.orderId}`} className="text-xs uppercase">
+            Motivazione (obbligatoria)
+          </Label>
+          <Textarea
+            id={`controversia-nota-${riga.orderId}`}
+            data-testid={`controversia-nota-${riga.orderId}`}
+            rows={2}
+            value={nota}
+            onChange={(e) => setNota(e.target.value)}
+            placeholder="Perche stai chiudendo questa controversia?"
+            disabled={occupato}
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid={`controversia-risolvi-${riga.orderId}`}
+              disabled={!pronta || occupato}
+              onClick={() => void esegui("risolta")}
+            >
+              {inCorso === `${riga.orderId}:risolta` ? "Risoluzione…" : "Risolvi"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid={`controversia-respingi-${riga.orderId}`}
+              disabled={!pronta || occupato}
+              onClick={() => void esegui("respinta")}
+            >
+              {inCorso === `${riga.orderId}:respinta` ? "Rifiuto…" : "Respingi"}
+            </Button>
+          </div>
+          {/*
+            Nessun terzo pulsante. `rimborsata` non e nella firma della porta
+            browser-admin: finche refund e provider restano spenti, disporre un
+            rimborso e una leva di back-office. Il testo lo dice invece di
+            lasciare un vuoto che sembra una dimenticanza.
+          */}
+          <p className="text-xs text-muted-foreground">
+            Il rimborso non si dispone da qui: resta al back-office finche i pagamenti sono spenti.
+          </p>
+        </div>
+      ) : null}
+    </Card>
+  );
+};
 
 const RigaAudit = ({ voce }: { voce: AuditEntry }) => (
   <Card className="space-y-1 p-4">
@@ -334,11 +417,22 @@ const RigaAudit = ({ voce }: { voce: AuditEntry }) => (
 );
 
 export const ModerationPanelClient = () => {
-  const { ruolo } = useVinea();
+  // D10: `authRuolo` e non `ruolo`. Il secondo, con lo switcher demo acceso, e
+  // quello scelto a mano nel selettore Guest/User/Admin: leggerlo qui
+  // significava che chiunque potesse scegliere «Admin» e vedere il pannello -
+  // vuoto, perche il database non gli dava righe, ma aperto. Il primo viene da
+  // `user_roles` e il selettore non lo tocca.
+  //
+  // Il cancello vero resta comunque a database: le viste `moderation_*` sono
+  // `security_invoker = off` e filtrano su `user_roles`, e ogni RPC di
+  // moderazione rifiuta con 42501. Questo e cio che si mostra, non cio che si
+  // autorizza. La route `/admin` fa la stessa verifica sul server, prima di
+  // rendere.
+  const { authRuolo } = useVinea();
   const online = useOnline();
   const [tab, setTab] = useState("coda");
   const [aperta, setAperta] = useState<Report | null>(null);
-  const moderatore = ruolo === "admin";
+  const moderatore = authRuolo === "admin";
   const {
     coda,
     audit,
@@ -348,6 +442,7 @@ export const ModerationPanelClient = () => {
     reload,
     agisci,
     transizioneAnnuncio,
+    risolviControversia,
     inCorso,
   } = usePhase9Moderation({ moderatore });
 
@@ -408,7 +503,14 @@ export const ModerationPanelClient = () => {
           {contestazioni.length === 0 ? (
             <EmptyState title="Nessuna controversia" message="Nessuna pratica aperta." />
           ) : (
-            contestazioni.map((riga) => <RigaContestazione key={riga.id} riga={riga} />)
+            contestazioni.map((riga) => (
+              <RigaContestazione
+                key={riga.id}
+                riga={riga}
+                inCorso={inCorso}
+                onRisolvi={risolviControversia}
+              />
+            ))
           )}
         </TabsContent>
 

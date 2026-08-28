@@ -1,25 +1,30 @@
 ## CURRENT STATE
-- D9 Reviews & Reputation is merged into `main` as `c9a464c` (PR #101, squash): PostgreSQL owns eligibility, review identity, recipient identity, one-review-per-order, one seller reply, public aggregation and the closed-column public review projection.
-- Buyer order surfaces consume one server-authoritative eligibility model; the order detail supports four ratings plus an optional bounded comment, while the reviewed state and seller reply remain tied to the existing order surface.
-- The existing D8 public profile now includes authoritative review totals, nullable averages and paginated public reviews; zero reviews remain an explicit absence of rating, and reporting reuses the canonical moderation door.
-- Migration `20260827180000_d9_reviews_reputation.sql` replayed successfully after every preceding migration in a disposable local Supabase database. The D9 grid passed 83/83 cases with all 13 residue counters at zero.
-- Every relevant check passed at head `3bfa52c`: both frontends, backend, payout runner, Netlify preview and rules, and Supabase Preview.
-- The post-merge Supabase integration applied D9 to production project `pijnmcllmfgjmgsvtcej`. The ledger now holds 45 migrations with none unapplied, and no migration was applied by hand.
-- A read-only production schema dump confirmed the object bodies, not only the ledger row: both review tables with RLS enabled and participant-scoped `SELECT` policies, `SELECT`-only grants to `authenticated`, the write RPCs granted to `authenticated` but never to `anon`, the public reputation RPCs granted to `anon`, `private.recensioni_pubbliche` with `security_invoker=off`, `security_barrier=true` and no `order_id`, and `public.profilo_pubblico` returning its original nine columns followed by the two appended ones.
-- `frontend-next` passes lint with 13 pre-existing warnings and zero errors, typecheck, 1224/1224 tests across 76 files, and the production build. The CI test-count floor is 1224.
-- No production fixture, review, order, payment or payout was created or changed. Phase 13 cutover has not started.
+- D1–D9 CLOSED. D10 Admin Area is complete and merged into `main` from `d10-admin-area-complete`, based on `b1315e509e6343bdcef326ee59fe8cc04d9d0583`.
+- The Admin Area was reused, not rebuilt: `/admin`, `ModerationPanelClient`, `usePhase9Moderation`, the Supabase moderation service, the report queue, report events and internal notes, the moderation actions, the listing transitions, the dispute queue and the append-only audit log are the Phase 9 ones. No `moderation_v2`, no second report table, no second audit system, no parallel admin queue.
+- `/admin` decides on the server. `frontend-next/src/app/admin/page.tsx` awaits `connection()`, resolves the session through the existing server auth helper, reads `user_roles` and calls `notFound()` unless the caller really holds `admin`; an absent session redirects to `/accedi`. No `service_role` key is used in the page or anywhere in the browser.
+- The demo switcher grants nothing. `ModerationPanelClient` and the shell navigation both read `authRuolo` (the real role from `user_roles`) instead of the demo `ruolo`, so selecting "Admin" in the demo UI opens no admin surface.
+- D9 review reports reach moderators through the existing reports system: `recensione` is a `report_target_tipo` value and `reports.target_review_id` references `public.order_reviews`, both from Phase 9a. No D9-specific queue was added.
+- Migration `20260828120000_d10_admin_dispute_gate.sql` adds `public.moderazione_contestazione_risolvi(uuid, text, text)`: `SECURITY DEFINER`, `SET search_path = ''`, mandatory `auth.uid()`, mandatory real admin role, server-validated order, mandatory bounded note, `jsonb` return.
+- `EXECUTE` on that door is revoked from `PUBLIC`, `anon` **and** `service_role`, and granted to `authenticated` alone. `service_role` is named in the revoke because the Supabase project carries an `alter default privileges ... grant all on functions to ... service_role`: omitting it from the grant list does not withhold it. Verified on the local instance — without that revoke the resulting ACL is `postgres=X/postgres service_role=X/postgres authenticated=X/postgres`. The door requires `auth.uid()`, which a service key does not carry, so the permission was unusable as well as unintended.
+- The browser-admin door accepts only `risolta` and `respinta`. `p_esito` is `text` against a closed list, so `rimborsata` is not a legal input rather than a legal value stopped by a check. The frozen `public.ordine_contestazione_risolvi` was not modified and remains available to `service_role`; the new door calls it internally and writes nothing to `orders`, `payouts`, `payments` or `disputes` itself.
+- The Controversie tab is operational for `aperta` and `in_valutazione` practices: "Risolvi" and "Respingi", a required motivation, per-row in-flight state that blocks double submission, mediated errors and a queue reload after success. Terminal practices expose no action. There is no "Rimborsa" button; refund and provider actions remain OFF.
+- The disposable grid `supabase/tests/d10_admin_area.sql` passes 40/40 across LETTURE, D9, AZIONI, PORTA, ESITI, DENARO, IDEMPOTENZA and ESPOSIZIONE, on a local Docker Supabase database holding every preceding migration, with all 17 residue counters at zero and both append-only guards re-enabled. Case 34 asserts the absence of the `service_role` privilege, not only the presence of the `authenticated` one.
+- The full `frontend-next` suite passes 1256/1256 across 77 files, and typecheck is clean. `MIN_TESTS` was raised from `1224` to `1256` in `.github/workflows/ci.yml` and `prelaunch-contract.test.ts` in the same change, as raising one alone fails CI.
+- One assertion in `navigazione-mobile.test.ts` pinned the whole `useVinea()` destructuring line while its subject is that `autenticato` has a single source. It now matches that subject — `ruolo` present in the destructuring, `autenticato` assigned exactly once — so reading another field from the same hook no longer fails it.
+- No production read, write, fixture or deployment. Phase 13 cutover has not started.
 
 ## ACTIVE TASK
-None. D9 Reviews & Reputation is closed: merged, applied to production and verified there.
+Nessuna. D10 chiuso lato repository; la dichiarazione di chiusura spetta alla Cabina.
 
 ## NEXT STEPS
-1. Choose the next migration-phase task from `docs/ROADMAP_V1.md` before opening any branch.
-2. Correct any D9 SQL defect with a newer append-only migration, never by editing `20260827180000_d9_reviews_reputation.sql`.
-3. Keep the CI floor and the `prelaunch-contract` assertion moving together whenever the suite grows.
+1. Cabina audit post-merge/production e chiusura D10.
+2. Cabina dichiara D1–D10 CLOSED.
+3. Phase 13 resta separata e non iniziata.
 
 ## BLOCKERS / NOTES
-- `20260827180000_d9_reviews_reputation.sql` is applied to production and frozen; never edit it in place.
-- The destructive D9 grid is local-only. Never execute it or create review/order fixtures in production.
-- `.github/workflows/ci.yml` and `frontend-next/src/lib/beta/prelaunch-contract.test.ts` mirror the same `MIN_TESTS` value; raising one without the other fails CI, as it did at head `5828d76`.
-- Readiness debt unchanged: external AI provider OFF, payments/provider/scheduler OFF, final legal text pending, Phase 13 cutover not started.
+- `20260828120000_d10_admin_dispute_gate.sql` is frozen once the Supabase integration applies it: correct it with a newer timestamped migration, never in place.
+- The `service_role` revoke above is load-bearing. A later migration that drops and recreates the function without repeating it silently restores the platform default grant.
+- `public.ordine_contestazione_risolvi` is deployed and frozen. It must not be granted to `authenticated`; the D10 door is the only browser path to it.
+- The D10 grid is destructive and local-only. It suspends `audit_log_no_delete` and `wine_price_observations_no_delete` for scoped deletes and re-enables them; never execute it against production.
+- Readiness debt unchanged: external AI provider OFF, payments/provider/payout scheduler OFF, refund OFF, final legal text pending, Phase 13 cutover not started.
 - `.wslconfig` and `.d3b-production-schema.sql` are unrelated local files and must remain preserved and unstaged.
