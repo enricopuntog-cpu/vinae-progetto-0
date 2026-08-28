@@ -1,22 +1,25 @@
 ## CURRENT STATE
-- D9 Reviews & Reputation is complete on branch `d9-reviews-reputation-complete`: PostgreSQL owns eligibility, review identity, recipient identity, one-review-per-order, one seller reply, public aggregation and the closed-column public review projection.
+- D9 Reviews & Reputation is complete on branch `d9-reviews-reputation-complete` (PR #101): PostgreSQL owns eligibility, review identity, recipient identity, one-review-per-order, one seller reply, public aggregation and the closed-column public review projection.
 - Buyer order surfaces consume one server-authoritative eligibility model; the order detail supports four ratings plus an optional bounded comment, while the reviewed state and seller reply remain tied to the existing order surface.
 - The existing D8 public profile now includes authoritative review totals, nullable averages and paginated public reviews; zero reviews remain an explicit absence of rating, and reporting reuses the canonical moderation door.
 - Migration `20260827180000_d9_reviews_reputation.sql` replayed successfully after every preceding migration in a disposable local Supabase database. The D9 grid passed 83/83 cases with all 13 residue counters at zero.
+- Supabase Preview applied that migration on PR #101, so the file is frozen: every later SQL correction requires a newer append-only migration.
+- The first PR head failed one `frontend-next` assertion: `prelaunch-contract.test.ts` still pinned the old `MIN_TESTS: "1146"` while `.github/workflows/ci.yml` had been raised to `1224`. The mirror assertion now reads `1224` and no other file changed.
 - `frontend-next` passed lint with 13 pre-existing warnings and zero errors, typecheck, 1224/1224 tests across 76 files, and the production build. The CI test-count floor is raised from 1146 to 1224.
-- No production fixture, review, order, payment or payout was created or changed. The D9 migration has not yet been applied to Supabase Preview or production, and Phase 13 cutover has not started.
+- No production fixture, review, order, payment or payout was created or changed. The D9 migration has not been applied to production, and Phase 13 cutover has not started.
 
 ## ACTIVE TASK
-D9 Reviews & Reputation — verified locally; ready for commit, PR, CI, Supabase Preview, merge and narrow production verification.
+D9 Reviews & Reputation — CI failure repaired; ready for the new head SHA to go green, then merge and narrow production verification.
 
 ## NEXT STEPS
-1. Commit and push the intentional D9 files, CI floor and this handoff.
-2. Open the D9 PR and require every relevant CI and Supabase Preview check to pass at the exact head SHA.
-3. Squash merge, verify `origin/main`, then reconcile and narrowly verify the production migration ledger.
+1. Push the CI fix and this handoff, then verify PR #101's new exact head SHA and diff.
+2. Require every relevant CI check and Supabase Preview green at that head SHA, then squash merge and verify `origin/main`.
+3. Reconcile the production migration ledger and narrowly verify the D9 migration there.
 
 ## BLOCKERS / NOTES
-- Once Supabase Preview applies `20260827180000_d9_reviews_reputation.sql`, that migration is frozen; every later SQL correction requires a newer append-only migration.
+- `20260827180000_d9_reviews_reputation.sql` is frozen by Supabase Preview; never edit it in place.
 - The destructive D9 grid is local-only. Never execute it or create review/order fixtures in production.
 - Production application must stop if project ref, environment or migration ledger is ambiguous, or if D9 is not the sole expected task migration absent from production.
+- The CI floor and the `prelaunch-contract` assertion mirror each other: raising one without the other fails the suite on the next PR.
 - Readiness debt unchanged: external AI provider OFF, payments/provider/scheduler OFF, final legal text pending, Phase 13 cutover not started.
 - `.wslconfig` and `.d3b-production-schema.sql` are unrelated local files and must remain preserved and unstaged.
