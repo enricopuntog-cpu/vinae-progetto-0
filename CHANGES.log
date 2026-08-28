@@ -1,21 +1,22 @@
 ## CURRENT STATE
-- D1 Professional Qualifications shipped through PR #99 and squash commit `8418c6b95617bbd43dacd16b2bdf4e5c1d755333`: all triggered CI jobs and Supabase Preview passed, and `origin/main` contains migrations `20260827160000_d1_professional_qualifications.sql` and `20260827160500_d1_public_profile_qualifiche.sql`.
-- Production project `pijnmcllmfgjmgsvtcej` (`vinea wine club`, default branch `main`) is healthy and its migration ledger contains both D1 migrations; no manual migration application was needed. The frozen legacy `20260825120000_profile_certifications.sql` is unchanged and `seller_verificato` is not the new source of truth.
-- Targeted production verification confirmed the private `professional-qualifications` bucket (`public = false`, 10 MiB, PDF/JPEG/PNG only), the canonical `approvata` plus non-expiry predicate, the five-field public badge allowlist, owner-scoped RLS, an append-only private review ledger, and a service-role-only review RPC. Anonymous Data API calls received permission denial for the review RPC and document table; the private review table is not exposed in the public schema cache.
-- Lifecycle `bozza -> inviata -> approvata/rifiutata/ritirata` is enforced in PostgreSQL. The browser cannot approve or review; raw payload/reasoning is not owner-readable; documents and `storage_path` remain private; draft deletion reports success only after both the Storage object and metadata are removed.
-- Disposable PostgreSQL verification passed 75/75 cases with all 9 residue counters at zero and the container/volume removed. `frontend-next` passed 91/91 targeted tests, typecheck, 1146/1146 full-suite tests across 72 files, the production build, and `git diff --check`; the CI floor is now `MIN_TESTS = 1146`.
-- No production fixture, qualification, document, review, provider call, background worker, AI approval, payment or payout was created or activated; the provider-neutral trusted review boundary remains OFF and Phase 13 cutover has not started.
+- D9 Reviews & Reputation is complete on branch `d9-reviews-reputation-complete`: PostgreSQL owns eligibility, review identity, recipient identity, one-review-per-order, one seller reply, public aggregation and the closed-column public review projection.
+- Buyer order surfaces consume one server-authoritative eligibility model; the order detail supports four ratings plus an optional bounded comment, while the reviewed state and seller reply remain tied to the existing order surface.
+- The existing D8 public profile now includes authoritative review totals, nullable averages and paginated public reviews; zero reviews remain an explicit absence of rating, and reporting reuses the canonical moderation door.
+- Migration `20260827180000_d9_reviews_reputation.sql` replayed successfully after every preceding migration in a disposable local Supabase database. The D9 grid passed 83/83 cases with all 13 residue counters at zero.
+- `frontend-next` passed lint with 13 pre-existing warnings and zero errors, typecheck, 1224/1224 tests across 76 files, and the production build. The CI test-count floor is raised from 1146 to 1224.
+- No production fixture, review, order, payment or payout was created or changed. The D9 migration has not yet been applied to Supabase Preview or production, and Phase 13 cutover has not started.
 
 ## ACTIVE TASK
-D1 Professional Qualifications — shipped and verified in production; awaiting Cabina final audit and closure.
+D9 Reviews & Reputation — verified locally; ready for commit, PR, CI, Supabase Preview, merge and narrow production verification.
 
 ## NEXT STEPS
-1. Cabina: audit finale e chiusura D1.
-2. Cabina: selezione del prossimo work package dalla ROADMAP ATTIVA.
-3. Eseguire soltanto il work package esplicitamente approvato dalla Cabina.
+1. Commit and push the intentional D9 files, CI floor and this handoff.
+2. Open the D9 PR and require every relevant CI and Supabase Preview check to pass at the exact head SHA.
+3. Squash merge, verify `origin/main`, then reconcile and narrowly verify the production migration ledger.
 
 ## BLOCKERS / NOTES
-- D1 migrations `20260827160000` and `20260827160500` are merged, Preview-applied and production-applied; they are frozen, so every later SQL correction requires a newer append-only migration.
-- The distributed migrations `20260826163000_d1_vinea_balance.sql` and `20260827104500_d1_balance_prelievo_e_freeze.sql` remain frozen; correct either only with a newer timestamped migration.
+- Once Supabase Preview applies `20260827180000_d9_reviews_reputation.sql`, that migration is frozen; every later SQL correction requires a newer append-only migration.
+- The destructive D9 grid is local-only. Never execute it or create review/order fixtures in production.
+- Production application must stop if project ref, environment or migration ledger is ambiguous, or if D9 is not the sole expected task migration absent from production.
 - Readiness debt unchanged: external AI provider OFF, payments/provider/scheduler OFF, final legal text pending, Phase 13 cutover not started.
 - `.wslconfig` and `.d3b-production-schema.sql` are unrelated local files and must remain preserved and unstaged.

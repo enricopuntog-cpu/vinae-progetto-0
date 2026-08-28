@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BadgeCheck, MapPin } from "lucide-react";
 import { notFound } from "next/navigation";
 import { AvatarPersona } from "@/components/vinea/AvatarPersona";
+import { ReputazionePubblica } from "@/components/vinea/profilo/ReputazionePubblica";
 import { WineCard } from "@/components/vinea/WineCard";
 import { esperienzaLabels } from "@/data/onboarding";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -33,8 +34,17 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 
   const profilo = esitoProfilo.data;
   const localita = [profilo.citta, profilo.provincia].filter(Boolean).join(", ");
-  const esitoAnnunci = await service.annunciAttivi(id);
+
+  // Due letture indipendenti, insieme: gli annunci e la prima pagina di
+  // recensioni non si aspettano a vicenda. Il riepilogo — conteggio e medie —
+  // non è nessuna delle due: viaggia già dentro `profilo_pubblico`, quindi la
+  // reputazione non costa una terza andata al database.
+  const [esitoAnnunci, esitoRecensioni] = await Promise.all([
+    service.annunciAttivi(id),
+    service.recensioni(id),
+  ]);
   const annunci = esitoAnnunci.ok ? esitoAnnunci.data : [];
+  const recensioni = esitoRecensioni.ok ? esitoRecensioni.data : [];
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
@@ -142,6 +152,19 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           </div>
         )}
       </section>
+
+      {/*
+        La reputazione sta qui dentro, non su una seconda pagina profilo, e non
+        dipende dagli annunci: chi ha smesso di vendere conserva le recensioni
+        che ha ricevuto, e la sezione sopra può essere vuota mentre questa non
+        lo è.
+      */}
+      <ReputazionePubblica
+        userId={profilo.userId}
+        totali={profilo.recensioniTotali}
+        medie={profilo.recensioniMedie}
+        iniziali={recensioni}
+      />
     </div>
   );
 }

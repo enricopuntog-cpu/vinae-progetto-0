@@ -306,6 +306,39 @@ export type ProfiloPubblico = {
    * persone non ha qualifiche — e non va sostituita da un segnaposto.
    */
   qualificheProfessionali: QualificaProfessionalePubblica[];
+  /**
+   * Quante recensioni ha ricevuto. Sempre un numero, `0` compreso: «nessuna
+   * recensione» è un fatto misurato e va detto.
+   *
+   * Non ha nulla a che vedere con `professionistaVerificato`. Una qualifica
+   * professionale è un titolo verificato da un ente; la reputazione è il
+   * giudizio di chi ha comprato. Sono due segnali distinti, con due sorgenti
+   * distinte, e nessuno dei due va derivato dall'altro.
+   */
+  recensioniTotali: number;
+  /**
+   * Le quattro medie, oppure `null` quando non c'è nessuna recensione.
+   *
+   * `null` e non un oggetto di zeri, ed è la ragione per cui questo campo non è
+   * `MedieRecensioni` liscio: una media di zero su cinque è un giudizio
+   * pessimo, e mostrarlo a chi non è mai stato recensito significherebbe
+   * affermare qualcosa che nessuno ha misurato. Chi rende questo campo deve
+   * ramificare sull'assenza, non stamparne il valore.
+   */
+  recensioniMedie: MedieRecensioni | null;
+};
+
+/**
+ * Le medie di reputazione, calcolate dal database. Numeri già arrotondati a due
+ * decimali alla sorgente: non vanno ricalcolati qui, perché il browser ha al
+ * massimo una pagina di recensioni e la media di dieci righe non è la media di
+ * tutte.
+ */
+export type MedieRecensioni = {
+  voto: number;
+  conformita: number;
+  imballaggio: number;
+  comunicazione: number;
 };
 
 /**
@@ -321,6 +354,35 @@ export type QualificaProfessionalePubblica = {
   paese: string | null;
   issuedOn: string | null;
   expiresOn: string | null;
+};
+
+/**
+ * Una recensione come la vede chiunque, e l'elenco è chiuso.
+ *
+ * Non c'è `orderId`, e non è un campo dimenticato: la vista sorgente non lo
+ * contiene, quindi non esiste un filtro da ricordarsi di applicare qui. Con
+ * esso restano fuori prezzi, commissioni, indirizzi, pagamenti, rimborsi,
+ * payout e contestazioni — tutto ciò che sta sull'ordine e non riguarda chi
+ * legge un profilo.
+ *
+ * L'autore compare solo con i tre campi che il contratto del profilo pubblico
+ * già espone. Nessuna email, nessun dato privato.
+ */
+export type RecensionePubblica = {
+  id: string;
+  voto: number;
+  conformita: number;
+  imballaggio: number;
+  comunicazione: number;
+  testo: string | null;
+  createdAt: string;
+  autore: { userId: string; username: string; avatarUrl: string };
+  /**
+   * La replica del destinatario, se l'ha scritta. Al massimo una: il database
+   * ha una UNIQUE sulla recensione, quindi la forma «discussione» non è
+   * raggiungibile e questo campo non diventerà mai un array.
+   */
+  risposta: { testo: string; createdAt: string } | null;
 };
 
 /**
@@ -354,6 +416,19 @@ export interface PublicProfileService {
    * pubblico esiste anche per chi non ha mai venduto nulla.
    */
   annunciAttivi(userId: string): Promise<Result<Wine[]>>;
+  /**
+   * Una pagina di recensioni ricevute da quella persona.
+   *
+   * È separata da `profilo` perché è paginata, per la stessa ragione per cui lo
+   * sono gli annunci attivi: il riepilogo — quante e con che media — sta nella
+   * riga del profilo e arriva in una chiamata sola, l'elenco cresce e si legge
+   * a blocchi. Chi ha zero annunci può avere reputazione: le due sezioni sono
+   * indipendenti.
+   */
+  recensioni(
+    userId: string,
+    opzioni?: { limite?: number; offset?: number },
+  ): Promise<Result<RecensionePubblica[]>>;
 }
 
 // ---- Regioni canoniche -----------------------------------------------------
@@ -1165,6 +1240,44 @@ export interface DisputeService {
   perOrdine(orderId: string): Promise<Result<DisputeRecord | null>>;
 }
 
+/**
+ * L'ammissibilità di un ordine alla recensione, come la calcola il server.
+ *
+ * Il browser non ricostruisce questa regola, e da D9 non ne conserva nemmeno
+ * una versione «di presentazione»: la funzione locale che guardava lo stato
+ * dell'ordine è stata rimossa da `lib/orders/seller-status`. Una seconda
+ * definizione della stessa regola è una regola che può divergere dalla prima, e
+ * la prima è `private.recensione_ammessa`.
+ */
+export type EleggibilitaRecensione = {
+  orderId: string;
+  eligible: boolean;
+  alreadyReviewed: boolean;
+  reviewId: string | null;
+  /**
+   * Perché non è recensibile, in forma grossolana: `recensibile`,
+   * `gia_recensito`, `contestato`, `non_concluso`. Sono i quattro valori che il
+   * database produce, e nessuno di essi è un dato che il compratore non abbia
+   * già sulla propria riga d'ordine.
+   */
+  motivo: MotivoEleggibilita;
+};
+
+export type MotivoEleggibilita =
+  | "recensibile"
+  | "gia_recensito"
+  | "contestato"
+  | "non_concluso";
+
+/** La replica del destinatario, come la restituisce il database. */
+export type OrderReviewRispostaRecord = {
+  id: string;
+  review_id: string;
+  autore_id: string;
+  testo: string;
+  created_at: string;
+};
+
 export interface ReviewService {
   invia(input: {
     orderId: string;
@@ -1175,6 +1288,28 @@ export interface ReviewService {
     testo?: string | null;
   }): Promise<Result<OrderReviewRecord>>;
   perOrdine(orderId: string): Promise<Result<OrderReviewRecord | null>>;
+  /**
+   * L'ammissibilità di **tutti** gli ordini di chi chiama, in una lettura sola.
+   *
+   * Non prende un identificativo, e l'assenza è deliberata due volte: non c'è
+   * modo di chiedere l'ordine di qualcun altro, e la pagina `/acquisti` non fa
+   * una chiamata per riga. Chi ha bisogno di un singolo ordine cerca la sua
+   * voce nell'elenco.
+   */
+  eleggibilita(): Promise<Result<EleggibilitaRecensione[]>>;
+  /**
+   * La replica del destinatario. Il chiamante non passa la propria identità: il
+   * database legge `destinatario_id` dalla recensione e rifiuta chiunque altro,
+   * compreso l'autore della recensione stessa.
+   */
+  rispondi(input: {
+    reviewId: string;
+    testo: string;
+  }): Promise<Result<OrderReviewRispostaRecord>>;
+  /** La replica associata a una recensione, se esiste. */
+  rispostaPerRecensione(
+    reviewId: string,
+  ): Promise<Result<OrderReviewRispostaRecord | null>>;
 }
 
 // ---- Fase 7c: imballaggio ---------------------------------------------------

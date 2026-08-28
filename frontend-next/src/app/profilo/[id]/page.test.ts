@@ -38,8 +38,12 @@ describe("/profilo/[id]", () => {
     expect(pagina).toInclude("profilo.citta");
     expect(pagina).toInclude("profilo.provincia");
     expect(pagina).toInclude("profilo.bio");
+    // `recension` non è più vietato qui: da D9 la reputazione ha una sorgente
+    // reale e vive nella sezione dedicata sotto. Restano vietati i segnali di
+    // fiducia inventati — un badge di «trust», un rating sintetico — e ogni
+    // dato privato o di ruolo.
     expect(codice).not.toMatch(
-      /seller_verificato|TrustBadge|ShieldCheck|rating|recension|certific|email|dob|ruol|stato_utente/i,
+      /seller_verificato|TrustBadge|ShieldCheck|rating|certific|email|dob|ruol|stato_utente/i,
     );
   });
 
@@ -49,7 +53,13 @@ describe("/profilo/[id]", () => {
     // interrogabile su un elenco di uuid sarebbe una sonda su chi e verificato.
     expect(pagina).toInclude("profilo.professionistaVerificato");
     expect(pagina).toInclude("profilo.qualificheProfessionali");
-    expect(pagina.match(/await service\./g)).toHaveLength(2);
+    // Una sola lettura del profilo: annunci e recensioni sono le altre due, e
+    // partono insieme nel `Promise.all` — nessuna delle due rilegge il profilo
+    // per avere spunta, badge o riepilogo reputazione.
+    expect(pagina.match(/await service\.profilo\(/g)).toHaveLength(1);
+    expect(pagina).toInclude("await Promise.all([");
+    expect(pagina).toInclude("service.annunciAttivi(id),");
+    expect(pagina).toInclude("service.recensioni(id),");
     expect(codice).not.toMatch(/qualific\w*\(|professional_qualification|\.rpc\(/i);
   });
 
@@ -74,7 +84,7 @@ describe("/profilo/[id]", () => {
 
   it("carica gli annunci attivi solo dopo un profilo valido e li mantiene opzionali", () => {
     const profiloValido = pagina.indexOf("if (!esitoProfilo.data) notFound()");
-    const letturaAnnunci = pagina.indexOf("await service.annunciAttivi(id)");
+    const letturaAnnunci = pagina.indexOf("service.annunciAttivi(id)");
     expect(profiloValido).toBeGreaterThan(-1);
     expect(letturaAnnunci).toBeGreaterThan(profiloValido);
     expect(pagina).toInclude("const annunci = esitoAnnunci.ok ? esitoAnnunci.data : []");
@@ -85,7 +95,10 @@ describe("/profilo/[id]", () => {
 
   it("non apre query profilo, directory o azioni sociali alternative", () => {
     expect(codice).not.toMatch(/\.from\(["']profiles["']\)|service_role/);
-    expect(codice).not.toMatch(/listaUtenti|cercaUtenti|people|directory|follow|messagg|recension|CTA/i);
+    // `recension` non compare più fra i vietati: la sezione reputazione è
+    // prevista e testata altrove. Il divieto resta su directory, ricerca
+    // utenti, follow e messaggistica.
+    expect(codice).not.toMatch(/listaUtenti|cercaUtenti|people|directory|follow|messagg|CTA/i);
     expect(codice).not.toMatch(/href=["'{`]\/profilo/);
   });
 });

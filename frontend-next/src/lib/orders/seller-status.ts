@@ -109,7 +109,17 @@ export const puoContestare = (ordine: Pick<OrderRecord, "stato" | "contestato_at
     ordine.stato,
   );
 
-export const puoRecensire = (stato: OrderStatus): boolean => stato === "completato";
+/*
+ * `puoRecensire(stato)` viveva qui e non c'è più.
+ *
+ * Era una seconda definizione di «recensibile», accanto a quella del database,
+ * e le due potevano divergere senza che nulla lo segnalasse: questa guardava un
+ * solo campo, quella del database guarda anche `contestato_at` e l'esistenza di
+ * una recensione. D9 ha spostato la regola in `private.recensione_ammessa`, la
+ * legge sia la porta di scrittura sia `ordini_recensibili`, e l'interfaccia la
+ * riceve invece di ricostruirla. `puoConfermare` e `puoContestare` restano:
+ * quelle non hanno un modello di lettura lato server che le sostituisca.
+ */
 
 /**
  * Scomposizione dell'importo mostrata nel riepilogo. I numeri sono quelli

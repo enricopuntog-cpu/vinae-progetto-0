@@ -7,7 +7,6 @@ import {
   puoConfermare,
   puoContestare,
   puoPreparare,
-  puoRecensire,
   puoSegnalareConsegna,
   puoSpedire,
   scomposizioneAddebito,
@@ -202,8 +201,12 @@ describe("precondizioni delle transizioni", () => {
     expect(puoConfermare({ stato: "pagato", contestato_at: null })).toBe(true);
   });
 
-  it("si recensisce solo un ordine completato", () => {
-    expect(TUTTI_GLI_STATI.filter(puoRecensire)).toEqual(["completato"]);
+  it("non esiste più una regola locale di recensibilità", async () => {
+    // D9: la regola sta in `private.recensione_ammessa` e arriva
+    // dall'interfaccia via `ordini_recensibili`. Un `puoRecensire` qui sarebbe
+    // una seconda definizione che può divergere dalla prima.
+    const modulo: Record<string, unknown> = await import("./seller-status");
+    expect(modulo.puoRecensire).toBeUndefined();
   });
 });
 

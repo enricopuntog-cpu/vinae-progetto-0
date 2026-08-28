@@ -19,10 +19,13 @@
  * restituisce al massimo una riga. È la ragione per cui questo servizio non
  * può offrire un elenco nemmeno volendo: non esiste la chiamata.
  *
- * NIENTE DATI INVENTATI. Non c'è un rating, non c'è un conteggio di recensioni,
- * non c'è un badge di fiducia e non c'è un livello: nessuna di quelle cose ha
- * oggi una sorgente, e mostrarne una a zero o a `false` significherebbe
- * affermare qualcosa su una persona senza averlo misurato.
+ * NIENTE DATI INVENTATI. La regola non è cambiata, è cambiato che cosa ha una
+ * sorgente. La reputazione ora ce l'ha — `order_reviews`, scritta solo da chi
+ * ha davvero comprato — e quindi entra; il conteggio arriva sempre, anche a
+ * zero, perché «nessuna recensione» è un fatto misurato; le medie arrivano
+ * `null` quando non c'è niente da mediare, perché 0/5 sarebbe un giudizio che
+ * nessuno ha espresso. Non c'è ancora, e non va inventato, un livello o un
+ * badge di fiducia che non sia calcolato da righe reali.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -31,9 +34,11 @@ import { COLONNE_ANNUNCIO_PUBBLICO, rigaAWine, type PublicListingRow } from "./l
 import type { Esperienza } from "@/data/onboarding";
 import type { Wine } from "@/data/wines";
 import type {
+  MedieRecensioni,
   ProfiloPubblico,
   PublicProfileService,
   QualificaProfessionalePubblica,
+  RecensionePubblica,
   Result,
 } from "./types";
 
@@ -42,6 +47,7 @@ const NOT_CONFIGURED_ERROR =
 
 const LETTURA_FALLITA = "Non è stato possibile leggere questo profilo.";
 const ANNUNCI_FALLITI = "Non è stato possibile leggere gli annunci di questa persona.";
+const RECENSIONI_FALLITE = "Non è stato possibile leggere le recensioni di questa persona.";
 
 /**
  * Il nome della funzione SQL, in un posto solo. La firma è
@@ -50,6 +56,16 @@ const ANNUNCI_FALLITI = "Non è stato possibile leggere gli annunci di questa pe
  * aggiungerne uno qui non servirebbe a niente, perché la funzione non li ha.
  */
 const RPC_PROFILO_PUBBLICO = "profilo_pubblico";
+
+/**
+ * L'elenco paginato delle recensioni ricevute. È l'unica altra porta pubblica
+ * del dominio: `order_reviews` non è leggibile se non si è parte dell'ordine, e
+ * la proiezione pubblica sta in `private`, dove PostgREST non arriva.
+ */
+const RPC_RECENSIONI_PUBBLICHE = "recensioni_pubbliche_elenco";
+
+/** Quante recensioni per pagina, se il chiamante non lo dice. */
+const RECENSIONI_PER_PAGINA = 10;
 
 /**
  * Un identificativo malformato non arriva al database.
@@ -80,6 +96,26 @@ function testo(valore: unknown): string {
 
 function testoOpzionale(valore: unknown): string | null {
   return typeof valore === "string" && valore !== "" ? valore : null;
+}
+
+/**
+ * PostgREST serializza `numeric` come stringa, per non perdere precisione: le
+ * medie arrivano come `"4.33"`, non come `4.33`. Vanno convertite qui e non
+ * stampate così come sono, altrimenti `toFixed` su una stringa esplode e un
+ * confronto numerico mente.
+ */
+function numero(valore: unknown): number | null {
+  if (typeof valore === "number") return Number.isFinite(valore) ? valore : null;
+  if (typeof valore === "string" && valore.trim() !== "") {
+    const n = Number(valore);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function intero(valore: unknown): number {
+  const n = numero(valore);
+  return n === null ? 0 : Math.trunc(n);
 }
 
 /**
@@ -126,6 +162,63 @@ function mappaProfiloPubblico(riga: Record<string, unknown>): ProfiloPubblico {
     avatarUrl: riferimentoAvatarSicuro(testo(riga.avatar_url), userId) ?? "",
     professionistaVerificato: riga.professionista_verificato === true,
     qualificheProfessionali: mappaQualifichePubbliche(riga.qualifiche_professionali),
+    recensioniTotali: intero(riga.recensioni_totali),
+    recensioniMedie: mappaMedie(riga.recensioni_medie),
+  };
+}
+
+/**
+ * Le medie, o `null`.
+ *
+ * `null` è la risposta del database quando non c'è nessuna recensione, e
+ * **resta** `null` fin qui: non diventa un oggetto di zeri lungo la strada.
+ * Diventa `null` anche quando una delle quattro medie manca o non è un numero,
+ * perché mezze medie non sono un riepilogo — sono un riepilogo sbagliato.
+ */
+function mappaMedie(valore: unknown): MedieRecensioni | null {
+  if (typeof valore !== "object" || valore === null) return null;
+  const riga = valore as Record<string, unknown>;
+  const voto = numero(riga.voto);
+  const conformita = numero(riga.conformita);
+  const imballaggio = numero(riga.imballaggio);
+  const comunicazione = numero(riga.comunicazione);
+  if (voto === null || conformita === null || imballaggio === null || comunicazione === null) {
+    return null;
+  }
+  return { voto, conformita, imballaggio, comunicazione };
+}
+
+/**
+ * Una recensione pubblica, copiata campo per campo.
+ *
+ * Stessa ragione della copia esplicita dei badge: la funzione SQL restituisce
+ * già solo le colonne ammesse — non c'è `order_id` nella vista sorgente, quindi
+ * non c'è niente dell'ordine da filtrare — ma una colonna aggiunta un giorno
+ * alla firma non arriverebbe in interfaccia per il solo fatto di essere stata
+ * aggiunta. L'avatar dell'autore passa dalla stessa verifica del profilo: è un
+ * campo che l'interessato controlla.
+ */
+function mappaRecensionePubblica(riga: Record<string, unknown>): RecensionePubblica {
+  const autoreId = testo(riga.autore_id);
+  const rispostaTesto = testoOpzionale(riga.risposta_testo);
+  const rispostaCreatedAt = testoOpzionale(riga.risposta_created_at);
+  return {
+    id: testo(riga.review_id),
+    voto: intero(riga.voto),
+    conformita: intero(riga.conformita),
+    imballaggio: intero(riga.imballaggio),
+    comunicazione: intero(riga.comunicazione),
+    testo: testoOpzionale(riga.testo),
+    createdAt: testo(riga.created_at),
+    autore: {
+      userId: autoreId,
+      username: testo(riga.autore_username),
+      avatarUrl: riferimentoAvatarSicuro(testo(riga.autore_avatar_url), autoreId) ?? "",
+    },
+    risposta:
+      rispostaTesto !== null && rispostaCreatedAt !== null
+        ? { testo: rispostaTesto, createdAt: rispostaCreatedAt }
+        : null,
   };
 }
 
@@ -210,6 +303,38 @@ export function creaPublicProfileService(client: SupabaseClient | null): PublicP
       // essere un suo campo.
       const righe = (data ?? []) as unknown as PublicListingRow[];
       return { ok: true, data: righe.map(rigaAWine) };
+    },
+
+    async recensioni(
+      userId: string,
+      opzioni?: { limite?: number; offset?: number },
+    ): Promise<Result<RecensionePubblica[]>> {
+      if (!client) return { ok: false, error: NOT_CONFIGURED_ERROR };
+      if (!UUID.test(userId)) return { ok: true, data: [] };
+
+      // Il limite e l'offset arrivano come sono: la funzione SQL taglia il
+      // limite a 50 e riporta a zero un offset negativo nel proprio corpo. Un
+      // parametro che parte da qui non decide quanto lavoro fa il database, e
+      // ripetere il taglio in questo file darebbe una seconda regola da tenere
+      // allineata alla prima.
+      const { data, error } = await client.rpc(RPC_RECENSIONI_PUBBLICHE, {
+        p_user_id: userId,
+        p_limit: opzioni?.limite ?? RECENSIONI_PER_PAGINA,
+        p_offset: opzioni?.offset ?? 0,
+      });
+
+      if (error) {
+        segnalaErrore("lettura delle recensioni pubbliche", error);
+        return { ok: false, error: RECENSIONI_FALLITE };
+      }
+
+      const righe = Array.isArray(data) ? data : [];
+      return {
+        ok: true,
+        data: righe
+          .filter((r): r is Record<string, unknown> => typeof r === "object" && r !== null)
+          .map(mappaRecensionePubblica),
+      };
     },
   };
 }
