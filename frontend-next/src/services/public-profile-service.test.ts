@@ -351,18 +351,91 @@ describe("PublicProfileService.profilo", () => {
         avatarUrl: "/avatar/calice.svg",
         professionistaVerificato: false,
         qualificheProfessionali: [],
+        // D9: il conteggio arriva sempre, anche a zero — «nessuna recensione» è
+        // un fatto misurato — e le medie restano `null` quando non c'è niente
+        // da mediare.
+        recensioniTotali: 0,
+        recensioniMedie: null,
       },
     });
-    expect(Object.keys(esito.ok ? (esito.data ?? {}) : {})).toHaveLength(9);
+    expect(Object.keys(esito.ok ? (esito.data ?? {}) : {})).toHaveLength(11);
   });
 
-  it("non promette fiducia oltre la qualifica: niente rating, recensioni o livello", async () => {
+  it("non promette fiducia che il database non ha misurato: niente rating sintetico o livello", async () => {
     const { client } = fakeClient({ data: [rigaRpc()], error: null });
     const esito = await creaPublicProfileService(client).profilo(ALICE);
     const profilo = esito.ok ? esito.data! : null;
 
-    for (const inventato of ["rating", "valutazioni", "recensioni", "livello"]) {
+    // La reputazione c'è — `recensioniTotali` e `recensioniMedie` — perché da
+    // D9 ha una sorgente: `order_reviews`, scritta solo da chi ha comprato.
+    // Non c'è, e non va inventato, ciò che una sorgente non ce l'ha: un
+    // punteggio unico di fiducia, un livello, un distintivo calcolato altrove.
+    for (const inventato of ["rating", "livello", "trust", "affidabilita", "sellerVerificato"]) {
       expect(profilo).not.toHaveProperty(inventato);
+    }
+  });
+
+  it("zero recensioni: conteggio zero e medie null, mai un oggetto di zeri", async () => {
+    const { client } = fakeClient({
+      data: [rigaRpc({ recensioni_totali: 0, recensioni_medie: null })],
+      error: null,
+    });
+
+    const esito = await creaPublicProfileService(client).profilo(ALICE);
+
+    expect(esito.ok && esito.data?.recensioniTotali).toBe(0);
+    expect(esito.ok && esito.data?.recensioniMedie).toBeNull();
+  });
+
+  it("il conteggio arriva anche come stringa: PostgREST serializza i numeric così", async () => {
+    const { client } = fakeClient({
+      data: [rigaRpc({ recensioni_totali: "12", recensioni_medie: null })],
+      error: null,
+    });
+
+    const esito = await creaPublicProfileService(client).profilo(ALICE);
+
+    expect(esito.ok && esito.data?.recensioniTotali).toBe(12);
+  });
+
+  it("le medie passano dalla stessa conversione, una per una", async () => {
+    const { client } = fakeClient({
+      data: [
+        rigaRpc({
+          recensioni_totali: 3,
+          recensioni_medie: {
+            voto: "4.3333333333333333",
+            conformita: 4,
+            imballaggio: "3.5",
+            comunicazione: 5,
+          },
+        }),
+      ],
+      error: null,
+    });
+
+    const esito = await creaPublicProfileService(client).profilo(ALICE);
+
+    expect(esito.ok && esito.data?.recensioniMedie).toEqual({
+      voto: 4.3333333333333333,
+      conformita: 4,
+      imballaggio: 3.5,
+      comunicazione: 5,
+    });
+  });
+
+  it("una media mancante annulla tutte le medie: mezze medie sono un riepilogo sbagliato", async () => {
+    for (const medie of [
+      { voto: 4, conformita: 4, imballaggio: null, comunicazione: 5 },
+      { voto: "quattro", conformita: 4, imballaggio: 3, comunicazione: 5 },
+      { conformita: 4, imballaggio: 3, comunicazione: 5 },
+    ]) {
+      const { client } = fakeClient({
+        data: [rigaRpc({ recensioni_totali: 3, recensioni_medie: medie })],
+        error: null,
+      });
+      const esito = await creaPublicProfileService(client).profilo(ALICE);
+      expect(esito.ok && esito.data?.recensioniMedie).toBeNull();
     }
   });
 
@@ -621,6 +694,135 @@ describe("PublicProfileService.annunciAttivi", () => {
     await servizio.annunciAttivi(ALICE);
 
     expect(scritture).toEqual([]);
+  });
+});
+
+// ===========================================================================
+// [3b] Il servizio — recensioni pubbliche
+// ===========================================================================
+
+describe("PublicProfileService.recensioni", () => {
+  const rigaRecensione = (over: Record<string, unknown> = {}) => ({
+    review_id: "d9a50000-0000-0000-0000-0000000000aa",
+    voto: 5,
+    conformita: 4,
+    imballaggio: 3,
+    comunicazione: 5,
+    testo: "Bottiglia perfetta.",
+    created_at: "2026-08-20T10:00:00.000Z",
+    autore_id: BOB,
+    autore_username: "bob",
+    autore_avatar_url: null,
+    risposta_testo: null,
+    risposta_created_at: null,
+    ...over,
+  });
+
+  it("passa dalla porta paginata, mai dalla tabella delle recensioni", async () => {
+    const { client, relazioni, chiamateRpc } = fakeClient({ data: [], error: null });
+
+    await creaPublicProfileService(client).recensioni(ALICE, { limite: 10, offset: 20 });
+
+    expect(chiamateRpc).toEqual([
+      {
+        nome: "recensioni_pubbliche_elenco",
+        argomenti: { p_user_id: ALICE, p_limit: 10, p_offset: 20 },
+      },
+    ]);
+    expect(relazioni).toEqual([]);
+    expect(relazioni).not.toContain("order_reviews");
+  });
+
+  it("senza opzioni chiede la prima pagina di dieci", async () => {
+    const { client, chiamateRpc } = fakeClient({ data: [], error: null });
+
+    await creaPublicProfileService(client).recensioni(ALICE);
+
+    expect(chiamateRpc[0]!.argomenti).toEqual({ p_user_id: ALICE, p_limit: 10, p_offset: 0 });
+  });
+
+  it("un identificativo malformato è un elenco vuoto, senza arrivare al database", async () => {
+    const { client, chiamateRpc } = fakeClient({ data: [], error: null });
+
+    expect(await creaPublicProfileService(client).recensioni("pippo")).toEqual({
+      ok: true,
+      data: [],
+    });
+    expect(chiamateRpc).toEqual([]);
+  });
+
+  it("copia la sola allowlist della riga: un order_id che arrivasse non passa", async () => {
+    const { client } = fakeClient({
+      data: [
+        rigaRecensione({
+          order_id: "d9a40000-0000-0000-0000-0000000000aa",
+          autore_avatar_url: `${ALICE}/trafugata.webp`,
+          risposta_testo: "Grazie!",
+          risposta_created_at: "2026-08-21T10:00:00.000Z",
+        }),
+      ],
+      error: null,
+    });
+
+    const esito = await creaPublicProfileService(client).recensioni(ALICE);
+    const recensione = esito.ok ? (esito.data[0] ?? {}) : {};
+
+    expect(Object.keys(recensione).sort()).toEqual([
+      "autore",
+      "comunicazione",
+      "conformita",
+      "createdAt",
+      "id",
+      "imballaggio",
+      "risposta",
+      "testo",
+      "voto",
+    ]);
+    expect(recensione).not.toHaveProperty("orderId");
+    expect(recensione).not.toHaveProperty("order_id");
+    // L'avatar dell'autore passa dalla stessa verifica del profilo: la cartella
+    // qui appartiene ad ALICE, non a BOB, e diventa stringa vuota.
+    expect(esito.ok && esito.data[0]!.autore.avatarUrl).toBe("");
+    expect(esito.ok && esito.data[0]!.risposta).toEqual({
+      testo: "Grazie!",
+      createdAt: "2026-08-21T10:00:00.000Z",
+    });
+  });
+
+  it("senza replica il campo è null, non un oggetto vuoto", async () => {
+    const { client } = fakeClient({ data: [rigaRecensione({ testo: null })], error: null });
+
+    const esito = await creaPublicProfileService(client).recensioni(ALICE);
+
+    expect(esito.ok && esito.data[0]!.risposta).toBeNull();
+    expect(esito.ok && esito.data[0]!.testo).toBeNull();
+  });
+
+  it("una riga che non è un oggetto viene scartata, non disegnata", async () => {
+    const { client } = fakeClient({ data: [null, "recensione", rigaRecensione()], error: null });
+
+    const esito = await creaPublicProfileService(client).recensioni(ALICE);
+
+    expect(esito.ok && esito.data).toHaveLength(1);
+  });
+
+  it("un errore diventa un messaggio nostro, non un elenco vuoto silenzioso", async () => {
+    const { client } = fakeClient({
+      data: null,
+      error: { code: "42501", message: "permission denied for schema private" },
+    });
+
+    const esito = await creaPublicProfileService(client).recensioni(ALICE);
+
+    expect(esito.ok).toBe(false);
+    const messaggio = esito.ok ? "" : esito.error;
+    expect(messaggio).toBe("Non è stato possibile leggere le recensioni di questa persona.");
+    expect(messaggio).not.toInclude("permission denied");
+  });
+
+  it("senza client configurato fallisce chiusa", async () => {
+    const esito = await creaPublicProfileService(null).recensioni(ALICE);
+    expect(esito.ok).toBe(false);
   });
 });
 

@@ -9,7 +9,6 @@ import {
   ETICHETTE_STATO_VENDITORE,
   puoConfermare,
   puoPreparare,
-  puoRecensire,
   sellerStatusDaOrdine,
 } from "@/lib/orders/seller-status";
 import { BuyerConfirmPanel } from "@/components/vinea/orders/BuyerConfirmPanel";
@@ -37,7 +36,8 @@ export default function OrdineDetailPageClient({ orderId }: { orderId: string })
     );
   }
 
-  const { ordine, tracking, contestazione, recensione, ruolo } = o.stato.dati;
+  const { ordine, tracking, contestazione, recensione, rispostaRecensione, eleggibilita, ruolo } =
+    o.stato.dati;
   const venditore = ruolo === "venditore";
   const etichetta = venditore
     ? ETICHETTE_STATO_VENDITORE[sellerStatusDaOrdine(ordine)]
@@ -109,9 +109,20 @@ export default function OrdineDetailPageClient({ orderId }: { orderId: string })
 
           {contestazione && <DisputePanel contestazione={contestazione} />}
 
-          {!venditore && puoRecensire(ordine.stato) && (
-            <ReviewPanel esistente={recensione} inCorso={o.inCorso} onInvia={o.recensisci} />
-          )}
+          {/* `puoRecensire` non è più la condizione: decide il server, che
+              risponde in `eleggibilita`. Il riquadro compare comunque quando la
+              recensione esiste, perché anche il venditore la legge e le
+              risponde — e la sua ammissibilità non è una domanda che
+              `ordini_recensibili` accetta. */}
+          <ReviewPanel
+            eleggibilita={eleggibilita}
+            esistente={recensione}
+            risposta={rispostaRecensione}
+            ruolo={ruolo}
+            inCorso={o.inCorso}
+            onInvia={o.recensisci}
+            onRispondi={o.rispondiRecensione}
+          />
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">

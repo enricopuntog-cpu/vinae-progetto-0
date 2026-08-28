@@ -13,7 +13,8 @@ import {
 } from "@/lib/orders/seller-status";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { createOrderService } from "@/services/phase7/order-service";
-import type { OrderRecord } from "@/services/types";
+import { createReviewService } from "@/services/phase7c/review-service";
+import type { EleggibilitaRecensione, OrderRecord } from "@/services/types";
 
 /** Le stesse schede di frontend/, nello stesso ordine. */
 const TAB_COMPRATORE = [
@@ -52,6 +53,7 @@ export function OrderList({ lato }: { lato: "acquisti" | "vendite" }) {
   const venditore = lato === "vendite";
   const [ordini, setOrdini] = useState<OrderRecord[] | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
+  const [eleggibilita, setEleggibilita] = useState<EleggibilitaRecensione[]>([]);
 
   useEffect(() => {
     const servizio = createOrderService(getSupabaseClient());
@@ -66,7 +68,59 @@ export function OrderList({ lato }: { lato: "acquisti" | "vendite" }) {
     };
   }, [venditore]);
 
-  return <OrderListView lato={lato} ordini={ordini} errore={errore} />;
+  useEffect(() => {
+    // UNA chiamata per l'intero elenco, non una per riga: `ordini_recensibili`
+    // risponde su tutti gli ordini di chi la invoca. Il venditore non la fa
+    // affatto — la funzione risponde sui soli ordini di chi compra.
+    if (venditore) return;
+    const servizio = createReviewService(getSupabaseClient());
+    let vivo = true;
+    void servizio.eleggibilita().then((esito) => {
+      // Una lettura fallita lascia l'elenco vuoto, quindi nessun invito a
+      // recensire: davanti a un guasto è meglio non mostrare un'azione che
+      // mostrarne una che fallirà.
+      if (vivo && esito.ok) setEleggibilita(esito.data);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [venditore]);
+
+  return (
+    <OrderListView lato={lato} ordini={ordini} errore={errore} eleggibilita={eleggibilita} />
+  );
+}
+
+/**
+ * L'esito della recensione su una riga d'ordine.
+ *
+ * Non c'è alcun ramo che guardi `o.stato`: la condizione arriva dal server e
+ * questo componente la disegna. Se l'ammissibilità non è stata letta — lato
+ * vendite, o lettura fallita — non compare niente, che è il caso prudente.
+ */
+function StatoRecensione({ eleggibilita }: { eleggibilita?: EleggibilitaRecensione }) {
+  if (!eleggibilita) return null;
+  if (eleggibilita.eligible) {
+    return (
+      <span
+        data-testid="cta-recensione"
+        className="whitespace-nowrap rounded-full bg-bordeaux px-2 py-0.5 text-[10px] font-semibold text-white"
+      >
+        Lascia una recensione
+      </span>
+    );
+  }
+  if (eleggibilita.alreadyReviewed) {
+    return (
+      <span
+        data-testid="stato-recensione"
+        className="whitespace-nowrap text-[10px] font-medium text-muted-foreground"
+      >
+        Recensito
+      </span>
+    );
+  }
+  return null;
 }
 
 /**
@@ -81,13 +135,28 @@ export function OrderListView({
   lato,
   ordini,
   errore,
+  eleggibilita = [],
 }: {
   lato: "acquisti" | "vendite";
   ordini: OrderRecord[] | null;
   errore: string | null;
+  /**
+   * L'ammissibilità alla recensione, calcolata dal server. Assente per
+   * `/vendite`, e assente anche quando la lettura è fallita: in entrambi i casi
+   * nessuna riga mostra un invito a recensire.
+   */
+  eleggibilita?: EleggibilitaRecensione[];
 }) {
   const venditore = lato === "vendite";
   const [tab, setTab] = useState<string>("tutti");
+
+  // Una mappa invece di un `find` per riga: l'elenco degli ordini e quello
+  // dell'ammissibilità hanno la stessa cardinalità, e cercare linearmente
+  // dentro il render renderebbe quadratica una pagina che cresce.
+  const perOrdine = useMemo(
+    () => new Map(eleggibilita.map((e) => [e.orderId, e])),
+    [eleggibilita],
+  );
 
   const schede = venditore ? TAB_VENDITORE : TAB_COMPRATORE;
 
@@ -158,6 +227,11 @@ export function OrderListView({
                     <span className="whitespace-nowrap rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold">
                       {etichetta(o)}
                     </span>
+                    {/* Tre esiti e non due: si può recensire, l'ha già fatto,
+                        oppure non compare niente. Un ordine non ammesso non
+                        mostra un invito spento né un invito attivo che
+                        fallirebbe — mostra il nulla, che è la verità. */}
+                    <StatoRecensione eleggibilita={perOrdine.get(o.id)} />
                     <ArrowRight className="h-4 w-4 text-muted-foreground" />
                   </div>
                 </Link>
