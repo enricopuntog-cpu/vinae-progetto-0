@@ -80,7 +80,14 @@ describe("la shell sceglie la barra dal ruolo", () => {
 
   it("ricava l'essere autenticato dal ruolo e non da un secondo segnale", () => {
     expect(layout).toInclude('const autenticato = ruolo !== "guest";');
-    expect(layout).toInclude("const { ruolo, setRuolo, authProfilo } = useVinea();");
+    // `ruolo` arriva dallo store, non da una prop ne' da un secondo hook.
+    // L'elenco destrutturato non e' fissato: la shell legge dallo stesso hook
+    // anche altri campi - da D10 `authRuolo`, per la voce Admin - e bloccare la
+    // riga intera avrebbe fatto fallire questa asserzione per una ragione che
+    // non e' la sua. Cio' che deve restare vero e' che `autenticato` abbia una
+    // sorgente sola, ed e' la riga sopra piu' il conteggio qui sotto a dirlo.
+    expect(layout).toMatch(/const \{[^}]*\bruolo\b[^}]*\} = useVinea\(\);/);
+    expect(layout.match(/const autenticato =/g) ?? []).toHaveLength(1);
   });
 
   it("la barra disegnata e' quella scelta dal ruolo, non una lista fissa", () => {

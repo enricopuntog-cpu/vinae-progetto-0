@@ -79,7 +79,7 @@ const desktopLinks = [
 
 export function VineaLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { ruolo, setRuolo, authProfilo } = useVinea();
+  const { ruolo, setRuolo, authRuolo, authProfilo } = useVinea();
   // Lo stesso segnale che la barra mobile usava gia per mandare Home su /home:
   // non ne serve un secondo. Con lo switcher demo acceso `ruolo` e quello
   // scelto a mano, e l'avatar ricade sulla silhouette perche `authProfilo` resta
@@ -142,7 +142,15 @@ export function VineaLayout({ children }: { children: ReactNode }) {
                 </Link>
               );
             })}
-            {ruolo === "admin" && (
+            {/*
+              D10. Il ruolo **reale**, non quello del selettore. Prima bastava
+              scegliere «Admin» nello switcher demo per far comparire questa
+              voce, che portava a una pagina che ora risponde `notFound()`: un
+              collegamento che non porta da nessuna parte e peggio di un
+              collegamento assente. Il confine resta `user_roles`; questa riga
+              decide solo che cosa si vede.
+            */}
+            {authRuolo === "admin" && (
               <Link
                 href="/admin"
                 data-testid="nav-link-admin"
