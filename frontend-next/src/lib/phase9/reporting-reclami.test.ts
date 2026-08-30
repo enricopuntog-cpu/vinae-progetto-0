@@ -80,11 +80,19 @@ describe("A20 - punti di ingresso", () => {
     expect(annuncio).toMatch(/sonoIlVenditore[\s\S]*Segnala annuncio/);
   });
 
-  it("il profilo usa userId e nasconde l'azione a chi guarda se stesso", () => {
+  it("il profilo usa il trigger interattivo condiviso e lo nasconde a chi guarda se stesso", () => {
     expect(profilo).toInclude("const profiloProprio = utente?.id === profilo.userId;");
     expect(profilo).toInclude("{!profiloProprio ? (");
     expect(profilo).toInclude('targetType="profilo"');
     expect(profilo).toInclude("targetId={profilo.userId}");
+    expect(dialogo).toInclude("const triggerPredefinito =");
+    expect(dialogo).toInclude("<DialogTrigger asChild>{trigger ?? triggerPredefinito}</DialogTrigger>");
+    expect(dialogo).not.toInclude("<TriggerPredefinito");
+  });
+
+  it("l'annuncio continua ad aprire lo stesso dialogo condiviso", () => {
+    expect(annuncio).toMatch(/<ReportDialog[\s\S]*targetType="annuncio"[\s\S]*Segnala annuncio/);
+    expect(dialogo).toInclude("setOpen(valore);");
   });
 
   it("il Club usa slug e nome reali e nasconde l'azione al proprietario", () => {
