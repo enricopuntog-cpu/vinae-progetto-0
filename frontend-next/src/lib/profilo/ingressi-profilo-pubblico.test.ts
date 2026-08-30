@@ -194,6 +194,17 @@ describe("messaggi: l'intestazione porta al profilo della controparte", () => {
     expect(codice).toInclude("src={conversation.wineImage}");
   });
 
+  it("disegna la miniatura dell'annuncio con la foundation e non con un `img` grezzo", () => {
+    // `conversations_page` proietta `coalesce(l.immagini[1], '')`: senza
+    // foundation un annuncio senza foto diventa `src=""`, cioè il riquadro
+    // rotto. Il soggetto qui è che la miniatura non sia più un `<img>` nudo.
+    expect(codice).toInclude("<SafeImage");
+    expect(codice).not.toMatch(/<img\b/);
+    expect(codice).toInclude('data-testid="conversazione-annuncio-immagine"');
+    // Il valore è quello che la conversazione porta già: nessuna lettura in più.
+    expect(codice).not.toMatch(/\.from\(|createClient|Service\(|fetch\(/);
+  });
+
   it("non annida un link dentro un altro e non tocca back o composer", () => {
     // I link della persona e dell'annuncio sono fratelli dentro lo stesso
     // `<span>`: se uno dei due finisse dentro l'altro, fra i due `<Link` non ci

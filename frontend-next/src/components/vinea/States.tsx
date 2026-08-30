@@ -335,12 +335,20 @@ export function LoadingBlock({ label = "Caricamento in corso" }: { label?: strin
 type SafeImgProps = ImgHTMLAttributes<HTMLImageElement> & {
   fallbackLabel?: string;
   ratio?: string; // tailwind aspect utility, e.g. "aspect-square"
+  /**
+   * Segnaposto della sola icona, per i riquadri troppo piccoli perché il testo
+   * ci stia dentro (la miniatura dell'annuncio nei Messaggi è 36×48px, dove
+   * `p-4` più l'etichetta traboccherebbero). L'etichetta resta comunque su
+   * `aria-label`: sparisce dalla vista, non da chi legge con uno screen reader.
+   */
+  compact?: boolean;
 };
 export function SafeImage({
   src,
   alt,
   fallbackLabel = "Immagine non disponibile",
   ratio,
+  compact = false,
   className,
   ...rest
 }: SafeImgProps) {
@@ -353,10 +361,14 @@ export function SafeImage({
         aria-label={fallbackLabel}
         className={`grid place-items-center bg-secondary text-muted-foreground ${ratio ?? ""} ${className ?? ""}`}
       >
-        <div className="flex flex-col items-center gap-1 p-4 text-center text-xs">
-          <ImageOff className="h-5 w-5" />
-          <span>{fallbackLabel}</span>
-        </div>
+        {compact ? (
+          <ImageOff className="h-4 w-4" />
+        ) : (
+          <div className="flex flex-col items-center gap-1 p-4 text-center text-xs">
+            <ImageOff className="h-5 w-5" />
+            <span>{fallbackLabel}</span>
+          </div>
+        )}
       </div>
     );
   }

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AzioneIndietro } from "@/components/vinea/AzioneIndietro";
 
 export const metadata: Metadata = {
   title: "Centro legale — Vinea Wine Club",
@@ -9,6 +10,12 @@ export default function Page() {
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <header>
+        {/* Il Centro legale è una deviazione: ci si arriva dal footer, dal gate
+            dell'età e dalla registrazione, e da tutti e tre si vuole tornare
+            dov'era rimasto il discorso. Il ritorno sta in un componente client
+            a sé perché questa pagina resta un Server Component: qui non c'è
+            sessione, non c'è store e non deve arrivarci ora. */}
+        <AzioneIndietro className="-ml-2 mb-3" />
         <h1 className="font-serif text-3xl font-semibold text-bordeaux md:text-4xl">
           Centro legale
         </h1>

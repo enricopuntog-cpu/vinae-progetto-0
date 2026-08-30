@@ -237,18 +237,20 @@ export default function AnnuncioDetailPageClient({
         </div>
       </div>
 
-      {/* Price Intelligence: subito sotto il blocco principale, prima delle
-          sezioni secondarie. Chi ha appena letto il prezzo richiesto trova qui
-          il contesto per giudicarlo — o l'ammissione che il contesto non c'è
-          ancora. */}
-      <PriceIntelligencePanel vista={vistaPrezzi} />
-
       {/* Quando berlo + abbinamenti. Indicizzati per vino, non per annuncio:
           su dati reali `id` è lo slug dell'annuncio e non troverebbe nulla. */}
       <div className="grid gap-6 lg:grid-cols-2">
         <DrinkWindowSection wineId={wine.wineSlug ?? wine.id} />
         <FoodPairingSection wineId={wine.wineSlug ?? wine.id} />
       </div>
+
+      {/* Price Intelligence sta dopo «quando berlo» e gli abbinamenti, non
+          prima. Chi apre la scheda guarda la bottiglia: quando aprirla e con
+          che cosa. Il contesto di prezzo è la lettura che segue, non quella
+          che si mette davanti al vino. Il pannello è lo stesso di prima —
+          stessa vista, stessi dati D3, nessuna formula toccata: è cambiata
+          solo la sua posizione nella pagina. */}
+      <PriceIntelligencePanel vista={vistaPrezzi} />
 
       {/* Servizio, storia, degustazione */}
       <Tabs defaultValue="storia" className="mt-4">

@@ -18,6 +18,8 @@ import {
   Layers,
   Ruler,
   Loader2,
+  TrendingDown,
+  TrendingUp,
 } from "lucide-react";
 import type { Wine } from "@/data/wines";
 import { WineCard } from "@/components/vinea/WineCard";
@@ -245,13 +247,6 @@ function Cantina() {
         />
       </div>
 
-      {/* Contabilità (D3-B): un blocco a parte perché può mancare da solo. */}
-      <ContabilitaCantina
-        analitica={analitica}
-        errore={analiticaErrore}
-        inCorso={analiticaLoading}
-      />
-
       {/* Bottiglie: 3 viste */}
       <Tabs defaultValue="tutte">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -326,6 +321,16 @@ function Cantina() {
           />
         </TabsContent>
       </Tabs>
+
+      {/* Contabilità (D3-B): un blocco a parte perché può mancare da solo.
+          Sta qui, dopo l'elenco, e non prima: chi apre la Cantina viene a
+          vedere le proprie bottiglie, e il valore è la lettura che segue. Resta
+          sopra «Cosa bere adesso», che è un consiglio e non un conto. */}
+      <ContabilitaCantina
+        analitica={analitica}
+        errore={analiticaErrore}
+        inCorso={analiticaLoading}
+      />
 
       {/* Dashboard drink-window (icone) */}
       <section className="grid gap-3 md:grid-cols-4">
@@ -439,17 +444,78 @@ function ContabilitaCantina({
   const capitale = voceCapitaleNoto(analitica);
   const incassi = voceIncassiTrasferiti(analitica);
   const performance = vocePerformance(analitica);
+  // La freccia esiste solo dove esiste il segno: senza un esborso noto la
+  // performance non è zero, è un conto che non si può fare, e una freccia
+  // piatta lo racconterebbe come un pareggio.
+  const segno =
+    analitica.performanceCents === null
+      ? null
+      : analitica.performanceCents >= 0
+        ? "positivo"
+        : "negativo";
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Kpi label="Valore di riferimento Vinea" value={valore.valore} hint={valore.nota} />
-        <Kpi label="Capitale noto" value={capitale.valore} hint={capitale.nota} />
-        <Kpi label="Incassi trasferiti" value={incassi.valore} hint={incassi.nota} />
-        <Kpi label="Performance netta" value={performance.valore} hint={performance.nota} />
+    <section
+      aria-labelledby="contabilita-cantina"
+      className="overflow-hidden rounded-3xl border border-border bg-card"
+    >
+      <div className="flex flex-col gap-4 border-b border-border bg-gradient-to-br from-secondary/60 to-transparent p-5 sm:flex-row sm:items-end sm:justify-between md:p-6">
+        <div className="min-w-0">
+          <h2
+            id="contabilita-cantina"
+            className="text-xs uppercase tracking-[0.2em] text-muted-foreground"
+          >
+            Valore di riferimento Vinea
+          </h2>
+          {/* Il numero principale è uno solo, ed è grande quanto la sua
+              importanza. Gli altri tre restano leggibili sotto, senza
+              competere: prima non c'era differenza di peso fra un totale e il
+              suo dettaglio. */}
+          <p className="mt-2 break-words font-serif text-4xl leading-none text-bordeaux md:text-5xl">
+            {valore.valore}
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">{valore.nota}</p>
+        </div>
+        {segno && (
+          <p
+            data-testid="cantina-tendenza"
+            className={`inline-flex shrink-0 items-center gap-2 self-start rounded-full border px-3 py-1.5 text-sm sm:self-end ${
+              segno === "positivo"
+                ? "border-salvia/40 bg-salvia/10 text-antracite"
+                : "border-bordeaux/30 bg-bordeaux/5 text-bordeaux"
+            }`}
+          >
+            {segno === "positivo" ? (
+              <TrendingUp className="h-4 w-4" aria-hidden />
+            ) : (
+              <TrendingDown className="h-4 w-4" aria-hidden />
+            )}
+            <span className="font-semibold">{performance.valore}</span>
+            <span className="text-xs text-muted-foreground">{performance.nota}</span>
+          </p>
+        )}
       </div>
-      <ValoreNelTempo serie={analitica.serieValore} />
-    </div>
+
+      <dl className="grid grid-cols-1 divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        {[
+          { label: "Capitale noto", voce: capitale },
+          { label: "Incassi trasferiti", voce: incassi },
+          { label: "Performance netta", voce: performance },
+        ].map(({ label, voce }) => (
+          <div key={label} className="p-5 md:p-6">
+            <dt className="text-xs uppercase tracking-wide text-muted-foreground">{label}</dt>
+            <dd className="mt-1 font-serif text-2xl text-antracite">{voce.valore}</dd>
+            <dd className="mt-1 text-xs text-muted-foreground">{voce.nota}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {/* Il grafico entra nella stessa cornice invece di aprirne una seconda:
+          è la stessa contabilità vista nel tempo, non un altro riquadro. */}
+      <div className="border-t border-border p-5 md:p-6">
+        <ValoreNelTempo serie={analitica.serieValore} incorniciato={false} />
+      </div>
+    </section>
   );
 }
 

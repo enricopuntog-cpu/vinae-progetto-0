@@ -20,6 +20,10 @@
  * `prezzo_cents` è la colonna giusta perché è già quella che `OrderList` mostra
  * al lato vendite; `addebito_totale_cents` include commissione e imballaggio,
  * che sono del compratore e della piattaforma, non del venditore.
+ *
+ * Vale a maggior ragione per `valoreIndicativoAttiviCents`, che somma annunci
+ * **non venduti**: è ciò che è esposto in vetrina, cioè una richiesta, non una
+ * transazione. Nessun euro di quella somma è mai passato da nessuna parte.
  */
 
 import { sellerStatusDaOrdine, type IstantaneaVenditore } from "@/lib/orders/seller-status";
@@ -34,6 +38,20 @@ export type OrdineRiepilogo = IstantaneaVenditore & {
 
 /** Il minimo che serve dalla lista annunci del proprietario. */
 export type AnnuncioRiepilogo = { stato: ListingStato };
+
+/**
+ * L'annuncio come lo vede il riepilogo: lo stato più il prezzo richiesto.
+ *
+ * `wine.prezzo` è in euro perché `mieiAnnunciConEsito()` lo consegna già così —
+ * è `listings.prezzo_cents` diviso cento, non una seconda lettura e non una
+ * seconda colonna. La somma torna qui in centesimi con un `Math.round` per
+ * riga: sommare euro in virgola mobile e convertire alla fine sposterebbe il
+ * totale di qualche centesimo, e questo numero viene letto come denaro.
+ *
+ * È un tipo a parte da `AnnuncioRiepilogo` perché l'ordinamento delle schede
+ * non ha bisogno del prezzo e non deve iniziare a chiederlo.
+ */
+export type AnnuncioPrezzo = AnnuncioRiepilogo & { wine: { prezzo: number } };
 
 // ---------------------------------------------------------------------------
 // Riepilogo (KPI)
@@ -60,6 +78,16 @@ const DA_GESTIRE = new Set<SellerOrderStatus>(STATI_DA_GESTIRE);
 export type RiepilogoVenditore = {
   /** Annunci in stato `attivo`, cioè visibili nel catalogo pubblico. */
   annunciAttivi: number;
+  /**
+   * Somma dei prezzi richiesti degli annunci in stato `attivo`.
+   *
+   * È un valore indicativo di ciò che è esposto in vetrina adesso, e cambia
+   * appena un prezzo viene modificato o un annuncio esce da `attivo`. **Non è
+   * un saldo, non è un incassato e non è un payout**: nessuno di questi annunci
+   * è stato venduto, e il denaro che si muove davvero è quello di
+   * `valoreVenditeCompletateCents`, che è un'altra misura e un'altra domanda.
+   */
+  valoreIndicativoAttiviCents: number;
   /** Ordini il cui stato venditore è in `STATI_DA_GESTIRE`. */
   ordiniDaGestire: number;
   /** Ordini il cui stato venditore è `completato`. */
@@ -70,7 +98,7 @@ export type RiepilogoVenditore = {
 
 export const riepilogoVenditore = (
   ordini: readonly OrdineRiepilogo[],
-  annunci: readonly AnnuncioRiepilogo[],
+  annunci: readonly AnnuncioPrezzo[],
 ): RiepilogoVenditore => {
   let ordiniDaGestire = 0;
   let venditeCompletate = 0;
@@ -85,8 +113,17 @@ export const riepilogoVenditore = (
     }
   }
 
+  let annunciAttivi = 0;
+  let valoreIndicativoAttiviCents = 0;
+  for (const annuncio of annunci) {
+    if (annuncio.stato !== "attivo") continue;
+    annunciAttivi += 1;
+    valoreIndicativoAttiviCents += Math.round(annuncio.wine.prezzo * 100);
+  }
+
   return {
-    annunciAttivi: annunci.filter((a) => a.stato === "attivo").length,
+    annunciAttivi,
+    valoreIndicativoAttiviCents,
     ordiniDaGestire,
     venditeCompletate,
     valoreVenditeCompletateCents,
