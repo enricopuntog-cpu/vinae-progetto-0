@@ -16,7 +16,7 @@
 //    audit_log.motivazione e NOT NULL con CHECK: l'eccezione del mock non e
 //    riproducibile, e non e una regressione ma un vincolo che il mock non aveva.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -48,7 +48,17 @@ import {
 } from "@/components/vinea/States";
 import { usePhase9Moderation } from "@/lib/phase9/use-phase9-moderation";
 import { useVinea } from "@/lib/vinea-store";
-import { AdminOperationsSearch } from "@/components/vinea/moderation/AdminOperationsSearch";
+import { getSupabaseClient } from "@/lib/supabase/client";
+import {
+  AdminOperationsSearch,
+  type AdminDisputeFocus,
+  type AdminReportFocus,
+} from "@/components/vinea/moderation/AdminOperationsSearch";
+import {
+  EMPTY_ADMIN_OVERVIEW,
+  adminOperationsOverview,
+  type AdminOverview,
+} from "@/services/phase9/admin-operations-service";
 import {
   modActionLabel,
   modActionTone,
@@ -144,6 +154,53 @@ const DURATE = ["24 ore", "7 giorni", "30 giorni", "Indefinita"];
 // Una pratica chiusa non si rilavora: le RPC la rifiutano con P0001, e mostrare
 // comandi che il database respinge sarebbe un invito a un errore.
 const chiusa = (report: Report) => report.stato === "risolta" || report.stato === "respinta";
+
+// D11. Un rimando correlato non si accontenta di cambiare scheda: chi arriva
+// da un utente con tre pratiche deve trovarsi davanti quelle tre. Il focus
+// viaggia con la destinazione, la coda dichiara di essere filtrata e offre
+// sempre la via d'uscita.
+type CodaFocus =
+  | AdminReportFocus
+  | { kind: "priorita-alta"; label: string }
+  | { kind: "info-richieste"; label: string };
+
+const corrispondeAlFocus = (report: Report, focus: CodaFocus): boolean => {
+  switch (focus.kind) {
+    case "profilo":
+      return report.targetType === "profilo" && report.targetId === focus.id;
+    case "annuncio":
+      return report.targetType === "annuncio" && report.targetId === focus.id;
+    // Una segnalazione diretta su un Club puo avere targetId vuoto: la
+    // correlazione vera passa dallo slug, non dal bersaglio.
+    case "club":
+      return report.targetType === "club" && report.clubSlug === focus.slug;
+    case "priorita-alta":
+      return report.priorita === "alta";
+    case "info-richieste":
+      return report.stato === "info_richieste";
+  }
+};
+
+const BannerFiltro = ({
+  testo,
+  onRimuovi,
+  testId,
+}: {
+  testo: string;
+  onRimuovi: () => void;
+  testId: string;
+}) => (
+  <div
+    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-oro/50 bg-oro/10 p-3 text-sm"
+    data-testid={testId}
+    role="status"
+  >
+    <span>Filtro attivo · {testo}</span>
+    <Button variant="outline" size="sm" onClick={onRimuovi}>
+      Rimuovi filtro
+    </Button>
+  </div>
+);
 
 const prioritaTono: Record<Priorita, string> = {
   alta: "bg-bordeaux/10 text-bordeaux",
@@ -560,6 +617,9 @@ export const ModerationPanelClient = () => {
   const online = useOnline();
   const [tab, setTab] = useState("overview");
   const [aperta, setAperta] = useState<Report | null>(null);
+  const [focusCoda, setFocusCoda] = useState<CodaFocus | null>(null);
+  const [focusContestazione, setFocusContestazione] = useState<AdminDisputeFocus | null>(null);
+  const [overview, setOverview] = useState<AdminOverview>(EMPTY_ADMIN_OVERVIEW);
   const moderatore = authRuolo === "admin";
   const {
     coda,
@@ -574,6 +634,25 @@ export const ModerationPanelClient = () => {
     inCorso,
   } = usePhase9Moderation({ moderatore });
 
+  // I KPI vengono da una porta Admin dedicata, non dedotti dalle code caricate:
+  // «annunci in revisione» e uno stato di listings, e contare le segnalazioni in
+  // revisione rispondeva a un'altra domanda. Se la porta rifiuta, i contatori
+  // restano a zero e la pagina non inventa numeri.
+  useEffect(() => {
+    if (!moderatore) return;
+    let vivo = true;
+    void adminOperationsOverview(getSupabaseClient())
+      .then((dati) => {
+        if (vivo) setOverview(dati);
+      })
+      .catch(() => {
+        if (vivo) setOverview(EMPTY_ADMIN_OVERVIEW);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [moderatore]);
+
   // Stesso cancello di frontend/src/routes/admin.tsx:73-84. Il gate vero resta
   // comunque nel database: senza il ruolo admin le proiezioni non restituiscono
   // righe, quindi nascondere la pagina e comodita, non sicurezza.
@@ -586,14 +665,69 @@ export const ModerationPanelClient = () => {
   if (loading && coda.length === 0) return <LoadingBlock label="Caricamento moderazione" />;
   if (error && coda.length === 0) return <ErrorState message={error} onRetry={() => void reload()} />;
 
-  const segnalazioniAperte = coda.filter((report) => !chiusa(report));
-  const controversieAperte = contestazioni.filter(contestazioneLavorabile);
-  const altaPriorita = segnalazioniAperte.filter((report) => report.priorita === "alta");
-  const annunciInRevisione = segnalazioniAperte.filter(
-    (report) => report.targetType === "annuncio" && report.stato === "in_revisione",
-  );
-
   const vaiA = (prossima: string) => setTab(prossima);
+
+  const focalizzaCoda = (focus: CodaFocus) => {
+    setFocusCoda(focus);
+    setTab("coda");
+  };
+
+  const focalizzaContestazione = (focus: AdminDisputeFocus) => {
+    setFocusContestazione(focus);
+    setTab("controversie");
+  };
+
+  const codaVisibile = focusCoda
+    ? coda.filter((report) => corrispondeAlFocus(report, focusCoda))
+    : coda;
+  const contestazioniVisibili = focusContestazione
+    ? contestazioni.filter((riga) => riga.orderId === focusContestazione.orderId)
+    : contestazioni;
+
+  const KPI: Array<{ id: string; valore: number; etichetta: string; onClick: () => void }> = [
+    {
+      id: "kpi-open-reports",
+      valore: overview.openReports,
+      etichetta: "Segnalazioni da lavorare",
+      onClick: () => {
+        setFocusCoda(null);
+        vaiA("coda");
+      },
+    },
+    {
+      id: "kpi-open-disputes",
+      valore: overview.openDisputes,
+      etichetta: "Controversie aperte",
+      onClick: () => {
+        setFocusContestazione(null);
+        vaiA("controversie");
+      },
+    },
+    {
+      id: "kpi-high-priority",
+      valore: overview.highPriorityReports,
+      etichetta: "Alta priorita",
+      onClick: () => focalizzaCoda({ kind: "priorita-alta", label: "alta priorita" }),
+    },
+    {
+      id: "kpi-info-requested",
+      valore: overview.infoRequestedReports,
+      etichetta: "Informazioni richieste",
+      onClick: () => focalizzaCoda({ kind: "info-richieste", label: "informazioni richieste" }),
+    },
+    {
+      id: "kpi-review-listings",
+      valore: overview.listingsInReview,
+      etichetta: "Annunci in revisione",
+      onClick: () => vaiA("annunci"),
+    },
+    {
+      id: "kpi-suspended-listings",
+      valore: overview.listingsSuspended,
+      etichetta: "Annunci sospesi",
+      onClick: () => vaiA("annunci"),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -601,7 +735,7 @@ export const ModerationPanelClient = () => {
         <div>
           <h1 className="font-serif text-3xl md:text-4xl">Operazioni Admin</h1>
           <p className="text-muted-foreground">
-            Overview, segnalazioni, controversie e ricerca operativa.
+            Overview, segnalazioni, controversie, utenti, annunci, ordini e club.
           </p>
         </div>
         <Button variant="outline" onClick={() => void reload()} disabled={!online}>
@@ -617,23 +751,18 @@ export const ModerationPanelClient = () => {
 
       <section aria-labelledby="admin-overview-title" className="space-y-3">
         <h2 id="admin-overview-title" className="font-serif text-2xl">Overview</h2>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <button type="button" onClick={() => vaiA("coda")} className="rounded-xl border bg-card p-4 text-left transition-colors hover:bg-secondary/40">
-            <span className="block text-3xl font-semibold" data-testid="kpi-open-reports">{segnalazioniAperte.length}</span>
-            <span className="text-sm text-muted-foreground">Segnalazioni da lavorare</span>
-          </button>
-          <button type="button" onClick={() => vaiA("controversie")} className="rounded-xl border bg-card p-4 text-left transition-colors hover:bg-secondary/40">
-            <span className="block text-3xl font-semibold" data-testid="kpi-open-disputes">{controversieAperte.length}</span>
-            <span className="text-sm text-muted-foreground">Controversie aperte</span>
-          </button>
-          <button type="button" onClick={() => vaiA("coda")} className="rounded-xl border bg-card p-4 text-left transition-colors hover:bg-secondary/40">
-            <span className="block text-3xl font-semibold" data-testid="kpi-high-priority">{altaPriorita.length}</span>
-            <span className="text-sm text-muted-foreground">Alta priorita</span>
-          </button>
-          <button type="button" onClick={() => vaiA("coda")} className="rounded-xl border bg-card p-4 text-left transition-colors hover:bg-secondary/40">
-            <span className="block text-3xl font-semibold" data-testid="kpi-review-listings">{annunciInRevisione.length}</span>
-            <span className="text-sm text-muted-foreground">Annunci in revisione</span>
-          </button>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {KPI.map((voce) => (
+            <button
+              key={voce.id}
+              type="button"
+              onClick={voce.onClick}
+              className="rounded-xl border bg-card p-4 text-left transition-colors hover:bg-secondary/40"
+            >
+              <span className="block text-3xl font-semibold" data-testid={voce.id}>{voce.valore}</span>
+              <span className="text-sm text-muted-foreground">{voce.etichetta}</span>
+            </button>
+          ))}
         </div>
       </section>
 
@@ -642,21 +771,35 @@ export const ModerationPanelClient = () => {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="coda">Segnalazioni</TabsTrigger>
           <TabsTrigger value="controversie">Controversie</TabsTrigger>
-          <TabsTrigger value="ricerca">Ricerca</TabsTrigger>
+          <TabsTrigger value="utenti">Utenti</TabsTrigger>
+          <TabsTrigger value="annunci">Annunci</TabsTrigger>
+          <TabsTrigger value="ordini">Ordini</TabsTrigger>
+          <TabsTrigger value="club">Club</TabsTrigger>
           <TabsTrigger value="audit">Audit</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-3">
           <p className="rounded-xl border p-4 text-sm text-muted-foreground">
-            Usa le card KPI per aprire le code operative oppure passa alla Ricerca per un lookup read-only.
+            Usa le card KPI per aprire la coda giusta, oppure le sezioni Utenti, Annunci, Ordini e Club
+            per un lookup in sola lettura.
           </p>
         </TabsContent>
 
         <TabsContent value="coda" className="space-y-3">
-          {coda.length === 0 ? (
-            <EmptyState title="Nessuna segnalazione" message="La coda e vuota." />
+          {focusCoda ? (
+            <BannerFiltro
+              testId="admin-coda-filtro"
+              testo={`segnalazioni collegate a ${focusCoda.label}`}
+              onRimuovi={() => setFocusCoda(null)}
+            />
+          ) : null}
+          {codaVisibile.length === 0 ? (
+            <EmptyState
+              title="Nessuna segnalazione"
+              message={focusCoda ? "Nessuna pratica per questo filtro." : "La coda e vuota."}
+            />
           ) : (
-            coda.map((report) => (
+            codaVisibile.map((report) => (
               <RigaSegnalazione
                 key={report.id}
                 report={report}
@@ -667,10 +810,20 @@ export const ModerationPanelClient = () => {
         </TabsContent>
 
         <TabsContent value="controversie" className="space-y-3">
-          {contestazioni.length === 0 ? (
-            <EmptyState title="Nessuna controversia" message="Nessuna pratica aperta." />
+          {focusContestazione ? (
+            <BannerFiltro
+              testId="admin-controversie-filtro"
+              testo={`contestazione dell'${focusContestazione.label}`}
+              onRimuovi={() => setFocusContestazione(null)}
+            />
+          ) : null}
+          {contestazioniVisibili.length === 0 ? (
+            <EmptyState
+              title="Nessuna controversia"
+              message={focusContestazione ? "Nessuna pratica per questo ordine." : "Nessuna pratica aperta."}
+            />
           ) : (
-            contestazioni.map((riga) => (
+            contestazioniVisibili.map((riga) => (
               <RigaContestazione
                 key={riga.id}
                 riga={riga}
@@ -681,10 +834,35 @@ export const ModerationPanelClient = () => {
           )}
         </TabsContent>
 
-        <TabsContent value="ricerca" className="space-y-3">
+        <TabsContent value="utenti" className="space-y-3">
           <AdminOperationsSearch
-            onReports={() => vaiA("coda")}
-            onDisputes={() => vaiA("controversie")}
+            scope="utente"
+            onFocusReports={focalizzaCoda}
+            onFocusDispute={focalizzaContestazione}
+          />
+        </TabsContent>
+
+        <TabsContent value="annunci" className="space-y-3">
+          <AdminOperationsSearch
+            scope="annuncio"
+            onFocusReports={focalizzaCoda}
+            onFocusDispute={focalizzaContestazione}
+          />
+        </TabsContent>
+
+        <TabsContent value="ordini" className="space-y-3">
+          <AdminOperationsSearch
+            scope="ordine"
+            onFocusReports={focalizzaCoda}
+            onFocusDispute={focalizzaContestazione}
+          />
+        </TabsContent>
+
+        <TabsContent value="club" className="space-y-3">
+          <AdminOperationsSearch
+            scope="club"
+            onFocusReports={focalizzaCoda}
+            onFocusDispute={focalizzaContestazione}
           />
         </TabsContent>
 
