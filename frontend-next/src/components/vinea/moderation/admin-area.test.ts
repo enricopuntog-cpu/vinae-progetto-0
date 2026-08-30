@@ -452,7 +452,12 @@ describe("D10 - la scheda Controversie", () => {
     // vuota li tiene spenti comunque.
     expect(pannelloNudo).toMatch(/disabled=\{!pronta \|\| occupato\}/);
     expect(pannelloNudo).toInclude("const occupato = inCorso !== null;");
-    expect(pannelloNudo).toInclude("if (!onRisolvi || !pronta || occupato) return;");
+    // La guardia si e stretta con le azioni controllate: alla chiave del
+    // controller si e aggiunto il `ref` locale, che chiude la finestra fra il
+    // click e il primo render disabilitato.
+    expect(pannelloNudo).toInclude(
+      "if (!onRisolvi || !pronta || occupato || invioLocale.current) return;",
+    );
     // La chiave e per ordine, come per le segnalazioni: un flag globale
     // spegnerebbe i comandi di tutte le righe della coda.
     expect(controllerNudo).toInclude("setInCorso(`${orderId}:${esito}`);");

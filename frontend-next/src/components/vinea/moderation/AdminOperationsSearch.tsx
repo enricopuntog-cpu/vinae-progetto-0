@@ -5,16 +5,18 @@
 // sola porta a database, una sola forma di stato (ricerca, caricamento, vuoto,
 // errore, risultati, dettaglio), e un solo posto dove correggere un difetto.
 //
-// Tutto qui e in sola lettura. La BUILD 1 non introduce comandi: ruoli,
-// sospensioni, rimborsi e payout restano fuori, e cio che si mostra viene da
-// porte che verificano il ruolo reale a database.
+// Utenti, Ordini e Club restano in sola lettura: ruoli, sospensioni account,
+// rimborsi, compensi e provider non passano da qui. L'unica sezione con comandi
+// e Annunci, e usa la porta di moderazione che gia esiste — nessuna RPC nuova.
 
 import Link from "next/link";
 import { type FormEvent, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ListingModerationActions } from "@/components/vinea/moderation/ListingModerationActions";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import type { TransizioneAnnuncio } from "@/services/phase9/supabase-moderation-service";
 import {
   ADMIN_LOOKUP_MIN_LENGTH,
   EMPTY_ADMIN_LOOKUP,
@@ -46,7 +48,20 @@ type Props = {
   scope: AdminScope;
   onFocusReports: (focus: AdminReportFocus) => void;
   onFocusDispute: (focus: AdminDisputeFocus) => void;
+  // La porta di moderazione arriva dal pannello, che possiede il controller:
+  // cosi un'azione fatta da qui rilegge anche coda e audit, e non solo la
+  // scheda. Null quando il servizio non e configurato.
+  onTransizioneAnnuncio:
+    | ((listingId: string, transizione: TransizioneAnnuncio, motivazione: string) => Promise<void>)
+    | null;
+  inCorso: string | null;
 };
+
+// Una pratica chiusa non e piu «aperta» per il dettaglio: se restano solo
+// pratiche risolte o respinte l'annuncio si lavora direttamente, senza mandare
+// l'operatore su una coda dove non troverebbe nulla da fare.
+const praticaAperta = (report: AdminRelatedReport) =>
+  report.stato !== "risolta" && report.stato !== "respinta";
 
 const SCOPE_UX: Record<AdminScope, { titolo: string; etichetta: string; placeholder: string; aiuto: string; vuoto: string }> = {
   utente: {
@@ -266,15 +281,29 @@ const DettaglioUtente = ({
   </Card>
 );
 
+// Due strade sole, e mai insieme. Con una pratica aperta si lavora la pratica:
+// agire a lato lascerebbe la segnalazione aperta su un annuncio gia sospeso, e
+// la storia della decisione fuori dalla pratica che l'ha motivata. Senza pratica
+// aperta la segnalazione non esiste e non va inventata: si agisce sull'annuncio.
 const DettaglioAnnuncio = ({
   entity,
   reports,
   onFocusReports,
+  onTransizioneAnnuncio,
+  inCorso,
+  onAggiorna,
 }: {
   entity: AdminListingResult;
   reports: AdminRelatedReport[];
   onFocusReports: (focus: AdminReportFocus) => void;
-}) => (
+  onTransizioneAnnuncio:
+    | ((listingId: string, transizione: TransizioneAnnuncio, motivazione: string) => Promise<void>)
+    | null;
+  inCorso: string | null;
+  onAggiorna: () => Promise<boolean>;
+}) => {
+  const aperte = reports.filter(praticaAperta);
+  return (
   <Card className="space-y-4 p-5" data-testid="admin-listing-detail">
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div>
@@ -307,12 +336,28 @@ const DettaglioAnnuncio = ({
           data-testid="admin-focus-listing-reports"
           onClick={() => onFocusReports({ kind: "annuncio", id: entity.id, label: entity.title })}
         >
-          Vai alla segnalazione
+          {aperte.length > 0 ? "Gestisci segnalazione" : "Segnalazioni correlate"}
         </Button>
       ) : null}
     </div>
+
+    {aperte.length > 0 ? (
+      <p className="text-xs text-muted-foreground" data-testid="admin-listing-actions-via-report">
+        Questo annuncio ha una segnalazione aperta: si lavora dalla pratica, cosi la decisione resta
+        nella sua storia. Le azioni dirette tornano quando la pratica e chiusa.
+      </p>
+    ) : (
+      <ListingModerationActions
+        listingId={entity.id}
+        stato={entity.status}
+        inCorso={inCorso}
+        onTransizione={onTransizioneAnnuncio}
+        onAggiorna={onAggiorna}
+      />
+    )}
   </Card>
-);
+  );
+};
 
 const DettaglioOrdine = ({
   entity,
@@ -341,12 +386,14 @@ const DettaglioOrdine = ({
     </dl>
 
     {/*
-      Nessun comando finanziario qui dentro. Rimborsi, incassi, rilascio dei
-      compensi e azioni sul provider non appartengono a una sezione di sola
-      lettura, e restano fuori dalla BUILD 1 per scelta, non per dimenticanza.
+      Nessuna leva manuale di pagamento qui dentro. La decisione sulla
+      contestazione continua a usare il workflow D10 esistente, che puo
+      aggiornare ordine, payout, tracking ed eventi; non offre comandi separati
+      per rimborso, incasso, rilascio compensi o provider.
     */}
     <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-      Sezione in sola lettura: da qui non si dispongono movimenti sull&apos;ordine.
+      La decisione chiude la contestazione secondo il workflow esistente. Il rimborso e le operazioni
+      di pagamento non si dispongono da qui.
     </p>
 
     {entity.openDispute || entity.disputeId ? (
@@ -357,7 +404,7 @@ const DettaglioOrdine = ({
           data-testid="admin-focus-order-dispute"
           onClick={() => onFocusDispute({ orderId: entity.id, label: `ordine ${entity.id.slice(0, 8)}` })}
         >
-          Apri contestazione
+          Gestisci contestazione
         </Button>
       </div>
     ) : null}
@@ -425,13 +472,23 @@ const chiaveRisultato = (scope: AdminScope, result: unknown): string =>
     ? (result as AdminClubResult).slug
     : (result as { id: string }).id;
 
-export const AdminOperationsSearch = ({ scope, onFocusReports, onFocusDispute }: Props) => {
+export const AdminOperationsSearch = ({
+  scope,
+  onFocusReports,
+  onFocusDispute,
+  onTransizioneAnnuncio,
+  inCorso,
+}: Props) => {
   const ux = SCOPE_UX[scope];
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<AdminLookupResults | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<AdminDetail | null>(null);
+  // L'identificatore con cui la scheda e stata aperta: serve a rileggerla dopo
+  // un'azione. Ricavarlo dall'entita significherebbe conoscerne la chiave per
+  // ogni ambito in un secondo posto.
+  const [chiaveAperta, setChiaveAperta] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
@@ -465,11 +522,26 @@ export const AdminOperationsSearch = ({ scope, onFocusReports, onFocusDispute }:
     setDetailError(null);
     try {
       setDetail(await adminOperationsDetail(getSupabaseClient(), scope, identificatore));
+      setChiaveAperta(identificatore);
     } catch {
       setDetail(null);
+      setChiaveAperta(null);
       setDetailError("Il dettaglio non e disponibile. Riprova.");
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  // La rilettura dopo un'azione. Non svuota la scheda quando fallisce: l'azione
+  // e gia avvenuta, e lasciare l'operatore davanti al nulla sarebbe peggio di
+  // lasciarlo davanti a dati vecchi dichiarati tali.
+  const aggiornaDettaglio = async (): Promise<boolean> => {
+    if (!chiaveAperta) return false;
+    try {
+      setDetail(await adminOperationsDetail(getSupabaseClient(), scope, chiaveAperta));
+      return true;
+    } catch {
+      return false;
     }
   };
 
@@ -478,14 +550,29 @@ export const AdminOperationsSearch = ({ scope, onFocusReports, onFocusDispute }:
   if (detail?.entity) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" data-testid="admin-detail-back" onClick={() => setDetail(null)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          data-testid="admin-detail-back"
+          onClick={() => {
+            setDetail(null);
+            setChiaveAperta(null);
+          }}
+        >
           ← Torna ai risultati
         </Button>
         {detail.tipo === "utente" ? (
           <DettaglioUtente entity={detail.entity} reports={detail.reports} onFocusReports={onFocusReports} />
         ) : null}
         {detail.tipo === "annuncio" ? (
-          <DettaglioAnnuncio entity={detail.entity} reports={detail.reports} onFocusReports={onFocusReports} />
+          <DettaglioAnnuncio
+            entity={detail.entity}
+            reports={detail.reports}
+            onFocusReports={onFocusReports}
+            onTransizioneAnnuncio={onTransizioneAnnuncio}
+            inCorso={inCorso}
+            onAggiorna={aggiornaDettaglio}
+          />
         ) : null}
         {detail.tipo === "ordine" ? (
           <DettaglioOrdine entity={detail.entity} onFocusDispute={onFocusDispute} />
