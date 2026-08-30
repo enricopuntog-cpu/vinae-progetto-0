@@ -57,17 +57,6 @@ const erroreMediato = (causa: unknown) => {
   return "Invio non riuscito. Riprova più tardi.";
 };
 
-const TriggerPredefinito = ({ variant }: { variant: Props["variant"] }) =>
-  variant === "icon" ? (
-    <button className="rounded-full p-2 text-muted-foreground hover:bg-secondary" aria-label="Segnala">
-      <Flag className="h-4 w-4" />
-    </button>
-  ) : (
-    <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-bordeaux">
-      <Flag className="h-4 w-4" /> Segnala
-    </Button>
-  );
-
 export const ReportDialog = ({
   targetType,
   targetId,
@@ -93,6 +82,21 @@ export const ReportDialog = ({
     setLoading(false);
     setErrore(null);
   };
+
+  const triggerPredefinito =
+    variant === "icon" ? (
+      <button
+        type="button"
+        className="rounded-full p-2 text-muted-foreground hover:bg-secondary"
+        aria-label="Segnala"
+      >
+        <Flag className="h-4 w-4" />
+      </button>
+    ) : (
+      <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-bordeaux">
+        <Flag className="h-4 w-4" /> Segnala
+      </Button>
+    );
 
   const invia = async () => {
     if (loading) return;
@@ -144,7 +148,7 @@ export const ReportDialog = ({
         if (!valore) reset();
       }}
     >
-      <DialogTrigger asChild>{trigger ?? <TriggerPredefinito variant={variant} />}</DialogTrigger>
+      <DialogTrigger asChild>{trigger ?? triggerPredefinito}</DialogTrigger>
       <DialogContent className="max-w-lg" aria-describedby="report-target-description">
         <DialogHeader>
           <DialogTitle className="font-serif text-2xl">

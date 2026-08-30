@@ -1,25 +1,19 @@
 ## CURRENT STATE
-- D1–D10 are closed. UI work package PR #104 was merged; the reporting BUILD starts from merge/base SHA `f13927c2bf41ce54f56bbdb04e6df58822c41375`.
-- The previous UI package is closed. Browser smoke for PR #104 remains `NON VERIFICATO` and is non-blocking for this separate BUILD.
-- `SEGNALAZIONI & RECLAMI END-TO-END` is implemented on `build/segnalazioni-reclami-complete` by extending the existing Phase 9 system (`reports`, `report_events`, `audit_log`, moderation projections/service/dialog), without parallel report or moderation subsystems.
-- Exactly two append-only migrations add the `club` target and the authenticated direct-Club RPC. The frozen `public.segnalazione_invia` is unchanged. Direct Club reports resolve canonical slug/name server-side, reject owner/duplicate/invalid-reason submissions, and remain in the existing Admin queue with only `info_richieste` and `chiusura` actions.
-- The shared report dialog and the listing, public-profile, direct-Club, Club-post and Club-comment entry points use their real identifiers and hide owner/self actions where required. Account links to the existing private `/segnalazioni` page; moderator-only notes, assignments and audit data remain absent from the user projection.
-- Independent VERIFY: the A20 database grid passes `20/20` with 0 failures and explicit cleanup in the local non-production Supabase Docker database; `frontend-next` typecheck passes with Bun 1.3.14; targeted frontend tests pass `84/84`; the full `frontend-next` suite passes `1306/1306`; `git diff --check` passes.
-- The CI test floor is aligned to the verified suite total at `MIN_TESTS = 1306` in both the workflow and its prelaunch contract test.
-- No payment, provider or payout code changed. No production write or production migration application was performed. Phase 13 has not started.
+- VERIFICATO: PR #105 e merged; il reporting e deployato in produzione; segnalazione annuncio, Le mie segnalazioni e chiusura Admin sono funzionanti. Il browser smoke di produzione ha individuato il bug runtime del trigger sul profilo pubblico.
+- Questo package su `fix/reporting-admin-triage-ux`, base `origin/main` SHA `a41d2e743fe3ef40d9e09f05a34ed728d989f08e`, corregge il trigger profilo nel `ReportDialog` condiviso e chiarisce il triage Admin senza nuove RPC o modifiche database.
+- Il triage Admin espone una sola azione e una sola CTA contestuale, richiede la motivazione, mantiene privata la nota interna, mostra/invia la durata solo per `sospensione`, separa `Annulla` da `Chiudi segnalazione` e filtra le azioni secondo gli effetti backend reali.
+- Verifica locale completata: test mirati `48/48`, typecheck, lint dei file TS/TSX toccati, suite completa `1311/1311`, contratto prelaunch `19/19` e `git diff --check` passano. `MIN_TESTS` e allineato a `1311`.
 
 ## ACTIVE TASK
-`SEGNALAZIONI & RECLAMI END-TO-END` passed independent semantic, database, typecheck and full-suite verification and is in the authorized commit/PR/CI lifecycle.
+`REPORTING RUNTIME FIX + ADMIN TRIAGE UX` e verificato localmente e pronto per commit, PR, CI e squash merge.
 
 ## NEXT STEPS
-1. Commit and push only the intentional reporting work-package files.
-2. Open the pull request and wait for every required CI and Supabase Preview check.
-3. Squash-merge only after all hard gates remain green.
+1. Creare commit, push e pull request verso `main` con i soli file intenzionali.
+2. Attendere e correggere soltanto eventuali failure concrete dei check CI attivati.
+3. Eseguire squash merge a CI verde e verificare il merge SHA su `origin/main`.
 
 ## BLOCKERS / NOTES
-- Supabase Preview remains the migration hard gate before merge; the two migrations freeze after their first Preview application.
-- Browser smoke remains pending availability and is not a hard blocker for this work package.
-- The CI test floor is `MIN_TESTS = 1306`; it was raised, never lowered, after the verified suite count increased.
-- No `moderation_v2`, `reports_v2`, `ModerationServiceV2`, destructive Club RPC or unsupported Club suspension/deletion/ban operation was introduced.
-- `.wslconfig` and `.d3b-production-schema.sql` are unrelated local files and remain preserved and unstaged.
-- Readiness debt remains unchanged: external AI provider OFF, payments/provider/payout scheduler OFF, refund OFF, final legal text pending, Phase 13 cutover not started.
+- Browser smoke di questo package: NON VERIFICATO per indisponibilita del browser nella sessione; non e hard blocker con test e CI verdi.
+- Nessuna migration, modifica schema/enum, `moderation_v2`, `reports_v2` o sistema parallelo e stata introdotta. Payment, provider e payout sono intatti.
+- `.wslconfig` e `.d3b-production-schema.sql` restano preservati, untracked e non toccati.
+- Phase 13 NOT started.

@@ -220,13 +220,50 @@ describe("D10 - la moderazione resta quella della Fase 9", () => {
     expect(adapterNudo).not.toMatch(/moderation_v2|reports_v2|audit_log_v2|_v2"/);
   });
 
-  it("i Club diretti restano nella coda esistente con sole azioni semanticamente valide", () => {
-    expect(pannelloNudo).toMatch(
-      /report\.targetType === "club"\s*\? \["info_richieste", "chiusura"\]\s*:\s*AZIONI/,
+  it("filtra le azioni secondo gli effetti realmente supportati dal bersaglio", () => {
+    expect(pannelloNudo).toInclude(
+      'if (report.targetType === "club") return ["info_richieste", "chiusura"]',
     );
+    expect(pannelloNudo).toInclude(
+      'if (report.targetType === "annuncio" || report.targetType === "profilo")',
+    );
+    expect(pannelloNudo).toInclude("return AZIONI_CON_ENFORCEMENT;");
+    expect(pannelloNudo).toInclude("return AZIONI_SOLO_PRATICA;");
     expect(pannelloNudo).toInclude("azioniPerPratica(report).map");
+    expect(pannelloNudo).not.toMatch(/report\.targetType === "club"[\s\S]{0,80}(sospensione|rimozione)/);
     expect(adapterNudo).toInclude('targetId: row.target_id ?? ""');
     expect(adapterNudo).not.toMatch(/moderation_v2|reports_v2|ModerationServiceV2/);
+  });
+
+  it("guida la lavorazione con una sola azione e una CTA contestuale", () => {
+    expect(pannelloNudo).toInclude("const [azione, setAzione] = useState<ModAction | null>(null);");
+    expect(pannelloNudo).toInclude('aria-label="Azione di moderazione"');
+    expect(pannelloNudo).toInclude("AZIONE_UX[azione].cta");
+    expect(pannelloNudo).toInclude('cta: "Chiudi segnalazione"');
+    expect(pannelloNudo).toInclude(">Annulla</Button>");
+    expect(pannelloNudo).not.toInclude(">Chiudi</Button>");
+  });
+
+  it("rende motivazione, durata e invio contestuali", () => {
+    expect(pannelloNudo).toInclude("const pronta = azione !== null && motivazione.trim().length > 0;");
+    expect(pannelloNudo).toInclude('{azione === "sospensione" ? (');
+    expect(pannelloNudo).toInclude('durata: azione === "sospensione" ? durata : undefined');
+    expect(pannelloNudo).toInclude(
+      "if (!azione || !pronta || occupato || invioLocale.current) return;",
+    );
+    expect(pannelloNudo).toInclude("const invioLocale = useRef(false);");
+    expect(pannelloNudo).toInclude("Visibile solo al team Vinea.");
+  });
+
+  it("Annulla chiude solo il dialogo, mentre chiusura passa alla RPC della pratica", () => {
+    expect(pannelloNudo).toMatch(/<Button variant="ghost" onClick=\{onChiudi\}[^>]*>Annulla<\/Button>/);
+    expect(pannelloNudo).toMatch(/await onAzione\(\{[\s\S]*azione,[\s\S]*\}\)/);
+    expect(adapterNudo).toInclude('chiusura: "moderazione_chiusura"');
+  });
+
+  it("le pratiche terminali non espongono azioni", () => {
+    expect(pannelloNudo).toInclude('report.stato === "risolta" || report.stato === "respinta"');
+    expect(pannelloNudo).toInclude("{onApri && !chiusa(report) ? (");
   });
 
   it("le segnalazioni su recensione non hanno una coda propria", () => {

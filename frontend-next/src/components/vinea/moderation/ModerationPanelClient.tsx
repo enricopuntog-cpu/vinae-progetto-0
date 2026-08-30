@@ -16,7 +16,7 @@
 //    audit_log.motivazione e NOT NULL con CHECK: l'eccezione del mock non e
 //    riproducibile, e non e una regressione ma un vincolo che il mock non aveva.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,6 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -62,8 +63,7 @@ import type {
   TransizioneAnnuncio,
 } from "@/services/phase9/supabase-moderation-service";
 
-// Le sette azioni della decisione, nell'ordine in cui il mock le presenta.
-const AZIONI: ModAction[] = [
+const AZIONI_CON_ENFORCEMENT: ModAction[] = [
   "info_richieste",
   "richiesta_modifiche",
   "ammonizione",
@@ -73,8 +73,70 @@ const AZIONI: ModAction[] = [
   "chiusura",
 ];
 
-const azioniPerPratica = (report: Report): ModAction[] =>
-  report.targetType === "club" ? ["info_richieste", "chiusura"] : AZIONI;
+const AZIONI_SOLO_PRATICA: ModAction[] = [
+  "info_richieste",
+  "richiesta_modifiche",
+  "ammonizione",
+  "chiusura",
+];
+
+// Le RPC applicano sospensione, rimozione e ripristino soltanto ad annunci e
+// profili. Sugli altri bersagli quelle azioni scriverebbero solo l'audit, quindi
+// non vengono proposte come se modificassero il contenuto. Il Club diretto non
+// ha moderazione propria e puo soltanto chiedere informazioni o chiudere.
+const azioniPerPratica = (report: Report): ModAction[] => {
+  if (report.targetType === "club") return ["info_richieste", "chiusura"];
+  if (report.targetType === "annuncio" || report.targetType === "profilo") {
+    return AZIONI_CON_ENFORCEMENT;
+  }
+  return AZIONI_SOLO_PRATICA;
+};
+
+const AZIONE_UX: Record<ModAction, { nome: string; descrizione: string; cta: string }> = {
+  info_richieste: {
+    nome: "Richiedi informazioni",
+    descrizione: "Chiede ulteriori informazioni prima di decidere.",
+    cta: "Richiedi informazioni",
+  },
+  richiesta_modifiche: {
+    nome: "Richiedi modifiche",
+    descrizione: "Registra la richiesta nella pratica; non modifica direttamente il contenuto.",
+    cta: "Richiedi modifiche",
+  },
+  ammonizione: {
+    nome: "Ammonisci",
+    descrizione: "Registra un richiamo formale nella pratica.",
+    cta: "Invia ammonizione",
+  },
+  sospensione: {
+    nome: "Sospendi",
+    descrizione: "Applica una sospensione temporanea o indefinita quando supportata.",
+    cta: "Conferma sospensione",
+  },
+  rimozione: {
+    nome: "Rimuovi",
+    descrizione: "Rimuove il contenuto quando l'azione e supportata.",
+    cta: "Conferma rimozione",
+  },
+  ripristino: {
+    nome: "Ripristina",
+    descrizione: "Ripristina un contenuto precedentemente moderato quando supportato.",
+    cta: "Conferma ripristino",
+  },
+  chiusura: {
+    nome: "Chiudi segnalazione",
+    descrizione: "Conclude la pratica senza ulteriori provvedimenti.",
+    cta: "Chiudi segnalazione",
+  },
+};
+
+const STATO_ADMIN: Partial<Record<Report["stato"], string>> = {
+  inviata: "Nuova",
+  in_revisione: "In revisione",
+  info_richieste: "Informazioni richieste",
+  risolta: "Risolta",
+  respinta: "Respinta",
+};
 
 const DURATE = ["24 ore", "7 giorni", "30 giorni", "Indefinita"];
 
@@ -120,15 +182,21 @@ const DialogoAzioni = ({
   onAzione,
   onTransizione,
 }: DialogoProps) => {
+  const [azione, setAzione] = useState<ModAction | null>(null);
   const [motivazione, setMotivazione] = useState("");
   const [durata, setDurata] = useState(DURATE[1]);
   const [notaInterna, setNotaInterna] = useState("");
+  const [invioAttivo, setInvioAttivo] = useState(false);
+  const invioLocale = useRef(false);
 
-  const pronta = motivazione.trim().length > 0;
-  const occupato = inCorso !== null;
+  const pronta = azione !== null && motivazione.trim().length > 0;
+  const occupato = inCorso !== null || invioAttivo;
   const suAnnuncio = report.targetType === "annuncio" && report.targetId.length > 0;
 
-  const esegui = async (azione: ModAction) => {
+  const esegui = async () => {
+    if (!azione || !pronta || occupato || invioLocale.current) return;
+    invioLocale.current = true;
+    setInvioAttivo(true);
     try {
       await onAzione({
         reportId: report.id,
@@ -141,99 +209,153 @@ const DialogoAzioni = ({
     } catch {
       // L'errore e gia nello stato del controller e la pagina lo mostra: qui
       // conta solo non chiudere il dialogo, cosi il testo scritto non si perde.
+    } finally {
+      invioLocale.current = false;
+      setInvioAttivo(false);
     }
   };
 
   return (
-    <Dialog open onOpenChange={(aperto) => !aperto && onChiudi()}>
-      <DialogContent className="max-w-2xl">
+    <Dialog open onOpenChange={(aperto) => !aperto && !occupato && onChiudi()}>
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto" aria-describedby="mod-report-summary">
         <DialogHeader>
-          <DialogTitle className="font-serif text-xl">{report.targetLabel}</DialogTitle>
+          <DialogTitle className="font-serif text-xl">Lavora la segnalazione</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3 text-sm">
-          <p className="text-muted-foreground">
-            {reportTargetLabel[report.targetType]} · {report.reason}
+        <section id="mod-report-summary" className="space-y-2 rounded-xl border bg-secondary/30 p-4 text-sm">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <p className="font-medium">{report.targetLabel}</p>
+              <p className="text-muted-foreground">{reportTargetLabel[report.targetType]}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge className={prioritaTono[report.priorita]}>Priorita {report.priorita}</Badge>
+              <Badge className={reportStatusTone[report.stato]}>
+                {STATO_ADMIN[report.stato] ?? reportStatusLabel[report.stato]}
+              </Badge>
+            </div>
+          </div>
+          <p><span className="font-medium">Motivo:</span> {report.reason}</p>
+          {report.descrizione ? <p><span className="font-medium">Descrizione:</span> {report.descrizione}</p> : null}
+          <p className="text-xs text-muted-foreground">
+            Segnalata da {report.reporter || "utente"} il {data(report.createdAt)}
           </p>
-          {report.descrizione ? <p>{report.descrizione}</p> : null}
+          {report.storia.length > 0 ? (
+            <div className="border-t pt-2">
+              <p className="mb-1 text-xs font-medium uppercase">Storia pratica</p>
+              <ol className="space-y-1 text-xs text-muted-foreground">
+                {report.storia.map((voce) => (
+                  <li key={`${voce.ts}-${voce.testo}`}>
+                    {data(voce.ts)} · <span className="font-medium">{voce.autore}</span> · {voce.testo}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
+        </section>
+
+        <div className="space-y-4 text-sm">
+          <fieldset>
+            <legend className="mb-2 font-medium">Come vuoi gestire questa segnalazione?</legend>
+            <RadioGroup
+              value={azione ?? ""}
+              onValueChange={(valore) => setAzione(valore as ModAction)}
+              className="grid gap-2 sm:grid-cols-2"
+              aria-label="Azione di moderazione"
+            >
+              {azioniPerPratica(report).map((voce) => (
+                <Label key={voce} className="flex cursor-pointer items-start gap-3 rounded-xl border p-3">
+                  <RadioGroupItem value={voce} className="mt-0.5" />
+                  <span>
+                    <span className="block font-medium">{AZIONE_UX[voce].nome}</span>
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      {AZIONE_UX[voce].descrizione}
+                    </span>
+                  </span>
+                </Label>
+              ))}
+            </RadioGroup>
+          </fieldset>
 
           <div>
-            <Label htmlFor="mod-motivazione" className="text-xs uppercase">
-              Motivazione (obbligatoria)
-            </Label>
+            <Label htmlFor="mod-motivazione">Motivazione (obbligatoria)</Label>
             <Textarea
               id="mod-motivazione"
               rows={3}
               value={motivazione}
               onChange={(e) => setMotivazione(e.target.value)}
-              placeholder="Perche stai eseguendo questa azione?"
+              placeholder="Spiega la decisione presa"
               className="mt-1"
+              disabled={occupato}
             />
           </div>
 
-          <div>
-            <Label htmlFor="mod-durata" className="text-xs uppercase">
-              Durata (solo per la sospensione)
-            </Label>
-            <Select value={durata} onValueChange={setDurata}>
-              <SelectTrigger id="mod-durata" className="mt-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {DURATE.map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {d}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {azione === "sospensione" ? (
+            <div>
+              <Label htmlFor="mod-durata">Durata della sospensione</Label>
+              <Select value={durata} onValueChange={setDurata} disabled={occupato}>
+                <SelectTrigger id="mod-durata" className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DURATE.map((d) => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
 
           <div>
-            <Label htmlFor="mod-nota" className="text-xs uppercase">
-              Nota interna (facoltativa, mai visibile al segnalante)
-            </Label>
+            <Label htmlFor="mod-nota">Nota interna (facoltativa)</Label>
             <Textarea
               id="mod-nota"
               rows={2}
               value={notaInterna}
               onChange={(e) => setNotaInterna(e.target.value)}
               className="mt-1"
+              disabled={occupato}
             />
+            <p className="mt-1 text-xs text-muted-foreground">Visibile solo al team Vinea.</p>
           </div>
 
           {suAnnuncio ? (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!pronta || occupato}
-              onClick={() => {
-                void onTransizione(report.targetId, "in_revisione", motivazione).then(
-                  onChiudi,
-                  () => {},
-                );
-              }}
-            >
-              Metti l&apos;annuncio in revisione
-            </Button>
+            <div className="rounded-xl border border-dashed p-3">
+              <p className="text-xs text-muted-foreground">
+                Azione separata sulla visibilita dell&apos;annuncio; non conclude da sola la pratica.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                disabled={motivazione.trim().length === 0 || occupato}
+                onClick={() => {
+                  if (occupato || invioLocale.current) return;
+                  invioLocale.current = true;
+                  setInvioAttivo(true);
+                  void onTransizione(report.targetId, "in_revisione", motivazione).then(
+                    () => onChiudi(),
+                    () => {
+                      invioLocale.current = false;
+                      setInvioAttivo(false);
+                    },
+                  );
+                }}
+              >
+                {inCorso === `${report.targetId}:in_revisione` ? "Messa in revisione…" : "Metti annuncio in revisione"}
+              </Button>
+            </div>
           ) : null}
         </div>
 
-        <DialogFooter className="flex-wrap gap-2">
-          {azioniPerPratica(report).map((azione) => (
-            <Button
-              key={azione}
-              variant="outline"
-              size="sm"
-              className={modActionTone[azione]}
-              disabled={!pronta || occupato}
-              onClick={() => void esegui(azione)}
-            >
-              {modActionLabel[azione]}
-            </Button>
-          ))}
-          <Button variant="ghost" size="sm" onClick={onChiudi}>
-            Chiudi
+        <DialogFooter className="gap-2">
+          <Button variant="ghost" onClick={onChiudi} disabled={occupato}>Annulla</Button>
+          <Button
+            className={azione ? modActionTone[azione] : undefined}
+            disabled={!pronta || occupato}
+            onClick={() => void esegui()}
+          >
+            {azione && inCorso === `${report.id}:${azione}` ? `${AZIONE_UX[azione].cta}…` : azione ? AZIONE_UX[azione].cta : "Scegli un'azione"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -258,7 +380,9 @@ const RigaSegnalazione = ({
       </div>
       <div className="flex flex-wrap gap-2">
         <Badge className={prioritaTono[report.priorita]}>{report.priorita}</Badge>
-        <Badge className={reportStatusTone[report.stato]}>{reportStatusLabel[report.stato]}</Badge>
+        <Badge className={reportStatusTone[report.stato]}>
+          {STATO_ADMIN[report.stato] ?? reportStatusLabel[report.stato]}
+        </Badge>
       </div>
     </div>
 
