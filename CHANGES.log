@@ -1,19 +1,27 @@
 ## CURRENT STATE
-- VERIFICATO: PR #105 e merged; il reporting e deployato in produzione; segnalazione annuncio, Le mie segnalazioni e chiusura Admin sono funzionanti. Il browser smoke di produzione ha individuato il bug runtime del trigger sul profilo pubblico.
-- Questo package su `fix/reporting-admin-triage-ux`, base `origin/main` SHA `a41d2e743fe3ef40d9e09f05a34ed728d989f08e`, corregge il trigger profilo nel `ReportDialog` condiviso e chiarisce il triage Admin senza nuove RPC o modifiche database.
-- Il triage Admin espone una sola azione e una sola CTA contestuale, richiede la motivazione, mantiene privata la nota interna, mostra/invia la durata solo per `sospensione`, separa `Annulla` da `Chiudi segnalazione` e filtra le azioni secondo gli effetti backend reali.
-- Verifica locale completata: test mirati `48/48`, typecheck, lint dei file TS/TSX toccati, suite completa `1311/1311`, contratto prelaunch `19/19` e `git diff --check` passano. `MIN_TESTS` e allineato a `1311`.
+- PR #105 CLOSED e PR #106 CLOSED: `origin/main` e `e76cb0d` ("Fix reporting trigger and admin triage (#106)"). Il reporting e in produzione e la triage Admin funziona.
+- Questo package su `build/admin-operations-overview-search`, base `origin/main` SHA `e76cb0d280220fee6a67e54ab60cb64fa7a7d972`, estende la sola superficie `/admin` senza duplicare la moderazione. Nessun `admin_v2`.
+- Header "Operazioni Admin" con cinque sezioni: Overview, Segnalazioni, Controversie, Ricerca, Audit. I KPI sono derivati dalle code reali gia caricate (segnalazioni aperte, controversie aperte, alta priorita, annunci in revisione) e ogni card naviga alla sezione pertinente. Nessun numero mock.
+- La ricerca e unica, submit-based, minimo 2 caratteri, gruppi utenti/annunci/ordini limitati a 10 richiesti e 20 massimi server-side. Passa solo dalla RPC `public.admin_operations_lookup(text, integer)`: `security definer`, `set search_path = ''`, `stable`, gate su `auth.uid()` + `public.user_roles.role = 'admin'`, nessun `service_role`, nessuna chiave nel browser.
+- Il gate non-admin e doppio e precede la superficie: `/admin` fa `notFound()` su `!eAdminReale(ruoli)`, il pannello ritorna `PermissionDeniedState` prima di Overview, KPI e Ricerca.
+- Proiezioni read-only: utente (id, username, ruolo reale, iscrizione, stato, annunci, segnalazioni aperte) senza email/auth metadata/qualifiche/documenti; annuncio con titolo reale da `wines` e link a `/annuncio/<slug>`; ordine con UUID, parti, stato, totale, payout e flag contestazione.
+- Non introdotte: gestione account/ruoli, approvazione qualifiche, refund, capture, release payout, azioni provider di pagamento, modifica saldo, cambio manuale stato finanziario. Payments/provider/payout restano OFF.
+- Migration SI: unica append-only `20260830191000_admin_operations_lookup.sql`, read-only, nessuna write RPC, corretta sullo schema reale (`reports.target_listing_id`/`target_profile_id`, `public.disputes`, `profiles.stato_utente`, `listings->bottle_units->wines`, `orders.totale_cents`/`payout_stato`).
+- DB grid `supabase/tests/admin_operations_lookup.sql` ESEGUITA: 22 PASS, 0 FAIL, psql exit 0, residuo zero, su container effimero `supabase/postgres:17.6.1.147` con lo schema reale caricato da `.d3b-production-schema.sql`. Coperti anon denied, non-admin denied, i tre lookup, UUID esatto, query corta respinta, limite <= 20, proiezione utente chiusa, assenza di scritture, ACL (`authenticated` si, `anon`/`service_role`/PUBLIC no).
+- Validazioni verdi: test mirati 10/10, full suite `frontend-next` 1321 pass / 0 fail, typecheck pulito, lint pulito sui file toccati, `git diff --check` pulito. `MIN_TESTS` alzato 1311 -> 1321 in `ci.yml` e nel contratto prelaunch.
+- NESSUN apply di produzione eseguito da questo package.
 
 ## ACTIVE TASK
-`REPORTING RUNTIME FIX + ADMIN TRIAGE UX` e verificato localmente e pronto per commit, PR, CI e squash merge.
+`ADMIN OPERATIONS — OVERVIEW + SEARCH + LOOKUP` verificato in locale e pronto per commit, push e PR verso `main`. La migration non e ancora stata applicata ad alcun ambiente remoto.
 
 ## NEXT STEPS
-1. Creare commit, push e pull request verso `main` con i soli file intenzionali.
-2. Attendere e correggere soltanto eventuali failure concrete dei check CI attivati.
-3. Eseguire squash merge a CI verde e verificare il merge SHA su `origin/main`.
+1. Commit, push e apertura PR verso `main` con i soli file intenzionali del package.
+2. Attendere Supabase Preview e tutti i check CI, correggendo eventuali failure concrete con una nuova migration timestamped se il SQL e gia stato applicato al Preview.
+3. Squash merge a check verdi, poi verificare PR MERGED e `origin/main` allineato allo squash SHA.
 
 ## BLOCKERS / NOTES
-- Browser smoke di questo package: NON VERIFICATO per indisponibilita del browser nella sessione; non e hard blocker con test e CI verdi.
-- Nessuna migration, modifica schema/enum, `moderation_v2`, `reports_v2` o sistema parallelo e stata introdotta. Payment, provider e payout sono intatti.
-- `.wslconfig` e `.d3b-production-schema.sql` restano preservati, untracked e non toccati.
+- Dopo il primo apply su Supabase Preview, `20260830191000_admin_operations_lookup.sql` e FROZEN: ogni correzione SQL successiva richiede una nuova migration timestamped.
+- Browser smoke NON VERIFICATO in questo ambiente; non e blocker perche grid, test mirati, full suite, typecheck e lint sono verdi.
+- La replica usata per la grid non porta `extensions.moddatetime` ne `gin_trgm_ops`: mancano i trigger `updated_at` e un indice trigram, entrambi non usati dalla funzione di lookup.
 - Phase 13 NOT started.
+- `.wslconfig` e `.d3b-production-schema.sql` sono preservati, untracked e non toccati; il container effimero `vinea-grid` va rimosso a fine verifica.
