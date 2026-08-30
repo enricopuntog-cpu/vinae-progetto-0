@@ -54,6 +54,7 @@ import {
   type AdminDisputeFocus,
   type AdminReportFocus,
 } from "@/components/vinea/moderation/AdminOperationsSearch";
+import { messaggioAzione } from "@/components/vinea/moderation/ListingModerationActions";
 import {
   EMPTY_ADMIN_OVERVIEW,
   adminOperationsOverview,
@@ -497,6 +498,9 @@ const RigaContestazione = ({
   onRisolvi: ((orderId: string, esito: EsitoContestazioneAdmin, nota: string) => Promise<void>) | null;
 }) => {
   const [nota, setNota] = useState("");
+  const [errore, setErrore] = useState<string | null>(null);
+  const [esitoLocale, setEsitoLocale] = useState<string | null>(null);
+  const invioLocale = useRef(false);
   const pronta = nota.trim().length > 0;
   // `inCorso` e la chiave dell'azione in volo, per ordine. Non un booleano
   // locale: la coda ha piu righe, e il controller la spegne da solo quando la
@@ -505,13 +509,22 @@ const RigaContestazione = ({
   const lavorabile = contestazioneLavorabile(riga);
 
   const esegui = async (esito: EsitoContestazioneAdmin) => {
-    if (!onRisolvi || !pronta || occupato) return;
+    if (!onRisolvi || !pronta || occupato || invioLocale.current) return;
+    invioLocale.current = true;
+    setErrore(null);
+    setEsitoLocale(null);
     try {
       await onRisolvi(riga.orderId, esito, nota);
       setNota("");
-    } catch {
-      // L'errore e gia nello stato del controller e la pagina lo mostra. Qui
-      // conta solo non azzerare la nota: chi riprova non deve riscriverla.
+      // Il controller ha gia riletto la coda: lo stato mostrato sopra e quello
+      // vero. Qui resta solo la conferma che il comando e arrivato.
+      setEsitoLocale(esito === "risolta" ? "Contestazione risolta." : "Contestazione respinta.");
+    } catch (e) {
+      // La nota non si azzera: chi riprova non deve riscriverla. Il messaggio e
+      // mediato, come per le azioni sull'annuncio.
+      setErrore(messaggioAzione(e));
+    } finally {
+      invioLocale.current = false;
     }
   };
 
@@ -530,12 +543,65 @@ const RigaContestazione = ({
         </div>
       </div>
       {riga.descrizione ? <p className="text-sm">{riga.descrizione}</p> : null}
-      <p className="text-xs text-muted-foreground">
-        {/* I due totali restano distinti: l'imballaggio della 7c e nel secondo. */}
-        Ordine {euro(riga.totaleCents)} · addebitato {euro(riga.addebitoTotaleCents)} · aperta il{" "}
-        {data(riga.aperturaAt)}
-      </p>
+
+      {/*
+        L'identificativo dell'ordine per esteso: da qui si arriva anche dalla
+        scheda Ordini, e chi decide deve poter confrontare la riga che ha in mano
+        con quella che ha cercato. I due totali restano distinti: l'imballaggio
+        della 7c e nel secondo.
+      */}
+      <dl className="grid gap-2 border-t pt-2 text-xs sm:grid-cols-2">
+        <div>
+          <dt className="text-muted-foreground">Ordine</dt>
+          <dd>
+            <code className="break-all rounded bg-muted px-1.5 py-0.5">{riga.orderId}</code>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Stato ordine</dt>
+          <dd>{riga.ordineStato}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Aperta da</dt>
+          <dd>{riga.apertaDaUsername}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Venditore</dt>
+          <dd>{riga.sellerUsername}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Totale ordine</dt>
+          <dd>{euro(riga.totaleCents)}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Addebito totale</dt>
+          <dd>{euro(riga.addebitoTotaleCents)}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Apertura</dt>
+          <dd>{data(riga.aperturaAt)}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Chiusura</dt>
+          <dd>{riga.chiusuraAt ? data(riga.chiusuraAt) : "—"}</dd>
+        </div>
+      </dl>
       {riga.esitoNota ? <p className="text-xs">Esito: {riga.esitoNota}</p> : null}
+
+      {esitoLocale ? (
+        <p role="status" data-testid={`controversia-esito-${riga.orderId}`} className="text-xs">
+          {esitoLocale}
+        </p>
+      ) : null}
+      {errore ? (
+        <p
+          role="alert"
+          data-testid={`controversia-errore-${riga.orderId}`}
+          className="rounded-md border border-bordeaux/40 bg-bordeaux/5 p-2 text-xs text-bordeaux"
+        >
+          {errore}
+        </p>
+      ) : null}
 
       {onRisolvi && lavorabile ? (
         <div className="space-y-2 border-t pt-3">
@@ -581,6 +647,12 @@ const RigaContestazione = ({
             Il rimborso non si dispone da qui: resta al back-office finche i pagamenti sono spenti.
           </p>
         </div>
+      ) : !lavorabile ? (
+        // Distinta dall'assenza di servizio: qui la porta c'e, ed e la pratica a
+        // essere finita.
+        <p className="text-xs text-muted-foreground" data-testid={`controversia-chiusa-${riga.orderId}`}>
+          Pratica chiusa: non ammette altre decisioni.
+        </p>
       ) : null}
     </Card>
   );
@@ -839,6 +911,8 @@ export const ModerationPanelClient = () => {
             scope="utente"
             onFocusReports={focalizzaCoda}
             onFocusDispute={focalizzaContestazione}
+            onTransizioneAnnuncio={transizioneAnnuncio}
+            inCorso={inCorso}
           />
         </TabsContent>
 
@@ -847,6 +921,8 @@ export const ModerationPanelClient = () => {
             scope="annuncio"
             onFocusReports={focalizzaCoda}
             onFocusDispute={focalizzaContestazione}
+            onTransizioneAnnuncio={transizioneAnnuncio}
+            inCorso={inCorso}
           />
         </TabsContent>
 
@@ -855,6 +931,8 @@ export const ModerationPanelClient = () => {
             scope="ordine"
             onFocusReports={focalizzaCoda}
             onFocusDispute={focalizzaContestazione}
+            onTransizioneAnnuncio={transizioneAnnuncio}
+            inCorso={inCorso}
           />
         </TabsContent>
 
@@ -863,6 +941,8 @@ export const ModerationPanelClient = () => {
             scope="club"
             onFocusReports={focalizzaCoda}
             onFocusDispute={focalizzaContestazione}
+            onTransizioneAnnuncio={transizioneAnnuncio}
+            inCorso={inCorso}
           />
         </TabsContent>
 

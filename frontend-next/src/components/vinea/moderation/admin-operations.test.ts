@@ -280,7 +280,12 @@ describe("Admin Operations — confini della BUILD read-only", () => {
     for (const vietato of ["refund", "capture", "payout release", "release payout", "transfer_data", "on_behalf_of", "stripe", "service_role"]) {
       expect(eseguibile).not.toContain(vietato);
     }
-    expect(search).toContain("Sezione in sola lettura");
+    // La scheda Ordini rimanda alla contestazione e non nega gli effetti del
+    // workflow D10: dichiara soltanto l'assenza di leve manuali di pagamento.
+    expect(search).toContain(
+      "La decisione chiude la contestazione secondo il workflow esistente",
+    );
+    expect(search).toContain("Il rimborso e le operazioni");
   });
 
   it("tiene fuori i dati privati dalla superficie Admin", () => {

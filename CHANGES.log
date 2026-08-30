@@ -1,21 +1,22 @@
 ## CURRENT STATE
-- PR #107 e gia MERGED; questo package vive su `build/admin-operations-readonly-completion`, base `origin/main` `9922246f5c30eaa5dbf32b7de608f7f03fa32304`.
-- La BUILD read-only completa `/admin` con le otto sezioni finali: Overview, Segnalazioni, Controversie, Utenti, Annunci, Ordini, Club e Audit. Utenti, Annunci, Ordini e Club condividono ricerca e dettaglio configurabili; i focus correlati selezionano la segnalazione o contestazione esatta.
-- La nuova append-only `20260830192000_admin_operations_readonly_completion.sql` estende `admin_operations_lookup` e aggiunge `admin_operations_overview()` e `admin_operations_detail(text, text)`. Le tre RPC sono `stable`, `security definer`, con `search_path` vuoto, gate interno su `auth.uid()` e ruolo admin reale, output limitato, zero DML e EXECUTE concesso soltanto ad `authenticated` dopo le revoche esplicite.
-- I difetti richiesti sono chiusi: profili pubblici collegati per UUID; ordini ricercati solo per UUID esatto e copy coerente; KPI annunci in revisione e sospesi letti da `listings.stato`; Club cercabili e correlati alle segnalazioni tramite `reports.club_slug`; link Club corretto sulla rotta reale `/community/[slug]`.
-- La grid transazionale `supabase/tests/admin_operations_readonly.sql` e verde: 28 PASSA, 0 FALLISCE, 0 SALTATO, residuo zero, hard gate 1 e psql exit 0. Il solo database effimero e stato riallineato con l'esatto vincolo Club della migration frozen `20260830190500`; nessun file migration storico e stato modificato.
-- Verifiche frontend verdi: 32/32 test Admin Operations; 19/19 prelaunch dopo l'aggiornamento della soglia; typecheck pulito; lint pulito sui TS/TSX toccati; suite completa `frontend-next` 1343 PASS, 0 FAIL su 82 file; `MIN_TESTS` allineato a 1343; `git diff --check` pulito.
-- La superficie resta interamente read-only: nessuna mutazione Admin, finanziaria, provider o payout; nessuna moderazione diretta, gestione ruoli, sospensione/cancellazione utenti, azione distruttiva Club o avvio della Phase 13.
+- PR #108 e MERGED/CLOSED: la BUILD read-only delle Operazioni Admin e chiusa e `20260830192000_admin_operations_readonly_completion` risulta deployed e FROZEN. Base di questo package: `origin/main` `9cf913219601c340ff1792b2a69204dccdd28cd8`, branch `build/admin-operations-controlled-actions`.
+- Controlled Actions completa le otto sezioni di `/admin` riusando esclusivamente il backend esistente. Nessuna RPC nuova e nessun SQL toccato: gli annunci passano da `transizioneAnnuncio`, mentre le contestazioni passano da `risolviControversia` del controller di Fase 9.
+- Annunci: il componente condiviso `ListingModerationActions` espone esattamente le cinque transizioni ammesse dalle porte esistenti per lo stato corrente; `venduto` e `riservato` non mostrano azioni. Con una pratica aperta il dettaglio focalizza la segnalazione esatta con «Gestisci segnalazione» e non monta azioni dirette parallele.
+- Ordini/Controversie: «Gestisci contestazione» focalizza ordine e pratica esatti. Restano i soli esiti `risolta` e `respinta`, con motivazione obbligatoria e nessuna decisione sulle pratiche terminali. La semantica D10 resta invariata: il workflow esistente puo aggiornare stato ordine, payout, tracking ed eventi; la UI non offre leve manuali separate di refund, capture, pagamento, provider o payout.
+- Motivazione, conferma, loading, guardia anti-doppio invio, refresh e feedback distinguono mutation failure da refresh failure. Gli errori 42501, 22023, P0001 e di rete sono mediati; il client non scrive audit e rilegge cio che la foundation registra.
+- Utenti e Club restano read-only: nessuna mutazione account, ruolo o qualifica e nessuna azione distruttiva sul Club. Sul report Club restano solo `info_richieste` e `chiusura`.
+- VERIFY locale verde: 26/26 test Controlled Actions, 95/95 suite moderation, typecheck e lint mirato puliti, suite completa `frontend-next` 1369/1369. `MIN_TESTS` e stato alzato insieme a 1369 in CI e nel contratto prelaunch; il relativo test e verde 19/19.
 
 ## ACTIVE TASK
-Completare il ciclo di shipping della BUILD read-only: stage intenzionale, commit, push, PR, check remoti, Supabase Preview, squash merge e verifica post-merge.
+VERIFY indipendente completato in locale; Controlled Actions e pronto per stage intenzionale, PR, CI e squash merge.
 
 ## NEXT STEPS
-1. Stage dei soli file intenzionali, commit, push e apertura PR verso `main`.
-2. Attendere Frontend, Frontend Next, Backend, Payout runner, Supabase Preview e Netlify tutti verdi sullo SHA esatto.
-3. Eseguire squash merge e verificare che `origin/main` coincida con lo SHA squash della PR.
+1. Creare il commit intenzionale e aprire la PR verso `main` senza includere i file estranei untracked.
+2. Attendere tutti i check CI attivati e correggere soltanto eventuali failure concrete.
+3. Eseguire lo squash merge, verificare il nuovo SHA di `origin/main` e chiudere il work package.
 
 ## BLOCKERS / NOTES
-- Nessun blocker locale residuo. Browser smoke NON VERIFICATO e non bloccante secondo la disponibilita corrente.
-- `20260830191000_admin_operations_lookup.sql` resta production-deployed e FROZEN; `20260830192000` non e stata applicata manualmente e diventera FROZEN al primo apply Preview.
-- `.d3b-production-schema.sql` e `.wslconfig` restano untracked, preservati e non toccati. Nessun apply manuale di produzione e nessun avvio Phase 13.
+- MIGRATION NO: nessun file `supabase/` modificato, nessun apply e nessuna scrittura di produzione. `20260830192000` resta deployed, FROZEN e intatta; nessuna grid nuova e necessaria.
+- Payments, provider e payout scheduler restano OFF. Nessuna leva manuale refund/capture/payout/provider e stata aggiunta; Phase 13 NON avviata.
+- Browser smoke NON VERIFICATO e non bloccante se test e CI restano verdi.
+- `.d3b-production-schema.sql` e `.wslconfig` restano untracked, preservati e non toccati.
