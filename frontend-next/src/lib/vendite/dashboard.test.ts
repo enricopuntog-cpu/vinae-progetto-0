@@ -10,7 +10,7 @@ import {
   PRIORITA_ANNUNCIO,
   riepilogoVenditore,
   STATI_DA_GESTIRE,
-  type AnnuncioRiepilogo,
+  type AnnuncioPrezzo,
   type OrdineRiepilogo,
 } from "@/lib/vendite/dashboard";
 import { ETICHETTE_STATO_VENDITORE, sellerStatusDaOrdine } from "@/lib/orders/seller-status";
@@ -28,7 +28,10 @@ const ordine = (patch: Partial<OrdineRiepilogo> = {}): OrdineRiepilogo => ({
   ...patch,
 });
 
-const annuncio = (stato: ListingStato): AnnuncioRiepilogo => ({ stato });
+const annuncio = (stato: ListingStato, prezzo = 0): AnnuncioPrezzo => ({
+  stato,
+  wine: { prezzo },
+});
 
 /** Un ordine per ciascuno dei nove stati venditore raggiungibili. */
 const unoPerStato: Record<SellerOrderStatus, OrdineRiepilogo> = {
@@ -91,10 +94,35 @@ describe("riepilogoVenditore", () => {
   it("su nessun dato restituisce zeri e non NaN", () => {
     expect(riepilogoVenditore([], [])).toEqual({
       annunciAttivi: 0,
+      valoreIndicativoAttiviCents: 0,
       ordiniDaGestire: 0,
       venditeCompletate: 0,
       valoreVenditeCompletateCents: 0,
     });
+  });
+
+  it("somma il prezzo richiesto dei soli annunci attivi", () => {
+    // La stessa selezione di `annunciAttivi`: ciò che non è in vetrina non ha
+    // un prezzo richiesto da sommare. Una bozza a 900 € non è esposta a
+    // nessuno, e contarla gonfierebbe il numero con una cifra mai pubblicata.
+    const annunci = [
+      annuncio("attivo", 120),
+      annuncio("attivo", 45.5),
+      annuncio("bozza", 900),
+      annuncio("venduto", 900),
+    ];
+    const riepilogo = riepilogoVenditore([], annunci);
+    expect(riepilogo.valoreIndicativoAttiviCents).toBe(16_550);
+    expect(riepilogo.annunciAttivi).toBe(2);
+  });
+
+  it("non confonde la vetrina con il denaro delle vendite chiuse", () => {
+    const riepilogo = riepilogoVenditore(
+      [ordine({ stato: "completato", prezzo_cents: 4_500 })],
+      [annuncio("attivo", 100)],
+    );
+    expect(riepilogo.valoreIndicativoAttiviCents).toBe(10_000);
+    expect(riepilogo.valoreVenditeCompletateCents).toBe(4_500);
   });
 
   it("resta d'accordo con sellerStatusDaOrdine su ogni stato ordine", () => {

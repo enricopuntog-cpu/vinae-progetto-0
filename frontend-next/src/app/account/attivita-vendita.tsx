@@ -21,10 +21,10 @@
  * ## Non è una seconda dashboard
  *
  * Le quattro misure non sono ricalcolate: escono da `riepilogoVenditore()`, la
- * stessa funzione che alimenta i KPI di `/vendite`. Se un giorno «da gestire»
- * cambierà definizione, cambierà in un posto solo e le due superfici non
- * potranno raccontare due numeri diversi. Qui non c'è nessuna soglia, nessun
- * filtro e nessun conteggio locale.
+ * stessa funzione che alimenta i KPI di `/vendite`. Se un giorno «valore
+ * indicativo» cambierà definizione, cambierà in un posto solo e le due
+ * superfici non potranno raccontare due numeri diversi. Qui non c'è nessuna
+ * soglia, nessun filtro e nessun conteggio locale.
  *
  * ## Due letture, non una per KPI
  *
@@ -139,10 +139,18 @@ export default function AttivitaVendita() {
           Non siamo riusciti a leggere la tua attività di vendita. Riprova fra poco.
         </p>
       ) : (
-        // Le stesse quattro misure della dashboard, con le stesse etichette. La
-        // quarta è il prezzo venditore congelato sugli ordini completati: non un
-        // saldo, non un incassato, non un payout — il rilascio dei fondi è
-        // un'altra cosa e non si legge da qui.
+        // Quattro misure, tutte da `riepilogoVenditore()`. Due parlano di
+        // denaro e nessuna delle due è denaro incassato: «Valore indicativo» è
+        // la somma dei prezzi *richiesti* sugli annunci ancora attivi — una
+        // vetrina, non una vendita — e «Valore completate» è il prezzo
+        // venditore congelato sugli ordini chiusi. Né saldo, né incassato, né
+        // payout: il rilascio dei fondi è un'altra cosa e non si legge da qui,
+        // ed è per questo che entrambe le etichette lo dicono a voce.
+        //
+        // «Da gestire» ha lasciato il posto al valore indicativo: era l'unica
+        // delle quattro che chiedeva un'azione, e l'azione si fa in `/vendite`,
+        // dove quel numero continua a esistere accanto al pulsante che lo
+        // risolve. Qui l'Account resta un riepilogo.
         <div className="mt-6 grid grid-cols-2 gap-3">
           <Kpi
             label="Annunci attivi"
@@ -150,9 +158,9 @@ export default function AttivitaVendita() {
             hint={`su ${formatInteger(schede.length)} in totale`}
           />
           <Kpi
-            label="Da gestire"
-            value={formatInteger(riepilogo.ordiniDaGestire)}
-            hint="Ordini in attesa di un tuo gesto"
+            label="Valore indicativo"
+            value={formatEUR(riepilogo.valoreIndicativoAttiviCents / 100)}
+            hint="Prezzi richiesti degli attivi: non è un saldo, un incassato o un payout"
           />
           <Kpi
             label="Vendite completate"

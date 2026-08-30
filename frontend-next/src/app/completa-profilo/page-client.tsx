@@ -53,7 +53,6 @@ export default function CompletaProfiloPageClient() {
 
   const [dob, setDob] = useState("");
   const [dobError, setDobError] = useState<string | null>(null);
-  const [maggiorenne, setMaggiorenne] = useState(false);
   const [terms, setTerms] = useState(false);
   const [inCorso, setInCorso] = useState(false);
   // Il nome di partenza è quello che il trigger ha assegnato; finché l'utente
@@ -74,8 +73,13 @@ export default function CompletaProfiloPageClient() {
     );
   };
 
-  const valid =
-    username.trim().length >= 3 && dob !== "" && dobError === null && maggiorenne && terms;
+  // Come nel form email: la data di nascita è obbligatoria (`dob !== ""`) e deve
+  // superare `isMaggiorenne` (`dobError === null`). Una casella «confermo di
+  // avere 18 anni» accanto a una data già dichiarata chiedeva lo stesso fatto
+  // due volte, e la seconda risposta non arrivava da nessuna parte: nella
+  // scrittura viaggia `dob`, e la barriera che conta è il CHECK su
+  // `profiles.dob`, che vincola l'UPDATE come vincola l'INSERT.
+  const valid = username.trim().length >= 3 && dob !== "" && dobError === null && terms;
 
   const salva = async () => {
     if (!valid) return;
@@ -227,18 +231,12 @@ export default function CompletaProfiloPageClient() {
             </Link>{" "}
             di Vinea.
           </ConsentCheckbox>
-          <ConsentCheckbox
-            checked={maggiorenne}
-            onCheckedChange={setMaggiorenne}
-            icon={<ShieldAlert className="h-3.5 w-3.5 text-bordeaux" />}
-            testId="consenso-eta"
-          >
-            Confermo di avere almeno 18 anni. Vinea è vietato ai minori di 18 anni.
-          </ConsentCheckbox>
-
-          <p className="rounded-xl border border-oro/30 bg-oro/5 p-3 text-xs text-antracite/80">
-            L&apos;età viene <b>dichiarata da te</b>: non chiediamo né verifichiamo documenti in
-            questa fase.
+          <p className="flex items-start gap-2 rounded-xl border border-oro/30 bg-oro/5 p-3 text-xs text-antracite/80">
+            <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-bordeaux" aria-hidden />
+            <span>
+              Vinea è riservato ai maggiorenni. L&apos;età viene <b>dichiarata da te</b> con la
+              data di nascita: non chiediamo né verifichiamo documenti in questa fase.
+            </span>
           </p>
 
           {authError && (

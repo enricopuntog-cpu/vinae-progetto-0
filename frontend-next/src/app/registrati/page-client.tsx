@@ -52,7 +52,6 @@ export default function RegistratiPageClient() {
   // impura secondo le regole del React Compiler.
   const [dobError, setDobError] = useState<string | null>(null);
   const [terms, setTerms] = useState(false);
-  const [maggiorenne, setMaggiorenne] = useState(false);
   const [inCorso, setInCorso] = useState(false);
   const [erroreRegistrazione, setErroreRegistrazione] = useState<CodiceErroreAuth | null>(null);
   const [confermaEmail, setConfermaEmail] = useState(false);
@@ -70,14 +69,20 @@ export default function RegistratiPageClient() {
     );
   };
 
+  // La data di nascita è obbligatoria (`dob !== ""`) e deve superare
+  // `isMaggiorenne` (`dobError === null`): chi ha meno di 18 anni non può
+  // inviare. Una casella «confermo di avere 18 anni» accanto a una data già
+  // dichiarata non aggiungeva nulla a questo — chiedeva due volte lo stesso
+  // fatto e la seconda risposta non arrivava da nessuna parte: al provider
+  // viaggia `dataNascita`, e la barriera che conta è il CHECK su
+  // `profiles.dob`. Vedi `src/lib/age.ts`.
   const valid =
     username.trim().length >= 3 &&
     email.includes("@") &&
     password.length >= 6 &&
     dob !== "" &&
     dobError === null &&
-    terms &&
-    maggiorenne;
+    terms;
 
   const percorsoAccesso = next
     ? `/accedi?${PARAMETRO_NEXT}=${encodeURIComponent(next)}`
@@ -258,25 +263,19 @@ export default function RegistratiPageClient() {
             </Link>{" "}
             di Vinea.
           </ConsentCheckbox>
-          <ConsentCheckbox
-            checked={maggiorenne}
-            onCheckedChange={setMaggiorenne}
-            icon={<ShieldAlert className="h-3.5 w-3.5 text-bordeaux" />}
-            testId="consenso-eta"
-          >
-            Confermo di avere almeno 18 anni. Vinea è vietato ai minori di 18 anni.
-          </ConsentCheckbox>
-
           {/*
             Dichiarazione auto-riferita, non verifica documentale: nessun documento
-            viene richiesto o caricato. Il controllo 18+ è applicato sia qui lato
-            client (isMaggiorenne) sia lato server dal CHECK su profiles.dob.
-            Richiede validazione legale prima del lancio pubblico reale — vedi
-            "Cosa NON è ancora deciso" in docs/ROADMAP_V1.md.
+            viene richiesto o caricato. Il controllo 18+ è applicato sia lato client
+            (isMaggiorenne sulla data qui sopra) sia lato server dal CHECK su
+            profiles.dob. Richiede validazione legale prima del lancio pubblico
+            reale — vedi "Cosa NON è ancora deciso" in docs/ROADMAP_V1.md.
           */}
-          <p className="rounded-xl border border-oro/30 bg-oro/5 p-3 text-xs text-antracite/80">
-            L&apos;età viene <b>dichiarata da te</b>: non chiediamo né verifichiamo documenti in
-            questa fase.
+          <p className="flex items-start gap-2 rounded-xl border border-oro/30 bg-oro/5 p-3 text-xs text-antracite/80">
+            <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-bordeaux" aria-hidden />
+            <span>
+              Vinea è riservato ai maggiorenni. L&apos;età viene <b>dichiarata da te</b> con la data
+              di nascita: non chiediamo né verifichiamo documenti in questa fase.
+            </span>
           </p>
 
           {erroreRegistrazione && (

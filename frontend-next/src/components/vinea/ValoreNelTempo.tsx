@@ -32,13 +32,27 @@ const CONFIG: ChartConfig = {
 const giornoBreve = (t: number) =>
   new Date(t).toLocaleDateString("it-IT", { day: "2-digit", month: "short" });
 
-export function ValoreNelTempo({ serie }: { serie: PuntoValorePortafoglio[] }) {
+export function ValoreNelTempo({
+  serie,
+  /**
+   * La cornice propria serve quando questo blocco sta da solo. Dentro la card
+   * di contabilità sarebbe un riquadro nel riquadro: lì la sezione resta —
+   * intestazione, tabella, avvisi — e cade solo il bordo.
+   */
+  incorniciato = true,
+}: {
+  serie: PuntoValorePortafoglio[];
+  incorniciato?: boolean;
+}) {
   const stato = statoSerieValore(serie);
   const righe = righeSerieValore(serie);
   const parziale = righe.some((r) => r.parziale);
 
   return (
-    <section aria-labelledby="valore-nel-tempo" className="rounded-2xl border border-border bg-card p-4 md:p-6">
+    <section
+      aria-labelledby="valore-nel-tempo"
+      className={incorniciato ? "rounded-2xl border border-border bg-card p-4 md:p-6" : undefined}
+    >
       <h2 id="valore-nel-tempo" className="font-serif text-2xl">
         Valore nel tempo
       </h2>

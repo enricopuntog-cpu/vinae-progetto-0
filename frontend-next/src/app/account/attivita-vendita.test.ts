@@ -24,6 +24,7 @@ import { join } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   riepilogoVenditore,
+  type AnnuncioPrezzo,
   type AnnuncioRiepilogo,
   type OrdineRiepilogo,
 } from "@/lib/vendite/dashboard";
@@ -59,7 +60,10 @@ const ordine = (patch: Partial<OrdineRiepilogo> = {}): OrdineRiepilogo => ({
   ...patch,
 });
 
-const annuncio = (stato: AnnuncioRiepilogo["stato"]): AnnuncioRiepilogo => ({ stato });
+const annuncio = (stato: AnnuncioRiepilogo["stato"], prezzo = 0): AnnuncioPrezzo => ({
+  stato,
+  wine: { prezzo },
+});
 
 // ---------------------------------------------------------------------------
 // I numeri
@@ -89,6 +93,7 @@ describe("i KPI dell'Account escono da ordini e annunci reali", () => {
     // domanda, e sono quattro zeri. Non un errore, non una sezione assente.
     expect(riepilogoVenditore([], [])).toEqual({
       annunciAttivi: 0,
+      valoreIndicativoAttiviCents: 0,
       ordiniDaGestire: 0,
       venditeCompletate: 0,
       valoreVenditeCompletateCents: 0,
@@ -101,6 +106,52 @@ describe("i KPI dell'Account escono da ordini e annunci reali", () => {
     expect(riepilogo.ordiniDaGestire).toBe(0);
     expect(riepilogo.venditeCompletate).toBe(0);
     expect(riepilogo.valoreVenditeCompletateCents).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Il valore indicativo
+// ---------------------------------------------------------------------------
+
+describe("«Valore indicativo» somma i prezzi richiesti dei soli annunci attivi", () => {
+  it("somma gli attivi e nient'altro", () => {
+    const riepilogo = riepilogoVenditore(
+      [],
+      [
+        annuncio("attivo", 120),
+        annuncio("attivo", 45.5),
+        annuncio("bozza", 900),
+        annuncio("in_revisione", 900),
+        annuncio("sospeso", 900),
+        annuncio("venduto", 900),
+      ],
+    );
+    expect(riepilogo.valoreIndicativoAttiviCents).toBe(16_550);
+    expect(riepilogo.annunciAttivi).toBe(2);
+  });
+
+  it("non si mescola con il denaro degli ordini", () => {
+    // Le due misure di denaro rispondono a due domande diverse: la vetrina di
+    // adesso e le vendite chiuse. Un annuncio attivo non deve toccare la
+    // seconda, e un ordine completato non deve toccare la prima.
+    const riepilogo = riepilogoVenditore(
+      [ordine({ stato: "completato", prezzo_cents: 7_000 })],
+      [annuncio("attivo", 30)],
+    );
+    expect(riepilogo.valoreIndicativoAttiviCents).toBe(3_000);
+    expect(riepilogo.valoreVenditeCompletateCents).toBe(7_000);
+  });
+
+  it("resta esatto al centesimo su più righe", () => {
+    // `wine.prezzo` arriva in euro: sommare 0.1 + 0.2 in virgola mobile e
+    // convertire alla fine darebbe 30.000000000000004 centesimi. Si arrotonda
+    // per riga, e il totale resta un intero di centesimi.
+    const riepilogo = riepilogoVenditore(
+      [],
+      [annuncio("attivo", 0.1), annuncio("attivo", 0.2), annuncio("attivo", 19.99)],
+    );
+    expect(riepilogo.valoreIndicativoAttiviCents).toBe(2_029);
+    expect(Number.isInteger(riepilogo.valoreIndicativoAttiviCents)).toBe(true);
   });
 });
 
@@ -139,18 +190,40 @@ describe("la sezione riusa la dashboard invece di riscriverla", () => {
 
   it("usa le stesse etichette e lo stesso hint della dashboard", () => {
     // Non un vincolo estetico: due nomi diversi per la stessa misura sono due
-    // misure, agli occhi di chi legge.
+    // misure, agli occhi di chi legge. Vale per le misure che le due superfici
+    // condividono — «Da gestire» non è più fra queste, perché l'Account l'ha
+    // sostituita e in `/vendite` continua a vivere accanto alla sua azione.
     for (const etichetta of [
       '"Annunci attivi"',
-      '"Da gestire"',
       '"Vendite completate"',
       '"Valore completate"',
-      '"Ordini in attesa di un tuo gesto"',
       '"Ordini chiusi come completati"',
       '"Prezzo venditore, non un incassato"',
     ]) {
       expect(sezioneNuda).toInclude(etichetta);
       expect(senzaCommenti(dashboard)).toInclude(etichetta);
+    }
+  });
+
+  it("mostra «Valore indicativo» al posto di «Da gestire», senza ricalcolarlo", () => {
+    expect(sezioneNuda).toInclude('label="Valore indicativo"');
+    expect(sezioneNuda).toInclude("riepilogo.valoreIndicativoAttiviCents");
+    // L'Account non è più il posto in cui si guarda cosa aspetta un gesto.
+    expect(sezioneNuda).not.toInclude('"Da gestire"');
+    expect(sezioneNuda).not.toInclude("riepilogo.ordiniDaGestire");
+    // …ma `/vendite` sì, e lì la misura resta accanto al pulsante che la chiude.
+    expect(senzaCommenti(dashboard)).toInclude('label="Da gestire"');
+  });
+
+  it("dice che il valore indicativo non è denaro incassato", () => {
+    // Un numero in euro dentro un Account viene letto come un saldo, se nessuno
+    // dice il contrario. Qui il contrario è scritto nell'hint, non in un
+    // commento: deve arrivare a chi guarda la pagina.
+    const hint = /hint="[^"]*non è un saldo, un incassato o un payout[^"]*"/;
+    expect(sezioneNuda).toMatch(hint);
+    for (const parola of ["Saldo", "Incassato", "Payout", "Guadagn"]) {
+      // Nessuna di queste può essere l'etichetta della misura.
+      expect(sezioneNuda).not.toMatch(new RegExp(`label="[^"]*${parola}`, "i"));
     }
   });
 });
@@ -207,15 +280,18 @@ describe("una visita a /account fa due letture, non una per KPI", () => {
 /**
  * Un client che risponde una cosa sola alla query degli annunci del
  * proprietario, con una sessione valida: quello che cambia fra i casi è
- * soltanto se PostgREST ha risposto righe o un errore.
+ * soltanto se PostgREST ha risposto righe o un errore. La lettura è paginata
+ * (`.range()` dopo due `.order()`): una risposta sola equivale a una prima
+ * pagina corta, che chiude il giro.
  */
 const clientAnnunci = (risposta: { data: unknown; error: unknown }): SupabaseClient => {
   const query = {
     select: () => query,
     eq: () => query,
-    order: (
-      _colonna: string,
-      _opzioni: unknown,
+    order: () => query,
+    range: (
+      _da: number,
+      _a: number,
     ): Promise<{ data: unknown; error: unknown }> => Promise.resolve(risposta),
   };
 

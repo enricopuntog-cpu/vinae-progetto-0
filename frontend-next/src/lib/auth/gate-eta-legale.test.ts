@@ -170,7 +170,6 @@ describe("/completa-profilo", () => {
     // partono insieme, mai in due scritture.
     expect(pagina.split("authAggiornaProfilo(").length - 1).toBe(1);
     expect(pagina).toInclude("isMaggiorenne(value, new Date())");
-    expect(pagina).toInclude('testId="consenso-eta"');
     expect(pagina).toInclude("authLogout()");
   });
 });
@@ -202,6 +201,38 @@ describe("Centro legale", () => {
     expect(legale).not.toMatch(
       /KYC|verifica dell.identit|documento d.identit|base giuridica|GDPR|art\.\s*\d|conservazione dei dati|foro competente|legge applicabile|responsabilit/i,
     );
+  });
+
+  it("offre un ritorno indietro visibile senza diventare un client component", () => {
+    expect(legale).toInclude("<AzioneIndietro");
+    expect(legale).toInclude('from "@/components/vinea/AzioneIndietro"');
+    // La pagina resta server: il ritorno è client, e lo è da solo.
+    expect(legale).not.toMatch(/useVinea|"use client"|useRouter/);
+  });
+
+  it("il ritorno indietro ha una destinazione anche senza cronologia", () => {
+    const azione = leggi("src/components/vinea/AzioneIndietro.tsx");
+    expect(esiste("src/components/vinea/AzioneIndietro.tsx")).toBeTrue();
+    expect(azione).toInclude('"use client"');
+    // I due rami: la cronologia quando c'è, una rotta interna quando non c'è.
+    expect(azione).toInclude("window.history.length > 1");
+    expect(azione).toInclude("router.back()");
+    expect(azione).toInclude("router.push(fallback)");
+    expect(azione).toInclude("fallback = routes.home");
+    // Il fallback non può arrivare da fuori: niente referrer, niente query. Il
+    // divieto guarda il codice, non il commento che lo spiega.
+    expect(senzaCommenti(azione)).not.toMatch(/document\.referrer|searchParams|location\.href/);
+  });
+
+  it("il ritorno indietro è un controllo accessibile e non un'icona muta", () => {
+    const azione = leggi("src/components/vinea/AzioneIndietro.tsx");
+    expect(azione).toInclude('type="button"');
+    // Un'etichetta testuale accanto all'icona, e l'icona esclusa dall'albero
+    // accessibile perché non ripeta la stessa parola due volte.
+    expect(azione).toInclude("{etichetta}");
+    expect(azione).toInclude('etichetta = "Indietro"');
+    expect(azione).toMatch(/<ArrowLeft[^>]*aria-hidden/);
+    expect(azione).toInclude("focus-visible:ring-2");
   });
 
   it("è raggiungibile da un rimando discreto senza toccare le navigazioni", () => {
@@ -243,6 +274,57 @@ describe("consenso", () => {
         /consentVersion|versioneConsenso|consentAt|consenso_at|accettatoIl/,
       );
     }
+  });
+
+  it("la registrazione chiede la data di nascita una volta sola, senza casella gemella", () => {
+    const codice = senzaCommenti(registrati);
+    // La data resta obbligatoria e resta validata: sono queste due condizioni a
+    // fermare un minorenne, non una spunta accanto a esse.
+    expect(codice).toInclude('id="dob"');
+    expect(codice).toInclude('type="date"');
+    expect(codice).toInclude("isMaggiorenne(value, new Date())");
+    expect(codice).toInclude("Devi avere almeno 18 anni per usare Vinea.");
+    expect(codice).toInclude('dob !== ""');
+    expect(codice).toInclude("dobError === null");
+    // La casella «confermo di avere 18 anni» chiedeva lo stesso fatto una
+    // seconda volta e la risposta non raggiungeva nessuna barriera: non c'è
+    // più, e con lei lo stato che la reggeva.
+    expect(codice).not.toInclude('testId="consenso-eta"');
+    expect(codice).not.toInclude("maggiorenne &&");
+    expect(codice).not.toMatch(/setMaggiorenne|\[maggiorenne,/);
+    // Il requisito resta però scritto sulla pagina, e la casella dei Termini
+    // resta una spunta vera.
+    expect(codice).toInclude("Vinea è riservato ai maggiorenni.");
+    expect(codice).toInclude('testId="consenso-termini"');
+  });
+
+  it("nemmeno il completamento profilo chiede due volte lo stesso fatto", () => {
+    // Stessa forma dell'altra superficie: la casella non veniva scritta da
+    // nessuna parte — `authAggiornaProfilo` porta solo nome utente e data — e
+    // il CHECK su `profiles.dob` vincola l'UPDATE come vincola l'INSERT.
+    const codice = senzaCommenti(completa);
+    expect(codice).toInclude('id="dob"');
+    expect(codice).toInclude('type="date"');
+    expect(codice).toInclude("isMaggiorenne(value, new Date())");
+    expect(codice).toInclude("Devi avere almeno 18 anni per usare Vinea.");
+    expect(codice).toInclude('dob !== ""');
+    expect(codice).toInclude("dobError === null");
+    expect(codice).not.toInclude('testId="consenso-eta"');
+    expect(codice).not.toInclude("maggiorenne &&");
+    expect(codice).not.toMatch(/setMaggiorenne|\[maggiorenne,/);
+    // Il requisito resta scritto, e i Termini restano una spunta vera.
+    expect(codice).toInclude("Vinea è riservato ai maggiorenni.");
+    expect(codice).toInclude('testId="consenso-termini"');
+    // La scrittura non è cambiata: resta una sola, e porta ancora la data.
+    expect(codice).toInclude("authAggiornaProfilo({ username: username.trim(), dob })");
+  });
+
+  it("la registrazione manda al provider la data, e la barriera vera resta il CHECK", () => {
+    expect(senzaCommenti(registrati)).toInclude("dataNascita: dob");
+    expect(leggi("src/services/auth-service.ts")).toInclude("dob: dataNascita");
+    expect(leggi("../supabase/migrations/20260728000545_auth_profiles_roles.sql")).toInclude(
+      "check (dob <= (current_date - interval '18 years'))",
+    );
   });
 
   it("non chiede documenti su nessuna delle due superfici", () => {

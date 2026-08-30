@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, MoreHorizontal } from "lucide-react";
 import { formatEUR } from "@/lib/format";
 import { AvatarPersona } from "@/components/vinea/AvatarPersona";
+import { SafeImage } from "@/components/vinea/States";
 import type { ConversationSummary } from "@/services/types";
 
 /**
@@ -81,7 +82,20 @@ export const ConversationHeader = ({
         href={`/annuncio/${conversation.listingSlug}`}
         className="flex items-center gap-3 border-b border-border bg-crema/60 p-3 hover:bg-crema"
       >
-        <img src={conversation.wineImage} alt="" className="h-12 w-9 rounded object-cover" />
+        {/* `conversations_page` proietta `coalesce(l.immagini[1], '')`: un annuncio
+            senza foto arriva qui come stringa vuota, e `src=""` fa risolvere al
+            browser l'URL della pagina stessa — il riquadro rotto. `SafeImage`
+            copre in un colpo solo quel caso e l'URL che c'è ma non carica,
+            usando lo stesso segnaposto già in uso sulle schede annuncio. Nessuna
+            lettura in più: il valore è quello che la conversazione porta già. */}
+        <SafeImage
+          src={conversation.wineImage}
+          alt=""
+          fallbackLabel="Foto non disponibile"
+          compact
+          className="h-12 w-9 shrink-0 rounded object-cover"
+          data-testid="conversazione-annuncio-immagine"
+        />
         <span className="min-w-0 flex-1">
           <span className="block text-[11px] uppercase tracking-wide text-salvia">
             Annuncio collegato
