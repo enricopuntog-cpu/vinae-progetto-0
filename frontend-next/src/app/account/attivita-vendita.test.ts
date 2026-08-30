@@ -280,15 +280,18 @@ describe("una visita a /account fa due letture, non una per KPI", () => {
 /**
  * Un client che risponde una cosa sola alla query degli annunci del
  * proprietario, con una sessione valida: quello che cambia fra i casi è
- * soltanto se PostgREST ha risposto righe o un errore.
+ * soltanto se PostgREST ha risposto righe o un errore. La lettura è paginata
+ * (`.range()` dopo due `.order()`): una risposta sola equivale a una prima
+ * pagina corta, che chiude il giro.
  */
 const clientAnnunci = (risposta: { data: unknown; error: unknown }): SupabaseClient => {
   const query = {
     select: () => query,
     eq: () => query,
-    order: (
-      _colonna: string,
-      _opzioni: unknown,
+    order: () => query,
+    range: (
+      _da: number,
+      _a: number,
     ): Promise<{ data: unknown; error: unknown }> => Promise.resolve(risposta),
   };
 

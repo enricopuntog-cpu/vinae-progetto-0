@@ -7,15 +7,16 @@
 - Registrazione: the redundant "Confermo di avere almeno 18 anni" checkbox is removed from both `/registrati` and `/completa-profilo`. On each surface it fed only the local `valid` boolean and was never persisted: the write carries `dob`, and the authoritative barrier is the CHECK on `public.profiles.dob`, which binds the UPDATE from `/completa-profilo` exactly as it binds the signup INSERT. Date of birth stays mandatory, `isMaggiorenne` still blocks submission, the Termini/Privacy checkbox stays a real consent, and the 18+ requirement stays written on both pages.
 - Scheda annuncio: `PriceIntelligencePanel` moved below "Quando berlo" and "Abbinamenti gastronomici" instead of above them. Same panel, same `vista={vistaPrezzi}`, same D3 data and provider — only its position changed. `src/lib/annuncio/ordine-sezioni.test.ts` pins the order and the single occurrence of each section.
 - Cantina: the value/contabilità block moved below the bottle list and above "Cosa bere adesso", and was redesigned — one prominent main value, a trend badge rendered only when `performanceCents` has a sign, three supporting voices in a `<dl>`, and the chart inside the same frame via the new `incorniciato={false}` variant of `ValoreNelTempo`. Same four D3-B voices, same series, no new formula, snapshot, history or provider.
-- Validation run: full `frontend-next` suite 1283/1283 across 79 files, `bun run typecheck` clean, `git diff --check` clean. `MIN_TESTS` raised 1256 → 1283 in `.github/workflows/ci.yml` and in the `prelaunch-contract.test.ts` assertion that mirrors it, together in the same change. The floor was never lowered.
+- KPI source completeness: `leggiMieiAnnunci` in `listing-service.ts` now paginates with `.range()` in pages of 1000 (matching the project-wide PostgREST `max_rows` in `supabase/config.toml`) until a short page ends the loop, with a secondary `id` ordering key so a `created_at` tie cannot straddle a page boundary. All of the seller's listings reach both the sales list and the "Valore indicativo" KPI; sequential pages, no N+1, same error semantics (a mid-loop failure returns the generic error, never a partial list). Behavior beyond 1000 rows is proven by `src/services/listing-paginazione.test.ts`.
+- Validation run: full `frontend-next` suite 1292/1292 across 80 files, `bun run typecheck` clean, `git diff --check` clean. `MIN_TESTS` raised 1256 → 1283 → 1292 in `.github/workflows/ci.yml` and in the `prelaunch-contract.test.ts` assertion that mirrors it, together in the same change. The floor was never lowered.
 - No migration, no production read or write, no Supabase deployment. Phase 13 cutover has not started.
 
 ## ACTIVE TASK
 UI work package on `fix/ui-messaggi-account-legal-registrazione-cantina`: implemented, validated locally, PR open and awaiting CI plus a browser smoke on the Netlify deploy preview before merge.
 
 ## NEXT STEPS
-1. Watch the PR checks and run the browser smoke on the deploy preview, then squash merge.
-2. Decide whether `mieiAnnunci()` should paginate past the PostgREST `max_rows = 1000` cap, which bounds the sales list and the KPI computed from it identically.
+1. Watch the PR checks on the new head and confirm they stay green.
+2. Run the browser smoke on the deploy preview of the new head, then squash merge.
 3. Cabina: the two out-of-scope items (Admin role for the reported account; new segnalazioni/reclami department) remain separate tasks.
 
 ## BLOCKERS / NOTES

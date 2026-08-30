@@ -273,6 +273,15 @@ const NESSUN_CLIENT: Result<never> = {
 };
 
 /**
+ * Ampiezza di una pagina di `leggiMieiAnnunci`, uguale al `max_rows = 1000` di
+ * PostgREST (`supabase/config.toml`): il tetto che una singola richiesta non
+ * può superare, qualunque cosa chieda. Una pagina più larga non darebbe più
+ * righe — ne darebbe comunque mille — ma renderebbe irriconoscibile il segnale
+ * di fine: con pagine da mille, una pagina corta può essere soltanto l'ultima.
+ */
+const DIMENSIONE_PAGINA_MIEI_ANNUNCI = 1000;
+
+/**
  * Corpo di una scrittura: chiama, e traduce l'esito in `Result`. Tenerlo in un
  * punto solo evita che una delle cinque scritture dimentichi la traduzione e
  * lasci sfuggire un messaggio di PostgreSQL.
@@ -316,7 +325,16 @@ export function createListingService(client: SupabaseClient | null): ListingServ
    * Stessa struttura, stessa ragione: `mieiAnnunci()` conserva il collasso su
    * `[]` per i consumer che quel collasso lo vogliono, `mieiAnnunciConEsito()`
    * lascia distinguibili una lettura fallita e un elenco davvero vuoto. La
-   * query è una sola e resta una sola.
+   * lettura sotto resta una sola ed è condivisa dalle due firme.
+   *
+   * PAGINATA, non a colpo singolo. PostgREST non consegna mai più di
+   * `max_rows` righe per richiesta (1000, `supabase/config.toml`) e quando il
+   * tetto taglia non arriva nessun errore: le righe oltre il millenario
+   * mancano e basta. Per la gestione annunci sarebbe un'assenza silenziosa;
+   * per il «Valore indicativo» dell'Account, che somma i prezzi degli attivi,
+   * sarebbe un totale falso presentato come un fatto. La lettura procede
+   * quindi a pagine finché l'ultima torna corta, in sequenza — una richiesta
+   * ogni mille annunci, mai una per annuncio.
    *
    * Il filtro `seller_id` è esplicito e non delegato alla RLS, benché oggi
    * `listings_select_own` dica esattamente la stessa cosa. La ragione è
@@ -340,20 +358,35 @@ export function createListingService(client: SupabaseClient | null): ListingServ
     } = await client.auth.getUser();
     if (!user) return { ok: true, data: [] };
 
-    const { data, error } = await client
-      .from("listings")
-      .select(COLONNE_PROPRIETARIO)
-      .eq("seller_id", user.id)
-      .order("created_at", { ascending: false });
+    const righe: RigaAnnuncioProprietario[] = [];
+    for (let da = 0; ; da += DIMENSIONE_PAGINA_MIEI_ANNUNCI) {
+      const { data, error } = await client
+        .from("listings")
+        .select(COLONNE_PROPRIETARIO)
+        .eq("seller_id", user.id)
+        // `created_at` non è una chiave: due annunci possono condividerla, e un
+        // pareggio a cavallo fra due pagine renderebbe instabile il confine —
+        // la stessa riga consegnata due volte, o nessuna. L'id chiude il
+        // pareggio e rende l'ordine totale.
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(da, da + DIMENSIONE_PAGINA_MIEI_ANNUNCI - 1);
 
-    if (error) {
-      segnalaErrore("mieiAnnunci", error);
-      return { ok: false, error: "Annunci non disponibili." };
+      if (error) {
+        segnalaErrore("mieiAnnunci", error);
+        return { ok: false, error: "Annunci non disponibili." };
+      }
+
+      // Una pagina piena vale esattamente il cap: ce ne può essere un'altra.
+      // Una pagina corta è l'ultima, e il giro si chiude lì.
+      const pagina = (data as unknown as RigaAnnuncioProprietario[] | null) ?? [];
+      righe.push(...pagina);
+      if (pagina.length < DIMENSIONE_PAGINA_MIEI_ANNUNCI) break;
     }
 
     return {
       ok: true,
-      data: (data as unknown as RigaAnnuncioProprietario[])
+      data: righe
         .map(annuncioProprietarioDaRiga)
         .filter((annuncio): annuncio is AnnuncioProprietario => annuncio !== null),
     };
