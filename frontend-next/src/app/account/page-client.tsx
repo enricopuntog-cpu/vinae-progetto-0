@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Camera, Check, LogOut, Trash2 } from "lucide-react";
+import { Camera, Check, Flag, LogOut, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { useVinea } from "@/lib/vinea-store";
 import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
+import { routes } from "@/config/routes";
 import { esperienzaLabels, type Esperienza } from "@/data/onboarding";
 import {
   CATALOGO_AVATAR,
@@ -469,6 +470,17 @@ export default function AccountPageClient() {
         proprie, e il loro esito non tocca nessuno stato di questo modulo. Se
         falliscono, qui sopra non cambia nulla.
       */}
+      <Button asChild variant="outline" className="h-auto w-full justify-start rounded-2xl p-4">
+        <Link href={routes.segnalazioni}>
+          <Flag className="h-4 w-4" />
+          <span className="text-left">
+            <span className="block font-medium">Le mie segnalazioni</span>
+            <span className="block text-xs font-normal text-muted-foreground">
+              Segui lo stato delle pratiche inviate.
+            </span>
+          </span>
+        </Link>
+      </Button>
       <AttivitaVendita />
       <SaldoVineaPanel />
       <QualificheProfessionali />

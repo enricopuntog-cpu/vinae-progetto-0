@@ -220,6 +220,15 @@ describe("D10 - la moderazione resta quella della Fase 9", () => {
     expect(adapterNudo).not.toMatch(/moderation_v2|reports_v2|audit_log_v2|_v2"/);
   });
 
+  it("i Club diretti restano nella coda esistente con sole azioni semanticamente valide", () => {
+    expect(pannelloNudo).toMatch(
+      /report\.targetType === "club"\s*\? \["info_richieste", "chiusura"\]\s*:\s*AZIONI/,
+    );
+    expect(pannelloNudo).toInclude("azioniPerPratica(report).map");
+    expect(adapterNudo).toInclude('targetId: row.target_id ?? ""');
+    expect(adapterNudo).not.toMatch(/moderation_v2|reports_v2|ModerationServiceV2/);
+  });
+
   it("le segnalazioni su recensione non hanno una coda propria", () => {
     // D9 manda le segnalazioni di una recensione nel sistema esistente:
     // `recensione` e un valore di report_target_tipo e `target_review_id` una

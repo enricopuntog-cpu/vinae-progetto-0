@@ -20,7 +20,14 @@ export const trustHint: Record<TrustSource, string> = {
 // ------------------------ REPORTS ------------------------
 
 export type ReportTargetType =
-  "annuncio" | "profilo" | "messaggio" | "conversazione" | "post" | "commento" | "recensione";
+  | "annuncio"
+  | "profilo"
+  | "messaggio"
+  | "conversazione"
+  | "post"
+  | "commento"
+  | "recensione"
+  | "club";
 
 export const reportTargetLabel: Record<ReportTargetType, string> = {
   annuncio: "Annuncio",
@@ -30,6 +37,7 @@ export const reportTargetLabel: Record<ReportTargetType, string> = {
   post: "Post di club",
   commento: "Commento",
   recensione: "Recensione",
+  club: "Club",
 };
 
 export const reportReasons: Record<ReportTargetType, string[]> = {
@@ -58,6 +66,16 @@ export const reportReasons: Record<ReportTargetType, string[]> = {
   post: ["Contenuto inappropriato", "Off-topic per il club", "Spam commerciale", "Disinformazione"],
   commento: ["Insulti o linguaggio offensivo", "Molestia mirata", "Spam"],
   recensione: ["Recensione falsa", "Contenuto diffamatorio", "Fuori tema rispetto all'ordine"],
+  club: ["contenuto_non_conforme", "comportamento_scorretto", "spam", "altro"],
+};
+
+export const reportReasonLabel: Partial<Record<ReportTargetType, Record<string, string>>> = {
+  club: {
+    contenuto_non_conforme: "Contenuto non conforme",
+    comportamento_scorretto: "Comportamento scorretto",
+    spam: "Spam",
+    altro: "Altro",
+  },
 };
 
 export type ReportStatus = "inviata" | "in_revisione" | "info_richieste" | "risolta" | "respinta";
