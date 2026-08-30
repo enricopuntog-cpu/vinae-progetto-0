@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BadgeCheck, MapPin } from "lucide-react";
 import { notFound } from "next/navigation";
 import { AvatarPersona } from "@/components/vinea/AvatarPersona";
+import { ReportDialog } from "@/components/vinea/ReportDialog";
 import { ReputazionePubblica } from "@/components/vinea/profilo/ReputazionePubblica";
 import { WineCard } from "@/components/vinea/WineCard";
 import { esperienzaLabels } from "@/data/onboarding";
@@ -34,6 +35,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 
   const profilo = esitoProfilo.data;
   const localita = [profilo.citta, profilo.provincia].filter(Boolean).join(", ");
+  const utente = client ? (await client.auth.getUser()).data.user : null;
+  const profiloProprio = utente?.id === profilo.userId;
 
   // Due letture indipendenti, insieme: gli annunci e la prima pagina di
   // recensioni non si aspettano a vicenda. Il riepilogo — conteggio e medie —
@@ -84,6 +87,15 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
                 {localita}
               </p>
             )}
+            {!profiloProprio ? (
+              <div className="mt-3 flex justify-center sm:justify-start">
+                <ReportDialog
+                  targetType="profilo"
+                  targetId={profilo.userId}
+                  targetLabel={profilo.username}
+                />
+              </div>
+            ) : null}
           </div>
         </div>
 

@@ -73,6 +73,9 @@ const AZIONI: ModAction[] = [
   "chiusura",
 ];
 
+const azioniPerPratica = (report: Report): ModAction[] =>
+  report.targetType === "club" ? ["info_richieste", "chiusura"] : AZIONI;
+
 const DURATE = ["24 ore", "7 giorni", "30 giorni", "Indefinita"];
 
 // Una pratica chiusa non si rilavora: le RPC la rifiutano con P0001, e mostrare
@@ -217,7 +220,7 @@ const DialogoAzioni = ({
         </div>
 
         <DialogFooter className="flex-wrap gap-2">
-          {AZIONI.map((azione) => (
+          {azioniPerPratica(report).map((azione) => (
             <Button
               key={azione}
               variant="outline"

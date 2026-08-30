@@ -293,7 +293,7 @@ describe("Fase 9a - scrittura e limiti dichiarati", () => {
     expect(creata.stato).toBe("inviata");
   });
 
-  it("la RPC non riceve ne priorita ne stato ne identita del segnalante", async () => {
+  it("la RPC esistente conserva la firma senza dati autoritativi del client", async () => {
     const mia = senzaSegnalante(queueRow);
     const { client, rpcChiamate } = fakeClient({ my_reports: { data: mia } }, { data: "r1" });
     await createSupabaseModerationService(client).segnala({
@@ -309,16 +309,101 @@ describe("Fase 9a - scrittura e limiti dichiarati", () => {
       storia: [],
       noteInterne: [],
     });
-    const args = rpcChiamate[0]?.args as Record<string, unknown>;
-    expect(Object.keys(args).sort()).toEqual([
-      "p_club_slug",
-      "p_descrizione",
-      "p_foto",
-      "p_motivo",
-      "p_target_id",
-      "p_target_label",
-      "p_target_tipo",
+    expect(rpcChiamate).toEqual([
+      {
+        nome: "segnalazione_invia",
+        args: {
+          p_target_tipo: "annuncio",
+          p_target_id: "l1",
+          p_target_label: "Barolo 2015",
+          p_motivo: "Prezzo anomalo",
+          p_descrizione: "",
+          p_foto: [],
+          p_club_slug: null,
+        },
+      },
     ]);
+  });
+
+  it("solo il Club diretto usa la porta dedicata e rilegge my_reports", async () => {
+    const club = senzaSegnalante({
+      ...queueRow,
+      id: "r-club",
+      target_tipo: "club",
+      target_label: "Club Barolo",
+      target_id: null,
+      motivo: "spam",
+      club_slug: "club-barolo",
+    });
+    const { client, tabelleLette, rpcChiamate } = fakeClient(
+      { my_reports: { data: club } },
+      { data: "r-club" },
+    );
+
+    const creata = await createSupabaseModerationService(client).segnala({
+      targetType: "club",
+      targetId: "",
+      targetLabel: "Etichetta non autoritativa",
+      clubSlug: "club-barolo",
+      reason: "spam",
+      descrizione: "Messaggi ripetuti",
+      foto: ["non-inviata.png"],
+      priorita: "alta",
+      reporter: "non-inviato",
+      updatedAt: "",
+      storia: [],
+      noteInterne: [],
+    });
+
+    expect(rpcChiamate).toEqual([
+      {
+        nome: "segnalazione_club_invia",
+        args: {
+          p_club_slug: "club-barolo",
+          p_motivo: "spam",
+          p_descrizione: "Messaggi ripetuti",
+        },
+      },
+    ]);
+    expect(tabelleLette).toEqual(["my_reports"]);
+    expect(creata.targetType).toBe("club");
+    expect(creata.targetId).toBe("");
+    expect(creata.targetLabel).toBe("Club Barolo");
+  });
+
+  it("un Club senza slug viene respinto prima della rete", async () => {
+    const { client, rpcChiamate, tabelleLette } = fakeClient({});
+    await expect(
+      createSupabaseModerationService(client).segnala({
+        targetType: "club",
+        targetId: "",
+        targetLabel: "Club",
+        clubSlug: "   ",
+        reason: "spam",
+        descrizione: "",
+        foto: [],
+        priorita: "bassa",
+        reporter: "",
+        updatedAt: "",
+        storia: [],
+        noteInterne: [],
+      }),
+    ).rejects.toThrow("Club non valido");
+    expect(rpcChiamate).toHaveLength(0);
+    expect(tabelleLette).toHaveLength(0);
+  });
+
+  it("la coda admin accetta un Club diretto senza target UUID", () => {
+    const report = mapQueueReport({
+      ...queueRow,
+      target_tipo: "club",
+      target_label: "Club Barolo",
+      target_id: null,
+      club_slug: "club-barolo",
+    });
+    expect(report.targetType).toBe("club");
+    expect(report.targetId).toBe("");
+    expect(report.clubSlug).toBe("club-barolo");
   });
 
   it("senza client configurato solleva un errore leggibile", async () => {

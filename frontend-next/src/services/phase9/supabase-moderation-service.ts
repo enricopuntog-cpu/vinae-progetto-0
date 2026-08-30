@@ -250,16 +250,35 @@ export const createSupabaseModerationService = (
 ): ModerationService => ({
   segnala: async (input) => {
     if (!client) return noPhase9Client("segnala");
-    const { data, error } = await client.rpc("segnalazione_invia", {
-      p_target_tipo: input.targetType,
-      p_target_id: input.targetId,
-      p_target_label: input.targetLabel,
-      p_motivo: input.reason,
-      p_descrizione: input.descrizione ?? "",
-      p_foto: input.foto ?? [],
-      p_club_slug: input.clubSlug ?? null,
-    });
-    if (error) return phase9Throw("segnalazione_invia", error);
+
+    const rpcName =
+      input.targetType === "club" ? "segnalazione_club_invia" : "segnalazione_invia";
+    const rpcArgs =
+      input.targetType === "club"
+        ? {
+            p_club_slug: input.clubSlug,
+            p_motivo: input.reason,
+            p_descrizione: input.descrizione ?? "",
+          }
+        : {
+            p_target_tipo: input.targetType,
+            p_target_id: input.targetId,
+            p_target_label: input.targetLabel,
+            p_motivo: input.reason,
+            p_descrizione: input.descrizione ?? "",
+            p_foto: input.foto ?? [],
+            p_club_slug: input.clubSlug ?? null,
+          };
+
+    if (input.targetType === "club" && !input.clubSlug?.trim()) {
+      return phase9Throw(rpcName, {
+        code: "22023",
+        message: "Club non valido.",
+      });
+    }
+
+    const { data, error } = await client.rpc(rpcName, rpcArgs);
+    if (error) return phase9Throw(rpcName, error);
 
     // La RPC restituisce l'id. La riga canonica si rilegge dalla proiezione:
     // stato, priorita e codice sono decisi dal server e non si ricostruiscono

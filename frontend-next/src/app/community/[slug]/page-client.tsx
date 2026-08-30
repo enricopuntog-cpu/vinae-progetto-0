@@ -23,6 +23,7 @@ import { ArrowLeft, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ClubDiscussioni } from "@/components/vinea/ClubDiscussioni";
+import { ReportDialog } from "@/components/vinea/ReportDialog";
 import { ErrorState } from "@/components/vinea/States";
 import { formatInteger } from "@/lib/format";
 import { assiClub, puoPubblicareNelClub } from "@/lib/phase12/club-view";
@@ -89,7 +90,21 @@ export default function CommunityDetailPageClient({
               </span>
             ))}
           </div>
-          <h1 className="font-serif text-3xl md:text-5xl">{club.nome}</h1>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h1 className="font-serif text-3xl md:text-5xl">{club.nome}</h1>
+            {!club.mio ? (
+              <ReportDialog
+                targetType="club"
+                clubSlug={club.slug}
+                targetLabel={club.nome}
+                trigger={
+                  <Button variant="outline" size="sm" className="border-crema/40 bg-transparent text-crema hover:bg-crema/10">
+                    Segnala Club
+                  </Button>
+                }
+              />
+            ) : null}
+          </div>
           <p className="max-w-2xl text-crema/85">{club.descrizione}</p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             <p className="flex items-center gap-1">
