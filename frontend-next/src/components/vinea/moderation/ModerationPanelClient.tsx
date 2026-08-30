@@ -48,6 +48,7 @@ import {
 } from "@/components/vinea/States";
 import { usePhase9Moderation } from "@/lib/phase9/use-phase9-moderation";
 import { useVinea } from "@/lib/vinea-store";
+import { AdminOperationsSearch } from "@/components/vinea/moderation/AdminOperationsSearch";
 import {
   modActionLabel,
   modActionTone,
@@ -557,7 +558,7 @@ export const ModerationPanelClient = () => {
   // rendere.
   const { authRuolo } = useVinea();
   const online = useOnline();
-  const [tab, setTab] = useState("coda");
+  const [tab, setTab] = useState("overview");
   const [aperta, setAperta] = useState<Report | null>(null);
   const moderatore = authRuolo === "admin";
   const {
@@ -585,13 +586,22 @@ export const ModerationPanelClient = () => {
   if (loading && coda.length === 0) return <LoadingBlock label="Caricamento moderazione" />;
   if (error && coda.length === 0) return <ErrorState message={error} onRetry={() => void reload()} />;
 
+  const segnalazioniAperte = coda.filter((report) => !chiusa(report));
+  const controversieAperte = contestazioni.filter(contestazioneLavorabile);
+  const altaPriorita = segnalazioniAperte.filter((report) => report.priorita === "alta");
+  const annunciInRevisione = segnalazioniAperte.filter(
+    (report) => report.targetType === "annuncio" && report.stato === "in_revisione",
+  );
+
+  const vaiA = (prossima: string) => setTab(prossima);
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-serif text-3xl md:text-4xl">Moderazione</h1>
+          <h1 className="font-serif text-3xl md:text-4xl">Operazioni Admin</h1>
           <p className="text-muted-foreground">
-            {coda.length} segnalazioni · {contestazioni.length} controversie
+            Overview, segnalazioni, controversie e ricerca operativa.
           </p>
         </div>
         <Button variant="outline" onClick={() => void reload()} disabled={!online}>
@@ -605,12 +615,42 @@ export const ModerationPanelClient = () => {
         </p>
       ) : null}
 
+      <section aria-labelledby="admin-overview-title" className="space-y-3">
+        <h2 id="admin-overview-title" className="font-serif text-2xl">Overview</h2>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <button type="button" onClick={() => vaiA("coda")} className="rounded-xl border bg-card p-4 text-left transition-colors hover:bg-secondary/40">
+            <span className="block text-3xl font-semibold" data-testid="kpi-open-reports">{segnalazioniAperte.length}</span>
+            <span className="text-sm text-muted-foreground">Segnalazioni da lavorare</span>
+          </button>
+          <button type="button" onClick={() => vaiA("controversie")} className="rounded-xl border bg-card p-4 text-left transition-colors hover:bg-secondary/40">
+            <span className="block text-3xl font-semibold" data-testid="kpi-open-disputes">{controversieAperte.length}</span>
+            <span className="text-sm text-muted-foreground">Controversie aperte</span>
+          </button>
+          <button type="button" onClick={() => vaiA("coda")} className="rounded-xl border bg-card p-4 text-left transition-colors hover:bg-secondary/40">
+            <span className="block text-3xl font-semibold" data-testid="kpi-high-priority">{altaPriorita.length}</span>
+            <span className="text-sm text-muted-foreground">Alta priorita</span>
+          </button>
+          <button type="button" onClick={() => vaiA("coda")} className="rounded-xl border bg-card p-4 text-left transition-colors hover:bg-secondary/40">
+            <span className="block text-3xl font-semibold" data-testid="kpi-review-listings">{annunciInRevisione.length}</span>
+            <span className="text-sm text-muted-foreground">Annunci in revisione</span>
+          </button>
+        </div>
+      </section>
+
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="coda">Coda</TabsTrigger>
+        <TabsList className="h-auto flex-wrap justify-start">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="coda">Segnalazioni</TabsTrigger>
           <TabsTrigger value="controversie">Controversie</TabsTrigger>
-          <TabsTrigger value="audit">Audit log</TabsTrigger>
+          <TabsTrigger value="ricerca">Ricerca</TabsTrigger>
+          <TabsTrigger value="audit">Audit</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="overview" className="space-y-3">
+          <p className="rounded-xl border p-4 text-sm text-muted-foreground">
+            Usa le card KPI per aprire le code operative oppure passa alla Ricerca per un lookup read-only.
+          </p>
+        </TabsContent>
 
         <TabsContent value="coda" className="space-y-3">
           {coda.length === 0 ? (
@@ -639,6 +679,13 @@ export const ModerationPanelClient = () => {
               />
             ))
           )}
+        </TabsContent>
+
+        <TabsContent value="ricerca" className="space-y-3">
+          <AdminOperationsSearch
+            onReports={() => vaiA("coda")}
+            onDisputes={() => vaiA("controversie")}
+          />
         </TabsContent>
 
         <TabsContent value="audit" className="space-y-3">
