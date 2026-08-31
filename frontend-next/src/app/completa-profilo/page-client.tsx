@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
-import { Check, ShieldAlert } from "lucide-react";
+import { useRef, useState } from "react";
+import { Check, KeyRound, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,11 @@ import { useVinea } from "@/lib/vinea-store";
 import { percorsoRelativoSicuro } from "@/lib/auth/origine-redirect";
 import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
 import { isMaggiorenne } from "@/lib/age";
+import { messaggioErroreAuth } from "@/lib/auth/errori-auth";
+import {
+  LUNGHEZZA_MINIMA_PASSWORD,
+  completaProfiloConPasswordFacoltativa,
+} from "@/lib/auth/password-facoltativa";
 
 /**
  * Completamento profilo dopo il primo accesso social (Fase 5b, punto 4).
@@ -33,6 +38,16 @@ import { isMaggiorenne } from "@/lib/age";
  * caricato, e il CHECK su profiles.dob resta la barriera autoritativa lato
  * server. Richiede validazione legale prima del lancio pubblico reale — vedi
  * "Cosa NON è ancora deciso" in docs/ROADMAP_V1.md.
+ *
+ * PASSWORD VINEA, FACOLTATIVA. Chi entra con Google ha un account senza
+ * password: può accedere solo ripassando dal provider. Qui — nello stesso
+ * passaggio, senza uno step in più — può dargliene una, così lo STESSO account
+ * diventa raggiungibile anche con email e password. È `updateUser({ password })`
+ * sulla sessione già autenticata: nessun secondo account, nessuna identità da
+ * collegare, nessuna riga nuova. La password Google non c'entra e non è
+ * conoscibile; questa è una password di Vinea, e Supabase Auth è l'unico posto
+ * in cui esiste. Chi non la vuole lascia i campi vuoti e continua con Google:
+ * /reimposta-password e Account → Sicurezza restano lì per dopo.
  */
 export default function CompletaProfiloPageClient() {
   const router = useRouter();
@@ -48,6 +63,7 @@ export default function CompletaProfiloPageClient() {
     authProfileLoading,
     authRicaricaProfilo,
     authAggiornaProfilo,
+    authAggiornaPasswordNuova,
     authLogout,
   } = useVinea();
 
@@ -55,6 +71,19 @@ export default function CompletaProfiloPageClient() {
   const [dobError, setDobError] = useState<string | null>(null);
   const [terms, setTerms] = useState(false);
   const [inCorso, setInCorso] = useState(false);
+  // `setInCorso` aggiorna il render successivo; il ref chiude anche la finestra
+  // sincrona tra due click nello stesso tick.
+  const inCorsoRef = useRef(false);
+  const [password, setPassword] = useState("");
+  const [conferma, setConferma] = useState("");
+  const [erroreSicurezza, setErroreSicurezza] = useState<string | null>(null);
+  /**
+   * Ricorda che `updateUser` è già andato a buon fine in questa pagina. Se il
+   * salvataggio del profilo fallisce subito dopo, il secondo tentativo NON
+   * ripete la scrittura della password: è già quella giusta, e riscriverla
+   * sarebbe una mutazione che nessuno ha chiesto due volte.
+   */
+  const [passwordGiaImpostata, setPasswordGiaImpostata] = useState(false);
   // Il nome di partenza è quello che il trigger ha assegnato; finché l'utente
   // non tocca il campo si mostra quello. Derivato e non copiato in stato da un
   // effect: una setState sincrona dentro un effect è ciò che la regola
@@ -81,15 +110,62 @@ export default function CompletaProfiloPageClient() {
   // `profiles.dob`, che vincola l'UPDATE come vincola l'INSERT.
   const valid = username.trim().length >= 3 && dob !== "" && dobError === null && terms;
 
+  /**
+   * La password è chiesta solo se l'utente ha scritto in almeno uno dei due
+   * campi. Nessuno dei due toccato significa «continuo con Google», e in quel
+   * caso non parte nessuna chiamata ad Auth.
+   */
+  const passwordTroppoCorta = password.length > 0 && password.length < LUNGHEZZA_MINIMA_PASSWORD;
+  const mostraMismatch = conferma.length > 0 && password !== conferma;
+
   const salva = async () => {
+    // Doppio invio: la guardia sincrona sta prima di tutto, perché il secondo
+    // click arriverebbe mentre il primo è ancora in volo.
+    if (inCorsoRef.current) return;
     if (!valid) return;
+
+    // Prima si valida TUTTO, poi si scrive. La funzione esegue la password
+    // prima del profilo e ricorda il successo: un errore Auth non completa il
+    // profilo, mentre il retry dopo un errore profilo non ripete updateUser.
+    setErroreSicurezza(null);
+    inCorsoRef.current = true;
     setInCorso(true);
-    // Un'unica operazione coerente: se il nome utente è già preso, l'errore di
-    // unicità respinge l'intera istruzione e la data di nascita non viene
-    // scritta a metà.
-    const esito = await authAggiornaProfilo({ username: username.trim(), dob });
+    const esito = await completaProfiloConPasswordFacoltativa({
+      password,
+      conferma,
+      passwordGiaImpostata,
+      aggiornaPassword: authAggiornaPasswordNuova,
+      // Un'unica operazione coerente: se il nome utente è già preso, l'errore
+      // di unicità respinge anche la data di nascita.
+      completaProfilo: () => authAggiornaProfilo({ username: username.trim(), dob }),
+    });
+    inCorsoRef.current = false;
     setInCorso(false);
-    if (esito.ok) router.push(destinazione);
+
+    if (esito.tipo === "errore-validazione") {
+      setErroreSicurezza(esito.messaggio);
+      return;
+    }
+    if (esito.tipo === "errore-password") {
+      setErroreSicurezza(messaggioErroreAuth(esito.errore));
+      return;
+    }
+    if (esito.passwordImpostata && !passwordGiaImpostata) {
+      setPasswordGiaImpostata(true);
+      // La password ha già raggiunto Supabase Auth: non resta in memoria più
+      // del necessario e i campi disabilitati mostrano che non verrà riscritta.
+      setPassword("");
+      setConferma("");
+    }
+    if (esito.tipo === "errore-profilo") {
+      if (esito.passwordImpostata) {
+        setErroreSicurezza(
+          "Password impostata, ma non è stato possibile completare il profilo. Riprova.",
+        );
+      }
+      return;
+    }
+    router.push(destinazione);
   };
 
   if (authLoading) {
@@ -220,6 +296,66 @@ export default function CompletaProfiloPageClient() {
             </div>
           </div>
 
+          <div className="space-y-3 rounded-2xl border border-border bg-crema/40 p-4">
+            <h2 className="font-serif text-lg">Sicurezza dell&apos;account</h2>
+            <p className="text-sm text-muted-foreground">
+              Puoi continuare ad accedere con Google oppure creare una password Vinea per entrare
+              anche con la tua email.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="password-vinea">Password Vinea (facoltativa)</Label>
+                <Input
+                  id="password-vinea"
+                  type="password"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setErroreSicurezza(null);
+                  }}
+                  placeholder={`almeno ${LUNGHEZZA_MINIMA_PASSWORD} caratteri`}
+                  autoComplete="new-password"
+                  aria-invalid={passwordTroppoCorta}
+                  disabled={passwordGiaImpostata}
+                  data-testid="password-vinea"
+                />
+              </div>
+              <div>
+                <Label htmlFor="password-vinea-conferma">Conferma password</Label>
+                <Input
+                  id="password-vinea-conferma"
+                  type="password"
+                  value={conferma}
+                  onChange={(e) => {
+                    setConferma(e.target.value);
+                    setErroreSicurezza(null);
+                  }}
+                  placeholder="ripeti la password"
+                  autoComplete="new-password"
+                  aria-invalid={mostraMismatch}
+                  disabled={passwordGiaImpostata}
+                  data-testid="password-vinea-conferma"
+                />
+              </div>
+            </div>
+            {erroreSicurezza && (
+              <p
+                role="alert"
+                data-testid="errore-sicurezza"
+                className="rounded-xl border border-bordeaux/30 bg-bordeaux/5 p-3 text-sm text-bordeaux"
+              >
+                {erroreSicurezza}
+              </p>
+            )}
+            <p className="flex items-start gap-2 text-xs text-muted-foreground">
+              <KeyRound className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span>
+                Puoi lasciare questi campi vuoti: potrai impostarla anche più tardi da Account →
+                Sicurezza. La password è custodita da Supabase Auth, Vinea non la conserva.
+              </span>
+            </p>
+          </div>
+
           <ConsentCheckbox checked={terms} onCheckedChange={setTerms} testId="consenso-termini">
             Accetto i{" "}
             <Link href="/legale#termini" className="text-bordeaux underline-offset-2 hover:underline">
@@ -249,13 +385,15 @@ export default function CompletaProfiloPageClient() {
             <Button
               onClick={salva}
               disabled={!valid || inCorso}
+              aria-busy={inCorso}
+              data-testid="completa-profilo"
               className="bg-bordeaux hover:bg-bordeaux/90"
             >
               {inCorso ? (
                 "Salvataggio…"
               ) : (
                 <>
-                  <Check className="h-4 w-4" /> Conferma e continua
+                  <Check className="h-4 w-4" /> Completa profilo
                 </>
               )}
             </Button>

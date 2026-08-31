@@ -146,7 +146,8 @@ describe("/completa-profilo", () => {
   it("legge il ritorno dai parametri e ci torna dopo il salvataggio", () => {
     expect(pagina).toInclude("useSearchParams");
     expect(pagina).toInclude("percorsoRelativoSicuro(parametri.get(PARAMETRO_NEXT))");
-    expect(pagina).toInclude("if (esito.ok) router.push(destinazione);");
+    expect(pagina).toInclude('if (esito.tipo === "errore-profilo") {');
+    expect(pagina).toInclude("router.push(destinazione);");
     // Il wrapper della route fornisce il Suspense che useSearchParams richiede.
     expect(leggi("src/app/completa-profilo/page.tsx")).toInclude("<Suspense");
   });
