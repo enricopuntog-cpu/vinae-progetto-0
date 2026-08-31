@@ -31,9 +31,24 @@ export const qualificaModificabile = (q: QualificaProfessionale): boolean =>
 export const qualificaInviabile = (q: QualificaProfessionale): boolean =>
   q.stato === "bozza" && q.documenti.length > 0;
 
-/** Si rinuncia a una bozza o a una verifica in corso, mai a un esito. */
+/**
+ * Il ritiro riguarda una richiesta GIÀ INVIATA, e soltanto quella.
+ *
+ * Una bozza non è una richiesta: nessuno l'ha ancora letta, non c'è niente da
+ * cui ritirarsi, e offrire «Ritira» su una bozza produceva una riga «ritirata»
+ * di una pratica mai inviata. Su una bozza si usa `qualificaEliminabile`.
+ * Un esito — approvata o rifiutata — non si ritira né si elimina.
+ */
 export const qualificaRitirabile = (q: QualificaProfessionale): boolean =>
-  q.stato === "bozza" || q.stato === "inviata";
+  q.stato === "inviata";
+
+/**
+ * L'eliminazione vale solo prima dell'invio, ed è definitiva: toglie gli
+ * allegati dall'archivio privato e la riga dal database. Il permesso vero è
+ * nella RPC `professional_qualification_delete`, che rilegge lo stato da sola.
+ */
+export const qualificaEliminabile = (q: QualificaProfessionale): boolean =>
+  q.stato === "bozza";
 
 /**
  * La spunta di questa riga. È `valida`, cioè quello che il database ha già

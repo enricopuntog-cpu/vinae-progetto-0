@@ -29,6 +29,14 @@ export default function Page() {
           <a href="#eta" className="text-bordeaux underline-offset-2 hover:underline">
             Requisito di età
           </a>
+          {/* Non un'ancora ma una rotta: la spiegazione dei documenti di
+              qualifica è linkata anche dall'account, dove serve intera. */}
+          <a
+            href="/legale/documenti-qualifica"
+            className="text-bordeaux underline-offset-2 hover:underline"
+          >
+            Documenti di qualifica
+          </a>
         </nav>
       </header>
 
