@@ -75,6 +75,14 @@ type StoreState = {
   authLogin: (email: string, password: string) => Promise<ResultAuth<{ userId: string }>>;
   authInviaMagicLink: (email: string, contesto?: ContestoRitornoAuth) => Promise<ResultAuth<void>>;
   authVerificaEmail: (tokenHash: string) => Promise<ResultAuth<void>>;
+  /**
+   * Chiede il link di recupero password. L'esito non rivela se l'indirizzo
+   * corrisponde a un account: le superfici mostrano la stessa frase neutra in
+   * ogni caso.
+   */
+  authInviaRecuperoPassword: (email: string) => Promise<ResultAuth<void>>;
+  /** Imposta la password dell'utente della sessione corrente. */
+  authAggiornaPasswordNuova: (password: string) => Promise<ResultAuth<void>>;
   authAccediConOAuth: (
     provider: OAuthProvider,
     contesto?: ContestoRitornoAuth,

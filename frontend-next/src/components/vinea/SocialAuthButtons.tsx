@@ -72,6 +72,7 @@ export function SocialAuthButtons({
   superficie,
   next,
   erroreIniziale = null,
+  consensoMancante = null,
 }: {
   /** Testo del separatore sopra i pulsanti. */
   etichetta: string;
@@ -86,6 +87,20 @@ export function SocialAuthButtons({
    * accusa la cosa sbagliata.
    */
   erroreIniziale?: CodiceErroreAuth | null;
+  /**
+   * Motivo per cui il gesto non può partire adesso, deciso dalla superficie
+   * ospite. `null` significa nessun impedimento.
+   *
+   * Su /registrati vale l'accettazione di Termini e Privacy: la casella è una
+   * sola e sta nel form, perché il consenso riguarda la **creazione
+   * dell'account**, non il metodo scelto per crearlo. Duplicarla accanto ai
+   * pulsanti social vorrebbe dire chiedere due volte lo stesso fatto e poi
+   * doversi chiedere quale delle due risposte conta.
+   *
+   * Su /accedi resta `null`: rientrare in un account già creato non è il
+   * momento in cui si accettano di nuovo i termini.
+   */
+  consensoMancante?: string | null;
 }) {
   const { authAccediConOAuth } = useVinea();
   const [avvio, setAvvio] = useState<OAuthProvider | null>(null);
@@ -98,9 +113,14 @@ export function SocialAuthButtons({
    */
   const [scartato, setScartato] = useState(false);
   const daMostrare = errore ?? (scartato ? null : erroreIniziale);
+  const bloccato = consensoMancante !== null;
 
   const avvia = async (provider: OAuthProvider) => {
     if (avvio) return;
+    // Il pulsante è già `disabled`, ma la guardia sta anche qui: `disabled` è
+    // una proprietà del DOM, e ciò che non deve succedere non è che il click
+    // passi — è che il giro dal provider parta senza il consenso.
+    if (bloccato) return;
     setScartato(true);
     setErrore(null);
     setAvvio(provider);
@@ -136,14 +156,24 @@ export function SocialAuthButtons({
         <Button
           variant="outline"
           onClick={() => avvia("google")}
-          disabled={avvio !== null}
+          disabled={avvio !== null || bloccato}
           aria-busy={avvio === "google"}
+          aria-describedby={bloccato ? "social-consenso-mancante" : undefined}
           data-testid="oauth-google"
           className="w-full"
         >
           <GoogleIcon />
           {avvio === "google" ? "Apertura Google…" : ETICHETTA_GOOGLE[superficie]}
         </Button>
+        {bloccato && (
+          <p
+            id="social-consenso-mancante"
+            data-testid="social-consenso-mancante"
+            className="text-xs text-muted-foreground"
+          >
+            {consensoMancante}
+          </p>
+        )}
       </div>
     </div>
   );

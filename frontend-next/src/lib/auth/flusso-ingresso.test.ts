@@ -193,7 +193,10 @@ describe("Google: la superficie decide il testo, e l'errore resta suo", () => {
   });
 
   it("durante l'apertura il pulsante è chiuso e lo dichiara", () => {
-    expect(codice).toInclude("disabled={avvio !== null}");
+    // `|| bloccato`: la stessa proprietà porta ora anche il consenso mancante
+    // su /registrati. Il gesto in volo resta la prima delle due ragioni per
+    // cui il pulsante è spento — vedi `recupero-password.test.ts`.
+    expect(codice).toInclude("disabled={avvio !== null || bloccato}");
     expect(codice).toInclude('aria-busy={avvio === "google"}');
     expect(codice).toInclude("if (avvio) return;");
   });
@@ -229,9 +232,12 @@ describe("coordinamento: si sa quale operazione è in corso", () => {
   const codice = senzaCommenti(ACCEDI);
 
   it("/accedi distingue password e magic link invece di un booleano solo", () => {
-    expect(codice).toInclude('useState<"password" | "magic-link" | null>');
+    // Il terzo membro è il recupero password, aggiunto dopo: il punto della
+    // prova non è quanti gesti ci sono, ma che ognuno sappia di essere suo.
+    expect(codice).toInclude('useState<"password" | "magic-link" | "recupero" | null>');
     expect(codice).toInclude('inCorso === "password"');
     expect(codice).toInclude('inCorso === "magic-link"');
+    expect(codice).toInclude('inCorso === "recupero"');
     // Il difetto precedente: un `inCorso` booleano condiviso dai due gesti, che
     // spegneva anche il pulsante dell'altro.
     expect(codice).not.toInclude("setInCorso(true)");
@@ -341,18 +347,37 @@ describe("confini: D5 non tocca ciò che non è suo", () => {
     expect(senzaCommenti(SERVIZIO)).toInclude("accediConOAuth(provider");
   });
 
-  it("non aggiunge password, recovery o account linking al giro Google", () => {
-    for (const sorgente of [senzaCommenti(SOCIAL), senzaCommenti(ACCEDI), senzaCommenti(REGISTRATI), senzaCommenti(SERVIZIO)]) {
-      expect(sorgente).not.toInclude("linkIdentity");
-      expect(sorgente).not.toInclude("resetPasswordForEmail");
-      expect(sorgente).not.toInclude("updateUser");
+  it("non aggiunge password né account linking al giro Google", () => {
+    // Il recupero password è arrivato dopo, e vive nel servizio accanto — non
+    // dentro il gesto Google. Ciò che resta vietato ovunque è il collegamento
+    // automatico di identità: unire due account è una decisione di chi li
+    // possiede, non un effetto collaterale di un login.
+    for (const sorgente of [SOCIAL, ACCEDI, REGISTRATI, SERVIZIO]) {
+      expect(senzaCommenti(sorgente)).not.toInclude("linkIdentity");
     }
+    // E la superficie social non tocca password in nessuna forma.
+    for (const proibito of ["resetPasswordForEmail", "updateUser", "password"]) {
+      expect(senzaCommenti(SOCIAL)).not.toInclude(proibito);
+    }
+    // Nel servizio, le due operazioni sulla password stanno fuori dal ramo
+    // OAuth: quello apre il provider e finisce lì.
+    const codice = senzaCommenti(SERVIZIO);
+    const oauth = codice.slice(
+      codice.indexOf("async accediConOAuth"),
+      codice.indexOf("async signInWithGoogle"),
+    );
+    expect(oauth).not.toInclude("resetPasswordForEmail");
+    expect(oauth).not.toInclude("updateUser");
   });
 
-  it("non inventa un consenso legale a partire dal click su Google", () => {
+  it("il consenso legale non nasce dal click su Google: la superficie lo riceve", () => {
     const codice = senzaCommenti(SOCIAL);
+    // Nessuna casella qui dentro e nessuno stato di consenso proprio: il
+    // componente sa solo se è bloccato, e chi lo ospita sa perché.
     expect(codice).not.toInclude("ConsentCheckbox");
+    expect(codice).not.toInclude("setConsenso");
     expect(codice).not.toInclude("terms");
-    expect(codice).not.toInclude("consenso");
+    expect(codice).toInclude("consensoMancante = null,");
+    expect(codice).toInclude("const bloccato = consensoMancante !== null");
   });
 });

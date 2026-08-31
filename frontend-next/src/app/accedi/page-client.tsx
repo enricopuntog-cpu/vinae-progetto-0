@@ -35,7 +35,14 @@ import {
  */
 export default function AccediPageClient() {
   const router = useRouter();
-  const { authUser, authLoading, authLogin, authInviaMagicLink, authLogout } = useVinea();
+  const {
+    authUser,
+    authLoading,
+    authLogin,
+    authInviaMagicLink,
+    authInviaRecuperoPassword,
+    authLogout,
+  } = useVinea();
 
   const parametri = useSearchParams();
   /**
@@ -57,9 +64,15 @@ export default function AccediPageClient() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   /** Quale operazione è davvero in corso, non «una qualsiasi». */
-  const [inCorso, setInCorso] = useState<"password" | "magic-link" | null>(null);
+  const [inCorso, setInCorso] = useState<"password" | "magic-link" | "recupero" | null>(null);
   const [errorePassword, setErrorePassword] = useState<CodiceErroreAuth | null>(null);
   const [erroreMagicLink, setErroreMagicLink] = useState<CodiceErroreAuth | null>(null);
+  const [erroreRecupero, setErroreRecupero] = useState<CodiceErroreAuth | null>(null);
+  /**
+   * Il recupero è stato **richiesto**, non «l'email esiste». È l'unico fatto
+   * che questa pagina conosce e l'unico che può mostrare: vedi `recupera`.
+   */
+  const [recuperoRichiesto, setRecuperoRichiesto] = useState(false);
   const [magicLinkInviato, setMagicLinkInviato] = useState(false);
   /**
    * L'errore nell'URL appartiene al tentativo precedente e il parametro resta
@@ -78,6 +91,10 @@ export default function AccediPageClient() {
     // descrive più.
     setErrorePassword(null);
     setErroreMagicLink(null);
+    // La conferma di recupero riguardava l'indirizzo di prima: appena cambia,
+    // non descrive più ciò che c'è nel campo.
+    setErroreRecupero(null);
+    setRecuperoRichiesto(false);
   };
 
   const aggiornaPassword = (valore: string) => {
@@ -115,6 +132,33 @@ export default function AccediPageClient() {
       return;
     }
     setMagicLinkInviato(true);
+  };
+
+  /**
+   * Password dimenticata. Riusa l'email già digitata per accedere: chi ha
+   * appena provato la password sbagliata ha l'indirizzo sotto le dita, e un
+   * secondo campo che chiede la stessa cosa è un passaggio in più.
+   *
+   * Il messaggio di successo è **identico** per un indirizzo registrato e per
+   * uno che non lo è, e non c'è nessun ramo che li distingua: se questa pagina
+   * dicesse "nessun account con questa email" diventerebbe un modo per
+   * scoprire chi è iscritto a Vinea provando indirizzi altrui. Supabase stesso
+   * risponde ok in entrambi i casi; qui si evita di reintrodurre la
+   * distinzione a valle.
+   */
+  const recupera = async () => {
+    if (inCorso) return;
+    if (!emailValida) return;
+    setRitornoScartato(true);
+    setErroreRecupero(null);
+    setInCorso("recupero");
+    const esito = await authInviaRecuperoPassword(email.trim());
+    setInCorso(null);
+    if (!esito.ok) {
+      setErroreRecupero(esito.error);
+      return;
+    }
+    setRecuperoRichiesto(true);
   };
 
   if (authLoading) {
@@ -224,7 +268,51 @@ export default function AccediPageClient() {
               placeholder="almeno 6 caratteri"
               autoComplete="current-password"
             />
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              {/*
+                Un <button>, non un link: non porta da nessuna parte, invia una
+                richiesta usando l'email già scritta qui sopra. Un href verso
+                una pagina che avrebbe richiesto di nuovo lo stesso indirizzo
+                sarebbe stato un passaggio in più per lo stesso gesto.
+              */}
+              <button
+                type="button"
+                onClick={recupera}
+                disabled={!emailValida || inCorso !== null}
+                aria-busy={inCorso === "recupero"}
+                data-testid="password-dimenticata"
+                className="text-xs text-bordeaux underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline"
+              >
+                {inCorso === "recupero" ? "Invio in corso…" : "Password dimenticata?"}
+              </button>
+              {!emailValida && (
+                <span className="text-xs text-muted-foreground">
+                  Inserisci la tua email per ricevere il link.
+                </span>
+              )}
+            </div>
           </div>
+
+          {recuperoRichiesto && (
+            <p
+              role="status"
+              data-testid="recupero-inviato"
+              className="rounded-xl border border-border bg-crema p-3 text-sm text-antracite/80"
+            >
+              Se esiste un account associato a questa email, riceverai le istruzioni per
+              reimpostare la password.
+            </p>
+          )}
+
+          {erroreRecupero && (
+            <p
+              role="alert"
+              data-testid="errore-recupero"
+              className="rounded-xl border border-bordeaux/30 bg-bordeaux/5 p-3 text-sm text-bordeaux"
+            >
+              {messaggioErroreAuth(erroreRecupero)}
+            </p>
+          )}
 
           {errorePassword && (
             <p

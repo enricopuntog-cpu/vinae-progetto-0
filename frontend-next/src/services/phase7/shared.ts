@@ -15,7 +15,12 @@ export const serviceError = <T>(operation: string, error: ServiceError): Result<
   };
 };
 
+/**
+ * Il saldo di questa famiglia è reso su /account, e lì il nome del provider non
+ * è un'informazione per chi legge: è un dettaglio di installazione. Resta il
+ * fatto — adesso non si può — senza la mappa di come è fatto il sistema.
+ */
 export const noClient = <T>(): Result<T> => ({
   ok: false,
-  error: "Connessione a Supabase non configurata.",
+  error: "Il servizio non è disponibile in questo momento. Riprova fra qualche istante.",
 });

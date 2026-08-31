@@ -8,6 +8,7 @@ import {
 import {
   PARAMETRO_NEXT,
   PARAMETRO_SUPERFICIE,
+  PERCORSO_REIMPOSTA_PASSWORD,
   PERCORSO_SUPERFICIE_AUTH,
   superficieAuthDa,
 } from "@/lib/auth/ritorno-auth";
@@ -73,12 +74,33 @@ export async function GET(request: NextRequest) {
   };
 
   /**
+   * Il rientro chiedeva di reimpostare la password.
+   *
+   * Si riconosce dalla destinazione e non da un parametro in più: è già
+   * `AuthService.inviaRecuperoPassword` a scriverla come `next`, ed è già
+   * passata da `percorsoRelativoSicuro`. Un secondo parametro sarebbe un
+   * secondo posto in cui dire la stessa cosa, e uno dei due prima o poi mente.
+   */
+  const inRecupero = destinazione === PERCORSO_REIMPOSTA_PASSWORD;
+
+  /**
    * Ritorno d'errore: codice applicativo e, se c'era, la destinazione richiesta.
    *
    * `next` sopravvive anche al fallimento di proposito: chi stava andando da
    * qualche parte e non è riuscito a entrare deve poter riprovare senza perdere
    * dove stava andando. È lo stesso valore già validato sopra, quindi non
    * riapre la porta che `percorsoRelativoSicuro` chiude.
+   *
+   * PERCHÉ IL RECUPERO NON TORNA SU /accedi. Un link di reimpostazione scaduto
+   * — il caso normale, perché quei link valgono una volta sola e per poco —
+   * rimandava l'utente sulla pagina di accesso con un errore di accesso. Ma
+   * quella persona non stava accedendo: non ha la password, ed è esattamente
+   * il motivo per cui aveva chiesto il link. La superficie del recupero è
+   * `/reimposta-password`, che senza sessione mostra il messaggio mediato e
+   * l'unica azione utile — chiederne uno nuovo. Resta un percorso nostro,
+   * costante, quindi non è un redirect aperto nemmeno se `next` fosse stato
+   * falsificato: sopravvive alla validazione solo perché è già uguale a una
+   * costante di questo repository.
    *
    * `dettaglio` non entra mai nell'URL: viene registrato qui e basta.
    */
@@ -87,6 +109,9 @@ export async function GET(request: NextRequest) {
       console.error("[auth/callback]", codice, dettaglio);
     }
     const parametri = new URLSearchParams({ errore: codice });
+    if (inRecupero) {
+      return vaiA(`${PERCORSO_REIMPOSTA_PASSWORD}?${parametri.toString()}`);
+    }
     if (destinazione !== "/home") parametri.set(PARAMETRO_NEXT, destinazione);
     return vaiA(`${PERCORSO_SUPERFICIE_AUTH[superficie]}?${parametri.toString()}`);
   };

@@ -20,8 +20,14 @@ import type {
   Result,
 } from "./types";
 
+/**
+ * Il testo che vede l'utente non nomina le variabili d'ambiente né il file che
+ * le contiene: è un'istruzione per chi installa il progetto, e finiva stampata
+ * in pagina su /account. Chi legge non può farci nulla, e l'unica cosa che
+ * l'elenco aggiunge è la mappa della configurazione.
+ */
 const NOT_CONFIGURED_ERROR =
-  "Supabase non configurato: imposta NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY in frontend-next/.env.local.";
+  "Il profilo non è disponibile in questo momento. Riprova fra qualche istante.";
 
 const NESSUNA_SESSIONE = "Nessuna sessione attiva.";
 
@@ -147,14 +153,23 @@ async function leggiCertificazioniForti(
 }
 
 /**
- * Traduce in italiano i soli errori che l'utente può correggere da solo; per
- * gli altri resta il messaggio del server, che non espone dettagli interni
- * perché arriva già filtrato da PostgREST.
+ * Traduce in italiano i soli errori che l'utente può correggere da solo.
  *
  * `23505` è la violazione di unicità su `profiles.username`. È il caso normale
  * e non un'anomalia: il nome di partenza lo assegna il trigger
  * `handle_new_user()` e due persone possono volere lo stesso.
+ *
+ * PERCHÉ IL FALLBACK NON È PIÙ `errore.message`. Il messaggio del server non è
+ * filtrato come si credeva: un vincolo violato o una policy che rifiuta la riga
+ * arrivano qui con il testo di PostgreSQL — nomi di tabella, di colonna e di
+ * constraint — e /account lo stampa in pagina così com'è. Un errore che
+ * l'utente non può correggere non ha nulla da dirgli oltre a «riprova»; la
+ * forma esatta resta utile solo a chi legge i log, e per quello c'è
+ * `console.error`, non l'interfaccia.
  */
+const ERRORE_GENERICO_PROFILO =
+  "Non è stato possibile completare l'operazione sul profilo. Riprova fra qualche istante.";
+
 function messaggioErrore(errore: { code?: string; message: string }): string {
   if (errore.code === "23505" || errore.message.includes("profiles_username_key")) {
     return "Questo nome utente è già in uso. Scegline un altro.";
@@ -168,7 +183,8 @@ function messaggioErrore(errore: { code?: string; message: string }): string {
   ) {
     return "L'avatar scelto non è valido.";
   }
-  return errore.message;
+  console.error("[profilo] errore non tradotto", { code: errore.code });
+  return ERRORE_GENERICO_PROFILO;
 }
 
 /**

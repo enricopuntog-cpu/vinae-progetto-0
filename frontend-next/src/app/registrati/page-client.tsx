@@ -252,6 +252,15 @@ export default function RegistratiPageClient() {
             </div>
           </div>
 
+          {/*
+            Una sola casella per entrambe le strade. Il consenso è la condizione
+            per creare un account su Vinea, non una formalità del form email:
+            chi arriva da Google crea un account esattamente come chi compila i
+            campi qui sopra, quindi la stessa accettazione vale per entrambi e
+            il testo lo dice. Una seconda casella accanto ai pulsanti social
+            avrebbe chiesto due volte la stessa cosa lasciando aperta la domanda
+            su quale delle due risposte fosse quella vincolante.
+          */}
           <ConsentCheckbox checked={terms} onCheckedChange={setTerms} testId="consenso-termini">
             Accetto i{" "}
             <Link href="/legale#termini" className="text-bordeaux underline-offset-2 hover:underline">
@@ -261,7 +270,8 @@ export default function RegistratiPageClient() {
             <Link href="/legale#privacy" className="text-bordeaux underline-offset-2 hover:underline">
               Privacy
             </Link>{" "}
-            di Vinea.
+            di Vinea. Vale per la creazione dell&apos;account con qualsiasi metodo, email o
+            Google.
           </ConsentCheckbox>
           {/*
             Dichiarazione auto-riferita, non verifica documentale: nessun documento
@@ -309,6 +319,11 @@ export default function RegistratiPageClient() {
             superficie="registrati"
             next={next}
             erroreIniziale={erroreSocialIniziale}
+            consensoMancante={
+              terms
+                ? null
+                : "Accetta Termini e Privacy qui sopra per registrarti con Google."
+            }
           />
 
           <p className="text-sm text-muted-foreground">

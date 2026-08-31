@@ -33,6 +33,10 @@ export const CODICI_ERRORE_AUTH = [
   "callback-senza-codice",
   "scambio-non-riuscito",
   "configurazione-assente",
+  "recupero-non-inviato",
+  "sessione-recupero-assente",
+  "password-non-aggiornata",
+  "password-troppo-debole",
   "generico",
 ] as const;
 
@@ -49,7 +53,9 @@ export type OperazioneAuth =
   | "registrazione"
   | "magic-link"
   | "oauth-avvio"
-  | "scambio-codice";
+  | "scambio-codice"
+  | "recupero-password"
+  | "aggiornamento-password";
 
 const FALLBACK_OPERAZIONE: Record<OperazioneAuth, CodiceErroreAuth> = {
   login: "generico",
@@ -57,6 +63,8 @@ const FALLBACK_OPERAZIONE: Record<OperazioneAuth, CodiceErroreAuth> = {
   "magic-link": "magic-link-non-inviato",
   "oauth-avvio": "oauth-avvio-non-riuscito",
   "scambio-codice": "scambio-non-riuscito",
+  "recupero-password": "recupero-non-inviato",
+  "aggiornamento-password": "password-non-aggiornata",
 };
 
 /**
@@ -83,6 +91,16 @@ export const MESSAGGI_ERRORE_AUTH: Record<CodiceErroreAuth, string> = {
   "callback-senza-codice": "Il link di accesso non è più valido. Richiedine uno nuovo.",
   "scambio-non-riuscito": "Non è stato possibile completare l'accesso. Riprova dall'inizio.",
   "configurazione-assente": "L'accesso non è disponibile in questo momento. Riprova più tardi.",
+  // Il messaggio del recupero non nomina mai l'esito lato provider: chi lo
+  // legge non deve poter dedurre se quell'indirizzo esiste. La superficie
+  // mostra comunque la stessa conferma neutra in caso di successo.
+  "recupero-non-inviato":
+    "Non è stato possibile inviare il link per reimpostare la password. Riprova fra qualche istante.",
+  "sessione-recupero-assente":
+    "Il link per reimpostare la password non è più valido. Richiedine uno nuovo.",
+  "password-non-aggiornata":
+    "Non è stato possibile aggiornare la password. Riprova fra qualche istante.",
+  "password-troppo-debole": "La password è troppo debole. Scegline una più lunga e meno comune.",
   generico: "Non è stato possibile completare l'operazione. Riprova.",
 };
 
@@ -133,6 +151,20 @@ export const classificaErroreAuth = (
   }
   if (/invalid email|email_address_invalid|unable to validate email/.test(testo)) {
     return "email-non-valida";
+  }
+  // Famiglie del solo percorso password: una password rifiutata perché debole
+  // è l'unico caso in cui l'utente può fare qualcosa di diverso dal riprovare.
+  if (/weak_password|password.*(too short|at least|weak)|short_password/.test(testo)) {
+    return "password-troppo-debole";
+  }
+  // La sessione di recupero non esiste o è scaduta: chiedere di nuovo il link
+  // è l'azione utile, e riprovare a salvare non lo è.
+  if (
+    /auth session missing|session_not_found|session missing|jwt expired|token has expired|otp_expired/.test(
+      testo,
+    )
+  ) {
+    return operazione === "aggiornamento-password" ? "sessione-recupero-assente" : "generico";
   }
   return FALLBACK_OPERAZIONE[operazione];
 };
