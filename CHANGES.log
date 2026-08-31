@@ -1,20 +1,20 @@
 ## CURRENT STATE
 - PR #111 è CLOSED/MERGED su `main` SHA `7ed085f74f079138cd5de69938e4a6b58ae5722e`; INVESTOR READINESS & AUTH CLOSURE è CHIUSA.
-- GOOGLE FIRST-ACCESS PASSWORD SETUP è VERIFIED sul branch `build/google-first-access-password`, basato su quel `origin/main`.
+- GOOGLE FIRST-ACCESS PASSWORD SETUP è CODE CLOSED con PR #112 MERGED su `main` SHA `627e817cea34c6096b61ede4613a1a59f7257fa4`.
 - `/completa-profilo` mantiene username, data di nascita, maggiore età e consenso obbligatori e aggiunge nello stesso modulo password Vinea e conferma facoltative con policy minima di 6 caratteri e whitespace invariato.
 - I campi vuoti completano solo il profilo; una password valida usa una volta `supabase.auth.updateUser({ password })` sulla sessione autenticata corrente e poi completa il profilo. Input parziale/invalido non avvia mutazioni e un errore Auth blocca il profilo.
 - Dopo password riuscita e profilo fallito, il messaggio di successo parziale è esplicito e il retry nella stessa pagina ripete solo il profilo. Nessun nuovo account, identità, profilo, storage password o migrazione.
 - Payments/provider/payout restano OFF. Fase 11 NON APERTA. Fase 13 NON INIZIATA.
 
 ## ACTIVE TASK
-GOOGLE FIRST-ACCESS PASSWORD SETUP — verifica indipendente completata. Test auth mirati: 185 PASS, 0 FAIL, 688 asserzioni su 7 file. Typecheck, lint dei file TS/TSX toccati, production build e `git diff --check` puliti. Suite completa `frontend-next`: 1520 PASS, 0 FAIL, 20204 asserzioni su 89 file; floor CI e relativo contratto aggiornati insieme a 1520, con prelaunch-contract 19 PASS. Diff Supabase vuoto.
+GOOGLE FIRST-ACCESS PASSWORD SETUP — CODE CLOSED. Verifica indipendente: 185 test auth mirati PASS; typecheck, lint dei file toccati, production build e diff check puliti; suite completa `frontend-next` 1520 PASS con floor CI allineato a 1520. PR #112: Frontend, Frontend Next, Backend, Payout runner e Netlify verdi; Supabase Preview skipped come previsto per MIGRATION NO. Squash merge verificato su `origin/main`.
 
 ## NEXT STEPS
-1. Committare e pubblicare esclusivamente i file intenzionali del package.
-2. Aprire la PR verso `main` e attendere tutti i check attivati.
-3. Eseguire squash merge e verificare il nuovo SHA di `origin/main`.
+1. Eseguire UAT manuale con un account Google disposable e la nuova password Vinea.
+2. Registrare `SAME USER ID` e l'osservazione sul consenso duplicato senza dati sensibili.
+3. Decidere separatamente qualsiasi modifica al secondo gate di consenso.
 
 ## BLOCKERS / NOTES
 - REAL GOOGLE→PASSWORD LOGIN = NOT VERIFIED: browser/sessione e account Google test non sono disponibili in questa verifica; DUPLICATE CONSENT = NOT OBSERVED.
-- MIGRATION NO: nessun SQL o apply produzione previsto.
-- `.d3b-production-schema.sql` e `.wslconfig` restano untracked, preservati e non toccati.
+- MIGRATION NO: nessun SQL o apply produzione eseguito; nessun file Supabase apparteneva alla PR #112.
+- Payments/provider/payout restano OFF. Fase 11 NON APERTA. Fase 13 NON INIZIATA. `.d3b-production-schema.sql` e `.wslconfig` restano untracked, preservati e non toccati.
