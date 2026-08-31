@@ -113,6 +113,7 @@ describe("ProfessionalQualificationService", () => {
       "caricaDocumento",
       "eliminaDocumento",
       "invia",
+      "elimina",
       "ritira",
     ]);
     expect(chiavi.join(" ")).not.toMatch(/approv|rifiut|review|verdict|provider/i);
@@ -379,5 +380,106 @@ describe("invia e ritira", () => {
       "professional_qualification_withdraw",
     ]);
     expect(registro.rpc.every((c) => c.argomenti.p_id === QUALIFICA)).toBe(true);
+  });
+});
+
+describe("elimina — la bozza e i suoi allegati", () => {
+  const bozzaConDueDocumenti = {
+    id: QUALIFICA,
+    titolo: "Sommelier professionista",
+    enteEmittente: "Associazione Italiana Sommelier",
+    paese: null,
+    credentialReference: null,
+    issuedOn: null,
+    expiresOn: null,
+    stato: "bozza" as const,
+    submittedAt: null,
+    reviewedAt: null,
+    createdAt: "2026-08-01T10:00:00Z",
+    valida: false,
+    documenti: [
+      documento,
+      { ...documento, id: "d1c00000-0000-4000-8000-000000000004", storagePath: `${OWNER}/${QUALIFICA}/quattro.png` },
+    ],
+  };
+
+  it("toglie prima gli oggetti dal bucket, poi chiama la RPC", async () => {
+    const { client, registro } = clientFinto({
+      rpc: { professional_qualification_delete: { data: null } },
+    });
+    const esito = await creaProfessionalQualificationService(client).elimina(bozzaConDueDocumenti);
+    expect(esito).toEqual({ ok: true, data: undefined });
+    // L'ordine è la garanzia: al contrario, la RPC farebbe sparire i metadati
+    // con i percorsi, e gli oggetti resterebbero senza nessuno che li ritrovi.
+    expect(registro.operazioni).toEqual(["remove", "rpc:professional_qualification_delete"]);
+    expect(registro.remove).toEqual([
+      [documento.storagePath, `${OWNER}/${QUALIFICA}/quattro.png`],
+    ]);
+    expect(registro.rpc[0]?.argomenti).toEqual({ p_id: QUALIFICA });
+  });
+
+  it("se Storage fallisce, la RPC di eliminazione NON parte", async () => {
+    const { client, registro } = clientFinto({
+      remove: { message: "storage offline" },
+      rpc: { professional_qualification_delete: { data: null } },
+    });
+    const esito = await creaProfessionalQualificationService(client).elimina(bozzaConDueDocumenti);
+    expect(esito.ok).toBe(false);
+    expect(registro.rpc).toEqual([]);
+    if (!esito.ok) expect(esito.error).toInclude("La bozza non è stata eliminata");
+  });
+
+  it("se la RPC fallisce dopo Storage, non dichiara successo", async () => {
+    const { client, registro } = clientFinto({
+      rpc: {
+        professional_qualification_delete: {
+          error: { code: "42501", message: "permission denied" },
+        },
+      },
+    });
+    const esito = await creaProfessionalQualificationService(client).elimina(bozzaConDueDocumenti);
+    expect(esito.ok).toBe(false);
+    expect(registro.operazioni).toEqual(["remove", "rpc:professional_qualification_delete"]);
+    // Errore mediato: nessun dettaglio PostgREST arriva all'interfaccia.
+    if (!esito.ok) expect(esito.error).not.toInclude("permission denied");
+  });
+
+  it("propaga il messaggio del database quando è una sua regola (P0001)", async () => {
+    const { client } = clientFinto({
+      rpc: {
+        professional_qualification_delete: {
+          error: {
+            code: "P0001",
+            message: "Si elimina solo una qualifica in bozza. Una richiesta gia inviata si ritira.",
+          },
+        },
+      },
+    });
+    const esito = await creaProfessionalQualificationService(client).elimina({
+      ...bozzaConDueDocumenti,
+      stato: "inviata" as const,
+    });
+    expect(esito.ok).toBe(false);
+    if (!esito.ok) expect(esito.error).toInclude("Si elimina solo una qualifica in bozza");
+  });
+
+  it("una bozza senza allegati non chiama Storage a vuoto", async () => {
+    const { client, registro } = clientFinto({
+      rpc: { professional_qualification_delete: { data: null } },
+    });
+    const esito = await creaProfessionalQualificationService(client).elimina({
+      ...bozzaConDueDocumenti,
+      documenti: [],
+    });
+    expect(esito.ok).toBe(true);
+    expect(registro.operazioni).toEqual(["rpc:professional_qualification_delete"]);
+  });
+
+  it("non inventa un titolare: nessun p_user_id attraversa la chiamata", async () => {
+    const { client, registro } = clientFinto({
+      rpc: { professional_qualification_delete: { data: null } },
+    });
+    await creaProfessionalQualificationService(client).elimina(bozzaConDueDocumenti);
+    expect(Object.keys(registro.rpc[0]?.argomenti ?? {})).toEqual(["p_id"]);
   });
 });

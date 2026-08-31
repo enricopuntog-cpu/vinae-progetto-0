@@ -248,6 +248,13 @@ export interface ProfessionalQualificationService {
   eliminaDocumento(documento: QualificaDocumento): Promise<Result<void>>;
   invia(id: string): Promise<Result<QualificaProfessionaleStato>>;
   ritira(id: string): Promise<Result<QualificaProfessionaleStato>>;
+  /**
+   * Elimina una bozza: prima gli oggetti Storage, poi la riga. Riceve la
+   * qualifica intera e non il solo identificativo perché i percorsi degli
+   * oggetti da rimuovere sono quelli già letti in `documenti` — il servizio non
+   * ne cerca altri, e il database non li restituisce a nessun'altra proiezione.
+   */
+  elimina(qualifica: QualificaProfessionale): Promise<Result<void>>;
 }
 
 // ---- Profilo pubblico di un'altra persona ----------------------------------

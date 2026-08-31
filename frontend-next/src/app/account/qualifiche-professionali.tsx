@@ -1,11 +1,23 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { BadgeCheck, Paperclip, RefreshCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { professionalQualificationService } from "@/services/professional-qualification-service";
 import {
   etichettaStatoQualifica,
+  qualificaEliminabile,
   qualificaInviabile,
   qualificaRitirabile,
   spiegazioneStato,
@@ -31,6 +43,22 @@ const Card = ({ children, className = "" }: { children: React.ReactNode; classNa
   <div className={`rounded-2xl border border-border bg-card p-5 md:p-6 ${className}`}>{children}</div>
 );
 
+/**
+ * La spiegazione lunga sta nel Centro legale, non qui dentro. Chi sta per
+ * caricare la foto di un diploma deve poter leggere per intero dove finisce
+ * quel file — e poterlo fare prima di caricarlo, non dopo.
+ */
+const ROTTA_PRIVACY_DOCUMENTI = "/legale/documenti-qualifica";
+
+const LinkPrivacyDocumenti = ({ className = "" }: { className?: string }) => (
+  <Link
+    href={ROTTA_PRIVACY_DOCUMENTI}
+    className={`text-bordeaux underline underline-offset-2 ${className}`}
+  >
+    Perché chiediamo questo documento?
+  </Link>
+);
+
 const CAMPI_VUOTI = {
   titolo: "",
   enteEmittente: "",
@@ -48,6 +76,15 @@ export default function QualificheProfessionali() {
   const [erroreForm, setErroreForm] = useState<string | null>(null);
   const [inCorso, setInCorso] = useState(false);
   const [erroreAzione, setErroreAzione] = useState<string | null>(null);
+  /** La bozza per cui il dialogo di conferma è aperto: `null` = chiuso. */
+  const [bozzaDaEliminare, setBozzaDaEliminare] = useState<QualificaProfessionale | null>(null);
+  /**
+   * La protezione dal doppio invio. `inCorso` disabilita i pulsanti, ma è stato
+   * di React: fra due click ravvicinati, o fra un click e un `Enter` sul
+   * dialogo, il render può non essere ancora arrivato. Questo riferimento è
+   * sincrono e chiude la porta nello stesso giro di eventi.
+   */
+  const azioneInVolo = useRef(false);
   const bozzaInAllegato = useRef<string | null>(null);
   const selettoreFile = useRef<HTMLInputElement | null>(null);
 
@@ -164,6 +201,33 @@ export default function QualificheProfessionali() {
     await carica();
   };
 
+  /**
+   * L'eliminazione di una bozza, dopo la conferma esplicita.
+   *
+   * Il servizio toglie prima gli oggetti dall'archivio privato e solo dopo la
+   * riga: qui non si anticipa nulla in interfaccia. La card sparisce perché la
+   * rilettura non la restituisce più, non perché sia stata tolta dall'elenco
+   * per ottimismo — se la RPC fallisse, una card rimossa a mano mentirebbe.
+   */
+  const eliminaBozza = async (qualifica: QualificaProfessionale) => {
+    if (azioneInVolo.current) return;
+    azioneInVolo.current = true;
+    setBozzaDaEliminare(null);
+    setErroreAzione(null);
+    setInCorso(true);
+    try {
+      const esito = await professionalQualificationService().elimina(qualifica);
+      if (!esito.ok) {
+        setErroreAzione(esito.error);
+        return;
+      }
+      await carica();
+    } finally {
+      setInCorso(false);
+      azioneInVolo.current = false;
+    }
+  };
+
   return (
     <section className="space-y-6" data-testid="qualifiche-professionali">
       <header>
@@ -257,9 +321,18 @@ export default function QualificheProfessionali() {
                           ))}
                         </ul>
                       )}
+                      <p className="text-xs text-muted-foreground">
+                        I documenti restano in un archivio privato e non compaiono sul profilo
+                        pubblico. <LinkPrivacyDocumenti />
+                      </p>
                     </div>
                   )}
 
+                  {/* L'ordine è quello del gesto: prima si allega, poi — se
+                      serve — si rinuncia, e solo alla fine si invia. «Invia
+                      richiesta» compare soltanto quando un documento esiste
+                      davvero: `qualificaInviabile` guarda `documenti`, e il
+                      database ricontrolla comunque. */}
                   <div className="flex flex-wrap gap-2">
                     {q.stato === "bozza" && (
                       <Button
@@ -271,9 +344,19 @@ export default function QualificheProfessionali() {
                         <Paperclip className="h-3.5 w-3.5 mr-1.5" /> Allega documento
                       </Button>
                     )}
+                    {qualificaEliminabile(q) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setBozzaDaEliminare(q)}
+                        disabled={inCorso}
+                      >
+                        Elimina
+                      </Button>
+                    )}
                     {qualificaInviabile(q) && (
                       <Button size="sm" onClick={() => invia(q.id)} disabled={inCorso}>
-                        Invia per la verifica
+                        Invia richiesta
                       </Button>
                     )}
                     {qualificaRitirabile(q) && (
@@ -283,7 +366,7 @@ export default function QualificheProfessionali() {
                         onClick={() => ritira(q.id)}
                         disabled={inCorso}
                       >
-                        Ritira
+                        Ritira richiesta
                       </Button>
                     )}
                   </div>
@@ -294,6 +377,36 @@ export default function QualificheProfessionali() {
           {erroreAzione && <p className="mt-4 text-sm text-red-700">{erroreAzione}</p>}
         </Card>
       )}
+
+      {/* La conferma è esplicita perché l'operazione non è reversibile: gli
+          oggetti escono dall'archivio privato e la riga esce dal database.
+          Nessun «annulla» dopo, quindi la domanda viene prima. */}
+      <AlertDialog
+        open={bozzaDaEliminare !== null}
+        onOpenChange={(aperto) => {
+          if (!aperto) setBozzaDaEliminare(null);
+        }}
+      >
+        <AlertDialogContent data-testid="qualifiche-conferma-elimina">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminare questa bozza?</AlertDialogTitle>
+            <AlertDialogDescription>
+              I documenti allegati verranno rimossi. Questa operazione non può essere annullata.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={inCorso}>Annulla</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={inCorso}
+              onClick={() => {
+                if (bozzaDaEliminare) void eliminaBozza(bozzaDaEliminare);
+              }}
+            >
+              Elimina bozza
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <input
         ref={selettoreFile}
@@ -368,7 +481,8 @@ export default function QualificheProfessionali() {
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           Il riferimento resta privato: non compare sul profilo pubblico. I documenti restano in
-          un archivio privato e non sono scaricabili da altre persone.
+          un archivio privato e non sono scaricabili da altre persone.{" "}
+          <LinkPrivacyDocumenti />
         </p>
         {erroreForm && <p className="mt-3 text-sm text-red-700">{erroreForm}</p>}
         <Button size="sm" variant="outline" className="mt-4" onClick={creaBozza} disabled={inCorso}>

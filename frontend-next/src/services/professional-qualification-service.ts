@@ -335,6 +335,59 @@ export function creaProfessionalQualificationService(
       return { ok: true, data: statoValido(data) };
     },
 
+    /**
+     * L'eliminazione di una bozza, in due metà con un ordine obbligato.
+     *
+     * Prima gli oggetti nel bucket privato, poi la riga. Al contrario — riga
+     * prima, oggetti dopo — la RPC farebbe sparire i metadati che contengono i
+     * percorsi, e con essi l'unico modo di sapere che cosa resta da togliere:
+     * gli oggetti diventerebbero orfani senza nessuno che possa ritrovarli.
+     *
+     * Se Storage fallisce, la RPC NON parte. La qualifica resta in bozza,
+     * ancora eliminabile, con i suoi percorsi ancora leggibili: si riprova.
+     * Se Storage riesce e la RPC fallisce, la mezza operazione non viene
+     * dichiarata riuscita — la bozza resta, senza allegati, e un secondo
+     * tentativo la elimina davvero.
+     */
+    async elimina(qualifica: QualificaProfessionale): Promise<Result<void>> {
+      if (!supabase) return senzaClient();
+
+      const percorsi = qualifica.documenti
+        .map((d) => d.storagePath)
+        .filter((percorso) => percorso !== "");
+
+      if (percorsi.length > 0) {
+        const { error: erroreStorage } = await supabase.storage
+          .from(BUCKET_QUALIFICHE)
+          .remove(percorsi);
+        if (erroreStorage) {
+          return {
+            ok: false,
+            error: erroreServizio(
+              "rimozione documenti della bozza",
+              erroreStorage,
+              "Non è stato possibile eliminare i documenti allegati. La bozza non è stata eliminata: riprova.",
+            ),
+          };
+        }
+      }
+
+      const { error } = await supabase.rpc("professional_qualification_delete", {
+        p_id: qualifica.id,
+      });
+      if (error) {
+        return {
+          ok: false,
+          error: erroreServizio(
+            "eliminazione bozza",
+            error,
+            "I documenti sono stati rimossi, ma non è stato possibile eliminare la bozza. Riprova.",
+          ),
+        };
+      }
+      return { ok: true, data: undefined };
+    },
+
     async ritira(id: string): Promise<Result<QualificaProfessionaleStato>> {
       if (!supabase) return senzaClient();
       const { data, error } = await supabase.rpc("professional_qualification_withdraw", {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   etichettaStatoQualifica,
   qualificaConSpunta,
+  qualificaEliminabile,
   qualificaInviabile,
   qualificaModificabile,
   qualificaRitirabile,
@@ -63,12 +64,33 @@ describe("permessi mostrati", () => {
     expect(qualificaInviabile(qualifica({ stato: "inviata", documenti: [documento] }))).toBe(false);
   });
 
-  it("si ritira una bozza o una verifica in corso, mai un esito", () => {
+  it("si ritira solo una richiesta già inviata: mai una bozza, mai un esito", () => {
+    // La bozza non è una richiesta: non c'è niente da cui ritirarsi, e offrire
+    // «Ritira» lì produceva una riga `ritirata` di una pratica mai inviata.
     for (const stato of STATI) {
-      expect(qualificaRitirabile(qualifica({ stato }))).toBe(
-        stato === "bozza" || stato === "inviata",
-      );
+      expect(qualificaRitirabile(qualifica({ stato }))).toBe(stato === "inviata");
     }
+  });
+});
+
+describe("qualificaEliminabile", () => {
+  it("si elimina solo una bozza: inviata, approvata, rifiutata e ritirata restano", () => {
+    for (const stato of STATI) {
+      expect(qualificaEliminabile(qualifica({ stato }))).toBe(stato === "bozza");
+    }
+  });
+
+  it("eliminabile e ritirabile non si sovrappongono mai", () => {
+    // Sono le due metà dello stesso gesto in momenti diversi: prima dell'invio
+    // si cancella, dopo l'invio si rinuncia lasciando traccia.
+    for (const stato of STATI) {
+      const q = qualifica({ stato });
+      expect(qualificaEliminabile(q) && qualificaRitirabile(q)).toBe(false);
+    }
+  });
+
+  it("non guarda i documenti: una bozza vuota si elimina come una con allegati", () => {
+    expect(qualificaEliminabile(qualifica({ stato: "bozza", documenti: [] }))).toBe(true);
   });
 });
 
