@@ -465,7 +465,9 @@ export function useSellWizard({
   const caricaFoto = useCallback(async (file: File) => {
     const client = getSupabaseClient();
     if (!client) {
-      toast.error("Connessione a Supabase non configurata.");
+      // Il nome del provider non aiuta chi sta caricando una foto: la sola cosa
+      // vera e utile è che adesso non si può, e che non dipende dalla foto.
+      toast.error("Il caricamento delle foto non è disponibile in questo momento.");
       return;
     }
 

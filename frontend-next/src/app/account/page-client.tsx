@@ -32,6 +32,7 @@ import type { ProfiloCorrente } from "@/services/types";
 import AttivitaVendita from "./attivita-vendita";
 import SaldoVineaPanel from "./saldo-vinea";
 import QualificheProfessionali from "./qualifiche-professionali";
+import SicurezzaAccount from "./sicurezza-account";
 
 const ESPERIENZE = Object.keys(esperienzaLabels) as Esperienza[];
 
@@ -484,6 +485,7 @@ export default function AccountPageClient() {
       <AttivitaVendita />
       <SaldoVineaPanel />
       <QualificheProfessionali />
+      <SicurezzaAccount />
     </div>
   );
 }

@@ -42,8 +42,9 @@ import type {
   Result,
 } from "./types";
 
-const NOT_CONFIGURED_ERROR =
-  "Supabase non configurato: imposta NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY in frontend-next/.env.local.";
+/** Vedi `profile-service.ts`: il nome delle variabili d'ambiente non è una cosa
+ *  da dire a chi visita un profilo pubblico. */
+const NOT_CONFIGURED_ERROR = "Questo profilo non è disponibile in questo momento.";
 
 const LETTURA_FALLITA = "Non è stato possibile leggere questo profilo.";
 const ANNUNCI_FALLITI = "Non è stato possibile leggere gli annunci di questa persona.";

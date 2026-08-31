@@ -220,6 +220,18 @@ export const useRealAuthDomain = () => {
     [],
   );
 
+  const authInviaRecuperoPassword = useCallback(
+    (email: string): Promise<ResultAuth<void>> =>
+      supabaseAuthService.inviaRecuperoPassword(email),
+    [],
+  );
+
+  const authAggiornaPasswordNuova = useCallback(
+    (password: string): Promise<ResultAuth<void>> =>
+      supabaseAuthService.aggiornaPasswordNuova(password),
+    [],
+  );
+
   const authAccediConOAuth = useCallback(
     (provider: OAuthProvider, contesto?: ContestoRitornoAuth) =>
       supabaseAuthService.accediConOAuth(provider, contesto),
@@ -274,6 +286,8 @@ export const useRealAuthDomain = () => {
     authLogin,
     authInviaMagicLink,
     authVerificaEmail,
+    authInviaRecuperoPassword,
+    authAggiornaPasswordNuova,
     authAccediConOAuth,
     authStatoEta: statoEta,
     authRicaricaProfilo,

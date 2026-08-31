@@ -72,6 +72,30 @@ export interface AuthService {
   login(email: string, password: string): Promise<ResultAuth<{ userId: string }>>;
   inviaMagicLink(email: string, contesto?: ContestoRitornoAuth): Promise<ResultAuth<void>>;
   /**
+   * Chiede a Supabase il link che apre una sessione di recupero.
+   *
+   * Serve tre casi che sono lo stesso gesto tecnico: "password dimenticata" di
+   * un account email/password, la prima password di un account nato con Google
+   * — che una password non ce l'ha mai avuta, e a cui quindi non si può
+   * chiedere quella vecchia — e il cambio password dall'area account.
+   *
+   * L'esito **non** dice se quell'indirizzo esiste: Supabase risponde ok anche
+   * per un'email sconosciuta, e le superfici mostrano comunque la stessa frase
+   * neutra. Un `ok: false` qui è un guasto del canale, non un verdetto
+   * sull'account.
+   */
+  inviaRecuperoPassword(email: string): Promise<ResultAuth<void>>;
+  /**
+   * Imposta la password dell'utente **della sessione corrente**.
+   *
+   * Non riceve né userId né vecchia password: l'identità è quella della
+   * sessione aperta dal link di recupero, che è l'unica prova che serve e
+   * l'unica che un account nato con Google possa produrre. Una vecchia
+   * password chiesta qui sarebbe una domanda senza risposta per metà degli
+   * account.
+   */
+  aggiornaPasswordNuova(password: string): Promise<ResultAuth<void>>;
+  /**
    * Avvia il flusso OAuth. Non ritorna una sessione: il browser viene
    * reindirizzato al provider e rientra su /auth/callback, che completa lo
    * scambio del code. Un esito `ok` significa solo "redirect avviato".

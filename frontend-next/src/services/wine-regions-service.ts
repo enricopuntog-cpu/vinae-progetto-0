@@ -32,8 +32,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Result, WineRegionsService } from "./types";
 
-const NOT_CONFIGURED_ERROR =
-  "Supabase non configurato: imposta NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY in frontend-next/.env.local.";
+/** Vedi `profile-service.ts`: chi compila un annuncio non installa il progetto. */
+const NOT_CONFIGURED_ERROR = "Non è stato possibile leggere l'elenco delle regioni.";
 
 const LETTURA_FALLITA = "Non è stato possibile leggere l'elenco delle regioni.";
 

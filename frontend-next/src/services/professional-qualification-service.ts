@@ -31,8 +31,9 @@ import type {
  * strada da tenere allineata.
  */
 
+/** Vedi `profile-service.ts`: in pagina va un messaggio, non la configurazione. */
 const NON_CONFIGURATO =
-  "Supabase non configurato: imposta NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY in frontend-next/.env.local.";
+  "Le qualifiche non sono disponibili in questo momento. Riprova fra qualche istante.";
 
 const NESSUNA_SESSIONE = "Nessuna sessione attiva.";
 

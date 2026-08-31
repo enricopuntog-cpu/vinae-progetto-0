@@ -62,6 +62,21 @@ import { percorsoRelativoSicuro } from "@/lib/auth/origine-redirect";
 export const PERCORSO_RITORNO_AUTH = "/auth/callback";
 
 /**
+ * Dove atterra chi ha chiesto di reimpostare la password.
+ *
+ * Non è una seconda callback: il link di recupero rientra da
+ * `PERCORSO_RITORNO_AUTH` come tutti gli altri, viene scambiato lì, e questo
+ * percorso viaggia soltanto come `next`. Ciò significa che il recupero eredita
+ * senza modifiche l'origine decisa dal server, la validazione del percorso
+ * relativo e il ritorno d'errore sulla superficie di partenza — e che
+ * l'aggiunta non tocca OAuth, magic link né conferma della registrazione.
+ *
+ * Sta qui e non nella pagina perché è un valore che deve essere identico in
+ * due punti lontani: chi chiede il link (AuthService) e chi lo riceve.
+ */
+export const PERCORSO_REIMPOSTA_PASSWORD = "/reimposta-password";
+
+/**
  * Da quale delle due superfici di ingresso è partito il flusso.
  *
  * Serve alla callback per riportare un errore dove l'utente lo stava

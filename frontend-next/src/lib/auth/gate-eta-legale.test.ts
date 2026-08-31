@@ -266,10 +266,17 @@ describe("consenso", () => {
     expect(checkbox).toInclude("onCheckedChange(v === true)");
   });
 
-  it("non attribuisce consenso al click su Google e non aggiunge caselle o registrazioni", () => {
+  it("il click su Google non vale come consenso, e nessun consenso viene registrato", () => {
     const social = senzaCommenti(leggi("src/components/vinea/SocialAuthButtons.tsx"));
-    expect(social).not.toMatch(/consenso|ConsentCheckbox|terms|accett/i);
+    // Il consenso non si deduce dal click: la superficie social non ha una
+    // casella propria e non decide nulla, riceve solo il motivo per cui è
+    // ferma. La spunta resta l'unica di /registrati.
+    expect(social).not.toMatch(/ConsentCheckbox|terms|accett/i);
+    expect(social).toInclude("consensoMancante");
     for (const sorgente of [registrati, completa]) {
+      // E nessuna delle due pagine tiene una prova del consenso da qualche
+      // parte: niente versione, niente data, niente colonna. Il testo accettato
+      // è quello pubblicato su /legale.
       expect(senzaCommenti(sorgente)).not.toMatch(
         /consentVersion|versioneConsenso|consentAt|consenso_at|accettatoIl/,
       );

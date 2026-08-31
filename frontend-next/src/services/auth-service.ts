@@ -1,7 +1,11 @@
 "use client";
 
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { urlRitornoAuthDalBrowser, type ContestoRitornoAuth } from "@/lib/auth/ritorno-auth";
+import {
+  PERCORSO_REIMPOSTA_PASSWORD,
+  urlRitornoAuthDalBrowser,
+  type ContestoRitornoAuth,
+} from "@/lib/auth/ritorno-auth";
 import { classificaErroreAuth } from "@/lib/auth/errori-auth";
 import type { AuthService, OAuthProvider, Result } from "./types";
 
@@ -102,6 +106,35 @@ export const supabaseAuthService: AuthService = {
       options: redirectTo ? { emailRedirectTo: redirectTo } : undefined,
     });
     if (error) return { ok: false, error: classificaErroreAuth(error, "magic-link") };
+    return { ok: true, data: undefined };
+  },
+
+  async inviaRecuperoPassword(email) {
+    const supabase = getSupabaseClient();
+    if (!supabase) return { ok: false, error: NON_CONFIGURATO };
+
+    // Stessa destinazione di rientro degli altri flussi, con `next` che porta
+    // alla pagina di reimpostazione: il link torna su /auth/callback, che
+    // scambia il code e apre la sessione di recupero, poi manda l'utente lì.
+    // Nessun secondo punto di scambio, nessuna seconda regola d'origine.
+    const redirectTo = urlRitornoAuthDalBrowser({ next: PERCORSO_REIMPOSTA_PASSWORD });
+    const { error } = await supabase.auth.resetPasswordForEmail(
+      email,
+      redirectTo ? { redirectTo } : undefined,
+    );
+    if (error) return { ok: false, error: classificaErroreAuth(error, "recupero-password") };
+    return { ok: true, data: undefined };
+  },
+
+  async aggiornaPasswordNuova(password) {
+    const supabase = getSupabaseClient();
+    if (!supabase) return { ok: false, error: NON_CONFIGURATO };
+
+    // La password non passa da nessuna tabella di questo progetto e non viene
+    // registrata da nessuna parte: la riceve Supabase Auth, che è l'unico
+    // posto in cui esiste. Qui non c'è nulla da salvare né da loggare.
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) return { ok: false, error: classificaErroreAuth(error, "aggiornamento-password") };
     return { ok: true, data: undefined };
   },
 

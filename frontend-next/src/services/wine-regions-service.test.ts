@@ -147,10 +147,17 @@ describe("WineRegionsService — guasti", () => {
     expect(await creaWineRegionsService(client).elenco()).toEqual({ ok: true, data: [] });
   });
 
-  it("senza client configurato risponde con l'errore di configurazione", async () => {
+  // Senza client il servizio fallisce chiuso, ma il testo che ne esce finisce
+  // in /vendi: nominare le variabili d'ambiente e il file che le contiene era
+  // un'istruzione per chi installa il progetto, non per chi compila un annuncio.
+  it("senza client configurato fallisce con un messaggio, non con la configurazione", async () => {
     const esito = await creaWineRegionsService(null).elenco();
     expect(esito.ok).toBe(false);
-    if (!esito.ok) expect(esito.error).toContain("NEXT_PUBLIC_SUPABASE_URL");
+    if (!esito.ok) {
+      expect(esito.error).not.toInclude("NEXT_PUBLIC_SUPABASE_URL");
+      expect(esito.error).not.toInclude(".env.local");
+      expect(esito.error).toBe("Non è stato possibile leggere l'elenco delle regioni.");
+    }
   });
 });
 

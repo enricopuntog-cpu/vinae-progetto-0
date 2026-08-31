@@ -264,6 +264,29 @@ describe("scrittura del profilo corrente", () => {
     expect(esito.error).toBe("Devi avere almeno 18 anni per usare Vinea.");
   });
 
+  it("un errore che l'utente non può correggere non arriva in pagina con il testo del database", async () => {
+    // /account stampa questo valore così com'è. Finché il fallback era
+    // `errore.message`, una policy o un vincolo che non abbiamo tradotto
+    // mostravano nomi di tabella, di colonna e di constraint a chi stava
+    // solo salvando la propria presentazione.
+    const { client } = fakeClient({
+      sessione: SESSIONE,
+      errore: {
+        code: "42501",
+        message:
+          'new row violates row-level security policy for table "profiles" (profiles_update_own)',
+      },
+    });
+    const esito = await creaProfileService(client).aggiornaProfiloCorrente({ bio: "x" });
+
+    expect(esito.ok).toBe(false);
+    if (esito.ok) return;
+    for (const interno of ["profiles", "policy", "row-level", "42501", "constraint"]) {
+      expect(esito.error.toLowerCase()).not.toInclude(interno.toLowerCase());
+    }
+    expect(esito.error.length).toBeGreaterThan(10);
+  });
+
   it("senza sessione non scrive nulla", async () => {
     const { client, scritture } = fakeClient({ sessione: null });
     const esito = await creaProfileService(client).aggiornaProfiloCorrente({ bio: "x" });
