@@ -1,6 +1,6 @@
-/** Testi originali per la beta Next.js. Fonti e mappa dati in docs/LEGAL_DATA_MAP.md.
+/** Testi originali per la beta Next.js.
  * Non trasformare la bozza in informativa definitiva senza completare il titolare
- * e la verifica dei punti operativi indicati nel dossier. Nessuna società inventata.
+ * e la verifica di conservazione e contratti dei fornitori. Nessuna società inventata.
  */
 export const versioneLegale = "7 settembre 2026";
 export const identitaLegale = { nome: "", indirizzo: "", email: "" };
