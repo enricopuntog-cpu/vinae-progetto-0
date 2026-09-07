@@ -69,13 +69,17 @@ export default function SommelierChat() {
   );
   const utenteCorrente = authUser?.userId ?? null;
 
-  // L'identificativo di sessione si legge dopo il montaggio e mai durante il
-  // render: `localStorage` non esiste sul server, e leggerlo nello stato
-  // iniziale darebbe due valori diversi fra HTML servito e idratazione.
+  // Il montaggio controlla soltanto l'animazione del pannello.
   useEffect(() => {
-    setSessionId(sessionIdPersistente(depositoBrowser()));
     setMontato(true);
   }, []);
+
+  // Memoria soltanto dopo l'apertura esplicita di una chat disponibile.
+  // Nessun identificatore viene letto o creato durante la navigazione normale.
+  useEffect(() => {
+    if (!aperto || !AZIONI_IA_ABILITATE || sessionId) return;
+    setSessionId(sessionIdPersistente(depositoBrowser()));
+  }, [aperto, sessionId]);
 
   // Cambio di utente (login, logout, altro account): la conversazione a schermo
   // non è più la sua.

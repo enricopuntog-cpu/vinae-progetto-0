@@ -231,9 +231,15 @@ export function VineaLayout({ children }: { children: ReactNode }) {
       </main>
 
       <footer className="mx-auto max-w-6xl px-4 pb-6 text-center text-xs text-muted-foreground">
-        <Link href="/legale" className="underline-offset-2 hover:text-bordeaux hover:underline">
-          Centro legale
-        </Link>
+          <Link href="/legale" className="underline-offset-2 hover:text-bordeaux hover:underline">
+            Centro legale
+          </Link>
+          <span aria-hidden="true" className="mx-2">·</span>
+          <Link href="/legale#privacy" className="underline-offset-2 hover:text-bordeaux hover:underline">Privacy</Link>
+          <span aria-hidden="true" className="mx-2">·</span>
+          <Link href="/legale#termini" className="underline-offset-2 hover:text-bordeaux hover:underline">Termini</Link>
+          <span aria-hidden="true" className="mx-2">·</span>
+          <Link href="/legale#cookie" className="underline-offset-2 hover:text-bordeaux hover:underline">Cookie</Link>
       </footer>
 
       <nav
