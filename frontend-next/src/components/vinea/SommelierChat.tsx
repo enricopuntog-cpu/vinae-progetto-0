@@ -22,7 +22,7 @@ import { AZIONI_IA_ABILITATE } from "@/config/features";
  *
  * Tre punti che non sono estetici:
  *
- * 1. **Il pannello resta montato per tutti**, anche senza sessione (7.9). È
+ * 1. **Il pulsante resta disponibile per tutti**, anche senza sessione (7.9). È
  *    parità con `frontend/`, dove il rifiuto arriva dall'API e non dalla UI:
  *    chi non è autenticato vede il pannello, prova, e riceve un messaggio che
  *    dice di accedere. Nascondere il trigger sarebbe una decisione di prodotto
@@ -51,9 +51,9 @@ const SUGGERIMENTI = [
   "Che differenza c'è tra Brunello e Rosso di Montalcino?",
 ];
 
-export default function SommelierChat() {
+export default function SommelierChat({ inizialmenteAperto = false }: { inizialmenteAperto?: boolean }) {
   const { authUser } = useVinea();
-  const [aperto, setAperto] = useState(false);
+  const [aperto, setAperto] = useState(inizialmenteAperto);
   const [montato, setMontato] = useState(false);
   const [battute, setBattute] = useState<Battuta[]>([]);
   const [testo, setTesto] = useState("");
@@ -61,6 +61,8 @@ export default function SommelierChat() {
   const [azioneBloccata, setAzioneBloccata] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const storicoRichiesto = useRef<string | null>(null);
 
   const aiService = useMemo(
@@ -73,6 +75,18 @@ export default function SommelierChat() {
   useEffect(() => {
     setMontato(true);
   }, []);
+
+  useEffect(() => {
+    if (!montato) return;
+    if (aperto) inputRef.current?.focus({ preventScroll: true });
+    else triggerRef.current?.focus({ preventScroll: true });
+    if (!aperto) return;
+    const chiudiConEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAperto(false);
+    };
+    window.addEventListener("keydown", chiudiConEscape);
+    return () => window.removeEventListener("keydown", chiudiConEscape);
+  }, [aperto, montato]);
 
   // Memoria soltanto dopo l'apertura esplicita di una chat disponibile.
   // Nessun identificatore viene letto o creato durante la navigazione normale.
@@ -196,7 +210,13 @@ export default function SommelierChat() {
   return (
     <>
       <button
+        ref={triggerRef}
+        type="button"
         aria-label="Apri chat Sommelier AI"
+        aria-haspopup="dialog"
+        aria-expanded={aperto}
+        aria-hidden={aperto}
+        tabIndex={aperto ? -1 : 0}
         data-testid="sommelier-trigger"
         onClick={() => setAperto(true)}
         className={`fixed right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-bordeaux text-crema shadow-xl ring-4 ring-bordeaux/25 transition-transform duration-200 hover:scale-105 active:scale-95 md:h-16 md:w-16 ${
@@ -204,10 +224,11 @@ export default function SommelierChat() {
         }`}
         style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}
       >
-        <span className="absolute -top-1 -right-1 inline-flex h-3 w-3 rounded-full bg-oro ring-2 ring-crema animate-pulse-soft" />
+        <span className="absolute -top-1 -right-1 inline-flex h-3 w-3 rounded-full bg-oro ring-2 ring-crema" />
         <MessageSquareText className="h-6 w-6" />
       </button>
 
+      {aperto && <>
       <div
         onClick={() => setAperto(false)}
         aria-hidden
@@ -338,6 +359,7 @@ export default function SommelierChat() {
           }}
         >
           <input
+            ref={inputRef}
             value={testo}
             onChange={(e) => {
               setTesto(e.target.value);
@@ -360,6 +382,7 @@ export default function SommelierChat() {
           </button>
         </form>
       </aside>
+      </>}
     </>
   );
 }

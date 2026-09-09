@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { LinkSuIntento as Link } from "@/components/vinea/LinkSuIntento";
 import { Bell, MessageCircle } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatPhase8Time } from "@/lib/phase8/format";

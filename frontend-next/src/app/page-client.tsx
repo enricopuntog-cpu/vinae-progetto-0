@@ -1,6 +1,7 @@
 "use client";
 
-import Link from "next/link";
+import { LinkSuIntento as Link } from "@/components/vinea/LinkSuIntento";
+import Image from "next/image";
 import { ArrowRight, Grape, Search, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { WineCard } from "@/components/vinea/WineCard";
 import { SectionTitle } from "@/components/vinea/Layout";
@@ -31,7 +32,9 @@ const REGIONI = [
 
 const Hero = ({ guest }: { guest: boolean }) => (
   <section className="relative overflow-hidden rounded-3xl bg-bordeaux text-crema hero-glow">
-    <div className="absolute inset-0 opacity-35" style={{ backgroundImage: `url(${wineImages.cellar})`, backgroundSize: "cover" }} />
+    <div className="absolute inset-0 opacity-35">
+      <Image src={wineImages.cellar} alt="" fill sizes="(max-width: 1152px) 100vw, 1152px" loading="eager" className="object-cover object-left-top" />
+    </div>
     <div className="absolute inset-0 bg-gradient-to-r from-bordeaux via-bordeaux/85 to-transparent" />
     <div className="relative max-w-2xl px-6 py-16 md:px-14 md:py-24">
       <p className="text-xs uppercase tracking-[0.3em] text-oro">Vinea Wine Club</p>

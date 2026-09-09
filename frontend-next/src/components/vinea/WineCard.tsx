@@ -1,13 +1,13 @@
 "use client";
 
-import Link from "next/link";
+import { LinkSuIntento as Link } from "@/components/vinea/LinkSuIntento";
 import type { ReactNode } from "react";
 import { MapPin, ShieldCheck, Tag, EyeOff, Wine as WineIcon } from "lucide-react";
 import type { Wine } from "@/data/wines";
 import type { StatoBottiglia } from "@/data/cellar";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
 import { DrinkBadge } from "@/components/vinea/DrinkWindow";
-import { SafeImage } from "@/components/vinea/States";
+import { WineThumbnail } from "@/components/vinea/WineThumbnail";
 import { badgeStatoBottiglia } from "@/lib/cantina/badge-stato";
 
 const DetailLink = ({
@@ -72,11 +72,11 @@ export function WineCard({
         className="flex gap-3 rounded-2xl border border-border bg-card p-3 card-lift perf-card"
       >
         <div className="relative">
-          <SafeImage
+          <WineThumbnail
             src={wine.immagini[0]}
             alt={wine.nome}
             className="h-24 w-20 flex-shrink-0 rounded-lg object-cover"
-            fallbackLabel="Foto non disponibile"
+            sizes="80px"
           />
           {sale && (
             <span className="absolute left-1 top-1 rounded-full bg-bordeaux px-1.5 py-0.5 text-[9px] font-semibold text-crema shadow">
@@ -157,11 +157,11 @@ export function WineCard({
         className="block"
       >
         <div className="img-sheen aspect-[4/5] overflow-hidden bg-secondary">
-          <SafeImage
+          <WineThumbnail
             src={wine.immagini[0]}
             alt={`${wine.nome} ${wine.annata}`}
             className="h-full w-full object-cover img-reveal group-hover:scale-110"
-            fallbackLabel="Foto non disponibile"
+            sizes="(max-width: 767px) calc((100vw - 48px) / 2), 384px"
           />
         </div>
         <div className="p-4">
