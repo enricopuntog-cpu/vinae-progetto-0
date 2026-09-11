@@ -2,6 +2,7 @@
 
 import { LinkSuIntento as Link } from "@/components/vinea/LinkSuIntento";
 import SommelierChat from "@/components/vinea/SommelierLauncher";
+import { VineaLogo } from "@/components/vinea/VineaLogo";
 import { usePathname } from "next/navigation";
 import {
   Home,
@@ -82,9 +83,7 @@ export function VineaLayout({ children }: { children: ReactNode }) {
       >
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 md:py-4">
           <Link href="/" className="flex items-center gap-2.5" data-testid="brand-logo-link">
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-bordeaux text-crema font-serif text-lg">
-              V
-            </span>
+            <VineaLogo />
             <span className="flex flex-col leading-none">
               <span className="font-serif text-2xl font-semibold tracking-tight text-bordeaux">
                 Vinea
