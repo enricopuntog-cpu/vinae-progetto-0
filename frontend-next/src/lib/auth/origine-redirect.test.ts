@@ -22,6 +22,20 @@ const ambienteAnteprima: AmbienteOrigine = {
 const richiesta = (href: string) => new URL(href);
 
 describe("origine pubblica dei redirect Auth", () => {
+  it("con il dominio acquistato non ritorna al vecchio host o a host inoltrati arbitrari", () => {
+    const dominio = "https://vineawineclub.com";
+    for (const host of [
+      "vineawineclub.com", "timely-lokum-43a12e.netlify.app",
+      "vineawineclub.com.evil.example", "evil.example",
+    ]) {
+      const esito = risolviOriginePubblica(
+        richiesta(`${IMMUTABILE}/auth/callback?next=%2Faccount`),
+        { URL: dominio }, host,
+      );
+      expect(esito).toEqual({ origine: dominio, sorgente: "netlify-produzione" });
+    }
+  });
+
   it("in produzione ignora il dominio immutabile del deploy e resta sul dominio pubblico", () => {
     const risolta = risolviOriginePubblica(
       richiesta(`${IMMUTABILE}/auth/callback?code=abc`),

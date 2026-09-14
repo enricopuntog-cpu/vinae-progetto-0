@@ -45,16 +45,19 @@ const Page = async ({
     console.error("[esplora] lettura regioni fallita:", errore);
     return { ok: false as const, error: "Regioni temporaneamente non disponibili." };
   });
-  const [annunci, esitoRegioni] = await Promise.all([annunciPromise, regioniPromise]);
 
   // Finestra di bevuta e abbinamenti stanno su `wines` dalla Fase 6c-1. Si
   // caricano qui e non nei componenti: `DrinkBadge` compare su ogni scheda, e
   // una lettura per scheda significherebbe una cascata di richieste e un
   // distintivo che appare a pagina già disegnata.
-  const metaPerVino = await caricaMetaPerVino(
-    client,
-    annunci.map((a) => a.wineSlug ?? a.id),
-  );
+  // I metadati dipendono dagli annunci, ma non dal registro regioni:
+  // una regione lenta non deve ritardare l'avvio della seconda lettura.
+  const metaPromise = annunciPromise.then((annunci) => caricaMetaPerVino(
+    client, annunci.map((a) => a.wineSlug ?? a.id),
+  ));
+  const [annunci, esitoRegioni, metaPerVino] = await Promise.all([
+    annunciPromise, regioniPromise, metaPromise,
+  ]);
 
   return (
     <WineMetaProvider metaPerVino={metaPerVino}>

@@ -79,6 +79,24 @@ file `.env` versionato.
 
 ### Origine dei redirect della callback Auth
 
+Dal 14 settembre 2026 il dominio principale della beta è
+`https://vineawineclub.com`. Dopo un cambio del dominio principale Netlify
+serve una nuova build: una funzione già distribuita può conservare il vecchio
+`URL`, anche quando il dominio nuovo mostra correttamente la homepage.
+Verificare `/auth/callback?next=%2Faccount` e il suo `Location` dopo il deploy.
+`next.config.ts` reindirizza solo il vecchio host pubblico
+`timely-lokum-43a12e.netlify.app` al dominio acquistato, conservando percorso
+e parametri. Nessun redirect generale degli host di anteprima.
+
+Supabase Auth è stato aggiornato sul progetto `pijnmcllmfgjmgsvtcej`:
+Site URL `https://vineawineclub.com`; aggiunti i Redirect URLs
+`https://vineawineclub.com/auth/callback` e
+`https://vineawineclub.com/auth/callback?**` per i parametri `superficie`/`next`.
+Le voci preesistenti restano conservate. Verifica con token deliberatamente
+non valido: il redirect mantiene dominio, callback e destinazione Account;
+nessun account creato e nessuna email inviata. Questa prova non sostituisce
+un accesso Google completo con sessione reale.
+
 `frontend-next/src/app/auth/callback/route.ts` costruiva ogni `Location` da
 `request.nextUrl.origin`, cioè da un dato che arriva **con la richiesta**. I
 cookie di sessione scritti da `exchangeCodeForSession` sono legati

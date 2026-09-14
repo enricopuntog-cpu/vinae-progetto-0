@@ -113,6 +113,7 @@ export function VineaLayout({ children }: { children: ReactNode }) {
                 <Link
                   key={n.to}
                   href={n.to}
+                  prefetch={n.to === "/esplora" || n.to === "/community" ? null : undefined}
                   aria-current={active ? "page" : undefined}
                   data-testid={`nav-link-${n.label.toLowerCase().replace(/\s+/g, "-")}`}
                   className={`relative rounded-full px-3 py-1.5 text-sm font-medium transition ${
@@ -239,6 +240,7 @@ export function VineaLayout({ children }: { children: ReactNode }) {
               <li key={n.to} className="flex">
                 <Link
                   href={n.to}
+                  prefetch={n.to === "/esplora" || n.to === "/community" ? null : undefined}
                   aria-current={active ? "page" : undefined}
                   aria-label={n.label}
                   data-testid={`mobile-nav-${n.label.toLowerCase()}`}
