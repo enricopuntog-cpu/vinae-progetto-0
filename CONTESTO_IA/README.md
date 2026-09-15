@@ -58,6 +58,11 @@ va riscritto come se la decisione precedente non fosse mai esistita.
 - La beta pubblica `frontend-next` è separata e non è il cutover.
 - Fase 11: estensioni AI ammesse per eccezione; implementazione non aperta finché
   non sono soddisfatti i prerequisiti della specifica.
+- Vetrina a successo e aliquota per classe di venditore: ammesse per eccezione e
+  per nome il 14 settembre 2026, **progettate e non implementate**. I documenti
+  sono `docs/VETRINA_A_SUCCESSO_SPEC.md` e
+  `docs/ALIQUOTA_PER_CLASSE_VENDITORE_SPEC.md`; l'elenco completo delle
+  eccezioni è in `docs/ROADMAP_V1.md`.
 - Fase 12: Club/Community; checkpoint 12a/12b/12c mersi e in produzione.
 - `public.clubs` contiene `circolo-vinea` dal 19 agosto 2026; il seed dei sette
   club non è stato eseguito.
