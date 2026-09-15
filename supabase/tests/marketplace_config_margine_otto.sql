@@ -32,8 +32,19 @@
 --   riga chiusa. Da solo non distinguerebbe i due mondi: a distinguerli è [04],
 --   che legge `valida_fino`.
 --
---   SUL PROGETTO REALE NON È ANCORA GIRATA. Può girarci: questa griglia NON
---   SCRIVE — nessuna fixture, nessun utente, nessun ordine, solo letture e
+--   TERZA CORSA, SU SUPABASE VERO. L'integrazione GitHub ha creato per la
+--   PR #117 un branch di anteprima (`economia/marketplace-margine-8`,
+--   project_ref oaavtbrivfzfwldipyok, nato da `pijnmcllmfgjmgsvtcej`) e vi ha
+--   applicato da sola questa migrazione: il suo ledger ha 52 voci e l'ultima è
+--   `20260915120000`. I sedici casi rieseguiti lì: 16 PASSA / 0 FALLISCE.
+--   ADATTAMENTO DI TRASPORTO, dichiarato per onestà: eseguiti via `execute_sql`,
+--   che non è psql, quindi niente `\set`, niente tabella temporanea e niente
+--   `begin`/`rollback` — i sedici casi sono stati uniti in una sola `select`
+--   che restituisce le stesse colonne. LE ESPRESSIONI SONO QUELLE DI QUESTO
+--   FILE, lettera per lettera.
+--
+--   SUL PROGETTO DI PRODUZIONE NON È ANCORA GIRATA. Può girarci: questa griglia
+--   NON SCRIVE — nessuna fixture, nessun utente, nessun ordine, solo letture e
 --   chiamate a funzioni `immutable`/`stable`. Il `begin`/`rollback` serve
 --   soltanto alla tabella temporanea degli esiti.
 --

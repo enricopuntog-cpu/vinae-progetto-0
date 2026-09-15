@@ -3077,13 +3077,33 @@ PostgreSQL 17.6 in un contenitore isolato costruito dal bootstrap
 `9c_bootstrap_postgres_locale.sql` più le 51 migrazioni di `origin/main`
 applicate in ordine — non su un database stub, e non sul progetto reale.
 
-| Corsa | Esito |
-| --- | --- |
-| prima della migrazione | 5 PASSA / 11 FALLISCE |
-| dopo la migrazione | 16 PASSA / 0 FALLISCE |
+| Corsa | Dove | Esito |
+| --- | --- | --- |
+| prima della migrazione | contenitore isolato | 5 PASSA / 11 FALLISCE |
+| dopo la migrazione | contenitore isolato | 16 PASSA / 0 FALLISCE |
+| dopo la migrazione | branch di anteprima Supabase | 16 PASSA / 0 FALLISCE |
 
 La corsa di controllo serve a escludere una griglia verde in entrambi i casi,
 che non misurerebbe nulla. Il contenitore è stato rimosso a fine corsa.
+
+### `Supabase Preview` NON è `skipped` su una PR con migrazioni
+
+Correzione additiva a quanto registrato stamattina. La riga «sulle teste delle
+rispettive PR lo stesso check è `skipped`» era vera per le PR **senza** file
+sotto `supabase/migrations/`, ed era l'unico caso che si fosse potuto osservare.
+Sulla PR #117, che una migrazione ce l'ha, il check `Supabase Preview` **parte e
+passa**: l'integrazione GitHub crea un branch di anteprima
+(`economia/marketplace-margine-8`, project_ref `oaavtbrivfzfwldipyok`, figlio di
+`pijnmcllmfgjmgsvtcej`, `with_data` falso) e vi applica la migrazione da sola.
+Il ledger dell'anteprima ha **52 voci**, l'ultima `20260915120000`.
+
+Cambia che cosa si sa prima del merge: la migrazione è già stata applicata una
+volta dal percorso reale, non solo in un contenitore, e i sedici casi della
+griglia rieseguiti lì danno 16 PASSA / 0 FALLISCE — con l'adattamento di
+trasporto dichiarato nell'intestazione della griglia. Non sostituisce la
+verifica post-merge sul progetto di produzione: un'anteprima nasce senza dati e
+non è la produzione. Toglie dal merge la domanda «si applica?», non la domanda
+«che cosa ha scritto».
 
 ### Che cosa NON è stato fatto
 
