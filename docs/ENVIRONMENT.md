@@ -69,7 +69,7 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `AI_MAX_OUTPUT_TOKENS` | Edge Function | Tetto di token in uscita per chiamata, default `800`. |
 | `AI_TIMEOUT_SECONDS` | Edge Function | Timeout applicativo verso il fornitore, default `30`, tetto `120`. |
 | `AUTH_REDIRECT_ORIGIN` | solo server | Origine dei redirect della callback Auth. Override esplicito per gli ambienti che non sono Netlify; su Netlify si lascia vuota. Non è `NEXT_PUBLIC_*`: il dato serve al solo server. |
-| `URL` | solo server | **Riservata Netlify, non si imposta a mano.** Dominio pubblico stabile del sito; è l'origine dei redirect Auth in produzione ed è già la base canonica di `metadataBase`. |
+| `URL` | solo server | **Riservata Netlify, non si imposta a mano.** Dominio pubblico stabile del sito, dal 14 settembre 2026 `https://vineawineclub.com`; è l'origine dei redirect Auth in produzione ed è già la base canonica di `metadataBase`. Dopo un cambio del dominio principale serve una build nuova: una funzione già distribuita può conservare il valore precedente. |
 | `DEPLOY_PRIME_URL` | solo server | **Riservata Netlify, non si imposta a mano.** Dominio della Deploy Preview o del branch deploy corrente. |
 | `CONTEXT` | solo server | **Riservata Netlify, non si imposta a mano.** `production`, `deploy-preview`, `branch-deploy` o `dev`; sceglie fra le due precedenti. |
 
@@ -149,6 +149,11 @@ corretta, perché il dominio pubblico è un valore plausibile.
 scelta dal server e deve appartenere a `PAYMENT_REDIRECT_ALLOWED_ORIGINS`.
 
 ### Redirect URLs del progetto Supabase — stato misurato e proposta
+
+> **Lo stato corrente è più in basso.** Le due tabelle di questa sezione sono
+> misure del 17 e del 18 agosto 2026, quando il dominio pubblico era l'host
+> assegnato da Netlify. Per la configurazione in vigore vedi
+> «Stato misurato il 15 settembre 2026».
 
 Il modulo qui sopra decide dove il **nostro server** risponde. Chi decide dove
 Supabase **rimanda** è un'altra cosa, e vive nella dashboard del progetto
@@ -256,6 +261,79 @@ privata
 nell'ambiente delle Edge Function ed è il gate autoritativo: rendere visibile
 la UI non abilita il provider, non aggira autenticazione, stato utente o rate
 limit e non rende pubblica alcuna chiave.
+
+### Stato misurato il 15 settembre 2026 — dominio proprio `vineawineclub.com`
+
+La beta ha un dominio di proprietà, `https://vineawineclub.com`, e la
+configurazione Auth è stata spostata su di esso. Le due tabelle precedenti
+restano vere **alle loro date** e non vanno lette come stato corrente.
+
+Rimisurato con la stessa sonda di sola lettura — `GET /auth/v1/verify` con un
+token deliberatamente non valido, che non crea utenti, non scrive e non invia
+email — sul progetto `pijnmcllmfgjmgsvtcej`:
+
+| `redirect_to` chiesto | risolto da Supabase |
+| --- | --- |
+| `https://vineawineclub.com/auth/callback` | sé stesso — ammesso |
+| `https://vineawineclub.com/auth/callback?superficie=accedi` | sé stesso, query conservata — ammesso |
+| `https://vineawineclub.com/qualsiasi-percorso` | sé stesso — ammesso |
+| `https://vineawineclub.com/a/b/c/d` | sé stesso — ammesso |
+| `https://vineawineclub.com` senza percorso | `https://vineawineclub.com/` |
+| `https://timely-lokum-43a12e.netlify.app/auth/callback` | sé stesso — ancora ammesso |
+| `https://timely-lokum-43a12e.netlify.app/qualsiasi` | sé stesso — ancora ammesso |
+| `https://timely-lokum-43a12e.netlify.app` senza percorso | `https://vineawineclub.com/` |
+| `https://www.vineawineclub.com/auth/callback` | `https://vineawineclub.com/` |
+| `https://sub.vineawineclub.com/auth/callback` | `https://vineawineclub.com/` |
+| `http://vineawineclub.com/auth/callback` (schema `http`) | `https://vineawineclub.com/` |
+| `https://vineawineclub.com.evil.example/qualsiasi` | `https://vineawineclub.com/` |
+| `https://deploy-preview-99--timely-lokum-43a12e.netlify.app/auth/callback` | `https://vineawineclub.com/` |
+| `https://evil.example.com` | `https://vineawineclub.com/` |
+| `http://localhost:3000/a/b` | sé stesso (wildcard `/**`, invariato) |
+| `http://localhost:9999/sonda` | `https://vineawineclub.com/` |
+| `http://127.0.0.1:9999/sonda` | sé stesso |
+| `http://[::1]:3000/sonda` | sé stesso |
+
+Quello che si legge, distinguendo il misurato dal supposto:
+
+- **il Site URL è `https://vineawineclub.com`**, ed è il ripiego di ogni valore
+  non riconosciuto. Non è più né `localhost:3000` né l'host Netlify;
+- il comportamento effettivo del dominio proprio è quello di una voce
+  `https://vineawineclub.com/**`. Questa sessione ha misurato il
+  **comportamento**, non ha letto l'elenco della dashboard: sono due cose
+  diverse e la seconda non è accessibile da qui;
+- l'host Netlify **non è stato rimosso** dall'elenco: `…netlify.app/auth/callback`
+  e `…netlify.app/qualsiasi` sono ancora destinazioni valide. Non è un difetto —
+  quell'host oggi risponde `308` verso il dominio proprio conservando il
+  percorso — ma è superficie che resta aperta e va tolta deliberatamente, non
+  per inerzia;
+- `www`, un sottodominio qualunque, lo schema `http` e un suffisso ostile
+  **non** passano: il confronto è per URL intero e non per prefisso;
+- le **Deploy Preview restano fuori**, come deciso il 18 agosto 2026.
+
+**Una riga della tabella del 18 agosto 2026 va corretta.** Quella misura
+concludeva che «il jolly `/**` copre anche l'origine nuda, senza barra finale».
+Non era misurabile allora: l'origine nuda dell'host Netlify coincideva con il
+Site URL di quel momento, quindi «ammessa» e «ricaduta sul ripiego» producevano
+lo stesso `Location` e la sonda non poteva distinguerle. Oggi che il Site URL è
+un altro dominio la distinzione si vede: `https://timely-lokum-43a12e.netlify.app`
+**senza percorso** ricade sul ripiego, mentre lo stesso host con `/` o con un
+percorso qualunque è ammesso. **Il jolly `/**` non copre l'origine priva di
+percorso**; quando sembra coprirla è perché quell'origine è il Site URL.
+
+Un fatto laterale, misurato e non configurato da noi: gli indirizzi di loopback
+`127.0.0.1` e `[::1]` sono accettati **su qualunque porta**, mentre il nome
+`localhost` passa solo sulla porta `3000`, che è la voce in elenco. È il
+comportamento di GoTrue verso il loopback, e vale la pena saperlo prima di
+interpretarlo come una voce di configurazione che qualcuno avrebbe aggiunto.
+
+**Le email di Auth passano da un SMTP proprio.** Dal 14 settembre 2026 il
+progetto Supabase usa il custom SMTP di Resend con mittente
+`Vinea Wine Club <noreply@vineawineclub.com>`. Non è una variabile di questo
+repository e non va aggiunta a `frontend-next`: vive nella configurazione del
+progetto Supabase. `RESEND_API_KEY` in `frontend/docs/BACKEND_CONTRACTS.md`
+riguarda le email transazionali del backend legacy, che restano non
+configurate. Il mailer di prova incorporato, con il suo
+`over_email_send_rate_limit`, non è più la strada in uso.
 
 ### Matrice della beta Netlify
 

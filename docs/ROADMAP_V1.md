@@ -645,11 +645,17 @@ dopo parità funzionale verificata e approvazione esplicita separata.
 
 ## Cosa NON è ancora deciso
 
-- Hosting di produzione per il frontend Next.js (Vercel o altro).
+- Hosting di produzione per il frontend Next.js (Vercel o altro). La beta gira
+  su Netlify con il dominio proprio `vineawineclub.com`; è la beta, non una
+  scelta presa per il post-cutover.
 - Piano Supabase (tier, regione dati, residenza dati per requisiti
   legali su vendita di alcolici).
-- Provider email transazionali definitivo (Resend è l'ipotesi in
-  `BACKEND_CONTRACTS.md`, non confermato).
+- Provider email transazionali del backend legacy. **Le email di Auth non sono
+  più in questo elenco**: dal 14 settembre 2026 il progetto Supabase usa il
+  custom SMTP di Resend sul dominio proprio `vineawineclub.com`. Resta non
+  configurato e non deciso il provider per le email transazionali di ordini,
+  dispute e recensioni, dove `RESEND_API_KEY` in `BACKEND_CONTRACTS.md` è
+  ancora un segnaposto.
 - Strategia concreta di feature flag per il rollout progressivo per
   dominio.
 - Verifica legale su vendita di alcolici, età, privacy, marketplace —
