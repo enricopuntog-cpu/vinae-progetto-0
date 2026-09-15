@@ -3121,3 +3121,125 @@ e la quota fissa della carta SEE». Quel file è distribuito e quindi **congelat
 non si corregge in luogo. La nuova migrazione crea invece il commento a livello
 di database — che prima non esisteva su nessuna colonna di `marketplace_config` —
 con la descrizione giusta, ed è quello che si legge interrogando lo schema.
+
+## Due funzionalità economiche ammesse per nome, e progettate — 15 settembre 2026
+
+### La migrazione dell'8% è in produzione: verificato dopo il merge
+
+La PR #117 è stata mersa su `main` (`0a226aa`) e l'integrazione Supabase ha
+applicato la migrazione. Riletto in sola lettura sul progetto
+`pijnmcllmfgjmgsvtcej` il 15 settembre 2026:
+
+| Oggetto | Misura |
+| --- | --- |
+| ledger delle migrazioni | **52 voci**, ultima `20260915120000 marketplace_config_margine_otto_percento` |
+| `public.marketplace_config` id 1 | `500 / 150 / 25 / 14`, **chiusa** il 2026-09-15 alle 14:58:28.329054+00 |
+| `public.marketplace_config` id 2 | **`800 / 209 / 25 / 14`**, `valida_da` 2026-09-15 14:58:28.329054+00, `valida_fino` nulla |
+
+La chiusura e l'apertura portano lo **stesso istante**: l'`update` e l'`insert`
+erano nella stessa transazione, come l'indice `marketplace_config_una_corrente`
+imponeva. Resta aperta la rilettura della griglia dei sedici casi sul progetto
+reale, che è cosa diversa dall'aver letto la riga.
+
+### L'ammissione
+
+Enrico ha ammesso **per eccezione esplicita e per nome**, il 14 settembre 2026,
+due funzionalità nuove: la **vetrina a successo** e l'**aliquota differenziata
+per classe di venditore**. È la stessa forma di ammissione usata per le quattro
+estensioni della Fase 11 e per la 12b+12c. «Nessuna funzionalità nuova durante
+la migrazione» **non è decaduta**.
+
+L'ammissione riguarda la **progettazione**. In questa sessione non è stata
+scritta alcuna migrazione, non è stato applicato alcun SQL, e nulla è stato
+toccato sotto `frontend/`, `backend/`, `frontend-next/` e
+`supabase/migrations/`. Il risultato è documentazione:
+`docs/VETRINA_A_SUCCESSO_SPEC.md` e
+`docs/ALIQUOTA_PER_CLASSE_VENDITORE_SPEC.md`.
+
+### Vetrina a successo — dove cambia il denaro
+
+Il 4% del prezzo del venditore, trattenuto dal bonifico **solo se la bottiglia
+si vende**. Il compratore paga esattamente lo stesso.
+
+La conclusione tecnica sta in una riga: l'unico punto del progetto che decide
+quanto riceve il venditore è l'`insert into public.payouts` dentro
+`public.payout_prepara`
+(`20260803150000_phase_7b_stripe_connect_marketplace.sql:1354`), dove oggi c'è
+`v_order.prezzo_cents`. La trattenuta è una **sottrazione lì**, e nient'altro:
+l'architettura «separate charges and transfers» già scelta fa sì che ciò che non
+viene trasferito resti alla piattaforma senza alcun movimento aggiuntivo.
+
+Che il compratore paghi lo stesso non è affidato all'attenzione: la vetrina non
+aggiunge alcun addendo alle due colonne generate
+(`orders.totale_cents = prezzo + commissione`,
+`orders.addebito_totale_cents = prezzo + commissione + imballaggio`), e
+`payments.amount_cents` nasce dalla seconda. L'importo addebitato non può
+cambiare nemmeno per errore.
+
+Che l'importo trattenuto non sia manipolabile dal client poggia su cinque strati,
+quattro dei quali già esistono: `orders` non ha alcun `GRANT` di scrittura verso
+i ruoli client; `order_checkout_reserve` non riceve importi né aliquote;
+`listings.vetrina_attiva` resterebbe fuori dal `grant update` e avrebbe una sola
+porta `SECURITY DEFINER`; `payout_prepara` è riservata a `service_role` e non ha
+un parametro in cui scrivere un importo; e un `check` di tabella
+(`vetrina_trattenuta_cents < prezzo_cents`) vincolerebbe anche uno scrittore
+privilegiato.
+
+Due cose che il documento **non** decide e che restano di Enrico: che cosa il
+venditore riceva in cambio del 4% — «vetrina» nomina un corrispettivo, non un
+servizio — e se l'aliquota congelata sull'ordine debba essere quella
+dell'attivazione o quella della vendita.
+
+### Aliquota per classe — raccomandata la riga per classe
+
+L'ostacolo misurato: `marketplace_config_una_corrente` è un indice unico su
+un'espressione **costante**, quindi ammette al più una riga aperta in assoluto.
+Due strade confrontate: una riga di configurazione per classe (A) oppure colonne
+aggiuntive sulla riga corrente (B).
+
+**Raccomandata la A.** Tre ragioni: i modi in cui A si rompe sono rumorosi e
+quelli di B silenziosi — sotto A una classe senza riga aperta fa fallire il
+checkout *prima* che qualcuno paghi, sotto B una colonna letta male produce un
+addebito sbagliato che nessuno nota; una terza classe costa una riga sotto A e
+una migrazione di schema sotto B; e la forma è **già in produzione** nel
+progetto, perché `packaging_options_corrente_idx` è esattamente
+`unique (chiave) where valida_fino is null`.
+
+Il punto debole di A è reale e va mitigato: i parametri condivisi
+(`riferimento_*`, `auto_rilascio_giorni`) verrebbero duplicati per classe e
+potrebbero divergere. Mitigazione raccomandata: regola operativa scritta nel
+commento della tabella più un caso di griglia, **non** un vincolo di database
+che vieterebbe ciò che il prodotto un giorno potrebbe volere.
+
+Due correzioni di modello emerse leggendo il codice:
+
+- **`public.professional_qualifications` non è la sorgente della classe.**
+  Contiene qualifiche *della persona* — un diploma da sommelier, un albo — non
+  la natura commerciale di chi vende. Un appassionato con un diploma non è un
+  operatore commerciale e pagherebbe il 16% per errore di modello. La sorgente
+  giusta è un ruolo in `user_roles` scritto solo da una porta riservata e
+  protetto da un trigger, sulla forma del verdetto delle qualifiche
+  (`20260827160000`) e di `seller_enabled_sync` (7b).
+- **Il preventivo pubblico si rompe, e sotto A si rompe rumorosamente.**
+  `frontend-next/src/services/phase7/marketplace-config-service.ts:29` legge
+  `public_marketplace_config` con `.maybeSingle()`, che con due righe restituisce
+  un errore. La migrazione e la modifica del servizio devono essere lo stesso
+  cambiamento. Sotto B lo stesso consumatore continuerebbe a funzionare
+  mostrando l'aliquota privata a chi compra da un professionale.
+
+### Una dipendenza esterna per ciascuna, registrata e non risolta
+
+- **Vetrina — fiscale.** La trattenuta è un corrispettivo per un servizio reso a
+  un venditore quasi sempre persona fisica: trattamento IVA, obbligo e forma del
+  documento, momento impositivo, esposizione ai fini delle comunicazioni sui
+  redditi da piattaforma. **Da chiarire con il commercialista prima
+  dell'attivazione.**
+- **Aliquota professionale — Digital Services Act.** Ammettere venditori
+  professionali attiva gli obblighi degli articoli 30-32 del Regolamento (UE)
+  2022/2065, che oggi non si applicano perché la piattaforma mette in contatto
+  solo privati. Nota da non perdere: i booleani che arrivano da Stripe Connect
+  (`charges_enabled`, `payouts_enabled`, `details_submitted`) **non** soddisfano
+  l'articolo 30, perché quella raccolta serve a Stripe e non dice nulla su
+  registro di iscrizione o autocertificazione.
+
+`PAYMENTS_ENABLED` resta `false` e non è stato toccato.

@@ -63,6 +63,26 @@ Dettagli architetturali completi nelle ADR:
   parità comportamentale con l'app attuale, non un miglioramento del
   prodotto.
 
+### Funzionalità ammesse per eccezione e per nome
+
+La regola sopra **non è decaduta**: continua a valere per tutto ciò che una
+sessione non ha chiesto per nome. Le eccezioni sono poche, esplicite, datate, e
+riguardano l'**ammissione a progettare** — l'implementazione di ciascuna resta
+una decisione separata.
+
+| Funzionalità | Ammessa il | Documento |
+| --- | --- | --- |
+| Quattro estensioni AI della Fase 11 | 12 agosto 2026 | [`PHASE_11_AI_EXTENSIONS_SPEC.md`](PHASE_11_AI_EXTENSIONS_SPEC.md) |
+| Contenuti e moderazione del Club (12b + 12c) | 17 agosto 2026 | [`superpowers/specs/2026-08-17-phase-12bc-club-content-design.md`](superpowers/specs/2026-08-17-phase-12bc-club-content-design.md) |
+| **Vetrina a successo** | 14 settembre 2026 | [`VETRINA_A_SUCCESSO_SPEC.md`](VETRINA_A_SUCCESSO_SPEC.md) |
+| **Aliquota differenziata per classe di venditore** | 14 settembre 2026 | [`ALIQUOTA_PER_CLASSE_VENDITORE_SPEC.md`](ALIQUOTA_PER_CLASSE_VENDITORE_SPEC.md) |
+
+Le ultime due sono progettate e **non implementate**: nessuna migrazione,
+nessun SQL applicato. L'SQL che contengono è mostrato per essere discusso. La
+seconda ha inoltre un prerequisito esterno — gli obblighi di tracciabilità degli
+operatori commerciali previsti dagli articoli 30-32 del Digital Services Act —
+che precede l'implementazione e che nessuna quantità di codice chiude.
+
 ## Sequenza delle fasi
 
 Il dettaglio di ogni ticket è in
