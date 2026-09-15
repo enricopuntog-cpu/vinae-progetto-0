@@ -2908,3 +2908,24 @@ prova «applicata» né il suo contrario.
 sul progetto di produzione da una sessione che abbia il connettore, e scrivere
 qui il conteggio con l'ultima riga. Finché non è fatto, l'accensione dei
 pagamenti non ha il suo prerequisito soddisfatto.
+
+### Verifica post-merge della PR #114 — e il caso che la #51 aveva previsto
+
+La PR #114 è mersa in squash come `aca86ac` il 15 settembre 2026 alle 08:42:24
+UTC, con **zero file** sotto `supabase/migrations/`. I quattro controlli
+GitHub sono `success` sul commit di merge.
+
+Sul merge è però partita una corsa **`Supabase Preview`**: `in_progress` alle
+08:42:27, conclusa `success` alle 08:43:19, nove secondi di esecuzione dopo
+l'attesa della branch action. È esattamente la situazione che la PR #51 del 18
+agosto 2026 aveva misurato e scritto: **una PR senza migrazioni proprie può
+essere quella che distribuisce l'arretrato di un'altra**, e il merge che lo
+smaltisce non è quello che lo possiede.
+
+Quindi lo stato del ledger **potrebbe essere cambiato proprio adesso**, e questa
+sessione non può dire in che modo: non ha lo strumento per leggerlo, prima o
+dopo. Non si deduce nulla dalla durata della corsa né dal suo esito — un
+`success` dice che l'integrazione è girata, non quante righe ha scritto. Chi
+rilegge il ledger secondo il passo aperto qui sopra confronti il risultato con
+i **51** file di `origin/main` e registri la differenza, sapendo che il momento
+di riferimento è questo merge e non il precedente.
