@@ -429,6 +429,14 @@ prezzi alti. I **tre parametri** sono congelati sull'ordine insieme al risultato
 senza di essi un ordine vecchio resta addebitabile ma non più spiegabile. La fee
 davvero trattenuta è misurata a parte e non entra in nessuna decisione.
 
+I parametri iniziali sono storia: **dal 15 settembre 2026 la riga corrente vale
+`800 / 209 / 25`**, cioè margine obiettivo 8% e fee di riferimento al costo reale
+ponderato del pagamento, commissione Stripe Connect inclusa. I 150 bps erano la
+tariffa di un singolo tipo di carta e non contenevano lo 0,25% di Connect, così
+il margine dichiarato non si realizzava mai — 4,38% sul mix atteso invece del 5%.
+La formula non è stata toccata: è cambiata una riga di `marketplace_config`, che
+è versionata proprio per questo.
+
 Il checkout passa dalla Checkout Session ospitata a un PaymentIntent con un solo
 Payment Element. **Non porta `transfer_data` né `on_behalf_of`**: è quell'assenza
 a far restare i fondi alla piattaforma, e il denaro raggiunge il venditore solo
@@ -461,8 +469,10 @@ percentuale piatta: `orders` porta `margine_obiettivo_bps`,
 `commissione_cents`, e `marketplace_config` è versionata.
 
 Ciò che resta vero è più stretto, e va detto così: `orders`, `payments`,
-`payouts` e `seller_payout_accounts` sono a **zero righe**, `marketplace_config`
-ha la sola riga di configurazione iniziale, nessun percorso dell'interfaccia
+`payouts` e `seller_payout_accounts` sono a **zero righe** — rimisurati in sola
+lettura sul progetto reale il 15 settembre 2026 —, `marketplace_config` aveva la
+sola riga di configurazione iniziale fino a quella data e ne ha due dal momento
+in cui la migrazione `20260915120000` è applicata, nessun percorso dell'interfaccia
 raggiunge onboarding o checkout, mentre i percorsi dell'ordine coprono conferma e
 contestazione; la feature flag resta spenta. Il checkpoint 7g implementa la
 schedulazione dell'auto-rilascio con uno scheduler esterno GitHub Actions, come

@@ -424,7 +424,19 @@ Modello economico, deciso fuori dal codice e qui soltanto reso esecutivo:
   0,25 €. L'arrotondamento è **sempre per eccesso**, perché per difetto il
   margine scenderebbe sotto l'obiettivo di un centesimo. La percentuale
   effettiva è un risultato e non un parametro: 9,20% su 10 €, 6,86% su 100 €,
-  6,60% su 5000 €, con asintoto a 6,5990%;
+  6,60% su 5000 €, con asintoto a 6,5990%.
+
+  **Quelli iniziali non sono più quelli in vigore.** Dal 15 settembre 2026 la
+  riga corrente è `800 / 209 / 25`: margine obiettivo 8% per decisione
+  commerciale del 14 settembre 2026, e fee di riferimento portata dal listino di
+  un singolo tipo di carta al costo reale ponderato del pagamento — mix atteso
+  75% carte SEE standard, 20% SEE premium, 5% internazionali — con lo 0,25% di
+  Stripe Connect che i 150 bps non contenevano. Con i vecchi parametri il
+  margine dichiarato non si realizzava mai: 4,75% con sole carte standard, 3,35%
+  con carta premium, 4,38% sul mix. La formula non cambia; cambia una riga di
+  `marketplace_config`, che è esattamente la ragione per cui è versionata.
+  Migrazione `20260915120000_marketplace_config_margine_otto_percento.sql`,
+  griglia `supabase/tests/marketplace_config_margine_otto.sql`;
 - i **tre parametri** sono congelati sull'ordine alla creazione, non solo il
   risultato: senza di essi un ordine vecchio resta addebitabile ma non più
   spiegabile. Cambiare `marketplace_config` dopo non tocca gli ordini già nati;
