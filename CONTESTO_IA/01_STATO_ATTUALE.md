@@ -2929,3 +2929,78 @@ dopo. Non si deduce nulla dalla durata della corsa né dal suo esito — un
 rilegge il ledger secondo il passo aperto qui sopra confronti il risultato con
 i **51** file di `origin/main` e registri la differenza, sapendo che il momento
 di riferimento è questo merge e non il precedente.
+
+## Il sito pubblicato non veniva da `origin/main` — recupero del 15 settembre 2026
+
+Il 15 settembre 2026, dopo i merge delle PR #114 e #115, la produzione
+`https://vineawineclub.com` serviva ancora un artefatto che il repository
+pubblico non conteneva. Questa sezione registra come è stato misurato lo scarto,
+che cosa copriva il lavoro locale e che cosa il merge su `main` fa scattare
+davvero.
+
+### Lo scarto misurato, non dedotto
+
+Il ramo locale `codex/desktop-current-2026-09-14`, fermo a `9d8f653`, portava
+nove commit non presenti su `origin/main`: quattro con codice applicativo
+(`2c21fb1` centro legale, `cd24764` prestazioni e immagini, `99dec9a` logo,
+`1575bb2` dominio e transizioni di rotta), uno misto (`e053f0b`), quattro di
+sola scrittura su `CHANGES.log`. In tutto **32 file** diversi da `origin/main`,
+di cui 30 di codice, configurazione o asset e due di sola documentazione.
+
+L'artefatto pubblicato è stato confrontato con una build locale del ramo di
+recupero, costruito da `origin/main` con i soli commit di codice:
+
+- **quindici pagine confrontate riga per riga sul testo reso**, undici
+  preregistrate staticamente (`/legale`, `/legale/documenti-qualifica`,
+  `/accedi`, `/registrati`, `/vendi`, `/segnalazioni`, `/cantina`, `/acquisti`,
+  `/notifiche`, `/account`, `/completa-profilo`) e quattro rese dal server
+  (`/`, `/esplora`, `/community`, `/home`), queste ultime anche con cache
+  aggirata: **zero righe di differenza** su tutte e quindici;
+- `/images/vinea-logo-scelto.png`: SHA-256 `6023acc7…98b3`, 637631 byte,
+  **identico** al blob del ramo; su `origin/main` il file non esisteva;
+- il redirect del vecchio host riprodotto in locale con `Host:
+  timely-lokum-43a12e.netlify.app` dà `308 https://vineawineclub.com/legale?x=1`,
+  **la stessa risposta** dell'host pubblico;
+- l'unico header applicativo definito in `next.config.ts`, `X-Robots-Tag:
+  noindex, nofollow`, coincide fra locale e produzione. `Strict-Transport-Security`
+  e `X-Content-Type-Options` arrivano da Netlify e non dal repository.
+
+**Limite dichiarato:** dall'esterno non si elenca l'albero dei file di un deploy
+Netlify. Il confronto prova che su tutte le superfici interrogate l'artefatto e
+il ramo di recupero producono lo stesso risultato; non prova che il deploy non
+contenga file mai serviti da quelle rotte.
+
+### Che cosa il ramo locale copriva, e che cosa no
+
+Copriva tutto il codice osservabile in produzione: l'albero del ramo di recupero
+è identico a quello di `codex/desktop-current-2026-09-14` su `frontend-next/`,
+`.github/` e `.gitignore`. Non copriva `docs/LEGAL_DATA_MAP.md`, che vive
+soltanto su `codex/centro-legale-privacy-cookie` (`657068f`) e non è codice di
+produzione: `CHANGES.log` lo classifica come dossier preparatorio interno
+escluso dal repository pubblico, e come tale **non è stato portato in Git**.
+Fra i due rami legali l'unica differenza di codice è un commento di intestazione
+in `frontend-next/src/lib/legal/contenuti.ts`; la versione distribuita è quella
+del ramo desktop.
+
+### Il merge su `main` non ricostruisce la produzione Netlify
+
+Netlify è collegato al repository — su ogni PR pubblica lo stato
+`netlify/timely-lokum-43a12e/deploy-preview` più i check `Header rules`,
+`Redirect rules` e `Pages changed` — ma sui commit di `main` non pubblica nulla:
+zero commit status, zero check run dell'app `netlify`, zero deployment GitHub.
+E dopo i due merge del mattino la produzione serviva ancora la build del 14
+settembre alle 22:41:27 UTC. Perché non si ricostruisca è un dato della
+dashboard Netlify: **domanda aperta**, da chiudere prima di scegliere la
+finestra di merge.
+
+### Correzione additiva alla sezione precedente
+
+La sezione «Verifica post-merge della PR #114» qui sopra resta vera nei fatti
+che riporta, ma la sua lettura va completata. La corsa `Supabase Preview` sul
+merge di una PR senza migrazioni **non è un caso particolare**: l'app GitHub
+`supabase` pubblica quel check su **ogni** push a `main`. Verificato su
+`7ed085f`, `627e817`, `361b297`, `aca86ac` e `344ad45`, tutti merge senza file
+sotto `supabase/migrations/`; sulle teste delle rispettive PR lo stesso check è
+`skipped`. Resta vero che una PR senza SQL proprio può distribuire l'arretrato
+di un'altra, e resta vero che il ledger va riletto: cambia soltanto che la
+partenza della corsa non è di per sé un indizio di applicazione.

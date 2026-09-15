@@ -125,6 +125,19 @@ export default function Page() {
           non viene esaminata.
         </p>
       </Sezione>
+      <Sezione id="conservazione-diritti" titolo="Conservazione e diritti">
+        <p>
+          Ritirare una richiesta già inviata non equivale alla cancellazione dei suoi allegati.
+          La beta non applica ancora un termine automatico di cancellazione per questi documenti.
+          I criteri di conservazione, i destinatari e le richieste di accesso, rettifica o
+          cancellazione sono descritti nell&apos;informativa generale.
+        </p>
+        <p>
+          <Link href="/legale#privacy" className="text-bordeaux underline underline-offset-2">Leggi l&apos;informativa privacy</Link>
+          {" · "}
+          <Link href="/legale#contatti" className="text-bordeaux underline underline-offset-2">Titolare e contatti</Link>
+        </p>
+      </Sezione>
     </div>
   );
 }

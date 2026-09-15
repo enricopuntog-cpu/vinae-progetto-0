@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import dynamic from "next/dynamic";
+import { LinkSuIntento as Link } from "@/components/vinea/LinkSuIntento";
+import SommelierChat from "@/components/vinea/SommelierLauncher";
+import { VineaLogo } from "@/components/vinea/VineaLogo";
 import { usePathname } from "next/navigation";
 import {
   Home,
@@ -28,23 +29,7 @@ import {
 } from "@/lib/shell/navigazione-mobile";
 import { useVinea, type DemoRuolo } from "@/lib/vinea-store";
 
-// Fase 10c. Il pannello Sommelier era rimasto fuori dalla Fase 3 perché
-// dipendeva da `@/services/api-client`, cioè dal backend FastAPI; ora la sua
-// controparte è `AiService` sopra le Edge Function, e rientra.
-//
-// Si carica con `next/dynamic` come la vista 3D della cantina
-// (`frontend-next/src/app/cantina/page-client.tsx:5`), che è l'equivalente App
-// Router del `lazy` + `Suspense` di `frontend/`
-// (`frontend/src/components/vinea/Layout.tsx:19`, `:254-256`): il pannello è in
-// fondo a ogni pagina ma lo apre una minoranza dei visitatori, e non ha motivo
-// di stare nel bundle iniziale.
-//
-// `ssr: false` è lecito qui perché questo file è già un componente client, e
-// dice la verità sul componente: la conversazione ha un identificativo che vive
-// in `localStorage`, che sul server non esiste.
-const SommelierChat = dynamic(() => import("@/components/vinea/SommelierChat"), {
-  ssr: false,
-});
+// Il launcher carica il pannello Sommelier soltanto al primo click.
 
 // D6. Le voci della barra mobile stanno in `@/lib/shell/navigazione-mobile`,
 // che tiene anche lo stato attivo: sono le due cose della shell che si possono
@@ -98,9 +83,7 @@ export function VineaLayout({ children }: { children: ReactNode }) {
       >
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 md:py-4">
           <Link href="/" className="flex items-center gap-2.5" data-testid="brand-logo-link">
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-bordeaux text-crema font-serif text-lg">
-              V
-            </span>
+            <VineaLogo />
             <span className="flex flex-col leading-none">
               <span className="font-serif text-2xl font-semibold tracking-tight text-bordeaux">
                 Vinea
@@ -130,6 +113,7 @@ export function VineaLayout({ children }: { children: ReactNode }) {
                 <Link
                   key={n.to}
                   href={n.to}
+                  prefetch={n.to === "/esplora" || n.to === "/community" ? null : undefined}
                   aria-current={active ? "page" : undefined}
                   data-testid={`nav-link-${n.label.toLowerCase().replace(/\s+/g, "-")}`}
                   className={`relative rounded-full px-3 py-1.5 text-sm font-medium transition ${
@@ -231,9 +215,15 @@ export function VineaLayout({ children }: { children: ReactNode }) {
       </main>
 
       <footer className="mx-auto max-w-6xl px-4 pb-6 text-center text-xs text-muted-foreground">
-        <Link href="/legale" className="underline-offset-2 hover:text-bordeaux hover:underline">
-          Centro legale
-        </Link>
+          <Link href="/legale" className="underline-offset-2 hover:text-bordeaux hover:underline">
+            Centro legale
+          </Link>
+          <span aria-hidden="true" className="mx-2">·</span>
+          <Link href="/legale#privacy" className="underline-offset-2 hover:text-bordeaux hover:underline">Privacy</Link>
+          <span aria-hidden="true" className="mx-2">·</span>
+          <Link href="/legale#termini" className="underline-offset-2 hover:text-bordeaux hover:underline">Termini</Link>
+          <span aria-hidden="true" className="mx-2">·</span>
+          <Link href="/legale#cookie" className="underline-offset-2 hover:text-bordeaux hover:underline">Cookie</Link>
       </footer>
 
       <nav
@@ -250,6 +240,7 @@ export function VineaLayout({ children }: { children: ReactNode }) {
               <li key={n.to} className="flex">
                 <Link
                   href={n.to}
+                  prefetch={n.to === "/esplora" || n.to === "/community" ? null : undefined}
                   aria-current={active ? "page" : undefined}
                   aria-label={n.label}
                   data-testid={`mobile-nav-${n.label.toLowerCase()}`}

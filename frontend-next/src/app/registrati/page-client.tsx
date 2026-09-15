@@ -266,7 +266,7 @@ export default function RegistratiPageClient() {
             <Link href="/legale#termini" className="text-bordeaux underline-offset-2 hover:underline">
               Termini
             </Link>{" "}
-            e la{" "}
+            e dichiaro di aver letto l&apos;informativa{" "}
             <Link href="/legale#privacy" className="text-bordeaux underline-offset-2 hover:underline">
               Privacy
             </Link>{" "}
@@ -322,7 +322,7 @@ export default function RegistratiPageClient() {
             consensoMancante={
               terms
                 ? null
-                : "Accetta Termini e Privacy qui sopra per registrarti con Google."
+                : "Accetta i Termini e conferma di aver letto la Privacy qui sopra per registrarti con Google."
             }
           />
 

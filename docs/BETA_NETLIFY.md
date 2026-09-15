@@ -62,6 +62,44 @@ una credenziale di servizio, e non è stata inviata alcuna email per provarlo.
 Nessuna chiave Resend appartiene al repository o alle variabili di
 `frontend-next`: l'SMTP è configurato nel progetto Supabase, non nell'app.
 
+## Che cosa fa scattare un merge su `main` — misurato il 15 settembre 2026
+
+`netlify.toml` è versionato alla radice del repository: `base = "frontend-next"`,
+`command = "bun run build"`, `publish = ".next"`, `BUN_VERSION 1.3.14`,
+`NODE_VERSION 22`. Il sito Netlify **è collegato a questo repository**: su ogni
+PR l'app GitHub di Netlify pubblica lo stato `netlify/timely-lokum-43a12e/deploy-preview`
+e i check `Header rules`, `Redirect rules` e `Pages changed` — verificato su
+#112, #113, #114 e #115, comprese le PR di sola documentazione.
+
+Sui commit di `main` Netlify **non pubblica nulla**: zero commit status, zero
+check run dell'app `netlify`, zero deployment GitHub sul repository. Verificato
+su `361b297`, `aca86ac` e `344ad45`.
+
+La produzione non si è ricostruita sui due merge di stamattina. Misurato alle
+09:21 UTC del 15 settembre 2026, dopo i merge delle 08:42:24Z e delle 08:46Z:
+
+| misura | valore |
+| --- | --- |
+| `X-Nextjs-Date` su `https://vineawineclub.com/legale` | `Mon, 14 Sep 2026 22:41:27 GMT` |
+| `https://vineawineclub.com/images/vinea-logo-scelto.png` con cache aggirata | `200`, 637631 byte |
+| lo stesso file su `origin/main` prima di questa PR | assente |
+
+Il build servito è quindi anteriore ai due merge, e contiene codice che su
+`origin/main` non esisteva. **Perché** non si sia ricostruito — pubblicazione
+automatica disattivata, deploy bloccato su una versione pubblicata, o branch di
+produzione diverso da `main` — è un dato della dashboard Netlify e non è
+misurabile dall'esterno: resta una domanda aperta, e va risolta prima di
+scegliere la finestra di merge.
+
+L'integrazione Supabase, al contrario, **parte a ogni push su `main`**, anche
+quando il merge non porta alcun file sotto `supabase/migrations/`. L'app GitHub
+`supabase` ha pubblicato il check `Supabase Preview` su `7ed085f`, `627e817`,
+`361b297`, `aca86ac` e `344ad45`, con l'output iniziale `Waiting for branch
+action run to complete.`; sulle teste delle stesse PR lo stesso check risulta
+`skipped`. Il caso della #114 non è quindi un'eccezione: è il comportamento
+normale. Che cosa quella corsa abbia fatto al ledger di produzione non si deduce
+dal check — va letto il ledger.
+
 ## Stato remoto verificato il 16 agosto 2026 — storico
 
 > **Verbale datato.** Le righe qui sotto restano vere come record del 16 agosto

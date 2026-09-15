@@ -81,5 +81,13 @@ va riscritto come se la decisione precedente non fosse mai esistita.
   pagamenti; l'elenco esatto è in [`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md).
   Un merge non prova che una nuova migrazione sia stata applicata, e un merge
   senza migrazioni può averne distribuite di altrui: rileggere sempre il ledger.
+- Rilascio Netlify: il sito è collegato al repository e costruisce una Deploy
+  Preview per ogni PR, ma **un merge su `main` non ha ricostruito la produzione**
+  — misurato il 15 settembre 2026 sui merge `aca86ac` e `344ad45`. Il motivo è
+  un dato della dashboard Netlify e resta una domanda aperta. Fino al 15
+  settembre 2026 l'artefatto pubblicato conteneva codice assente da
+  `origin/main`; la PR di recupero lo riporta in Git.
+- L'integrazione `Supabase Preview` parte a **ogni** push su `main`, anche senza
+  file sotto `supabase/migrations/`; sulle teste delle PR risulta `skipped`.
 
 Per ogni fatto più volatile, rileggere `CHANGES.log` e misurare di nuovo.

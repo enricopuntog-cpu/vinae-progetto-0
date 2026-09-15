@@ -361,7 +361,7 @@ export default function CompletaProfiloPageClient() {
             <Link href="/legale#termini" className="text-bordeaux underline-offset-2 hover:underline">
               Termini
             </Link>{" "}
-            e la{" "}
+            e dichiaro di aver letto l&apos;informativa{" "}
             <Link href="/legale#privacy" className="text-bordeaux underline-offset-2 hover:underline">
               Privacy
             </Link>{" "}

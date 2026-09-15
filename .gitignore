@@ -118,3 +118,6 @@ test-results/
 memory/
 test_reports/
 test_result.md
+
+# Local Netlify folder
+.netlify

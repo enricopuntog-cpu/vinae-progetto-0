@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { percorsoRelativoSicuro } from "@/lib/auth/origine-redirect";
 import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
+import { cookie, privacy, termini, identitaLegale, statoLegale } from "@/lib/legal/contenuti";
 
 /**
  * Contratto D4: il gate 18+, il ritorno alla pagina richiesta e il Centro
@@ -191,17 +192,30 @@ describe("Centro legale", () => {
     expect(legale).not.toMatch(/useVinea|"use client"/);
   });
 
-  it("dichiara il rinvio invece di inventare il testo definitivo", () => {
-    expect(legale).toInclude("Il testo definitivo sarà pubblicato prima del lancio pubblico.");
+  it("integra privacy, termini e cookie preservando requisito di età e accessibilità", () => {
+    expect(legale).not.toInclude("Il testo definitivo sarà pubblicato prima del lancio pubblico.");
+    expect(legale).toInclude('id="cookie"');
+    expect(legale).toInclude('href="#cookie"');
+    expect(legale).toInclude("<Capitoli contenuti={privacy}");
+    expect(legale).toInclude("<Capitoli contenuti={termini}");
+    expect(legale).toInclude("<Capitoli contenuti={cookie}");
+    expect(privacy.length).toBeGreaterThan(0);
+    expect(termini.length).toBeGreaterThan(0);
+    expect(cookie.length).toBeGreaterThan(0);
     expect(legale).toInclude("Vinea è riservato ai maggiorenni.");
     expect(legale).toInclude("La data di nascita è dichiarata dall&apos;utente.");
     expect(legale).toInclude("In questa fase non sono richiesti");
   });
 
-  it("non promette clausole, basi giuridiche, conservazione o verifica dell'identità", () => {
-    expect(legale).not.toMatch(
-      /KYC|verifica dell.identit|documento d.identit|base giuridica|GDPR|art\.\s*\d|conservazione dei dati|foro competente|legge applicabile|responsabilit/i,
-    );
+  it("non presenta come definitiva una bozza senza titolare o termini operativi verificati", () => {
+    expect(statoLegale).toBe("bozza");
+    expect(Object.values(identitaLegale).every((valore) => valore === "")).toBeTrue();
+    expect(legale).toInclude('statoLegale === "bozza"');
+    expect(legale).toInclude("Bozza per revisione");
+    expect(legale).toInclude('id="contatti"');
+    const testoPrivacy = privacy.flatMap((capitolo) => capitolo.paragrafi).join(" ");
+    expect(testoPrivacy).toInclude("non sono ancora definiti e verificati tutti i termini operativi");
+    expect(testoPrivacy).toInclude("non costituisce un consenso generale");
   });
 
   it("offre un ritorno indietro visibile senza diventare un client component", () => {

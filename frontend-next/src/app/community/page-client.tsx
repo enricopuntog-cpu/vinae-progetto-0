@@ -22,7 +22,7 @@
 // chiesto.
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Suspense, use, useMemo, useState } from "react";
 import { Search, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -54,7 +54,7 @@ export default function CommunityHubPageClient({
 }: {
   iniziali: Club[];
   erroreLettura: string | null;
-  discussioni: ClubPost[];
+  discussioni: Promise<ClubPost[]>;
   // Lo risolve il componente server con getUser(). Nasconde il modulo a chi non
   // ha sessione, ma non e la barriera: `club_crea` pretende comunque un
   // auth.uid(), e senza sessione rifiuta.
@@ -209,15 +209,15 @@ export default function CommunityHubPageClient({
             <TabsContent value="discussioni" className="mt-4">
               {/* Nessuno `clubSlug`: qui non si compone, perche una discussione
                   ha bisogno di un club in cui stare. */}
-              <ClubDiscussioni iniziali={discussioni} mostraClub />
+              <Suspense fallback={<p role="status">Caricamento discussioni…</p>}>
+                <DiscussioniInArrivo discussioni={discussioni} />
+              </Suspense>
             </TabsContent>
 
             <TabsContent value="popolari" className="mt-4">
-              <ClubDiscussioni
-                iniziali={discussioni}
-                mostraClub
-                ordina={ordinaPerPopolarita}
-              />
+              <Suspense fallback={<p role="status">Caricamento discussioni…</p>}>
+                <DiscussioniInArrivo discussioni={discussioni} popolari />
+              </Suspense>
             </TabsContent>
           </Tabs>
         </>
@@ -231,6 +231,14 @@ export default function CommunityHubPageClient({
 // vere. Il suo posto lo prende lo stato vuoto di ClubDiscussioni, che e una
 // cosa diversa - "non c'e ancora nessuna discussione" invece di "la funzione
 // non esiste ancora" - e che invita a scriverne una.
+
+function DiscussioniInArrivo({ discussioni, popolari = false }: {
+  discussioni: Promise<ClubPost[]>;
+  popolari?: boolean;
+}) {
+  const iniziali = use(discussioni);
+  return <ClubDiscussioni iniziali={iniziali} mostraClub ordina={popolari ? ordinaPerPopolarita : undefined} />;
+}
 
 export function ClubCard({
   club,
