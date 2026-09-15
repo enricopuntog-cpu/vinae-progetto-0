@@ -1,6 +1,6 @@
 # Router del contesto durevole Vinea
 
-Ultimo aggiornamento del router: **20 agosto 2026**.
+Ultimo aggiornamento del router: **15 settembre 2026**.
 
 Questa cartella conserva memoria strutturale e storia datata. Non è il bootstrap
 obbligatorio e non sostituisce le fonti vive.
@@ -22,7 +22,8 @@ Aprire soltanto ciò che serve al task:
 
 - [`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md) — dossier cronologico di misure e
   stati verificati; l'apertura è una fotografia del 9 agosto 2026, non lo stato
-  corrente.
+  corrente. L'ultima voce è del 15 settembre 2026: dominio proprio, SMTP
+  Resend e riconciliazione del ledger delle migrazioni.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono
@@ -61,7 +62,24 @@ va riscritto come se la decisione precedente non fosse mai esistita.
 - `public.clubs` contiene `circolo-vinea` dal 19 agosto 2026; il seed dei sette
   club non è stato eseguito.
 - Fase 13: cutover; non iniziata e soggetta a decisione separata.
-- Ultimo ledger di produzione registrato: 32 migrazioni. Un merge non prova che
-  una nuova migrazione sia stata applicata: rileggere sempre il ledger.
+- Dominio pubblico della beta: **`https://vineawineclub.com`**, di proprietà,
+  dal 14 settembre 2026. L'host `timely-lokum-43a12e.netlify.app` non è più
+  l'indirizzo pubblico: risponde `308` verso il dominio proprio conservando il
+  percorso, ed è ancora una destinazione ammessa nei Redirect URLs di Supabase.
+  Il nome del sito Netlify è invariato, quindi le Deploy Preview conservano la
+  vecchia forma.
+- Email di Auth: **SMTP proprio Resend**, mittente
+  `Vinea Wine Club <noreply@vineawineclub.com>`, in uso dal 14 settembre 2026.
+  Il mailer di prova incorporato in Supabase e il suo `over_email_send_rate_limit`
+  non sono più la strada in uso. La chiave vive nel progetto Supabase, non nel
+  repository.
+- Ledger di produzione: **ultimo conteggio registrato 32**, al 20 agosto 2026,
+  quando coincideva con i file su `main`. Su `origin/main` i file sono oggi
+  **51**: **19 migrazioni** aggiunte dopo quella data non sono coperte da alcuna
+  lettura del ledger. Non è una misura di quante manchino — è la misura di
+  quanto non sappiamo. Rileggerlo è un prerequisito aperto dell'accensione dei
+  pagamenti; l'elenco esatto è in [`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md).
+  Un merge non prova che una nuova migrazione sia stata applicata, e un merge
+  senza migrazioni può averne distribuite di altrui: rileggere sempre il ledger.
 
 Per ogni fatto più volatile, rileggere `CHANGES.log` e misurare di nuovo.

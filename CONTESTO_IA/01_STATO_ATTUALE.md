@@ -2779,3 +2779,132 @@ un progetto paid. Di conseguenza non e' consentita alcuna nuova chiamata. Il pas
 e' ottenere quelle autorizzazioni per il solo canary F01. Anche un canary futuro valido resterebbe
 un prerequisito empirico: non aprirebbe automaticamente 11a, non sceglierebbe da solo il provider e
 non avrebbe alcun effetto sulla Fase 13.
+
+## Dominio proprio, SMTP Resend e ledger delle migrazioni — 15 settembre 2026
+
+Voce di sola documentazione. Nessuna modifica a `frontend/`, `backend/`,
+`frontend-next/` o `supabase/`, nessuna scrittura remota, nessuna migrazione
+applicata. Tutto ciò che segue è stato misurato da questa sessione o è citato
+come verbale altrui con la sua data.
+
+### Il dominio pubblico non è più un host assegnato da Netlify
+
+La beta risponde su **`https://vineawineclub.com`**, dominio di proprietà.
+Misurato con richieste HTTP non autenticate: apice `200`; `www` `301` verso
+l'apice; `https://timely-lokum-43a12e.netlify.app/` e `/accedi` rispondono
+`308` verso il dominio proprio **conservando il percorso**; il callback senza
+`code` risponde `307` verso `https://vineawineclub.com/accedi?errore=callback-senza-codice`,
+cioè sul dominio proprio.
+
+Va detto con precisione, perché la formulazione corrente circola imprecisa:
+l'host `timely-lokum-43a12e.netlify.app` **non è spento**. Risponde, e risponde
+per rimandare. Il nome del sito Netlify resta `timely-lokum-43a12e`, quindi le
+Deploy Preview conservano la forma `deploy-preview-<numero>--timely-lokum-43a12e.netlify.app`.
+
+### Redirect Auth: lo stato è cambiato, e una riga del 18 agosto va corretta
+
+Rimisurato sul progetto `pijnmcllmfgjmgsvtcej` con la sonda di sola lettura già
+usata allora — `GET /auth/v1/verify` con token non valido, che non crea utenti,
+non scrive e non invia email. La tabella completa sta in
+[`../docs/ENVIRONMENT.md`](../docs/ENVIRONMENT.md); qui i tre fatti che
+cambiano il quadro.
+
+**Il Site URL è `https://vineawineclub.com`** ed è il ripiego di ogni valore non
+riconosciuto. Il dominio proprio si comporta come una voce `/**`: callback,
+query e percorsi arbitrari passano; `www`, un sottodominio qualunque, lo schema
+`http` e un suffisso ostile no.
+
+**L'host Netlify è ancora in elenco.** `…netlify.app/auth/callback` e
+`…netlify.app/qualsiasi` restano destinazioni ammesse. Oggi quell'host rimanda
+al dominio proprio, quindi non è un difetto operativo; è superficie che resta
+aperta, e toglierla è una decisione da prendere, non un residuo da assumere
+già chiuso.
+
+**La correzione.** La misura del 18 agosto 2026 concludeva che «il jolly `/**`
+copre anche l'origine nuda, senza barra finale». Quella conclusione non era
+misurabile allora: l'origine nuda dell'host Netlify **coincideva con il Site
+URL** di quel momento, quindi «ammessa» e «ricaduta sul ripiego» producevano lo
+stesso `Location`, e la sonda non poteva distinguerle. Oggi il Site URL è un
+altro dominio e la distinzione si vede: l'host Netlify **senza percorso** ricade
+sul ripiego, mentre con `/` o con un percorso qualunque è ammesso. Il jolly non
+copre l'origine priva di percorso; quando sembrava coprirla era il Site URL a
+farlo. È lo stesso errore di lettura che quella pagina documenta altrove — una
+sonda che non distingue due cause non è una prova — ed è capitato alla riga che
+lo spiegava.
+
+### Resend: il prerequisito che bloccava l'SMTP proprio è caduto
+
+La voce del 18 agosto 2026 più in alto in questo dossier resta vera **alla sua
+data**: l'attivazione di Resend si fermava perché verificare un mittente
+richiede di provare via DNS il possesso di un dominio, e
+`timely-lokum-43a12e.netlify.app` è assegnato da Netlify. Con un dominio di
+proprietà quel blocco non esiste più.
+
+A verbale del 14 settembre 2026, in `CHANGES.log` di quella sessione: custom
+SMTP attivo verso `smtp.resend.com`, mittente
+`Vinea Wine Club <noreply@vineawineclub.com>`, consegna reale verso Gmail
+partita dal flusso `https://vineawineclub.com/accedi`.
+
+Riverificata qui la sola parte osservabile dall'esterno, il DNS pubblico letto
+via DNS-over-HTTPS con `Status 0` su ogni nome: DKIM `resend._domainkey`
+presente; `send` con CNAME `send.forge.rmta.net.` e SPF `v=spf1 ip4:… ~all`;
+`rsend` con CNAME `rsend-euw1.forge.rmta.net.`; `_dmarc` `v=DMARC1; p=none;`;
+MX all'apice verso `inbound-smtp.eu-west-1.amazonaws.com.`, che è la ricezione
+opzionale e non serve all'invio.
+
+**Non verificabile da questa sessione**, e quindi non riscritto come misura
+propria: lo stato del pannello Resend e l'interruttore del custom SMTP nella
+dashboard Supabase. Non esiste qui un connettore Supabase o Netlify, non
+esistono CLI `supabase` o `psql`, e nessuna email è stata inviata per provarlo.
+
+### Ledger delle migrazioni: lo scarto esatto, e perché non è stato chiuso
+
+Il prerequisito sta nel poter dire quali migrazioni sono in produzione, non nel
+supporlo. Ecco dove siamo, contato e non stimato.
+
+- **51 file** sotto `supabase/migrations/` su `origin/main` al commit `361b297`.
+  Contati con `git ls-tree`, non con `ls` su una copia di lavoro.
+- **Ultimo conteggio di ledger registrato: 32**, scritto nel README di questa
+  cartella il 20 agosto 2026 con la PR #60. Alla stessa data `main` portava
+  **esattamente 32 file**: a quel momento ledger e file coincidevano.
+- **Scarto: 19 migrazioni**, tutte aggiunte dopo il 20 agosto 2026, il cui stato
+  in produzione **non è verificato**:
+  `20260821120000_profiles_username_case_insensitive`,
+  `20260821183000_profile_avatars`, `20260822000000_club_user_creation`,
+  `20260824120000_price_intelligence_1a_observations`,
+  `20260825120000_profile_certifications`,
+  `20260825180000_public_profile_foundation`,
+  `20260826120000_wine_regions_canonical`,
+  `20260826130000_d3b_cellar_accounting`, `20260826163000_d1_vinea_balance`,
+  `20260827104500_d1_balance_prelievo_e_freeze`,
+  `20260827160000_d1_professional_qualifications`,
+  `20260827160500_d1_public_profile_qualifiche`,
+  `20260827180000_d9_reviews_reputation`,
+  `20260828120000_d10_admin_dispute_gate`,
+  `20260830190000_report_target_club_enum`,
+  `20260830190500_reporting_club_entrypoints`,
+  `20260830191000_admin_operations_lookup`,
+  `20260830192000_admin_operations_readonly_completion`,
+  `20260831130000_professional_qualification_delete`.
+
+**Il ledger di produzione non è stato letto**, e questa voce non deduce nulla da
+altro. Strumenti assenti in questa sessione, verificato: nessun connettore MCP
+Supabase, nessuna CLI `supabase`, nessun `psql`, nessun
+`SUPABASE_ACCESS_TOKEN` e nessuna chiave di servizio nell'ambiente. L'unica
+credenziale disponibile è la chiave anonima pubblica, che non raggiunge
+`supabase_migrations.schema_migrations`: la radice PostgREST risponde
+`{"message":"Secret API key required"}`. Il dump
+`.d3b-production-schema.sql` presente nella copia di lavoro è **untracked**,
+datato 26 agosto 2026 e **non contiene il ledger**; non è stato toccato.
+
+Lo scarto sopra dice quante migrazioni **non sono coperte da una lettura**, non
+quante sono mancanti. Le due cose coincidono solo nel caso peggiore, e nessuno
+dei due estremi è stato osservato. Il precedente della PR #51 del 18 agosto 2026
+vale anche qui e nella direzione opposta all'ottimismo: un merge senza
+migrazioni può aver distribuito l'arretrato di un altro, quindi «mersa» non
+prova «applicata» né il suo contrario.
+
+**Passo successivo, e resta aperto**: rileggere il ledger con `list_migrations`
+sul progetto di produzione da una sessione che abbia il connettore, e scrivere
+qui il conteggio con l'ultima riga. Finché non è fatto, l'accensione dei
+pagamenti non ha il suo prerequisito soddisfatto.
