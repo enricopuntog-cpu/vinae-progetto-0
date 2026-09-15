@@ -68,6 +68,11 @@ Il codice è raggiungibile; nessun denaro lo ha mai percorso. Dettaglio in
 [`../docs/ROADMAP_V1.md`](../docs/ROADMAP_V1.md), sezione «Distribuita non vuol
 dire percorsa».
 
+> Aggiornamento del 15 settembre 2026: le tabelle del denaro restano a zero
+> righe, rimisurate, ma «`marketplace_config` ha la sola riga iniziale» smette
+> di valere quando la migrazione `20260915120000` è applicata. Vedi la sezione
+> «La configurazione economica cambia riga» in fondo a questo file.
+
 ## Stato Git e prove
 
 La PR #14 è stata unita in `main` con merge commit `61e3fde`. L'HEAD finale del
@@ -3004,3 +3009,115 @@ sotto `supabase/migrations/`; sulle teste delle rispettive PR lo stesso check è
 `skipped`. Resta vero che una PR senza SQL proprio può distribuire l'arretrato
 di un'altra, e resta vero che il ledger va riletto: cambia soltanto che la
 partenza della corsa non è di per sé un indizio di applicazione.
+
+## La configurazione economica cambia riga — 15 settembre 2026
+
+### Il ledger di produzione, finalmente letto
+
+La riga «LEDGER MIGRAZIONI NON LETTO» del 15 settembre mattina si chiude qui.
+Con il connettore Supabase abilitato, `list_migrations` sul progetto
+`pijnmcllmfgjmgsvtcej` restituisce **51 voci**. Confrontate una per una con i 51
+file sotto `supabase/migrations/` di `origin/main`: **corrispondenza esatta,
+nessuno scarto in nessuna delle due direzioni**. L'ultima riga è
+`20260831130000 professional_qualification_delete`. Lo scarto di 19 migrazioni
+ipotizzato al mattino non esisteva: era la distanza fra l'ultima lettura (32
+voci, 20 agosto) e lo stato attuale, non un arretrato.
+
+Questo soddisfa il prerequisito che l'accensione dei pagamenti aspettava.
+
+### Lo stato economico misurato, non dedotto
+
+Letto in sola lettura sullo stesso progetto, prima di scrivere qualunque cosa:
+
+| Oggetto | Misura |
+| --- | --- |
+| `public.marketplace_config` | una sola riga, `id = 1`, `500 / 150 / 25 / 14`, `valida_da` 2026-08-04 10:19:20.970507+00, `valida_fino` nulla |
+| `public.orders` | 0 righe |
+| `public.payments` | 0 righe |
+| `public.payouts` | 0 righe |
+
+Coincide con la lettura del 15 settembre fatta dalla chat organizzativa. Nessun
+ordine esistente può quindi muoversi per effetto del cambio — e non si
+muoverebbe comunque, perché i tre parametri sono congelati su `orders` alla
+creazione.
+
+### Due parametri sbagliati, non uno
+
+`riferimento_stripe_percentuale_bps` valeva 150 bps, cioè la tariffa Stripe per
+le carte SEE standard. Non è il costo del pagamento: mancava la commissione
+**Stripe Connect dello 0,25%** che la piattaforma paga perché applica tariffe
+proprie, e mancava il peso delle carte più care. Con quel parametro il margine
+dichiarato non si realizzava mai — 4,75% con sole carte standard, 3,35% con
+carta premium, 4,38% sul mix atteso. Il costo reale ponderato su quel mix (75%
+SEE standard, 20% SEE premium, 5% internazionali) è
+`0,75×1,5% + 0,20×2,8% + 0,05×3,15% + 0,25% = 2,0925%`, cioè **209 bps**.
+
+`margine_obiettivo_bps` passa da 500 a **800** per decisione commerciale del 14
+settembre 2026.
+
+Corretti insieme, su un prezzo del venditore di 45,00 € il compratore paga
+49,90 €, la fee di riferimento proiettata vale 1,29 € e il margine netto della
+piattaforma 3,61 €. **Verificato eseguendo la formula di produzione**
+`private.marketplace_totale_cents` in sola lettura: 4500 → 4990. Il rapporto
+3,61/45,00 vale **8,02%**, non 8,01% come diceva la formulazione della decisione;
+la differenza è un arrotondamento nella nota, non nel calcolo, e la conclusione
+non cambia.
+
+### La formula non è stata toccata
+
+`private.marketplace_totale_cents` resta identica. Cambiano soltanto i parametri
+che riceve, che è la ragione per cui `marketplace_config` è versionata invece
+che costante. La griglia lo prova con un caso apposito: con i **vecchi**
+parametri la funzione deve restituire i **vecchi** totali, e li restituisce.
+
+### La griglia è stata eseguita davvero
+
+`supabase/tests/marketplace_config_margine_otto.sql`, sedici casi, su
+PostgreSQL 17.6 in un contenitore isolato costruito dal bootstrap
+`9c_bootstrap_postgres_locale.sql` più le 51 migrazioni di `origin/main`
+applicate in ordine — non su un database stub, e non sul progetto reale.
+
+| Corsa | Dove | Esito |
+| --- | --- | --- |
+| prima della migrazione | contenitore isolato | 5 PASSA / 11 FALLISCE |
+| dopo la migrazione | contenitore isolato | 16 PASSA / 0 FALLISCE |
+| dopo la migrazione | branch di anteprima Supabase | 16 PASSA / 0 FALLISCE |
+
+La corsa di controllo serve a escludere una griglia verde in entrambi i casi,
+che non misurerebbe nulla. Il contenitore è stato rimosso a fine corsa.
+
+### `Supabase Preview` NON è `skipped` su una PR con migrazioni
+
+Correzione additiva a quanto registrato stamattina. La riga «sulle teste delle
+rispettive PR lo stesso check è `skipped`» era vera per le PR **senza** file
+sotto `supabase/migrations/`, ed era l'unico caso che si fosse potuto osservare.
+Sulla PR #117, che una migrazione ce l'ha, il check `Supabase Preview` **parte e
+passa**: l'integrazione GitHub crea un branch di anteprima
+(`economia/marketplace-margine-8`, project_ref `oaavtbrivfzfwldipyok`, figlio di
+`pijnmcllmfgjmgsvtcej`, `with_data` falso) e vi applica la migrazione da sola.
+Il ledger dell'anteprima ha **52 voci**, l'ultima `20260915120000`.
+
+Cambia che cosa si sa prima del merge: la migrazione è già stata applicata una
+volta dal percorso reale, non solo in un contenitore, e i sedici casi della
+griglia rieseguiti lì danno 16 PASSA / 0 FALLISCE — con l'adattamento di
+trasporto dichiarato nell'intestazione della griglia. Non sostituisce la
+verifica post-merge sul progetto di produzione: un'anteprima nasce senza dati e
+non è la produzione. Toglie dal merge la domanda «si applica?», non la domanda
+«che cosa ha scritto».
+
+### Che cosa NON è stato fatto
+
+Nessun `apply_migration`, nessun `execute_sql` in scrittura, nessuna Edge
+Function distribuita. Sul progetto reale sono state eseguite soltanto letture e
+chiamate a funzioni `immutable`/`stable`. La migrazione entra in produzione
+quando la PR è mersa, perché in questo repository **il merge è il gate di
+deploy** — e il merge resta di Enrico. `PAYMENTS_ENABLED` non è stato toccato.
+
+### Un difetto che resta dov'è
+
+Il commento sorgente dentro `20260803150000_phase_7b_stripe_connect_marketplace.sql`
+descrive ancora `riferimento_stripe_percentuale_bps` come «la quota percentuale
+e la quota fissa della carta SEE». Quel file è distribuito e quindi **congelato**:
+non si corregge in luogo. La nuova migrazione crea invece il commento a livello
+di database — che prima non esisteva su nessuna colonna di `marketplace_config` —
+con la descrizione giusta, ed è quello che si legge interrogando lo schema.
