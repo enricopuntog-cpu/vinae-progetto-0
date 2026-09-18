@@ -3378,3 +3378,21 @@ backup/restore, CSP script con nonce e smoke autenticati. Dettagli in
 `docs/SECURITY_FOLLOWUP_PR120.md`; checklist in
 `docs/PRELAUNCH_TASK_RECONCILIATION.md`. Questo record supera gli stati PR e ledger
 precedenti senza riscriverne le osservazioni storiche.
+
+## 18 settembre 2026 — chiusura del blocco manuale Realtime
+
+Dopo la richiesta esplicita di Enrico di eseguire le operazioni manuali residue,
+salvato in dashboard produzione il divieto dei canali Realtime pubblici.
+Reload: servizio ON, Allow public access OFF. Il servizio ha disconnesso i
+client durante l'applicazione. Prove anonime senza scritture: canale pubblico
+CHANNEL_ERROR PrivateOnly; canale privato CHANNEL_ERROR Unauthorized. Resta lo
+smoke con due utenti autorizzati. Il precedente blocco automatico è risolto.
+
+PR121 già unita su `848518f`, CI verde, Netlify Published
+`6aad86afdd098e0008a93edf` con lo stesso SHA; verificati sul dominio reale
+header, reporter 204, robots, callback stabile e gate AI/pagamenti 503.
+Desktop allineato preservando file personali, staging e vecchio branch.
+Su richiesta dell'utente ci si ferma dopo questo intervento e il resoconto:
+nessun bisogno che Enrico azioni altri toggle per avviare i controlli tecnici.
+Backup/restore e CSP sono lavoro dell'agente; OAuth richiede collaborazione
+solo se si presenta una verifica personale del provider.

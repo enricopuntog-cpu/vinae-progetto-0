@@ -9,7 +9,7 @@ Le assegnazioni «C» nel documento non aprono da sole nuove funzionalità o fas
 | A: recupero build in Git | Già chiuso dalla PR116; il deploy letto corrisponde al merge PR120. |
 | A: dominio e configurazione documentati | Già presenti; aggiornate qui le misure Netlify al 18 settembre. |
 | A: ledger e marketplace_config | 54 migrazioni; griglia 16/16 e valori 800/209/25/14. Ripetere prima dei pagamenti. |
-| A: Realtime privato | Codice e policy presenti; divieto globale canali pubblici ancora da salvare dopo autorizzazione specifica richiesta dal controllo automatico. |
+| A: Realtime privato | Divieto globale salvato e verificato in produzione: pubblico rifiutato PrivateOnly, privato anonimo Unauthorized, servizio ON. Resta smoke con due utenti autorizzati. Nessun intervento dashboard richiesto a Enrico. |
 | A: interruttori Auth | Secure email change, secure password change, leaked password protection ON. Current password OFF. |
 | A: gate fail-closed | Porte AI/pagamenti 503; webhook 503. Verifica scheduler/configurazione completa ancora necessaria prima dell'accensione. |
 | A: backup completo ripristinabile | Aperto. Prossimo lavoro tecnico indipendente: copia protetta e restore in ambiente isolato, includendo Storage. |
@@ -32,7 +32,7 @@ Le assegnazioni «C» nel documento non aprono da sole nuove funzionalità o fas
 
 ## Ordine proposto per proseguire
 
-1. Chiudere Realtime e smoke autenticati (OAuth, messaggi, immagini private),
+1. Eseguire smoke autenticati (OAuth, messaggi, immagini private),
    mantenendo pagamenti e AI spenti.
 2. Eseguire backup/restore isolato e scrivere il piano di continuità; usare i
    report CSP per preparare la policy completa con nonce.
@@ -40,3 +40,13 @@ Le assegnazioni «C» nel documento non aprono da sole nuove funzionalità o fas
    solo dopo pianificare il gate pagamenti con scheduler e test controllato.
 
 La beta non è dichiarata pronta ai pagamenti o al lancio pubblico.
+
+## Che cosa richiede davvero Enrico
+
+Il blocco manuale della dashboard Realtime è chiuso dall'agente. Backup/restore,
+CSP e preparazione degli smoke sono lavori tecnici eseguibili dall'agente.
+Per OAuth serve collaborazione soltanto se il provider richiede una password,
+un codice, una conferma sul telefono o un'altra verifica personale che l'agente
+non può completare. Non occorre inviare password nella chat. Decisioni su club,
+procedure, fornitori e adempimenti restano quelle di prodotto/organizzazione
+elencate sopra; non bloccano l'esecuzione dei prossimi controlli tecnici.

@@ -46,12 +46,15 @@ Non si presume sfruttabilità identica in ogni deployment.
 
 ## Residui reali
 
-1. **Realtime pubblico ancora consentito.** L'app usa canali `private: true`;
-   le policy limitano notifiche all'utente e messaggi ai membri. Il salvataggio
-   del divieto di canali pubblici è stato bloccato dalla revisione automatica:
-   richiesta autorizzazione specifica perché eventuali client esterni pubblici
-   perderebbero accesso. Modifica non salvata, form annullato. Non aggirare il
-   blocco con API; completare dopo la risposta dell'utente e provare due utenti.
+1. **Restrizione Realtime chiusa; smoke autenticato residuo.** Dopo la richiesta
+   esplicita dell'utente di eseguire le operazioni manuali residue, disabilitato
+   «Allow public access to channels» nella dashboard di produzione. Salvataggio
+   riuscito, servizio ON e flag OFF confermati dopo reload. Il servizio ha
+   disconnesso i client durante il salvataggio. Prova WebSocket anonima reale:
+   pubblico `CHANNEL_ERROR: PrivateOnly`, privato `CHANNEL_ERROR: Unauthorized`.
+   Nessun messaggio inviato o dato scritto. L'app usa `private: true` e policy
+   per proprietario/membro; resta da provare il flusso con due utenti autorizzati.
+   Il precedente blocco automatico è risolto, senza ricorrere ad API alternative.
 2. **CSP script ancora Report-Only e unsafe-inline.** Raccolta disponibile e
    protezioni di base enforcing non chiudono la protezione XSS degli script.
    Occorrono nonce/strategia di rendering e prove autenticate di OAuth, Realtime
@@ -83,5 +86,12 @@ Installazione con lockfile congelato riuscita; audit zero segnalazioni;
 build Next 16.3.3 PASS (26 pagine statiche). Smoke locale del reporter:
 204 e log con sole categorie, senza token della richiesta di prova.
 I controlli pubblici e le griglie statiche non sostituiscono gli smoke autenticati.
+
+PR121 unita: `848518f3a4e8a2cd95db2ccbf91e6e88c44eb24d`, quattro job CI verdi.
+Deploy produzione `6aad86afdd098e0008a93edf` Published il 18 settembre alle
+18:46 UTC sullo stesso commit. Smoke reale: home 200, header nuovi e robots
+presenti, reporter 204, callback 307 verso il dominio stabile; porte AI e
+pagamenti ancora 503. Desktop aggiornato conservando quattro file personali
+e staging, con nuovo branch e vecchia storia preservata.
 
 Riconciliazione della checklist: [PRELAUNCH_TASK_RECONCILIATION.md](PRELAUNCH_TASK_RECONCILIATION.md).
