@@ -97,24 +97,28 @@ export default function ReimpostaPasswordPageClient({
    * lo scambio fallito e il link mai aperto sono lo stesso vicolo cieco, ma non
    * la stessa frase, e la callback è l'unico punto che sa quale dei due è.
    */
-  if (!authUser) {
+  if (!authUser || errore === "riautenticazione-richiesta") {
     return (
       <div className="mx-auto max-w-md space-y-6">
         <div className="rounded-3xl border border-border bg-card p-5 md:p-8">
-          <h1 className="font-serif text-2xl md:text-3xl">Link non più valido</h1>
+          <h1 className="font-serif text-2xl md:text-3xl">
+            {errore === "riautenticazione-richiesta" ? "Conferma la tua identità" : "Link non più valido"}
+          </h1>
           <p
             role="alert"
             data-testid="recupero-sessione-assente"
             className="mt-4 rounded-xl border border-bordeaux/30 bg-bordeaux/5 p-3 text-sm text-bordeaux"
           >
-            {messaggioErroreAuth(erroreRientro ?? "sessione-recupero-assente")}
+            {messaggioErroreAuth(errore ?? erroreRientro ?? "sessione-recupero-assente")}
           </p>
           <p className="mt-3 text-sm text-muted-foreground">
-            I link per reimpostare la password valgono una sola volta e scadono dopo poco tempo.
+            {errore === "riautenticazione-richiesta"
+              ? "Nella pagina di accesso scegli Esci, poi accedi di nuovo o usa Password dimenticata."
+              : "I link per reimpostare la password valgono una sola volta e scadono dopo poco tempo."}
           </p>
           <Button asChild className="mt-5 bg-bordeaux hover:bg-bordeaux/90">
             <Link href="/accedi" data-testid="richiedi-nuovo-link">
-              Richiedi un nuovo link
+              {errore === "riautenticazione-richiesta" ? "Vai alla pagina di accesso" : "Richiedi un nuovo link"}
             </Link>
           </Button>
         </div>

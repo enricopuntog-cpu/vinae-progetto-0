@@ -12,7 +12,8 @@
 # Next.js ricevono gli stessi header da frontend-next/src/lib/security-headers.ts
 # via next.config.ts, dove sono documentate anche le origini della CSP.
 # security-headers.test.ts tiene allineate le due copie.
-# La CSP è in Report-Only; la versione enforcing con nonce è un passo successivo.
+# Policy completa Report-Only con raccolta; tre direttive di base già enforcing.
+# La protezione degli script con nonce è un passo successivo.
 [[headers]]
   for = "/*"
   [headers.values]
@@ -23,4 +24,6 @@
     Cross-Origin-Opener-Policy = "same-origin"
     Cross-Origin-Resource-Policy = "same-origin"
     Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
-    Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://pijnmcllmfgjmgsvtcej.supabase.co https://i.pravatar.cc; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://pijnmcllmfgjmgsvtcej.supabase.co wss://pijnmcllmfgjmgsvtcej.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+    Content-Security-Policy = "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://pijnmcllmfgjmgsvtcej.supabase.co https://i.pravatar.cc; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://pijnmcllmfgjmgsvtcej.supabase.co wss://pijnmcllmfgjmgsvtcej.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; report-uri /api/security/csp-report; report-to csp"
+    Reporting-Endpoints = "csp=\"/api/security/csp-report\""

@@ -276,12 +276,12 @@ describe("/reimposta-password", () => {
   });
 
   it("una sessione di recupero assente porta a chiedere un link nuovo", () => {
-    expect(REIMPOSTA).toInclude("if (!authUser)");
+    expect(REIMPOSTA).toInclude('if (!authUser || errore === "riautenticazione-richiesta")');
     // Il motivo lo riporta la callback quando c'è: lo scambio fallito e il
     // link mai aperto sono lo stesso vicolo cieco ma non la stessa frase.
     // Senza motivo resta quella di prima, e la CTA è la stessa in entrambi.
     expect(REIMPOSTA).toInclude(
-      'messaggioErroreAuth(erroreRientro ?? "sessione-recupero-assente")',
+      'messaggioErroreAuth(errore ?? erroreRientro ?? "sessione-recupero-assente")',
     );
     // Il codice che arriva dall'URL è validato dal server contro il
     // vocabolario chiuso prima di scendere qui: la pagina non rende mai una

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import nextConfig from "../../next.config";
-import { CONTENT_SECURITY_POLICY, SECURITY_HEADERS } from "./security-headers";
+import { BASE_SECURITY_POLICY, CONTENT_SECURITY_POLICY, SECURITY_HEADERS } from "./security-headers";
 
 // Le regole `[[headers]]` di netlify.toml coprono i file statici; headers() di
 // Next.js copre le pagine. Le due copie devono restare identiche.
@@ -11,7 +11,7 @@ function headerNetlify(): Map<string, string> {
   const valori = new Map<string, string>();
   for (const riga of toml.split(/\r?\n/)) {
     const m = /^\s+([A-Za-z-]+) = "(.*)"\s*$/.exec(riga);
-    if (m) valori.set(m[1], m[2]);
+    if (m) valori.set(m[1], m[2].replace(/\\"/g, '"'));
   }
   return valori;
 }
@@ -33,10 +33,12 @@ describe("header di sicurezza", () => {
     }
   });
 
-  it("la CSP resta in Report-Only e non viene applicata", () => {
+  it("raccoglie la policy completa e applica la protezione di base", () => {
     const chiavi = SECURITY_HEADERS.map((h) => h.key);
     expect(chiavi).toContain("Content-Security-Policy-Report-Only");
-    expect(chiavi).not.toContain("Content-Security-Policy");
+    expect(SECURITY_HEADERS).toContainEqual({ key: "Content-Security-Policy", value: BASE_SECURITY_POLICY });
+    expect(BASE_SECURITY_POLICY).toContain("object-src 'none'");
+    expect(CONTENT_SECURITY_POLICY).toContain("report-uri /api/security/csp-report");
   });
 
   it("connect-src ammette Supabase sia in https sia in wss", () => {
