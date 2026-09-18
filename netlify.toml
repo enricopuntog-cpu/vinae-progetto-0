@@ -6,3 +6,21 @@
 [build.environment]
   BUN_VERSION = "1.3.14"
   NODE_VERSION = "22"
+
+# Security header post-audit del 17 settembre 2026.
+# Queste regole raggiungono solo i file statici della CDN: le pagine rese da
+# Next.js ricevono gli stessi header da frontend-next/src/lib/security-headers.ts
+# via next.config.ts, dove sono documentate anche le origini della CSP.
+# security-headers.test.ts tiene allineate le due copie.
+# La CSP è in Report-Only; la versione enforcing con nonce è un passo successivo.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Resource-Policy = "same-origin"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+    Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://pijnmcllmfgjmgsvtcej.supabase.co https://i.pravatar.cc; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://pijnmcllmfgjmgsvtcej.supabase.co wss://pijnmcllmfgjmgsvtcej.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"

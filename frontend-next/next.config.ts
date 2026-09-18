@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
+import { SECURITY_HEADERS } from "./src/lib/security-headers";
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
   // Solo il vecchio host pubblico: le anteprime conservano il proprio URL.
   redirects: async () => [{
     source: "/:path*",
@@ -16,7 +18,7 @@ const nextConfig: NextConfig = {
   headers: async () => [
     {
       source: "/:path*",
-      headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }, ...SECURITY_HEADERS],
     },
   ],
 };
