@@ -1,0 +1,53 @@
+import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import nextConfig from "../../next.config";
+import { CONTENT_SECURITY_POLICY, SECURITY_HEADERS } from "./security-headers";
+
+// Le regole `[[headers]]` di netlify.toml coprono i file statici; headers() di
+// Next.js copre le pagine. Le due copie devono restare identiche.
+function headerNetlify(): Map<string, string> {
+  const toml = readFileSync(join(import.meta.dir, "..", "..", "..", "netlify.toml"), "utf8");
+  const valori = new Map<string, string>();
+  for (const riga of toml.split(/\r?\n/)) {
+    const m = /^\s+([A-Za-z-]+) = "(.*)"\s*$/.exec(riga);
+    if (m) valori.set(m[1], m[2]);
+  }
+  return valori;
+}
+
+describe("header di sicurezza", () => {
+  it("netlify.toml e next.config portano gli stessi valori", () => {
+    const netlify = headerNetlify();
+    for (const { key, value } of SECURITY_HEADERS) {
+      expect(netlify.get(key)).toBe(value);
+    }
+  });
+
+  it("headers() di Next.js applica l'elenco a ogni percorso", async () => {
+    const regole = await nextConfig.headers!();
+    const tutte = regole.find((r) => r.source === "/:path*");
+    expect(tutte).toBeDefined();
+    for (const header of SECURITY_HEADERS) {
+      expect(tutte!.headers).toContainEqual(header);
+    }
+  });
+
+  it("la CSP resta in Report-Only e non viene applicata", () => {
+    const chiavi = SECURITY_HEADERS.map((h) => h.key);
+    expect(chiavi).toContain("Content-Security-Policy-Report-Only");
+    expect(chiavi).not.toContain("Content-Security-Policy");
+  });
+
+  it("connect-src ammette Supabase sia in https sia in wss", () => {
+    const connect = CONTENT_SECURITY_POLICY.split("; ").find((d) => d.startsWith("connect-src"));
+    expect(connect).toContain("https://pijnmcllmfgjmgsvtcej.supabase.co");
+    expect(connect).toContain("wss://pijnmcllmfgjmgsvtcej.supabase.co");
+  });
+
+  it("il sito non è incorniciabile e non dichiara il framework", () => {
+    expect(SECURITY_HEADERS).toContainEqual({ key: "X-Frame-Options", value: "DENY" });
+    expect(CONTENT_SECURITY_POLICY).toContain("frame-ancestors 'none'");
+    expect(nextConfig.poweredByHeader).toBe(false);
+  });
+});

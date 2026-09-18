@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { SECURITY_HEADERS } from "./src/lib/security-headers";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
@@ -17,7 +18,7 @@ const nextConfig: NextConfig = {
   headers: async () => [
     {
       source: "/:path*",
-      headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }, ...SECURITY_HEADERS],
     },
   ],
 };

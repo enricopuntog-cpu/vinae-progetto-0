@@ -8,11 +8,11 @@
   NODE_VERSION = "22"
 
 # Security header post-audit del 17 settembre 2026.
-# La CSP è in Report-Only: la versione enforcing con nonce via middleware è un
-# passo successivo, da fare dopo aver letto le violazioni raccolte in produzione.
-# Origini oltre a 'self': Supabase (REST/Auth/Storage via https, Realtime via
-# wss, immagini pubbliche e firmate del bucket), Google Fonts (foglio di stile
-# in layout.tsx e file dei font) e i.pravatar.cc (avatar dei dati dimostrativi).
+# Queste regole raggiungono solo i file statici della CDN: le pagine rese da
+# Next.js ricevono gli stessi header da frontend-next/src/lib/security-headers.ts
+# via next.config.ts, dove sono documentate anche le origini della CSP.
+# security-headers.test.ts tiene allineate le due copie.
+# La CSP è in Report-Only; la versione enforcing con nonce è un passo successivo.
 [[headers]]
   for = "/*"
   [headers.values]

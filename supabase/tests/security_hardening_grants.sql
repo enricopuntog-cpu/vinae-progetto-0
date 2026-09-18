@@ -179,7 +179,8 @@ begin
   return query
     select split_part(e, '|', 1)::integer,
            split_part(e, '|', 2),
-           case split_part(e, '|', 3) when 'true' then 'PASSA' else 'FALLISCE' end,
+           -- format('%s', boolean) scrive `t`/`f`; i casi scritti a mano `true`.
+           case when split_part(e, '|', 3) in ('t', 'true') then 'PASSA' else 'FALLISCE' end,
            split_part(e, '|', 4)
       from unnest(esiti) e
      order by 1;
