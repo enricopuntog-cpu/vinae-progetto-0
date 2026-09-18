@@ -80,6 +80,13 @@ describe("vocabolario chiuso degli errori di autenticazione", () => {
 });
 
 describe("classificazione degli errori Supabase", () => {
+  it("una sessione vecchia richiede una nuova prova di identità, senza esporre il dettaglio", () => {
+    for (const code of ["reauthentication_needed", "reauthentication_not_valid"]) {
+      expect(classificaErroreAuth({ code, message: "private provider detail" }, "aggiornamento-password"))
+        .toBe("riautenticazione-richiesta");
+    }
+    expect(messaggioErroreAuth("riautenticazione-richiesta")).toContain("link di recupero");
+  });
   const casi: ReadonlyArray<
     readonly [string, Parameters<typeof classificaErroreAuth>[0], "login" | "magic-link", CodiceErroreAuth]
   > = [

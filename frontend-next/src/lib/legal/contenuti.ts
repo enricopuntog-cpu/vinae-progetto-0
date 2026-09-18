@@ -2,7 +2,7 @@
  * Non trasformare la bozza in informativa definitiva senza completare il titolare
  * e la verifica di conservazione e contratti dei fornitori. Nessuna società inventata.
  */
-export const versioneLegale = "7 settembre 2026";
+export const versioneLegale = "18 settembre 2026";
 export const identitaLegale = { nome: "", indirizzo: "", email: "" };
 export const statoLegale = "bozza" as const;
 
@@ -51,6 +51,7 @@ export const privacy: readonly CapitoloLegale[] = [
     titolo: "5. Fornitori, destinatari e trasferimenti",
     paragrafi: [
       "Netlify eroga l’hosting e la distribuzione delle pagine. Supabase fornisce database, autenticazione, archiviazione dei file e funzioni del servizio. Il database della beta è collocato nella regione europea eu-west-1, in Irlanda. L’accesso operativo ai dati è riservato alle persone autorizzate nei limiti del ruolo e della necessità.",
+      "Resend è il servizio SMTP usato da Supabase per inviare le email di autenticazione, conferma e recupero dell’account. Riceve l’indirizzo del destinatario e il contenuto necessario alla consegna del messaggio. Non è usato nella beta per newsletter promozionali.",
       "Google interviene quando scegli l’accesso con Google. Inoltre le pagine caricano Google Fonts per la tipografia: il browser contatta i domini Google dei caratteri e comunica i dati tecnici necessari alla richiesta. Eventuali immagini ospitate su domini esterni, inclusi avatar forniti dal provider di accesso o immagini dimostrative, comportano richieste al relativo gestore quando visualizzate.",
       "Le informazioni strettamente necessarie possono essere comunicate a consulenti che assistono il titolare, soggetti autorizzati alla manutenzione e autorità quando richiesto dalla legge. I fornitori che operano per conto del titolare devono essere disciplinati da accordi sul trattamento; per le proprie finalità i servizi esterni operano secondo le rispettive informative.",
       "La regione europea del database non implica che ogni operazione di supporto, rete o subfornitura avvenga soltanto nello Spazio economico europeo. Gli eventuali trasferimenti richiedono una base del capo V GDPR, come una decisione di adeguatezza applicabile al destinatario o clausole contrattuali standard e le misure necessarie. Il titolare deve completare la verifica dei contratti, dei destinatari e delle garanzie effettivamente applicate prima della versione definitiva di questo testo; non viene attestata qui una verifica già conclusa.",
@@ -69,7 +70,7 @@ export const privacy: readonly CapitoloLegale[] = [
     titolo: "7. Funzioni non ancora attive",
     paragrafi: [
       "Pagamenti, accrediti e prenotazione delle spedizioni non sono attivi nella beta descritta. Il sistema contiene strutture per ordini, importi, identificativi del prestatore di pagamento, movimenti, tracking, recensioni e contestazioni: la loro presenza tecnica non significa che stiamo già raccogliendo numeri di carta, IBAN o indirizzi di spedizione attraverso un acquisto operativo. Prima dell’attivazione saranno indicati i dati richiesti e i partner effettivi.",
-      "Le chiamate ai provider di intelligenza artificiale sono disattivate. La memoria locale del Sommelier è descritta nell’informativa cookie. Resend, eventi regionali, promozioni a pagamento, ispezioni fisiche delle bottiglie e accessori da collezione sono sviluppi previsti: questo testo non li presenta come trattamenti già avviati. Un aggiornamento specifico precederà l’eventuale nuova raccolta.",
+      "Le chiamate ai provider di intelligenza artificiale sono disattivate. La memoria locale del Sommelier è descritta nell’informativa cookie. Eventi regionali, promozioni a pagamento, ispezioni fisiche delle bottiglie e accessori da collezione sono sviluppi previsti: questo testo non li presenta come trattamenti già avviati. Un aggiornamento specifico precederà l’eventuale nuova raccolta.",
       "Nella beta descritta non vengono adottate decisioni basate unicamente su trattamenti automatizzati che producano effetti giuridici o analogamente significativi sulla persona. Il controllo della data di nascita verifica il requisito dichiarato di età; non determina una valutazione economica o un punteggio personale.",
     ],
   },

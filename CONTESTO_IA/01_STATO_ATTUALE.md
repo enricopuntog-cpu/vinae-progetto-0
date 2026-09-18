@@ -3353,3 +3353,28 @@ merge la applica tramite l'integrazione Supabase.
 - Pulizia: gli utenti di prova non si cancellano singolarmente (il ledger è
   append-only e `balance_accounts` li referenzia); eliminato l'intero branch di
   anteprima. Produzione: zero utenti `stepup-*`, ledger a 53 voci.
+
+## 18 settembre 2026 — follow-up sicurezza dopo merge PR120
+
+PR119 e PR120 risultano merse; base `09690c39289e80e9389f8fd3f67ef32bd57b1dba`.
+Netlify Published `6aad296a00d5f5000819d6d5` corrisponde alla base. Ledger letto e
+confrontato con i file: 54/54, nessuna differenza. Griglie produzione step-up
+9/9, marketplace 16/16, nuova verifica grant statica 7/7 PASSA. La griglia grant
+con fixture Auth resta solo per anteprima, contrariamente al vecchio handoff.
+
+Secure email change e leaked password protection già ON; Secure password change
+attivato e verificato ON. Divieto di canali pubblici Realtime non salvato:
+revisione automatica richiede autorizzazione specifica; form annullato.
+
+Audit dipendenze ha trovato advisory anche critici non evidenziati dal report
+originario: Next16.3.3 e lockfile aggiornato, audit finale senza segnalazioni.
+Reporter CSP limitato e sanitizzato, tre direttive enforcing, gestione errore
+reauth password, robots e riferimento Resend aggiornati. 1566 test PASS,
+typecheck/build PASS, lint 0 errori/12 warning. Nessuna nuova migrazione.
+
+Porte AI e pagamenti 503 da origine ammessa; dominio nuovo 403 CORS, da completare
+nel futuro lavoro di attivazione. Nessun provider chiamato. Restano OAuth reale,
+backup/restore, CSP script con nonce e smoke autenticati. Dettagli in
+`docs/SECURITY_FOLLOWUP_PR120.md`; checklist in
+`docs/PRELAUNCH_TASK_RECONCILIATION.md`. Questo record supera gli stati PR e ledger
+precedenti senza riscriverne le osservazioni storiche.

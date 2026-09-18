@@ -8,8 +8,9 @@
  * ricevono da `headers()` in `next.config.ts`, che legge questo elenco.
  * `security-headers.test.ts` impedisce alle due copie di divergere.
  *
- * La CSP è in Report-Only: la versione enforcing con nonce generato nel Proxy
- * è un passo successivo, da scrivere dopo aver letto le violazioni reali.
+ * La policy completa è in Report-Only con raccolta sanitizzata; object-src,
+ * base-uri e frame-ancestors sono già enforced. Gli script con nonce nel Proxy
+ * sono un passo successivo, dopo aver letto le violazioni reali.
  * Origini oltre a 'self': Supabase (REST/Auth/Storage via https, Realtime via
  * wss, immagini pubbliche e firmate del bucket), Google Fonts (foglio di stile
  * in `app/layout.tsx` e file dei font) e i.pravatar.cc (avatar dei dati
@@ -28,7 +29,13 @@ export const CONTENT_SECURITY_POLICY = [
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",
+  "report-uri /api/security/csp-report",
+  "report-to csp",
 ].join("; ");
+
+// Queste direttive non dipendono da nonce o dai flussi autenticati. La policy
+// completa resta osservabile prima di bloccare script, immagini e Realtime.
+export const BASE_SECURITY_POLICY = "object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
 
 export const SECURITY_HEADERS: ReadonlyArray<{ key: string; value: string }> = [
   { key: "X-Frame-Options", value: "DENY" },
@@ -39,4 +46,6 @@ export const SECURITY_HEADERS: ReadonlyArray<{ key: string; value: string }> = [
   { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
   { key: "Content-Security-Policy-Report-Only", value: CONTENT_SECURITY_POLICY },
+  { key: "Content-Security-Policy", value: BASE_SECURITY_POLICY },
+  { key: "Reporting-Endpoints", value: 'csp="/api/security/csp-report"' },
 ];

@@ -36,6 +36,7 @@ export const CODICI_ERRORE_AUTH = [
   "recupero-non-inviato",
   "sessione-recupero-assente",
   "password-non-aggiornata",
+  "riautenticazione-richiesta",
   "password-troppo-debole",
   "generico",
 ] as const;
@@ -100,6 +101,8 @@ export const MESSAGGI_ERRORE_AUTH: Record<CodiceErroreAuth, string> = {
     "Il link per reimpostare la password non è più valido. Richiedine uno nuovo.",
   "password-non-aggiornata":
     "Non è stato possibile aggiornare la password. Riprova fra qualche istante.",
+  "riautenticazione-richiesta":
+    "Per cambiare la password devi confermare di nuovo la tua identità. Effettua un nuovo accesso oppure richiedi un link di recupero password.",
   "password-troppo-debole": "La password è troppo debole. Scegline una più lunga e meno comune.",
   generico: "Non è stato possibile completare l'operazione. Riprova.",
 };
@@ -142,6 +145,10 @@ export const classificaErroreAuth = (
   operazione: OperazioneAuth,
 ): CodiceErroreAuth => {
   const testo = testoGrezzo(errore);
+
+  if (errore?.code === "reauthentication_needed" || errore?.code === "reauthentication_not_valid") {
+    return "riautenticazione-richiesta";
+  }
 
   if (errore?.status === 429 || /rate limit|too many|over_.*_rate|for security purposes/.test(testo)) {
     return "troppi-tentativi";
