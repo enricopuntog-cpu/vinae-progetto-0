@@ -23,8 +23,8 @@ Aprire soltanto ciò che serve al task:
 - [`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md) — dossier cronologico di misure e
   stati verificati; l'apertura è una fotografia del 9 agosto 2026, non lo stato
   corrente. Le ultime voci sono del 18 settembre 2026: PR #119 e #120 merse,
-  ledger a 54 migrazioni e follow-up sicurezza con dipendenze corrette e
-  griglie produzione chiuse. Residui e checklist riconciliata in
+  ledger a 54 migrazioni, follow-up PR121 unito e verificato in produzione,
+  canali Realtime pubblici disabilitati e provati. Residui e checklist in
   `../docs/SECURITY_FOLLOWUP_PR120.md` e `../docs/PRELAUNCH_TASK_RECONCILIATION.md`.
 - La regola delle porte che fanno uscire denaro — riautenticazione recente
   dopo il ramo di replay — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`.
