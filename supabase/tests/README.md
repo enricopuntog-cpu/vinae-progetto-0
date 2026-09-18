@@ -770,3 +770,39 @@ un `count(*)` nudo su `wines` sono il seed di catalogo di
 * **Nessuna interfaccia**, perché non esiste: è la Fase 1B.
 * **Nessun fornitore esterno**, perché non ne esiste nessuno. Il caso 27 misura
   l'**assenza di una via d'ingresso**, che è ciò che si può misurare.
+
+## Step-up auth sui prelievi — riautenticazione recente
+
+Migrazione `20260918102406_step_up_auth_prelievi.sql`. Due prove, di natura
+diversa.
+
+**1. Griglia statica** [`step_up_auth_prelievi_static.sql`](step_up_auth_prelievi_static.sql):
+sola lettura, nessuna fixture, eseguibile anche in produzione dopo il merge.
+Esito atteso: 9 righe, tutte `PASSA`. Esiti registrati il 18 settembre 2026:
+anteprima `ddprkiolzaltmymlylax` 9/9 `PASSA`; produzione prima del merge
+3 `PASSA`/6 `FALLISCE` (righe 1-6), il controllo che dimostra che la griglia
+distingue lo stato vecchio.
+
+**2. Comportamento via PostgREST**, con token veri. Il SQL Editor non basta:
+`auth.jwt()` e la risposta 403 esistono solo sul percorso HTTP. Solo su un
+branch di anteprima usa e getta, mai in produzione:
+
+1. utente di prova con identità `email` e un saldo disponibile ottenuto con
+   `private.balance_account_lock` + `private.balance_movimento_applica`;
+2. `POST /auth/v1/token?grant_type=password`, poi `rpc/balance_prelievo_richiedi`:
+   atteso `200`;
+3. invecchiare **sia** `auth.sessions.created_at` **sia**
+   `auth.mfa_amr_claims.updated_at` di quella sessione (la claim `password`
+   del login conta come ultimo accesso): nuova chiave → `403`
+   `reauth_required`, conteggio di `balance_withdrawals` e bucket del rate
+   limit invariati;
+4. stessa chiave di un prelievo già accettato, sessione vecchia → `200` con lo
+   stesso `id`; `balance_prelievo_annulla` → `200`; anonimo → `401 42501`;
+5. nuovo login, stessa chiamata e stessa chiave → `200`, una sola riga;
+6. token della vecchia sessione dopo il nuovo login → `403`; token di una
+   sessione chiusa con `/auth/v1/logout` → `403`.
+
+Esiti del 18 settembre 2026: tutti come attesi, dettaglio in
+`CONTESTO_IA/01_STATO_ATTUALE.md`. Gli utenti di prova non si possono
+cancellare da soli perché il ledger è append-only e li referenzia: si elimina
+l'intero branch di anteprima.

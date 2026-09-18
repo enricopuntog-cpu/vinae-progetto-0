@@ -22,8 +22,11 @@ Aprire soltanto ciò che serve al task:
 
 - [`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md) — dossier cronologico di misure e
   stati verificati; l'apertura è una fotografia del 9 agosto 2026, non lo stato
-  corrente. L'ultima voce è del 18 settembre 2026: security hardening
-  post-audit (grant di `profiles`, header HTTP), PR #119 non mersa.
+  corrente. Le ultime voci sono del 18 settembre 2026: security hardening
+  post-audit (PR #119, mersa; migrazione nel ledger di produzione) e step-up
+  auth sui prelievi (PR in bozza, non mersa).
+- La regola delle porte che fanno uscire denaro — riautenticazione recente
+  dopo il ramo di replay — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`.
 - L'eccezione accettata sulle viste `SECURITY DEFINER` (lint 0010) e i grant
   correnti di `public.profiles` sono in `03_ARCHITETTURA_REGOLE_DEBITI.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.

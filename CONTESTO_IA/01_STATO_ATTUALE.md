@@ -3309,3 +3309,47 @@ violazione Report-Only è l'iframe `app.netlify.com` della barra delle Deploy
 Preview, assente in produzione e quindi non ammessa. I percorsi autenticati
 (Realtime `wss`, immagini firmate della cantina) non sono stati percorsi nel
 browser.
+
+## 18 settembre 2026 — step-up auth sui prelievi (PR in bozza, non mersa)
+
+Branch `claude/step-up-auth-prelievi`, migrazione
+`20260918102406_step_up_auth_prelievi.sql`, NON applicata in produzione: il
+merge la applica tramite l'integrazione Supabase.
+
+- Gate: un access token reale di GoTrue sul branch di anteprima
+  `ddprkiolzaltmymlylax` porta la claim `session_id`, uguale all'`id` in
+  `auth.sessions`. Dopo un refresh `session_id`, `sessions.created_at` e
+  `mfa_amr_claims.updated_at` restano invariati; cambiano `refreshed_at` e
+  `updated_at`.
+- Il corpo di `balance_prelievo_richiedi` è stato copiato dalla migrazione
+  `20260827104500`: md5 di `prosrc` `53e7df1a…` identico in file, anteprima e
+  produzione. Dopo l'applicazione: `balance_prelievo_richiedi` `75c51a0c…`,
+  `autenticazione_recente_richiedi` `a2c33c05…`, entrambi uguali al file;
+  `balance_prelievo_annulla` e `order_checkout_reserve_saldo` invariati.
+- Difetto trovato nella specifica: il DETAIL `{"status":403}` senza `headers`
+  produceva `500 PGRST121`. Corretto aggiungendo `'headers', json_build_object()`
+  prima di qualsiasi push.
+- PostgREST con token veri: sessione fresca 200; sessione invecchiata
+  (`created_at` e claim a -20 min) 403 `reauth_required`, prelievi 2→2, bucket
+  del rate limit 2→2; nuovo login e stessa chiamata 200; replay con sessione
+  vecchia 200 stesso id; annulla con sessione vecchia 200; anonimo 401 `42501`;
+  token della vecchia sessione dopo un login fresco altrove 403; token di una
+  sessione chiusa con logout 403. Invecchiare il solo `sessions.created_at`
+  non basta: la claim `password` del login conta come ultimo accesso.
+- `supabase-js` reale + `createBalanceService`: sessione a -16 min →
+  `riautenticazione: true`; password sbagliata `400 invalid_credentials` e
+  nessuna riga; password giusta, sessione nuova, stessa chiave → prelievo
+  creato una volta (3→4 righe, una per la chiave, impegnati +1300).
+- Browser su `next dev` puntato all'anteprima con sessioni iniettate: account
+  Google → modale con solo «Conferma con Google» e zero campi password; il
+  giro parte ma Google risponde `redirect_uri_mismatch` perché la callback
+  dell'anteprima non è registrata: login Google reale NON completato. Account
+  email → email mostrata, un campo password, nessun bottone provider. Nessuna
+  password digitata nel browser.
+- Griglia statica `supabase/tests/step_up_auth_prelievi_static.sql`: anteprima
+  9/9 PASSA; produzione prima del merge 3 PASSA/6 FALLISCE (controllo atteso).
+- `frontend-next`: 1554 test PASS (floor CI 1554), lint 0 errori/12 warning,
+  typecheck e build PASS.
+- Pulizia: gli utenti di prova non si cancellano singolarmente (il ledger è
+  append-only e `balance_accounts` li referenzia); eliminato l'intero branch di
+  anteprima. Produzione: zero utenti `stepup-*`, ledger a 53 voci.
