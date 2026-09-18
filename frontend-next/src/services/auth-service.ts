@@ -7,6 +7,7 @@ import {
   type ContestoRitornoAuth,
 } from "@/lib/auth/ritorno-auth";
 import { classificaErroreAuth } from "@/lib/auth/errori-auth";
+import { metodiRiautenticazioneDa } from "@/lib/auth/riautenticazione";
 import type { AuthService, OAuthProvider, Result } from "./types";
 
 /**
@@ -190,6 +191,38 @@ export const supabaseAuthService: AuthService = {
     const { data } = await supabase.auth.getSession();
     if (!data.session) return null;
     return { userId: data.session.user.id, email: data.session.user.email ?? null };
+  },
+
+  async metodiRiautenticazione() {
+    const supabase = getSupabaseClient();
+    if (!supabase) return null;
+
+    // getUser e non getSession: le identità collegate si chiedono al server.
+    // Un token locale vecchio potrebbe non conoscere un provider collegato dopo.
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) return null;
+    return metodiRiautenticazioneDa(data.user.identities, data.user.email);
+  },
+
+  async riautenticaConPassword(password) {
+    const supabase = getSupabaseClient();
+    if (!supabase) return { ok: false, error: NON_CONFIGURATO };
+
+    const { data: sessione } = await supabase.auth.getSession();
+    const utente = sessione.session?.user;
+    // Senza sessione non c'è un'identità da confermare: è un accesso, non una
+    // conferma, e lo fa /accedi.
+    if (!utente?.email) return { ok: false, error: "generico" };
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: utente.email,
+      password,
+    });
+    if (error) return { ok: false, error: classificaErroreAuth(error, "login") };
+    // L'email è quella della sessione, quindi l'utente è lo stesso. Se non lo
+    // fosse non si tratterebbe di una conferma, e non la si tratta come tale.
+    if (data.user.id !== utente.id) return { ok: false, error: "generico" };
+    return { ok: true, data: undefined };
   },
 
   /**

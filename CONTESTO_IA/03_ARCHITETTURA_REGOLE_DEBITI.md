@@ -165,6 +165,44 @@ renderebbe scrivibili dal client `stato_utente` e `provvedimenti`, lasciando il
 solo trigger `profiles_stato_utente_guard` a fermare un utente sospeso.
 `public_marketplace_config` è in sola lettura per `anon` e `authenticated`.
 
+## Step-up auth sulle porte che fanno uscire denaro (18 settembre 2026)
+
+Le sessioni restano lunghe per scelta; la contropartita, decisa dalla chat
+organizzativa, è un'autenticazione **recente** (15 minuti) per il denaro che
+esce verso l'utente. Migrazione `20260918102406_step_up_auth_prelievi.sql`.
+
+- **Regola.** Ogni porta che fa uscire denaro verso l'utente chiama
+  `perform private.autenticazione_recente_richiedi(900);` come **prima
+  istruzione dopo il ramo di replay** e prima di rate limit, blocchi e
+  scritture. Ogni nuova porta di questo tipo deve farlo nella stessa PR che la
+  crea. Il replay di una richiesta già accettata non chiede riautenticazione:
+  non crea nulla e ha la sua idempotenza.
+- **Ambito deciso, non allargabile senza decisione.** Protetta oggi solo
+  `public.balance_prelievo_richiedi`. Non protette per decisione di prodotto:
+  `order_checkout_reserve_saldo` (merce all'indirizzo del compratore; costo di
+  conversione) e `balance_prelievo_annulla` (annullare non è dannoso). Cambio
+  password ed email: interruttori della dashboard Auth, non codice.
+- **Come si misura.** La claim `session_id` del JWT (verificata con un token
+  reale) individua la riga di `auth.sessions`; conta
+  `greatest(sessions.created_at, max(mfa_amr_claims.updated_at))`. Il refresh
+  sposta `refreshed_at`/`updated_at`, non quei due (misurato). Mai
+  `max(created_at)` su tutte le sessioni dell'utente: un login fresco sul
+  telefono farebbe passare una sessione vecchia rubata altrove. Fail-closed se
+  manca la claim o la riga (sessione chiusa con logout: 403 misurato).
+- **Risposta.** `raise sqlstate 'PGRST'` con `code = reauth_required` e
+  `status 403`, non 401 (un 401 innesca refresh/logout nei client). PostgREST
+  esige la chiave `headers` nel DETAIL anche vuota: senza, il client riceve un
+  `500 PGRST121` (misurato).
+- **Client.** `frontend-next` apre `ConfermaIdentita` e ripete la stessa
+  chiamata con la stessa chiave di idempotenza. I metodi si leggono dalle
+  identità (`getUser()`): identità `email` → password; `google`/`facebook` →
+  nuovo giro OAuth con rientro su `/account` (l'importo va reinserito). Un
+  account nato con Google non vede mai un campo password.
+- **Limite noto.** Un account con identità `email` ma senza password (nato da
+  magic link) vede il campo password e deve usare «password dimenticata». Un
+  account Google che ha impostato una password Vinea ha solo l'identità
+  `google` e conferma con Google.
+
 ## Regole di denaro introdotte dalla 7b
 
 - La commissione è calcolata lato server e **congelata sull'ordine** insieme ai

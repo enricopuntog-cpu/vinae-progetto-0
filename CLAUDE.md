@@ -203,6 +203,12 @@ RLS filters rows, never columns:
   written only from signed provider events, never from seller requests.
 - Payment completion paths must not react to moderation state in a way that can
   freeze already-paid funds without an exit.
+- Every door that moves money out to the user calls
+  `perform private.autenticazione_recente_richiedi(900);` as the first
+  statement after its idempotent replay branch (today only
+  `balance_prelievo_richiedi`). Recency is measured on the token's
+  `session_id`, never on the user's most recent session; the answer is 403
+  `reauth_required`. Details in `CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md`.
 
 ## Invariant technical conventions
 

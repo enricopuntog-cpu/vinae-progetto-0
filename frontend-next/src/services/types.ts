@@ -27,6 +27,7 @@ import type {
 import type { Wine } from "@/data/wines";
 import type { CodiceErroreAuth } from "@/lib/auth/errori-auth";
 import type { ContestoRitornoAuth } from "@/lib/auth/ritorno-auth";
+import type { MetodiRiautenticazione } from "@/lib/auth/riautenticazione";
 
 export type Result<T, E = string> = { ok: true; data: T } | { ok: false; error: E };
 
@@ -109,6 +110,20 @@ export interface AuthService {
   signInWithFacebook(contesto?: ContestoRitornoAuth): Promise<ResultAuth<void>>;
   logout(): Promise<void>;
   utenteCorrente(): Promise<{ userId: string; email: string | null } | null>;
+  /**
+   * Step-up auth: con quali prove l'utente **della sessione corrente** può
+   * rifare l'accesso. Letto dalle identità collegate all'account tramite
+   * `getUser()`, che le chiede al server invece di fidarsi del token locale.
+   * `null` se non c'è una sessione.
+   */
+  metodiRiautenticazione(): Promise<MetodiRiautenticazione | null>;
+  /**
+   * Rifà l'accesso con la password dell'utente **della sessione corrente**:
+   * l'email la prende dalla sessione, non dal chiamante. Un accesso riuscito
+   * apre una sessione nuova, ed è la nascita di quella sessione che il
+   * database misura prima di un prelievo.
+   */
+  riautenticaConPassword(password: string): Promise<ResultAuth<void>>;
   /** Ruoli della sola riga corrente, filtrati dalla RLS su `user_roles`. */
   ruoliProfilo(userId: string): Promise<Result<string[]>>;
   // Lettura e scrittura del profilo NON stanno più qui: appartengono a
@@ -1018,6 +1033,14 @@ export type PrelievoRichiesto = {
   createdAt: string;
 };
 
+/**
+ * Il database ha rifiutato un prelievo nuovo perché la sessione non è stata
+ * aperta negli ultimi 15 minuti (403 `reauth_required`). Non è un errore da
+ * mostrare e basta: chi chiama deve far confermare l'identità e ripetere la
+ * STESSA richiesta, chiave di idempotenza compresa.
+ */
+export type RiautenticazioneRichiesta = { ok: false; error: string; riautenticazione: true };
+
 export interface BalanceService {
   /** Saldo e storia del solo titolare autenticato. */
   riepilogo(limiteMovimenti?: number): Promise<Result<SaldoVinea>>;
@@ -1032,7 +1055,7 @@ export interface BalanceService {
   richiediPrelievo(
     amountCents: number,
     idempotencyKey: string,
-  ): Promise<Result<PrelievoRichiesto>>;
+  ): Promise<Result<PrelievoRichiesto> | RiautenticazioneRichiesta>;
   /** Scioglie la prenotazione di un prelievo ancora fermo in coda. */
   annullaPrelievo(withdrawalId: string): Promise<Result<void>>;
 }

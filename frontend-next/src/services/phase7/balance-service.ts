@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { noClient, serviceError } from "@/services/phase7/shared";
+import { CODICE_RIAUTENTICAZIONE } from "@/lib/auth/riautenticazione";
 import type {
   BalanceService,
   MovimentoSaldo,
   MovimentoSaldoTipo,
+  PrelievoRichiesto,
   PrelievoSaldo,
   PrelievoSaldoStato,
   SaldoVinea,
@@ -92,7 +94,16 @@ export const createBalanceService = (client: SupabaseClient | null): BalanceServ
       p_amount_cents: amountCents,
       p_idempotency_key: idempotencyKey,
     });
-    if (error) return serviceError("balance_prelievo_richiedi", error);
+    if (error) {
+      const esito = serviceError<PrelievoRichiesto>("balance_prelievo_richiedi", error);
+      // Sessione non recente: il database non ha creato nulla, e l'unica
+      // risposta giusta è far rifare l'accesso e ripetere questa stessa
+      // chiamata. Lo si dice con un campo, non lasciandolo indovinare dal testo.
+      if (error.code === CODICE_RIAUTENTICAZIONE && !esito.ok) {
+        return { ok: false, error: esito.error, riautenticazione: true };
+      }
+      return esito;
+    }
     const riga = data as RigaPrelievo | null;
     if (!riga?.id) {
       return { ok: false, error: "La richiesta di prelievo non è stata registrata." };
