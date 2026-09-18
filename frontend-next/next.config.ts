@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
   // Solo il vecchio host pubblico: le anteprime conservano il proprio URL.
   redirects: async () => [{
     source: "/:path*",
