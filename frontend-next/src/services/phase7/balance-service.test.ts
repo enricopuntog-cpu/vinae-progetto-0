@@ -8,7 +8,7 @@ import { createBalanceService } from "@/services/phase7/balance-service";
 // altrettanto importante, che non lo attraversi due volte in modo diverso.
 // ---------------------------------------------------------------------------
 
-type Risposta = { data?: unknown; error?: { message?: string } | null };
+type Risposta = { data?: unknown; error?: { code?: string; message?: string } | null };
 
 const fakeClient = (risposta: Risposta = { data: null }) => {
   const chiamate: { nome: string; args: Record<string, unknown> }[] = [];
@@ -65,6 +65,34 @@ describe("richiediPrelievo", () => {
     const { client } = fakeClient({ data: null });
     const esito = await createBalanceService(client).richiediPrelievo(2500, "chiave-abcdefgh");
     expect(esito.ok).toBe(false);
+  });
+
+  it("reauth_required diventa una richiesta di conferma, con il testo del database", async () => {
+    const { client } = fakeClient({
+      data: null,
+      error: {
+        code: "reauth_required",
+        message: "Per sicurezza, conferma la tua identita' per continuare.",
+      },
+    });
+    const esito = await createBalanceService(client).richiediPrelievo(2500, "chiave-abcdefgh");
+    expect(esito).toEqual({
+      ok: false,
+      error: "Per sicurezza, conferma la tua identita' per continuare.",
+      riautenticazione: true,
+    });
+  });
+
+  it("gli altri errori non chiedono una conferma d'identità", async () => {
+    for (const code of ["P0001", "rate_limit_exceeded", "42501", undefined]) {
+      const { client } = fakeClient({
+        data: null,
+        error: { code, message: "Saldo Vinea insufficiente." },
+      });
+      const esito = await createBalanceService(client).richiediPrelievo(2500, "chiave-abcdefgh");
+      expect(esito.ok).toBe(false);
+      expect("riautenticazione" in esito).toBe(false);
+    }
   });
 
   it("l'errore del database non passa per un successo", async () => {

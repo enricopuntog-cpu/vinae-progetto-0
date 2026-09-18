@@ -49,8 +49,34 @@ const registra = (nome: string, ...argomenti: readonly unknown[]) => {
   return Promise.resolve({ data: { url: null }, error: erroreProvider });
 };
 
+/**
+ * Stato del finto Auth per la conferma d'identità prima di un prelievo
+ * (step-up auth). Vive qui perché questo è l'unico file che sostituisce
+ * `@/lib/supabase/client`: un secondo `mock.module` dello stesso modulo in un
+ * altro file si contenderebbe il registro dei moduli nello stesso processo.
+ */
+type UtenteFinto = { id: string; email: string | null; identities: { provider: string }[] };
+let utenteSessione: UtenteFinto | null = null;
+let utenteServer: UtenteFinto | null = null;
+let idDopoLogin: string | null = null;
+
 const clientBrowser = {
   auth: {
+    getSession: async () => ({
+      data: { session: utenteSessione ? { user: utenteSessione } : null },
+      error: null,
+    }),
+    getUser: async () => {
+      chiamate.push({ nome: "getUser", argomenti: [] });
+      return utenteServer
+        ? { data: { user: utenteServer }, error: null }
+        : { data: { user: null }, error: { message: "Auth session missing!" } };
+    },
+    signInWithPassword: async (credenziali: { email: string; password: string }) => {
+      chiamate.push({ nome: "signInWithPassword", argomenti: [credenziali] });
+      if (erroreProvider) return { data: { user: null, session: null }, error: erroreProvider };
+      return { data: { user: { id: idDopoLogin ?? utenteSessione?.id } }, error: null };
+    },
     resetPasswordForEmail: (email: string, opzioni?: unknown) =>
       registra("resetPasswordForEmail", email, opzioni),
     updateUser: (attributi: unknown) => registra("updateUser", attributi),
@@ -115,6 +141,9 @@ beforeEach(() => {
   scambioFallisce = null;
   clientBrowserAttivo = true;
   clientServerAttivo = true;
+  utenteSessione = null;
+  utenteServer = null;
+  idDopoLogin = null;
 });
 
 const soloNome = (nome: string) => chiamate.filter((c) => c.nome === nome);
@@ -348,5 +377,83 @@ describe("/auth/callback — gli altri flussi non sono cambiati", () => {
     const { percorso, parametri } = destinazioneDi(risposta);
     expect(percorso).toBe("/accedi");
     expect(parametri.get("next")).toBe("/cantina");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Step-up auth: conferma d'identità prima di un prelievo
+// ---------------------------------------------------------------------------
+
+const EMAIL_UTENTE = { id: "u-1", email: "a@vinea.test", identities: [{ provider: "email" }] };
+const GOOGLE_UTENTE = { id: "u-2", email: "g@vinea.test", identities: [{ provider: "google" }] };
+
+describe("riautenticaConPassword — eseguito", () => {
+  it("usa l'email della sessione e apre una sessione nuova con una sola chiamata", async () => {
+    utenteSessione = EMAIL_UTENTE;
+    const esito = await supabaseAuthService.riautenticaConPassword("giusta-123");
+    expect(esito).toEqual({ ok: true, data: undefined });
+    const accessi = soloNome("signInWithPassword");
+    expect(accessi.length).toBe(1);
+    expect(accessi[0]?.argomenti[0]).toEqual({ email: "a@vinea.test", password: "giusta-123" });
+  });
+
+  it("password sbagliata: un codice del vocabolario, mai il testo del provider", async () => {
+    utenteSessione = EMAIL_UTENTE;
+    erroreProvider = { message: "Invalid login credentials", status: 400 };
+    const esito = await supabaseAuthService.riautenticaConPassword("sbagliata");
+    expect(esito).toEqual({ ok: false, error: "credenziali-non-valide" });
+  });
+
+  it("senza sessione non tenta un accesso: non c'è un'identità da confermare", async () => {
+    const esito = await supabaseAuthService.riautenticaConPassword("qualunque");
+    expect(esito.ok).toBe(false);
+    if (!esito.ok) expect(eCodiceDelVocabolario(esito.error)).toBe(true);
+    expect(soloNome("signInWithPassword").length).toBe(0);
+  });
+
+  it("un accesso che restituisce un altro utente non vale come conferma", async () => {
+    utenteSessione = EMAIL_UTENTE;
+    idDopoLogin = "u-altro";
+    const esito = await supabaseAuthService.riautenticaConPassword("giusta-123");
+    expect(esito.ok).toBe(false);
+  });
+});
+
+describe("metodiRiautenticazione — eseguito", () => {
+  it("chiede le identità al server e per un account Google non offre la password", async () => {
+    utenteServer = GOOGLE_UTENTE;
+    const metodi = await supabaseAuthService.metodiRiautenticazione();
+    expect(soloNome("getUser").length).toBe(1);
+    expect(metodi).toEqual({ email: "g@vinea.test", password: false, oauth: ["google"] });
+  });
+
+  it("account email/password: solo la password", async () => {
+    utenteServer = EMAIL_UTENTE;
+    expect(await supabaseAuthService.metodiRiautenticazione()).toEqual({
+      email: "a@vinea.test",
+      password: true,
+      oauth: [],
+    });
+  });
+
+  it("senza utente lato server: nessun metodo, non un'ipotesi", async () => {
+    expect(await supabaseAuthService.metodiRiautenticazione()).toBeNull();
+  });
+});
+
+describe("conferma con provider — rientro sul saldo", () => {
+  it("il giro OAuth chiede di rientrare su /account passando dalla callback", async () => {
+    await supabaseAuthService.accediConOAuth("google", { next: "/account" });
+    const { options } = soloNome("signInWithOAuth")[0]?.argomenti[0] as {
+      options: { redirectTo: string };
+    };
+    const url = new URL(options.redirectTo);
+    expect(url.pathname).toBe("/auth/callback");
+    expect(url.searchParams.get("next")).toBe("/account");
+  });
+
+  it("la callback, scambiato il code, riporta l'utente sulla pagina del saldo", async () => {
+    const risposta = await chiama("?code=valido&next=%2Faccount");
+    expect(destinazioneDi(risposta).percorso).toBe("/account");
   });
 });

@@ -11,6 +11,7 @@ import { importoPrelievoInCentesimi, prelievoAnnullabile } from "@/lib/balance/p
 import { eseguiAzioneBeta } from "@/lib/beta/external-actions";
 import { AZIONI_PAGAMENTO_ABILITATE } from "@/config/features";
 import type { SaldoVinea } from "@/services/types";
+import ConfermaIdentita from "./conferma-identita";
 
 const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
   <div className={`rounded-2xl border border-border bg-card p-5 md:p-6 ${className}`}>{children}</div>
@@ -24,6 +25,9 @@ export default function SaldoVineaPanel() {
   const [importo, setImporto] = useState("");
   const [errorePrelievo, setErrorePrelievo] = useState<string | null>(null);
   const [avvisoBeta, setAvvisoBeta] = useState<string | null>(null);
+  // Il database ha chiesto un accesso recente (step-up auth): si apre la
+  // conferma d'identità, e a conferma riuscita si ripete la stessa richiesta.
+  const [confermaIdentita, setConfermaIdentita] = useState(false);
   // La chiave sopravvive al ritentativo: è ciò che distingue «riprova la stessa
   // richiesta» da «apri un secondo prelievo». Si azzera solo quando la richiesta
   // è arrivata a destinazione, o quando l'utente cambia l'importo.
@@ -102,6 +106,12 @@ export default function SaldoVineaPanel() {
       return;
     }
     if (!esito.valore.ok) {
+      // Nessuna riga creata: la sessione non è recente. La chiave NON si
+      // azzera, così la ripetizione dopo la conferma è la stessa richiesta.
+      if ("riautenticazione" in esito.valore) {
+        setConfermaIdentita(true);
+        return;
+      }
       setErrorePrelievo(esito.valore.error);
       return;
     }
@@ -212,6 +222,15 @@ export default function SaldoVineaPanel() {
                 <p id="prelievo-errore" className="text-sm text-red-700">{errorePrelievo}</p>
               )}
               {avvisoBeta && <p className="text-sm text-amber-700">{avvisoBeta}</p>}
+              <ConfermaIdentita
+                aperto={confermaIdentita}
+                onChiudi={() => setConfermaIdentita(false)}
+                onConfermata={() => {
+                  setConfermaIdentita(false);
+                  // Stesso importo, ancora nel campo, e stessa chiave nel ref.
+                  void richiediPrelievo();
+                }}
+              />
             </div>
           </Card>
 
