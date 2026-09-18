@@ -174,6 +174,14 @@ RLS filters rows, never columns:
 - Public reads use `security_invoker = off` views with explicit closed column
   lists. A newly added base-table column remains private until deliberately
   exposed.
+- Supabase lint 0010 (`security_definer_view`) on the `public_*`, `my_*` and
+  `moderation_*` views is an accepted exception: never "fix" it by switching
+  them to `security_invoker = on`, which breaks anonymous marketplace reads. A
+  new such view needs an explicit filtering `WHERE` and must be added to the
+  closed list in `CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md`.
+- `anon` has no privilege on `public.profiles`; `authenticated` has table
+  `SELECT` plus column-level `UPDATE` only. Never replace that with a
+  table-wide `UPDATE` grant: it would expose the moderation columns.
 - Domain-controlled columns are absent from client write grants and are changed
   only through a checked `SECURITY DEFINER` function.
 - Cross-table invariants also use triggers so privileged writers are bound.

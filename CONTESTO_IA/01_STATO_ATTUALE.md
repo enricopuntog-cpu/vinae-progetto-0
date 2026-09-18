@@ -3243,3 +3243,69 @@ Due correzioni di modello emerse leggendo il codice:
   registro di iscrizione o autocertificazione.
 
 `PAYMENTS_ENABLED` resta `false` e non è stato toccato.
+
+## Security hardening dopo l'audit del 17 settembre 2026 — 18 settembre 2026
+
+PR #119, in bozza e **non mersa**. Il merge applica la migrazione in
+produzione tramite l'integrazione GitHub di Supabase. Gli header di pagina
+arrivano in produzione solo con un nuovo deploy Netlify, e il 15 settembre è
+stato misurato che un merge su `main` non ha ricostruito la produzione.
+
+### Prima, letto in sola lettura sul progetto reale `pijnmcllmfgjmgsvtcej`
+
+- `anon` su `public.profiles`: grant di tabella `DELETE, INSERT, REFERENCES,
+  SELECT, TRIGGER, TRUNCATE, UPDATE` e UPDATE di colonna su tutte le quindici
+  colonne.
+- `authenticated`: `DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE` di
+  tabella; UPDATE **solo di colonna** sulle otto colonne della Fase 9b.
+- `profiles` e le viste che la leggono sono di proprietà di `postgres`, che ha
+  `rolbypassrls = true`. `private.professional_qualification_reviews_append_only()`
+  non aveva `search_path` fisso.
+
+### Deviazione dal testo approvato dall'audit
+
+Il testo prescriveva `grant select, update on public.profiles to
+authenticated`. Applicato alla lettera, avrebbe sostituito il grant di colonna
+della Fase 9b con un UPDATE di tabella: `stato_utente`, `provvedimenti`,
+`stato_utente_at`, `stato_utente_motivo`, `id`, `created_at` e `updated_at`
+sarebbero tornati scrivibili dal client, lasciando al solo trigger
+`profiles_stato_utente_guard` il compito di fermare un utente sospeso. La
+migrazione `20260918090918_security_hardening_grants.sql` ricrea invece
+`SELECT` di tabella più UPDATE di colonna identico a prima. Il resto del testo
+è applicato com'è.
+
+### Dopo, misurato sul branch di anteprima `gododaicukthqdkacyuf` (PR #119)
+
+- Ledger dell'anteprima: 53 voci, ultima `20260918090918`.
+- Query dell'audit: per `anon` nessuna riga; per `authenticated` solo `SELECT`
+  di tabella; `relforcerowsecurity = true`.
+- Griglia `supabase/tests/security_hardening_grants.sql`: **20/20 PASSA**, zero
+  residui. La prima esecuzione riportava FALLISCE su casi con valori corretti
+  per un errore del registro (`format('%s', boolean)` scrive `t`): corretto il
+  registro, non i casi.
+- HTTP sull'anteprima: signup GoTrue `200` con profilo creato dal trigger;
+  `authenticated` legge la propria riga (`200`) e modifica bio e città (`200`);
+  PATCH di `stato_utente` e DELETE `403 42501`; `anon` su `profiles` GET e
+  DELETE `401 42501`; `public_listings`, `public_clubs`,
+  `public_marketplace_config` e `rpc/profilo_pubblico` `200`; POST anonimo
+  sulla vista di configurazione `401 42501`. Utente di prova cancellato;
+  anteprima riletta con zero utenti e zero profili.
+
+### Header HTTP
+
+Le regole `[[headers]]` di `netlify.toml` raggiungono solo i file statici della
+CDN: sulla prima Deploy Preview `/` non aveva né `X-Frame-Options` né la CSP,
+mentre un chunk `/_next/static/` li aveva. Lo stesso elenco è ora servito anche
+da `headers()` in `next.config.ts` tramite
+`frontend-next/src/lib/security-headers.ts`, e un test tiene allineate le due
+copie. Sulla Deploy Preview finale `/`, `/esplora`, `/accedi` e `/community`
+portano tutti gli header e la CSP in Report-Only; `x-powered-by` è sparito.
+HSTS vi risulta `max-age=31536000; includeSubDomains; preload` perché su
+`*.netlify.app` Netlify impone il proprio valore: il valore di due anni va
+verificato sul dominio proprio dopo il rilascio.
+
+Navigazione della Deploy Preview (home, ricerca, club, accesso, legale): l'unica
+violazione Report-Only è l'iframe `app.netlify.com` della barra delle Deploy
+Preview, assente in produzione e quindi non ammessa. I percorsi autenticati
+(Realtime `wss`, immagini firmate della cantina) non sono stati percorsi nel
+browser.

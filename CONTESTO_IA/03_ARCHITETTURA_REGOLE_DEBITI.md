@@ -120,6 +120,51 @@ stata sostituita dalla policy corrente sopra.
 - Una vendita pubblicata richiede una data di nascita dichiarata compatibile
   con la maggiore età.
 
+## Eccezione accettata: viste `SECURITY DEFINER` (lint Supabase 0010)
+
+Registrata dopo il security audit del 17 settembre 2026 (PR #119). Il linter
+Supabase segnala come ERROR (lint 0010, `security_definer_view`) le viste
+`public.*` che girano con i privilegi del proprietario. Per Vinea sono
+**intenzionali e corrette** e **non vanno convertite a
+`security_invoker = on`**: sono il meccanismo con cui dati curati arrivano ad
+`anon` e ad `authenticated`, che giustamente non hanno grant sulle tabelle base.
+Convertirle romperebbe il marketplace pubblico, i club e le code di
+moderazione. Il filtro vive nel loro `WHERE` e nel loro elenco chiuso di
+colonne: per esempio `moderation_report_queue` filtra su
+`user_roles.role = 'admin'`, `my_reports` su `reporter_id = auth.uid()`,
+`public_listings` su `stato = 'attivo'` senza colonne PII.
+
+Elenco chiuso delle sedici viste accettate al 18 settembre 2026, tutte di
+proprietà di `postgres`:
+
+- pubbliche: `public_listings`, `public_clubs`, `public_club_posts`,
+  `public_club_post_risposte`, `public_marketplace_config`,
+  `public_packaging_options`, `wine_price_history`;
+- del proprietario: `my_reports`, `my_report_events`, `my_certifications`,
+  `my_listing_moderation`, `my_sommelier_messages`;
+- di moderazione: `moderation_report_queue`, `moderation_report_events`,
+  `moderation_dispute_queue`, `moderation_audit_log`.
+
+Regola: una nuova vista `public_*`, `my_*` o `moderation_*` con
+`security_invoker = off` deve avere un `WHERE` di filtro esplicito (stato
+pubblico, `auth.uid()` o ruolo verificato) e un elenco chiuso di colonne, e va
+aggiunta a questo elenco nella stessa PR. Una vista che compare nel lint 0010 e
+non è in questo elenco è un difetto da esaminare, non un'eccezione.
+
+## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
+
+Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):
+`anon` non ha alcun privilegio su `public.profiles`; `authenticated` ha
+`SELECT` di tabella e `UPDATE` **di colonna** sulle otto colonne della Fase 9b
+(`username, bio, citta, provincia, esperienza, avatar_url, dob, obiettivi`);
+`INSERT`/`DELETE` non esistono per i client, perché la riga nasce dal trigger
+`on_auth_user_created`. La tabella ha `FORCE ROW LEVEL SECURITY`, innocuo per
+`handle_new_user()` perché il proprietario `postgres` ha `rolbypassrls`. Non
+sostituire mai il grant di colonna con un `grant update on public.profiles`:
+renderebbe scrivibili dal client `stato_utente` e `provvedimenti`, lasciando il
+solo trigger `profiles_stato_utente_guard` a fermare un utente sospeso.
+`public_marketplace_config` è in sola lettura per `anon` e `authenticated`.
+
 ## Regole di denaro introdotte dalla 7b
 
 - La commissione è calcolata lato server e **congelata sull'ordine** insieme ai
@@ -199,9 +244,14 @@ successive possono costruire.
   marketplace;
 - rate limiting condiviso per RPC/Edge Functions;
 - threat model e revisione indipendente;
-- gestione centralizzata segreti, CSP/HSTS, osservabilità, alert;
+- gestione centralizzata segreti, osservabilità, alert;
+- CSP: dalla PR #119 gli header di sicurezza e HSTS con `includeSubDomains;
+  preload` sono in `netlify.toml` e la CSP è in **Report-Only**. Resta aperta la
+  CSP enforcing con nonce via middleware, da scrivere dopo aver letto le
+  violazioni raccolte in produzione;
 - backup, restore e disaster recovery;
-- Leaked Password Protection in Supabase Auth.
+- Leaked Password Protection in Supabase Auth (azione manuale da dashboard);
+  valutare le passkey.
 
 ### Debiti della migrazione
 

@@ -1,6 +1,6 @@
 # Router del contesto durevole Vinea
 
-Ultimo aggiornamento del router: **15 settembre 2026**.
+Ultimo aggiornamento del router: **18 settembre 2026**.
 
 Questa cartella conserva memoria strutturale e storia datata. Non è il bootstrap
 obbligatorio e non sostituisce le fonti vive.
@@ -22,8 +22,10 @@ Aprire soltanto ciò che serve al task:
 
 - [`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md) — dossier cronologico di misure e
   stati verificati; l'apertura è una fotografia del 9 agosto 2026, non lo stato
-  corrente. L'ultima voce è del 15 settembre 2026: dominio proprio, SMTP
-  Resend e riconciliazione del ledger delle migrazioni.
+  corrente. L'ultima voce è del 18 settembre 2026: security hardening
+  post-audit (grant di `profiles`, header HTTP), PR #119 non mersa.
+- L'eccezione accettata sulle viste `SECURITY DEFINER` (lint 0010) e i grant
+  correnti di `public.profiles` sono in `03_ARCHITETTURA_REGOLE_DEBITI.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono
