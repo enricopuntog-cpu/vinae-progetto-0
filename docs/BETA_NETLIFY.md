@@ -277,3 +277,19 @@ si tocca e i redirect preesistenti non si rimuovono.
 Il mock conta separatamente ogni tentativo IA, pagamento o logistica tramite
 `GET /_counts`; tutti e tre devono restare a zero. Non contiene credenziali,
 non sostituisce test RLS e non deve essere usato come backend della beta.
+
+## Aggiornamento misurato il 18 settembre 2026
+
+La precedente sezione sul 15 settembre è storica. La dashboard oggi mostra repo
+`enricopuntog-cpu/vinae-progetto-0`, produzione `main`, build Active, base
+`frontend-next`, comando `bun run build`, publish `.next`, Deploy Preview per PR.
+Il deploy Published `6aad296a00d5f5000819d6d5` del 18 settembre 12:08 UTC corrisponde
+esattamente al merge PR120 `09690c39289e80e9389f8fd3f67ef32bd57b1dba`.
+Questo dimostra l'allineamento attuale, non la causa dell'incidente storico.
+Continuare a controllare il Published SHA dopo ogni rilascio.
+
+Gli header PR119 sono presenti sul dominio custom; callback senza codice 307
+sul dominio stabile. Il follow-up aggiunge reporter CSP sanitizzato, direttive
+di base enforcing e robots.txt. La policy script completa resta Report-Only.
+La dashboard indica Node24 ma `netlify.toml` impone Node22 e Bun1.3.14.
+Dettagli e limiti in `SECURITY_FOLLOWUP_PR120.md`.
