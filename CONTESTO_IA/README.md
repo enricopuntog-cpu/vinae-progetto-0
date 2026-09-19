@@ -90,6 +90,12 @@ va riscritto come se la decisione precedente non fosse mai esistita.
   L'elenco esatto è in [`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md).
   Un merge non prova che una nuova migrazione sia stata applicata, e un merge
   senza migrazioni può averne distribuite di altrui: rileggere sempre il ledger.
+- Chiusura tecnica pre-lancio del 19 settembre 2026: restore isolato concluso
+  ed eliminato, backup Storage verificato fuori Git/OneDrive, CSP script con
+  nonce in produzione, allowlist Edge verificata 10/10 e scheduler provato con
+  due invocazioni reali. `AI_ENABLED` e `PAYMENTS_ENABLED` restano `false`.
+  Stato operativo in `../docs/PRELAUNCH_TASK_RECONCILIATION.md` e runbook in
+  `../docs/CONTINUITY_AND_BACKUP_RUNBOOK.md`.
 - Rilascio Netlify: il sito è collegato al repository e costruisce una Deploy
   Preview per ogni PR, ma **un merge su `main` non ha ricostruito la produzione**
   — misurato il 15 settembre 2026 sui merge `aca86ac` e `344ad45`. Il motivo è

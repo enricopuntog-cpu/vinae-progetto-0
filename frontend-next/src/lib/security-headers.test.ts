@@ -47,6 +47,12 @@ describe("header di sicurezza", () => {
     expect(connect).toContain("wss://pijnmcllmfgjmgsvtcej.supabase.co");
   });
 
+  it("img-src non invia visitatori a servizi avatar dimostrativi", () => {
+    const images = CONTENT_SECURITY_POLICY.split("; ").find((d) => d.startsWith("img-src"));
+    expect(images).toContain("https://pijnmcllmfgjmgsvtcej.supabase.co");
+    expect(images).not.toContain("pravatar");
+  });
+
   it("il sito non è incorniciabile e non dichiara il framework", () => {
     expect(SECURITY_HEADERS).toContainEqual({ key: "X-Frame-Options", value: "DENY" });
     expect(CONTENT_SECURITY_POLICY).toContain("frame-ancestors 'none'");

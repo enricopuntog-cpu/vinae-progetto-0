@@ -1,28 +1,28 @@
 # Checklist pre-lancio riconciliata
 
-18 settembre 2026. Fonte: `task.TXT` versione 1.3 fornita dall'utente.
+Aggiornata il 19 settembre 2026. Fonte: `task.TXT` versione 1.3 fornita dall'utente.
 Stati verificati nel [follow-up sicurezza](SECURITY_FOLLOWUP_PR120.md).
 Le assegnazioni «C» nel documento non aprono da sole nuove funzionalità o fasi.
 
 | Blocco / voce | Stato e prossimo passo |
 | --- | --- |
-| A: recupero build in Git | Già chiuso dalla PR116; il deploy letto corrisponde al merge PR120. |
+| A: recupero build in Git | Chiuso. PR #123 unita; produzione e checkout Desktop verificati sul merge `f3c7c3a`. |
 | A: dominio e configurazione documentati | Già presenti; aggiornate qui le misure Netlify al 18 settembre. |
 | A: ledger e marketplace_config | 54 migrazioni; griglia 16/16 e valori 800/209/25/14. Ripetere prima dei pagamenti. |
 | A: Realtime privato | Chiuso: pubblico rifiutato, canale privato ammesso ai partecipanti e negato a estraneo/anonimo; broadcast database ricevuto dal partecipante. |
 | A: interruttori Auth | Secure email change, secure password change, leaked password protection ON. Current password OFF. |
-| A: gate fail-closed | Porte AI/pagamenti 503; webhook 503. Verifica scheduler/configurazione completa ancora necessaria prima dell'accensione. |
-| A: backup completo ripristinabile | Chiuso tecnicamente il 19 settembre: restore isolato verificato su schema/dati/Auth; 11 oggetti Storage salvati fuori Git/OneDrive con hash/eTag verificati. Copia temporanea da cancellare al termine. |
+| A: gate fail-closed | Chiuso: le cinque porte AI/pagamenti rispondono 503 con CORS esatto sia dal dominio stabile sia da localhost; webhook 503. AI e pagamenti restano OFF. |
+| A: backup completo ripristinabile | Chiuso tecnicamente il 19 settembre: restore isolato verificato su schema/dati/Auth; 11 oggetti Storage salvati fuori Git/OneDrive con hash/eTag verificati. Copia temporanea eliminata e produzione rimasta unica. |
 | A: club e contenuti veri | Una riga attuale. Servono nomi, territori, responsabili e contenuti approvati da Enrico prima del seed. |
 | A: contestazioni, imballaggio, inviti, supporto | Decisioni Enrico; possiamo redigere le procedure dopo tempi, responsabilità e promesse di servizio. |
 | A: commercialista, marchio, MBE, altre offerte, enoteche | Attività esterne Enrico/professionisti. Nessun invio o acquisto eseguito. |
 | B: forma/società/IVA/conto, fondo | Decisioni e adempimenti esterni ancora aperti. |
 | B: termini/privacy/cookie/registro/DPIA/DAC7/età | Revisione professionale aperta. Resend corretto come fatto tecnico; non dichiarata conformità legale. |
-| B: Stripe e scheduler | Prima dell'abilitazione: onboarding verificato e almeno due esecuzioni scheduler riuscite osservate, con configurazione approvata. |
+| B: Stripe e scheduler | Scheduler chiuso tecnicamente: URL, token e chiave pubblica configurati; run `35450587237` e `35450783027` hanno invocato davvero la function con `enabled=false`, zero trasferimenti e zero bloccati. Onboarding Stripe resta successivo. |
 | B: prelievo OAuth | Google reale: nuova autenticazione, ritorno `/account` e nuova sessione verificati. Retry economico non eseguito con gate OFF; Facebook non esposto dalla UI. |
-| B: continuità | Da scrivere insieme alla prova backup/restore: custodia, delega, tempi e ordini durante indisponibilità. |
+| B: continuità | Runbook tecnico scritto in `CONTINUITY_AND_BACKUP_RUNBOOK.md`. Enrico deve nominare delegato, destinazione cifrata offsite, canale avvisi e approvare RTO/RPO. |
 | B: ordine reale e PAYMENTS_ENABLED | L'ordine scritto è circolare: un pagamento reale richiede il gate attivo. Prima test isolato con provider test; poi finestra controllata di attivazione e importo minimo, esplicitamente concordata. Nessuna accensione in questo task. |
-| C: CSP e dati demo | CSP script enforcing con nonce chiusa in PR #123 e smoke Deploy Preview verde. Restano dati/avatar demo e `style-src 'unsafe-inline'`. |
+| C: CSP e dati demo | CSP script enforcing con nonce chiusa in PR #123. La nuova chiusura rimuove `i.pravatar.cc` dalle policy; i file demo non sono montati nelle route pubbliche. Resta `style-src 'unsafe-inline'`, richiesto dagli stili React/Radix correnti. |
 | C: accessi senza password | Recupero disponibile; flusso magic-link dedicato da definire quando usato davvero. |
 | C: marchio, audit esterno, go/no-go, metriche carte/tempo/club, logistica, stato | Non chiusi da test tecnici. Richiedono professionisti, dati beta o decisioni Enrico. |
 | D: multi-bottiglia, vetrina, contestazioni automatiche | Non implementati da questa checklist: verificare ammissione e dipendenze roadmap. Vetrina già progettata, restano decisioni commerciali. |
@@ -32,10 +32,10 @@ Le assegnazioni «C» nel documento non aprono da sole nuove funzionalità o fas
 
 ## Ordine proposto per proseguire
 
-1. Unire PR #123, verificare il dominio stabile e cancellare la copia restore.
-2. Scrivere/approvare il piano di continuità organizzativa e la custodia del backup.
-3. Enrico chiude contenuti club, regole operative e interlocuzioni professionali;
+1. Enrico completa le quattro decisioni di custodia/continuità elencate nel runbook.
+2. Enrico chiude contenuti club, regole operative e interlocuzioni professionali;
    solo dopo pianificare il gate pagamenti con scheduler e test controllato.
+3. Le funzioni di prodotto opzionali restano lavori separati da ammettere in roadmap.
 
 La beta non è dichiarata pronta ai pagamenti o al lancio pubblico.
 
@@ -47,4 +47,4 @@ Per OAuth serve collaborazione soltanto se il provider richiede una password,
 un codice, una conferma sul telefono o un'altra verifica personale che l'agente
 non può completare. Non occorre inviare password nella chat. Decisioni su club,
 procedure, fornitori e adempimenti restano quelle di prodotto/organizzazione
-elencate sopra; non bloccano l'esecuzione dei prossimi controlli tecnici.
+elencate sopra. Tutti i controlli tecnici eseguibili in questa chiusura sono stati completati.
