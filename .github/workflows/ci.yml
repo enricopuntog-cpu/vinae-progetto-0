@@ -16,7 +16,7 @@ concurrency:
 jobs:
   frontend:
     name: Frontend - lint, typecheck, test, build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
       run:
@@ -56,7 +56,7 @@ jobs:
 
   frontend-next:
     name: Frontend Next - lint, typecheck, test, build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
       run:
@@ -116,7 +116,7 @@ jobs:
 
   payout-runner:
     name: Payout runner - tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
@@ -136,7 +136,7 @@ jobs:
 
   backend:
     name: Backend - lint, syntax and tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:
