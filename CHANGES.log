@@ -1,4 +1,5 @@
 ## CURRENT STATE
+- 2026-09-19: chiusura tecnica pre-lancio completata. Configurate le allowlist Edge per dominio stabile e localhost, mantenendo `AI_ENABLED=false` e `PAYMENTS_ENABLED=false`; smoke 10/10 con CORS corretto e risposta 503 del gate. Scheduler configurato e provato con due invocazioni reali (`35450587237`, `35450783027`): entrambe `enabled=false`, zero trasferimenti e zero bloccati. Copia restore eliminata; produzione rimasta unico progetto Supabase. Redatto il runbook di continuità/backup e rimossa `i.pravatar.cc` dalle CSP.
 - 2026-09-19: PR #123 aperta (`f8b6bb03977d4994444f9661f0440f51997ee42d`), CI e Deploy Preview verdi. CSP completa enforcing sulle pagine HTML: nonce server per richiesta, `strict-dynamic`, attributi script vietati e HTML non cacheabile. Smoke preview: 200, 19/19 script con nonce, nonce distinti, idratazione funzionante, nessun errore/warning console.
 - 2026-09-19: restore isolato Supabase `vinea-restore-drill-20260919` completato dal backup 04:26 UTC. Originale/copia: 54 migrazioni, 46 tabelle RLS, 65 policy, hash funzioni/policy e dati delle 46 tabelle coincidenti. Griglie copia: grant 20/20, messaggi 23/23; smoke con tre sessioni vere 23/23 per Auth, RPC/RLS messaggi, Realtime privato e Storage privato/firmato.
 - 2026-09-19: backup Storage fuori da Git/OneDrive in `%LOCALAPPDATA%/Vinea/backups/2026-09-19`: 11 oggetti, 3.528.925 byte, hash/eTag verificati. OAuth Google reale completato sul dominio stabile con nuova sessione; allowlist Auth verificata sul dominio stabile.
@@ -6,21 +7,21 @@
 - 2026-09-18: PR #119 e #120 MERSE. Base verificata `09690c39289e80e9389f8fd3f67ef32bd57b1dba`; Netlify Published `6aad296a00d5f5000819d6d5` sullo stesso commit. La precedente descrizione di PR120 in bozza è superata.
 - Supabase produzione `pijnmcllmfgjmgsvtcej`: 54 migrazioni, corrispondenza esatta con i file; ultima `20260918102406_step_up_auth_prelievi`. Griglie produzione: step-up 9/9, marketplace 16/16, grant statici 7/7 PASSA. Nessun nuovo dato o migrazione in questo follow-up.
 - Follow-up sicurezza implementato: Next.js/eslint-config-next 16.3.3 e dipendenze transitive corrette, audit CI, gestione errore password con riautenticazione, reporter CSP sanitizzato, CSP script enforcing con nonce, robots.txt e Resend descritto come SMTP in uso.
-- Validazione locale: lockfile congelato PASS, audit zero vulnerabilità note, 1571 test PASS, typecheck/build PASS, lint 0 errori/12 warning preesistenti. Dettagli e limiti in `docs/SECURITY_FOLLOWUP_PR120.md`.
+- Validazione locale: lockfile congelato PASS, audit zero vulnerabilità note, 1572 test PASS, typecheck/build PASS, lint 0 errori/12 warning preesistenti. Dettagli e limiti in `docs/SECURITY_FOLLOWUP_PR120.md`.
 - Auth produzione: Secure email change e leaked password protection ON; Secure password change ON. Require current password OFF. Realtime pubblico DISABILITATO dopo la richiesta esplicita dell'utente di eseguire le operazioni manuali residue: salvato e verificato dopo reload, servizio ON. Prova WebSocket pubblico: CHANNEL_ERROR PrivateOnly; privato anonimo: CHANNEL_ERROR Unauthorized.
-- Porte pagamenti e AI verificate 503 «non attive» da origine localhost ammessa; webhook pubblico 503. Nessuna accensione. Dal dominio nuovo le Edge rispondono 403 CORS: allowlist da completare nel lavoro di attivazione controllata.
+- Porte pagamenti e AI verificate 503 «non attive» da `https://vineawineclub.com` e localhost, con `Access-Control-Allow-Origin` esatto; webhook pubblico 503. Nessuna accensione.
 - Le specifiche vetrina a successo e aliquota per classe restano progettate, non implementate. Fase 11 NON APERTA; Fase 13 NON INIZIATA.
 
 ## ACTIVE TASK
-CHIUSURA PR #123: documentazione finale, merge, verifica produzione e cancellazione della copia temporanea dopo conferma al momento dell'azione. Pagamenti e AI restano spenti.
+CHIUSURA TECNICA PRE-LANCIO COMPLETATA: CORS e scheduler verificati con pagamenti e AI spenti; continuità tecnica documentata. Nessuna apertura dei gate.
 
 ## NEXT STEPS
-1. Unire PR #123 dopo il commit documentale e verificare il Published SHA/header sul dominio stabile.
-2. Cancellare `vinea-restore-drill-20260919` dopo la conferma richiesta al momento dell'eliminazione permanente.
-3. Affrontare decisioni/procedure esterne della checklist prima di qualsiasi apertura pagamenti.
+1. Enrico chiude le decisioni di continuità e le procedure/contenuti esterni elencati nella checklist.
+2. Commercialista e consulenti chiudono adempimenti societari, fiscali e legali.
+3. Solo dopo, pianificare onboarding Stripe e test provider in ambiente controllato prima di qualsiasi apertura pagamenti.
 
 ## BLOCKERS / NOTES
-- CSP script con nonce, smoke Realtime autenticato e immagini firmate sono chiusi dalla PR #123. Resta `style-src 'unsafe-inline'`, necessario ai componenti correnti; rimuovere `i.pravatar.cc` insieme ai dati demo.
+- CSP script con nonce, smoke Realtime autenticato e immagini firmate sono chiusi dalla PR #123. `i.pravatar.cc` è rimosso dalla policy; resta `style-src 'unsafe-inline'`, necessario ai componenti correnti.
 - Il precedente blocco automatico Realtime è RISOLTO: dopo la nuova istruzione dell'utente il salvataggio via dashboard è riuscito. I client sono stati disconnessi durante l'applicazione. La prova anonima non certifica il flusso autenticato tra due utenti.
 - OAuth Google reale e ritorno su `/account` con nuova sessione sono provati in produzione. Il retry del prelievo non è stato eseguito perché il gate pagamenti è spento e non esiste saldo disponibile; Facebook non è esposto dalla UI. Non attivare Require current password.
 - Per verificare i grant in produzione usare `supabase/tests/security_hardening_grants_static.sql`; la griglia precedente crea fixture Auth ed è destinata all'anteprima.

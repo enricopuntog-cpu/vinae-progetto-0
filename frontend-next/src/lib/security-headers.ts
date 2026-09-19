@@ -13,8 +13,8 @@
  * la policy effettiva delle pagine è costruita in `csp.ts`.
  * Origini oltre a 'self': Supabase (REST/Auth/Storage via https, Realtime via
  * wss, immagini pubbliche e firmate del bucket), Google Fonts (foglio di stile
- * in `app/layout.tsx` e file dei font) e i.pravatar.cc (avatar dei dati
- * dimostrativi).
+ * in `app/layout.tsx` e file dei font). Gli avatar pubblici passano soltanto
+ * dallo Storage Supabase del progetto.
  */
 const SUPABASE_ORIGIN = "pijnmcllmfgjmgsvtcej.supabase.co";
 
@@ -22,7 +22,7 @@ export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  `img-src 'self' data: blob: https://${SUPABASE_ORIGIN} https://i.pravatar.cc`,
+  `img-src 'self' data: blob: https://${SUPABASE_ORIGIN}`,
   "font-src 'self' data: https://fonts.gstatic.com",
   `connect-src 'self' https://${SUPABASE_ORIGIN} wss://${SUPABASE_ORIGIN}`,
   "frame-ancestors 'none'",

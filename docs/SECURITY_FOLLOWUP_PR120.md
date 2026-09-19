@@ -62,14 +62,17 @@ Non si presume sfruttabilità identica in ogni deployment.
 3. **OAuth Google reale provato** con nuova sessione e ritorno `/account`;
    Facebook non è esposto dalla UI e il retry economico resta subordinato al gate.
 4. **Backup/restore tecnico provato il 19 settembre.** Restore isolato identico
-   per schema/dati/Auth; 11 oggetti Storage salvati localmente con hash/eTag.
-   Restano custodia/delega e piano di continuità organizzativo.
-5. **Allowlist Edge del dominio nuovo incompleta.** Le cinque porte da
-   `Origin: https://vineawineclub.com` rispondono 403; da localhost rispondono
-   503 del gate. Correggere e provare le origini esatte nel lavoro di attivazione
-   controllata. Un 403 CORS da solo non dimostra un flag OFF.
-6. Togliere avatar demo e relativa origine CSP con la rimozione dei dati demo;
-   valutare CAPTCHA integrato e MFA/passkey secondo roadmap, senza toggle isolati.
+   per schema/dati/Auth; 11 oggetti Storage salvati localmente con hash/eTag;
+   copia isolata eliminata. Il runbook tecnico è in
+   `CONTINUITY_AND_BACKUP_RUNBOOK.md`; restano quattro decisioni del titolare.
+5. **Allowlist Edge e scheduler chiusi il 19 settembre.** Le cinque porte da
+   `Origin: https://vineawineclub.com` e da localhost rispondono 503 del gate
+   con `Access-Control-Allow-Origin` esatto. Le run `35450587237` e
+   `35450783027` hanno invocato davvero `payouts-release`: `enabled=false`,
+   zero trasferimenti e zero bloccati. Nessun gate è stato acceso.
+6. `i.pravatar.cc` è stato rimosso dalla CSP; i dati demo residui non sono
+   montati nelle route pubbliche. Valutare CAPTCHA integrato e MFA/passkey
+   secondo roadmap, senza toggle isolati.
 
 Gli advisor non sono tutti verdi: 18 segnalazioni informative RLS senza policy,
 16 viste SECURITY DEFINER (eccezione architetturale già documentata), tre RPC

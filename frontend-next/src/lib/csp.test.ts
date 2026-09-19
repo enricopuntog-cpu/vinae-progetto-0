@@ -18,6 +18,7 @@ describe("CSP enforcing delle pagine", () => {
     const csp = buildPageCsp(nonce, "https://preview.supabase.co");
     expect(csp).toContain("connect-src 'self' https://preview.supabase.co wss://preview.supabase.co;");
     expect(csp).not.toContain("pijnmcllmfgjmgsvtcej");
+    expect(csp).not.toContain("pravatar");
   });
   it("rifiuta nonce e configurazioni che potrebbero iniettare direttive", () => {
     for (const bad of ["' unsafe-inline", "\r\nx: y", "short"]) expect(() => buildPageCsp(bad)).toThrow();
