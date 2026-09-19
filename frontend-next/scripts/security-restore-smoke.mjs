@@ -4,7 +4,10 @@ import { readFileSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 
 const cfg = JSON.parse(readFileSync(process.env.VINEA_DRILL_CONFIG, 'utf8'));
-if (cfg.url !== 'https://tnoimjzakhbqiwjmcsit.supabase.co') throw new Error('Disposable project guard');
+const projectRef = new URL(cfg.url).hostname.split('.')[0];
+if (!cfg.expectedProjectId || cfg.expectedProjectId !== projectRef || projectRef === 'pijnmcllmfgjmgsvtcej') {
+  throw new Error('Disposable project guard');
+}
 const outcomes = [];
 const sockets = [];
 function check(name, ok, detail) {
@@ -98,5 +101,5 @@ try {
   process.exitCode = 1;
 } finally {
   for (const socket of sockets) socket.close();
-  console.log(JSON.stringify({ project: 'tnoimjzakhbqiwjmcsit', outcomes }, null, 2));
+  console.log(JSON.stringify({ project: projectRef, outcomes }, null, 2));
 }
