@@ -1,25 +1,28 @@
 ## CURRENT STATE
+- 2026-09-19: PR #123 aperta (`f8b6bb03977d4994444f9661f0440f51997ee42d`), CI e Deploy Preview verdi. CSP completa enforcing sulle pagine HTML: nonce server per richiesta, `strict-dynamic`, attributi script vietati e HTML non cacheabile. Smoke preview: 200, 19/19 script con nonce, nonce distinti, idratazione funzionante, nessun errore/warning console.
+- 2026-09-19: restore isolato Supabase `vinea-restore-drill-20260919` completato dal backup 04:26 UTC. Originale/copia: 54 migrazioni, 46 tabelle RLS, 65 policy, hash funzioni/policy e dati delle 46 tabelle coincidenti. Griglie copia: grant 20/20, messaggi 23/23; smoke con tre sessioni vere 23/23 per Auth, RPC/RLS messaggi, Realtime privato e Storage privato/firmato.
+- 2026-09-19: backup Storage fuori da Git/OneDrive in `%LOCALAPPDATA%/Vinea/backups/2026-09-19`: 11 oggetti, 3.528.925 byte, hash/eTag verificati. OAuth Google reale completato sul dominio stabile con nuova sessione; allowlist Auth verificata sul dominio stabile.
 - 2026-09-18: PR #121 MERSA (`848518f3a4e8a2cd95db2ccbf91e6e88c44eb24d`), CI verde e Netlify Published `6aad86afdd098e0008a93edf` sul medesimo commit. Smoke reale: home 200, header nuovi e robots presenti, reporter 204, callback 307 sul dominio stabile. Desktop sincronizzato su `codex/desktop-current-2026-09-18`, vecchio branch e quattro file/staging preservati.
 - 2026-09-18: PR #119 e #120 MERSE. Base verificata `09690c39289e80e9389f8fd3f67ef32bd57b1dba`; Netlify Published `6aad296a00d5f5000819d6d5` sullo stesso commit. La precedente descrizione di PR120 in bozza è superata.
 - Supabase produzione `pijnmcllmfgjmgsvtcej`: 54 migrazioni, corrispondenza esatta con i file; ultima `20260918102406_step_up_auth_prelievi`. Griglie produzione: step-up 9/9, marketplace 16/16, grant statici 7/7 PASSA. Nessun nuovo dato o migrazione in questo follow-up.
-- Follow-up sicurezza implementato: Next.js/eslint-config-next 16.3.3 e dipendenze transitive corrette, audit CI, gestione errore password con riautenticazione, reporter CSP sanitizzato, tre direttive CSP enforcing, robots.txt, Resend descritto come SMTP in uso. Policy script completa ancora Report-Only.
-- Validazione locale: lockfile congelato PASS, audit zero vulnerabilità note, 1566 test PASS, typecheck/build PASS, lint 0 errori/12 warning preesistenti. Dettagli e limiti in `docs/SECURITY_FOLLOWUP_PR120.md`.
+- Follow-up sicurezza implementato: Next.js/eslint-config-next 16.3.3 e dipendenze transitive corrette, audit CI, gestione errore password con riautenticazione, reporter CSP sanitizzato, CSP script enforcing con nonce, robots.txt e Resend descritto come SMTP in uso.
+- Validazione locale: lockfile congelato PASS, audit zero vulnerabilità note, 1571 test PASS, typecheck/build PASS, lint 0 errori/12 warning preesistenti. Dettagli e limiti in `docs/SECURITY_FOLLOWUP_PR120.md`.
 - Auth produzione: Secure email change e leaked password protection ON; Secure password change ON. Require current password OFF. Realtime pubblico DISABILITATO dopo la richiesta esplicita dell'utente di eseguire le operazioni manuali residue: salvato e verificato dopo reload, servizio ON. Prova WebSocket pubblico: CHANNEL_ERROR PrivateOnly; privato anonimo: CHANNEL_ERROR Unauthorized.
 - Porte pagamenti e AI verificate 503 «non attive» da origine localhost ammessa; webhook pubblico 503. Nessuna accensione. Dal dominio nuovo le Edge rispondono 403 CORS: allowlist da completare nel lavoro di attivazione controllata.
 - Le specifiche vetrina a successo e aliquota per classe restano progettate, non implementate. Fase 11 NON APERTA; Fase 13 NON INIZIATA.
 
 ## ACTIVE TASK
-CHIUSO IL BLOCCO MANUALE REALTIME. PR121 già unita e verificata. Registrare la restrizione di produzione e fermarsi dopo il resoconto come richiesto dall'utente. I prossimi punti sono attività tecniche dell'agente, non interruttori da cambiare a mano da Enrico. Checklist in `docs/PRELAUNCH_TASK_RECONCILIATION.md`.
+CHIUSURA PR #123: documentazione finale, merge, verifica produzione e cancellazione della copia temporanea dopo conferma al momento dell'azione. Pagamenti e AI restano spenti.
 
 ## NEXT STEPS
-1. Provare messaggistica Realtime con due utenti autorizzati e immagini Storage private.
-2. Provare il rientro OAuth della riautenticazione con account reale in produzione, mantenendo i pagamenti spenti.
-3. Eseguire una prova isolata di backup e ripristino, includendo oggetti Storage e configurazione.
+1. Unire PR #123 dopo il commit documentale e verificare il Published SHA/header sul dominio stabile.
+2. Cancellare `vinea-restore-drill-20260919` dopo la conferma richiesta al momento dell'eliminazione permanente.
+3. Affrontare decisioni/procedure esterne della checklist prima di qualsiasi apertura pagamenti.
 
 ## BLOCKERS / NOTES
-- CSP script con nonce, smoke Realtime autenticato e immagini firmate restano aperti. La CSP enforcing di base e l'endpoint di raccolta non equivalgono a protezione XSS completa. Rimuovere `i.pravatar.cc` insieme ai dati demo.
+- CSP script con nonce, smoke Realtime autenticato e immagini firmate sono chiusi dalla PR #123. Resta `style-src 'unsafe-inline'`, necessario ai componenti correnti; rimuovere `i.pravatar.cc` insieme ai dati demo.
 - Il precedente blocco automatico Realtime è RISOLTO: dopo la nuova istruzione dell'utente il salvataggio via dashboard è riuscito. I client sono stati disconnessi durante l'applicazione. La prova anonima non certifica il flusso autenticato tra due utenti.
-- OAuth Google/Facebook step-up non provato end-to-end in produzione. Account email senza password: percorso recupero; non attivare Require current password. La finestra password di 24 ore è distinta dai 15 minuti del prelievo.
+- OAuth Google reale e ritorno su `/account` con nuova sessione sono provati in produzione. Il retry del prelievo non è stato eseguito perché il gate pagamenti è spento e non esiste saldo disponibile; Facebook non è esposto dalla UI. Non attivare Require current password.
 - Per verificare i grant in produzione usare `supabase/tests/security_hardening_grants_static.sql`; la griglia precedente crea fixture Auth ed è destinata all'anteprima.
 - Nessun `function_search_path_mutable`; restano advisor architetturali su viste e RPC SECURITY DEFINER / deny-all RLS. Non azzerarli revocando porte di dominio intenzionali.
 - Netlify oggi ha build Active, repo corretto e produzione su main; il deploy PR121 è allineato. La causa storica della mancata pubblicazione del 15 settembre non è ricostruita. Dopo ogni merge controllare Published SHA, non solo CI.
