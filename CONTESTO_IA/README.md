@@ -84,12 +84,10 @@ va riscritto come se la decisione precedente non fosse mai esistita.
   Il mailer di prova incorporato in Supabase e il suo `over_email_send_rate_limit`
   non sono più la strada in uso. La chiave vive nel progetto Supabase, non nel
   repository.
-- Ledger di produzione: **ultimo conteggio registrato 32**, al 20 agosto 2026,
-  quando coincideva con i file su `main`. Su `origin/main` i file sono oggi
-  **51**: **19 migrazioni** aggiunte dopo quella data non sono coperte da alcuna
-  lettura del ledger. Non è una misura di quante manchino — è la misura di
-  quanto non sappiamo. Rileggerlo è un prerequisito aperto dell'accensione dei
-  pagamenti; l'elenco esatto è in [`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md).
+- Ledger di produzione: **54 migrazioni verificate** al 19 settembre 2026,
+  in corrispondenza esatta con il repository; il restore isolato ha confermato
+  lo stesso conteggio, le policy, le funzioni e i dati delle 46 tabelle.
+  L'elenco esatto è in [`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md).
   Un merge non prova che una nuova migrazione sia stata applicata, e un merge
   senza migrazioni può averne distribuite di altrui: rileggere sempre il ledger.
 - Rilascio Netlify: il sito è collegato al repository e costruisce una Deploy

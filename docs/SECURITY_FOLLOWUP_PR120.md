@@ -30,7 +30,7 @@ Fase 11, nuove funzionalità o cutover Fase 13.
 | REST anonimo | profiles rifiutato (401/42501); public_marketplace_config 200 con 800/209/25/14. |
 | CSRF | Route handler esistenti: callback PKCE e webhook Stripe. Nessuna mutazione di dominio autorizzata dal solo cookie. Webhook firmato e fail-closed; nuovo reporter senza auth, database o provider. La sessione usa cookie SSR, non localStorage. |
 | XSS | Nessun nuovo sink utente rilevato; il CSS di ChartStyle riceve configurazioni costanti nei callsite esaminati. Questo non equivale a una prova esaustiva di assenza di XSS. |
-| HTTP | Header PR119 misurati sul dominio reale; callback senza codice torna al dominio stabile. Aggiunte CSP enforcing per object-src, base-uri e frame-ancestors. |
+| HTTP | Header PR119 misurati sul dominio reale; callback senza codice torna al dominio stabile. PR123 aggiunge CSP completa enforcing con nonce per richiesta e HTML non cacheabile. |
 | CSP osservabile | `report-uri` + `report-to` / `Reporting-Endpoints` verso endpoint locale. Registra solo categorie chiuse di direttiva e risorsa; scarta URL, query, token, frammenti, utenti e IP dal payload applicativo. |
 | Reporter | Massimo 16 KiB anche senza Content-Length, 10 voci, 30 richieste/minuto per istanza calda, tipi MIME dedicati, cross-site rifiutato e cache disattivata. I log infrastrutturali restano separati. Il limite locale non è una protezione DDoS globale. |
 | Indicizzazione | robots.txt vieta la scansione, coerente con noindex della beta. Non è controllo di accesso. |
@@ -53,18 +53,17 @@ Non si presume sfruttabilità identica in ogni deployment.
    disconnesso i client durante il salvataggio. Prova WebSocket anonima reale:
    pubblico `CHANNEL_ERROR: PrivateOnly`, privato `CHANNEL_ERROR: Unauthorized`.
    Nessun messaggio inviato o dato scritto. L'app usa `private: true` e policy
-   per proprietario/membro; resta da provare il flusso con due utenti autorizzati.
+   per proprietario/membro; il flusso con due partecipanti e un estraneo è stato
+   provato sulla copia isolata il 19 settembre.
    Il precedente blocco automatico è risolto, senza ricorrere ad API alternative.
-2. **CSP script ancora Report-Only e unsafe-inline.** Raccolta disponibile e
-   protezioni di base enforcing non chiudono la protezione XSS degli script.
-   Occorrono nonce/strategia di rendering e prove autenticate di OAuth, Realtime
-   e immagini Storage firmate prima di imporre la policy completa.
-3. **OAuth step-up reale non provato** per Google/Facebook; serve account reale
-   controllato e rientro in produzione, senza trasferimento di denaro. Magic
-   link senza password resta nel percorso di recupero previsto dalla PR120.
-4. **Backup e ripristino non provati.** Progettare prova isolata con database,
-   oggetti Storage, configurazione, retention e accesso al backup. Non basta
-   vedere backup automatici disponibili in dashboard.
+2. **CSP script enforcing chiusa in PR123.** Nonce server per richiesta,
+   `strict-dynamic`, `script-src-attr 'none'`; smoke autenticati Realtime e
+   Storage firmato conclusi. Resta `style-src 'unsafe-inline'`.
+3. **OAuth Google reale provato** con nuova sessione e ritorno `/account`;
+   Facebook non è esposto dalla UI e il retry economico resta subordinato al gate.
+4. **Backup/restore tecnico provato il 19 settembre.** Restore isolato identico
+   per schema/dati/Auth; 11 oggetti Storage salvati localmente con hash/eTag.
+   Restano custodia/delega e piano di continuità organizzativo.
 5. **Allowlist Edge del dominio nuovo incompleta.** Le cinque porte da
    `Origin: https://vineawineclub.com` rispondono 403; da localhost rispondono
    503 del gate. Correggere e provare le origini esatte nel lavoro di attivazione
