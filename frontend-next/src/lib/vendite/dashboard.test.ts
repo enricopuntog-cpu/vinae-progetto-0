@@ -389,11 +389,16 @@ describe("la guardia di /vendite", () => {
     expect(senzaCommenti).toInclude('from "next/server"');
   });
 
-  it("non introduce un middleware globale per una route sola", () => {
-    // Un intercettore su ogni richiesta del sito per risolvere un percorso solo.
-    for (const file of ["src/middleware.ts", "middleware.ts", "src/proxy.ts", "proxy.ts"]) {
+  it("mantiene la guardia vendite nella route e non nel proxy CSP", () => {
+    for (const file of ["src/middleware.ts", "middleware.ts", "proxy.ts"]) {
       expect(existsSync(join(progetto, file))).toBe(false);
     }
+    // Il proxy globale protegge gli script di tutte le pagine; non decide chi
+    // può leggere la dashboard vendite e non effettua chiamate Supabase Auth.
+    const proxy = leggi("src/proxy.ts");
+    expect(proxy).not.toInclude("getUser");
+    expect(proxy).not.toInclude("getSupabaseServerClient");
+    expect(proxy).not.toInclude('"/vendite"');
   });
 
   it("non tocca KPI, grafici o ciclo di vita: la dashboard e' invariata", () => {

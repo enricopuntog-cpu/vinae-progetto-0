@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import "./globals.css";
 import { Providers } from "./providers";
 import { VineaLayout } from "@/components/vinea/Layout";
@@ -14,11 +15,13 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // A per-request nonce cannot be reused from prerendered/cached HTML.
+  await connection();
   return (
     <html lang="it" className="h-full antialiased">
       <head>

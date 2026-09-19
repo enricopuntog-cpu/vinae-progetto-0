@@ -8,9 +8,9 @@
  * ricevono da `headers()` in `next.config.ts`, che legge questo elenco.
  * `security-headers.test.ts` impedisce alle due copie di divergere.
  *
- * La policy completa è in Report-Only con raccolta sanitizzata; object-src,
- * base-uri e frame-ancestors sono già enforced. Gli script con nonce nel Proxy
- * sono un passo successivo, dopo aver letto le violazioni reali.
+ * Le pagine HTML ricevono dal Proxy una CSP completa enforcing con nonce.
+ * Questo elenco mantiene il fallback per asset/API e il canale Report-Only;
+ * la policy effettiva delle pagine è costruita in `csp.ts`.
  * Origini oltre a 'self': Supabase (REST/Auth/Storage via https, Realtime via
  * wss, immagini pubbliche e firmate del bucket), Google Fonts (foglio di stile
  * in `app/layout.tsx` e file dei font) e i.pravatar.cc (avatar dei dati
@@ -33,8 +33,7 @@ export const CONTENT_SECURITY_POLICY = [
   "report-to csp",
 ].join("; ");
 
-// Queste direttive non dipendono da nonce o dai flussi autenticati. La policy
-// completa resta osservabile prima di bloccare script, immagini e Realtime.
+// Fallback senza nonce per asset/API; il Proxy sostituisce la CSP delle pagine.
 export const BASE_SECURITY_POLICY = "object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
 
 export const SECURITY_HEADERS: ReadonlyArray<{ key: string; value: string }> = [

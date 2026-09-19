@@ -1,7 +1,7 @@
 -- Fase 8 - griglia sequenziale di messaggistica e notifiche.
 --
 -- Eseguire dopo 20260806224517_phase_8_messaging_notifications.sql.
--- Crea e cancella tre utenti, un vino, una bottiglia, un annuncio, una
+-- Crea e annulla con rollback tre utenti, un vino, una bottiglia, un annuncio, una
 -- conversazione, messaggi, notifiche e bucket rate limit. Su un progetto
 -- remoto richiede autorizzazione fixture separata dal deploy.
 -- Atteso: 23 PASSA, 0 FALLISCE, nessuna riga 99 e residui = 0.
@@ -127,7 +127,9 @@ declare
   v_page_cursor_at timestamptz;
   v_page_cursor_id uuid;
   v_rate_error text;
+  v_results jsonb;
 begin
+  begin
   insert into auth.users (
     instance_id, id, aud, role, email, encrypted_password,
     email_confirmed_at, created_at, updated_at,
@@ -504,46 +506,25 @@ begin
     coalesce(v_rate_error, 'nessun errore')
   );
 
-  -- Cleanup in ordine esplicito. La cancellazione amministrativa dei messaggi
-  -- e consentita soltanto per cleanup/retention; nessun ruolo client la possiede.
+  -- Keep the verdicts in a variable, then roll back the entire fixture.
+  -- This also removes append-only price observations created by later triggers.
   perform set_config('role', 'postgres', true);
-  perform set_config('request.jwt.claims', '', true);
-  perform set_config('request.jwt.claim.sub', '', true);
-  delete from private.rate_limit_buckets
-  where subject like '%' || v_seller::text || '%'
-     or subject like '%' || v_buyer::text || '%'
-     or subject like '%' || v_outsider::text || '%';
-  delete from public.notifications
-  where recipient_id in (v_seller, v_buyer, v_outsider);
-  delete from public.conversations where id = v_conversation;
-  delete from public.listings where id = v_listing;
-  delete from public.bottle_units where owner_id in (v_seller, v_buyer, v_outsider);
-  delete from public.wines where id = v_wine;
-  delete from auth.users where id in (v_seller, v_buyer, v_outsider);
+  select jsonb_agg(to_jsonb(e) order by e.n) into v_results from esiti_8 e;
+  raise exception using errcode = 'ZX008', message = 'fixture rollback';
+  exception when sqlstate 'ZX008' then null;
+  end;
+
+  insert into esiti_8
+  select * from jsonb_populate_recordset(null::esiti_8, v_results);
+  insert into fixture_8_ids values (v_seller, v_buyer, v_outsider, v_listing, v_conversation);
 exception when others then
+  -- The enclosing exception block rolls back every fixture on failure too.
   perform set_config('role', 'postgres', true);
   insert into esiti_8 values (
-    99,
-    'ESECUZIONE DELLO SCRIPT',
-    'nessun errore fuori dai casi',
-    'FALLISCE',
-    sqlstate || ': ' || sqlerrm
-  )
-  on conflict (n) do update
-  set esito = excluded.esito,
-      dettaglio = excluded.dettaglio;
-
-  delete from private.rate_limit_buckets
-  where subject like '%' || v_seller::text || '%'
-     or subject like '%' || v_buyer::text || '%'
-     or subject like '%' || v_outsider::text || '%';
-  delete from public.notifications
-  where recipient_id in (v_seller, v_buyer, v_outsider);
-  delete from public.conversations where id = v_conversation;
-  delete from public.listings where id = v_listing;
-  delete from public.bottle_units where owner_id in (v_seller, v_buyer, v_outsider);
-  delete from public.wines where id = v_wine;
-  delete from auth.users where id in (v_seller, v_buyer, v_outsider);
+    99, 'ESECUZIONE DELLO SCRIPT', 'nessun errore fuori dai casi',
+    'FALLISCE', sqlstate || ': ' || sqlerrm
+  );
+  insert into fixture_8_ids values (v_seller, v_buyer, v_outsider, v_listing, v_conversation);
 end;
 $test$;
 
