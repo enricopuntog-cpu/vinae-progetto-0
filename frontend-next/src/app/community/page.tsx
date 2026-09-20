@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { CLUB_UI_ABILITATA } from "@/config/features";
+import { clubAbilitatiServer } from "@/lib/clubs/gate";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseClubService } from "@/services/phase12/supabase-club-service";
 import CommunityHubPageClient from "./page-client";
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 };
 
 export default async function Page() {
-  if (!CLUB_UI_ABILITATA) notFound();
+  if (!clubAbilitatiServer()) notFound();
   const client = await getSupabaseServerClient();
   const servizio = createSupabaseClubService(client);
   // Le discussioni partono insieme ai club, ma non bloccano il tab iniziale.

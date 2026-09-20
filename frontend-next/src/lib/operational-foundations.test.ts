@@ -25,6 +25,9 @@ describe("fondamenta operative fail-closed", () => {
     expect(read("frontend-next/src/config/features.ts")).toMatch(
       /valoreFlagEsattamenteTrue\(\s*process\.env\.NEXT_PUBLIC_CLUBS_ENABLED,?\s*\)/,
     );
+    expect(read("frontend-next/src/lib/clubs/gate.ts")).toMatch(
+      /process\.env\.CLUBS_ENABLED[\s\S]*process\.env\.NEXT_PUBLIC_CLUBS_ENABLED/,
+    );
   });
 
   it("non esegue il backup offsite senza il gate esatto", () => {

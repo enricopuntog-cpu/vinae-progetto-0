@@ -19,8 +19,9 @@ conclusi e dei residui che dipendono da account, persone o decisioni esterne.
   comando per segnare la documentazione completa;
 - fondamenta Club per proposta e approvazione, accesso aperto/chiuso, richieste
   di ingresso, moderatori, regolamento versionato, link esterni e audit;
-- Club chiusi al pubblico dietro `NEXT_PUBLIC_CLUBS_ENABLED=false` e grant
-  pubblici revocati fino a un lancio deliberato;
+- Club chiusi al pubblico dietro i due gate `CLUBS_ENABLED=false` e
+  `NEXT_PUBLIC_CLUBS_ENABLED=false`, oltre ai grant pubblici revocati fino a un
+  lancio deliberato;
 - pagamenti, payout e funzioni AI lasciati spenti.
 
 ## Da completare quando arrivano prerequisiti esterni
@@ -45,6 +46,7 @@ conclusi e dei residui che dipendono da account, persone o decisioni esterne.
 - `PAYMENTS_ENABLED=false` e azioni di pagamento disabilitate;
 - `AI_ENABLED=false` e azioni IA disabilitate;
 - `NEXT_PUBLIC_CLUBS_ENABLED=false`;
+- `CLUBS_ENABLED=false`;
 - `BACKUP_OFFSITE_ENABLED=false` finché il primo bucket non è configurato e
   verificato;
 - nessun utente riceve automaticamente `emergency_delegate`.

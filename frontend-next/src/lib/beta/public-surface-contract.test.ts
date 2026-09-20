@@ -79,8 +79,8 @@ describe("superfici pubbliche della beta", () => {
     // Entrambe le route falliscono chiuse finche la flag di lancio non viene
     // abilitata; il dettaglio mantiene inoltre il 404 per uno slug assente.
     expect(dettaglio).toInclude("if (!club) notFound()");
-    expect(elenco).toInclude("if (!CLUB_UI_ABILITATA) notFound()");
-    expect(dettaglio).toInclude("if (!CLUB_UI_ABILITATA) notFound()");
+    expect(elenco).toInclude("if (!clubAbilitatiServer()) notFound()");
+    expect(dettaglio).toInclude("if (!clubAbilitatiServer()) notFound()");
     expect(leggi("src/components/vinea/Layout.tsx")).toInclude('to: "/community"');
   });
 

@@ -3,7 +3,7 @@
 - Il backup offsite e predisposto per Backblaze B2 EU Central: export separato database/Auth e Storage, hash SHA-256, cifratura client-side `age`, Object Lock e retention 30 giornalieri/12 settimanali/12 mensili. Workflow fail-closed finche `BACKUP_OFFSITE_ENABLED` non e `true`; credenziali assenti dal repository. Restore verifier e procedura isolata inclusi.
 - Il banner globale ha pannello dedicato `/continuita` accessibile a `admin` o `emergency_delegate`; `status-page/` e pronto ma non e dichiarato indipendente finche non viene distribuito fuori dall'app principale.
 - Le contestazioni accettano difformita oggettive entro 48 ore dalla consegna, fino a 8 prove WebP private ricodificate senza EXIF, risposta venditore entro 48 ore e presa in carico documentazione. Payout e pagamenti restano spenti.
-- I Club hanno proposta/approvazione, accesso aperto o chiuso, richieste, moderatori, regole versionate, link esterni e audit. La superficie resta chiusa: `NEXT_PUBLIC_CLUBS_ENABLED=false` e grant delle viste pubbliche revocati.
+- I Club hanno proposta/approvazione, accesso aperto o chiuso, richieste, moderatori, regole versionate, link esterni e audit. La superficie resta chiusa con un doppio gate (`CLUBS_ENABLED=false` e `NEXT_PUBLIC_CLUBS_ENABLED=false`) e grant delle viste pubbliche revocati.
 - Migrazioni validate sullo schema di produzione dentro una transazione annullata: esito positivo e nessuna modifica persistita. In locale: 1580 test, typecheck e build passati; lint 0 errori e 12 warning preesistenti; audit senza vulnerabilita note.
 - Stato persistente e residui esterni: `docs/OPERATIONAL_DECISIONS_STATUS.md`. `AI_ENABLED=false` e `PAYMENTS_ENABLED=false` restano invariati.
 
