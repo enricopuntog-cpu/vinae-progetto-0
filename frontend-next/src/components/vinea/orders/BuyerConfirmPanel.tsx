@@ -20,20 +20,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { MIME_PROVA_INGRESSO } from "@/lib/orders/prepara-prova-contestazione";
 
-/** Gli stessi cinque motivi di frontend/. */
 const MOTIVI = [
-  "Bottiglia non conforme",
-  "Bottiglia danneggiata",
-  "Livello alterato",
-  "Sospetta contraffazione",
-  "Mancata consegna",
+  "Bottiglia rotta",
+  "Pacco danneggiato",
+  "Prodotto differente dall'annuncio",
+  "Annata differente",
+  "Quantità errata",
+  "Manomissione evidente",
+  "Sospetta frode o contraffazione",
+  "Altra difformità oggettiva",
 ] as const;
 
 type Props = {
   inCorso: boolean;
   onConferma: () => Promise<string | null>;
-  onContesta: (motivo: string, descrizione: string, foto: string[]) => Promise<string | null>;
+  onContesta: (motivo: string, descrizione: string, foto: File[]) => Promise<string | null>;
 };
 
 /**
@@ -47,6 +50,7 @@ export function BuyerConfirmPanel({ inCorso, onConferma, onContesta }: Props) {
   const [aperto, setAperto] = useState(false);
   const [motivo, setMotivo] = useState<string>(MOTIVI[0]);
   const [descrizione, setDescrizione] = useState("");
+  const [foto, setFoto] = useState<File[]>([]);
   const [errore, setErrore] = useState<string | null>(null);
 
   return (
@@ -54,7 +58,7 @@ export function BuyerConfirmPanel({ inCorso, onConferma, onContesta }: Props) {
       <p className="text-sm font-semibold">Hai ricevuto l&apos;ordine?</p>
       <p className="mt-1 text-xs text-muted-foreground">
         Confermando liberi il pagamento al venditore. Se qualcosa non va, apri una contestazione:
-        blocca i fondi finché la pratica non è chiusa.
+        blocca i fondi finché la pratica non è chiusa. Hai 48 ore dalla consegna.
       </p>
       {errore && <p className="mt-2 text-xs text-red-700">{errore}</p>}
 
@@ -103,9 +107,27 @@ export function BuyerConfirmPanel({ inCorso, onConferma, onContesta }: Props) {
                   placeholder="Racconta cosa è successo…"
                 />
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                Il caricamento delle foto arriverà con lo Storage della Cantina, ancora da
-                verificare: per ora la contestazione si apre senza allegati.
+              <div>
+                <Label htmlFor="contestazione-foto" className="text-xs">Fotografie</Label>
+                <input
+                  id="contestazione-foto"
+                  type="file"
+                  multiple
+                  accept={MIME_PROVA_INGRESSO.join(",")}
+                  onChange={(event) => {
+                    const selected = Array.from(event.target.files ?? []).slice(0, 8);
+                    setFoto(selected);
+                  }}
+                  className="mt-1 block w-full text-xs"
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Fino a 8 foto di pacco, imballaggio, bottiglia, etichetta o danno.
+                  Le immagini vengono ricodificate senza metadati EXIF.
+                </p>
+              </div>
+              <p className="rounded-lg bg-secondary/60 p-2 text-[11px] text-muted-foreground">
+                La protezione riguarda difformità oggettive. Vinea non garantisce gusto,
+                profumo, stato evolutivo o qualità percepita del vino.
               </p>
             </div>
             <DialogFooter>
@@ -116,7 +138,7 @@ export function BuyerConfirmPanel({ inCorso, onConferma, onContesta }: Props) {
                 className="bg-bordeaux hover:bg-bordeaux/90"
                 disabled={descrizione.trim().length < 3 || inCorso}
                 onClick={async () => {
-                  const err = await onContesta(motivo, descrizione, []);
+                  const err = await onContesta(motivo, descrizione, foto);
                   setErrore(err);
                   if (!err) setAperto(false);
                 }}

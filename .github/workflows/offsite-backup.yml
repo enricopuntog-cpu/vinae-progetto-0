@@ -1,0 +1,48 @@
+name: Continuity - encrypted offsite backup
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: continuity-offsite-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Supabase to Backblaze B2
+    if: ${{ vars.BACKUP_OFFSITE_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Install age
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes age
+
+      - name: Export, encrypt and upload
+        env:
+          BACKUP_OFFSITE_ENABLED: ${{ vars.BACKUP_OFFSITE_ENABLED }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          B2_S3_ENDPOINT: ${{ vars.B2_S3_ENDPOINT }}
+          B2_BUCKET: ${{ vars.B2_BUCKET }}
+          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+        run: |
+          aws --version
+          bash .github/scripts/offsite-backup.sh

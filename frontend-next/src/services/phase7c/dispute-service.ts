@@ -1,30 +1,31 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { MIME_PROVA } from "@/lib/orders/prepara-prova-contestazione";
 import { noClient, serviceError } from "@/services/phase7/shared";
-import type { DisputeRecord, DisputeService, OrderRecord } from "@/services/types";
+import type {
+  DisputeEventRecord,
+  DisputeRecord,
+  DisputeService,
+  OrderRecord,
+} from "@/services/types";
 
-/**
- * Le colonne del fascicolo leggibili dalle parti. `risolta_da` non c'è, e
- * l'assenza è la ragione per cui questo elenco è esplicito: la colonna esiste,
- * il venditore raggiunge la riga, ma chi ha deciso la pratica è dato di
- * moderazione e resta fuori dal `GRANT`.
- */
-const COLONNE_DISPUTE =
-  "id,order_id,aperta_da,motivo,descrizione,foto,stato,esito_nota,apertura_at,chiusura_at";
+const BUCKET = "dispute-evidence";
+const COLONNE_DISPUTE = [
+  "id", "order_id", "aperta_da", "motivo", "descrizione", "foto", "stato",
+  "esito_nota", "apertura_at", "chiusura_at", "venditore_scadenza_at",
+  "venditore_risposta_tipo", "venditore_risposta", "venditore_foto",
+  "venditore_risposta_at", "documentazione_completa_at",
+].join(",");
+const COLONNE_EVENTI = "id,dispute_id,actor_kind,event_kind,detail,created_at";
 
-/**
- * Apertura e lettura di una contestazione.
- *
- * **Nessun metodo di risoluzione, ed è il punto.** In `frontend/` il pannello
- * mostrava a entrambe le parti tre bottoni che chiudevano la pratica, sotto la
- * scritta «Azioni demo — simula l'esito». Era impalcatura da demo, non un
- * modello di permessi: portarla alla lettera lascerebbe a una parte in causa il
- * potere di decidere la propria controversia, e a un venditore quello di
- * respingere la contestazione che blocca i suoi stessi fondi.
- *
- * `ordine_contestazione_risolvi` esiste nella migrazione ma non ha alcun
- * `GRANT` verso `authenticated`: è back-office, e non è chiamabile da qui
- * nemmeno scrivendone il nome.
- */
+const firma = async (client: SupabaseClient, paths: string[]): Promise<string[]> => {
+  if (paths.length === 0) return [];
+  const { data, error } = await client.storage.from(BUCKET).createSignedUrls(paths, 15 * 60);
+  if (error) return [];
+  return (data ?? [])
+    .map((item) => item.signedUrl)
+    .filter((url): url is string => typeof url === "string" && url.length > 0);
+};
+
 export const createDisputeService = (client: SupabaseClient | null): DisputeService => ({
   apri: async ({ orderId, motivo, descrizione, foto }) => {
     if (!client) return noClient();
@@ -46,8 +47,73 @@ export const createDisputeService = (client: SupabaseClient | null): DisputeServ
       .select(COLONNE_DISPUTE)
       .eq("order_id", orderId)
       .maybeSingle();
+    if (error) return serviceError("disputes.select", error);
+    if (!data) return { ok: true, data: null };
+
+    const row = data as unknown as DisputeRecord;
+    const [buyerEvidence, sellerEvidence] = await Promise.all([
+      firma(client, Array.isArray(row.foto) ? row.foto : []),
+      firma(client, Array.isArray(row.venditore_foto) ? row.venditore_foto : []),
+    ]);
+    return {
+      ok: true,
+      data: { ...row, foto: buyerEvidence, venditore_foto: sellerEvidence },
+    };
+  },
+
+  eventi: async (disputeId) => {
+    if (!client) return noClient();
+    const { data, error } = await client
+      .from("dispute_events")
+      .select(COLONNE_EVENTI)
+      .eq("dispute_id", disputeId)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
     return error
-      ? serviceError("disputes.select", error)
-      : { ok: true, data: data as DisputeRecord | null };
+      ? serviceError("dispute_events.select", error)
+      : { ok: true, data: (data ?? []) as DisputeEventRecord[] };
+  },
+
+  caricaProva: async (orderId, file) => {
+    if (!client) return noClient();
+    const { data } = await client.auth.getUser();
+    if (!data.user) return { ok: false, error: "Accedi per caricare le prove." };
+    if (file.type !== MIME_PROVA || file.size === 0) {
+      return { ok: false, error: "Fotografia preparata non valida." };
+    }
+    const path = `${orderId}/${data.user.id}/${crypto.randomUUID()}.webp`;
+    const { error } = await client.storage
+      .from(BUCKET)
+      .upload(path, file, { contentType: MIME_PROVA, upsert: false });
+    return error
+      ? serviceError("dispute evidence upload", error)
+      : { ok: true, data: path };
+  },
+
+  eliminaProve: async (paths) => {
+    if (!client) return noClient();
+    if (paths.length === 0) return { ok: true, data: undefined };
+    const { data } = await client.auth.getUser();
+    if (!data.user) return { ok: false, error: "Accedi per rimuovere le prove." };
+    if (paths.some((path) => path.split("/")[1] !== data.user?.id)) {
+      return { ok: false, error: "Percorso prova non valido." };
+    }
+    const { error } = await client.storage.from(BUCKET).remove(paths);
+    return error
+      ? serviceError("dispute evidence cleanup", error)
+      : { ok: true, data: undefined };
+  },
+
+  rispondiVenditore: async ({ orderId, tipo, risposta, foto }) => {
+    if (!client) return noClient();
+    const { error } = await client.rpc("contestazione_venditore_rispondi", {
+      p_order_id: orderId,
+      p_tipo: tipo,
+      p_risposta: risposta,
+      p_foto: foto ?? [],
+    });
+    return error
+      ? serviceError("contestazione_venditore_rispondi", error)
+      : { ok: true, data: undefined };
   },
 });

@@ -12,6 +12,7 @@ import {
   Search,
   Shield,
   Wine,
+  TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
 import { type ReactNode } from "react";
@@ -19,7 +20,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
 import { AvatarPersona } from "@/components/vinea/AvatarPersona";
 import { HeaderInboxActions } from "@/components/vinea/notifications/HeaderInboxActions";
-import { AI_UI, DEMO_UI_ABILITATA } from "@/config/features";
+import { AI_UI, CLUB_UI_ABILITATA, DEMO_UI_ABILITATA } from "@/config/features";
+import type { IncidentNotice } from "@/lib/incidents/notice";
 import {
   classiRicercaHeader,
   navMobile,
@@ -62,7 +64,13 @@ const desktopLinks = [
   { to: "/account", label: "Account", exact: false },
 ] as const;
 
-export function VineaLayout({ children }: { children: ReactNode }) {
+export function VineaLayout({
+  children,
+  incidentNotice,
+}: {
+  children: ReactNode;
+  incidentNotice: IncidentNotice | null;
+}) {
   const pathname = usePathname();
   const { ruolo, setRuolo, authRuolo, authProfilo } = useVinea();
   // Lo stesso segnale che la barra mobile usava gia per mandare Home su /home:
@@ -70,13 +78,19 @@ export function VineaLayout({ children }: { children: ReactNode }) {
   // scelto a mano, e l'avatar ricade sulla silhouette perche `authProfilo` resta
   // nullo senza una sessione vera - che e esattamente cio che deve succedere.
   const autenticato = ruolo !== "guest";
-  const vociMobile = navMobile(autenticato);
+  const vociMobile = navMobile(autenticato).filter(
+    (voce) => CLUB_UI_ABILITATA || voce.icona !== "club",
+  );
+  const vociDesktop = desktopLinks.filter(
+    (voce) => CLUB_UI_ABILITATA || voce.to !== "/community",
+  );
 
   return (
     <div className="min-h-dvh bg-background text-foreground pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
       <a href="#contenuto-principale" className="skip-link" data-testid="skip-link">
         Vai al contenuto principale
       </a>
+      {incidentNotice ? <IncidentBanner notice={incidentNotice} /> : null}
       <header
         className="sticky top-0 z-40 border-b border-border bg-crema/80 header-blur"
         data-testid="app-header"
@@ -105,7 +119,7 @@ export function VineaLayout({ children }: { children: ReactNode }) {
             aria-label="Navigazione principale"
             data-testid="desktop-nav"
           >
-            {desktopLinks.map((n) => {
+            {vociDesktop.map((n) => {
               const active = n.exact
                 ? pathname === n.to || (n.to === "/" && pathname === "/home")
                 : pathname === n.to || pathname.startsWith(n.to + "/");
@@ -278,6 +292,42 @@ export function VineaLayout({ children }: { children: ReactNode }) {
 
       {AI_UI.sommelier && <SommelierChat />}
     </div>
+  );
+}
+
+const INCIDENT_STYLE: Record<IncidentNotice["kind"], string> = {
+  manutenzione: "border-oro/40 bg-oro/15 text-antracite",
+  degrado: "border-amber-500/40 bg-amber-50 text-amber-950",
+  incidente: "border-red-500/40 bg-red-50 text-red-950",
+  sicurezza: "border-bordeaux/40 bg-bordeaux/10 text-bordeaux",
+};
+
+function IncidentBanner({ notice }: { notice: IncidentNotice }) {
+  return (
+    <aside
+      role={notice.kind === "incidente" || notice.kind === "sicurezza" ? "alert" : "status"}
+      className={`border-b px-4 py-2 text-sm ${INCIDENT_STYLE[notice.kind]}`}
+      data-testid="incident-banner"
+    >
+      <div className="mx-auto flex max-w-6xl items-start gap-2">
+        <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+        <p className="flex-1">
+          {notice.message}
+          {notice.statusUrl ? (
+            <>
+              {" "}
+              <a
+                href={notice.statusUrl}
+                rel="noreferrer"
+                className="font-semibold underline underline-offset-2"
+              >
+                Aggiornamenti sullo stato
+              </a>
+            </>
+          ) : null}
+        </p>
+      </div>
+    </aside>
   );
 }
 

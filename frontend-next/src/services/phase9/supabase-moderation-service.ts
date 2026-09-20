@@ -103,6 +103,12 @@ export type DisputeQueueRow = {
   motivo: string;
   descrizione: string;
   foto: string[];
+  sellerResponseDeadline: string;
+  sellerResponseKind: "accetta" | "contesta" | "propone_soluzione" | null;
+  sellerResponse: string | null;
+  sellerEvidence: string[];
+  sellerResponseAt: string | null;
+  documentationCompleteAt: string | null;
   stato: "aperta" | "in_valutazione" | "rimborsata" | "risolta" | "respinta";
   esitoNota: string | null;
   risoltaDa: string | null;
@@ -203,6 +209,12 @@ export const mapDisputeRow = (row: {
   motivo: string;
   descrizione: string;
   foto: string[] | null;
+  venditore_scadenza_at: string;
+  venditore_risposta_tipo: DisputeQueueRow["sellerResponseKind"];
+  venditore_risposta: string | null;
+  venditore_foto: string[] | null;
+  venditore_risposta_at: string | null;
+  documentazione_completa_at: string | null;
   stato: DisputeQueueRow["stato"];
   esito_nota: string | null;
   risolta_da: string | null;
@@ -222,6 +234,12 @@ export const mapDisputeRow = (row: {
   motivo: row.motivo,
   descrizione: row.descrizione,
   foto: row.foto ?? [],
+  sellerResponseDeadline: row.venditore_scadenza_at,
+  sellerResponseKind: row.venditore_risposta_tipo,
+  sellerResponse: row.venditore_risposta,
+  sellerEvidence: row.venditore_foto ?? [],
+  sellerResponseAt: row.venditore_risposta_at,
+  documentationCompleteAt: row.documentazione_completa_at,
   stato: row.stato,
   esitoNota: row.esito_nota,
   risoltaDa: row.risolta_da,
@@ -591,7 +609,41 @@ export const codaContestazioni = async (
     .order("apertura_at", { ascending: true })
     .limit(TETTO_CODA);
   if (error) return phase9Throw("moderation_dispute_queue", error);
-  return (data ?? []).map((row) => mapDisputeRow(row as Parameters<typeof mapDisputeRow>[0]));
+  const righe = (data ?? []).map((row) =>
+    mapDisputeRow(row as Parameters<typeof mapDisputeRow>[0]),
+  );
+  const percorsi = [...new Set(righe.flatMap((riga) => [...riga.foto, ...riga.sellerEvidence]))];
+  if (percorsi.length === 0) return righe;
+
+  const { data: firmate, error: firmaError } = await client.storage
+    .from("dispute-evidence")
+    .createSignedUrls(percorsi, 15 * 60);
+  if (firmaError) return phase9Throw("dispute-evidence", firmaError);
+  const urlPerPercorso = new Map(
+    (firmate ?? [])
+      .filter((voce) => voce.signedUrl)
+      .map((voce) => [voce.path, voce.signedUrl] as const),
+  );
+  return righe.map((riga) => ({
+    ...riga,
+    foto: riga.foto
+      .map((percorso) => urlPerPercorso.get(percorso))
+      .filter((url): url is string => typeof url === "string"),
+    sellerEvidence: riga.sellerEvidence
+      .map((percorso) => urlPerPercorso.get(percorso))
+      .filter((url): url is string => typeof url === "string"),
+  }));
+};
+
+export const completaDocumentazioneContestazione = async (
+  client: SupabaseClient | null,
+  orderId: string,
+): Promise<void> => {
+  if (!client) return noPhase9Client("completaDocumentazioneContestazione");
+  const { error } = await client.rpc("moderazione_contestazione_documentazione_completa", {
+    p_order_id: orderId,
+  });
+  if (error) return phase9Throw("moderazione_contestazione_documentazione_completa", error);
 };
 
 // ---------------------------------------------------------------------------

@@ -59,6 +59,7 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `NEXT_PUBLIC_AI_UI_ENABLED` | client | Visibilità delle tre superfici IA della Fase 10. **Fallisce chiusa**: soltanto la stringa esatta `true` monta la UI; non autorizza chiamate. |
 | `NEXT_PUBLIC_AI_ACTIONS_ENABLED` | client | Permette alla UI di tentare le chiamate IA; soltanto `true` esatto. Non sostituisce `AI_ENABLED`. |
 | `NEXT_PUBLIC_DEMO_UI_ENABLED` | client | Mostra soltanto il selettore locale Guest/User/Admin; non abilita fallback di dati mock. Assente o diverso da `true` usa sessione e ruolo reali. |
+| `NEXT_PUBLIC_CLUBS_ENABLED` | client/server | Mostra navigazione e route Club soltanto con `true` esatto. Finche e spento, le route rispondono 404 e le viste pubbliche restano senza grant. |
 | `AI_ENABLED` | Edge Function | Kill switch delle funzioni AI (Fase 10). **Fallisce chiuso**: assente o diverso da `true` significa spento. |
 | `AI_ALLOWED_ORIGINS` | Edge Function | Allowlist CORS delle sole function AI, origini complete separate da virgole. **Non sostituisce `PAYMENT_ALLOWED_ORIGINS`**: le due convivono. |
 | `OPENAI_API_KEY` | Edge Function | Chiave del fornitore di prova. Assente, il provider è quello disabilitato e ogni chiamata dà 503. |
@@ -76,6 +77,10 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 I segreti della Edge Function vanno impostati nell'ambiente Supabase; quelli del
 Route Handler nell'ambiente server Next.js. Non copiare la `service_role` in un
 file `.env` versionato.
+
+Le variabili e i secret dell'automazione B2 sono elencati nel runbook
+[`CONTINUITY_AND_BACKUP_RUNBOOK.md`](CONTINUITY_AND_BACKUP_RUNBOOK.md). Non
+appartengono all'ambiente del frontend e non devono essere copiati su Netlify.
 
 ### Origine dei redirect della callback Auth
 

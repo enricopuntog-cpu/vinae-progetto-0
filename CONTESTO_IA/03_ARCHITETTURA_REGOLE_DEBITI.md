@@ -287,7 +287,9 @@ successive possono costruire.
   preload` sono in `netlify.toml` e la CSP è in **Report-Only**. Resta aperta la
   CSP enforcing con nonce via middleware, da scrivere dopo aver letto le
   violazioni raccolte in produzione;
-- backup, restore e disaster recovery;
+- backup e restore: prova isolata completata il 19 settembre e automazione B2
+  cifrata predisposta il 21 settembre. Restano esterni la creazione del bucket,
+  le credenziali, la custodia della chiave `age` e la prima esecuzione verificata;
 - Leaked Password Protection in Supabase Auth (azione manuale da dashboard);
   valutare le passkey.
 
@@ -324,6 +326,25 @@ successive possono costruire.
 - provider email transazionale;
 - strategia di feature flag/cutover progressivo;
 - provider AI e budget.
+
+## Decisioni operative chiuse il 21 settembre 2026
+
+- La finestra di contestazione e di 48 ore dalla consegna. Le prove sono
+  fotografie private WebP ricodificate lato client senza EXIF; compratore,
+  venditore e admin le leggono solo tramite URL firmati temporanei. Il venditore
+  risponde entro 48 ore. La stima di tre giorni lavorativi parte dalla
+  documentazione completa e non e una garanzia. Il payout resta bloccato usando
+  il motore gia esistente; nessun rimborso o provider viene acceso.
+- I Club nascono come proposte e richiedono approvazione. Possono essere aperti
+  o chiusi, hanno richieste di ingresso, moderatori, regolamento versionato,
+  link esterni e audit append-only. La superficie resta chiusa con flag UI
+  spenta e grant pubblici revocati finche flusso UI e contenuti non sono provati.
+- Il banner incidenti e scrivibile solo da `admin` o `emergency_delegate`, con
+  audit append-only. La migrazione non assegna il ruolo a nessuno. La pagina di
+  stato statica deve essere distribuita su infrastruttura separata.
+- La destinazione offsite scelta e Backblaze B2 EU Central con cifratura `age`,
+  Object Lock e retention 30 giornalieri, 12 settimanali, 12 mensili. Il job
+  resta fail-closed finche account, bucket, chiave e variabili non esistono.
 
 ## Comandi di verifica
 

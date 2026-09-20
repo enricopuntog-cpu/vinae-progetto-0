@@ -6,8 +6,11 @@ import { createOrderService } from "@/services/phase7/order-service";
 import { createDisputeService } from "@/services/phase7c/dispute-service";
 import { createReviewService } from "@/services/phase7c/review-service";
 import { createTrackingService } from "@/services/phase7c/tracking-service";
+import { preparaProvaContestazione } from "@/lib/orders/prepara-prova-contestazione";
 import type {
+  DisputeEventRecord,
   DisputeRecord,
+  DisputeSellerResponseKind,
   EleggibilitaRecensione,
   OrderRecord,
   OrderReviewRecord,
@@ -20,6 +23,7 @@ export type DettaglioOrdine = {
   ordine: OrderRecord;
   tracking: TrackingEventRecord[];
   contestazione: DisputeRecord | null;
+  eventiContestazione: DisputeEventRecord[];
   recensione: OrderReviewRecord | null;
   /**
    * La replica del venditore alla recensione, se c'è. Al massimo una: il
@@ -100,6 +104,10 @@ export function useOrderDetail(orderId: string) {
         : recensioni.eleggibilita().then((e) => (e.ok ? e.data : null)),
     ]);
 
+    const contestazione = esitoDispute.ok ? esitoDispute.data : null;
+    const esitoEventi = contestazione
+      ? await contestazioni.eventi(contestazione.id)
+      : null;
     const recensione = esitoReview.ok ? esitoReview.data : null;
     // La replica si legge solo se la recensione esiste: senza di essa non c'è
     // niente a cui possa essere associata.
@@ -112,7 +120,8 @@ export function useOrderDetail(orderId: string) {
       dati: {
         ordine,
         tracking: esitoTracking.ok ? esitoTracking.data : [],
-        contestazione: esitoDispute.ok ? esitoDispute.data : null,
+        contestazione,
+        eventiContestazione: esitoEventi?.ok ? esitoEventi.data : [],
         recensione,
         rispostaRecensione: esitoRisposta?.ok ? esitoRisposta.data : null,
         eleggibilita:
@@ -158,6 +167,48 @@ export function useOrderDetail(orderId: string) {
     [ricarica],
   );
 
+  const azioneConProve = useCallback(
+    async (
+      files: File[],
+      operation: (paths: string[]) => Promise<{ ok: boolean; error?: string }>,
+    ) => {
+      if (files.length > 8) return "Puoi allegare al massimo 8 fotografie.";
+      setInCorso(true);
+      const paths: string[] = [];
+      try {
+        for (const file of files) {
+          let prepared: File;
+          try {
+            prepared = await preparaProvaContestazione(file);
+          } catch (error) {
+            await contestazioni.eliminaProve(paths);
+            return error instanceof Error ? error.message : "Fotografia non valida.";
+          }
+          const upload = await contestazioni.caricaProva(orderId, prepared);
+          if (!upload.ok) {
+            await contestazioni.eliminaProve(paths);
+            return upload.error;
+          }
+          paths.push(upload.data);
+        }
+
+        const result = await operation(paths);
+        if (!result.ok) {
+          await contestazioni.eliminaProve(paths);
+          return result.error ?? "Operazione non riuscita.";
+        }
+        await ricarica();
+        return null;
+      } finally {
+        setInCorso(false);
+      }
+    },
+    // Il servizio e ricreato a ogni render; le due coordinate stabili sono
+    // ordine e funzione di rilettura.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [orderId, ricarica],
+  );
+
   return {
     stato,
     inCorso,
@@ -168,8 +219,25 @@ export function useOrderDetail(orderId: string) {
       azione(() => ordini.segnaSpedito(orderId, corriere, trackingNumber)),
     segnaConsegnato: () => azione(() => ordini.segnaConsegnato(orderId)),
     confermaRicezione: () => azione(() => ordini.confermaRicezione(orderId)),
-    apriContestazione: (motivo: string, descrizione: string, foto: string[]) =>
-      azione(() => contestazioni.apri({ orderId, motivo, descrizione, foto })),
+    apriContestazione: (motivo: string, descrizione: string, foto: File[]) =>
+      azioneConProve(
+        foto,
+        (paths) => contestazioni.apri({ orderId, motivo, descrizione, foto: paths }),
+      ),
+    rispondiContestazione: (
+      tipo: DisputeSellerResponseKind,
+      risposta: string,
+      foto: File[],
+    ) =>
+      azioneConProve(
+        foto,
+        (paths) => contestazioni.rispondiVenditore({
+          orderId,
+          tipo,
+          risposta,
+          foto: paths,
+        }),
+      ),
     recensisci: (r: {
       voto: number;
       conformita: number;

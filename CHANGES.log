@@ -1,33 +1,24 @@
 ## CURRENT STATE
-- 2026-09-19: chiusura tecnica pre-lancio completata. Configurate le allowlist Edge per dominio stabile e localhost, mantenendo `AI_ENABLED=false` e `PAYMENTS_ENABLED=false`; smoke 10/10 con CORS corretto e risposta 503 del gate. Scheduler configurato e provato con due invocazioni reali (`35450587237`, `35450783027`): entrambe `enabled=false`, zero trasferimenti e zero bloccati. Copia restore eliminata; produzione rimasta unico progetto Supabase. Redatto il runbook di continuità/backup e rimossa `i.pravatar.cc` dalle CSP.
-- 2026-09-19: Actions ufficiali aggiornate ai runtime Node 24 correnti (`checkout@v7`, `setup-node@v7`, `setup-python@v7`, `cache@v6`) e runner fissati a Ubuntu 24.04 per evitare il cambio implicito di `ubuntu-latest`.
-- 2026-09-19: PR #123 aperta (`f8b6bb03977d4994444f9661f0440f51997ee42d`), CI e Deploy Preview verdi. CSP completa enforcing sulle pagine HTML: nonce server per richiesta, `strict-dynamic`, attributi script vietati e HTML non cacheabile. Smoke preview: 200, 19/19 script con nonce, nonce distinti, idratazione funzionante, nessun errore/warning console.
-- 2026-09-19: restore isolato Supabase `vinea-restore-drill-20260919` completato dal backup 04:26 UTC. Originale/copia: 54 migrazioni, 46 tabelle RLS, 65 policy, hash funzioni/policy e dati delle 46 tabelle coincidenti. Griglie copia: grant 20/20, messaggi 23/23; smoke con tre sessioni vere 23/23 per Auth, RPC/RLS messaggi, Realtime privato e Storage privato/firmato.
-- 2026-09-19: backup Storage fuori da Git/OneDrive in `%LOCALAPPDATA%/Vinea/backups/2026-09-19`: 11 oggetti, 3.528.925 byte, hash/eTag verificati. OAuth Google reale completato sul dominio stabile con nuova sessione; allowlist Auth verificata sul dominio stabile.
-- 2026-09-18: PR #121 MERSA (`848518f3a4e8a2cd95db2ccbf91e6e88c44eb24d`), CI verde e Netlify Published `6aad86afdd098e0008a93edf` sul medesimo commit. Smoke reale: home 200, header nuovi e robots presenti, reporter 204, callback 307 sul dominio stabile. Desktop sincronizzato su `codex/desktop-current-2026-09-18`, vecchio branch e quattro file/staging preservati.
-- 2026-09-18: PR #119 e #120 MERSE. Base verificata `09690c39289e80e9389f8fd3f67ef32bd57b1dba`; Netlify Published `6aad296a00d5f5000819d6d5` sullo stesso commit. La precedente descrizione di PR120 in bozza è superata.
-- Supabase produzione `pijnmcllmfgjmgsvtcej`: 54 migrazioni, corrispondenza esatta con i file; ultima `20260918102406_step_up_auth_prelievi`. Griglie produzione: step-up 9/9, marketplace 16/16, grant statici 7/7 PASSA. Nessun nuovo dato o migrazione in questo follow-up.
-- Follow-up sicurezza implementato: Next.js/eslint-config-next 16.3.3 e dipendenze transitive corrette, audit CI, gestione errore password con riautenticazione, reporter CSP sanitizzato, CSP script enforcing con nonce, robots.txt e Resend descritto come SMTP in uso.
-- Validazione locale: lockfile congelato PASS, audit zero vulnerabilità note, 1572 test PASS, typecheck/build PASS, lint 0 errori/12 warning preesistenti. Dettagli e limiti in `docs/SECURITY_FOLLOWUP_PR120.md`.
-- Auth produzione: Secure email change e leaked password protection ON; Secure password change ON. Require current password OFF. Realtime pubblico DISABILITATO dopo la richiesta esplicita dell'utente di eseguire le operazioni manuali residue: salvato e verificato dopo reload, servizio ON. Prova WebSocket pubblico: CHANNEL_ERROR PrivateOnly; privato anonimo: CHANNEL_ERROR Unauthorized.
-- Porte pagamenti e AI verificate 503 «non attive» da `https://vineawineclub.com` e localhost, con `Access-Control-Allow-Origin` esatto; webhook pubblico 503. Nessuna accensione.
-- Le specifiche vetrina a successo e aliquota per classe restano progettate, non implementate. Fase 11 NON APERTA; Fase 13 NON INIZIATA.
+- 2026-09-21: decisioni operative implementate sul branch `codex/operational-decisions-foundations`. Tre migrazioni additive introducono banner incidenti e capability `emergency_delegate` non assegnata, contestazioni 48h con prove private/risposta venditore/audit/notifiche, e fondamenta governance Club.
+- Il backup offsite e predisposto per Backblaze B2 EU Central: export separato database/Auth e Storage, hash SHA-256, cifratura client-side `age`, Object Lock e retention 30 giornalieri/12 settimanali/12 mensili. Workflow fail-closed finche `BACKUP_OFFSITE_ENABLED` non e `true`; credenziali assenti dal repository. Restore verifier e procedura isolata inclusi.
+- Il banner globale ha pannello dedicato `/continuita` accessibile a `admin` o `emergency_delegate`; `status-page/` e pronto ma non e dichiarato indipendente finche non viene distribuito fuori dall'app principale.
+- Le contestazioni accettano difformita oggettive entro 48 ore dalla consegna, fino a 8 prove WebP private ricodificate senza EXIF, risposta venditore entro 48 ore e presa in carico documentazione. Payout e pagamenti restano spenti.
+- I Club hanno proposta/approvazione, accesso aperto o chiuso, richieste, moderatori, regole versionate, link esterni e audit. La superficie resta chiusa: `NEXT_PUBLIC_CLUBS_ENABLED=false` e grant delle viste pubbliche revocati.
+- Migrazioni validate sullo schema di produzione dentro una transazione annullata: esito positivo e nessuna modifica persistita. Test applicativi e deploy restano da chiudere nella PR corrente.
+- Stato persistente e residui esterni: `docs/OPERATIONAL_DECISIONS_STATUS.md`. `AI_ENABLED=false` e `PAYMENTS_ENABLED=false` restano invariati.
 
 ## ACTIVE TASK
-CHIUSURA TECNICA PRE-LANCIO COMPLETATA: CORS e scheduler verificati con pagamenti e AI spenti; continuità tecnica documentata. Nessuna apertura dei gate.
+Chiudere PR, CI, integrazione Supabase/Netlify e sincronizzazione del checkout Desktop per le decisioni operative approvate.
 
 ## NEXT STEPS
-1. Enrico chiude le decisioni di continuità e le procedure/contenuti esterni elencati nella checklist.
-2. Commercialista e consulenti chiudono adempimenti societari, fiscali e legali.
-3. Solo dopo, pianificare onboarding Stripe e test provider in ambiente controllato prima di qualsiasi apertura pagamenti.
+1. Completare validazione locale, commit e PR delle fondamenta operative.
+2. Verificare CI, ledger Supabase, advisor e deploy Netlify dopo il merge.
+3. Sincronizzare il checkout Desktop e il file `task_aggiornato.TXT` preservando i quattro file personali gia presenti.
 
 ## BLOCKERS / NOTES
-- CSP script con nonce, smoke Realtime autenticato e immagini firmate sono chiusi dalla PR #123. `i.pravatar.cc` è rimosso dalla policy; resta `style-src 'unsafe-inline'`, necessario ai componenti correnti.
-- Il precedente blocco automatico Realtime è RISOLTO: dopo la nuova istruzione dell'utente il salvataggio via dashboard è riuscito. I client sono stati disconnessi durante l'applicazione. La prova anonima non certifica il flusso autenticato tra due utenti.
-- OAuth Google reale e ritorno su `/account` con nuova sessione sono provati in produzione. Il retry del prelievo non è stato eseguito perché il gate pagamenti è spento e non esiste saldo disponibile; Facebook non è esposto dalla UI. Non attivare Require current password.
-- Per verificare i grant in produzione usare `supabase/tests/security_hardening_grants_static.sql`; la griglia precedente crea fixture Auth ed è destinata all'anteprima.
-- Nessun `function_search_path_mutable`; restano advisor architetturali su viste e RPC SECURITY DEFINER / deny-all RLS. Non azzerarli revocando porte di dominio intenzionali.
-- Netlify oggi ha build Active, repo corretto e produzione su main; il deploy PR121 è allineato. La causa storica della mancata pubblicazione del 15 settembre non è ricostruita. Dopo ogni merge controllare Published SHA, non solo CI.
-- Centro legale ancora in bozza. Procedure operative, contenuti club, commercialista, marchio e logistica richiedono decisioni Enrico/professionisti. Nessun messaggio esterno inviato.
-- Prima dei pagamenti: scheduler con due esecuzioni osservate, test OAuth, continuità e adempimenti. La prova di un ordine reale richiede una finestra di attivazione controllata: non può precedere logicamente ogni attivazione del gate.
-- Preservare nella copia Desktop i quattro file personali già presenti e il loro staging: `.d3b-production-schema.sql`, `.wslconfig` e i due documenti di piano. Non includerli nel commit.
+- Per attivare B2 servono account/bucket EU Central con Object Lock, application key limitata, recipient `age` e variabili/secret GitHub; dopo va eseguito e verificato il primo backup.
+- Per completare la continuita organizzativa servono una persona delegata con MFA e accessi individuali ai servizi, una pagina di stato realmente separata e una procedura email incidenti approvata.
+- Flusso UI Club, contenuti iniziali, packaging, inviti/referral, supporto operativo e revisioni professionali restano elencati nel documento persistente; nessun requisito mancante e stato inventato.
+- Il restore isolato del 19 settembre resta la prova corrente. RTO/RPO 24h/24h devono essere riesaminati prima dei pagamenti reali.
+- Non attivare pagamenti, payout, IA, Club pubblici o backup offsite senza completare i rispettivi prerequisiti misurabili.
+- Preservare nel checkout Desktop `.d3b-production-schema.sql`, `.wslconfig` e i due documenti di piano con il loro staging; non includerli in commit.
