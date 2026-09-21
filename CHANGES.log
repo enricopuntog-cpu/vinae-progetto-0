@@ -6,14 +6,15 @@
 - `PAYMENTS_ENABLED=false`, `AI_ENABLED=false` e `BACKUP_OFFSITE_ENABLED=false` restano invariati. Il cutover della Fase 13 non è implicato.
 
 ## ACTIVE TASK
-Verificare il commit pubblicato su Netlify e il percorso autenticato Club/contestazioni dopo l'integrazione su `main`.
+PR #130 aperta; attendere il ripristino della capacità Supabase Preview, poi integrare soltanto con controlli verdi e mergeability pulita.
 
 ## NEXT STEPS
-1. Confrontare il commit Published di Netlify con `origin/main` e provare le viste amministrative con un account autorizzato.
+1. Rieseguire Supabase Preview quando la capacità è disponibile, completare il merge della PR #130 e verificare il commit Published con le viste autenticate.
 2. Configurare ed eseguire il primo backup offsite B2 quando saranno disponibili account e segreti.
 3. Pubblicare la pagina di stato su un hosting realmente indipendente.
 
 ## BLOCKERS / NOTES
+- Supabase Preview della PR #130 è pendente e il ramo temporaneo segnala `MIGRATIONS_FAILED` senza migrazioni applicate. Due tentativi di reset hanno restituito `Capacity is unavailable at this time`; il workflow non espone il log dettagliato. GitHub segnala `UNSTABLE`, quindi il merge non è stato eseguito. Le migrazioni nel progetto di produzione sono applicate e le verifiche dirette sono verdi.
 - I controlli SQL verificano le porte di accesso e quattro rifiuti comportamentali, ma non sostituiscono una prova end-to-end con due Club e due ordini reali; non sono state create fixture persistenti in produzione.
 - Per attivare B2 servono bucket EU Central con Object Lock, application key limitata, recipient `age` e segreti GitHub; dopo va verificato il primo backup.
 - Delegato di emergenza, accessi individuali, pagina di stato esterna e procedura email incidenti richiedono scelte o account esterni; non appartengono a questo ciclo.

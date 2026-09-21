@@ -3425,3 +3425,12 @@ pubblica non ha overflow orizzontale. Lo smoke autenticato dei nuovi pannelli
 e il confronto del commit Netlify Published restano da fare dopo l'integrazione.
 La Fase 13 non è stata aperta; `PAYMENTS_ENABLED`, `AI_ENABLED` e
 `BACKUP_OFFSITE_ENABLED` restano `false`.
+
+PR #130 aperta sulla testa `6690bb2` al primo controllo: CI applicativa e
+Deploy Preview Netlify verdi. Supabase Preview rimane pendente e il branch
+temporaneo risulta `MIGRATIONS_FAILED` con zero migrazioni registrate;
+il dettaglio del workflow non è accessibile dalla dashboard. Due tentativi
+di reset hanno restituito `Capacity is unavailable at this time`. Questo
+non smentisce la prova delle migrazioni già applicate direttamente nel progetto
+di produzione, ma impedisce il merge finché la preview non è verde e GitHub
+non segnala la testa come pulita. Nessun bypass dei controlli eseguito.
