@@ -19,9 +19,9 @@ conclusi e dei residui che dipendono da account, persone o decisioni esterne.
   comando per segnare la documentazione completa;
 - fondamenta Club per proposta e approvazione, accesso aperto/chiuso, richieste
   di ingresso, moderatori, regolamento versionato, link esterni e audit;
-- Club chiusi al pubblico dietro i due gate `CLUBS_ENABLED=false` e
-  `NEXT_PUBLIC_CLUBS_ENABLED=false`, oltre ai grant pubblici revocati fino a un
-  lancio deliberato;
+- lancio Club nella PR #128: viste pubbliche limitate ai Club approvati,
+  proposta soggetta a revisione, ingresso aperto o su richiesta, uscita tramite
+  RPC e pubblicazione consentita soltanto ai membri;
 - pagamenti, payout e funzioni AI lasciati spenti.
 
 ## Verificato in produzione
@@ -55,7 +55,8 @@ dei Club; non aprono accessi e non bloccano la beta chiusa.
 | Accessi del delegato | Bloccata esternamente | Concedere alla persona nominata accessi individuali e minimi a GitHub, Supabase, Netlify, DNS e backup; il ruolo applicativo da solo abilita soltanto il banner. |
 | Email di incidente | Bloccata da dati e procedura | Definire destinatari, base giuridica, modello approvato e responsabile invio tramite Resend; evitare broadcast per micro-interruzioni. |
 | RTO/RPO definitivo | Rinviata prima dei pagamenti | Riesaminare l'obiettivo temporaneo 24h/24h dopo la prima prova B2. |
-| Flussi Club completi | Pronti lato dati, UI chiusa | Costruire UI proposta/revisione/ingresso/regole/link, testarla con fixture reali, poi concedere le viste pubbliche e accendere la flag. |
+| Flussi Club amministrativi | Parziali | La PR #128 copre proposta, ingresso e uscita. Restano UI di revisione proposte/richieste, gestione moderatori, versioni del regolamento e link esterni. |
+| Contenuti iniziali Club | Bloccata editorialmente | In produzione resta il Club approvato `circolo-vinea`; creare altri Club soltanto con nomi, descrizioni e responsabili reali. |
 | Indici Club suggeriti dagli advisor | Rinviata al pre-lancio | Riesaminare con query e volumi reali le chiavi esterne non coperte; aggiungere soltanto gli indici utili prima di aprire i Club. |
 | Supporto operativo | Bloccata esternamente | Definire persone e casella responsabile delle contestazioni prima dei pagamenti reali. |
 | Packaging e inviti beta | Bloccata commercialmente | Scegliere partner/fornitura e lista invitati; nessun valore è inventato nel codice. |
@@ -67,8 +68,9 @@ dei Club; non aprono accessi e non bloccano la beta chiusa.
 
 - `PAYMENTS_ENABLED=false` e azioni di pagamento disabilitate;
 - `AI_ENABLED=false` e azioni IA disabilitate;
-- `NEXT_PUBLIC_CLUBS_ENABLED=false`;
-- `CLUBS_ENABLED=false`;
+- i Club si aprono soltanto con entrambe le flag esatte
+  `NEXT_PUBLIC_CLUBS_ENABLED=true` e `CLUBS_ENABLED=true`; le viste pubbliche
+  mostrano esclusivamente Club approvati;
 - `BACKUP_OFFSITE_ENABLED=false` finché il primo bucket non è configurato e
   verificato;
 - nessun utente riceve automaticamente `emergency_delegate`.

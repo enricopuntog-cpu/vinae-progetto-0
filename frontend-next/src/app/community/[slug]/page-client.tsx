@@ -26,7 +26,11 @@ import { ClubDiscussioni } from "@/components/vinea/ClubDiscussioni";
 import { ReportDialog } from "@/components/vinea/ReportDialog";
 import { ErrorState } from "@/components/vinea/States";
 import { formatInteger } from "@/lib/format";
-import { assiClub, puoPubblicareNelClub } from "@/lib/phase12/club-view";
+import {
+  assiClub,
+  etichettaIngressoClub,
+  puoPubblicareNelClub,
+} from "@/lib/phase12/club-view";
 import { coverSicura } from "@/lib/phase12/club-cover";
 import { ordinaPerPopolarita } from "@/lib/phase12/club-post-view";
 import { useClubFollow } from "@/lib/phase12/use-club-follow";
@@ -42,6 +46,7 @@ export default function CommunityDetailPageClient({
   const [club, setClub] = useState<Club>(iniziale);
   const { cambiaFollow, inCorso, error } = useClubFollow();
   const attesa = inCorso === club.slug;
+  const richiestaInAttesa = club.membershipRequestStatus === "in_attesa";
   const assi = assiClub(club);
   // La cover si convalida in lettura: `cover_image` e un percorso scritto da
   // club_crea, ma qui vale la stessa disciplina dell'avatar - il valore
@@ -137,11 +142,14 @@ export default function CommunityDetailPageClient({
                 ? "Solo il proprietario pubblica"
                 : "Tutti i membri possono pubblicare"}
             </p>
+            <p className="text-crema/80" data-testid="club-accesso">
+              {club.accessType === "chiuso" ? "Ingresso su approvazione" : "Ingresso aperto"}
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={() => void onFollow()}
-              disabled={!cambiaFollow || attesa}
+              disabled={!cambiaFollow || attesa || richiestaInAttesa}
               data-testid={`club-follow-${club.slug}`}
               className={
                 club.seguito
@@ -149,7 +157,7 @@ export default function CommunityDetailPageClient({
                   : "bg-oro text-antracite hover:bg-oro/90"
               }
             >
-              {attesa ? "…" : club.seguito ? "Segui già" : "Segui club"}
+              {etichettaIngressoClub(club, attesa)}
             </Button>
             <Button
               asChild
@@ -205,6 +213,12 @@ export default function CommunityDetailPageClient({
               </ol>
             )}
           </div>
+          {club.requirements && (
+            <div className="rounded-2xl border border-border bg-card p-4" data-testid="club-requisiti">
+              <p className="font-serif text-lg font-semibold">Requisiti di ingresso</p>
+              <p className="mt-2 text-sm text-muted-foreground">{club.requirements}</p>
+            </div>
+          )}
         </aside>
       </div>
     </div>

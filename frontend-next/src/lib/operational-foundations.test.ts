@@ -33,6 +33,17 @@ describe("fondamenta operative fail-closed", () => {
     );
   });
 
+  it("il lancio espone soltanto Club approvati e mantiene le scritture nelle RPC", () => {
+    const sql = read("supabase/migrations/20260921111621_launch_clubs.sql");
+    expect(sql).toMatch(/c\.approval_status = 'approvato'/);
+    expect(sql).toMatch(/grant select on public\.public_clubs,[\s\S]*to anon, authenticated/);
+    expect(sql).not.toMatch(/grant\s+(insert|update|delete)/i);
+    const servizio = read("frontend-next/src/services/phase12/supabase-club-service.ts");
+    expect(servizio).toInclude('client.rpc("club_ingresso_richiedi"');
+    expect(servizio).toInclude('client.rpc("club_abbandona"');
+    expect(servizio).toInclude('client.rpc("club_proposta_crea"');
+  });
+
   it("non esegue il backup offsite senza il gate esatto", () => {
     const script = read(".github/scripts/offsite-backup.sh");
     const workflow = read(".github/workflows/offsite-backup.yml");
