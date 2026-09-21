@@ -27,13 +27,21 @@ conclusi e dei residui che dipendono da account, persone o decisioni esterne.
 ## Verificato in produzione
 
 - PR #126 integrata in `main` al commit `e11d0d4`; CI e deploy Netlify verdi;
-- ledger Supabase a 57 migrazioni, incluse le tre di questa consegna;
+- PR #128 integrata in `main` al commit `c3e218b`; CI, preview e controlli locali
+  verdi con 1582 test;
+- ledger Supabase a 58 migrazioni, inclusa `20260921111621_launch_clubs`;
 - auto-rilascio dei nuovi ordini a 2 giorni, bucket `dispute-evidence` privato
   con limite 5 MiB e tutte le nuove tabelle/funzioni presenti;
-- zero incidenti attivi, zero utenti `emergency_delegate` e zero grant diretti
-  per `anon`/`authenticated` sulle quattro viste pubbliche Club;
-- produzione: home HTTP 200, `/community` e `/community/*` HTTP 404,
-  `/continuita` riservata tramite login e callback sul dominio stabile;
+- zero incidenti attivi e zero utenti `emergency_delegate`;
+- viste Club con soli grant `SELECT` per `anon`/`authenticated`, un Club
+  approvato visibile e zero Club non approvati esposti; le RPC proposta,
+  ingresso e uscita restano eseguibili soltanto da utenti autenticati;
+- deploy Netlify `6ab117825eacaf1d344142ed` pronto con entrambe le flag Club
+  attive in produzione e preview;
+- produzione: `/community`, `/community/circolo-vinea`, Home, Ricerca,
+  Cantina, Vendita, Messaggi, Account, Centro legale e Continuita si caricano
+  senza errori; in sessione autenticata si aprono i moduli proposta Club e
+  nuova discussione senza effettuare scritture;
 - `payments-checkout` e `connect-onboarding` rispondono HTTP 503; le tre
   funzioni AI rispondono HTTP 503.
 
@@ -55,22 +63,22 @@ dei Club; non aprono accessi e non bloccano la beta chiusa.
 | Accessi del delegato | Bloccata esternamente | Concedere alla persona nominata accessi individuali e minimi a GitHub, Supabase, Netlify, DNS e backup; il ruolo applicativo da solo abilita soltanto il banner. |
 | Email di incidente | Bloccata da dati e procedura | Definire destinatari, base giuridica, modello approvato e responsabile invio tramite Resend; evitare broadcast per micro-interruzioni. |
 | RTO/RPO definitivo | Rinviata prima dei pagamenti | Riesaminare l'obiettivo temporaneo 24h/24h dopo la prima prova B2. |
-| Flussi Club amministrativi | Parziali | La PR #128 copre proposta, ingresso e uscita. Restano UI di revisione proposte/richieste, gestione moderatori, versioni del regolamento e link esterni. |
+| Flussi Club amministrativi | Parziali | Il frontend utenti copre proposta, ingresso, uscita e discussioni. Restano UI di revisione proposte/richieste, gestione moderatori, versioni del regolamento e link esterni. |
 | Contenuti iniziali Club | Bloccata editorialmente | In produzione resta il Club approvato `circolo-vinea`; creare altri Club soltanto con nomi, descrizioni e responsabili reali. |
-| Indici Club suggeriti dagli advisor | Rinviata al pre-lancio | Riesaminare con query e volumi reali le chiavi esterne non coperte; aggiungere soltanto gli indici utili prima di aprire i Club. |
+| Indici Club suggeriti dagli advisor | Monitoraggio beta | Riesaminare con query e volumi reali le chiavi esterne non coperte; aggiungere soltanto gli indici dimostrati utili. |
 | Supporto operativo | Bloccata esternamente | Definire persone e casella responsabile delle contestazioni prima dei pagamenti reali. |
 | Packaging e inviti beta | Bloccata commercialmente | Scegliere partner/fornitura e lista invitati; nessun valore è inventato nel codice. |
 | Referral e premi invito | Esclusa per ora | Nessun premio o meccanismo è stato definito; non implementare finché non esiste una decisione commerciale. |
 | Club premium, sync social, professionisti | Futuro escluso dall'MVP | Struttura predisposta senza abbonamenti o sincronizzazioni automatiche; requisiti e adempimenti B2C/B2B restano da decidere. |
 | Revisione professionale | Bloccata esternamente | Revisione legale/fiscale/privacy e sicurezza indipendente prima di denaro reale. |
 
-## Gate che restano chiusi
+## Gate operativi
 
 - `PAYMENTS_ENABLED=false` e azioni di pagamento disabilitate;
 - `AI_ENABLED=false` e azioni IA disabilitate;
-- i Club si aprono soltanto con entrambe le flag esatte
-  `NEXT_PUBLIC_CLUBS_ENABLED=true` e `CLUBS_ENABLED=true`; le viste pubbliche
-  mostrano esclusivamente Club approvati;
+- i Club sono aperti con `NEXT_PUBLIC_CLUBS_ENABLED=true` e
+  `CLUBS_ENABLED=true`; le viste pubbliche mostrano esclusivamente Club
+  approvati e le scritture passano dalle RPC autenticate;
 - `BACKUP_OFFSITE_ENABLED=false` finché il primo bucket non è configurato e
   verificato;
 - nessun utente riceve automaticamente `emergency_delegate`.

@@ -1,20 +1,20 @@
 ## CURRENT STATE
-- 2026-09-21: PR #126 integrata in `main` al commit `e11d0d4`. Tre migrazioni additive introducono banner incidenti e capability `emergency_delegate` non assegnata, contestazioni 48h con prove private/risposta venditore/audit/notifiche, e fondamenta governance Club.
+- 2026-09-21: PR #128 integrata in `main` al commit `c3e218b`. La regressione Club e chiusa: proposta, ingresso, uscita e pubblicazione usano le RPC di governance; le viste espongono soltanto Club approvati.
 - Il backup offsite e predisposto per Backblaze B2 EU Central: export separato database/Auth e Storage, hash SHA-256, cifratura client-side `age`, Object Lock e retention 30 giornalieri/12 settimanali/12 mensili. Workflow fail-closed finche `BACKUP_OFFSITE_ENABLED` non e `true`; credenziali assenti dal repository. Restore verifier e procedura isolata inclusi.
 - Il banner globale ha pannello dedicato `/continuita` accessibile a `admin` o `emergency_delegate`; `status-page/` e pronto ma non e dichiarato indipendente finche non viene distribuito fuori dall'app principale.
 - Le contestazioni accettano difformita oggettive entro 48 ore dalla consegna, fino a 8 prove WebP private ricodificate senza EXIF, risposta venditore entro 48 ore e presa in carico documentazione. Payout e pagamenti restano spenti.
-- La PR #128 corregge la regressione Club: riapre in sola lettura le viste dei soli Club approvati, usa le RPC di governance per proposta/ingresso/uscita, mostra le richieste pendenti e consente di scrivere soltanto ai membri. I gate di produzione restano spenti fino al merge e alla verifica della migrazione.
-- Il ledger Supabase di produzione contiene 57 migrazioni, incluse le tre nuove. Verificati: auto-rilascio a 2 giorni, bucket prove privato da 5 MiB, zero delegati di emergenza, zero incidenti attivi e zero grant pubblici alle viste Club. Gli advisor segnalano i confini RPC/view `SECURITY DEFINER` e le tabelle RPC-only senza policy: sono intenzionali, con grant revocati e filtri/controlli interni verificati.
-- Netlify ha pubblicato `e11d0d4`: home 200, Club e schede Club 404, continuita 307 verso login e callback sul dominio stabile. Le cinque sonde Edge confermano `PAYMENTS_ENABLED=false` e `AI_ENABLED=false` con HTTP 503. In locale e CI: 1580 test, typecheck e build passati; lint 0 errori e 12 warning preesistenti; audit senza vulnerabilita note.
+- Il ledger Supabase di produzione contiene 58 migrazioni, inclusa `20260921111621_launch_clubs`. Verificati un Club approvato visibile, zero Club non approvati esposti, grant `SELECT` soltanto sulle quattro viste pubbliche e RPC Club eseguibili soltanto da `authenticated`. Gli advisor continuano a segnalare i confini RPC/view `SECURITY DEFINER` e le tabelle RPC-only senza policy: sono intenzionali, con grant revocati e filtri/controlli interni verificati.
+- Netlify ha pubblicato il deploy `6ab117825eacaf1d344142ed` dalla snapshot tracciata `c3e218b`; le flag `NEXT_PUBLIC_CLUBS_ENABLED` e `CLUBS_ENABLED` sono `true` in produzione e preview. `/community`, `circolo-vinea`, Home, Ricerca, Cantina, Vendita, Messaggi, Account, Centro legale e Continuita rispondono e si renderizzano senza errori. In sessione autenticata sono stati aperti e annullati senza scritture i moduli proposta Club e nuova discussione.
+- CI della PR #128: 1582 test, typecheck, build, lint e audit passati. La scansione segreti del deploy Netlify non ha rilevato corrispondenze.
 - Stato persistente e residui esterni: `docs/OPERATIONAL_DECISIONS_STATUS.md`. `AI_ENABLED=false` e `PAYMENTS_ENABLED=false` restano invariati.
 
 ## ACTIVE TASK
-PR #128 aperta per ripristinare `/community` e le azioni Club senza riaprire scritture dirette sulle tabelle.
+Nessun intervento correttivo aperto sui Club; il ripristino e verificato in produzione.
 
 ## NEXT STEPS
-1. Attendere CI e preview verdi della PR #128, quindi integrarla.
-2. Verificare la migrazione Supabase, accendere entrambe le flag Club e pubblicare Netlify.
-3. Eseguire smoke pubblico generale e registrare gli esiti di produzione.
+1. Implementare la UI amministrativa per revisionare proposte e richieste Club.
+2. Configurare ed eseguire il primo backup offsite B2 quando saranno disponibili account e segreti.
+3. Pubblicare la pagina di stato su un hosting realmente indipendente.
 
 ## BLOCKERS / NOTES
 - Per attivare B2 servono account/bucket EU Central con Object Lock, application key limitata, recipient `age` e variabili/secret GitHub; dopo va eseguito e verificato il primo backup.
