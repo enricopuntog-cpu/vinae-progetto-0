@@ -3396,3 +3396,32 @@ Su richiesta dell'utente ci si ferma dopo questo intervento e il resoconto:
 nessun bisogno che Enrico azioni altri toggle per avviare i controlli tecnici.
 Backup/restore e CSP sono lavoro dell'agente; OAuth richiede collaborazione
 solo se si presenta una verifica personale del provider.
+
+## 22 settembre 2026 — completamento logico governance Club e contestazioni
+
+Il lavoro parte dalla baseline `origin/main` a `30ec19c`, dopo PR #128.
+Le migrazioni di produzione sono ora 60: `20260921170806` aggiunge viste e RPC
+per la gestione Club, il proprietario del Club esistente, audit append-only,
+stati e decisioni versionate delle contestazioni; `20260921230019` allinea
+il limite storico di `esito_nota` ai 2000 caratteri ammessi dalla decisione.
+La migrazione già applicata non è stata riscritta.
+
+La decisione Vinea è registrata separatamente dall'esecuzione economica:
+la RPC non modifica ordini, pagamenti o payout. Le note amministrative sono
+private, mentre le parti vedono la timeline consentita. Il database di
+produzione aveva un Club e zero contestazioni; non sono state create fixture
+persistenti. La griglia `12e` ha passato 10/10 invarianti; `12f` ha verificato
+in transazione il rifiuto di decisione e nomina moderatore a utente normale,
+il rifiuto di lettura delle note private e il rifiuto della decisione ad anon.
+Gli advisor conservano segnalazioni intenzionali su RLS senza policy dirette e
+viste/RPC `SECURITY DEFINER`; gli indici di prestazione sono da valutare con
+volumi reali.
+
+Nel frontend target sono presenti la UI amministrativa Club e contestazioni,
+la gestione Club per owner/moderatore e lo stato della disputa per le parti.
+Verifiche locali: 1601 test passati, typecheck e build passati, lint con zero
+errori e 12 warning preesistenti. A 320, 375 e 1440 px la pagina Club
+pubblica non ha overflow orizzontale. Lo smoke autenticato dei nuovi pannelli
+e il confronto del commit Netlify Published restano da fare dopo l'integrazione.
+La Fase 13 non è stata aperta; `PAYMENTS_ENABLED`, `AI_ENABLED` e
+`BACKUP_OFFSITE_ENABLED` restano `false`.

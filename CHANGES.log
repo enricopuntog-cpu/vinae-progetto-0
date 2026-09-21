@@ -1,25 +1,21 @@
 ## CURRENT STATE
-- 2026-09-21: PR #128 integrata in `main` al commit `c3e218b`. La regressione Club e chiusa: proposta, ingresso, uscita e pubblicazione usano le RPC di governance; le viste espongono soltanto Club approvati.
-- Il backup offsite e predisposto per Backblaze B2 EU Central: export separato database/Auth e Storage, hash SHA-256, cifratura client-side `age`, Object Lock e retention 30 giornalieri/12 settimanali/12 mensili. Workflow fail-closed finche `BACKUP_OFFSITE_ENABLED` non e `true`; credenziali assenti dal repository. Restore verifier e procedura isolata inclusi.
-- Il banner globale ha pannello dedicato `/continuita` accessibile a `admin` o `emergency_delegate`; `status-page/` e pronto ma non e dichiarato indipendente finche non viene distribuito fuori dall'app principale.
-- Le contestazioni accettano difformita oggettive entro 48 ore dalla consegna, fino a 8 prove WebP private ricodificate senza EXIF, risposta venditore entro 48 ore e presa in carico documentazione. Payout e pagamenti restano spenti.
-- Il ledger Supabase di produzione contiene 58 migrazioni, inclusa `20260921111621_launch_clubs`. Verificati un Club approvato visibile, zero Club non approvati esposti, grant `SELECT` soltanto sulle quattro viste pubbliche e RPC Club eseguibili soltanto da `authenticated`. Gli advisor continuano a segnalare i confini RPC/view `SECURITY DEFINER` e le tabelle RPC-only senza policy: sono intenzionali, con grant revocati e filtri/controlli interni verificati.
-- Netlify ha pubblicato il deploy `6ab117825eacaf1d344142ed` dalla snapshot tracciata `c3e218b`; le flag `NEXT_PUBLIC_CLUBS_ENABLED` e `CLUBS_ENABLED` sono `true` in produzione e preview. `/community`, `circolo-vinea`, Home, Ricerca, Cantina, Vendita, Messaggi, Account, Centro legale e Continuita rispondono e si renderizzano senza errori. In sessione autenticata sono stati aperti e annullati senza scritture i moduli proposta Club e nuova discussione.
-- CI della PR #128: 1582 test, typecheck, build, lint e audit passati. La scansione segreti del deploy Netlify non ha rilevato corrispondenze.
-- Stato persistente e residui esterni: `docs/OPERATIONAL_DECISIONS_STATUS.md`. `AI_ENABLED=false` e `PAYMENTS_ENABLED=false` restano invariati.
+- Club/Community: proposte e richieste di ingresso sono revisionabili dagli amministratori; proprietari e moderatori hanno il pannello di gestione membri, moderatori, regolamenti versionati e link esterni. Le autorizzazioni sono verificate nelle RPC e i registri critici sono append-only.
+- Contestazioni: presa in carico, revisione, note riservate, decisione motivata e correzione versionata sono separate dai movimenti economici. Acquirente e venditore vedono stato, scadenze, risposta e timeline pertinenti; le note amministrative restano private.
+- In produzione Supabase risultano 60 migrazioni, incluse `20260921170806_complete_club_dispute_lifecycles` e `20260921230019_align_dispute_decision_note_limit`. La griglia SQL ha dato 10/10 esiti positivi; le prove negative sotto ruolo `authenticated` e `anon` sono passate. Un Club ha il proprietario ricostruito; non ci sono contestazioni reali da migrare.
+- Frontend: 1601 test passati, typecheck e build passati, lint senza errori e con 12 warning preesistenti. Verificati 320, 375 e 1440 px sulla pagina Club pubblica senza overflow orizzontale. L'interfaccia amministrativa autenticata richiede ancora una prova visuale con sessione idonea.
+- `PAYMENTS_ENABLED=false`, `AI_ENABLED=false` e `BACKUP_OFFSITE_ENABLED=false` restano invariati. Il cutover della Fase 13 non è implicato.
 
 ## ACTIVE TASK
-Nessun intervento correttivo aperto sui Club; il ripristino e verificato in produzione.
+Verificare il commit pubblicato su Netlify e il percorso autenticato Club/contestazioni dopo l'integrazione su `main`.
 
 ## NEXT STEPS
-1. Implementare la UI amministrativa per revisionare proposte e richieste Club.
+1. Confrontare il commit Published di Netlify con `origin/main` e provare le viste amministrative con un account autorizzato.
 2. Configurare ed eseguire il primo backup offsite B2 quando saranno disponibili account e segreti.
 3. Pubblicare la pagina di stato su un hosting realmente indipendente.
 
 ## BLOCKERS / NOTES
-- Per attivare B2 servono account/bucket EU Central con Object Lock, application key limitata, recipient `age` e variabili/secret GitHub; dopo va eseguito e verificato il primo backup.
-- Per completare la continuita organizzativa servono una persona delegata con MFA e accessi individuali ai servizi, una pagina di stato realmente separata e una procedura email incidenti approvata.
-- Revisione amministrativa Club, gestione moderatori/regolamenti/link, contenuti iniziali, packaging, inviti/referral, supporto operativo e revisioni professionali restano elencati nel documento persistente.
-- Il restore isolato del 19 settembre resta la prova corrente. RTO/RPO 24h/24h devono essere riesaminati prima dei pagamenti reali.
-- Non attivare pagamenti, payout, IA o backup offsite senza completare i rispettivi prerequisiti misurabili.
-- Preservare nel checkout Desktop `.d3b-production-schema.sql`, `.wslconfig` e i due documenti di piano con il loro staging; non includerli in commit.
+- I controlli SQL verificano le porte di accesso e quattro rifiuti comportamentali, ma non sostituiscono una prova end-to-end con due Club e due ordini reali; non sono state create fixture persistenti in produzione.
+- Per attivare B2 servono bucket EU Central con Object Lock, application key limitata, recipient `age` e segreti GitHub; dopo va verificato il primo backup.
+- Delegato di emergenza, accessi individuali, pagina di stato esterna e procedura email incidenti richiedono scelte o account esterni; non appartengono a questo ciclo.
+- Il restore isolato del 19 settembre resta la prova corrente. RTO/RPO 24h/24h vanno riesaminati prima dei pagamenti reali.
+- Conservare nel checkout Desktop lo staging personale di `.d3b-production-schema.sql`, `.wslconfig` e dei due documenti di piano; non includerli nei commit Vinea.
