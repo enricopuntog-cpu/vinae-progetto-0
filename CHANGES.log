@@ -1,19 +1,20 @@
 ## CURRENT STATE
-- 2026-09-21: PR #126 aperta dal branch `codex/operational-decisions-foundations`. Tre migrazioni additive introducono banner incidenti e capability `emergency_delegate` non assegnata, contestazioni 48h con prove private/risposta venditore/audit/notifiche, e fondamenta governance Club.
+- 2026-09-21: PR #126 integrata in `main` al commit `e11d0d4`. Tre migrazioni additive introducono banner incidenti e capability `emergency_delegate` non assegnata, contestazioni 48h con prove private/risposta venditore/audit/notifiche, e fondamenta governance Club.
 - Il backup offsite e predisposto per Backblaze B2 EU Central: export separato database/Auth e Storage, hash SHA-256, cifratura client-side `age`, Object Lock e retention 30 giornalieri/12 settimanali/12 mensili. Workflow fail-closed finche `BACKUP_OFFSITE_ENABLED` non e `true`; credenziali assenti dal repository. Restore verifier e procedura isolata inclusi.
 - Il banner globale ha pannello dedicato `/continuita` accessibile a `admin` o `emergency_delegate`; `status-page/` e pronto ma non e dichiarato indipendente finche non viene distribuito fuori dall'app principale.
 - Le contestazioni accettano difformita oggettive entro 48 ore dalla consegna, fino a 8 prove WebP private ricodificate senza EXIF, risposta venditore entro 48 ore e presa in carico documentazione. Payout e pagamenti restano spenti.
 - I Club hanno proposta/approvazione, accesso aperto o chiuso, richieste, moderatori, regole versionate, link esterni e audit. La superficie resta chiusa con un doppio gate (`CLUBS_ENABLED=false` e `NEXT_PUBLIC_CLUBS_ENABLED=false`) e grant delle viste pubbliche revocati.
-- Migrazioni validate sullo schema di produzione dentro una transazione annullata: esito positivo e nessuna modifica persistita. In locale: 1580 test, typecheck e build passati; lint 0 errori e 12 warning preesistenti; audit senza vulnerabilita note.
+- Il ledger Supabase di produzione contiene 57 migrazioni, incluse le tre nuove. Verificati: auto-rilascio a 2 giorni, bucket prove privato da 5 MiB, zero delegati di emergenza, zero incidenti attivi e zero grant pubblici alle viste Club. Gli advisor segnalano i confini RPC/view `SECURITY DEFINER` e le tabelle RPC-only senza policy: sono intenzionali, con grant revocati e filtri/controlli interni verificati.
+- Netlify ha pubblicato `e11d0d4`: home 200, Club e schede Club 404, continuita 307 verso login e callback sul dominio stabile. Le cinque sonde Edge confermano `PAYMENTS_ENABLED=false` e `AI_ENABLED=false` con HTTP 503. In locale e CI: 1580 test, typecheck e build passati; lint 0 errori e 12 warning preesistenti; audit senza vulnerabilita note.
 - Stato persistente e residui esterni: `docs/OPERATIONAL_DECISIONS_STATUS.md`. `AI_ENABLED=false` e `PAYMENTS_ENABLED=false` restano invariati.
 
 ## ACTIVE TASK
-Chiudere PR, CI, integrazione Supabase/Netlify e sincronizzazione del checkout Desktop per le decisioni operative approvate.
+Nessun lavoro repository aperto per le decisioni operative approvate; i residui richiedono prerequisiti esterni o una futura decisione di lancio.
 
 ## NEXT STEPS
-1. Completare validazione locale, commit e PR delle fondamenta operative.
-2. Verificare CI, ledger Supabase, advisor e deploy Netlify dopo il merge.
-3. Sincronizzare il checkout Desktop e il file `task_aggiornato.TXT` preservando i quattro file personali gia presenti.
+1. Configurare e provare B2 soltanto dopo disponibilita di bucket, credenziali limitate e recipient `age`.
+2. Nominare il delegato con MFA e scegliere hosting/dominio separati per la pagina di stato.
+3. Prima di aprire i Club, completare UI e contenuti reali, riesaminare gli indici suggeriti dagli advisor e concedere esplicitamente i grant pubblici.
 
 ## BLOCKERS / NOTES
 - Per attivare B2 servono account/bucket EU Central con Object Lock, application key limitata, recipient `age` e variabili/secret GitHub; dopo va eseguito e verificato il primo backup.
