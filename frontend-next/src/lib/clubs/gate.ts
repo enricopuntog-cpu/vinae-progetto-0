@@ -1,5 +1,3 @@
-import "server-only";
-
 import { valoreFlagEsattamenteTrue } from "@/config/features";
 
 /**
