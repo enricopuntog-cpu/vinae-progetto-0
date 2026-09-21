@@ -14,7 +14,7 @@ PR #130 aperta; attendere il ripristino della capacità Supabase Preview, poi in
 3. Pubblicare la pagina di stato su un hosting realmente indipendente.
 
 ## BLOCKERS / NOTES
-- Supabase Preview della PR #130 è pendente e il ramo temporaneo segnala `MIGRATIONS_FAILED` senza migrazioni applicate. Due tentativi di reset hanno restituito `Capacity is unavailable at this time`; il workflow non espone il log dettagliato. GitHub segnala `UNSTABLE`, quindi il merge non è stato eseguito. Le migrazioni nel progetto di produzione sono applicate e le verifiche dirette sono verdi.
+- Supabase Preview della PR #130 è fallita e il ramo temporaneo segnala `MIGRATIONS_FAILED` senza migrazioni applicate. Il dettaglio del check GitHub e due tentativi di reset riportano `Capacity is unavailable at this time`. GitHub segnala `UNSTABLE`, quindi il merge non è stato eseguito. Le migrazioni nel progetto di produzione sono applicate e le verifiche dirette sono verdi.
 - I controlli SQL verificano le porte di accesso e quattro rifiuti comportamentali, ma non sostituiscono una prova end-to-end con due Club e due ordini reali; non sono state create fixture persistenti in produzione.
 - Per attivare B2 servono bucket EU Central con Object Lock, application key limitata, recipient `age` e segreti GitHub; dopo va verificato il primo backup.
 - Delegato di emergenza, accessi individuali, pagina di stato esterna e procedura email incidenti richiedono scelte o account esterni; non appartengono a questo ciclo.

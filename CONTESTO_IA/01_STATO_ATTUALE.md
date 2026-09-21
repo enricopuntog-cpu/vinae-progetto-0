@@ -3427,10 +3427,11 @@ La Fase 13 non è stata aperta; `PAYMENTS_ENABLED`, `AI_ENABLED` e
 `BACKUP_OFFSITE_ENABLED` restano `false`.
 
 PR #130 aperta sulla testa `6690bb2` al primo controllo: CI applicativa e
-Deploy Preview Netlify verdi. Supabase Preview rimane pendente e il branch
+Deploy Preview Netlify verdi. Supabase Preview è fallita e il branch
 temporaneo risulta `MIGRATIONS_FAILED` con zero migrazioni registrate;
-il dettaglio del workflow non è accessibile dalla dashboard. Due tentativi
-di reset hanno restituito `Capacity is unavailable at this time`. Questo
+il dettaglio del workflow non è accessibile dalla dashboard, ma il check GitHub
+riporta `Capacity is unavailable at this time`, come due tentativi di reset.
+Questo
 non smentisce la prova delle migrazioni già applicate direttamente nel progetto
 di produzione, ma impedisce il merge finché la preview non è verde e GitHub
 non segnala la testa come pulita. Nessun bypass dei controlli eseguito.
