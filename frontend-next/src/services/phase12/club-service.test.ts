@@ -6,7 +6,7 @@ import {
   noPhase12Client,
   phase12Error,
 } from "@/services/phase12/supabase-club-service";
-import type { Club } from "@/services/types";
+import type { Club, NuovoClub } from "@/services/types";
 
 // ---------------------------------------------------------------------------
 // Doppio del client, sulla forma di quello della Fase 9: registra le tabelle
@@ -126,6 +126,9 @@ const riga = {
   posting_mode: null,
   cover_image: null,
   mio: false,
+  access_type: "aperto" as const,
+  requirements: null,
+  membership_request_status: null,
   created_at: "2026-08-17T09:00:00.000Z",
 };
 
@@ -150,6 +153,9 @@ describe("mapClub", () => {
       postingMode: "OPEN",
       coverImage: null,
       mio: false,
+      accessType: "aperto",
+      requirements: null,
+      membershipRequestStatus: null,
       createdAt: "2026-08-17T09:00:00.000Z",
     });
   });
@@ -201,14 +207,17 @@ describe("ClubService — lettura", () => {
   });
 });
 
-describe("ClubService — follow", () => {
-  it("scrive il solo club_slug, mai un user_id", async () => {
-    const { client, inseriti } = fakeClient({
-      club_memberships: { data: null },
+describe("ClubService — ingresso e uscita", () => {
+  it("usa la RPC di ingresso e rilegge i conteggi dal server", async () => {
+    const { client, rpc } = fakeClient({
+      "rpc:club_ingresso_richiedi": { data: { slug: "barolo", status: "membro" } },
       public_clubs: { data: { ...riga, seguito: true, membri: 13 } },
     });
     const esito = await createSupabaseClubService(client).segui("barolo");
-    expect(inseriti).toEqual([{ club_slug: "barolo" }]);
+    expect(rpc).toEqual([{ nome: "club_ingresso_richiedi", argomenti: {
+      p_club_slug: "barolo",
+      p_messaggio: null,
+    } }]);
     expect(esito.ok).toBe(true);
     if (esito.ok) {
       expect(esito.data.seguito).toBe(true);
@@ -217,27 +226,27 @@ describe("ClubService — follow", () => {
     }
   });
 
-  it("cancella per club_slug e lascia la riga alla RLS", async () => {
-    const { client, cancellati } = fakeClient({
-      club_memberships: { data: null },
+  it("usa la RPC di uscita e non cancella direttamente membership", async () => {
+    const { client, rpc, cancellati } = fakeClient({
+      "rpc:club_abbandona": { data: { slug: "barolo", status: "uscito" } },
       public_clubs: { data: { ...riga, seguito: false } },
     });
     const esito = await createSupabaseClubService(client).smettiSegui("barolo");
-    expect(cancellati).toEqual([
-      { tabella: "club_memberships", filtri: { club_slug: "barolo" } },
-    ]);
-    expect(Object.keys(cancellati[0]!.filtri)).not.toContain("user_id");
+    expect(rpc).toEqual([{ nome: "club_abbandona", argomenti: { p_club_slug: "barolo" } }]);
+    expect(cancellati).toEqual([]);
     expect(esito.ok).toBe(true);
   });
 
-  it("considera il doppio follow lo stato voluto e non un errore", async () => {
+  it("espone una richiesta in attesa riletta dalla vista", async () => {
     const { client } = fakeClient({
-      club_memberships: { error: { code: "23505", message: "duplicate key" } },
-      public_clubs: { data: { ...riga, seguito: true } },
+      "rpc:club_ingresso_richiedi": { data: { slug: "barolo", status: "in_attesa" } },
+      public_clubs: {
+        data: { ...riga, access_type: "chiuso", membership_request_status: "in_attesa" },
+      },
     });
     const esito = await createSupabaseClubService(client).segui("barolo");
     expect(esito.ok).toBe(true);
-    if (esito.ok) expect(esito.data.seguito).toBe(true);
+    if (esito.ok) expect(esito.data.membershipRequestStatus).toBe("in_attesa");
   });
 
   it("rifiuta il follow senza sessione senza toccare il database", async () => {
@@ -286,7 +295,7 @@ describe("ClubService — errori", () => {
 
   it("distingue la scrittura riuscita dal club sparito nel frattempo", async () => {
     const { client } = fakeClient({
-      club_memberships: { data: null },
+      "rpc:club_ingresso_richiedi": { data: { slug: "barolo", status: "membro" } },
       public_clubs: { data: null },
     });
     const esito = await createSupabaseClubService(client).segui("barolo");
@@ -295,65 +304,64 @@ describe("ClubService — errori", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 12d - creazione di un club utente.
+// Proposta di un Club soggetta a revisione.
 // ---------------------------------------------------------------------------
 
-const rigaCreata = {
-  ...riga,
-  slug: "barolo-club",
-  nome: "Barolo Club",
-  owner_id: UTENTE,
-  owner_username: "enrico",
-  posting_mode: "OWNER_ONLY",
-  cover_image: COVER,
-  membri: 1,
-  seguito: true,
-  mio: true,
-};
-
 describe("ClubService — creazione", () => {
-  it("passa dalla RPC club_crea e non inserisce in clubs", async () => {
+  const proposta = (patch: Partial<NuovoClub> = {}): NuovoClub => ({
+    nome: "Barolo Club",
+    descrizione: "Un club per chi beve Barolo.",
+    categoria: "Denominazione",
+    territorio: "Piemonte",
+    accessType: "aperto" as const,
+    requirements: null,
+    regole: ["Rispetto reciproco"],
+    postingMode: "OPEN" as const,
+    ...patch,
+  });
+
+  it("passa dalla RPC di proposta e non inserisce in clubs", async () => {
     const { client, rpc, tabelle, inseriti } = fakeClient({
-      "rpc:club_crea": { data: { slug: "barolo-club" } },
-      public_clubs: { data: rigaCreata },
+      "rpc:club_proposta_crea": { data: { slug: "barolo-club", status: "in_attesa" } },
     });
 
-    const esito = await createSupabaseClubService(client).crea({
+    const esito = await createSupabaseClubService(client).crea(proposta({
       nome: "  Barolo Club  ",
       descrizione: "  Un club per chi beve Barolo.  ",
-      regole: ["Niente annunci"],
       postingMode: "OWNER_ONLY",
       coverImage: COVER,
-    });
+    }));
 
-    expect(rpc.map((c) => c.nome)).toEqual(["club_crea"]);
-    // Il nome della funzione e vincolante: non `club_crea_club`, non
-    // `club_create`, non una route applicativa.
+    expect(rpc.map((c) => c.nome)).toEqual(["club_proposta_crea"]);
     expect(tabelle).not.toContain("clubs");
     expect(inseriti).toEqual([]);
-    expect(esito.ok).toBe(true);
+    expect(esito).toEqual({ ok: true, data: { slug: "barolo-club", status: "in_attesa" } });
   });
 
   it("manda i parametri con i bordi ripuliti e nessun owner_id", async () => {
     const { client, rpc } = fakeClient({
-      "rpc:club_crea": { data: { slug: "barolo-club" } },
-      public_clubs: { data: rigaCreata },
+      "rpc:club_proposta_crea": { data: { slug: "barolo-club", status: "in_attesa" } },
     });
 
-    await createSupabaseClubService(client).crea({
+    await createSupabaseClubService(client).crea(proposta({
       nome: "  Barolo Club  ",
       descrizione: "  Un club per chi beve Barolo.  ",
       regole: ["Niente annunci"],
       postingMode: "OWNER_ONLY",
       coverImage: COVER,
-    });
+    }));
 
     expect(rpc[0]!.argomenti).toEqual({
       p_nome: "Barolo Club",
       p_descrizione: "Un club per chi beve Barolo.",
+      p_categoria: "Denominazione",
+      p_territorio: "Piemonte",
+      p_access_type: "aperto",
+      p_requirements: null,
       p_regole: ["Niente annunci"],
       p_posting_mode: "OWNER_ONLY",
       p_cover_image: COVER,
+      p_external_links: [],
     });
     // Il proprietario e lo slug li decide il server. Se comparissero qui, il
     // client sarebbe una seconda sorgente per un dato di autorizzazione.
@@ -364,87 +372,45 @@ describe("ClubService — creazione", () => {
 
   it("un club senza cover manda null, non una stringa vuota", async () => {
     const { client, rpc } = fakeClient({
-      "rpc:club_crea": { data: { slug: "barolo-club" } },
-      public_clubs: { data: rigaCreata },
+      "rpc:club_proposta_crea": { data: { slug: "barolo-club", status: "in_attesa" } },
     });
-    await createSupabaseClubService(client).crea({
-      nome: "Barolo Club",
-      descrizione: "Un club per chi beve Barolo.",
-      regole: [],
-      postingMode: "OPEN",
-    });
+    await createSupabaseClubService(client).crea(proposta({ territorio: null }));
     expect(rpc[0]!.argomenti.p_cover_image).toBeNull();
   });
 
-  it("rilegge il club dalla vista invece di ricostruirlo in locale", async () => {
-    // Lo slug e il conteggio dei membri sono il risultato della RPC: la
-    // risoluzione delle collisioni e l'auto-follow del creatore avvengono nel
-    // database, e il client li scopre rileggendo.
+  it("non pubblica o rilegge la proposta prima dell'approvazione", async () => {
     const { client, tabelle } = fakeClient({
-      "rpc:club_crea": { data: { slug: "barolo-club-2" } },
-      public_clubs: { data: { ...rigaCreata, slug: "barolo-club-2" } },
+      "rpc:club_proposta_crea": { data: { slug: "barolo-club-2", status: "in_attesa" } },
     });
-
-    const esito = await createSupabaseClubService(client).crea({
-      nome: "Barolo Club",
-      descrizione: "Un club per chi beve Barolo.",
-      regole: [],
-      postingMode: "OWNER_ONLY",
-    });
-
-    expect(tabelle).toEqual(["public_clubs"]);
-    expect(esito.ok).toBe(true);
-    if (esito.ok) {
-      expect(esito.data.slug).toBe("barolo-club-2");
-      expect(esito.data.postingMode).toBe("OWNER_ONLY");
-      expect(esito.data.ownerId).toBe(UTENTE);
-      // Il creatore risulta gia membro: e l'auto-follow di club_crea, letto e
-      // non dedotto.
-      expect(esito.data.seguito).toBe(true);
-      expect(esito.data.membri).toBe(1);
-      expect(esito.data.mio).toBe(true);
-    }
+    const esito = await createSupabaseClubService(client).crea(proposta());
+    expect(tabelle).toEqual([]);
+    expect(esito).toEqual({ ok: true, data: { slug: "barolo-club-2", status: "in_attesa" } });
   });
 
   it("rifiuta la creazione senza sessione senza toccare la RPC", async () => {
     const { client, rpc, tabelle } = fakeClient({}, { sessione: false });
-    const esito = await createSupabaseClubService(client).crea({
-      nome: "Barolo Club",
-      descrizione: "Un club per chi beve Barolo.",
-      regole: [],
-      postingMode: "OPEN",
-    });
+    const esito = await createSupabaseClubService(client).crea(proposta());
     expect(esito).toEqual({ ok: false, error: "Accedi per creare un club." });
     expect(rpc).toEqual([]);
     expect(tabelle).toEqual([]);
   });
 
   it("non finge un successo quando la RPC non restituisce uno slug", async () => {
-    const { client, tabelle } = fakeClient({ "rpc:club_crea": { data: null } });
-    const esito = await createSupabaseClubService(client).crea({
-      nome: "Barolo Club",
-      descrizione: "Un club per chi beve Barolo.",
-      regole: [],
-      postingMode: "OPEN",
-    });
-    expect(esito).toEqual({ ok: false, error: "Club creato ma non rileggibile." });
+    const { client, tabelle } = fakeClient({ "rpc:club_proposta_crea": { data: null } });
+    const esito = await createSupabaseClubService(client).crea(proposta());
+    expect(esito).toEqual({ ok: false, error: "Proposta inviata ma non confermata." });
     expect(tabelle).toEqual([]);
   });
 
   it("porta alla UI il messaggio della RPC quando e leggibile", async () => {
-    // P0001 e fra i codici leggibili: i limiti li scrive `club_crea`, e il suo
+    // P0001 e fra i codici leggibili: i limiti li scrive la RPC, e il suo
     // messaggio dice esattamente quale non e stato rispettato.
     const { client } = fakeClient({
-      "rpc:club_crea": {
+      "rpc:club_proposta_crea": {
         error: { code: "P0001", message: "Il nome deve avere almeno 2 caratteri." },
       },
     });
-    const esito = await createSupabaseClubService(client).crea({
-      nome: "x",
-      descrizione: "Un club per chi beve Barolo.",
-      regole: [],
-      postingMode: "OPEN",
-    });
+    const esito = await createSupabaseClubService(client).crea(proposta({ nome: "x" }));
     expect(esito).toEqual({ ok: false, error: "Il nome deve avere almeno 2 caratteri." });
   });
 });
@@ -541,7 +507,9 @@ describe("ClubService — cover del club", () => {
     expect(await servizio.crea({
       nome: "Barolo Club",
       descrizione: "Un club per chi beve Barolo.",
-      regole: [],
+      categoria: "Denominazione",
+      accessType: "aperto",
+      regole: ["Rispetto reciproco"],
       postingMode: "OPEN",
     })).toEqual(atteso);
     expect(await servizio.caricaCoverClub(webp())).toEqual(atteso);

@@ -8,7 +8,7 @@ import {
   type BozzaClub,
   type PreparazioneCover,
 } from "@/lib/phase12/crea-club";
-import type { Club, ClubService, NuovoClub, Result } from "@/services/types";
+import type { ClubProposal, ClubService, NuovoClub, Result } from "@/services/types";
 
 // ---------------------------------------------------------------------------
 // Doppi. Il servizio registra l'ORDINE delle chiamate e non solo il fatto che
@@ -17,30 +17,16 @@ import type { Club, ClubService, NuovoClub, Result } from "@/services/types";
 // conteggi passerebbe anche se la rimozione precedesse la creazione.
 // ---------------------------------------------------------------------------
 
-const CLUB: Club = {
+const PROPOSTA: ClubProposal = {
   slug: "barolo-club",
-  nome: "Barolo Club",
-  territorio: null,
-  denominazione: null,
-  produttore: null,
-  tipologia: null,
-  descrizione: "Un club per chi beve Barolo.",
-  regole: [],
-  membri: 1,
-  seguito: true,
-  ownerId: "3f2a1b4c-5d6e-4f70-8912-a3b4c5d6e7f8",
-  ownerUsername: "enrico",
-  postingMode: "OPEN",
-  coverImage: null,
-  mio: true,
-  createdAt: "2026-08-22T09:00:00.000Z",
+  status: "in_attesa",
 };
 
 const PERCORSO = "3f2a1b4c-5d6e-4f70-8912-a3b4c5d6e7f8/0a1b2c3d-4e5f-4061-8273-8495a6b7c8d9.webp";
 
 type Esiti = {
   carica?: Result<string>;
-  crea?: Result<Club>;
+  crea?: Result<ClubProposal>;
   elimina?: Result<void>;
 };
 
@@ -59,7 +45,7 @@ const servizioFinto = (esiti: Esiti = {}) => {
     async crea(input: NuovoClub) {
       chiamate.push("crea");
       creati.push(input);
-      return esiti.crea ?? ({ ok: true, data: CLUB } as Result<Club>);
+      return esiti.crea ?? ({ ok: true, data: PROPOSTA } as Result<ClubProposal>);
     },
     async eliminaCoverClub(percorso: string) {
       chiamate.push("elimina");
@@ -95,6 +81,8 @@ const bozza = (patch: Partial<BozzaClub> = {}): BozzaClub => ({
   ...BOZZA_VUOTA,
   nome: "Barolo Club",
   descrizione: "Un club per chi beve Barolo.",
+  categoria: "Denominazione",
+  regole: ["Rispetto reciproco"],
   ...patch,
 });
 
@@ -324,6 +312,10 @@ describe("creaClub — cosa arriva alla RPC", () => {
     expect(creati[0]).toEqual({
       nome: "Barolo Club",
       descrizione: "Un club per chi beve Barolo.",
+      categoria: "Denominazione",
+      territorio: null,
+      accessType: "aperto",
+      requirements: null,
       regole: ["Niente annunci"],
       postingMode: "OWNER_ONLY",
       coverImage: null,
@@ -343,9 +335,7 @@ describe("creaClub — cosa arriva alla RPC", () => {
     expect(chiavi).not.toContain("membri");
   });
 
-  it("il club restituito e quello riletto dal server", async () => {
-    // Il chiamante redirige su `club.slug`: deve essere lo slug che il server
-    // ha davvero assegnato, non quello che il client si aspettava.
+  it("la proposta restituita usa lo slug assegnato dal server", async () => {
     const { servizio } = servizioFinto();
     const esito = await creaClub(bozza({ nome: "Barolo" }), servizio, preparazioneFinta());
     expect(esito.ok).toBe(true);

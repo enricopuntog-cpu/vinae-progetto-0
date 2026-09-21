@@ -35,6 +35,7 @@ import { wineImages } from "@/lib/wine-images";
 import { formatInteger } from "@/lib/format";
 import {
   assiClub,
+  etichettaIngressoClub,
   ETICHETTE_FILTRO,
   FILTRI_VUOTI,
   filtraClub,
@@ -250,6 +251,7 @@ export function ClubCard({
   inCorso: string | null;
 }) {
   const attesa = inCorso === club.slug;
+  const richiestaInAttesa = club.membershipRequestStatus === "in_attesa";
   const assi = assiClub(club);
 
   return (
@@ -281,12 +283,12 @@ export function ClubCard({
           <Button
             size="sm"
             variant={club.seguito ? "outline" : "default"}
-            disabled={!onFollow || attesa}
+            disabled={!onFollow || attesa || richiestaInAttesa}
             onClick={() => void onFollow?.(club)}
             data-testid={`club-follow-${club.slug}`}
             className={club.seguito ? "" : "bg-bordeaux hover:bg-bordeaux/90"}
           >
-            {attesa ? "…" : club.seguito ? "Segui già" : "Segui club"}
+            {etichettaIngressoClub(club, attesa)}
           </Button>
         </div>
       </div>

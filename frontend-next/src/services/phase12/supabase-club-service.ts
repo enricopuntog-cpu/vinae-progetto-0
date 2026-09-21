@@ -36,6 +36,7 @@ import type {
   ClubPost,
   ClubPostRisposta,
   ClubService,
+  ClubMembershipRequestStatus,
   Result,
 } from "@/services/types";
 
@@ -105,6 +106,9 @@ type ClubRow = {
   posting_mode: Club["postingMode"] | null;
   cover_image: string | null;
   mio: boolean | null;
+  access_type: Club["accessType"] | null;
+  requirements: string | null;
+  membership_request_status: ClubMembershipRequestStatus | null;
   created_at: string;
 };
 
@@ -147,7 +151,7 @@ type RispostaRow = {
 // aggiungera domani alla tabella base, e un `*` qui rimetterebbe quella
 // decisione nelle mani della vista soltanto.
 const COLONNE =
-  "slug, nome, territorio, denominazione, produttore, tipologia, descrizione, regole, membri, seguito, owner_id, owner_username, posting_mode, cover_image, mio, created_at";
+  "slug, nome, territorio, denominazione, produttore, tipologia, descrizione, regole, membri, seguito, owner_id, owner_username, posting_mode, cover_image, mio, access_type, requirements, membership_request_status, created_at";
 
 const COLONNE_POST =
   "id, club_slug, tipo, titolo, corpo, created_at, autore_id, autore_username, autore_avatar_url, vino_slug, vino_produttore, vino_nome, vino_annata, listing_id, listing_slug, listing_prezzo_cents, risposte, mi_piace, piaciuto, mio";
@@ -183,6 +187,9 @@ export const mapClub = (row: ClubRow): Club => ({
   postingMode: row.posting_mode === "OWNER_ONLY" ? "OWNER_ONLY" : "OPEN",
   coverImage: row.cover_image ?? null,
   mio: row.mio === true,
+  accessType: row.access_type === "chiuso" ? "chiuso" : "aperto",
+  requirements: row.requirements ?? null,
+  membershipRequestStatus: row.membership_request_status ?? null,
   createdAt: row.created_at,
 });
 
@@ -309,26 +316,27 @@ export const createSupabaseClubService = (client: SupabaseClient | null): ClubSe
       if (!(await conSessione())) {
         return { ok: false, error: "Accedi per creare un club." };
       }
-      // La RPC e la sola porta di scrittura su clubs: nessun INSERT diretto.
-      // Il payload e fissato per intero; owner_id non si nomina perche lo
-      // assegna il server (auth.uid() dentro club_crea).
-      const { data, error } = await client.rpc("club_crea", {
+      const { data, error } = await client.rpc("club_proposta_crea", {
         p_nome: input.nome.trim(),
         p_descrizione: input.descrizione.trim(),
+        p_categoria: input.categoria.trim(),
+        p_territorio: input.territorio?.trim() || null,
+        p_access_type: input.accessType,
+        p_requirements: input.requirements?.trim() || null,
         p_regole: input.regole,
         p_posting_mode: input.postingMode,
         p_cover_image: input.coverImage ?? null,
+        p_external_links: [],
       });
-      if (error) return phase12Error("club_crea", error);
-      const creato = data as { slug?: string } | null;
-      if (!creato?.slug) {
-        return phase12Error("club_crea", {
+      if (error) return phase12Error("club_proposta_crea", error);
+      const proposta = data as { slug?: string; status?: string } | null;
+      if (!proposta?.slug || proposta.status !== "in_attesa") {
+        return phase12Error("club_proposta_crea", {
           code: "P0001",
-          message: "Club creato ma non rileggibile.",
+          message: "Proposta inviata ma non confermata.",
         });
       }
-      // Si rilegge dalla vista: slug, conteggi e `seguito` sono del server.
-      return rileggi(creato.slug, "club_crea rilettura");
+      return { ok: true, data: { slug: proposta.slug, status: "in_attesa" } };
     },
 
     caricaCoverClub: async (file) => {
@@ -363,7 +371,7 @@ export const createSupabaseClubService = (client: SupabaseClient | null): ClubSe
       const { data: sessione } = await client.auth.getSession();
       const utente = sessione.session?.user;
       if (!utente) return { ok: false, error: "Accedi per creare un club." };
-      // Cleanup dopo un club_crea fallito: si rimuove solo cio che sta nella
+      // Cleanup dopo una proposta fallita: si rimuove solo cio che sta nella
       // propria cartella (la policy Storage lo impone comunque).
       if (!percorsoCoverProprio(percorso, utente.id)) {
         return { ok: false, error: "Percorso della cover non valido." };
@@ -379,21 +387,20 @@ export const createSupabaseClubService = (client: SupabaseClient | null): ClubSe
     segui: async (slug) => {
       if (!client) return noPhase12Client();
       if (!(await conSessione())) return senzaSessione();
-      // Solo `club_slug`: l'autore lo mette il DEFAULT del database e non e
-      // nel grant di INSERT, `ruolo` e `created_at` idem.
-      const { error } = await client.from("club_memberships").insert({ club_slug: slug });
-      // 23505 e la chiave primaria: seguire due volte non e un errore da
-      // mostrare, e lo stato che l'utente voleva. Si prosegue alla rilettura.
-      if (error && error.code !== "23505") return phase12Error("club_memberships insert", error);
-      return rileggi(slug, "club_memberships insert rilettura");
+      const { error } = await client.rpc("club_ingresso_richiedi", {
+        p_club_slug: slug,
+        p_messaggio: null,
+      });
+      if (error) return phase12Error("club_ingresso_richiedi", error);
+      return rileggi(slug, "club_ingresso_richiedi rilettura");
     },
 
     smettiSegui: async (slug) => {
       if (!client) return noPhase12Client();
       if (!(await conSessione())) return senzaSessione();
-      const { error } = await client.from("club_memberships").delete().eq("club_slug", slug);
-      if (error) return phase12Error("club_memberships delete", error);
-      return rileggi(slug, "club_memberships delete rilettura");
+      const { error } = await client.rpc("club_abbandona", { p_club_slug: slug });
+      if (error) return phase12Error("club_abbandona", error);
+      return rileggi(slug, "club_abbandona rilettura");
     },
 
     // ---- 12b: contenuti ----------------------------------------------------

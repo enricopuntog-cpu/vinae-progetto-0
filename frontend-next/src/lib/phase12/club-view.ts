@@ -90,4 +90,11 @@ export const assiClub = (club: Club): string[] =>
  * comunque gia nascosto dall'assenza di `azioni.pubblica`.
  */
 export const puoPubblicareNelClub = (club: Club): boolean =>
-  club.postingMode !== "OWNER_ONLY" || club.mio;
+  club.seguito && (club.postingMode !== "OWNER_ONLY" || club.mio);
+
+export const etichettaIngressoClub = (club: Club, inCorso = false): string => {
+  if (inCorso) return "…";
+  if (club.seguito) return "Esci dal Club";
+  if (club.membershipRequestStatus === "in_attesa") return "Richiesta inviata";
+  return club.accessType === "chiuso" ? "Richiedi accesso" : "Entra nel Club";
+};

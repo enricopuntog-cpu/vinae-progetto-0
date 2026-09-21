@@ -155,10 +155,11 @@ describe("superfici pubbliche della beta", () => {
     // La lettura passa dalla vista: `clubs` non ha grant per i ruoli client.
     expect(servizio).toInclude('.from("public_clubs")');
     expect(servizio).not.toInclude('.from("clubs")');
-    // Il payload dell'insert e fissato per intero: user_id arriva dal DEFAULT
-    // del database, e se comparisse qui vorrebbe dire che lo sceglie il client.
-    expect(servizio).toInclude('.insert({ club_slug: slug })');
-    expect(servizio).toInclude('.delete().eq("club_slug", slug)');
+    // Ingresso e uscita passano dalle RPC di governance: nessuna scrittura
+    // diretta permette di aggirare i Club chiusi o scegliere l'utente.
+    expect(servizio).toInclude('client.rpc("club_ingresso_richiedi"');
+    expect(servizio).toInclude('client.rpc("club_abbandona"');
+    expect(servizio).not.toInclude('.from("club_memberships")');
     expect(servizio).not.toMatch(/user_id|userId/);
     // Nessuna delle quattro firme dell'interfaccia accetta un identificativo
     // utente.

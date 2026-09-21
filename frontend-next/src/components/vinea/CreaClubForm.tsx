@@ -7,12 +7,11 @@
 // le basta sapere se chi guarda ha una sessione. Cosi la regola «solo
 // autenticati» ha un punto solo, che e il montaggio di questo componente.
 //
-// Qui non c'e nessuna logica di creazione: validazione, upload della cover,
-// chiamata a `club_crea` e rimozione dell'upload se la RPC fallisce vivono in
+// Qui non c'e nessuna logica di proposta: validazione, upload della cover,
+// chiamata a `club_proposta_crea` e cleanup se la RPC fallisce vivono in
 // `lib/phase12/crea-club.ts`, dove si verificano senza un DOM. Questo file
 // raccoglie i campi e mostra l'errore.
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +28,7 @@ import {
 } from "@/lib/phase12/crea-club";
 import { MIME_INGRESSO } from "@/lib/phase12/prepara-cover-club";
 import { useCreaClub } from "@/lib/phase12/use-crea-club";
-import type { ClubPostingMode } from "@/services/types";
+import type { ClubAccessType, ClubPostingMode } from "@/services/types";
 
 // Le due modalita si scrivono come le vede chi crea il club, non come le
 // chiama il database. `OWNER_ONLY` non e un club privato: chiunque legge, e
@@ -40,11 +39,14 @@ const ETICHETTE_MODALITA: Record<ClubPostingMode, string> = {
 };
 
 export function CreaClubForm() {
-  const router = useRouter();
   const { crea, inCorso, error } = useCreaClub();
   const [aperto, setAperto] = useState(false);
   const [nome, setNome] = useState(BOZZA_VUOTA.nome);
   const [descrizione, setDescrizione] = useState(BOZZA_VUOTA.descrizione);
+  const [categoria, setCategoria] = useState(BOZZA_VUOTA.categoria);
+  const [territorio, setTerritorio] = useState(BOZZA_VUOTA.territorio);
+  const [accessType, setAccessType] = useState<ClubAccessType>(BOZZA_VUOTA.accessType);
+  const [requirements, setRequirements] = useState(BOZZA_VUOTA.requirements);
   // Le regole si scrivono come testo libero, una per riga, e diventano un
   // elenco solo al momento dell'invio: tenere qui un array vorrebbe dire
   // decidere a ogni tasto premuto se una riga vuota e una regola.
@@ -52,10 +54,15 @@ export function CreaClubForm() {
   const [modalita, setModalita] = useState<ClubPostingMode>(BOZZA_VUOTA.postingMode);
   const [cover, setCover] = useState<SceltaCover>(BOZZA_VUOTA.cover);
   const [problema, setProblema] = useState<string | null>(null);
+  const [proposta, setProposta] = useState<string | null>(null);
 
   const bozza = (): BozzaClub => ({
     nome,
     descrizione,
+    categoria,
+    territorio,
+    accessType,
+    requirements,
     regole: regoleDaTesto(regole),
     postingMode: modalita,
     cover,
@@ -70,8 +77,8 @@ export function CreaClubForm() {
     setProblema(locale);
     if (locale) return;
 
-    const club = await crea(bozza());
-    if (club) router.push(`/community/${club.slug}`);
+    const inviata = await crea(bozza());
+    if (inviata) setProposta(inviata.slug);
   };
 
   if (!aperto) {
@@ -81,7 +88,7 @@ export function CreaClubForm() {
         data-testid="club-apri-creazione"
         className="bg-oro text-antracite hover:bg-oro/90"
       >
-        Crea un Club
+        Proponi un Club
       </Button>
     );
   }
@@ -100,7 +107,10 @@ export function CreaClubForm() {
       className="rounded-2xl border border-border bg-card p-4 text-foreground"
       data-testid="club-creazione"
     >
-      <p className="font-serif text-lg font-semibold">Crea un Club</p>
+      <p className="font-serif text-lg font-semibold">Proponi un Club</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        La proposta viene pubblicata dopo la revisione dello staff.
+      </p>
       <div className="mt-3 grid gap-3">
         <div>
           <Label htmlFor="club-nome">Nome</Label>
@@ -139,13 +149,74 @@ export function CreaClubForm() {
         </div>
 
         <div>
+          <Label htmlFor="club-categoria">Categoria</Label>
+          <Input
+            id="club-categoria"
+            value={categoria}
+            maxLength={LIMITI_CLUB.categoriaMax}
+            onChange={(e) => setCategoria(e.target.value)}
+            placeholder="Territorio, denominazione, produttore…"
+            data-testid="club-categoria"
+            className="mt-1"
+          />
+        </div>
+
+        <div>
+          <Label htmlFor="club-territorio">Territorio (facoltativo)</Label>
+          <Input
+            id="club-territorio"
+            value={territorio}
+            maxLength={LIMITI_CLUB.territorioMax}
+            onChange={(e) => setTerritorio(e.target.value)}
+            placeholder="Es. Piemonte"
+            data-testid="club-territorio"
+            className="mt-1"
+          />
+        </div>
+
+        <fieldset>
+          <legend className="text-sm font-medium">Accesso</legend>
+          <div className="mt-1 grid gap-1">
+            {(["aperto", "chiuso"] as ClubAccessType[]).map((tipo) => (
+              <label key={tipo} className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="club-accesso"
+                  value={tipo}
+                  checked={accessType === tipo}
+                  onChange={() => setAccessType(tipo)}
+                  data-testid={`club-accesso-${tipo}`}
+                />
+                {tipo === "aperto" ? "Ingresso immediato" : "Ingresso su approvazione"}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        {accessType === "chiuso" && (
+          <div>
+            <Label htmlFor="club-requisiti">Requisiti di ingresso (facoltativi)</Label>
+            <Textarea
+              id="club-requisiti"
+              value={requirements}
+              rows={3}
+              maxLength={LIMITI_CLUB.requirementsMax}
+              onChange={(e) => setRequirements(e.target.value)}
+              placeholder="Indica chi puo entrare nel Club."
+              data-testid="club-requisiti"
+              className="mt-1"
+            />
+          </div>
+        )}
+
+        <div>
           <Label htmlFor="club-regole">Regole</Label>
           <Textarea
             id="club-regole"
             value={regole}
             rows={4}
             onChange={(e) => setRegole(e.target.value)}
-            placeholder="Una regola per riga. Puoi lasciare vuoto."
+            placeholder="Una regola per riga. Almeno una."
             data-testid="club-regole-testo"
             className="mt-1"
           />
@@ -229,6 +300,12 @@ export function CreaClubForm() {
           </p>
         )}
 
+        {proposta && (
+          <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">
+            Proposta inviata. Lo staff la esaminera prima della pubblicazione.
+          </p>
+        )}
+
         {!crea && (
           <p className="text-sm text-muted-foreground">
             Connessione a Supabase non configurata.
@@ -242,7 +319,7 @@ export function CreaClubForm() {
             data-testid="club-crea"
             className="bg-bordeaux hover:bg-bordeaux/90"
           >
-            {inCorso ? "Creo…" : "Crea il Club"}
+            {inCorso ? "Invio…" : "Invia proposta"}
           </Button>
           <Button variant="ghost" onClick={() => setAperto(false)}>
             Annulla

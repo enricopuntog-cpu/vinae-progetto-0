@@ -21,6 +21,9 @@ const club = (patch: Partial<Club> & { slug: string }): Club => ({
   postingMode: "OPEN",
   coverImage: null,
   mio: false,
+  accessType: "aperto",
+  requirements: null,
+  membershipRequestStatus: null,
   createdAt: "2026-08-24T09:00:00.000Z",
   ...patch,
 });

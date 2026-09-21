@@ -3,6 +3,7 @@ import {
   assiClub,
   ETICHETTE_FILTRO,
   FILTRI_VUOTI,
+  etichettaIngressoClub,
   filtraClub,
   opzioniFiltro,
   puoPubblicareNelClub,
@@ -24,6 +25,9 @@ const club = (patch: Partial<Club> & { slug: string }): Club => ({
   postingMode: "OPEN",
   coverImage: null,
   mio: false,
+  accessType: "aperto",
+  requirements: null,
+  membershipRequestStatus: null,
   createdAt: "2026-08-17T09:00:00.000Z",
   ...patch,
 });
@@ -127,11 +131,11 @@ describe("assiClub", () => {
 });
 
 describe("puoPubblicareNelClub", () => {
-  it("in un club OPEN il modulo si monta per chiunque", () => {
-    expect(puoPubblicareNelClub(club({ slug: "aperto", postingMode: "OPEN" }))).toBe(true);
-    expect(puoPubblicareNelClub(club({ slug: "aperto", postingMode: "OPEN", mio: true }))).toBe(
-      true,
-    );
+  it("in un club OPEN il modulo si monta soltanto per un membro", () => {
+    expect(puoPubblicareNelClub(club({ slug: "aperto", postingMode: "OPEN" }))).toBe(false);
+    expect(
+      puoPubblicareNelClub(club({ slug: "aperto", postingMode: "OPEN", seguito: true })),
+    ).toBe(true);
   });
 
   it("in un club OWNER_ONLY il modulo non si monta per chi non e il proprietario", () => {
@@ -144,7 +148,9 @@ describe("puoPubblicareNelClub", () => {
 
   it("in un club OWNER_ONLY il proprietario pubblica", () => {
     expect(
-      puoPubblicareNelClub(club({ slug: "chiuso", postingMode: "OWNER_ONLY", mio: true })),
+      puoPubblicareNelClub(
+        club({ slug: "chiuso", postingMode: "OWNER_ONLY", mio: true, seguito: true }),
+      ),
     ).toBe(true);
   });
 
@@ -156,5 +162,22 @@ describe("puoPubblicareNelClub", () => {
     const chiuso = club({ slug: "chiuso", postingMode: "OWNER_ONLY" });
     expect(chiuso.descrizione).toBeTruthy();
     expect(assiClub(chiuso)).toEqual([]);
+  });
+});
+
+describe("etichettaIngressoClub", () => {
+  it("distingue ingresso aperto, richiesta, attesa e uscita", () => {
+    expect(etichettaIngressoClub(club({ slug: "aperto" }))).toBe("Entra nel Club");
+    expect(etichettaIngressoClub(club({ slug: "chiuso", accessType: "chiuso" }))).toBe(
+      "Richiedi accesso",
+    );
+    expect(
+      etichettaIngressoClub(
+        club({ slug: "attesa", membershipRequestStatus: "in_attesa" }),
+      ),
+    ).toBe("Richiesta inviata");
+    expect(etichettaIngressoClub(club({ slug: "membro", seguito: true }))).toBe(
+      "Esci dal Club",
+    );
   });
 });
