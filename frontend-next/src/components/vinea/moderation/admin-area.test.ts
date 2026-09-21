@@ -337,26 +337,27 @@ describe("D10 - risolviContestazione", () => {
     const { client, rpcChiamate } = fakeClient({
       data: {
         order_id: "o1",
-        dispute_stato: "risolta",
-        chiusura_at: "2026-08-28T10:00:00.000Z",
-        gia_chiusa: false,
+        esito: "accordo",
+        resolved_at: "2026-08-28T10:00:00.000Z",
+        corrected: false,
       },
     });
     const esito = await risolviContestazione(client, {
       orderId: "o1",
-      esito: "risolta",
+      esito: "accordo",
       nota: "  Accordo fra le parti  ",
     });
 
     expect(rpcChiamate).toHaveLength(1);
-    expect(rpcChiamate[0].nome).toBe("moderazione_contestazione_risolvi");
+    expect(rpcChiamate[0].nome).toBe("moderazione_contestazione_decidi");
     // Mai `ordine_contestazione_risolvi` dal browser: quella resta al
     // service_role, e la sua firma include `rimborsata`.
     expect(rpcChiamate[0].nome).not.toBe("ordine_contestazione_risolvi");
     expect(rpcChiamate[0].args).toEqual({
       p_order_id: "o1",
-      p_esito: "risolta",
-      p_nota: "Accordo fra le parti",
+      p_esito: "accordo",
+      p_motivazione: "Accordo fra le parti",
+      p_motivo_correzione: null,
     });
     expect(esito).toEqual({
       orderId: "o1",
@@ -368,7 +369,7 @@ describe("D10 - risolviContestazione", () => {
 
   it("respinge accetta la stessa porta", async () => {
     const { client, rpcChiamate } = fakeClient({
-      data: { order_id: "o2", dispute_stato: "respinta", chiusura_at: null, gia_chiusa: false },
+      data: { order_id: "o2", esito: "respinta", resolved_at: null, corrected: false },
     });
     await risolviContestazione(client, { orderId: "o2", esito: "respinta", nota: "Prove insufficienti" });
     expect((rpcChiamate[0].args as { p_esito: string }).p_esito).toBe("respinta");
@@ -377,19 +378,20 @@ describe("D10 - risolviContestazione", () => {
   it("una motivazione vuota non arriva nemmeno al database", async () => {
     const { client, rpcChiamate } = fakeClient();
     await expect(
-      risolviContestazione(client, { orderId: "o1", esito: "risolta", nota: "   " }),
+      risolviContestazione(client, { orderId: "o1", esito: "accordo", nota: "   " }),
     ).rejects.toThrow(Phase9Error);
     expect(rpcChiamate).toHaveLength(0);
   });
 
   it("un retry su pratica gia chiusa torna `giaChiusa` invece di un errore", async () => {
     const { client } = fakeClient({
-      data: { order_id: "o1", dispute_stato: "risolta", chiusura_at: "2026-08-28T09:00:00.000Z", gia_chiusa: true },
+      data: { order_id: "o1", esito: "accordo", resolved_at: "2026-08-28T09:00:00.000Z", corrected: true },
     });
     const esito = await risolviContestazione(client, {
       orderId: "o1",
-      esito: "risolta",
+      esito: "accordo",
       nota: "Secondo invio",
+      motivoCorrezione: "Correzione motivata",
     });
     expect(esito.giaChiusa).toBe(true);
     expect(esito.disputeStato).toBe("risolta");
@@ -401,28 +403,26 @@ describe("D10 - risolviContestazione", () => {
     });
     const errore = await risolviContestazione(client, {
       orderId: "o1",
-      esito: "risolta",
+      esito: "accordo",
       nota: "tentativo",
     }).catch((e: unknown) => e);
     expect(errore).toBeInstanceOf(Phase9Error);
     expect((errore as Phase9Error).code).toBe("42501");
 
-    const opaco = await risolviContestazione(client, { orderId: "o1", esito: "risolta", nota: "x" })
+    const opaco = await risolviContestazione(client, { orderId: "o1", esito: "accordo", nota: "x" })
       .catch((e: unknown) => e);
     expect((opaco as Error).message).not.toInclude("public.");
   });
 
   it("senza client configurato l'azione fallisce chiusa", async () => {
     await expect(
-      risolviContestazione(null, { orderId: "o1", esito: "risolta", nota: "x" }),
+      risolviContestazione(null, { orderId: "o1", esito: "accordo", nota: "x" }),
     ).rejects.toThrow(Phase9Error);
   });
 
-  it("il tipo dell'esito non contempla il rimborso", () => {
-    // `EsitoContestazioneAdmin` e "risolta" | "respinta". La prova sta nel
-    // sorgente perche un tipo non esiste a runtime: se qualcuno aggiungesse
-    // "rimborsata" all'unione, questa riga cadrebbe.
-    expect(adapterNudo).toInclude('export type EsitoContestazioneAdmin = "risolta" | "respinta";');
+  it("il tipo dell'esito descrive la decisione senza fingere un rimborso", () => {
+    expect(adapterNudo).toInclude('"favore_acquirente" | "favore_venditore"');
+    expect(adapterNudo).toInclude('"accordo" | "respinta" | "cancellata"');
     expect(adapterNudo).not.toMatch(/p_esito:\s*"rimborsata"/);
   });
 });
@@ -432,19 +432,19 @@ describe("D10 - risolviContestazione", () => {
 // ---------------------------------------------------------------------------
 
 describe("D10 - la scheda Controversie", () => {
-  it("offre due comandi soli e nessun rimborso", () => {
-    expect(pannelloNudo).toInclude('void esegui("risolta")');
-    expect(pannelloNudo).toInclude('void esegui("respinta")');
+  it("offre gli esiti logici e nessuna movimentazione economica", () => {
+    expect(pannelloNudo).toInclude('value="favore_acquirente"');
+    expect(pannelloNudo).toInclude('value="favore_venditore"');
+    expect(pannelloNudo).toInclude('value="accordo"');
     // Nessun pulsante di rimborso, nessuna chiamata a un fornitore, nessuna
     // scrittura sui campi del pagamento: refund e provider restano spenti.
     expect(pannelloNudo).not.toMatch(/rimborsat|Rimborsa|refund|stripe|payment_status|payout_stato\s*=/i);
   });
 
-  it("una pratica terminale non ha comandi attivi", () => {
-    expect(pannelloNudo).toMatch(
-      /riga\.stato === "aperta" \|\| riga\.stato === "in_valutazione"/,
-    );
-    expect(pannelloNudo).toInclude("{onRisolvi && lavorabile ? (");
+  it("una correzione successiva richiede un motivo e resta tracciata", () => {
+    expect(pannelloNudo).toInclude("const chiusa = riga.resolvedAt !== null;");
+    expect(pannelloNudo).toInclude("Motivo della correzione");
+    expect(pannelloNudo).toInclude("Registra correzione");
   });
 
   it("il doppio invio e impedito dalla stessa chiave che il controller alza", () => {
@@ -465,7 +465,7 @@ describe("D10 - la scheda Controversie", () => {
 
   it("dopo il successo la coda si rilegge e l'errore finisce nello stato", () => {
     expect(controllerNudo).toMatch(
-      /await risolviContestazione\(client, \{ orderId, esito, nota \}\);\s*setError\(null\);\s*await reload\(\);/,
+      /await risolviContestazione\(client, \{ orderId, esito, nota, motivoCorrezione \}\);\s*setError\(null\);\s*await reload\(\);/,
     );
     expect(controllerNudo).toMatch(/catch \(e\) \{\s*setError\(messaggio\(e\)\);\s*throw e;/);
     // Senza servizio il comando non esiste, invece di esistere e non fare nulla.

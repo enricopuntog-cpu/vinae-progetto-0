@@ -118,6 +118,25 @@ export type DisputeQueueRow = {
   ordinePayoutStato: string;
   totaleCents: number;
   addebitoTotaleCents: number;
+  lifecycleStatus:
+    | "attesa_venditore" | "risposta_venditore" | "documentazione_completa"
+    | "in_revisione" | "risolta_acquirente" | "risolta_venditore"
+    | "accordo" | "respinta" | "cancellata";
+  assignedTo: string | null;
+  assignedToUsername: string | null;
+  claimedAt: string | null;
+  reviewStartedAt: string | null;
+  resolutionKind: EsitoContestazioneAdmin | null;
+  resolutionNote: string | null;
+  resolvedAt: string | null;
+  resolutionVersion: number;
+  adminNotes: Array<{ id: number; authorUsername: string | null; note: string; createdAt: string }>;
+  timeline: Array<{
+    id: string;
+    eventKind: string;
+    actorKind: "compratore" | "venditore" | "admin" | "sistema";
+    createdAt: string;
+  }>;
 };
 
 // ---------------------------------------------------------------------------
@@ -224,6 +243,15 @@ export const mapDisputeRow = (row: {
   ordine_payout_stato: string;
   totale_cents: number;
   addebito_totale_cents: number;
+  lifecycle_status?: DisputeQueueRow["lifecycleStatus"];
+  assigned_to?: string | null;
+  assigned_to_username?: string | null;
+  claimed_at?: string | null;
+  review_started_at?: string | null;
+  resolution_kind?: EsitoContestazioneAdmin | null;
+  resolution_note?: string | null;
+  resolved_at?: string | null;
+  resolution_version?: number;
 }): DisputeQueueRow => ({
   id: row.id,
   orderId: row.order_id,
@@ -249,6 +277,17 @@ export const mapDisputeRow = (row: {
   ordinePayoutStato: row.ordine_payout_stato,
   totaleCents: row.totale_cents,
   addebitoTotaleCents: row.addebito_totale_cents,
+  lifecycleStatus: row.lifecycle_status ?? (row.documentazione_completa_at ? "documentazione_completa" : "attesa_venditore"),
+  assignedTo: row.assigned_to ?? null,
+  assignedToUsername: row.assigned_to_username ?? null,
+  claimedAt: row.claimed_at ?? null,
+  reviewStartedAt: row.review_started_at ?? null,
+  resolutionKind: row.resolution_kind ?? null,
+  resolutionNote: row.resolution_note ?? null,
+  resolvedAt: row.resolved_at ?? null,
+  resolutionVersion: Number(row.resolution_version ?? 0),
+  adminNotes: [],
+  timeline: [],
 });
 
 // Le proiezioni non sono paginate: ModerationService dichiara Promise<Report[]>
@@ -612,8 +651,58 @@ export const codaContestazioni = async (
   const righe = (data ?? []).map((row) =>
     mapDisputeRow(row as Parameters<typeof mapDisputeRow>[0]),
   );
+  if (righe.length === 0) return [];
+  const disputeIds = righe.map((riga) => riga.id);
+  const [noteResult, baseTimelineResult, caseTimelineResult] = await Promise.all([
+    client.from("moderation_dispute_admin_notes")
+      .select("id,dispute_id,author_username,note,created_at")
+      .in("dispute_id", disputeIds)
+      .order("created_at", { ascending: true }),
+    client.from("dispute_events")
+      .select("id,dispute_id,actor_kind,event_kind,created_at")
+      .in("dispute_id", disputeIds)
+      .order("created_at", { ascending: true }),
+    client.from("dispute_case_timeline")
+      .select("id,dispute_id,event_kind,created_at")
+      .in("dispute_id", disputeIds)
+      .order("created_at", { ascending: true }),
+  ]);
+  const { data: noteData, error: noteError } = noteResult;
+  if (noteError) return phase9Throw("moderation_dispute_admin_notes", noteError);
+  if (baseTimelineResult.error) return phase9Throw("dispute_events", baseTimelineResult.error);
+  if (caseTimelineResult.error) return phase9Throw("dispute_case_timeline", caseTimelineResult.error);
+  const notePerDispute = new Map<string, DisputeQueueRow["adminNotes"]>();
+  for (const raw of noteData ?? []) {
+    const row = raw as { id: number; dispute_id: string; author_username: string | null; note: string; created_at: string };
+    const notes = notePerDispute.get(row.dispute_id) ?? [];
+    notes.push({ id: row.id, authorUsername: row.author_username, note: row.note, createdAt: row.created_at });
+    notePerDispute.set(row.dispute_id, notes);
+  }
+  const timelinePerDispute = new Map<string, DisputeQueueRow["timeline"]>();
+  const appendTimeline = (
+    disputeId: string,
+    event: DisputeQueueRow["timeline"][number],
+  ) => {
+    const events = timelinePerDispute.get(disputeId) ?? [];
+    events.push(event);
+    timelinePerDispute.set(disputeId, events);
+  };
+  for (const raw of baseTimelineResult.data ?? []) {
+    const row = raw as { id: number; dispute_id: string; actor_kind: DisputeQueueRow["timeline"][number]["actorKind"]; event_kind: string; created_at: string };
+    appendTimeline(row.dispute_id, { id: `base-${row.id}`, eventKind: row.event_kind, actorKind: row.actor_kind, createdAt: row.created_at });
+  }
+  for (const raw of caseTimelineResult.data ?? []) {
+    const row = raw as { id: number; dispute_id: string; event_kind: string; created_at: string };
+    appendTimeline(row.dispute_id, { id: `case-${row.id}`, eventKind: row.event_kind, actorKind: "admin", createdAt: row.created_at });
+  }
+  const conDettagli = righe.map((riga) => ({
+    ...riga,
+    adminNotes: notePerDispute.get(riga.id) ?? [],
+    timeline: (timelinePerDispute.get(riga.id) ?? [])
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+  }));
   const percorsi = [...new Set(righe.flatMap((riga) => [...riga.foto, ...riga.sellerEvidence]))];
-  if (percorsi.length === 0) return righe;
+  if (percorsi.length === 0) return conDettagli;
 
   const { data: firmate, error: firmaError } = await client.storage
     .from("dispute-evidence")
@@ -624,7 +713,7 @@ export const codaContestazioni = async (
       .filter((voce) => voce.signedUrl)
       .map((voce) => [voce.path, voce.signedUrl] as const),
   );
-  return righe.map((riga) => ({
+  return conDettagli.map((riga) => ({
     ...riga,
     foto: riga.foto
       .map((percorso) => urlPerPercorso.get(percorso))
@@ -647,21 +736,14 @@ export const completaDocumentazioneContestazione = async (
 };
 
 // ---------------------------------------------------------------------------
-// D10 - la risoluzione di una contestazione dal pannello
+// Decisione Vinea di una contestazione dal pannello
 // ---------------------------------------------------------------------------
-// La coda contestazioni era in sola lettura: la vista la mostrava e non
-// esisteva alcuna porta di scrittura raggiungibile dal browser. Il motore -
-// public.ordine_contestazione_risolvi - e concesso al solo service_role, e
-// resta li: `moderazione_contestazione_risolvi` e una porta nuova e piu
-// stretta che lo riusa senza duplicarne la semantica.
-//
-// Due esiti soli. `rimborsata` non e nella firma della porta - non e escluso
-// qui e ammesso la: il database non sa nemmeno riceverlo da questa strada,
-// finche refund e provider restano spenti. Il tipo qui sotto e la stessa lista
-// del `check` in SQL, non una copia che possa divergere in silenzio: se un
-// giorno divergesse, il database rifiuterebbe con 22023 invece di eseguire.
+// La RPC registra uno dei cinque esiti logici e la relativa motivazione. Non
+// chiama il precedente motore economico e non modifica ordine, payout o
+// pagamenti. La lista TypeScript coincide con l'enum e con il controllo SQL.
 
-export type EsitoContestazioneAdmin = "risolta" | "respinta";
+export type EsitoContestazioneAdmin =
+  | "favore_acquirente" | "favore_venditore" | "accordo" | "respinta" | "cancellata";
 
 export type EsitoRisoluzione = {
   orderId: string;
@@ -673,7 +755,7 @@ export type EsitoRisoluzione = {
 
 export const risolviContestazione = async (
   client: SupabaseClient | null,
-  input: { orderId: string; esito: EsitoContestazioneAdmin; nota: string },
+  input: { orderId: string; esito: EsitoContestazioneAdmin; nota: string; motivoCorrezione?: string | null },
 ): Promise<EsitoRisoluzione> => {
   if (!client) return noPhase9Client("risolviContestazione");
   // La motivazione e obbligatoria a database. Fermarla qui risparmia un giro di
@@ -685,27 +767,50 @@ export const risolviContestazione = async (
     });
   }
 
-  const { data, error } = await client.rpc("moderazione_contestazione_risolvi", {
+  const { data, error } = await client.rpc("moderazione_contestazione_decidi", {
     p_order_id: input.orderId,
     p_esito: input.esito,
-    p_nota: input.nota.trim(),
+    p_motivazione: input.nota.trim(),
+    p_motivo_correzione: input.motivoCorrezione?.trim() || null,
   });
-  if (error) return phase9Throw("moderazione_contestazione_risolvi", error);
+  if (error) return phase9Throw("moderazione_contestazione_decidi", error);
 
   // La RPC torna un jsonb stretto e non la riga di orders: quattro campi, per
   // costruzione, cosi nessuna colonna dell'ordine attraversa questa porta.
   const riga = (data ?? {}) as {
     order_id?: string;
-    dispute_stato?: DisputeQueueRow["stato"];
-    chiusura_at?: string | null;
-    gia_chiusa?: boolean;
+    esito?: EsitoContestazioneAdmin;
+    resolved_at?: string | null;
+    corrected?: boolean;
   };
   return {
     orderId: riga.order_id ?? input.orderId,
-    disputeStato: riga.dispute_stato ?? input.esito,
-    chiusuraAt: riga.chiusura_at ?? null,
-    giaChiusa: riga.gia_chiusa === true,
+    disputeStato: riga.esito === "respinta" ? "respinta" : "risolta",
+    chiusuraAt: riga.resolved_at ?? null,
+    giaChiusa: riga.corrected === true,
   };
+};
+
+export const prendiInCaricoContestazione = async (client: SupabaseClient | null, orderId: string) => {
+  if (!client) return noPhase9Client("prendiInCaricoContestazione");
+  const { error } = await client.rpc("moderazione_contestazione_prendi_in_carico", { p_order_id: orderId });
+  if (error) return phase9Throw("moderazione_contestazione_prendi_in_carico", error);
+};
+
+export const iniziaRevisioneContestazione = async (client: SupabaseClient | null, orderId: string) => {
+  if (!client) return noPhase9Client("iniziaRevisioneContestazione");
+  const { error } = await client.rpc("moderazione_contestazione_inizia_revisione", { p_order_id: orderId });
+  if (error) return phase9Throw("moderazione_contestazione_inizia_revisione", error);
+};
+
+export const aggiungiNotaPrivataContestazione = async (
+  client: SupabaseClient | null, orderId: string, nota: string,
+) => {
+  if (!client) return noPhase9Client("aggiungiNotaPrivataContestazione");
+  const { error } = await client.rpc("moderazione_contestazione_nota_privata", {
+    p_order_id: orderId, p_nota: nota.trim(),
+  });
+  if (error) return phase9Throw("moderazione_contestazione_nota_privata", error);
 };
 
 // I motivi ammessi per tipo di bersaglio vengono dal database, non dalla copia

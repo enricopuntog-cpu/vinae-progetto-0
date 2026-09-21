@@ -16,9 +16,12 @@ import { useVinea } from "@/lib/vinea-store";
 import {
   azioneAnnuncio,
   azionePratica,
+  aggiungiNotaPrivataContestazione,
   completaDocumentazioneContestazione,
   codaContestazioni,
   createSupabaseModerationService,
+  iniziaRevisioneContestazione,
+  prendiInCaricoContestazione,
   risolviContestazione,
   type AzionePraticaInput,
   type DisputeQueueRow,
@@ -47,9 +50,12 @@ export type Phase9ModerationState = {
    * non e un comando.
    */
   risolviControversia:
-    | ((orderId: string, esito: EsitoContestazioneAdmin, nota: string) => Promise<void>)
+    | ((orderId: string, esito: EsitoContestazioneAdmin, nota: string, motivoCorrezione?: string | null) => Promise<void>)
     | null;
   completaDocumentazione: ((orderId: string) => Promise<void>) | null;
+  prendiInCarico: ((orderId: string) => Promise<void>) | null;
+  iniziaRevisione: ((orderId: string) => Promise<void>) | null;
+  aggiungiNotaPrivata: ((orderId: string, nota: string) => Promise<void>) | null;
   inCorso: string | null;
 };
 
@@ -111,8 +117,8 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
   }, [authUserId, client, moderatore, service]);
 
   // Dopo un'azione si rilegge tutto invece di aggiornare lo stato in memoria:
-  // una sola azione tocca la pratica, la sua storia, il registro di audit e
-  // spesso lo stato del bersaglio. Ricostruire quel risultato dal client
+  // una sola azione tocca la pratica, la sua storia e il registro di audit.
+  // Ricostruire quel risultato dal client
   // significherebbe riscrivere la logica delle RPC, e sbagliarla.
   const agisci = useCallback(
     async (input: AzionePraticaInput) => {
@@ -151,20 +157,18 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
   );
 
   // Stessa forma di `agisci`: dopo la chiamata si rilegge tutto. Una
-  // risoluzione tocca la pratica, l'ordine, il payout e il tracking, e
-  // ricostruire quel risultato dal client significherebbe riscrivere la
-  // semantica della RPC - e sbagliarla proprio dove c'e del denaro.
+  // decisione tocca la pratica e i registri append-only. Rileggerli evita di
+  // ricostruire nel client la semantica della RPC.
   //
   // `inCorso` e per ordine e non globale: la coda ha piu righe, e un flag unico
   // spegnerebbe i comandi di tutte. E la stessa chiave che la scheda controlla
-  // per disabilitare i due pulsanti, quindi il doppio invio si ferma qui e non
-  // in un `useRef` accanto.
+  // per disabilitare il comando, quindi il doppio invio si ferma anche qui.
   const risolviControversia = useCallback(
-    async (orderId: string, esito: EsitoContestazioneAdmin, nota: string) => {
+    async (orderId: string, esito: EsitoContestazioneAdmin, nota: string, motivoCorrezione?: string | null) => {
       if (!service) return;
       setInCorso(`${orderId}:${esito}`);
       try {
-        await risolviContestazione(client, { orderId, esito, nota });
+        await risolviContestazione(client, { orderId, esito, nota, motivoCorrezione });
         setError(null);
         await reload();
       } catch (e) {
@@ -194,6 +198,27 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
     },
     [client, reload, service],
   );
+
+  const eseguiContestazione = useCallback(async (
+    key: string,
+    operation: () => Promise<unknown>,
+  ) => {
+    if (!service) return;
+    setInCorso(key);
+    try { await operation(); setError(null); await reload(); }
+    catch (e) { setError(messaggio(e)); throw e; }
+    finally { setInCorso(null); }
+  }, [reload, service]);
+
+  const prendiInCarico = useCallback((orderId: string) =>
+    eseguiContestazione(`${orderId}:presa-in-carico`, () =>
+      prendiInCaricoContestazione(client, orderId)), [client, eseguiContestazione]);
+  const iniziaRevisione = useCallback((orderId: string) =>
+    eseguiContestazione(`${orderId}:revisione`, () =>
+      iniziaRevisioneContestazione(client, orderId)), [client, eseguiContestazione]);
+  const aggiungiNotaPrivata = useCallback((orderId: string, nota: string) =>
+    eseguiContestazione(`${orderId}:nota`, () =>
+      aggiungiNotaPrivataContestazione(client, orderId, nota)), [client, eseguiContestazione]);
 
   useEffect(() => {
     const richiesta = ++epoch.current;
@@ -229,6 +254,9 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
         transizioneAnnuncio: null,
         risolviControversia: null,
         completaDocumentazione: null,
+        prendiInCarico: null,
+        iniziaRevisione: null,
+        aggiungiNotaPrivata: null,
         inCorso: null,
       };
     }
@@ -245,6 +273,9 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
       transizioneAnnuncio,
       risolviControversia,
       completaDocumentazione,
+      prendiInCarico,
+      iniziaRevisione,
+      aggiungiNotaPrivata,
       inCorso,
     };
   }, [
@@ -259,6 +290,9 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
     reload,
     risolviControversia,
     completaDocumentazione,
+    prendiInCarico,
+    iniziaRevisione,
+    aggiungiNotaPrivata,
     service,
     transizioneAnnuncio,
   ]);

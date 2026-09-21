@@ -167,7 +167,7 @@ describe("Annuncio — conferma, concorrenza, aggiornamento", () => {
   });
 });
 
-describe("Contestazioni — due esiti e nessuna leva manuale di pagamento", () => {
+describe("Contestazioni — ciclo decisionale completo senza leve economiche", () => {
   it("dall'ordine si arriva alla contestazione esatta", () => {
     expect(search).toContain('data-testid="admin-focus-order-dispute"');
     expect(search).toContain("Gestisci contestazione");
@@ -187,35 +187,43 @@ describe("Contestazioni — due esiti e nessuna leva manuale di pagamento", () =
       "{euro(riga.addebitoTotaleCents)}",
       "payout {riga.ordinePayoutStato}",
       "{data(riga.aperturaAt)}",
-      "Esito: {riga.esitoNota}",
+      "{riga.lifecycleStatus}",
+      "{riga.resolutionNote}",
+      "{riga.assignedToUsername",
     ]) {
       expect(panel).toContain(campo);
     }
   });
 
-  it("offre Risolvi e Respingi, entrambi con motivazione obbligatoria", () => {
+  it("offre i cinque esiti deliberabili con una motivazione obbligatoria", () => {
     const scheda = panel.slice(
       panel.indexOf("const RigaContestazione ="),
       panel.indexOf("const RigaAudit ="),
     );
-    expect(scheda).toContain('void esegui("risolta")');
-    expect(scheda).toContain('void esegui("respinta")');
     expect(scheda).toContain("const pronta = nota.trim().length > 0;");
-    // I due pulsanti e nessun terzo: entrambi fermi senza motivazione.
-    expect(scheda.match(/disabled=\{!pronta \|\| occupato\}/g)?.length).toBe(2);
-    expect(scheda.match(/void esegui\(/g)?.length).toBe(2);
+    for (const esito of [
+      'value="favore_acquirente"',
+      'value="favore_venditore"',
+      'value="accordo"',
+      'value="respinta"',
+      'value="cancellata"',
+    ]) {
+      expect(scheda).toContain(esito);
+    }
+    expect(scheda).toContain("onClick={() => void esegui(esito)}");
+    expect(scheda).toContain("disabled={!pronta || occupato");
   });
 
-  it("non inventa un terzo esito e blocca il doppio invio", () => {
-    expect(panel).not.toContain('esegui("rimborsata")');
+  it("blocca il doppio invio e non trasforma l'esito in un rimborso", () => {
+    expect(panel).not.toContain('value="rimborsata"');
     expect(panel).toContain("if (!onRisolvi || !pronta || occupato || invioLocale.current) return;");
   });
 
-  it("su una pratica terminale non offre alcuna decisione", () => {
-    expect(panel).toContain(
-      'riga.stato === "aperta" || riga.stato === "in_valutazione"',
-    );
-    expect(panel).toContain("Pratica chiusa: non ammette altre decisioni.");
+  it("una correzione terminale richiede una ragione e mantiene la traccia storica", () => {
+    expect(panel).toContain("const chiusa = riga.resolvedAt !== null;");
+    expect(panel).toContain("Motivo della correzione");
+    expect(panel).toContain("chiusa && motivoCorrezione.trim().length < 3");
+    expect(panel).toContain("Decisione corretta con traccia storica.");
   });
 
   it("non espone rimborso, payout, incasso o chiamate al provider", () => {
@@ -237,7 +245,7 @@ describe("Contestazioni — due esiti e nessuna leva manuale di pagamento", () =
     expect(superficie).not.toContain("ordine_contestazione_risolvi");
     // La UI non nega gli effetti D10 sull'ordine: dichiara solo che non offre
     // leve manuali separate di rimborso o pagamento.
-    expect(panel).toContain("Il rimborso non si dispone da qui");
+    expect(panel).toContain("La decisione non esegue rimborsi, payout o altre movimentazioni economiche");
     expect(search).toContain("La decisione chiude la contestazione secondo il workflow esistente");
     expect(search).toContain("Il rimborso e le operazioni");
   });
