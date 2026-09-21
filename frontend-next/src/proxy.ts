@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clubAbilitatiServer } from "./lib/clubs/gate";
 import { buildPageCsp } from "./lib/csp";
 
 export function proxy(request: NextRequest) {
@@ -8,7 +9,12 @@ export function proxy(request: NextRequest) {
   // Overwrite client-supplied values before Next renders its inline bootstrap.
   headers.set("x-nonce", nonce);
   headers.set("Content-Security-Policy", policy);
-  const response = NextResponse.next({ request: { headers } });
+  const percorsoClub =
+    request.nextUrl.pathname === "/community" ||
+    request.nextUrl.pathname.startsWith("/community/");
+  const response = percorsoClub && !clubAbilitatiServer()
+    ? new NextResponse(null, { status: 404 })
+    : NextResponse.next({ request: { headers } });
   response.headers.set("Content-Security-Policy", policy);
   response.headers.set("Cache-Control", "private, no-store");
   response.headers.set("Netlify-CDN-Cache-Control", "no-store");

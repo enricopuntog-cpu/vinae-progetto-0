@@ -36,7 +36,16 @@ export default function OrdineDetailPageClient({ orderId }: { orderId: string })
     );
   }
 
-  const { ordine, tracking, contestazione, recensione, rispostaRecensione, eleggibilita, ruolo } =
+  const {
+    ordine,
+    tracking,
+    contestazione,
+    eventiContestazione,
+    recensione,
+    rispostaRecensione,
+    eleggibilita,
+    ruolo,
+  } =
     o.stato.dati;
   const venditore = ruolo === "venditore";
   const etichetta = venditore
@@ -107,7 +116,15 @@ export default function OrdineDetailPageClient({ orderId }: { orderId: string })
             />
           )}
 
-          {contestazione && <DisputePanel contestazione={contestazione} />}
+          {contestazione && (
+            <DisputePanel
+              contestazione={contestazione}
+              eventi={eventiContestazione}
+              ruolo={ruolo}
+              inCorso={o.inCorso}
+              onRispondi={o.rispondiContestazione}
+            />
+          )}
 
           {/* `puoRecensire` non è più la condizione: decide il server, che
               risponde in `eleggibilita`. Il riquadro compare comunque quando la

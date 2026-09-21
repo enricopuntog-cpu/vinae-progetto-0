@@ -1237,6 +1237,9 @@ export type TrackingEventRecord = {
 
 /** Rispecchia `public.dispute_stato`. */
 export type DisputeStato = "aperta" | "in_valutazione" | "rimborsata" | "risolta" | "respinta";
+export type DisputeSellerResponseKind = "accetta" | "contesta" | "propone_soluzione";
+export type DisputeEventKind = "aperta" | "risposta_venditore" | "presa_in_carico" | "risolta";
+export type DisputeActorKind = "compratore" | "venditore" | "admin" | "sistema";
 
 /**
  * Il fascicolo della contestazione. `risolta_da` non c'è, e l'assenza è
@@ -1254,6 +1257,21 @@ export type DisputeRecord = {
   esito_nota: string | null;
   apertura_at: string;
   chiusura_at: string | null;
+  venditore_scadenza_at: string;
+  venditore_risposta_tipo: DisputeSellerResponseKind | null;
+  venditore_risposta: string | null;
+  venditore_foto: string[];
+  venditore_risposta_at: string | null;
+  documentazione_completa_at: string | null;
+};
+
+export type DisputeEventRecord = {
+  id: number;
+  dispute_id: string;
+  actor_kind: DisputeActorKind;
+  event_kind: DisputeEventKind;
+  detail: Record<string, unknown>;
+  created_at: string;
 };
 
 export type OrderReviewRecord = {
@@ -1292,6 +1310,15 @@ export interface DisputeService {
     foto?: string[];
   }): Promise<Result<OrderRecord>>;
   perOrdine(orderId: string): Promise<Result<DisputeRecord | null>>;
+  eventi(disputeId: string): Promise<Result<DisputeEventRecord[]>>;
+  caricaProva(orderId: string, file: File): Promise<Result<string>>;
+  eliminaProve(paths: string[]): Promise<Result<void>>;
+  rispondiVenditore(input: {
+    orderId: string;
+    tipo: DisputeSellerResponseKind;
+    risposta: string;
+    foto?: string[];
+  }): Promise<Result<void>>;
 }
 
 /**

@@ -55,6 +55,7 @@ import {
   type AdminReportFocus,
 } from "@/components/vinea/moderation/AdminOperationsSearch";
 import { messaggioAzione } from "@/components/vinea/moderation/ListingModerationActions";
+import { IncidentNoticeAdmin } from "@/components/vinea/moderation/IncidentNoticeAdmin";
 import {
   EMPTY_ADMIN_OVERVIEW,
   adminOperationsOverview,
@@ -492,10 +493,12 @@ const RigaContestazione = ({
   riga,
   inCorso,
   onRisolvi,
+  onCompletaDocumentazione,
 }: {
   riga: DisputeQueueRow;
   inCorso: string | null;
   onRisolvi: ((orderId: string, esito: EsitoContestazioneAdmin, nota: string) => Promise<void>) | null;
+  onCompletaDocumentazione: ((orderId: string) => Promise<void>) | null;
 }) => {
   const [nota, setNota] = useState("");
   const [errore, setErrore] = useState<string | null>(null);
@@ -528,6 +531,16 @@ const RigaContestazione = ({
     }
   };
 
+  const completaDocumentazione = async () => {
+    if (!onCompletaDocumentazione || occupato) return;
+    setErrore(null);
+    try {
+      await onCompletaDocumentazione(riga.orderId);
+    } catch (e) {
+      setErrore(messaggioAzione(e));
+    }
+  };
+
   return (
     <Card className="space-y-2 p-4" data-testid={`controversia-${riga.orderId}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -543,6 +556,29 @@ const RigaContestazione = ({
         </div>
       </div>
       {riga.descrizione ? <p className="text-sm">{riga.descrizione}</p> : null}
+      {riga.foto.length > 0 ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {riga.foto.map((url, index) => (
+            // eslint-disable-next-line @next/next/no-img-element -- URL firmato temporaneo.
+            <img key={url} src={url} alt={`Prova acquirente ${index + 1}`} className="aspect-square rounded-lg border object-cover" />
+          ))}
+        </div>
+      ) : null}
+
+      {riga.sellerResponse ? (
+        <div className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
+          <p className="font-medium">Risposta venditore · {riga.sellerResponseKind}</p>
+          <p>{riga.sellerResponse}</p>
+          {riga.sellerEvidence.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {riga.sellerEvidence.map((url, index) => (
+                // eslint-disable-next-line @next/next/no-img-element -- URL firmato temporaneo.
+                <img key={url} src={url} alt={`Prova venditore ${index + 1}`} className="aspect-square rounded-lg border object-cover" />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {/*
         L'identificativo dell'ordine per esteso: da qui si arriva anche dalla
@@ -585,6 +621,14 @@ const RigaContestazione = ({
           <dt className="text-muted-foreground">Chiusura</dt>
           <dd>{riga.chiusuraAt ? data(riga.chiusuraAt) : "—"}</dd>
         </div>
+        <div>
+          <dt className="text-muted-foreground">Scadenza risposta venditore</dt>
+          <dd>{data(riga.sellerResponseDeadline)}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Documentazione completa</dt>
+          <dd>{riga.documentationCompleteAt ? data(riga.documentationCompleteAt) : "Da verificare"}</dd>
+        </div>
       </dl>
       {riga.esitoNota ? <p className="text-xs">Esito: {riga.esitoNota}</p> : null}
 
@@ -605,6 +649,18 @@ const RigaContestazione = ({
 
       {onRisolvi && lavorabile ? (
         <div className="space-y-2 border-t pt-3">
+          {!riga.documentationCompleteAt && onCompletaDocumentazione ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={occupato}
+              onClick={() => void completaDocumentazione()}
+            >
+              {inCorso === `${riga.orderId}:documentazione`
+                ? "Registrazione…"
+                : "Segna documentazione completa"}
+            </Button>
+          ) : null}
           <Label htmlFor={`controversia-nota-${riga.orderId}`} className="text-xs uppercase">
             Motivazione (obbligatoria)
           </Label>
@@ -703,6 +759,7 @@ export const ModerationPanelClient = () => {
     agisci,
     transizioneAnnuncio,
     risolviControversia,
+    completaDocumentazione,
     inCorso,
   } = usePhase9Moderation({ moderatore });
 
@@ -821,6 +878,8 @@ export const ModerationPanelClient = () => {
         </p>
       ) : null}
 
+      <IncidentNoticeAdmin />
+
       <section aria-labelledby="admin-overview-title" className="space-y-3">
         <h2 id="admin-overview-title" className="font-serif text-2xl">Overview</h2>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -901,6 +960,7 @@ export const ModerationPanelClient = () => {
                 riga={riga}
                 inCorso={inCorso}
                 onRisolvi={risolviControversia}
+                onCompletaDocumentazione={completaDocumentazione}
               />
             ))
           )}

@@ -91,7 +91,8 @@ describe("la shell sceglie la barra dal ruolo", () => {
   });
 
   it("la barra disegnata e' quella scelta dal ruolo, non una lista fissa", () => {
-    expect(layout).toInclude("const vociMobile = navMobile(autenticato);");
+    expect(layout).toInclude("const vociMobile = navMobile(autenticato).filter(");
+    expect(layout).toInclude('CLUB_UI_ABILITATA || voce.icona !== "club"');
     expect(layout).toInclude("{vociMobile.map((n) => {");
     // Nessuna delle due liste e' nominata nel componente: se lo fosse, la
     // scelta sarebbe scavalcabile senza toccare `navMobile()`.

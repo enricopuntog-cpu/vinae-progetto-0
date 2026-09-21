@@ -90,6 +90,16 @@ export const DEMO_UI_ABILITATA = valoreFlagEsattamenteTrue(
 );
 
 /**
+ * Fondamenta Club/Community. La nuova governance viene distribuita chiusa:
+ * soltanto la stringa esatta `true` rimette le route e le voci di navigazione
+ * nella beta. Il database mantiene inoltre revocati i grant delle viste
+ * pubbliche finche il lancio della funzione non viene deciso e migrato.
+ */
+export const CLUB_UI_ABILITATA = valoreFlagEsattamenteTrue(
+  process.env.NEXT_PUBLIC_CLUBS_ENABLED,
+);
+
+/**
  * Gate server-side dell'imballaggio. Da leggere solo in codice che gira sul
  * server: in un componente client `process.env.PACKAGING_ENABLED` è
  * `undefined`, quindi risulterebbe spento e non acceso — il verso giusto in cui

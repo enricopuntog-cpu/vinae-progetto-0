@@ -16,6 +16,7 @@ import { useVinea } from "@/lib/vinea-store";
 import {
   azioneAnnuncio,
   azionePratica,
+  completaDocumentazioneContestazione,
   codaContestazioni,
   createSupabaseModerationService,
   risolviContestazione,
@@ -48,6 +49,7 @@ export type Phase9ModerationState = {
   risolviControversia:
     | ((orderId: string, esito: EsitoContestazioneAdmin, nota: string) => Promise<void>)
     | null;
+  completaDocumentazione: ((orderId: string) => Promise<void>) | null;
   inCorso: string | null;
 };
 
@@ -175,6 +177,24 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
     [client, reload, service],
   );
 
+  const completaDocumentazione = useCallback(
+    async (orderId: string) => {
+      if (!service) return;
+      setInCorso(`${orderId}:documentazione`);
+      try {
+        await completaDocumentazioneContestazione(client, orderId);
+        setError(null);
+        await reload();
+      } catch (e) {
+        setError(messaggio(e));
+        throw e;
+      } finally {
+        setInCorso(null);
+      }
+    },
+    [client, reload, service],
+  );
+
   useEffect(() => {
     const richiesta = ++epoch.current;
     queueMicrotask(() => {
@@ -208,6 +228,7 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
         agisci: null,
         transizioneAnnuncio: null,
         risolviControversia: null,
+        completaDocumentazione: null,
         inCorso: null,
       };
     }
@@ -223,6 +244,7 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
       agisci,
       transizioneAnnuncio,
       risolviControversia,
+      completaDocumentazione,
       inCorso,
     };
   }, [
@@ -236,6 +258,7 @@ export const usePhase9Moderation = (opzioni?: { moderatore?: boolean }): Phase9M
     mieSegnalazioni,
     reload,
     risolviControversia,
+    completaDocumentazione,
     service,
     transizioneAnnuncio,
   ]);

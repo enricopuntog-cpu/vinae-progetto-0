@@ -99,7 +99,7 @@ jobs:
       # che si svuota in silenzio.
       - name: Test
         env:
-          MIN_TESTS: "1571"
+          MIN_TESTS: "1580"
         run: |
           set -o pipefail
           bun run test 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
@@ -133,6 +133,19 @@ jobs:
       # payout non viene invocato contro Supabase e nessun payout viene emesso.
       - name: Test payout runner
         run: node --test .github/scripts/payouts-release-job.test.mjs
+
+  continuity-scripts:
+    name: Continuity scripts - syntax
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Validate scripts
+        run: |
+          bash -n .github/scripts/offsite-backup.sh
+          bash -n .github/scripts/offsite-restore-verify.sh
+          node --check .github/scripts/export-supabase-storage.mjs
 
   backend:
     name: Backend - lint, syntax and tests

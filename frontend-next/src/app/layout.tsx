@@ -3,6 +3,8 @@ import { connection } from "next/server";
 import "./globals.css";
 import { Providers } from "./providers";
 import { VineaLayout } from "@/components/vinea/Layout";
+import { readIncidentNotice } from "@/lib/incidents/notice";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.URL ?? "http://localhost:3000"),
@@ -22,6 +24,7 @@ export default async function RootLayout({
 }>) {
   // A per-request nonce cannot be reused from prerendered/cached HTML.
   await connection();
+  const incidentNotice = await readIncidentNotice(await getSupabaseServerClient());
   return (
     <html lang="it" className="h-full antialiased">
       <head>
@@ -34,7 +37,7 @@ export default async function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <Providers>
-          <VineaLayout>{children}</VineaLayout>
+          <VineaLayout incidentNotice={incidentNotice}>{children}</VineaLayout>
         </Providers>
       </body>
     </html>

@@ -1,6 +1,6 @@
 # Router del contesto durevole Vinea
 
-Ultimo aggiornamento del router: **18 settembre 2026**.
+Ultimo aggiornamento del router: **21 settembre 2026**.
 
 Questa cartella conserva memoria strutturale e storia datata. Non è il bootstrap
 obbligatorio e non sostituisce le fonti vive.
@@ -96,6 +96,11 @@ va riscritto come se la decisione precedente non fosse mai esistita.
   due invocazioni reali. `AI_ENABLED` e `PAYMENTS_ENABLED` restano `false`.
   Stato operativo in `../docs/PRELAUNCH_TASK_RECONCILIATION.md` e runbook in
   `../docs/CONTINUITY_AND_BACKUP_RUNBOOK.md`.
+- Decisioni operative del 21 settembre: fondamenta per backup B2 cifrato,
+  banner incidente/delegato, contestazioni con prove e risposta venditore e
+  governance Club sono in `../docs/OPERATIONAL_DECISIONS_STATUS.md`. I residui
+  che dipendono da account, persone o professionisti restano elencati li. Club,
+  pagamenti e IA restano chiusi dietro i rispettivi gate.
 - Rilascio Netlify: il sito è collegato al repository e costruisce una Deploy
   Preview per ogni PR, ma **un merge su `main` non ha ricostruito la produzione**
   — misurato il 15 settembre 2026 sui merge `aca86ac` e `344ad45`. Il motivo è

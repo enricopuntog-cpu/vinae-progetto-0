@@ -76,10 +76,11 @@ describe("superfici pubbliche della beta", () => {
     const dettaglio = senzaCommenti(leggi("src/app/community/[slug]/page.tsx"));
     expect(elenco).toInclude("createSupabaseClubService");
     expect(dettaglio).toInclude("createSupabaseClubService");
-    // Il 404 del dettaglio resta, ma ora e una risposta a uno slug assente e
-    // non lo stub che rispondeva 404 a qualunque slug.
+    // Entrambe le route falliscono chiuse finche la flag di lancio non viene
+    // abilitata; il dettaglio mantiene inoltre il 404 per uno slug assente.
     expect(dettaglio).toInclude("if (!club) notFound()");
-    expect(elenco).not.toInclude("notFound()");
+    expect(elenco).toInclude("if (!clubAbilitatiServer()) notFound()");
+    expect(dettaglio).toInclude("if (!clubAbilitatiServer()) notFound()");
     expect(leggi("src/components/vinea/Layout.tsx")).toInclude('to: "/community"');
   });
 

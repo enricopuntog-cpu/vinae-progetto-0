@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { clubAbilitatiServer } from "@/lib/clubs/gate";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseClubService } from "@/services/phase12/supabase-club-service";
 import CommunityDetailPageClient from "./page-client";
@@ -13,6 +14,7 @@ import CommunityDetailPageClient from "./page-client";
 // da `@/data/communities`, un file mock che nessuna pagina importa piu.
 
 async function leggiClub(slug: string) {
+  if (!clubAbilitatiServer()) return null;
   const client = await getSupabaseServerClient();
   const esito = await createSupabaseClubService(client).dettaglio(slug);
   return esito.ok ? esito.data : null;
@@ -24,6 +26,7 @@ async function leggiClub(slug: string) {
 // cadere la pagina - la scheda del club resta, e le discussioni sono un elenco
 // vuoto: il club esiste anche quando la sua bacheca non si e potuta leggere.
 async function leggiDiscussioni(slug: string) {
+  if (!clubAbilitatiServer()) return [];
   const client = await getSupabaseServerClient();
   const esito = await createSupabaseClubService(client).discussioni(slug);
   return esito.ok ? esito.data : [];
@@ -51,6 +54,7 @@ export async function generateMetadata({
 }
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
+  if (!clubAbilitatiServer()) notFound();
   const { slug } = await params;
   const club = await leggiClub(slug);
   if (!club) notFound();
