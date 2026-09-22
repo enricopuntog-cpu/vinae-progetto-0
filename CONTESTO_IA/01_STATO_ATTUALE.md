@@ -3514,3 +3514,32 @@ di decrypt/restore, rimuovendo capability non necessarie come
 questo debito non blocca il backup operativo. Decrypt e restore distruttivo o
 sulla produzione non sono stati eseguiti; la prossima prova completa userà la
 chiave privata offline con Enrico in un progetto isolato.
+
+### Restore completo del backup B2 in isolamento — 22 settembre 2026
+
+La nota precedente descriveva il gate prima di questa prova. Dal run B2
+`35738026438` sono stati riscaricati `.age` (3.626.800 byte) e `.sha256`
+(124 byte): checksum, sidecar e metadata concordano; entrambi gli oggetti
+restano in `GOVERNANCE` fino al 22 ottobre 2026 alle 14:09:13 UTC. Lo script
+`.github/scripts/offsite-restore-verify.sh`, rafforzato nella PR #137, ha
+decifrato l'archivio con la chiave privata locale e validato `MANIFEST.sha256`,
+SQL, inventario Storage, percorsi e tipi dei file senza contenuti inattesi.
+
+La branch Supabase temporanea `b2-restore-isolated-20260922` ha ricevuto ruoli,
+schema, dati e 11 file Storage. Ledger 60/60, 60 tabelle applicative con RLS,
+48 policy applicative, 200 funzioni, 91 tabelle nel dump con 288 righe e zero
+divergenze di conteggio; digest di ledger e funzioni identici a produzione.
+Presenti 10 utenti Auth, 11 identita, 6 bucket e 11 oggetti Storage; tutti i
+blob sono stati riscaricati dalla branch e verificati con SHA-256. Il dump
+schema non includeva alcune personalizzazioni dei servizi gestiti: nella sola
+branch sono stati ripristinati un trigger Auth, quattro policy Storage e una
+policy Realtime da configurazioni verificate prima della ricostruzione e
+confrontate con produzione. Smoke di login Auth, RLS, RPC, Realtime privato e
+Storage privato/firmato riusciti; fixture rimosse. La branch e le copie locali
+del backup sono state eliminate, con assenza verificata. Produzione solo letta.
+
+La prima esecuzione automatica dopo `BACKUP_OFFSITE_ENABLED=true` non era ancora
+avvenuta alle 15:42 UTC: il run `35701261729` era stato saltato alle 07:46 UTC
+prima dell'attivazione. Il debito di hardening della key B2 resta non
+bloccante; la configurazione esterna necessaria a un vero failover non e stata
+ricreata in questa prova.

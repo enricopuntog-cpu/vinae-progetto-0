@@ -151,13 +151,74 @@ inferiore ai 30 giorni richiesti. Gli artifact GitHub del run sono zero.
    `.github/scripts/offsite-restore-verify.sh <archivio.age> <chiave-age> <directory-vuota>`.
    Lo script verifica checksum esterno, percorsi dell'archivio e tutti gli hash
    interni; non modifica alcun database.
-3. Creare un nuovo progetto Supabase isolato nella stessa regione e applicare,
-   nell'ordine, `roles.sql`, `schema.sql`, `data.sql`. Importare poi gli oggetti
-   elencati in `storage-manifest.json`, mantenendo bucket e percorsi originali.
+3. Creare un ambiente Supabase isolato temporaneo nella stessa regione e
+   applicare, nell'ordine, `roles.sql`, `schema.sql`, `data.sql`. Il dump dello
+   schema non contiene necessariamente le personalizzazioni dei servizi gestiti:
+   confrontare e ripristinare trigger Auth e policy Storage/Realtime nella
+   sola copia isolata. Importare poi gli oggetti elencati in
+   `storage-manifest.json`, mantenendo bucket e percorsi originali. Il grant
+   su `log_min_messages` in `roles.sql` puo essere gia soddisfatto dall'ambiente
+   gestito e rifiutato dal ruolo di importazione: verificarlo prima di omettere
+   solo quel grant.
 4. Confrontare ledger, conteggi, policy, funzioni, utenti Auth e inventario
    Storage con il manifest. Eseguire gli smoke autenticati descritti sotto.
 5. Eliminare la copia isolata al termine. Un eventuale passaggio in produzione
    richiede la checklist di riapertura e l'autorita indicata sopra.
+
+### Prova sul backup B2 reale del 22 settembre 2026
+
+Il run manuale GitHub `35738026438`, riuscito alle 14:09:29 UTC, ha prodotto
+`daily/2026/09/vinea-2026-09-22T14-09-13Z.tar.gz.age` (3.626.800 byte) e
+il relativo `.sha256` (124 byte). I due oggetti sono stati riscaricati da B2:
+il SHA-256 dei byte cifrati, il sidecar e il metadata coincidono
+(`b7eaa109941e0904ea784def4ef87085c7498e36c9f7e92006ab1509cf9c9c60`).
+Object Lock e stato riletto su entrambi in mode `GOVERNANCE` con
+`RetainUntilDate=2026-10-22T14:09:13Z`, almeno 30 giorni. Il bucket non
+contiene archivi `.tar.gz` in chiaro e il run non ha artifact GitHub.
+
+Con la chiave privata `age` locale, mai copiata nel repository, lo script
+`.github/scripts/offsite-restore-verify.sh` ha decifrato il backup in una
+directory Temp isolata. La validazione preventiva e successiva della PR #137
+ha accettato solo file ordinari e percorsi canonici; nessun path traversal,
+link o file inatteso. `MANIFEST.sha256` (15 voci) ha verificato
+`roles.sql`, `schema.sql`, `data.sql`, `storage-manifest.json` e tutti i blob.
+
+Nella sola branch Supabase temporanea `b2-restore-isolated-20260922`
+(`gzvcsxdhdhgftpdcbbsa`) sono stati importati ruoli, schema, dati e infine
+Storage. Il grant ridondante su `log_min_messages` e stato omesso dopo aver
+verificato che era gia attivo nella branch. Durante l'import dei dati e stato
+usato `SET LOCAL session_replication_role=replica` nella transazione per non
+duplicare i profili tramite il trigger Auth. Dopo la ricostruzione sono stati
+ripristinati nella branch un trigger Auth, quattro policy Storage e una policy
+Realtime non comprese nel dump dello schema.
+
+Il confronto in sola lettura con produzione ha dato ledger 60/60 con digest
+identico: il ledger era gia presente nella branch derivata dal progetto e
+non e stato ricostruito dal dump B2. Sono state ricostruite 60 tabelle
+applicative con RLS, 48 policy applicative, 200 funzioni
+con digest identico e 91 tabelle del dump con 288 righe totali e zero
+divergenze nei conteggi. Le policy applicative e Storage differiscono in due
+sole parentesizzazioni equivalenti dopo il dump; le condizioni sono state
+confrontate. Sono presenti 10 utenti Auth e 11 identita, 6 bucket e 11 record
+Storage. Tutti gli 11 blob sono stati caricati, riscaricati dalla branch e
+confrontati byte per byte tramite SHA-256 con il backup. Un utente di prova
+temporaneo ha superato login Auth, RLS positiva/negativa sui profili, RPC
+autenticata, sottoscrizione Realtime privata e download Storage privato e
+firmato. Dopo lo smoke il conteggio e tornato a 10 utenti e 11 oggetti.
+
+La branch e stata eliminata e la lista dei branch mostra solo `main`. Le
+copie locali cifrate e decifrate del backup sono state cancellate da Temp e
+l'assenza e stata verificata. Nessuna scrittura e stata fatta in produzione.
+Questa prova dimostra la ricostruzione di schema, dati e blob del backup in
+isolamento. Per un progetto nuovo il ledger delle migrazioni e le
+personalizzazioni gestite richiedono fonti aggiuntive; la prova non sostituisce
+la configurazione esterna di secret, redirect, SMTP, funzioni Edge e dominio
+necessaria in un incidente reale.
+
+Alle 15:42 UTC del 22 settembre il workflow resta `active`, con cron
+`17 2 * * *` UTC e gate `BACKUP_OFFSITE_ENABLED=true`. La prima esecuzione
+automatica dopo l'attivazione non e ancora avvenuta; il run schedulato
+`35701261729` delle 07:46 UTC era stato saltato prima dell'attivazione.
 
 ## Attivazione del piano
 
@@ -213,9 +274,8 @@ ordini bloccati.
 
 ## Punti ancora esterni al repository
 
-- eseguire con Enrico la prova di decrypt e restore in un progetto isolato
-  usando la chiave privata `age` conservata offline;
-- dopo tale prova ruotare la B2 Application Key con least privilege, rimuovendo
+- monitorare la prima esecuzione automatica B2 con il gate attivo;
+- ruotare in seguito la B2 Application Key con least privilege, rimuovendo
   `bypassGovernance` e `deleteFiles`; non è un blocco operativo;
 - nominare una persona come delegato e assegnarle `emergency_delegate` con MFA;
 - concedere e provare gli accessi individuali del delegato ai servizi esterni;
