@@ -63,9 +63,11 @@ Lock abilitato e una application key limitata al bucket. Configurare in GitHub:
 | Secret | `B2_KEY_ID` |
 | Secret | `B2_APPLICATION_KEY` |
 
-Con `BACKUP_OFFSITE_ENABLED=false`, eseguire prima il workflow manuale per
-verificare che resti saltato. Poi impostare `true`, eseguirlo una volta e
-controllare in B2 oggetto cifrato, checksum, Object Lock e data di retention.
+Con `BACKUP_OFFSITE_ENABLED=false`, il dispatch manuale `35695015354` sul
+commit `07d77fb` ha restituito job `skipped` e zero step. Dopo le verifiche
+manuali del gate finale, in una sessione separata impostare `true`, eseguire
+il workflow una volta e controllare in B2 oggetto cifrato, checksum, Object
+Lock e data di retention.
 La chiave privata `age` resta offline e separata dall'account GitHub.
 
 ### Configurazione B2 prima del primo backup

@@ -3464,3 +3464,11 @@ La preparazione corregge la firma dalla regione dell'endpoint, verifica la
 retention di archivio e checksum in lettura, e documenta le Lifecycle Rules
 per `daily/`, `weekly/` e `monthly/`. Il bucket e le sue impostazioni non sono
 stati ancora verificati con un backup reale; il gate resta spento.
+
+La PR B2 #131 è stata integrata in squash su main a `07d77fb`. Tutti i sei
+check applicativi del commit di merge sono verdi, Supabase Preview `success` e
+il job offsite del dispatch manuale `35695015354` è `skipped` con zero step.
+`BACKUP_OFFSITE_ENABLED` è ancora `false`. Netlify Published è ancora il commit
+applicativo `8e13f84`; il merge B2 non ha modificato il frontend. Il gate
+restante è la verifica manuale in B2 di bucket, Object Lock, key e Lifecycle
+Rules, più la custodia della chiave privata `age` prima del primo test reale.
