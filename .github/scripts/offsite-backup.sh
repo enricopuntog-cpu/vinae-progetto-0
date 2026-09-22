@@ -88,6 +88,8 @@ upload_copy() {
     --object-lock-retain-until-date "$retain_until"
 
   verify_b2_retention "$B2_S3_ENDPOINT" "$B2_BUCKET" "${key}.sha256" "$retain_until"
+  verify_b2_readback "$B2_S3_ENDPOINT" "$B2_BUCKET" "$key" \
+    "$encrypted" "${encrypted}.sha256" "$workdir"
 }
 
 # Object Lock protegge le versioni; Lifecycle Rules del bucket le eliminano
@@ -97,4 +99,4 @@ while IFS= read -r tier; do
   upload_copy "$tier" "$(backup_retention_days "$tier")"
 done <<< "$tiers"
 
-echo "Backup cifrato caricato su B2 con Object Lock."
+echo "Backup cifrato caricato su B2, riscaricato e verificato con Object Lock."
