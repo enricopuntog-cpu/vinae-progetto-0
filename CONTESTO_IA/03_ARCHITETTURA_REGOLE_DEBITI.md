@@ -288,10 +288,10 @@ successive possono costruire.
   CSP enforcing con nonce via middleware, da scrivere dopo aver letto le
   violazioni raccolte in produzione;
 - backup e restore: prova isolata completata il 19 settembre; backup B2
-  cifrato operativo dal 22 settembre, con download S3 e SHA-256 verificati
-  senza decrypt. Resta la prova completa di decrypt/restore isolato con Enrico
-  e la chiave privata `age` offline. HARDENING FUTURO non bloccante: ruotare
-  la B2 Application Key con least privilege dopo tale prova, rimuovendo
+  cifrato operativo dal 22 settembre. Il backup reale del run `35738026438`
+  e stato decifrato e ricostruito in una branch Supabase temporanea, poi
+  eliminata. HARDENING FUTURO non bloccante: ruotare la B2 Application Key
+  con least privilege, rimuovendo
   `bypassGovernance` e `deleteFiles`;
 - Leaked Password Protection in Supabase Auth (azione manuale da dashboard);
   valutare le passkey.

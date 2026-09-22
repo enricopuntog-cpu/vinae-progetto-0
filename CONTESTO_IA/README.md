@@ -24,7 +24,10 @@ Aprire soltanto ciò che serve al task:
   stati verificati; l'apertura è una fotografia del 9 agosto 2026, non lo stato
   corrente. L'ultima voce è del 22 settembre 2026: backup B2 attivo, primo run
   riuscito `35736812313`, readback cifrato e checksum verificati nel run
-  `35738026438`, Object Lock e schedulazione confermati. Residui e checklist in
+  `35738026438`, Object Lock, decrypt, restore Supabase isolato e smoke
+  confermati; branch e file temporanei eliminati. La prima esecuzione
+  schedulata con il gate attivo non era ancora avvenuta alle 15:42 UTC.
+  Residui e checklist in
   `../docs/SECURITY_FOLLOWUP_PR120.md` e `../docs/PRELAUNCH_TASK_RECONCILIATION.md`.
 - La regola delle porte che fanno uscire denaro — riautenticazione recente
   dopo il ramo di replay — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`.
@@ -85,8 +88,8 @@ va riscritto come se la decisione precedente non fosse mai esistita.
   non sono più la strada in uso. La chiave vive nel progetto Supabase, non nel
   repository.
 - Ledger di produzione: **60 migrazioni verificate** al 22 settembre 2026.
-  Il restore isolato del 19 settembre aveva confermato le 54 migrazioni allora
-  presenti, le policy, le funzioni e i dati delle 46 tabelle di quel momento.
+  Il restore isolato del 22 settembre dal backup B2 ha confermato le 60
+  migrazioni correnti, le policy, le funzioni e i dati delle 91 tabelle del dump.
   L'elenco esatto è in [`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md).
   Un merge non prova che una nuova migrazione sia stata applicata, e un merge
   senza migrazioni può averne distribuite di altrui: rileggere sempre il ledger.
