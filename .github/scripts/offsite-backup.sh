@@ -68,26 +68,24 @@ upload_copy() {
   retain_until="$(date -u -d "+${days} days" +%Y-%m-%dT%H:%M:%SZ)"
   local key="${tier}/$(date -u +%Y/%m)/$(basename "$encrypted")"
 
-  aws s3api put-object \
+  put_b2_object_quiet \
     --endpoint-url "$B2_S3_ENDPOINT" \
     --bucket "$B2_BUCKET" \
     --key "$key" \
     --body "$encrypted" \
     --object-lock-mode GOVERNANCE \
     --object-lock-retain-until-date "$retain_until" \
-    --metadata "sha256=$(sha256sum "$encrypted" | cut -d' ' -f1),source=supabase" \
-    --output none
+    --metadata "sha256=$(sha256sum "$encrypted" | cut -d' ' -f1),source=supabase"
 
   verify_b2_retention "$B2_S3_ENDPOINT" "$B2_BUCKET" "$key" "$retain_until"
 
-  aws s3api put-object \
+  put_b2_object_quiet \
     --endpoint-url "$B2_S3_ENDPOINT" \
     --bucket "$B2_BUCKET" \
     --key "${key}.sha256" \
     --body "${encrypted}.sha256" \
     --object-lock-mode GOVERNANCE \
-    --object-lock-retain-until-date "$retain_until" \
-    --output none
+    --object-lock-retain-until-date "$retain_until"
 
   verify_b2_retention "$B2_S3_ENDPOINT" "$B2_BUCKET" "${key}.sha256" "$retain_until"
 }

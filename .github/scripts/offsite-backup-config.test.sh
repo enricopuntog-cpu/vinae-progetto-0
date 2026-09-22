@@ -61,6 +61,13 @@ for retention_response in \
 done
 unset -f aws
 
+aws() {
+  [[ "$*" == *'s3api put-object'* && "$*" == *'--output json'* ]] || return 1
+  printf '{"ETag":"example"}\n'
+}
+assert_equal "$(put_b2_object_quiet --bucket bucket --key daily/example.age --body example.age)" ''
+unset -f aws
+
 manifest_test_dir="$(mktemp -d)"
 trap 'rm -rf "$manifest_test_dir"' EXIT
 mkdir -p "$manifest_test_dir/database"
