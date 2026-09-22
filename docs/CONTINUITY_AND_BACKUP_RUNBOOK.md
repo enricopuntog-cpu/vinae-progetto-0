@@ -193,7 +193,9 @@ ripristinati nella branch un trigger Auth, quattro policy Storage e una policy
 Realtime non comprese nel dump dello schema.
 
 Il confronto in sola lettura con produzione ha dato ledger 60/60 con digest
-identico, 60 tabelle applicative con RLS, 48 policy applicative, 200 funzioni
+identico: il ledger era gia presente nella branch derivata dal progetto e
+non e stato ricostruito dal dump B2. Sono state ricostruite 60 tabelle
+applicative con RLS, 48 policy applicative, 200 funzioni
 con digest identico e 91 tabelle del dump con 288 righe totali e zero
 divergenze nei conteggi. Le policy applicative e Storage differiscono in due
 sole parentesizzazioni equivalenti dopo il dump; le condizioni sono state
@@ -207,7 +209,9 @@ firmato. Dopo lo smoke il conteggio e tornato a 10 utenti e 11 oggetti.
 La branch e stata eliminata e la lista dei branch mostra solo `main`. Le
 copie locali cifrate e decifrate del backup sono state cancellate da Temp e
 l'assenza e stata verificata. Nessuna scrittura e stata fatta in produzione.
-Questa prova dimostra la ricostruzione del backup in isolamento; non sostituisce
+Questa prova dimostra la ricostruzione di schema, dati e blob del backup in
+isolamento. Per un progetto nuovo il ledger delle migrazioni e le
+personalizzazioni gestite richiedono fonti aggiuntive; la prova non sostituisce
 la configurazione esterna di secret, redirect, SMTP, funzioni Edge e dominio
 necessaria in un incidente reale.
 
