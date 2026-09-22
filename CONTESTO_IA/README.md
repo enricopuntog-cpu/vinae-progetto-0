@@ -22,9 +22,9 @@ Aprire soltanto ciò che serve al task:
 
 - [`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md) — dossier cronologico di misure e
   stati verificati; l'apertura è una fotografia del 9 agosto 2026, non lo stato
-  corrente. L'ultima voce è del 22 settembre 2026: PR #130 integrata, commit
-  Published verificato, prova autenticata owner/admin delle nuove superfici,
-  e preparazione B2 integrata a gate spento con dispatch `skipped`. Residui e checklist in
+  corrente. L'ultima voce è del 22 settembre 2026: backup B2 attivo, primo run
+  riuscito `35736812313`, readback cifrato e checksum verificati nel run
+  `35738026438`, Object Lock e schedulazione confermati. Residui e checklist in
   `../docs/SECURITY_FOLLOWUP_PR120.md` e `../docs/PRELAUNCH_TASK_RECONCILIATION.md`.
 - La regola delle porte che fanno uscire denaro — riautenticazione recente
   dopo il ramo di replay — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`.
@@ -111,8 +111,10 @@ va riscritto come se la decisione precedente non fosse mai esistita.
   file sotto `supabase/migrations/`. Sulle PR con migrazioni può creare un ramo
   temporaneo ed eseguire la suite; sulle PR senza migrazioni può risultare
   `skipped`. Verificare sempre la testa esatta e il ledger dopo il merge.
-- La preparazione B2, le capability minime e le tre Lifecycle Rules manuali
-  sono in `../docs/CONTINUITY_AND_BACKUP_RUNBOOK.md`. Il gate resta `false`
-  fino al primo test reale autorizzato dall'utente.
+- Il backup B2 è operativo con gate `true`. Run, oggetti, retention, download
+  cifrato e tre Lifecycle Rules sono in
+  `../docs/CONTINUITY_AND_BACKUP_RUNBOOK.md`. Restano la prova completa di
+  decrypt/restore isolato con Enrico e, dopo quella validazione, la rotazione
+  least privilege della Application Key come hardening non bloccante.
 
 Per ogni fatto più volatile, rileggere `CHANGES.log` e misurare di nuovo.

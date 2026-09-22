@@ -72,7 +72,12 @@ La PR #131 di preflight B2 è integrata al commit `07d77fb` con CI su `main`
 verde. Il dispatch manuale `35695015354` del workflow offsite sul commit di
 merge ha saltato il job senza eseguire step, con il gate `false`. La produzione
 Netlify è rimasta sul Published `8e13f84`, perché il cambiamento non tocca
-il frontend; non è stato eseguito alcun backup reale.
+il frontend. Questo è il record del preflight: dal 22 settembre il gate B2 è
+`true`. Dopo i fix nelle PR #133/#134, il primo backup reale `35736812313`
+è riuscito; la PR #135 ha aggiunto il download S3 cifrato e il run
+`35738026438` ha verificato SHA-256, metadata e Object Lock. Il bucket
+contiene due coppie `.age`/`.sha256` sotto `daily/2026/09/`, senza archivio
+in chiaro né artifact GitHub. Dettagli nel runbook.
 
 Gli advisor Supabase continuano a classificare come `SECURITY DEFINER` le viste
 strette e le RPC accessibili agli utenti autenticati, e come "RLS senza policy"
@@ -86,7 +91,7 @@ dei Club; non aprono accessi e non bloccano la beta chiusa.
 
 | Attività | Stato | Prerequisito / prossima azione |
 | --- | --- | --- |
-| Attivare backup B2 | Gate spento | Variabili e nomi dei secret GitHub presenti. Verificare bucket, Object Lock, capability, Lifecycle Rules e chiave privata `age` come nel runbook; poi primo backup e restore isolato. |
+| Backup B2 | Operativo, gate attivo | Run `35738026438` riuscito con readback cifrato, SHA-256, Object Lock e schedulazione verificati. Resta la prova di decrypt/restore isolato con Enrico; poi rotazione least privilege della key, non bloccante. |
 | Pagina di stato indipendente | Bloccata esternamente | Scegliere account/progetto e dominio separati; distribuire `status-page/`, poi inserire l'URL HTTPS nel banner. |
 | Delegato di emergenza | Bloccata esternamente | Nominare una persona, abilitarle MFA e assegnare `emergency_delegate`; provare accesso a `/continuita`. |
 | Accessi del delegato | Bloccata esternamente | Concedere alla persona nominata accessi individuali e minimi a GitHub, Supabase, Netlify, DNS e backup; il ruolo applicativo da solo abilita soltanto il banner. |
@@ -108,6 +113,6 @@ dei Club; non aprono accessi e non bloccano la beta chiusa.
 - i Club sono aperti con `NEXT_PUBLIC_CLUBS_ENABLED=true` e
   `CLUBS_ENABLED=true`; le viste pubbliche mostrano esclusivamente Club
   approvati e le scritture passano dalle RPC autenticate;
-- `BACKUP_OFFSITE_ENABLED=false` finché il primo bucket non è configurato e
-  verificato;
+- `BACKUP_OFFSITE_ENABLED=true`; il workflow B2 è attivo e fallisce chiuso
+  se configurazione, retention o readback non sono validi;
 - nessun utente riceve automaticamente `emergency_delegate`.

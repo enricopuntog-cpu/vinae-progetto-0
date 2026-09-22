@@ -3472,3 +3472,45 @@ il job offsite del dispatch manuale `35695015354` è `skipped` con zero step.
 applicativo `8e13f84`; il merge B2 non ha modificato il frontend. Il gate
 restante è la verifica manuale in B2 di bucket, Object Lock, key e Lifecycle
 Rules, più la custodia della chiave privata `age` prima del primo test reale.
+
+### Backup B2 operativo e readback cifrato — 22 settembre 2026
+
+Enrico ha confermato bucket privato `vineawineclub` in EU Central, endpoint
+`https://s3.eu-central-003.backblazeb2.com`, Object Lock, secret e recipient
+configurati, e chiave privata `age` custodita offline. Ha autorizzato il primo
+backup reale e chiesto di non leggere i secret né ruotare la Application Key.
+Il gate GitHub `BACKUP_OFFSITE_ENABLED` è stato impostato a `true`.
+
+Il run `35734887340` è fallito prima di cifrare o caricare perché il manifest
+SHA-256 includeva se stesso; corretto e testato nella PR #133, merge `302ccb9`.
+Il run `35735978523` è fallito prima dell'upload perché AWS CLI rifiutava
+`--output none`; corretto e testato nella PR #134, merge `10d2f25`.
+Il bucket era vuoto dopo entrambi i run. Il pannello B2 mostrava inoltre
+`Keep all versions`, senza Lifecycle Rules salvate: sul bucket ancora vuoto
+sono state salvate e rilette le tre regole `daily/` 30+1, `weekly/` 84+1 e
+`monthly/` 366+1 giorni. Object Lock è rimasto abilitato.
+
+Il primo run riuscito `35736812313` sul commit `10d2f25` si è concluso il
+22 settembre alle 13:58:48 UTC. In `daily/2026/09/` ha caricato
+`vinea-2026-09-22T13-58-35Z.tar.gz.age` (3,6 MB nella UI) e il suo
+`.sha256` (124 byte). Entrambi risultano Governance fino al 22 ottobre 2026
+alle 13:58 UTC; l'archivio espone metadata SHA-256.
+
+Il pannello web B2 non permette il download dei file con SSE-B2. La PR #135,
+merge `18763ba`, ha aggiunto readback via S3 di `.age` e `.sha256` nel runner,
+verificando file non vuoti, header age, SHA-256 dei byte, sidecar e metadata,
+senza chiave privata o artifact. Il run `35738026438` su quel commit è riuscito
+il 22 settembre alle 14:09:29 UTC. Ha caricato una seconda coppia
+`vinea-2026-09-22T14-09-13Z.tar.gz.age` e `.sha256` nel medesimo percorso,
+3,6 MB e 124 byte nella UI, entrambi Governance fino al 22 ottobre alle
+14:09 UTC. Nel bucket sono visibili solo le due coppie `.age`/`.sha256`,
+nessun `.tar.gz` in chiaro. Artifact del run: zero. Il workflow GitHub è
+`active`, schedule giornaliera `17 2 * * *` UTC e gate `true`; la prima
+esecuzione schedulata con il gate attivo resta da osservare.
+
+**HARDENING FUTURO:** ruotare la B2 Application Key dopo la prova completa
+di decrypt/restore, rimuovendo capability non necessarie come
+`bypassGovernance` e `deleteFiles`. La key attuale resta limitata al bucket;
+questo debito non blocca il backup operativo. Decrypt e restore distruttivo o
+sulla produzione non sono stati eseguiti; la prossima prova completa userà la
+chiave privata offline con Enrico in un progetto isolato.
