@@ -24,7 +24,7 @@ Aprire soltanto ciò che serve al task:
   stati verificati; l'apertura è una fotografia del 9 agosto 2026, non lo stato
   corrente. L'ultima voce è del 22 settembre 2026: PR #130 integrata, commit
   Published verificato, prova autenticata owner/admin delle nuove superfici,
-  e preparazione B2 a gate spento. Residui e checklist in
+  e preparazione B2 integrata a gate spento con dispatch `skipped`. Residui e checklist in
   `../docs/SECURITY_FOLLOWUP_PR120.md` e `../docs/PRELAUNCH_TASK_RECONCILIATION.md`.
 - La regola delle porte che fanno uscire denaro — riautenticazione recente
   dopo il ramo di replay — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`.

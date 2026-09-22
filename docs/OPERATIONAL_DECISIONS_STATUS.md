@@ -68,6 +68,12 @@ owner/admin si aprono i pannelli Club e le code amministrative senza errori
 browser. Le controversie reali sono zero: la decisione su una pratica non è
 stata provata con dati persistenti.
 
+La PR #131 di preflight B2 è integrata al commit `07d77fb` con CI su `main`
+verde. Il dispatch manuale `35695015354` del workflow offsite sul commit di
+merge ha saltato il job senza eseguire step, con il gate `false`. La produzione
+Netlify è rimasta sul Published `8e13f84`, perché il cambiamento non tocca
+il frontend; non è stato eseguito alcun backup reale.
+
 Gli advisor Supabase continuano a classificare come `SECURITY DEFINER` le viste
 strette e le RPC accessibili agli utenti autenticati, e come "RLS senza policy"
 le tabelle raggiungibili soltanto dalle RPC. In questo disegno è intenzionale:
