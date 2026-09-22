@@ -3444,3 +3444,23 @@ ha registrato tutte le 60 migrazioni, incluse quelle di completamento.
 Il check GitHub `Supabase Preview` sulla testa `6948263` è `SUCCESS` e GitHub
 riporta `CLEAN`/`MERGEABLE`. Il blocco di capacità osservato sopra è quindi
 storico, non corrente; i controlli saranno riletti sulla testa finale.
+
+### Post-merge PR #130 e preparazione B2 — 22 settembre 2026
+
+Testa finale della PR `44c5c83`: CI applicativa, Supabase Preview e check
+Netlify verdi; GitHub `CLEAN`/`MERGEABLE`. Merge squash `8e13f84` su main.
+I sei check del commit di merge sono verdi e Netlify ha pubblicato
+`6ab21cb02f5df2000845a553` con `commit_ref=8e13f84`. Il ledger di produzione
+mantiene 60 migrazioni. Una sessione owner/admin su `vineawineclub.com` ha
+aperto gestione Club (membri, moderatori, regolamento, link), lookup Admin del
+Club e coda controversie: zero pratiche, nessun errore browser. Non è una
+prova di decisione su una controversia reale.
+
+Sul branch `codex/b2-backup-preflight` da `origin/main` sono stati verificati
+i nomi dei quattro secret GitHub senza leggerne i valori; cinque variabili
+repository sono configurate e `BACKUP_OFFSITE_ENABLED=false`. Lo script B2
+precedente usava `eu-central-1` con un endpoint `eu-central-003`.
+La preparazione corregge la firma dalla regione dell'endpoint, verifica la
+retention di archivio e checksum in lettura, e documenta le Lifecycle Rules
+per `daily/`, `weekly/` e `monthly/`. Il bucket e le sue impostazioni non sono
+stati ancora verificati con un backup reale; il gate resta spento.
