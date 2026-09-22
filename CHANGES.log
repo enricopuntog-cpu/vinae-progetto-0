@@ -6,15 +6,15 @@
 - `PAYMENTS_ENABLED=false`, `AI_ENABLED=false` e `BACKUP_OFFSITE_ENABLED=false` restano invariati. Il cutover della Fase 13 non è implicato.
 
 ## ACTIVE TASK
-PR #130 aperta; attendere il ripristino della capacità Supabase Preview, poi integrare soltanto con controlli verdi e mergeability pulita.
+PR #130 aperta; il reset del ramo Supabase Preview è riuscito e ha applicato tutte le 60 migrazioni. Il check è tornato verde e GitHub indica la testa pulita; completare la verifica della testa finale e integrare.
 
 ## NEXT STEPS
-1. Rieseguire Supabase Preview quando la capacità è disponibile, completare il merge della PR #130 e verificare il commit Published con le viste autenticate.
-2. Configurare ed eseguire il primo backup offsite B2 quando saranno disponibili account e segreti.
+1. Completare il merge della PR #130, confrontare `origin/main` con il deploy Published e provare le nuove viste autenticate.
+2. Su un branch successivo correggere e verificare la configurazione B2 senza attivare il backup offsite.
 3. Pubblicare la pagina di stato su un hosting realmente indipendente.
 
 ## BLOCKERS / NOTES
-- Supabase Preview della PR #130 è fallita e il ramo temporaneo segnala `MIGRATIONS_FAILED` senza migrazioni applicate. Il dettaglio del check GitHub e due tentativi di reset riportano `Capacity is unavailable at this time`. GitHub segnala `UNSTABLE`, quindi il merge non è stato eseguito. Le migrazioni nel progetto di produzione sono applicate e le verifiche dirette sono verdi.
+- Il precedente blocco Supabase Preview (`Capacity is unavailable at this time`) è risolto: il ramo temporaneo è `FUNCTIONS_DEPLOYED`, 60 migrazioni presenti, check GitHub `SUCCESS` e mergeability `CLEAN` sulla testa `6948263`. Rileggere questi stati sulla testa finale prima del merge.
 - I controlli SQL verificano le porte di accesso e quattro rifiuti comportamentali, ma non sostituiscono una prova end-to-end con due Club e due ordini reali; non sono state create fixture persistenti in produzione.
 - Per attivare B2 servono bucket EU Central con Object Lock, application key limitata, recipient `age` e segreti GitHub; dopo va verificato il primo backup.
 - Delegato di emergenza, accessi individuali, pagina di stato esterna e procedura email incidenti richiedono scelte o account esterni; non appartengono a questo ciclo.

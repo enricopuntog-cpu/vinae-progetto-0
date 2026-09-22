@@ -3435,3 +3435,12 @@ Questo
 non smentisce la prova delle migrazioni già applicate direttamente nel progetto
 di produzione, ma impedisce il merge finché la preview non è verde e GitHub
 non segnala la testa come pulita. Nessun bypass dei controlli eseguito.
+
+### Addendum — recupero Preview del 22 settembre 2026
+
+Un successivo reset del ramo temporaneo della PR #130 è stato accettato.
+La sequenza `CREATING_PROJECT` → `RUNNING_MIGRATIONS` → `FUNCTIONS_DEPLOYED`
+ha registrato tutte le 60 migrazioni, incluse quelle di completamento.
+Il check GitHub `Supabase Preview` sulla testa `6948263` è `SUCCESS` e GitHub
+riporta `CLEAN`/`MERGEABLE`. Il blocco di capacità osservato sopra è quindi
+storico, non corrente; i controlli saranno riletti sulla testa finale.

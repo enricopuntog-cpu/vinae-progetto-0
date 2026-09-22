@@ -61,12 +61,11 @@ conclusi e dei residui che dipendono da account, persone o decisioni esterne.
 Le nuove migrazioni sono applicate in produzione Supabase. La nuova UI è stata
 verificata localmente; non è ancora documentato un deploy Netlify del suo commit
 né uno smoke autenticato delle azioni amministrative.
-La PR #130 è aperta: i job applicativi e la Deploy Preview Netlify sono verdi,
-ma Supabase Preview è fallita e il suo ramo temporaneo è `MIGRATIONS_FAILED`
-senza migrazioni registrate. Due tentativi di reset hanno restituito
-`Capacity is unavailable at this time`, confermato anche dal dettaglio del
-check GitHub. Non integrare finché la verifica non
-torna verde e GitHub non segnala la testa come pulita.
+La PR #130 è aperta: i job applicativi e la Deploy Preview Netlify sono verdi.
+Il precedente errore di capacità Supabase Preview si è risolto con un nuovo reset:
+il ramo temporaneo ha registrato tutte le 60 migrazioni, lo stato è
+`FUNCTIONS_DEPLOYED`, il check GitHub è `SUCCESS` e la testa `6948263` è
+`CLEAN`. Prima dell'integrazione ricontrollare i controlli sulla testa finale.
 
 Gli advisor Supabase continuano a classificare come `SECURITY DEFINER` le viste
 strette e le RPC accessibili agli utenti autenticati, e come "RLS senza policy"
