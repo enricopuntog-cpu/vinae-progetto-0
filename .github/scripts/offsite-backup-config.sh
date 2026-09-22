@@ -41,6 +41,10 @@ write_backup_manifest() {
   )
 }
 
+put_b2_object_quiet() {
+  aws s3api put-object "$@" --output json >/dev/null
+}
+
 verify_b2_retention() {
   local endpoint="$1" bucket="$2" key="$3" expected="$4"
   local actual mode until actual_epoch expected_epoch
