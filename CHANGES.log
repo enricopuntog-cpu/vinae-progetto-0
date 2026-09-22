@@ -4,21 +4,21 @@
 - In produzione Supabase risultano 60 migrazioni, incluse `20260921170806_complete_club_dispute_lifecycles` e `20260921230019_align_dispute_decision_note_limit`. La griglia SQL ha dato 10/10 esiti positivi; le prove negative sotto ruolo `authenticated` e `anon` sono passate. Un Club ha il proprietario ricostruito; non ci sono contestazioni reali da migrare.
 - Frontend: 1601 test passati, typecheck e build passati, lint senza errori e con 12 warning preesistenti. Verificati 320, 375 e 1440 px sulla pagina Club pubblica senza overflow orizzontale.
 - PR #130 integrata su `origin/main` a `8e13f84`: CI su main tutta verde, Supabase Preview verde, Netlify Published `6ab21cb02f5df2000845a553` pronto sullo stesso commit. Con sessione owner/admin aperti i pannelli Club, la coda Club e le controversie (zero pratiche), senza errori browser. Nessuna decisione su pratica reale è stata simulata.
-- B2: PR #131 integrata su `origin/main` a `07d77fb`; CI su main tutta verde. Endpoint HTTPS Backblaze validato, regione di firma derivata dall'host, retention Governance riletta per archivio e checksum; test offline verdi. Repository variables e nomi dei quattro secret presenti, senza lettura dei valori segreti. `BACKUP_OFFSITE_ENABLED=false`; dispatch manuale `35695015354` sul commit di merge con job `skipped` e zero step. Nessun backup reale eseguito.
-- `PAYMENTS_ENABLED=false`, `AI_ENABLED=false` e `BACKUP_OFFSITE_ENABLED=false` restano invariati. Il cutover della Fase 13 non è implicato.
+- B2: `BACKUP_OFFSITE_ENABLED=true` dal 22 settembre 2026. Il primo run manuale `35734887340` ha esportato database e Storage, ma è fallito prima di cifrare e caricare: il manifest includeva il proprio file e la verifica SHA-256 non poteva riuscire. Bucket B2 ancora vuoto. Correzione e test su branch `codex/b2-manifest-self-hash`, da integrare con CI prima di rieseguire il backup.
+- `PAYMENTS_ENABLED=false` e `AI_ENABLED=false` restano invariati. Il cutover della Fase 13 non è implicato.
 
 ## ACTIVE TASK
-Gate finale prima del primo backup reale B2: verifiche manuali del bucket, delle capability e delle Lifecycle Rules. Non accendere il workflow in questa sessione.
+Completare il primo backup B2 cifrato: correggere il manifest, integrare la PR con CI verde, rieseguire il workflow e verificare direttamente oggetti, checksum, Object Lock, retention e schedulazione.
 
 ## NEXT STEPS
-1. Verificare nel pannello Backblaze bucket EU Central privato, Object Lock, capability della key limitata e tre Lifecycle Rules per `daily/`, `weekly/`, `monthly/` come nel runbook.
-2. Confermare la custodia offline e l'accessibilità della chiave privata `age`; solo dopo un'autorizzazione esplicita pianificare il primo backup reale e il restore isolato.
+1. Integrare il fix del manifest e rieseguire una volta il workflow sul nuovo `main`.
+2. Verificare gli oggetti cifrati e la retention. Nel pannello B2 il 22 settembre il bucket mostrava `Keep all versions` e nessuna Lifecycle Rule salvata, in contrasto con la configurazione riferita: risolvere la discrepanza prima di dichiarare completa la conservazione programmata.
 3. Pubblicare la pagina di stato su un hosting realmente indipendente.
 
 ## BLOCKERS / NOTES
 - Il blocco Supabase Preview (`Capacity is unavailable at this time`) è risolto: reset riuscito, 60 migrazioni nella Preview, tutti i check verdi sulla testa finale `44c5c83` prima del merge. Anche i sei check del commit su main sono verdi.
 - I controlli SQL verificano le porte di accesso e quattro rifiuti comportamentali, ma non sostituiscono una prova end-to-end con due Club e due ordini reali; non sono state create fixture persistenti in produzione.
-- Per attivare B2 verificare in dashboard bucket EU Central privato con Object Lock, key limitata e capability di lettura della retention, tre Lifecycle Rules, chiave privata `age` offline; variabili e nomi dei secret GitHub sono presenti ma i loro valori segreti non sono stati letti. Il gate resta `false`.
+- Bucket B2 privato in EU Central con Object Lock abilitato; il contenuto delle credenziali GitHub non è stato letto. La Application Key attuale è limitata al bucket ma include `bypassGovernance` e `deleteFiles`: HARDENING FUTURO non bloccante, ruotarla con least privilege dopo la validazione end-to-end del backup. La chiave privata `age` resta offline.
 - Delegato di emergenza, accessi individuali, pagina di stato esterna e procedura email incidenti richiedono scelte o account esterni; non appartengono a questo ciclo.
 - Il restore isolato del 19 settembre resta la prova corrente. RTO/RPO 24h/24h vanno riesaminati prima dei pagamenti reali.
 - Conservare nel checkout Desktop lo staging personale di `.d3b-production-schema.sql`, `.wslconfig` e dei due documenti di piano; non includerli nei commit Vinea.
