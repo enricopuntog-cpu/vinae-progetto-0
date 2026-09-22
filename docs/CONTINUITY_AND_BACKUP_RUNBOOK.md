@@ -1,6 +1,6 @@
 # Continuità operativa e custodia backup
 
-Stato iniziale: 19 settembre 2026; preflight B2 aggiornato il 22 settembre.
+Stato iniziale: 19 settembre 2026; backup B2 operativo verificato il 22 settembre.
 Questo runbook copre la beta Vinea e non
 sostituisce gli accordi con fornitori, commercialista o consulenti legali.
 
@@ -42,7 +42,10 @@ Supabase, Netlify, DNS e backup necessari alle responsabilita approvate.
    esegue export separati di ruoli, schema, dati e oggetti Storage, verifica
    SHA-256, cifra e carica copie daily, weekly (domenica UTC) e monthly
    (primo giorno UTC) con Object Lock rispettivamente per 30, 84 e 366 giorni.
-   Le Lifecycle Rules sotto sono necessarie per eliminarle in seguito.
+   Rilegge la retention e riscarica via S3 `.age` e `.sha256` per confrontare
+   header age, SHA-256 dei byte, sidecar e metadata. I file temporanei del runner
+   sono eliminati alla fine; nessun archivio è pubblicato come artifact GitHub.
+   Le Lifecycle Rules sotto eliminano le copie solo dopo la scadenza.
 6. L'automazione fallisce chiusa: finche `BACKUP_OFFSITE_ENABLED` non vale
    esattamente `true`, il job non parte.
 
@@ -53,7 +56,7 @@ Lock abilitato e una application key limitata al bucket. Configurare in GitHub:
 
 | Tipo | Nome |
 | --- | --- |
-| Variable | `BACKUP_OFFSITE_ENABLED`, inizialmente `false` |
+| Variable | `BACKUP_OFFSITE_ENABLED`, ora `true` |
 | Variable | `SUPABASE_URL` |
 | Variable | `BACKUP_AGE_RECIPIENT` |
 | Variable | `B2_S3_ENDPOINT` |
@@ -63,14 +66,19 @@ Lock abilitato e una application key limitata al bucket. Configurare in GitHub:
 | Secret | `B2_KEY_ID` |
 | Secret | `B2_APPLICATION_KEY` |
 
-Con `BACKUP_OFFSITE_ENABLED=false`, il dispatch manuale `35695015354` sul
-commit `07d77fb` ha restituito job `skipped` e zero step. Dopo le verifiche
-manuali del gate finale, in una sessione separata impostare `true`, eseguire
-il workflow una volta e controllare in B2 oggetto cifrato, checksum, Object
-Lock e data di retention.
+Il gate è `true` dal 22 settembre 2026. Il workflow è `active` e conserva la
+schedule giornaliera `17 2 * * *` UTC; GitHub può avviarla in ritardo.
+Il precedente dispatch disabilitato `35695015354` era `skipped`.
+I run `35734887340` e `35735978523` sono falliti prima di qualunque upload;
+le PR #133 e #134 hanno corretto manifest auto-incluso e output AWS CLI non
+valido. Il primo backup riuscito è il run `35736812313` sul commit `10d2f25`,
+completato il **22 settembre 2026 alle 13:58:48 UTC**. La PR #135 ha aggiunto
+la prova di download cifrato: il run `35738026438` sul commit `18763ba` è
+riuscito il **22 settembre 2026 alle 14:09:29 UTC**, dopo readback S3 di `.age`
+e `.sha256`, verifica dell'header age, SHA-256 dei byte, sidecar e metadata.
 La chiave privata `age` resta offline e separata dall'account GitHub.
 
-### Configurazione B2 prima del primo backup
+### Configurazione B2 corrente
 
 L'endpoint deve avere esattamente la forma
 `https://s3.<regione>.backblazeb2.com`, senza porta, percorso o query. Lo script
@@ -83,15 +91,17 @@ retention predefinita più breve: ogni oggetto `.age` e `.sha256` porta la propr
 retention Governance. Lo script legge la retention dopo ogni upload e fallisce
 se il mode non è Governance o la data è inferiore a quella richiesta.
 
-La chiave per il workflow deve essere una **application key non master**, limitata
+La chiave per il workflow è una **application key non master**, limitata
 al bucket. Per il caricamento e la lettura di verifica richiede `writeFiles`,
 `writeFileRetentions`, `readFiles` e `readFileRetentions`; per la compatibilità
 S3 con una chiave limitata al bucket verificare anche `listAllBucketNames`.
 `listFiles` aiuta a controllare le copie; `readBucketRetentions` permette di
-leggere la configurazione Object Lock. Non concedere `bypassGovernance`,
-`deleteFiles` o permessi di modifica dei bucket alla chiave del workflow.
-Verificare le capability effettive della chiave nel pannello B2; la sola
-presenza dei nomi dei secret in GitHub non le dimostra.
+leggere la configurazione Object Lock. La key attuale ha capability più ampie,
+incluse `bypassGovernance` e `deleteFiles`, senza uscire dal bucket
+`vineawineclub`. Non ruotarla durante la prima prova operativa.
+**HARDENING FUTURO: ruotare B2 Application Key rimuovendo capability non
+necessarie come `bypassGovernance` e `deleteFiles` dopo la validazione
+end-to-end completa del backup.** Questo debito non blocca il backup operativo.
 
 In **Buckets → Lifecycle Settings → Use custom lifecycle rules** configurare
 tre regole non sovrapposte, sia per gli archivi `.age` sia per i `.sha256`:
@@ -109,25 +119,34 @@ a eliminare e una regola di sola cancellazione delle versioni precedenti non
 elimina mai la versione corrente. Le regole girano una volta al giorno, perciò
 30/84/366 sono finestre minime e il numero di copie visibili è **circa**
 30 giornaliere, 12 settimanali e 12 mensili, non un conteggio esatto garantito.
-La copia mensile usa 366 giorni, non 12 mesi di calendario. Salvare e rileggere
-le tre regole nel pannello prima di attivare il gate.
+La copia mensile usa 366 giorni, non 12 mesi di calendario. Il 22 settembre il
+pannello mostrava inizialmente `Keep all versions` e nessuna regola salvata;
+le tre regole sopra sono state salvate e rilette nel pannello sul bucket vuoto.
 
 Riferimenti del provider: [regioni e AWS CLI](https://www.backblaze.com/docs/cloud-storage-use-the-aws-cli-with-backblaze-b2),
 [Object Lock S3](https://www.backblaze.com/docs/cloud-storage-enable-object-lock-with-the-s3-compatible-api),
 [capability delle application key](https://www.backblaze.com/docs/cloud-storage-s3-compatible-app-keys),
 [Lifecycle Rules e interazione con Object Lock](https://www.backblaze.com/docs/cloud-storage-lifecycle-rules).
 
-Le cinque repository variables B2/Supabase e i quattro nomi di secret
-richiesti sono presenti in GitHub al 22 settembre 2026; i secret non sono
-stati letti. `BACKUP_OFFSITE_ENABLED` risulta `false`. Il bucket, le sue regole,
-le capability della key e la disponibilità della chiave privata `age` non sono
-ancora verificati con un backup reale. In questo lavoro non è stato caricato
-alcun oggetto in B2.
+Nel bucket privato B2 sono presenti due coppie, senza `.tar.gz` in chiaro:
+
+| Run | Oggetto in `daily/2026/09/` | Dimensione UI | Object Lock |
+| --- | --- | ---: | --- |
+| `35736812313` | `vinea-2026-09-22T13-58-35Z.tar.gz.age` e `.sha256` | 3,6 MB e 124 byte | Governance fino al 22 ottobre 2026, 13:58 UTC |
+| `35738026438` | `vinea-2026-09-22T14-09-13Z.tar.gz.age` e `.sha256` | 3,6 MB e 124 byte | Governance fino al 22 ottobre 2026, 14:09 UTC |
+
+Entrambi gli archivi hanno metadata `sha256` e `source=supabase`. Il run
+`35738026438` ha verificato in lettura che il metadata SHA-256 coincida con
+il checksum del download e con il `.sha256` remoto. Il controllo della
+retention rilegge i due oggetti e rifiuta mode diverso da Governance o data
+inferiore ai 30 giorni richiesti. Gli artifact GitHub del run sono zero.
 
 ## Ripristino da B2
 
-1. Scaricare da B2 l'oggetto `.age` e il relativo `.sha256` senza rimuovere o
-   accorciare la retention dell'originale.
+1. Scaricare via S3 API da B2 l'oggetto `.age` e il relativo `.sha256` senza
+   rimuovere o accorciare la retention dell'originale. Il pannello web B2 non
+   scarica i file con cifratura SSE-B2; il run `35738026438` ha provato con
+   successo il download S3 dell'oggetto ancora cifrato con `age`.
 2. In una macchina isolata usare
    `.github/scripts/offsite-restore-verify.sh <archivio.age> <chiave-age> <directory-vuota>`.
    Lo script verifica checksum esterno, percorsi dell'archivio e tutti gli hash
@@ -194,8 +213,10 @@ ordini bloccati.
 
 ## Punti ancora esterni al repository
 
-- creare e configurare il bucket B2 con le variabili e i secret sopra;
-- conservare offline la chiave privata `age` e provarne l'accesso;
+- eseguire con Enrico la prova di decrypt e restore in un progetto isolato
+  usando la chiave privata `age` conservata offline;
+- dopo tale prova ruotare la B2 Application Key con least privilege, rimuovendo
+  `bypassGovernance` e `deleteFiles`; non è un blocco operativo;
 - nominare una persona come delegato e assegnarle `emergency_delegate` con MFA;
 - concedere e provare gli accessi individuali del delegato ai servizi esterni;
 - approvare destinatari, modello e procedura delle email di incidente via Resend;

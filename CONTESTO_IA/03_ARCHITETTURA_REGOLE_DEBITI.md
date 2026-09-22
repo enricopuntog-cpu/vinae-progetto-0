@@ -287,9 +287,12 @@ successive possono costruire.
   preload` sono in `netlify.toml` e la CSP è in **Report-Only**. Resta aperta la
   CSP enforcing con nonce via middleware, da scrivere dopo aver letto le
   violazioni raccolte in produzione;
-- backup e restore: prova isolata completata il 19 settembre e automazione B2
-  cifrata predisposta il 21 settembre. Restano esterni la creazione del bucket,
-  le credenziali, la custodia della chiave `age` e la prima esecuzione verificata;
+- backup e restore: prova isolata completata il 19 settembre; backup B2
+  cifrato operativo dal 22 settembre, con download S3 e SHA-256 verificati
+  senza decrypt. Resta la prova completa di decrypt/restore isolato con Enrico
+  e la chiave privata `age` offline. HARDENING FUTURO non bloccante: ruotare
+  la B2 Application Key con least privilege dopo tale prova, rimuovendo
+  `bypassGovernance` e `deleteFiles`;
 - Leaked Password Protection in Supabase Auth (azione manuale da dashboard);
   valutare le passkey.
 
@@ -344,7 +347,8 @@ successive possono costruire.
   stato statica deve essere distribuita su infrastruttura separata.
 - La destinazione offsite scelta e Backblaze B2 EU Central con cifratura `age`,
   Object Lock e retention 30 giornalieri, 12 settimanali, 12 mensili. Il job
-  resta fail-closed finche account, bucket, chiave e variabili non esistono.
+  è attivo dal 22 settembre 2026 e resta fail-closed se il gate non vale
+  esattamente `true` o se configurazione, retention o readback non sono validi.
 
 ## Comandi di verifica
 
