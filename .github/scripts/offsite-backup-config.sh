@@ -63,3 +63,30 @@ verify_b2_retention() {
     return 1
   fi
 }
+
+verify_b2_readback() {
+  local endpoint="$1" bucket="$2" key="$3" encrypted="$4" checksum="$5" workdir="$6"
+  local readback_dir readback_archive readback_checksum expected_sha actual_sha metadata_sha header
+  readback_dir="$(mktemp -d "$workdir/readback.XXXXXX")"
+  readback_archive="$readback_dir/archive.age"
+  readback_checksum="$readback_dir/archive.age.sha256"
+
+  aws s3api get-object --endpoint-url "$endpoint" --bucket "$bucket" \
+    --key "$key" "$readback_archive" --output json >/dev/null
+  aws s3api get-object --endpoint-url "$endpoint" --bucket "$bucket" \
+    --key "${key}.sha256" "$readback_checksum" --output json >/dev/null
+  metadata_sha="$(aws s3api head-object --endpoint-url "$endpoint" --bucket "$bucket" \
+    --key "$key" --query 'Metadata.sha256' --output text)"
+
+  expected_sha="$(awk 'NR == 1 { print $1 }' "$checksum")"
+  actual_sha="$(sha256sum "$readback_archive" | cut -d' ' -f1)"
+  IFS= read -r header < "$readback_archive" || header=""
+  if [[ ! -s "$readback_archive" || ! -s "$readback_checksum" ||
+        ! "$expected_sha" =~ ^[0-9a-f]{64}$ ||
+        "$header" != 'age-encryption.org/v1' ||
+        "$actual_sha" != "$expected_sha" || "$metadata_sha" != "$expected_sha" ]] ||
+     ! cmp -s "$checksum" "$readback_checksum"; then
+    echo "::error::Download o checksum B2 non verificabile per $key"
+    return 1
+  fi
+}

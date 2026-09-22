@@ -84,6 +84,51 @@ if (cd "$manifest_test_dir" && sha256sum --check MANIFEST.sha256 >/dev/null 2>&1
   exit 1
 fi
 
+readback_test_dir="$(mktemp -d)"
+trap 'rm -rf "$manifest_test_dir" "$readback_test_dir"' EXIT
+printf 'age-encryption.org/v1\nexample encrypted bytes\n' > "$readback_test_dir/example.age"
+sha256sum "$readback_test_dir/example.age" > "$readback_test_dir/example.age.sha256"
+readback_expected_sha="$(sha256sum "$readback_test_dir/example.age" | cut -d' ' -f1)"
+mock_metadata_sha="$readback_expected_sha"
+mock_bad_download=false
+aws() {
+  case "$1 $2" in
+    's3api get-object')
+      local destination="${@: -3:1}" remote_key='' previous=''
+      for argument in "$@"; do
+        if [[ "$previous" == --key ]]; then remote_key="$argument"; fi
+        previous="$argument"
+      done
+      if [[ "$remote_key" == *.sha256 ]]; then
+        cp "$readback_test_dir/example.age.sha256" "$destination"
+      elif [[ "$mock_bad_download" == true ]]; then
+        printf 'age-encryption.org/v1\ntampered\n' > "$destination"
+      else
+        cp "$readback_test_dir/example.age" "$destination"
+      fi
+      printf '{}\n'
+      ;;
+    's3api head-object') printf '%s\n' "$mock_metadata_sha" ;;
+    *) return 1 ;;
+  esac
+}
+verify_b2_readback https://s3.eu-central-003.backblazeb2.com bucket daily/example.age \
+  "$readback_test_dir/example.age" "$readback_test_dir/example.age.sha256" "$readback_test_dir"
+mock_metadata_sha="$(printf '0%.0s' {1..64})"
+if verify_b2_readback https://s3.eu-central-003.backblazeb2.com bucket daily/example.age \
+  "$readback_test_dir/example.age" "$readback_test_dir/example.age.sha256" "$readback_test_dir" >/dev/null; then
+  echo 'Metadata SHA-256 errati accettati.' >&2
+  exit 1
+fi
+mock_metadata_sha="$readback_expected_sha"
+mock_bad_download=true
+if verify_b2_readback https://s3.eu-central-003.backblazeb2.com bucket daily/example.age \
+  "$readback_test_dir/example.age" "$readback_test_dir/example.age.sha256" "$readback_test_dir" >/dev/null; then
+  echo 'Download B2 alterato accettato.' >&2
+  exit 1
+fi
+unset -f aws
+
 skip_output="$(env -i PATH="$PATH" BACKUP_OFFSITE_ENABLED=false bash "$script_dir/offsite-backup.sh")"
 [[ "$skip_output" == *'Backup offsite disattivato'* ]] || exit 1
 if missing_output="$(env -i PATH="$PATH" BACKUP_OFFSITE_ENABLED=true bash "$script_dir/offsite-backup.sh" 2>&1)"; then

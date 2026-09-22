@@ -4,15 +4,15 @@
 - In produzione Supabase risultano 60 migrazioni, incluse `20260921170806_complete_club_dispute_lifecycles` e `20260921230019_align_dispute_decision_note_limit`. La griglia SQL ha dato 10/10 esiti positivi; le prove negative sotto ruolo `authenticated` e `anon` sono passate. Un Club ha il proprietario ricostruito; non ci sono contestazioni reali da migrare.
 - Frontend: 1601 test passati, typecheck e build passati, lint senza errori e con 12 warning preesistenti. Verificati 320, 375 e 1440 px sulla pagina Club pubblica senza overflow orizzontale.
 - PR #130 integrata su `origin/main` a `8e13f84`: CI su main tutta verde, Supabase Preview verde, Netlify Published `6ab21cb02f5df2000845a553` pronto sullo stesso commit. Con sessione owner/admin aperti i pannelli Club, la coda Club e le controversie (zero pratiche), senza errori browser. Nessuna decisione su pratica reale è stata simulata.
-- B2: `BACKUP_OFFSITE_ENABLED=true` dal 22 settembre 2026. Il run `35734887340` è fallito prima dell'upload per il manifest auto-incluso; fix integrato nella PR #133 a `302ccb9`, con CI verde. Il run `35735978523` ha superato il manifest ma si è fermato prima dell'upload: AWS CLI rifiuta `--output none`. Bucket B2 ancora vuoto; fix e test sul branch `codex/b2-aws-cli-output` da integrare prima della prossima riesecuzione. Le tre Lifecycle Rules sono ora salvate e rilette nel pannello B2.
+- B2: `BACKUP_OFFSITE_ENABLED=true`. Il run manuale `35736812313` sul commit `10d2f25` è riuscito il 22 settembre 2026 alle 13:58:48 UTC. In `daily/2026/09/` sono presenti `vinea-2026-09-22T13-58-35Z.tar.gz.age` (3,6 MB) e il relativo `.sha256` (124 byte); entrambi Governance fino al 22 ottobre 2026, metadata SHA-256 sull'archivio. Zero artifact GitHub; workflow giornaliero attivo. PR #133 e #134 hanno corretto due errori emersi nei run falliti `35734887340` e `35735978523`, entrambi senza upload. Le tre Lifecycle Rules sono salvate e rilette nel pannello. Rimane da provare il download S3 dell'oggetto cifrato e il confronto degli hash: modifica su `codex/b2-readback-verify`.
 - `PAYMENTS_ENABLED=false` e `AI_ENABLED=false` restano invariati. Il cutover della Fase 13 non è implicato.
 
 ## ACTIVE TASK
-Completare il primo backup B2 cifrato: correggere il manifest, integrare la PR con CI verde, rieseguire il workflow e verificare direttamente oggetti, checksum, Object Lock, retention e schedulazione.
+Completare la verifica end-to-end non distruttiva: integrare la lettura S3 dell'archivio cifrato e del checksum, rieseguire il workflow e documentare il risultato. Decrypt e restore isolato restano successivi con Enrico.
 
 ## NEXT STEPS
-1. Integrare il fix AWS CLI e rieseguire una volta il workflow sul nuovo `main`.
-2. Verificare gli oggetti cifrati, checksum e retention; le tre Lifecycle Rules sono state salvate come `daily/` 30+1, `weekly/` 84+1 e `monthly/` 366+1 e rilette nel pannello.
+1. Integrare il controllo di readback e rieseguire una volta il workflow sul nuovo `main`, verificando hash, metadata, dimensioni e Object Lock.
+2. La prova di decrypt/restore userà in seguito la chiave privata `age` offline in un ambiente isolato; non eseguirla ora.
 3. Pubblicare la pagina di stato su un hosting realmente indipendente.
 
 ## BLOCKERS / NOTES
