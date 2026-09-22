@@ -31,23 +31,20 @@ actual="$(sha256sum "$encrypted" | awk '{ print $1 }')"
 archive="$destination/vinea-backup.tar.gz"
 age --decrypt --identity "$identity" --output "$archive" "$encrypted"
 
-# Rifiuta percorsi assoluti o traversal prima di estrarre.
-if tar -tzf "$archive" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
-  echo "Archivio con percorsi non sicuri."
-  exit 1
+validator="$(dirname "${BASH_SOURCE[0]}")/offsite-archive-validate.py"
+archive_for_python="$archive"
+destination_for_python="$destination"
+if command -v cygpath >/dev/null 2>&1; then
+  archive_for_python="$(cygpath -w "$archive")"
+  destination_for_python="$(cygpath -w "$destination")"
+  validator="$(cygpath -w "$validator")"
 fi
+
+"${PYTHON_BIN:-python3}" "$validator" archive "$archive_for_python"
 tar -xzf "$archive" -C "$destination"
 
 backup="$destination/vinea-backup"
-[[ -f "$backup/MANIFEST.sha256" ]] || { echo "Manifest interno assente."; exit 1; }
-(
-  cd "$backup"
-  sha256sum --check MANIFEST.sha256
-)
-
-for file in database/roles.sql database/schema.sql database/data.sql storage/storage-manifest.json; do
-  [[ -f "$backup/$file" ]] || { echo "File richiesto assente: $file"; exit 1; }
-done
+"${PYTHON_BIN:-python3}" "$validator" extracted "$destination_for_python"
 
 echo "Backup verificato e preparato in: $backup"
 echo "Nessun database e stato modificato. Proseguire nel solo progetto isolato seguendo il runbook."
