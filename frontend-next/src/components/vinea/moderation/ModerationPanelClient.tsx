@@ -2,19 +2,10 @@
 
 // Fase 9a/9b - pannello di moderazione.
 //
-// Tre schede come in frontend/src/routes/admin.tsx:158-168 — coda segnalazioni,
-// controversie ordini, audit log. La scheda contestazioni non ha il selettore
-// d'ambito piattaforma/club del mock, perche l'ambito club non e esprimibile:
-// user_roles e (user_id, role) senza colonna d'ambito, e la decisione 7.1 ha
-// rinviato il moderatore di club.
-//
-// Il 9b aggiunge i comandi. Due differenze dichiarate rispetto al mock:
-//  * niente «Prendi in carico» — decisione 7.5, la coda e condivisa e la
-//    colonna di assegnazione non esiste nemmeno a database;
-//  * la motivazione e obbligatoria anche per il ripristino, che nel mock ne
-//    faceva a meno (frontend/src/routes/admin.tsx:486). A database
-//    audit_log.motivazione e NOT NULL con CHECK: l'eccezione del mock non e
-//    riproducibile, e non e una regressione ma un vincolo che il mock non aveva.
+// La superficie unisce coda segnalazioni, contestazioni, governance Club e
+// audit. Le contestazioni hanno presa in carico e decisione proprie; la coda
+// generale delle segnalazioni resta condivisa e mantiene le sue sette azioni.
+// Ogni motivazione richiesta dalla UI e verificata di nuovo dalle RPC.
 
 import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +47,7 @@ import {
 } from "@/components/vinea/moderation/AdminOperationsSearch";
 import { messaggioAzione } from "@/components/vinea/moderation/ListingModerationActions";
 import { IncidentNoticeAdmin } from "@/components/vinea/moderation/IncidentNoticeAdmin";
+import { AdminClubGovernance } from "@/components/vinea/clubs/ClubGovernancePanels";
 import {
   EMPTY_ADMIN_OVERVIEW,
   adminOperationsOverview,
@@ -489,18 +481,38 @@ const RigaSegnalazione = ({
 const contestazioneLavorabile = (riga: DisputeQueueRow) =>
   riga.stato === "aperta" || riga.stato === "in_valutazione";
 
+const etichettaEventoContestazione: Record<string, string> = {
+  aperta: "Contestazione aperta",
+  risposta_venditore: "Risposta del venditore ricevuta",
+  presa_in_carico: "Documentazione presa in carico",
+  risolta: "Contestazione chiusa",
+  revisione_iniziata: "Revisione Vinea iniziata",
+  nota_privata_aggiunta: "Nota amministrativa aggiunta",
+  decisione_registrata: "Decisione Vinea registrata",
+  decisione_corretta: "Decisione Vinea corretta",
+};
+
 const RigaContestazione = ({
   riga,
   inCorso,
   onRisolvi,
   onCompletaDocumentazione,
+  onPrendiInCarico,
+  onIniziaRevisione,
+  onNotaPrivata,
 }: {
   riga: DisputeQueueRow;
   inCorso: string | null;
-  onRisolvi: ((orderId: string, esito: EsitoContestazioneAdmin, nota: string) => Promise<void>) | null;
+  onRisolvi: ((orderId: string, esito: EsitoContestazioneAdmin, nota: string, motivoCorrezione?: string | null) => Promise<void>) | null;
   onCompletaDocumentazione: ((orderId: string) => Promise<void>) | null;
+  onPrendiInCarico: ((orderId: string) => Promise<void>) | null;
+  onIniziaRevisione: ((orderId: string) => Promise<void>) | null;
+  onNotaPrivata: ((orderId: string, nota: string) => Promise<void>) | null;
 }) => {
   const [nota, setNota] = useState("");
+  const [notaPrivata, setNotaPrivata] = useState("");
+  const [motivoCorrezione, setMotivoCorrezione] = useState("");
+  const [esito, setEsito] = useState<EsitoContestazioneAdmin>("favore_acquirente");
   const [errore, setErrore] = useState<string | null>(null);
   const [esitoLocale, setEsitoLocale] = useState<string | null>(null);
   const invioLocale = useRef(false);
@@ -510,6 +522,7 @@ const RigaContestazione = ({
   // rilettura e finita — cosi il pulsante non si riaccende prima dei dati.
   const occupato = inCorso !== null;
   const lavorabile = contestazioneLavorabile(riga);
+  const chiusa = riga.resolvedAt !== null;
 
   const esegui = async (esito: EsitoContestazioneAdmin) => {
     if (!onRisolvi || !pronta || occupato || invioLocale.current) return;
@@ -517,11 +530,12 @@ const RigaContestazione = ({
     setErrore(null);
     setEsitoLocale(null);
     try {
-      await onRisolvi(riga.orderId, esito, nota);
+      await onRisolvi(riga.orderId, esito, nota, chiusa ? motivoCorrezione : null);
       setNota("");
+      setMotivoCorrezione("");
       // Il controller ha gia riletto la coda: lo stato mostrato sopra e quello
       // vero. Qui resta solo la conferma che il comando e arrivato.
-      setEsitoLocale(esito === "risolta" ? "Contestazione risolta." : "Contestazione respinta.");
+      setEsitoLocale(chiusa ? "Decisione corretta con traccia storica." : "Decisione registrata.");
     } catch (e) {
       // La nota non si azzera: chi riprova non deve riscriverla. Il messaggio e
       // mediato, come per le azioni sull'annuncio.
@@ -541,6 +555,13 @@ const RigaContestazione = ({
     }
   };
 
+  const eseguiSemplice = async (action: (() => Promise<void>) | null, success: string) => {
+    if (!action || occupato) return;
+    setErrore(null);
+    try { await action(); setEsitoLocale(success); }
+    catch (e) { setErrore(messaggioAzione(e)); }
+  };
+
   return (
     <Card className="space-y-2 p-4" data-testid={`controversia-${riga.orderId}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -551,7 +572,7 @@ const RigaContestazione = ({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge>{riga.stato}</Badge>
+          <Badge>{riga.lifecycleStatus}</Badge>
           <Badge className="bg-muted text-muted-foreground">payout {riga.ordinePayoutStato}</Badge>
         </div>
       </div>
@@ -629,8 +650,39 @@ const RigaContestazione = ({
           <dt className="text-muted-foreground">Documentazione completa</dt>
           <dd>{riga.documentationCompleteAt ? data(riga.documentationCompleteAt) : "Da verificare"}</dd>
         </div>
+        <div>
+          <dt className="text-muted-foreground">Presa in carico</dt>
+          <dd>{riga.assignedToUsername ?? "Non assegnata"}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Revisione iniziata</dt>
+          <dd>{riga.reviewStartedAt ? data(riga.reviewStartedAt) : "No"}</dd>
+        </div>
       </dl>
-      {riga.esitoNota ? <p className="text-xs">Esito: {riga.esitoNota}</p> : null}
+      {riga.resolutionNote ? <p className="text-xs"><b>Decisione v{riga.resolutionVersion}:</b> {riga.resolutionNote}</p> : null}
+
+      <div className="space-y-2 rounded-lg border p-3">
+        <p className="text-xs font-semibold uppercase">Timeline completa</p>
+        {riga.timeline.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Nessun evento registrato.</p>
+        ) : (
+          <ol className="space-y-2">
+            {riga.timeline.map((item) => (
+              <li key={item.id} className="flex flex-col gap-0.5 text-xs sm:flex-row sm:items-center sm:justify-between">
+                <span>{etichettaEventoContestazione[item.eventKind] ?? item.eventKind.replaceAll("_", " ")} · {item.actorKind}</span>
+                <time dateTime={item.createdAt} className="text-muted-foreground">{data(item.createdAt)}</time>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+
+      {riga.adminNotes.length > 0 ? (
+        <div className="space-y-2 rounded-lg border border-dashed p-3">
+          <p className="text-xs font-semibold uppercase">Note amministrative private</p>
+          {riga.adminNotes.map((item) => <p key={item.id} className="text-xs"><b>{item.authorUsername ?? "Admin"}</b> · {data(item.createdAt)}<br />{item.note}</p>)}
+        </div>
+      ) : null}
 
       {esitoLocale ? (
         <p role="status" data-testid={`controversia-esito-${riga.orderId}`} className="text-xs">
@@ -647,8 +699,11 @@ const RigaContestazione = ({
         </p>
       ) : null}
 
-      {onRisolvi && lavorabile ? (
+      {onRisolvi && (lavorabile || chiusa) ? (
         <div className="space-y-2 border-t pt-3">
+          {!riga.assignedTo && onPrendiInCarico ? (
+            <Button variant="outline" size="sm" disabled={occupato} onClick={() => void eseguiSemplice(() => onPrendiInCarico(riga.orderId), "Contestazione presa in carico.")}>Prendi in carico</Button>
+          ) : null}
           {!riga.documentationCompleteAt && onCompletaDocumentazione ? (
             <Button
               variant="outline"
@@ -661,8 +716,30 @@ const RigaContestazione = ({
                 : "Segna documentazione completa"}
             </Button>
           ) : null}
+          {riga.documentationCompleteAt && !riga.reviewStartedAt && onIniziaRevisione ? (
+            <Button variant="outline" size="sm" disabled={occupato} onClick={() => void eseguiSemplice(() => onIniziaRevisione(riga.orderId), "Revisione iniziata.")}>Inizia revisione</Button>
+          ) : null}
+
+          {onNotaPrivata ? (
+            <div className="space-y-2 rounded-lg bg-muted/30 p-3">
+              <Label htmlFor={`controversia-nota-privata-${riga.orderId}`}>Nota amministrativa privata</Label>
+              <Textarea id={`controversia-nota-privata-${riga.orderId}`} value={notaPrivata} onChange={(event) => setNotaPrivata(event.target.value)} rows={2} disabled={occupato} />
+              <Button variant="outline" size="sm" disabled={occupato || notaPrivata.trim().length < 3} onClick={() => void eseguiSemplice(async () => { await onNotaPrivata(riga.orderId, notaPrivata); setNotaPrivata(""); }, "Nota privata registrata.")}>Aggiungi nota privata</Button>
+            </div>
+          ) : null}
+
+          {(!chiusa && riga.lifecycleStatus === "in_revisione") || chiusa ? (
+            <>
+          <Label htmlFor={`controversia-esito-scelta-${riga.orderId}`}>Esito</Label>
+          <select id={`controversia-esito-scelta-${riga.orderId}`} className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={esito} onChange={(event) => setEsito(event.target.value as EsitoContestazioneAdmin)} disabled={occupato}>
+            <option value="favore_acquirente">Favore acquirente</option>
+            <option value="favore_venditore">Favore venditore</option>
+            <option value="accordo">Accordo tra le parti</option>
+            <option value="respinta">Contestazione respinta</option>
+            <option value="cancellata">Contestazione cancellata</option>
+          </select>
           <Label htmlFor={`controversia-nota-${riga.orderId}`} className="text-xs uppercase">
-            Motivazione (obbligatoria)
+            Motivazione pubblica (obbligatoria)
           </Label>
           <Textarea
             id={`controversia-nota-${riga.orderId}`}
@@ -670,45 +747,17 @@ const RigaContestazione = ({
             rows={2}
             value={nota}
             onChange={(e) => setNota(e.target.value)}
-            placeholder="Perche stai chiudendo questa controversia?"
+            placeholder="Motiva la decisione per entrambe le parti"
             disabled={occupato}
           />
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid={`controversia-risolvi-${riga.orderId}`}
-              disabled={!pronta || occupato}
-              onClick={() => void esegui("risolta")}
-            >
-              {inCorso === `${riga.orderId}:risolta` ? "Risoluzione…" : "Risolvi"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid={`controversia-respingi-${riga.orderId}`}
-              disabled={!pronta || occupato}
-              onClick={() => void esegui("respinta")}
-            >
-              {inCorso === `${riga.orderId}:respinta` ? "Rifiuto…" : "Respingi"}
-            </Button>
-          </div>
-          {/*
-            Nessun terzo pulsante. `rimborsata` non e nella firma della porta
-            browser-admin: finche refund e provider restano spenti, disporre un
-            rimborso e una leva di back-office. Il testo lo dice invece di
-            lasciare un vuoto che sembra una dimenticanza.
-          */}
+          {chiusa ? <><Label htmlFor={`controversia-correzione-${riga.orderId}`}>Motivo della correzione</Label><Textarea id={`controversia-correzione-${riga.orderId}`} value={motivoCorrezione} onChange={(event) => setMotivoCorrezione(event.target.value)} rows={2} /></> : null}
+          <Button data-testid={`controversia-decidi-${riga.orderId}`} disabled={!pronta || occupato || (chiusa && motivoCorrezione.trim().length < 3)} onClick={() => void esegui(esito)}>{chiusa ? "Registra correzione" : "Registra decisione"}</Button>
           <p className="text-xs text-muted-foreground">
-            Il rimborso non si dispone da qui: resta al back-office finche i pagamenti sono spenti.
+            La decisione non esegue rimborsi, payout o altre movimentazioni economiche.
           </p>
+            </>
+          ) : <p className="text-xs text-muted-foreground">Completa la documentazione e avvia la revisione prima di decidere.</p>}
         </div>
-      ) : !lavorabile ? (
-        // Distinta dall'assenza di servizio: qui la porta c'e, ed e la pratica a
-        // essere finita.
-        <p className="text-xs text-muted-foreground" data-testid={`controversia-chiusa-${riga.orderId}`}>
-          Pratica chiusa: non ammette altre decisioni.
-        </p>
       ) : null}
     </Card>
   );
@@ -760,6 +809,9 @@ export const ModerationPanelClient = () => {
     transizioneAnnuncio,
     risolviControversia,
     completaDocumentazione,
+    prendiInCarico,
+    iniziaRevisione,
+    aggiungiNotaPrivata,
     inCorso,
   } = usePhase9Moderation({ moderatore });
 
@@ -961,6 +1013,9 @@ export const ModerationPanelClient = () => {
                 inCorso={inCorso}
                 onRisolvi={risolviControversia}
                 onCompletaDocumentazione={completaDocumentazione}
+                onPrendiInCarico={prendiInCarico}
+                onIniziaRevisione={iniziaRevisione}
+                onNotaPrivata={aggiungiNotaPrivata}
               />
             ))
           )}
@@ -997,6 +1052,7 @@ export const ModerationPanelClient = () => {
         </TabsContent>
 
         <TabsContent value="club" className="space-y-3">
+          <AdminClubGovernance />
           <AdminOperationsSearch
             scope="club"
             onFocusReports={focalizzaCoda}

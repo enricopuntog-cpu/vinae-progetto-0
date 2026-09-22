@@ -1,6 +1,6 @@
 # Stato decisioni operative, contestazioni e Club
 
-Aggiornato il 21 settembre 2026. Questo file è la lista persistente dei lavori
+Aggiornato il 22 settembre 2026. Questo file è la lista persistente dei lavori
 conclusi e dei residui che dipendono da account, persone o decisioni esterne.
 
 ## Completato nel repository
@@ -22,14 +22,27 @@ conclusi e dei residui che dipendono da account, persone o decisioni esterne.
 - lancio Club nella PR #128: viste pubbliche limitate ai Club approvati,
   proposta soggetta a revisione, ingresso aperto o su richiesta, uscita tramite
   RPC e pubblicazione consentita soltanto ai membri;
+- completamento governance Club: revisione amministrativa di proposte,
+  richieste e regolamenti; gestione di membri, moderatori e link esterni da
+  parte dei ruoli autorizzati; versioni del regolamento con precedente versione
+  valida fino all'approvazione; audit append-only;
+- completamento logico delle contestazioni: presa in carico, revisione,
+  note amministrative private, decisione motivata, correzione versionata e
+  timeline visibile alle parti senza includere le note private; nessuna RPC
+  di decisione modifica ordini, pagamenti o payout;
 - pagamenti, payout e funzioni AI lasciati spenti.
 
-## Verificato in produzione
+## Verificato in produzione e in locale
 
 - PR #126 integrata in `main` al commit `e11d0d4`; CI e deploy Netlify verdi;
 - PR #128 integrata in `main` al commit `c3e218b`; CI, preview e controlli locali
   verdi con 1582 test;
-- ledger Supabase a 58 migrazioni, inclusa `20260921111621_launch_clubs`;
+- ledger Supabase a 60 migrazioni, incluse le due migrazioni di completamento
+  `20260921170806` e `20260921230019`;
+- verifiche del completamento: 10/10 invarianti SQL passati e quattro
+  rifiuti comportamentali verificati in transazione per utente normale e anon;
+  1601 test frontend, typecheck e build passati; lint senza errori e con 12
+  warning preesistenti; pagina Club pubblica verificata a 320, 375 e 1440 px;
 - auto-rilascio dei nuovi ordini a 2 giorni, bucket `dispute-evidence` privato
   con limite 5 MiB e tutte le nuove tabelle/funzioni presenti;
 - zero incidenti attivi e zero utenti `emergency_delegate`;
@@ -44,6 +57,15 @@ conclusi e dei residui che dipendono da account, persone o decisioni esterne.
   nuova discussione senza effettuare scritture;
 - `payments-checkout` e `connect-onboarding` rispondono HTTP 503; le tre
   funzioni AI rispondono HTTP 503.
+
+Le nuove migrazioni sono applicate in produzione Supabase. La nuova UI è stata
+verificata localmente; non è ancora documentato un deploy Netlify del suo commit
+né uno smoke autenticato delle azioni amministrative.
+La PR #130 è aperta: i job applicativi e la Deploy Preview Netlify sono verdi.
+Il precedente errore di capacità Supabase Preview si è risolto con un nuovo reset:
+il ramo temporaneo ha registrato tutte le 60 migrazioni, lo stato è
+`FUNCTIONS_DEPLOYED`, il check GitHub è `SUCCESS` e la testa `6948263` è
+`CLEAN`. Prima dell'integrazione ricontrollare i controlli sulla testa finale.
 
 Gli advisor Supabase continuano a classificare come `SECURITY DEFINER` le viste
 strette e le RPC accessibili agli utenti autenticati, e come "RLS senza policy"
@@ -63,7 +85,7 @@ dei Club; non aprono accessi e non bloccano la beta chiusa.
 | Accessi del delegato | Bloccata esternamente | Concedere alla persona nominata accessi individuali e minimi a GitHub, Supabase, Netlify, DNS e backup; il ruolo applicativo da solo abilita soltanto il banner. |
 | Email di incidente | Bloccata da dati e procedura | Definire destinatari, base giuridica, modello approvato e responsabile invio tramite Resend; evitare broadcast per micro-interruzioni. |
 | RTO/RPO definitivo | Rinviata prima dei pagamenti | Riesaminare l'obiettivo temporaneo 24h/24h dopo la prima prova B2. |
-| Flussi Club amministrativi | Parziali | Il frontend utenti copre proposta, ingresso, uscita e discussioni. Restano UI di revisione proposte/richieste, gestione moderatori, versioni del regolamento e link esterni. |
+| Verifica autenticata delle nuove UI | Da completare dopo la pubblicazione | Confrontare il commit Published con `main` e provare con sessioni owner, moderatore e admin i nuovi pannelli; la QA visuale locale ha coperto la pagina pubblica. |
 | Contenuti iniziali Club | Bloccata editorialmente | In produzione resta il Club approvato `circolo-vinea`; creare altri Club soltanto con nomi, descrizioni e responsabili reali. |
 | Indici Club suggeriti dagli advisor | Monitoraggio beta | Riesaminare con query e volumi reali le chiavi esterne non coperte; aggiungere soltanto gli indici dimostrati utili. |
 | Supporto operativo | Bloccata esternamente | Definire persone e casella responsabile delle contestazioni prima dei pagamenti reali. |

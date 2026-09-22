@@ -23,6 +23,7 @@ import { ArrowLeft, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ClubDiscussioni } from "@/components/vinea/ClubDiscussioni";
+import { ClubManagementPanel } from "@/components/vinea/clubs/ClubGovernancePanels";
 import { ReportDialog } from "@/components/vinea/ReportDialog";
 import { ErrorState } from "@/components/vinea/States";
 import { formatInteger } from "@/lib/format";
@@ -171,6 +172,8 @@ export default function CommunityDetailPageClient({
       </section>
 
       {error && <ErrorState title="Operazione non riuscita" message={error} home={false} />}
+
+      <ClubManagementPanel slug={club.slug} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <Tabs defaultValue="discussioni">

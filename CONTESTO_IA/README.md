@@ -1,6 +1,6 @@
 # Router del contesto durevole Vinea
 
-Ultimo aggiornamento del router: **21 settembre 2026**.
+Ultimo aggiornamento del router: **22 settembre 2026**.
 
 Questa cartella conserva memoria strutturale e storia datata. Non è il bootstrap
 obbligatorio e non sostituisce le fonti vive.
@@ -22,9 +22,9 @@ Aprire soltanto ciò che serve al task:
 
 - [`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md) — dossier cronologico di misure e
   stati verificati; l'apertura è una fotografia del 9 agosto 2026, non lo stato
-  corrente. Le ultime voci sono del 18 settembre 2026: PR #119 e #120 merse,
-  ledger a 54 migrazioni, follow-up PR121 unito e verificato in produzione,
-  canali Realtime pubblici disabilitati e provati. Residui e checklist in
+  corrente. L'ultima voce è del 22 settembre 2026: completamento logico Club
+  e contestazioni, ledger a 60 migrazioni, verifiche di autorizzazione e limiti
+  della prova UI. Residui e checklist in
   `../docs/SECURITY_FOLLOWUP_PR120.md` e `../docs/PRELAUNCH_TASK_RECONCILIATION.md`.
 - La regola delle porte che fanno uscire denaro — riautenticazione recente
   dopo il ramo di replay — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`.
@@ -84,9 +84,9 @@ va riscritto come se la decisione precedente non fosse mai esistita.
   Il mailer di prova incorporato in Supabase e il suo `over_email_send_rate_limit`
   non sono più la strada in uso. La chiave vive nel progetto Supabase, non nel
   repository.
-- Ledger di produzione: **54 migrazioni verificate** al 19 settembre 2026,
-  in corrispondenza esatta con il repository; il restore isolato ha confermato
-  lo stesso conteggio, le policy, le funzioni e i dati delle 46 tabelle.
+- Ledger di produzione: **60 migrazioni verificate** al 22 settembre 2026.
+  Il restore isolato del 19 settembre aveva confermato le 54 migrazioni allora
+  presenti, le policy, le funzioni e i dati delle 46 tabelle di quel momento.
   L'elenco esatto è in [`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md).
   Un merge non prova che una nuova migrazione sia stata applicata, e un merge
   senza migrazioni può averne distribuite di altrui: rileggere sempre il ledger.
@@ -96,11 +96,11 @@ va riscritto come se la decisione precedente non fosse mai esistita.
   due invocazioni reali. `AI_ENABLED` e `PAYMENTS_ENABLED` restano `false`.
   Stato operativo in `../docs/PRELAUNCH_TASK_RECONCILIATION.md` e runbook in
   `../docs/CONTINUITY_AND_BACKUP_RUNBOOK.md`.
-- Decisioni operative del 21 settembre: fondamenta per backup B2 cifrato,
-  banner incidente/delegato, contestazioni con prove e risposta venditore e
-  governance Club sono in `../docs/OPERATIONAL_DECISIONS_STATUS.md`. I residui
-  che dipendono da account, persone o professionisti restano elencati li. Club,
-  pagamenti e IA restano chiusi dietro i rispettivi gate.
+- Decisioni operative aggiornate al 22 settembre: fondamenta per backup B2,
+  banner incidente/delegato, governance Club e contestazioni fino alla decisione
+  logica sono in `../docs/OPERATIONAL_DECISIONS_STATUS.md`. I residui esterni
+  restano elencati lì. Club pubblici approvati sono attivi; pagamenti e IA
+  restano chiusi dietro i rispettivi gate.
 - Rilascio Netlify: il sito è collegato al repository e costruisce una Deploy
   Preview per ogni PR, ma **un merge su `main` non ha ricostruito la produzione**
   — misurato il 15 settembre 2026 sui merge `aca86ac` e `344ad45`. Il motivo è

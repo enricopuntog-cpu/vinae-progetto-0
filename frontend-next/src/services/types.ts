@@ -1238,7 +1238,15 @@ export type TrackingEventRecord = {
 /** Rispecchia `public.dispute_stato`. */
 export type DisputeStato = "aperta" | "in_valutazione" | "rimborsata" | "risolta" | "respinta";
 export type DisputeSellerResponseKind = "accetta" | "contesta" | "propone_soluzione";
-export type DisputeEventKind = "aperta" | "risposta_venditore" | "presa_in_carico" | "risolta";
+export type DisputeLifecycleStatus =
+  | "attesa_venditore" | "risposta_venditore" | "documentazione_completa"
+  | "in_revisione" | "risolta_acquirente" | "risolta_venditore"
+  | "accordo" | "respinta" | "cancellata";
+export type DisputeResolutionKind =
+  | "favore_acquirente" | "favore_venditore" | "accordo" | "respinta" | "cancellata";
+export type DisputeEventKind =
+  | "aperta" | "risposta_venditore" | "presa_in_carico" | "risolta"
+  | "revisione_iniziata" | "decisione_registrata" | "decisione_corretta";
 export type DisputeActorKind = "compratore" | "venditore" | "admin" | "sistema";
 
 /**
@@ -1263,10 +1271,16 @@ export type DisputeRecord = {
   venditore_foto: string[];
   venditore_risposta_at: string | null;
   documentazione_completa_at: string | null;
+  lifecycle_status: DisputeLifecycleStatus;
+  review_started_at: string | null;
+  resolution_kind: DisputeResolutionKind | null;
+  resolution_note: string | null;
+  resolved_at: string | null;
+  resolution_version: number;
 };
 
 export type DisputeEventRecord = {
-  id: number;
+  id: number | string;
   dispute_id: string;
   actor_kind: DisputeActorKind;
   event_kind: DisputeEventKind;

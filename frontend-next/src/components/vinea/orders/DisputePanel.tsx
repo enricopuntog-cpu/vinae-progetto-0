@@ -9,16 +9,7 @@ import type {
   DisputeEventRecord,
   DisputeRecord,
   DisputeSellerResponseKind,
-  DisputeStato,
 } from "@/services/types";
-
-const ETICHETTE: Record<DisputeStato, string> = {
-  aperta: "Aperta",
-  in_valutazione: "In valutazione",
-  rimborsata: "Rimborsata",
-  risolta: "Risolta",
-  respinta: "Respinta",
-};
 
 const RISPOSTE: Array<{ value: DisputeSellerResponseKind; label: string }> = [
   { value: "accetta", label: "Accetto il problema" },
@@ -31,6 +22,9 @@ const EVENTI: Record<DisputeEventRecord["event_kind"], string> = {
   risposta_venditore: "Risposta del venditore ricevuta",
   presa_in_carico: "Documentazione presa in carico",
   risolta: "Contestazione chiusa",
+  revisione_iniziata: "Revisione Vinea iniziata",
+  decisione_registrata: "Decisione Vinea registrata",
+  decisione_corretta: "Decisione Vinea corretta con tracciamento",
 };
 
 function EvidenceGallery({ title, urls }: { title: string; urls: string[] }) {
@@ -74,7 +68,7 @@ export function DisputePanel({
   const [risposta, setRisposta] = useState("");
   const [foto, setFoto] = useState<File[]>([]);
   const [errore, setErrore] = useState<string | null>(null);
-  const chiusa = contestazione.chiusura_at !== null;
+  const chiusa = contestazione.resolved_at !== null || contestazione.chiusura_at !== null;
   const scaduta = Date.now() > Date.parse(contestazione.venditore_scadenza_at);
   const puoRispondere =
     ruolo === "venditore"
@@ -86,7 +80,7 @@ export function DisputePanel({
     <section className="rounded-2xl border border-red-500/30 bg-red-500/5 p-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-semibold text-red-700">
-          Contestazione · {ETICHETTE[contestazione.stato]}
+          Contestazione · {contestazione.lifecycle_status.replaceAll("_", " ")}
         </p>
         <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-700">
           {new Date(contestazione.apertura_at).toLocaleDateString("it-IT")}
@@ -169,15 +163,18 @@ export function DisputePanel({
       ) : null}
 
       {contestazione.esito_nota ? (
-        <p className="mt-3 text-xs text-muted-foreground">Esito: {contestazione.esito_nota}</p>
+        <div className="mt-3 rounded-xl border bg-card p-3 text-sm">
+          <p className="font-semibold">Decisione Vinea{contestazione.resolution_version > 1 ? ` · versione ${contestazione.resolution_version}` : ""}</p>
+          <p className="mt-1">{contestazione.resolution_note ?? contestazione.esito_nota}</p>
+        </div>
       ) : null}
 
       <p className="mt-4 border-t border-red-500/20 pt-3 text-xs text-muted-foreground">
-        {contestazione.stato === "rimborsata"
-          ? "Rimborso disposto. I fondi restano bloccati finché il fornitore non lo conferma."
-          : chiusa
-            ? "Pratica chiusa."
-            : "I fondi restano bloccati. Vinea mira normalmente a esaminare la contestazione entro 3 giorni lavorativi dalla ricezione della documentazione completa."}
+        {chiusa
+          ? "Pratica chiusa. La decisione descrive l'esito; eventuali operazioni economiche seguono un flusso separato."
+          : contestazione.lifecycle_status === "attesa_venditore"
+            ? `In attesa della risposta del venditore entro ${new Date(contestazione.venditore_scadenza_at).toLocaleString("it-IT")}.`
+            : "Vinea mira normalmente a esaminare il caso entro 3 giorni lavorativi dalla documentazione completa."}
       </p>
     </section>
   );

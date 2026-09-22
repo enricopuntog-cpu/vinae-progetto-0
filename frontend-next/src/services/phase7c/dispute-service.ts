@@ -14,6 +14,8 @@ const COLONNE_DISPUTE = [
   "esito_nota", "apertura_at", "chiusura_at", "venditore_scadenza_at",
   "venditore_risposta_tipo", "venditore_risposta", "venditore_foto",
   "venditore_risposta_at", "documentazione_completa_at",
+  "lifecycle_status", "review_started_at", "resolution_kind",
+  "resolution_note", "resolved_at", "resolution_version",
 ].join(",");
 const COLONNE_EVENTI = "id,dispute_id,actor_kind,event_kind,detail,created_at";
 
@@ -69,9 +71,24 @@ export const createDisputeService = (client: SupabaseClient | null): DisputeServ
       .eq("dispute_id", disputeId)
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });
-    return error
-      ? serviceError("dispute_events.select", error)
-      : { ok: true, data: (data ?? []) as DisputeEventRecord[] };
+    if (error) return serviceError("dispute_events.select", error);
+    const caseEvents = await client
+      .from("dispute_case_timeline")
+      .select("id,dispute_id,event_kind,detail,created_at")
+      .eq("dispute_id", disputeId)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+    if (caseEvents.error) return serviceError("dispute_case_timeline.select", caseEvents.error);
+    const extra = (caseEvents.data ?? []).map((row) => ({
+      ...(row as Omit<DisputeEventRecord, "id" | "actor_kind"> & { id: number }),
+      id: `case-${row.id}`,
+      actor_kind: "admin" as const,
+    }));
+    return {
+      ok: true,
+      data: ([...(data ?? []) as DisputeEventRecord[], ...extra]
+        .sort((a, b) => a.created_at.localeCompare(b.created_at))),
+    };
   },
 
   caricaProva: async (orderId, file) => {
