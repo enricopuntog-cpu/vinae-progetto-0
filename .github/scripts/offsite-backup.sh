@@ -18,6 +18,17 @@ for name in "${required[@]}"; do
   fi
 done
 
+source "$(dirname "${BASH_SOURCE[0]}")/offsite-backup-config.sh"
+if ! b2_region="$(b2_region_from_endpoint "$B2_S3_ENDPOINT")"; then
+  echo "::error::B2_S3_ENDPOINT non valido: usare https://s3.<regione>.backblazeb2.com senza porta, percorso o parametri."
+  exit 1
+fi
+
+export AWS_ACCESS_KEY_ID="$B2_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="$B2_APPLICATION_KEY"
+export AWS_REGION="$b2_region"
+export AWS_DEFAULT_REGION="$b2_region"
+
 workdir="$(mktemp -d)"
 cleanup() {
   find "$workdir" -type f -exec shred -u {} + 2>/dev/null || true
@@ -54,10 +65,6 @@ age --recipient "$BACKUP_AGE_RECIPIENT" --output "$encrypted" "$archive"
 sha256sum "$encrypted" > "${encrypted}.sha256"
 shred -u "$archive"
 
-export AWS_ACCESS_KEY_ID="$B2_KEY_ID"
-export AWS_SECRET_ACCESS_KEY="$B2_APPLICATION_KEY"
-export AWS_DEFAULT_REGION="eu-central-1"
-
 upload_copy() {
   local tier="$1"
   local days="$2"
@@ -72,7 +79,10 @@ upload_copy() {
     --body "$encrypted" \
     --object-lock-mode GOVERNANCE \
     --object-lock-retain-until-date "$retain_until" \
-    --metadata "sha256=$(sha256sum "$encrypted" | cut -d' ' -f1),source=supabase"
+    --metadata "sha256=$(sha256sum "$encrypted" | cut -d' ' -f1),source=supabase" \
+    --output none
+
+  verify_b2_retention "$B2_S3_ENDPOINT" "$B2_BUCKET" "$key" "$retain_until"
 
   aws s3api put-object \
     --endpoint-url "$B2_S3_ENDPOINT" \
@@ -80,14 +90,17 @@ upload_copy() {
     --key "${key}.sha256" \
     --body "${encrypted}.sha256" \
     --object-lock-mode GOVERNANCE \
-    --object-lock-retain-until-date "$retain_until"
+    --object-lock-retain-until-date "$retain_until" \
+    --output none
+
+  verify_b2_retention "$B2_S3_ENDPOINT" "$B2_BUCKET" "${key}.sha256" "$retain_until"
 }
 
-# 30 giornalieri, 12 settimanali e 12 mensili. Le copie settimanali/mensili
-# hanno prefissi e retention distinti, cosi la lifecycle B2 puo eliminarle
-# senza tentare di modificare oggetti ancora protetti da Object Lock.
-upload_copy daily 30
-if [[ "$(date -u +%u)" == "7" ]]; then upload_copy weekly 84; fi
-if [[ "$(date -u +%d)" == "01" ]]; then upload_copy monthly 366; fi
+# Object Lock protegge le versioni; Lifecycle Rules del bucket le eliminano
+# solo dopo la scadenza. Entrambi gli oggetti vengono verificati in lettura.
+tiers="$(backup_tiers_for_utc_date "$(date -u +%F)")"
+while IFS= read -r tier; do
+  upload_copy "$tier" "$(backup_retention_days "$tier")"
+done <<< "$tiers"
 
 echo "Backup cifrato caricato su B2 con Object Lock."

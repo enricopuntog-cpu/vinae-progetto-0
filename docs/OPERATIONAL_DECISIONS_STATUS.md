@@ -9,8 +9,9 @@ conclusi e dei residui che dipendono da account, persone o decisioni esterne.
   `admin` o `emergency_delegate`;
 - artefatto statico `status-page/`, pronto per un hosting indipendente;
 - workflow giornaliero per backup cifrato Supabase database/Auth e Storage su
-  Backblaze B2, con SHA-256, Object Lock e retention 30 giornalieri, 12
-  settimanali, 12 mensili;
+  Backblaze B2, con SHA-256, Object Lock e finestre 30/84/366 giorni per le
+  copie giornaliere/settimanali/mensili; il conteggio esatto dipende dalle
+  Lifecycle Rules e dalla loro corsa quotidiana;
 - verifica e preparazione sicura di un archivio offsite per restore isolato;
 - contestazioni entro 48 ore dalla consegna, motivi oggettivi, prove fotografiche
   private ricodificate senza EXIF, risposta del venditore entro 48 ore, timeline
@@ -61,11 +62,11 @@ conclusi e dei residui che dipendono da account, persone o decisioni esterne.
 Le nuove migrazioni sono applicate in produzione Supabase. La nuova UI è stata
 verificata localmente; non è ancora documentato un deploy Netlify del suo commit
 né uno smoke autenticato delle azioni amministrative.
-La PR #130 è aperta: i job applicativi e la Deploy Preview Netlify sono verdi.
-Il precedente errore di capacità Supabase Preview si è risolto con un nuovo reset:
-il ramo temporaneo ha registrato tutte le 60 migrazioni, lo stato è
-`FUNCTIONS_DEPLOYED`, il check GitHub è `SUCCESS` e la testa `6948263` è
-`CLEAN`. Prima dell'integrazione ricontrollare i controlli sulla testa finale.
+La PR #130 è integrata al commit `8e13f84`; CI su `main` verde, Supabase
+Preview verde e Netlify Published sul medesimo commit. In sessione autenticata
+owner/admin si aprono i pannelli Club e le code amministrative senza errori
+browser. Le controversie reali sono zero: la decisione su una pratica non è
+stata provata con dati persistenti.
 
 Gli advisor Supabase continuano a classificare come `SECURITY DEFINER` le viste
 strette e le RPC accessibili agli utenti autenticati, e come "RLS senza policy"
@@ -79,13 +80,13 @@ dei Club; non aprono accessi e non bloccano la beta chiusa.
 
 | Attività | Stato | Prerequisito / prossima azione |
 | --- | --- | --- |
-| Attivare backup B2 | Bloccata esternamente | Creare bucket EU Central con Object Lock, chiave limitata, recipient `age`, variabili e secret GitHub; poi prima esecuzione e verifica oggetti. |
+| Attivare backup B2 | Gate spento | Variabili e nomi dei secret GitHub presenti. Verificare bucket, Object Lock, capability, Lifecycle Rules e chiave privata `age` come nel runbook; poi primo backup e restore isolato. |
 | Pagina di stato indipendente | Bloccata esternamente | Scegliere account/progetto e dominio separati; distribuire `status-page/`, poi inserire l'URL HTTPS nel banner. |
 | Delegato di emergenza | Bloccata esternamente | Nominare una persona, abilitarle MFA e assegnare `emergency_delegate`; provare accesso a `/continuita`. |
 | Accessi del delegato | Bloccata esternamente | Concedere alla persona nominata accessi individuali e minimi a GitHub, Supabase, Netlify, DNS e backup; il ruolo applicativo da solo abilita soltanto il banner. |
 | Email di incidente | Bloccata da dati e procedura | Definire destinatari, base giuridica, modello approvato e responsabile invio tramite Resend; evitare broadcast per micro-interruzioni. |
 | RTO/RPO definitivo | Rinviata prima dei pagamenti | Riesaminare l'obiettivo temporaneo 24h/24h dopo la prima prova B2. |
-| Verifica autenticata delle nuove UI | Da completare dopo la pubblicazione | Confrontare il commit Published con `main` e provare con sessioni owner, moderatore e admin i nuovi pannelli; la QA visuale locale ha coperto la pagina pubblica. |
+| Verifica autenticata delle nuove UI | Parziale | Commit Published e pannelli owner/admin verificati; restano il ruolo moderatore distinto e il percorso decisionale con una pratica reale, senza fixture persistenti indesiderate. |
 | Contenuti iniziali Club | Bloccata editorialmente | In produzione resta il Club approvato `circolo-vinea`; creare altri Club soltanto con nomi, descrizioni e responsabili reali. |
 | Indici Club suggeriti dagli advisor | Monitoraggio beta | Riesaminare con query e volumi reali le chiavi esterne non coperte; aggiungere soltanto gli indici dimostrati utili. |
 | Supporto operativo | Bloccata esternamente | Definire persone e casella responsabile delle contestazioni prima dei pagamenti reali. |

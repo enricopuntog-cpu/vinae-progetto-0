@@ -1,6 +1,7 @@
 # Continuità operativa e custodia backup
 
-Stato iniziale: 19 settembre 2026. Questo runbook copre la beta Vinea e non
+Stato iniziale: 19 settembre 2026; preflight B2 aggiornato il 22 settembre.
+Questo runbook copre la beta Vinea e non
 sostituisce gli accordi con fornitori, commercialista o consulenti legali.
 
 ## Obiettivi e responsabilità
@@ -37,9 +38,11 @@ Supabase, Netlify, DNS e backup necessari alle responsabilita approvate.
    client-side `age`, Object Lock in modalita Governance e credenziali limitate
    al solo bucket. Chiave privata, password e credenziali B2 non vanno nel
    repository o nel manifest.
-5. Il workflow `Continuity - encrypted offsite backup` esegue ogni giorno
-   export separati di ruoli, schema, dati e oggetti Storage, verifica SHA-256,
-   cifra e conserva 30 giornalieri, 12 settimanali e 12 mensili.
+5. Il workflow `Continuity - encrypted offsite backup`, quando attivato,
+   esegue export separati di ruoli, schema, dati e oggetti Storage, verifica
+   SHA-256, cifra e carica copie daily, weekly (domenica UTC) e monthly
+   (primo giorno UTC) con Object Lock rispettivamente per 30, 84 e 366 giorni.
+   Le Lifecycle Rules sotto sono necessarie per eliminarle in seguito.
 6. L'automazione fallisce chiusa: finche `BACKUP_OFFSITE_ENABLED` non vale
    esattamente `true`, il job non parte.
 
@@ -64,6 +67,60 @@ Con `BACKUP_OFFSITE_ENABLED=false`, eseguire prima il workflow manuale per
 verificare che resti saltato. Poi impostare `true`, eseguirlo una volta e
 controllare in B2 oggetto cifrato, checksum, Object Lock e data di retention.
 La chiave privata `age` resta offline e separata dall'account GitHub.
+
+### Configurazione B2 prima del primo backup
+
+L'endpoint deve avere esattamente la forma
+`https://s3.<regione>.backblazeb2.com`, senza porta, percorso o query. Lo script
+deriva la regione AWS CLI dall'host e rifiuta formati diversi prima degli export.
+Per l'endpoint configurato `https://s3.eu-central-003.backblazeb2.com`, la
+regione di firma è `eu-central-003`, non `eu-central-1`. Controllare nel pannello
+B2 che l'endpoint indicato dal bucket `vineawineclub` coincida e che il bucket
+sia **privato**, in EU Central, con **Object Lock abilitato**. Non impostare una
+retention predefinita più breve: ogni oggetto `.age` e `.sha256` porta la propria
+retention Governance. Lo script legge la retention dopo ogni upload e fallisce
+se il mode non è Governance o la data è inferiore a quella richiesta.
+
+La chiave per il workflow deve essere una **application key non master**, limitata
+al bucket. Per il caricamento e la lettura di verifica richiede `writeFiles`,
+`writeFileRetentions`, `readFiles` e `readFileRetentions`; per la compatibilità
+S3 con una chiave limitata al bucket verificare anche `listAllBucketNames`.
+`listFiles` aiuta a controllare le copie; `readBucketRetentions` permette di
+leggere la configurazione Object Lock. Non concedere `bypassGovernance`,
+`deleteFiles` o permessi di modifica dei bucket alla chiave del workflow.
+Verificare le capability effettive della chiave nel pannello B2; la sola
+presenza dei nomi dei secret in GitHub non le dimostra.
+
+In **Buckets → Lifecycle Settings → Use custom lifecycle rules** configurare
+tre regole non sovrapposte, sia per gli archivi `.age` sia per i `.sha256`:
+
+| Prefisso File Path | Days Till Hide / `daysFromUploadingToHiding` | Days Till Delete / `daysFromHidingToDeleting` | Object Lock minimo |
+| --- | ---: | ---: | ---: |
+| `daily/` | 30 | 1 | 30 giorni |
+| `weekly/` | 84 | 1 | 84 giorni |
+| `monthly/` | 366 | 1 | 366 giorni |
+
+Non lasciare una regola globale o sovrapposta con tempi più brevi: B2 applica
+il valore minore alle regole che corrispondono allo stesso oggetto. Object Lock
+impedisce la cancellazione di versioni ancora protette; nascondere non equivale
+a eliminare e una regola di sola cancellazione delle versioni precedenti non
+elimina mai la versione corrente. Le regole girano una volta al giorno, perciò
+30/84/366 sono finestre minime e il numero di copie visibili è **circa**
+30 giornaliere, 12 settimanali e 12 mensili, non un conteggio esatto garantito.
+La copia mensile usa 366 giorni, non 12 mesi di calendario. Salvare e rileggere
+le tre regole nel pannello prima di attivare il gate.
+
+Riferimenti del provider: [regioni e AWS CLI](https://www.backblaze.com/docs/cloud-storage-use-the-aws-cli-with-backblaze-b2),
+[Object Lock S3](https://www.backblaze.com/docs/cloud-storage-enable-object-lock-with-the-s3-compatible-api),
+[capability delle application key](https://www.backblaze.com/docs/cloud-storage-s3-compatible-app-keys),
+[Lifecycle Rules e interazione con Object Lock](https://www.backblaze.com/docs/cloud-storage-lifecycle-rules).
+
+Le cinque repository variables B2/Supabase e i quattro nomi di secret
+richiesti sono presenti in GitHub al 22 settembre 2026; i secret non sono
+stati letti. `BACKUP_OFFSITE_ENABLED` risulta `false`. Il bucket, le sue regole,
+le capability della key e la disponibilità della chiave privata `age` non sono
+ancora verificati con un backup reale. In questo lavoro non è stato caricato
+alcun oggetto in B2.
 
 ## Ripristino da B2
 
