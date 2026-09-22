@@ -51,11 +51,7 @@ npx --yes supabase@2.117.0 db dump --db-url "$SUPABASE_DB_URL" \
 echo "Esporto gli oggetti Supabase Storage."
 STORAGE_BACKUP_DIR="$backup_dir/storage" node .github/scripts/export-supabase-storage.mjs
 
-(
-  cd "$backup_dir"
-  find . -type f -print0 | sort -z | xargs -0 sha256sum > MANIFEST.sha256
-  sha256sum --check MANIFEST.sha256
-)
+write_backup_manifest "$backup_dir"
 
 stamp="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
 archive="$workdir/vinea-${stamp}.tar.gz"

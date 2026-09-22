@@ -32,6 +32,15 @@ backup_tiers_for_utc_date() {
   fi
 }
 
+write_backup_manifest() {
+  local backup_dir="$1"
+  (
+    cd "$backup_dir"
+    find . -type f ! -path './MANIFEST.sha256' -print0 | sort -z | xargs -0 sha256sum > MANIFEST.sha256
+    sha256sum --check MANIFEST.sha256
+  )
+}
+
 verify_b2_retention() {
   local endpoint="$1" bucket="$2" key="$3" expected="$4"
   local actual mode until actual_epoch expected_epoch

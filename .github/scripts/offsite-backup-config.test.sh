@@ -61,6 +61,22 @@ for retention_response in \
 done
 unset -f aws
 
+manifest_test_dir="$(mktemp -d)"
+trap 'rm -rf "$manifest_test_dir"' EXIT
+mkdir -p "$manifest_test_dir/database"
+printf 'example data\n' > "$manifest_test_dir/database/data.sql"
+write_backup_manifest "$manifest_test_dir"
+assert_equal "$(wc -l < "$manifest_test_dir/MANIFEST.sha256" | tr -d ' ')" 1
+if grep -q 'MANIFEST.sha256' "$manifest_test_dir/MANIFEST.sha256"; then
+  echo 'Il manifest include se stesso.' >&2
+  exit 1
+fi
+printf 'changed data\n' > "$manifest_test_dir/database/data.sql"
+if (cd "$manifest_test_dir" && sha256sum --check MANIFEST.sha256 >/dev/null 2>&1); then
+  echo 'Il manifest non rileva la modifica ai dati.' >&2
+  exit 1
+fi
+
 skip_output="$(env -i PATH="$PATH" BACKUP_OFFSITE_ENABLED=false bash "$script_dir/offsite-backup.sh")"
 [[ "$skip_output" == *'Backup offsite disattivato'* ]] || exit 1
 if missing_output="$(env -i PATH="$PATH" BACKUP_OFFSITE_ENABLED=true bash "$script_dir/offsite-backup.sh" 2>&1)"; then
