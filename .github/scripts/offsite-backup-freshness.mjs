@@ -335,8 +335,37 @@ export const signatureOf = (findings) => [...new Set(findings.map((f) => f.categ
 
 const findingsText = (findings) => findings.map((f) => `- **${f.category}**: ${f.message}`).join("\n");
 
+// Login GitHub: alfanumerici e trattini singoli interni, al massimo 39 caratteri.
+const GITHUB_LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+export const MAX_EXTRA_MENTIONS = 3;
+
+/**
+ * Destinatari dell'allarme: sempre l'owner del repository, piu i login GitHub
+ * della variabile di repository BACKUP_ALERT_EXTRA_MENTIONS (per esempio il
+ * delegato di emergenza, dopo la nomina). Vuota o assente: solo l'owner.
+ * Le voci non valide non sono mai menzionate ne ripetute nei log (potrebbero
+ * essere email): diventano un solo CHECK_ERROR con il conteggio.
+ */
+export const alertRecipients = (owner, raw = "") => {
+  const logins = [owner];
+  let rejected = 0;
+  for (const token of String(raw ?? "").split(/[\s,]+/).filter(Boolean)) {
+    const login = token.startsWith("@") ? token.slice(1) : token;
+    if (!GITHUB_LOGIN.test(login)) {
+      rejected += 1;
+    } else if (!logins.some((known) => known.toLowerCase() === login.toLowerCase())) {
+      logins.push(login);
+    }
+  }
+  if (logins.length - 1 > MAX_EXTRA_MENTIONS) {
+    rejected += logins.length - 1 - MAX_EXTRA_MENTIONS;
+    logins.length = 1 + MAX_EXTRA_MENTIONS;
+  }
+  return { logins, rejected };
+};
+
 /** Opens, updates or closes the single alert issue; comments only when the categories change. */
-export const syncAlertIssue = async ({ github, findings, owner, runUrl, drill, summary }) => {
+export const syncAlertIssue = async ({ github, findings, owner, mentions = [owner], runUrl, drill, summary }) => {
   const open = (await github.openAlerts()).filter((issue) => !issue.pull_request);
   const current = open[0];
   if (findings.length === 0) {
@@ -348,7 +377,7 @@ export const syncAlertIssue = async ({ github, findings, owner, runUrl, drill, s
   const signature = signatureOf(findings);
   const body = [
     `<!-- backup-freshness:${signature} -->`,
-    `@${owner} il controllo di freschezza del backup offsite ha rilevato:`,
+    `${mentions.map((login) => `@${login}`).join(" ")} il controllo di freschezza del backup offsite ha rilevato:`,
     "",
     findingsText(findings),
     "",
@@ -416,6 +445,13 @@ export const runFreshnessWatch = async ({
     findings.push(finding(CATEGORIES.CHECK_ERROR, `Run GitHub non verificabili: ${error.message}`));
   }
 
+  const owner = env.GITHUB_REPOSITORY_OWNER ?? String(env.GITHUB_REPOSITORY ?? "").split("/")[0];
+  const recipients = alertRecipients(owner, env.BACKUP_ALERT_EXTRA_MENTIONS);
+  if (recipients.rejected > 0) {
+    findings.push(finding(CATEGORIES.CHECK_ERROR,
+      `BACKUP_ALERT_EXTRA_MENTIONS: ${recipients.rejected} voci scartate (login GitHub non valido o oltre ${MAX_EXTRA_MENTIONS}).`));
+  }
+
   // Il repository e pubblico: i messaggi finiscono nei log e nell'issue.
   for (const f of findings) f.message = redact(f.message);
   say(`[backup-freshness] ${summary} Soglia ${hours(staleAfterMs)} h.`);
@@ -427,7 +463,8 @@ export const runFreshnessWatch = async ({
       const outcome = await syncAlertIssue({
         github,
         findings,
-        owner: env.GITHUB_REPOSITORY_OWNER ?? env.GITHUB_REPOSITORY.split("/")[0],
+        owner,
+        mentions: recipients.logins,
         runUrl,
         drill,
         summary,

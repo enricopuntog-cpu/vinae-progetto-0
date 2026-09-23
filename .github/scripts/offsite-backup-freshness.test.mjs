@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import test from "node:test";
 import {
   ALERT_LABEL,
+  MAX_EXTRA_MENTIONS,
+  alertRecipients,
   CATEGORIES,
   archiveStamp,
   backupSets,
@@ -383,4 +385,53 @@ test("chiavi: timestamp, prefissi mensili e raggruppamento", () => {
   assert.equal(sets.length, 2);
   assert.ok(sets[0].archive && sets[0].sidecar);
   assert.ok(sets[1].archive && !sets[1].sidecar);
+});
+
+test("D: destinatari dell'allarme — solo owner di default, extra validati", () => {
+  assert.deepEqual(alertRecipients("owner", undefined), { logins: ["owner"], rejected: 0 });
+  assert.deepEqual(alertRecipients("owner", ""), { logins: ["owner"], rejected: 0 });
+  assert.deepEqual(alertRecipients("owner", " @Delegata-1, owner OWNER\naltro "), {
+    logins: ["owner", "Delegata-1", "altro"],
+    rejected: 0,
+  });
+  const bad = alertRecipients("owner", "persona@example.com, -x, a--b, ok");
+  assert.deepEqual(bad.logins, ["owner", "ok"]);
+  assert.equal(bad.rejected, 3);
+  const many = alertRecipients("owner", "a b c d e");
+  assert.deepEqual(many.logins, ["owner", "a", "b", "c"]);
+  assert.equal(many.rejected, 2);
+  assert.equal(MAX_EXTRA_MENTIONS, 3);
+});
+
+test("D: il delegato configurato e menzionato nell'issue insieme all'owner", async () => {
+  const r = await watch({
+    objects: backupObjects(hoursAgo(21)),
+    github: fakeGitHub({ runs: [run({ created_at: iso(NOW - 8 * HOUR) })] }),
+    env: { ...ENV, BACKUP_ALERT_EXTRA_MENTIONS: "delegato-emergenza" },
+  });
+  assert.deepEqual(r.categories, [CATEGORIES.STALE]);
+  const [create] = r.github.actions.filter((a) => a[0] === "create");
+  assert.match(create[1].body, /^<!-- backup-freshness:BACKUP_STALE -->\n@owner @delegato-emergenza il controllo/);
+});
+
+test("D: senza variabile l'issue menziona soltanto l'owner", async () => {
+  const r = await watch({
+    objects: backupObjects(hoursAgo(21)),
+    github: fakeGitHub({ runs: [run({ created_at: iso(NOW - 8 * HOUR) })] }),
+  });
+  const [create] = r.github.actions.filter((a) => a[0] === "create");
+  assert.match(create[1].body, /\n@owner il controllo/);
+});
+
+test("D: voce non valida → CHECK_ERROR senza ripeterne il valore", async () => {
+  const r = await watch({
+    objects: backupObjects(hoursAgo(6)),
+    env: { ...ENV, BACKUP_ALERT_EXTRA_MENTIONS: "persona@example.com" },
+  });
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.categories, [CATEGORIES.CHECK_ERROR]);
+  assert.doesNotMatch(r.log, /persona@example\.com/);
+  const [create] = r.github.actions.filter((a) => a[0] === "create");
+  assert.doesNotMatch(create[1].body, /persona@example\.com/);
+  assert.match(create[1].body, /\n@owner il controllo/);
 });
