@@ -3822,3 +3822,33 @@ Costi aggiuntivi zero (repository pubblico, pochi MB in piu su B2).
   checklist di riapertura consolidata, ora unica fonte anche per il runbook).
 - Nessun delegato nominato o invitato, nessun account o accesso creato;
   produzione invariata salvo i normali deploy del merge.
+
+## 23 settembre 2026 — MFA del delegato e protezione di main (PR #152)
+
+- Gap confermato: `incident_notice_set` controllava solo il ruolo; un
+  `emergency_delegate` con sola password (sessione `aal1`) pubblicava il
+  banner. Migrazione `20260923200000_incident_notice_delegate_aal2.sql`: il
+  delegato senza `aal2` riceve `42501` con hint `aal2_required` prima di
+  qualunque scrittura; admin invariato.
+- Prove su stack locale separato (project id temporaneo, porte 553xx, 62
+  migrazioni): griglia 12h 21/21; prova REST `12h_delegate_mfa_e2e.mjs`
+  13/13 con token GoTrue reali (enrollment TOTP con QR/secret, challenge,
+  verify, publish/edit/withdraw in `aal2`, rifiuto in `aal1` anche in una
+  nuova sessione con fattore già verificato, codice errato 422, utente normale
+  `aal2` 403 senza hint, anon 401); audit del delegato `3 1`; residui zero.
+  Controllo prima/dopo con il corpo precedente: griglia controllo 19 rosso,
+  REST 10/13. Percorso UI completo nel browser sullo stesso stack.
+- Configurazione: `[auth.mfa.totp]` abilitato in `supabase/config.toml` per
+  stack locale, gate CI e Preview. Il deploy in produzione ignora la config
+  Auth del file; sul progetto ospitato TOTP è attivo di default ma non è
+  leggibile dalle API pubbliche: lo prova il primo enrollment reale.
+- GitHub: ruleset `main-protection` id 23894067 attivo; `.github/CODEOWNERS`
+  senza errori; environment `production-backup` e `production-payouts` creati
+  con branch policy `main` e collegati ai tre workflow con secret. Audit:
+  unico collaboratore il titolare, permessi di default dei workflow `read`,
+  Actions non approva PR, nessun `pull_request_target`.
+- Spostamento dei valori dei secret negli environment non eseguito: il push
+  del workflow usa e getta che li avrebbe sigillati nel runner è stato fermato
+  dal classificatore dei permessi dell'agente (scrittura nel secret store) e
+  attende l'autorizzazione esplicita di Enrico. Environment ancora vuoti; i sei
+  secret restano a livello di repository.

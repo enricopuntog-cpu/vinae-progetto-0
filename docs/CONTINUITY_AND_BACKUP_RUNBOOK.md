@@ -50,7 +50,9 @@ Il ruolo applicativo `emergency_delegate` abilita soltanto il pannello del
 banner in `/continuita`. Al momento della nomina devono essere concessi alla
 persona, uno per uno e con privilegi minimi, gli accessi operativi descritti
 nella matrice, dopo i prerequisiti che vi sono elencati (protezione di `main`
-e secret in un Environment GitHub, decisione sulla chiave `age`).
+e CODEOWNERS attivi dal 23 settembre 2026; valori dei secret da spostare negli
+environment; scelta fra i modelli di disaster recovery A e B). Dallo stesso
+giorno il pannello accetta il delegato solo con una sessione MFA `aal2`.
 
 ## Copie e integrità
 
@@ -94,6 +96,15 @@ Lock abilitato e una application key limitata al bucket. Configurare in GitHub:
 | Secret | `SUPABASE_SERVICE_ROLE_KEY` |
 | Secret | `B2_KEY_ID` |
 | Secret | `B2_APPLICATION_KEY` |
+
+Dal 23 settembre 2026 i job di backup e freshness watch dichiarano
+`environment: production-backup` (*deployment branches*: solo `main`). I
+valori dei quattro secret sono ancora a livello di repository, da cui un job
+con environment li riceve finché l'environment non ne ha di propri; il loro
+spostamento nell'environment e la cancellazione a livello di repository sono
+il passo aperto nella
+[matrice del delegato](EMERGENCY_DELEGATE_ACCESS_MATRIX.md#prerequisiti-da-decidere-prima-della-concessione),
+da chiudere con un dispatch di prova di backup e freshness watch.
 
 Il gate è `true` dal 22 settembre 2026. Il workflow è `active`; dal 23
 settembre 2026 la schedule è `17 2,14 * * *` UTC (prima `17 2 * * *`) e

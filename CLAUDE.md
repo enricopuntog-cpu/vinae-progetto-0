@@ -104,6 +104,12 @@ phases.
 - Merge only when relevant checks are green and GitHub reports the head as
   mergeable/clean. After merge, fetch `origin/main` and verify the final files
   and deployment/runtime effects from the remote default branch.
+- `main` is protected by the `main-protection` ruleset: PR only, squash only,
+  no force push or deletion, six required GitHub Actions checks and Code Owner
+  review (`.github/CODEOWNERS`). The owner cannot approve their own PR, so the
+  owner's and agents' PRs report `BLOCKED` only for that review and are merged
+  with `gh pr merge --squash --admin` — **only after every required check on
+  the exact head is green**. The admin bypass is never a way around CI.
 
 Always forbidden:
 

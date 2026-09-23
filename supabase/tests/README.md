@@ -815,8 +815,11 @@ verifica che `emergency_delegate` abbia **solo** la capability di continuità
 stessi esiti di un utente normale. Crea quattro utenti `@grid-12h.test`, una
 segnalazione e una proposta Club dentro una transazione chiusa da `ROLLBACK`:
 nessun residuo. Il guard rifiuta database con utenti reali (email non
-`.test`), quindi non gira in produzione. Esito atteso: 18 righe, tutte
-`passed = t`.
+`.test`), quindi non gira in produzione. Esito atteso: 21 righe, tutte
+`passed = t`. Le prove girano con claim `aal2`, il caso più forte per il
+delegato; i controlli 19–21 provano il vincolo MFA: delegato `aal1` o senza
+claim rifiutato senza scritture né audit, utente normale rifiutato anche in
+`aal2`, admin ammesso in `aal1` e `aal2`.
 
 Gira nel gate CI `Supabase DB regression` (`12g_ci_run.sh`) prima delle
 fixture 12g. A mano, su uno stack locale:
@@ -830,3 +833,21 @@ Prima esecuzione: 23 settembre 2026, stack locale Supabase CLI 2.117.0 con le
 Controllo negativo: con `private.moderazione_attore()` riscritta per accettare
 qualunque ruolo, i controlli 16 e 17 falliscono indicando le RPC coinvolte;
 ripristinata la funzione, di nuovo 18/18.
+
+Dal 23 settembre 2026 (migrazione `20260923200000`) la griglia ha 21
+controlli: 21/21 su stack locale con 62 migrazioni; con il corpo precedente di
+`incident_notice_set` il controllo 19 fallisce (`aal1=ok`).
+
+### 12h — prova REST MFA del delegato
+
+[`12h_delegate_mfa_e2e.mjs`](12h_delegate_mfa_e2e.mjs) passa dai servizi
+reali dello stack: GoTrue emette i token (`aal1` dopo la password, `aal2`
+dopo TOTP) e PostgREST li inoltra a `incident_notice_set`. Fixture
+[`12h_delegate_mfa_fixture.sql`](12h_delegate_mfa_fixture.sql) (delegato e
+utente normale `@mfa-12h.test`, password generata a runtime) e pulizia
+[`12h_delegate_mfa_cleanup.sql`](12h_delegate_mfa_cleanup.sql) (ultima riga:
+residui, attesi tutti `0`). Solo loopback. Nel gate CI gira dopo `12f` e
+prima delle fixture 12g; il runner verifica anche l'audit del delegato
+(`3 1`: tre eventi, un ritiro). Richiede `[auth.mfa.totp]` abilitato in
+`config.toml`. Esito del 23 settembre 2026 su stack locale: 13/13, audit
+`3 1`, residui `0 0 0 0 0 0`; con il corpo precedente della funzione 10/13.
