@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Stato dei servizi — Vinea</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --ink: #26211f; --muted: #6d625d; --bg: #f6f0e6; --card: #fffdf8; --line: #d8cdbd; --brand: #6f1831;
+        --ok: #2f6b45; --ok-bg: #eaf4ec; --warn: #7a4f00; --warn-bg: #fdf3dc;
+        --bad: #9b2226; --bad-bg: #fbe9e7;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #f1e9e1; --muted: #b8aca5; --bg: #1c1715; --card: #26201d; --line: #463c36; --brand: #e7a3b5;
+          --ok: #8fd1a4; --ok-bg: #1f3326; --warn: #f1c46b; --warn-bg: #3a2e14;
+          --bad: #f3a19d; --bad-bg: #3d1f1d;
+        }
+      }
+      body { margin: 0; min-height: 100vh; padding: 24px 16px; box-sizing: border-box; background: var(--bg); }
+      main { width: min(680px, 100%); margin: 0 auto; border: 1px solid var(--line); border-radius: 20px; background: var(--card); padding: clamp(20px, 5vw, 32px); box-sizing: border-box; }
+      h1 { margin: 4px 0 0; font-family: Georgia, serif; color: var(--brand); font-size: clamp(1.8rem, 6vw, 2.6rem); }
+      h2 { font-size: 1rem; margin: 28px 0 8px; }
+      p, li, dd { line-height: 1.55; }
+      small, .meta { color: var(--muted); font-size: .875rem; }
+      a { color: var(--brand); }
+      .status { margin-top: 20px; border-left: 6px solid var(--c); padding: 16px 18px; background: var(--c-bg); border-radius: 12px; }
+      .status .label { display: block; font-weight: 700; font-size: 1.15rem; color: var(--c); margin-bottom: 6px; }
+      .status p { margin: 0 0 8px; }
+      [data-state="operativo"], [data-state="risolto"] { --c: var(--ok); --c-bg: var(--ok-bg); }
+      [data-state="investigazione"], [data-state="identificato"] { --c: var(--bad); --c-bg: var(--bad-bg); }
+      [data-state="aggiornamento"] { --c: var(--warn); --c-bg: var(--warn-bg); }
+      .updates { list-style: none; padding: 0; margin: 0; }
+      .updates li { border-left: 3px solid var(--c); padding: 4px 0 4px 12px; margin-bottom: 12px; }
+      .updates strong { color: var(--c); }
+      dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font-size: .9rem; }
+      dt { font-weight: 600; }
+      dd { margin: 0; color: var(--muted); }
+      footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--line); }
+      @media (max-width: 420px) { dl { grid-template-columns: 1fr; } dd { margin-bottom: 6px; } }
+    </style>
+  </head>
+  <body>
+    <!-- Procedura di aggiornamento: status-page/README.md nel repository Vinea. -->
+    <main>
+      <small>Vinea Wine Club</small>
+      <h1>Stato dei servizi</h1>
+
+      <section class="status" data-state="operativo" aria-labelledby="stato-corrente">
+        <span class="label" id="stato-corrente">Operativo</span>
+        <p>Nessun incidente in corso. I servizi Vinea funzionano normalmente.</p>
+        <span class="meta">Ultimo aggiornamento: <time datetime="2026-09-23T18:00:00+02:00">23 settembre 2026, 18:00 (ora italiana)</time></span>
+      </section>
+
+      <h2>Aggiornamenti</h2>
+      <ol class="updates">
+        <li data-state="operativo">Nessun aggiornamento pubblicato.</li>
+      </ol>
+
+      <h2>Legenda</h2>
+      <dl>
+        <dt>Operativo</dt><dd>Nessun problema noto.</dd>
+        <dt>Investigazione in corso</dt><dd>Abbiamo ricevuto segnalazioni e stiamo verificando.</dd>
+        <dt>Problema identificato</dt><dd>La causa è nota e stiamo intervenendo.</dd>
+        <dt>Aggiornamento</dt><dd>Il servizio è in ripristino o sotto osservazione.</dd>
+        <dt>Risolto</dt><dd>Il problema è chiuso.</dd>
+      </dl>
+
+      <footer>
+        <p><small>Questa pagina è ospitata separatamente dal sito e resta consultabile anche se
+          <a href="https://vineawineclub.com/">vineawineclub.com</a> non risponde. Per incidenti
+          significativi Vinea può contattare direttamente via email gli utenti coinvolti.</small></p>
+      </footer>
+    </main>
+  </body>
+</html>
