@@ -51,6 +51,9 @@ jobs:
           B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
           FRESHNESS_STALE_AFTER_HOURS: ${{ inputs.stale_after_hours }}
+          # Login GitHub aggiuntivi da menzionare nell'issue di allarme (es. il
+          # delegato di emergenza dopo la nomina). Vuota: solo l'owner.
+          BACKUP_ALERT_EXTRA_MENTIONS: ${{ vars.BACKUP_ALERT_EXTRA_MENTIONS }}
         run: |
           aws --version
           node .github/scripts/offsite-backup-freshness.mjs

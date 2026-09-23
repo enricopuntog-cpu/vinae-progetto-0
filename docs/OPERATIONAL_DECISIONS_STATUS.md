@@ -6,7 +6,11 @@ conclusi e dei residui che dipendono da account, persone o decisioni esterne.
 ## Completato nel repository
 
 - banner globale di incidente con registro append-only e pannello riservato ad
-  `admin` o `emergency_delegate`;
+  `admin` o `emergency_delegate`; matrice positiva/negativa del ruolo
+  (`supabase/tests/12h_emergency_delegate_matrix.sql`) nel gate CI;
+- preparazione del delegato di emergenza: matrice accessi, onboarding, Incident
+  Card, checklist di riapertura consolidata, revoca, drill periodico e
+  destinatari configurabili dell'allarme backup;
 - status page statica in `status-page/site/`, validata in CI e pubblicata su
   Cloudflare Pages (piano gratuito) a `https://status.vineawineclub.com`;
 - workflow per backup cifrato Supabase database/Auth e Storage su
@@ -121,8 +125,8 @@ dei Club; non aprono accessi e non bloccano la beta chiusa.
 | --- | --- | --- |
 | Backup B2 / DR | Chiuso tecnicamente | Run reale `35738026438` decifrato e ripristinato in isolamento; primo run automatico `35833711496` riuscito con readback e Object Lock. Il runbook copre le tre fonti del failover da zero. Riapertura mirata del 23/09/2026 chiusa con la PR #148: due backup al giorno e freshness watch con allarme verificati. Resta solo la rotazione least privilege della key, non bloccante. |
 | Pagina di stato indipendente | CHIUSA | Pubblicata il 23/09/2026 su `https://status.vineawineclub.com` (Cloudflare Pages `vinea-status`, piano gratuito, riserva `https://vinea-status.pages.dev`). Unico record DNS aggiunto: `CNAME` `status` → `vinea-status.pages.dev`. HTTPS, header e 375 px verificati live. Aggiornamenti durante un incidente: `status-page/README.md`. |
-| Delegato di emergenza | Bloccata esternamente | Nominare una persona, abilitarle MFA e assegnare `emergency_delegate`; provare accesso a `/continuita`. |
-| Accessi del delegato | Bloccata esternamente | Concedere alla persona nominata accessi individuali e minimi a GitHub, Supabase, Netlify, DNS e backup; il ruolo applicativo da solo abilita soltanto il banner. |
+| Delegato di emergenza | **PREPARATO / persona non ancora nominata** | Preparazione tecnica e operativa chiusa il 23/09/2026: ruolo `emergency_delegate` verificato dalla griglia 12h (18/18, anche nel gate CI) e sul catalogo di produzione, senza privilegi extra; mandato, onboarding, drill trimestrale e revoca in `docs/EMERGENCY_DELEGATE_ONBOARDING.md`; procedura breve e checklist di riapertura in `docs/EMERGENCY_DELEGATE_INCIDENT_CARD.md`. Manca solo la nomina della persona e l'onboarding reale con MFA e accessi provati. Non è chiusa finché questo non avviene. |
+| Accessi del delegato | Matrice pronta, nessun accesso concesso | `docs/EMERGENCY_DELEGATE_ACCESS_MATRIX.md`. Prima di invitare la persona su GitHub: ruleset su `main`, `CODEOWNERS` e secret in un Environment limitato a `main` (oggi `main` non è protetto e *write* equivale ad accesso ai secret); decisione sulla chiave `age`; accettazione del rischio *Developer* Supabase (piano Pro, niente *Read-only*). Allarme backup pronto: basta la variabile `BACKUP_ALERT_EXTRA_MENTIONS`. |
 | Email di incidente | Bloccata da dati e procedura | Definire destinatari, base giuridica, modello approvato e responsabile invio tramite Resend; evitare broadcast per micro-interruzioni. |
 | RTO/RPO Beta | Decisi il 23/09/2026: RTO 24h, RPO target 24h | Sostenuti da due backup B2 al giorno e da un allarme oltre 20 ore verificato in produzione. Obiettivi, non garanzie: GitHub Actions schedulato e best-effort. Prima dei pagamenti reali: nuovi obiettivi dopo prova cronometrata su progetto nuovo, decisione PITR e riconciliazione Stripe post-restore. |
 | Verifica E2E Club/moderatore e contestazioni | Chiusa (PR #141, `e42c14e`, ledger 61) | Moderatore distinto, isolamento cross-Club, contestazione completa fino a decisione e correzione verificati con JWT reali sul branch Preview, 177/177 dopo quattro correzioni; fixture rimosse. Resta facoltativo uno smoke UI autenticato eseguito da una persona. |
@@ -145,4 +149,5 @@ dei Club; non aprono accessi e non bloccano la beta chiusa.
   e fallisce chiuso se configurazione, retention o readback non sono validi;
   il freshness watch non ha gate e va disattivato insieme al backup solo per
   una sospensione voluta;
-- nessun utente riceve automaticamente `emergency_delegate`.
+- nessun utente riceve automaticamente `emergency_delegate`; il 23 settembre
+  2026 il ruolo risulta assegnato a zero utenti in produzione.

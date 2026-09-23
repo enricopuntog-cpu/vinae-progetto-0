@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "bun:test";
+import { eAdminReale, ruoloDaSessione } from "@/lib/auth/role";
 
 const root = resolve(import.meta.dir, "../../..");
 const read = (path: string) => readFileSync(resolve(root, path), "utf8");
@@ -10,6 +11,26 @@ describe("fondamenta operative fail-closed", () => {
     const sql = read("supabase/migrations/20260920230154_operational_continuity_disputes_clubs.sql");
     expect(sql).toInclude("public.has_role(v_uid, 'emergency_delegate')");
     expect(sql).not.toMatch(/insert\s+into\s+public\.user_roles/i);
+  });
+
+  it("il delegato di emergenza non e admin per la shell ne per l'Area Admin", () => {
+    const utente = { userId: "00000000-0000-4000-8000-000000000002" };
+    expect(ruoloDaSessione(utente, ["emergency_delegate"])).toBe("user");
+    expect(eAdminReale(["emergency_delegate"])).toBe(false);
+    expect(ruoloDaSessione(utente, ["admin"])).toBe("admin");
+    expect(read("frontend-next/src/app/admin/page.tsx")).toInclude("if (!eAdminReale(ruoli)) notFound();");
+  });
+
+  it("/continuita si apre soltanto ad admin ed emergency_delegate e usa solo la porta del banner", () => {
+    const pagina = read("frontend-next/src/app/continuita/page.tsx");
+    expect(pagina).toInclude(
+      'ruoli.some((ruolo) => ruolo === "admin" || ruolo === "emergency_delegate")',
+    );
+    expect(pagina).toInclude("notFound();");
+    const pannello = read("frontend-next/src/components/vinea/moderation/IncidentNoticeAdmin.tsx");
+    expect(pannello.match(/client\.rpc\(/g)?.length).toBe(1);
+    expect(pannello).toInclude('client.rpc("incident_notice_set"');
+    expect(pannello).not.toMatch(/\.from\(/);
   });
 
   it("mantiene private le prove delle contestazioni", () => {

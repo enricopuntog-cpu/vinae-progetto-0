@@ -82,6 +82,11 @@ file `.env` versionato.
 Le variabili e i secret dell'automazione B2 sono elencati nel runbook
 [`CONTINUITY_AND_BACKUP_RUNBOOK.md`](CONTINUITY_AND_BACKUP_RUNBOOK.md). Non
 appartengono all'ambiente del frontend e non devono essere copiati su Netlify.
+Tra queste, la variabile GitHub Actions facoltativa
+`BACKUP_ALERT_EXTRA_MENTIONS` elenca i login GitHub aggiuntivi (massimo 3) da
+menzionare nell'issue di allarme del freshness watch, per esempio il delegato
+di emergenza dopo la nomina; vuota o assente, l'allarme menziona solo l'owner.
+Non esiste in nessun `.env`: vive solo nelle variabili del repository.
 
 ### Origine dei redirect della callback Auth
 

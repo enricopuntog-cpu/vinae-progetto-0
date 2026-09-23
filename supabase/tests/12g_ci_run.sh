@@ -182,6 +182,10 @@ run_grid() {
 
 run_grid "12e completamento Club/contestazioni" 12e_club_dispute_completion.sql 3
 run_grid "12g regressioni audit #141" 12g_club_dispute_e2e_regressions.sql 3
+# Matrice del ruolo emergency_delegate: transazione chiusa da ROLLBACK, senza
+# residui; gira prima delle fixture 12g perche il suo guard vuole solo utenti
+# `.test`.
+run_grid "12h matrice delegato di emergenza" 12h_emergency_delegate_matrix.sql 3
 
 # 12f solleva un'eccezione al primo diniego mancato; l'ultima riga e il
 # controllo sul limite della nota di decisione.
