@@ -36,6 +36,17 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Un solo istante UTC per nome, cartella mensile e tier: un run a cavallo della
+# mezzanotte non mescola due date. Il timestamp precede gli export, quindi misura
+# l'eta del dato salvato e non quella dell'upload.
+run_epoch="$(date -u +%s)"
+run_day="$(date -u -d "@$run_epoch" +%F)"
+run_month_path="$(date -u -d "@$run_epoch" +%Y/%m)"
+stamp="$(date -u -d "@$run_epoch" +%Y-%m-%dT%H-%M-%SZ)"
+
+# Prima degli export: se B2 non e leggibile il run fallisce senza dump inutili.
+tiers="$(backup_tiers_to_upload "$B2_S3_ENDPOINT" "$B2_BUCKET" "$run_day")"
+
 backup_dir="$workdir/vinea-backup"
 mkdir -p "$backup_dir/database" "$backup_dir/storage"
 
@@ -53,7 +64,6 @@ STORAGE_BACKUP_DIR="$backup_dir/storage" node .github/scripts/export-supabase-st
 
 write_backup_manifest "$backup_dir"
 
-stamp="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
 archive="$workdir/vinea-${stamp}.tar.gz"
 encrypted="${archive}.age"
 tar -C "$workdir" -czf "$archive" vinea-backup
@@ -66,7 +76,7 @@ upload_copy() {
   local days="$2"
   local retain_until
   retain_until="$(date -u -d "+${days} days" +%Y-%m-%dT%H:%M:%SZ)"
-  local key="${tier}/$(date -u +%Y/%m)/$(basename "$encrypted")"
+  local key="${tier}/${run_month_path}/$(basename "$encrypted")"
 
   put_b2_object_quiet \
     --endpoint-url "$B2_S3_ENDPOINT" \
@@ -94,7 +104,6 @@ upload_copy() {
 
 # Object Lock protegge le versioni; Lifecycle Rules del bucket le eliminano
 # solo dopo la scadenza. Entrambi gli oggetti vengono verificati in lettura.
-tiers="$(backup_tiers_for_utc_date "$(date -u +%F)")"
 while IFS= read -r tier; do
   upload_copy "$tier" "$(backup_retention_days "$tier")"
 done <<< "$tiers"
