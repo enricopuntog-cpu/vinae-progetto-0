@@ -154,6 +154,8 @@ jobs:
           bash .github/scripts/supabase-db-gate.test.sh
           python3 .github/scripts/offsite-archive-validate.test.py
           node --check .github/scripts/export-supabase-storage.mjs
+          node .github/scripts/status-page-check.mjs
+          bash .github/scripts/status-page-check.test.sh
 
   backend:
     name: Backend - lint, syntax and tests
