@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import Link from "next/link";
+import { PERCORSO_SICUREZZA, erroreRichiedeMfa } from "@/lib/auth/mfa";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { IncidentNoticeKind } from "@/lib/incidents/notice";
 
@@ -20,7 +22,7 @@ export function IncidentNoticeAdmin() {
   const [statusUrl, setStatusUrl] = useState("");
   const [active, setActive] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; message: string; mfa?: boolean } | null>(null);
 
   const save = async () => {
     const client = getSupabaseClient();
@@ -37,8 +39,12 @@ export function IncidentNoticeAdmin() {
         p_status_url: statusUrl.trim() || null,
         p_active: active,
       });
+      // Sessione scaduta o nuova in aal1: il database rifiuta il delegato con
+      // hint aal2_required. Si rimanda alla verifica, non a un errore generico.
       setResult(
-        error
+        erroreRichiedeMfa(error)
+          ? { ok: false, message: "Serve la verifica in due passaggi per questa sessione.", mfa: true }
+          : error
           ? { ok: false, message: "Non e stato possibile aggiornare il banner." }
           : {
               ok: true,
@@ -101,6 +107,14 @@ export function IncidentNoticeAdmin() {
       {result ? (
         <p role={result.ok ? "status" : "alert"} className={result.ok ? "text-sm" : "text-sm text-bordeaux"}>
           {result.message}
+          {result.mfa ? (
+            <>
+              {" "}
+              <Link href={PERCORSO_SICUREZZA} className="underline">
+                Completa la verifica
+              </Link>
+            </>
+          ) : null}
         </p>
       ) : null}
       <Button

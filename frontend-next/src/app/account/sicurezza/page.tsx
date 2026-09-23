@@ -1,18 +1,24 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
-import { IncidentNoticeAdmin } from "@/components/vinea/moderation/IncidentNoticeAdmin";
 import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
-import { PERCORSO_SICUREZZA, accessoContinuita } from "@/lib/auth/mfa";
+import { haRuoloContinuita } from "@/lib/auth/mfa";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import VerificaDuePassaggi from "./verifica-due-passaggi";
 
 export const metadata: Metadata = {
-  title: "Continuità operativa — Vinea",
+  title: "Sicurezza dell'accesso — Vinea",
   robots: { index: false, follow: false },
 };
 
-const PERCORSO_ACCESSO = `/accedi?${PARAMETRO_NEXT}=%2Fcontinuita`;
+const PERCORSO_ACCESSO = `/accedi?${PARAMETRO_NEXT}=%2Faccount%2Fsicurezza`;
 
+/**
+ * Verifica in due passaggi per chi ha un ruolo di continuità (admin ed
+ * emergency_delegate). Agli utenti normali la MFA non è offerta: non esiste
+ * oggi un flusso di login che la chieda loro, e mostrarla come "attiva"
+ * prometterebbe una protezione che l'app non applica.
+ */
 export default async function Page() {
   await connection();
   const client = await getSupabaseServerClient();
@@ -28,27 +34,17 @@ export default async function Page() {
     : (data ?? [])
         .map((riga) => (riga as { role: unknown }).role)
         .filter((ruolo): ruolo is string => typeof ruolo === "string");
-
-  // Livello della sessione dal JWT verificato (getClaims), non dal cookie
-  // decodificato alla cieca. Il vincolo vero resta in incident_notice_set.
-  const claims = (await client.auth.getClaims()).data?.claims;
-  const accesso = accessoContinuita({
-    ruoli,
-    aal: typeof claims?.aal === "string" ? claims.aal : null,
-    fattori: utente.factors,
-  });
-  if (accesso === "negato") notFound();
-  if (accesso !== "ammesso") redirect(PERCORSO_SICUREZZA);
+  if (!haRuoloContinuita(ruoli)) notFound();
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div>
-        <h1 className="font-serif text-3xl font-semibold">Continuità operativa</h1>
+        <h1 className="font-serif text-3xl font-semibold">Sicurezza dell&apos;accesso</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Pubblica o ritira il solo avviso globale. Ogni modifica viene registrata.
+          Le funzioni operative protette richiedono un secondo fattore oltre alla password.
         </p>
       </div>
-      <IncidentNoticeAdmin />
+      <VerificaDuePassaggi mostraContinuita />
     </div>
   );
 }

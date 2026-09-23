@@ -23,10 +23,11 @@ describe("fondamenta operative fail-closed", () => {
 
   it("/continuita si apre soltanto ad admin ed emergency_delegate e usa solo la porta del banner", () => {
     const pagina = read("frontend-next/src/app/continuita/page.tsx");
-    expect(pagina).toInclude(
-      'ruoli.some((ruolo) => ruolo === "admin" || ruolo === "emergency_delegate")',
-    );
-    expect(pagina).toInclude("notFound();");
+    expect(pagina).toInclude("const accesso = accessoContinuita({");
+    expect(pagina).toInclude('if (accesso === "negato") notFound();');
+    expect(pagina).toInclude('if (accesso !== "ammesso") redirect(PERCORSO_SICUREZZA);');
+    // aal dal JWT verificato, non dal cookie decodificato.
+    expect(pagina).toInclude("client.auth.getClaims()");
     const pannello = read("frontend-next/src/components/vinea/moderation/IncidentNoticeAdmin.tsx");
     expect(pannello.match(/client\.rpc\(/g)?.length).toBe(1);
     expect(pannello).toInclude('client.rpc("incident_notice_set"');

@@ -299,9 +299,13 @@ auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 max_enrolled_factors = 10
 
 # Control MFA via App Authenticator (TOTP)
+# Vinea: TOTP serve al ruolo emergency_delegate (aal2 obbligatorio in
+# incident_notice_set). Vale per stack locale, gate CI e Preview; il deploy in
+# produzione ignora la config Auth di questo file, e sul progetto ospitato TOTP
+# e attivo di default (verifica reale all'onboarding del delegato).
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]
