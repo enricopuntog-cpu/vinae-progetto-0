@@ -3716,6 +3716,26 @@ Il banner Vinea usa già un URL HTTPS per avviso, validato da vincolo SQL e
 parser; è un semplice link, quindi un guasto della status page non tocca il
 sito. Nessuna variabile d'ambiente aggiunta.
 
-Restano a Enrico, per mancanza di credenziali dell'agente: account Cloudflare,
-collegamento GitHub del progetto `vinea-status` e record `CNAME` su Netlify DNS.
-Procedura in `status-page/README.md`.
+Pubblicazione nello stesso giorno, tramite le sessioni dashboard già aperte di
+Enrico (il connettore Cloudflare non espone Pages e quello Netlify non espone il
+DNS; nessun token letto o inserito):
+
+- progetto Cloudflare Pages `vinea-status` collegato a
+  `enricopuntog-cpu/vinae-progetto-0`, branch `main`, nessun comando di build,
+  output `status-page/site`, build watch paths `status-page/*`; account su
+  Workers Free senza metodo di pagamento; primo deploy da `00a66aa`;
+- dominio `status.vineawineclub.com` aggiunto al progetto prima del DNS;
+- Netlify DNS: sette record letti prima (due `CNAME` Resend, `MX`, due
+  `NETLIFY` apex e `www`, due `TXT`); aggiunto solo `CNAME` `status` →
+  `vinea-status.pages.dev` TTL 3600; riletti dopo: otto record, gli altri sette
+  invariati;
+- verifica live: `https://vinea-status.pages.dev` e
+  `https://status.vineawineclub.com` HTTP 200 con CSP `default-src 'none'`,
+  HSTS, `nosniff`, `no-referrer`, `DENY`; certificato Google Trust Services
+  (CN `status.vineawineclub.com`) valido fino al 22 dicembre 2026; HTTP → HTTPS
+  301; `/nonexistent` 404; corpo identico al file del repository; a 375 px zero
+  risorse di rete, zero script, nessun errore console, nessun overflow;
+- sito principale invariato: apex 200, `www` 301 verso l'apex, deploy Netlify
+  `6ab3caad1e8f400008c3a007` ancora pubblicato.
+
+Procedura di aggiornamento durante un incidente in `status-page/README.md`.

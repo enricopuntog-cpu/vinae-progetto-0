@@ -54,7 +54,8 @@ Chiuso l'incidente: stato `risolto`, poi, quando non serve più, di nuovo
 
 ## Configurazione Cloudflare Pages
 
-Progetto Git collegato al repository, senza build:
+Pubblicata il 23 settembre 2026. Progetto Git collegato al repository, senza
+build:
 
 - nome progetto `vinea-status` (URL di riserva `https://vinea-status.pages.dev`);
 - branch di produzione `main`; preset framework *None*; comando di build vuoto;
@@ -71,6 +72,10 @@ Limite noto: la zona DNS è ospitata da Netlify. Se cadesse proprio il DNS
 Netlify, `status.vineawineclub.com` non risolverebbe; l'indirizzo
 `https://vinea-status.pages.dev` resta raggiungibile e va citato nelle
 comunicazioni email in quel caso.
+
+I branch che modificano `status-page/` generano anche un deploy di anteprima
+pubblico su un URL `*.vinea-status.pages.dev` (con `noindex`): nelle bozze non
+scrivere nulla che non possa diventare pubblico.
 
 ## Anteprima locale
 
