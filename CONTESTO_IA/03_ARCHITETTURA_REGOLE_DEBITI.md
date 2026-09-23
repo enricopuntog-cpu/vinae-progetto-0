@@ -403,6 +403,63 @@ python -m pytest -q
 I test backend non devono usare rete, MongoDB reale o credenziali
 Stripe/AI.
 
+### Gate database Club/contestazioni (`Supabase DB regression`)
+
+Il workflow [`.github/workflows/supabase-db-regression.yml`](../.github/workflows/supabase-db-regression.yml)
+gira su ogni PR, sui push su `main` e su richiesta manuale. Lo scope è calcolato
+da [`.github/scripts/supabase-db-gate-scope.sh`](../.github/scripts/supabase-db-gate-scope.sh)
+sul diff `HEAD^1..HEAD`. Sono pertinenti:
+
+- `supabase/migrations/**`, `supabase/config.toml` e `supabase/seed.sql`;
+- `supabase/tests/12e_*`, `12f_*` e `12g_*`;
+- il workflow e lo script di scope stessi.
+
+Per il resto il gate produce uno skip dichiarato (notice e job summary), non un
+fallimento. Se il diff non è calcolabile, il gate gira.
+
+Quando è pertinente, `supabase start` (CLI fissata) costruisce uno stack
+locale dalle migrazioni del commit: database, Auth, PostgREST, Storage e
+gateway. Poi [`supabase/tests/12g_ci_run.sh`](../supabase/tests/12g_ci_run.sh)
+esegue nell'ordine:
+
+1. le griglie `12e`, `12g_..._regressions` e `12f`;
+2. la fixture `12g` con password generata a runtime e mascherata;
+3. l'E2E `12g` completo nelle tre fasi (177 controlli);
+4. il controllo economico: importi e stato degli ordini invariati e zero righe
+   in `payments`, `payouts`, `balance_*` e `payment_provider_events`;
+5. in `trap EXIT`, pulizia e conteggio dei residui, che devono essere tutti a
+   zero.
+
+Lo stack è distrutto in uno step `always()`.
+
+Guardie fail-closed prima di qualunque scrittura:
+
+- API e database devono essere su loopback; il ref di produzione è rifiutato e
+  non esiste fallback remoto;
+- il ledger `supabase_migrations.schema_migrations` deve coincidere versione per
+  versione con `supabase/migrations/`;
+- non devono esistere utenti Auth estranei alla fixture.
+
+Il driver `12g_club_dispute_e2e.mjs` accetta soltanto loopback o
+`<ref>.supabase.co` diverso dalla produzione. Con `E2E_REQUIRE_LOOPBACK=true`,
+impostato dal runner, accetta solo loopback. Le guardie e lo scope hanno test
+senza rete in [`.github/scripts/supabase-db-gate.test.sh`](../.github/scripts/supabase-db-gate.test.sh),
+eseguiti nel job CI "Continuity scripts".
+
+Perché non la Supabase Preview: il branch Preview è creato dall'integrazione
+GitHub di Supabase e il suo check "Supabase Preview" riporta solo l'esito delle
+migrazioni. URL, chiavi e password del database del branch arrivano ad Actions
+soltanto con un access token di account Supabase, che vede anche la
+produzione. Nel repository i secret Supabase esistenti puntano alla
+produzione. Usarli, o aggiungere quel token, darebbe al job di regressione un
+potere sulla produzione e lo renderebbe dipendente dai tempi
+dell'integrazione. Lo stack effimero non richiede secret, gira identico sulle
+PR da fork (evento `pull_request`, token in sola lettura) e ha una prontezza
+deterministica: `supabase start` ritorna a migrazioni applicate e il runner
+rilegge comunque il ledger. Eseguire il 12g anche sulla Preview richiederebbe
+un token Supabase limitato ai soli branch, che oggi non è disponibile.
+Resta possibile a mano con il procedimento del 23 settembre.
+
 ## Fonti dettagliate
 
 - [`../docs/ROADMAP_V1.md`](../docs/ROADMAP_V1.md)

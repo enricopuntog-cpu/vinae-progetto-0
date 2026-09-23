@@ -1,0 +1,95 @@
+name: Supabase DB regression
+
+# Gate di regressione Club/contestazioni (griglie 12e, 12f, 12g ed E2E 12g
+# completo) su uno stack Supabase locale ed effimero, costruito nel job dalle
+# migrazioni del commit sotto prova.
+#
+# Perche non la Supabase Preview: il branch Preview e creato dall'integrazione
+# GitHub di Supabase, ma URL, chiavi e password del suo database arrivano ad
+# Actions solo tramite un access token di account Supabase, che vede anche la
+# produzione. Qui non serve nessun secret: il job gira identico sulle PR da
+# fork, non puo raggiungere la produzione (il runner accetta solo loopback) e
+# non dipende dai tempi dell'integrazione, perche `supabase start` ritorna solo
+# a migrazioni applicate. Dettagli in CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-db-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  club-dispute-12g:
+    name: Supabase 12g - Club/dispute regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Detect relevant changes
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: bash .github/scripts/supabase-db-gate-scope.sh
+
+      - name: Setup Node
+        if: steps.scope.outputs.relevant == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Setup Supabase CLI
+        if: steps.scope.outputs.relevant == 'true'
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.117.0
+
+      # Solo database, Auth, PostgREST, Storage e gateway: il resto non serve al
+      # contratto verificato. L'output di `supabase start` contiene le chiavi
+      # dello stack e non viene stampato; in caso di errore esce filtrato.
+      - name: Start ephemeral Supabase stack
+        if: steps.scope.outputs.relevant == 'true'
+        run: |
+          log="$RUNNER_TEMP/supabase-start.log"
+          if ! supabase start \
+            --exclude realtime,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor \
+            > "$log" 2>&1; then
+            grep -viE 'key|secret|jwt|token|password|postgres(ql)?://' "$log" | tail -n 60
+            rm -f "$log"
+            echo "::error title=Gate 12g::Stack Supabase locale non avviato."
+            exit 1
+          fi
+          rm -f "$log"
+          echo "Stack locale avviato con le migrazioni del commit."
+
+      - name: Run Club/dispute gate (12e, 12f, 12g)
+        if: steps.scope.outputs.relevant == 'true'
+        run: |
+          stack_env="$(supabase status -o env 2>/dev/null)"
+          value() { printf '%s\n' "$stack_env" | sed -nE "s/^$1=\"?([^\"]*)\"?$/\1/p" | head -n 1; }
+          api_url="$(value API_URL)"
+          anon_key="$(value ANON_KEY)"
+          db_url="$(value DB_URL)"
+          unset stack_env
+          for masked in "$anon_key" "$db_url"; do
+            if [ -n "$masked" ]; then echo "::add-mask::$masked"; fi
+          done
+          E2E_SUPABASE_URL="$api_url" E2E_ANON_KEY="$anon_key" E2E_DB_URL="$db_url" \
+            bash supabase/tests/12g_ci_run.sh
+
+      - name: Destroy ephemeral Supabase stack
+        if: always() && steps.scope.outputs.relevant == 'true'
+        run: supabase stop --no-backup

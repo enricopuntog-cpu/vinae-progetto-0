@@ -3638,3 +3638,53 @@ di regressione 7/7 sugli oggetti effettivi. Netlify Published
 `6ab3caad1e8f400008c3a007` sullo stesso commit; la pagina Club anonima non
 esegue più richieste di gestione. Branch Preview eliminato con la PR; funzioni
 pagamenti, Connect e AI a 503.
+
+## 23 settembre 2026 — regressione 12g automatizzata in CI
+
+Baseline `origin/main` a `18ab654` (PR #142), produzione con ledger 61,
+`PAYMENTS_ENABLED=false`, `AI_ENABLED=false`. Il harness E2E della PR #141 è
+diventato un gate CI: workflow `Supabase DB regression`, PR #143.
+
+Analisi della Supabase Preview. L'integrazione GitHub di Supabase crea il
+branch e pubblica il check "Supabase Preview" con l'esito delle migrazioni, ma
+non consegna ad Actions URL, chiavi o password del database del branch.
+Ottenerli richiede un access token di account Supabase, che vede anche la
+produzione. I secret Supabase del repository (`SUPABASE_URL`,
+`SUPABASE_DB_URL`, service role) sono di produzione. Il repository è pubblico e
+le PR da fork non ricevono secret. Un gate sulla Preview avrebbe quindi chiesto
+una credenziale con potere sulla produzione e una sincronizzazione con i tempi
+dell'integrazione. Scelta: uno stack Supabase locale effimero nel job, costruito
+dalle stesse migrazioni del commit, senza secret, identico sulle PR da fork e
+pronto in modo deterministico (`supabase start` ritorna a migrazioni applicate;
+il runner rilegge comunque il ledger).
+
+Il runner `supabase/tests/12g_ci_run.sh` rifiuta prima di ogni scrittura:
+
+- target non loopback, ref di produzione, variabili mancanti;
+- un ledger diverso dal checkout;
+- utenti Auth estranei alla fixture.
+
+Poi esegue:
+
+1. le griglie `12e`, `12g_..._regressions` e `12f`;
+2. la fixture con password generata a runtime e mascherata;
+3. l'E2E completo nelle tre fasi;
+4. il controllo economico;
+5. in `trap EXIT`, pulizia e conteggio dei residui.
+
+Test senza rete di guardie e scope: 20 casi nel job "Continuity scripts".
+
+Esecuzioni osservate:
+
+- PR #143, run `35866592440`: ledger 61, `12e` 10/10, regressioni 7/7, `12f`
+  PASS, E2E 81/81, 71/71 e 25/25 (177), zero righe economiche, residui
+  `0 0 0 0 0 0 0 0`, nessun JWT, chiave o connection string nel log;
+- probe PR #144 (solo documentazione, base il branch del gate): skip dichiarato
+  in 4 secondi con notice;
+- probe PR #145 (nuova migrazione che reintroduce il difetto 3 dell'audit #141,
+  prove depositate cancellabili), run `35866884990`: ledger 62, `12e` 10/10,
+  regressioni 6/7 con il controllo 3 rosso; il job fallisce prima della fixture
+  e la pulizia riporta comunque residui a zero.
+
+I probe sono stati chiusi senza merge e i loro branch eliminati. La produzione
+non è stata toccata.

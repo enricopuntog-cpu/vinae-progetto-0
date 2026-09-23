@@ -3,6 +3,7 @@
 // Attraversa GoTrue, PostgREST, RLS, RPC e Storage con JWT reali degli utenti
 // creati da 12g_club_dispute_e2e_fixtures.sql su un branch Supabase
 // temporaneo. Non contatta provider di pagamento e non usa service_role.
+// In CI lo esegue 12g_ci_run.sh su uno stack locale effimero.
 //
 //   E2E_SUPABASE_URL=https://<branch>.supabase.co \
 //   E2E_ANON_KEY=<chiave publishable del branch> \
@@ -23,8 +24,24 @@ if (!URL_BASE || !ANON || !PASSWORD || !PHASE) {
   console.error("Servono E2E_SUPABASE_URL, E2E_ANON_KEY, E2E_PASSWORD, E2E_PHASE.");
   process.exit(2);
 }
-if (URL_BASE.includes(PRODUCTION_REF)) {
-  console.error("Rifiutato: l'URL punta al progetto di produzione.");
+// Target accettati: loopback (stack locale, l'unico ammesso in CI con
+// E2E_REQUIRE_LOOPBACK=true) oppure un branch Preview `<ref>.supabase.co`
+// diverso dalla produzione. Qualunque altro host e rifiutato: niente fallback.
+let target;
+try {
+  target = new URL(URL_BASE);
+} catch {
+  console.error("Rifiutato: E2E_SUPABASE_URL non e un URL valido.");
+  process.exit(2);
+}
+const isLoopback = ["127.0.0.1", "localhost", "[::1]"].includes(target.hostname);
+const branchRef = /^([a-z0-9]{20})\.supabase\.co$/.exec(target.hostname)?.[1];
+if (URL_BASE.includes(PRODUCTION_REF) || (!isLoopback && (!branchRef || branchRef === PRODUCTION_REF))) {
+  console.error("Rifiutato: il target non e uno stack locale ne un branch Preview identificabile.");
+  process.exit(2);
+}
+if (process.env.E2E_REQUIRE_LOOPBACK === "true" && !isLoopback) {
+  console.error("Rifiutato: E2E_REQUIRE_LOOPBACK impone uno stack locale.");
   process.exit(2);
 }
 

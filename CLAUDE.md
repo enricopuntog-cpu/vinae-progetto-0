@@ -299,8 +299,13 @@ python -m pytest -q
 Backend tests run with `APP_ENV=test`, no network, no real MongoDB and no real
 Stripe/AI credentials; use the fakes in `backend/tests/conftest.py`.
 
-Supabase grids under `supabase/tests/` are versioned manual proofs, not CI. A
-grid that has never executed is not evidence. Record environment/version,
+Supabase grids under `supabase/tests/` are versioned manual proofs, except
+`12e`/`12f`/`12g` (Club/disputes). The `Supabase DB regression` workflow runs
+those, plus the full 12g E2E, on an ephemeral local stack built from the
+commit's migrations whenever migrations, Supabase config or those grids
+change. That gate uses no secrets and accepts only loopback targets; never
+point it at production or give it production credentials. A grid that has
+never executed is not evidence. Record environment/version,
 before/after control runs when applicable, pass/fail counts, cleanup and
 residues. SQL Editor tests do not cover PostgREST or browser behavior.
 
