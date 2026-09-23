@@ -60,20 +60,29 @@ jobs:
       # Solo database, Auth, PostgREST, Storage e gateway: il resto non serve al
       # contratto verificato. L'output di `supabase start` contiene le chiavi
       # dello stack e non viene stampato; in caso di errore esce filtrato.
+      # Il registry arriva da setup-cli (ghcr.io); se il pull delle immagini
+      # fallisce (es. `toomanyrequests`, 23 settembre 2026) si riprova da
+      # public.ecr.aws, il registry predefinito della CLI. Stesse immagini e
+      # versioni: cambia solo la sorgente del download.
       - name: Start ephemeral Supabase stack
         if: steps.scope.outputs.relevant == 'true'
         run: |
           log="$RUNNER_TEMP/supabase-start.log"
-          if ! supabase start \
-            --exclude realtime,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor \
-            > "$log" 2>&1; then
-            grep -viE 'key|secret|jwt|token|password|postgres(ql)?://' "$log" | tail -n 60
-            rm -f "$log"
-            echo "::error title=Gate 12g::Stack Supabase locale non avviato."
-            exit 1
-          fi
+          for registry in "${SUPABASE_INTERNAL_IMAGE_REGISTRY:-ghcr.io}" public.ecr.aws; do
+            if SUPABASE_INTERNAL_IMAGE_REGISTRY="$registry" supabase start \
+              --exclude realtime,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor \
+              > "$log" 2>&1; then
+              rm -f "$log"
+              echo "Stack locale avviato con le migrazioni del commit (immagini da $registry)."
+              exit 0
+            fi
+            grep -viE 'key|secret|jwt|token|password|postgres(ql)?://' "$log" | tail -n 20
+            echo "::warning title=Gate 12g::Avvio non riuscito con le immagini da $registry."
+            supabase stop --no-backup > /dev/null 2>&1 || true
+          done
           rm -f "$log"
-          echo "Stack locale avviato con le migrazioni del commit."
+          echo "::error title=Gate 12g::Stack Supabase locale non avviato."
+          exit 1
 
       - name: Run Club/dispute gate (12e, 12f, 12g) and delegate matrix (12h)
         if: steps.scope.outputs.relevant == 'true'
