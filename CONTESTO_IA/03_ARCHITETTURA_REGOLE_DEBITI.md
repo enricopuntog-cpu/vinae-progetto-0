@@ -352,6 +352,16 @@ successive possono costruire.
 - Il banner incidenti e scrivibile solo da `admin` o `emergency_delegate`, con
   audit append-only. La migrazione non assegna il ruolo a nessuno. La pagina di
   stato statica deve essere distribuita su infrastruttura separata.
+- `emergency_delegate` e una capability di sola continuita: compare soltanto in
+  `public.incident_notice_set`. Ogni controllo di ruolo usa un ruolo letterale
+  (`has_role(..., 'admin')` o `ur.role = 'admin'`); un controllo del tipo
+  "qualsiasi riga in `user_roles`" darebbe al delegato poteri admin. La griglia
+  `supabase/tests/12h_emergency_delegate_matrix.sql`, nel gate `Supabase DB
+  regression`, lo verifica per catalogo e per comportamento: il delegato deve
+  avere gli stessi esiti di un utente normale su ogni RPC e relazione diversa
+  dal banner, e ogni RPC riservata agli admin deve rifiutarlo con `42501`. Una
+  nuova porta per il delegato richiede di aggiornare quella griglia e
+  `docs/EMERGENCY_DELEGATE_ACCESS_MATRIX.md`.
 - La destinazione offsite scelta e Backblaze B2 EU Central con cifratura `age`,
   Object Lock e retention 30 giornalieri, 12 settimanali, 12 mensili. Il job
   è attivo dal 22 settembre 2026 e resta fail-closed se il gate non vale

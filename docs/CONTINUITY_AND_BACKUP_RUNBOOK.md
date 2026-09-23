@@ -11,10 +11,15 @@ sostituisce gli accordi con fornitori, commercialista o consulenti legali.
 
 - **Responsabile primario:** Enrico, titolare degli account GitHub, Netlify e
   Supabase.
-- **Delegato di emergenza:** da nominare. Il ruolo tecnico
-  `emergency_delegate` e disponibile ma non e assegnato a nessuno. Il delegato
-  potra pubblicare e ritirare l'avviso di incidente; deve ricevere accesso
-  individuale con MFA e non password o codici condivisi.
+- **Delegato di emergenza:** PREPARATO, persona non ancora nominata. Il ruolo
+  tecnico `emergency_delegate` e verificato (griglia 12h) ma non e assegnato a
+  nessuno. Mandato, onboarding, drill e revoca in
+  [`EMERGENCY_DELEGATE_ONBOARDING.md`](EMERGENCY_DELEGATE_ONBOARDING.md);
+  accessi minimi per servizio in
+  [`EMERGENCY_DELEGATE_ACCESS_MATRIX.md`](EMERGENCY_DELEGATE_ACCESS_MATRIX.md);
+  procedura breve in
+  [`EMERGENCY_DELEGATE_INCIDENT_CARD.md`](EMERGENCY_DELEGATE_INCIDENT_CARD.md).
+  Accesso individuale con MFA, mai password o codici condivisi.
 - **Obiettivi di ripristino Beta (23 settembre 2026):** RTO 24 ore; RPO
   target 24 ore. Sono obiettivi operativi, non garanzie: backup e allarme
   dipendono da GitHub Actions schedulato e da B2, servizi best-effort.
@@ -33,7 +38,8 @@ sostituisce gli accordi con fornitori, commercialista o consulenti legali.
   - Prima dei pagamenti reali gli obiettivi vanno rifissati: vedi
     "Controllo periodico".
 - **Autorita di riapertura:** Enrico; in sua assenza, il delegato formalmente
-  nominato dopo una checklist firmata. Il servizio resta chiuso ai pagamenti
+  nominato dopo una checklist firmata, entro il mandato e con la checklist di
+  riapertura della Incident Card. Il servizio resta chiuso ai pagamenti
   finche database, Storage, Auth, webhook e riconciliazione ordini non sono
   verificati.
 - **Canale ufficiale:** banner globale Vinea e pagina di stato indipendente
@@ -42,8 +48,9 @@ sostituisce gli accordi con fornitori, commercialista o consulenti legali.
 
 Il ruolo applicativo `emergency_delegate` abilita soltanto il pannello del
 banner in `/continuita`. Al momento della nomina devono essere concessi alla
-persona, uno per uno e con privilegi minimi, gli accessi operativi a GitHub,
-Supabase, Netlify, DNS e backup necessari alle responsabilita approvate.
+persona, uno per uno e con privilegi minimi, gli accessi operativi descritti
+nella matrice, dopo i prerequisiti che vi sono elencati (protezione di `main`
+e secret in un Environment GitHub, decisione sulla chiave `age`).
 
 ## Copie e integrità
 
@@ -82,6 +89,7 @@ Lock abilitato e una application key limitata al bucket. Configurare in GitHub:
 | Variable | `BACKUP_AGE_RECIPIENT` |
 | Variable | `B2_S3_ENDPOINT` |
 | Variable | `B2_BUCKET` |
+| Variable | `BACKUP_ALERT_EXTRA_MENTIONS` (facoltativa, solo freshness watch: login GitHub aggiuntivi da menzionare nell'allarme; oggi non impostata) |
 | Secret | `SUPABASE_DB_URL` |
 | Secret | `SUPABASE_SERVICE_ROLE_KEY` |
 | Secret | `B2_KEY_ID` |
@@ -211,7 +219,9 @@ approssima il momento del dato salvato.
   prova (`0 < ore <= 20`), mai piu alta.
 - **Allarme:** il job fallisce, generando la notifica GitHub dei workflow
   falliti, e apre una sola issue con etichetta `backup-freshness-alert` che
-  menziona l'owner del repository. Commenta solo se cambiano le categorie e
+  menziona l'owner del repository e gli eventuali login GitHub della variabile
+  di repository `BACKUP_ALERT_EXTRA_MENTIONS` (massimo 3, validati; oggi non
+  impostata). Commenta solo se cambiano le categorie e
   chiude l'issue con un commento al primo controllo pulito. Le email dipendono
   dalle impostazioni di notifica GitHub di Enrico, non verificabili dal
   repository. I messaggi sono ripuliti dai valori dei secret prima di log e
@@ -255,7 +265,9 @@ Limiti residui:
 - il watch usa la stessa key B2 del backup; esegue solo letture per
   costruzione, ma una key dedicata in sola lettura rientra nella rotazione
   least privilege;
-- l'unico destinatario dell'allarme e Enrico finche non c'e un delegato;
+- l'unico destinatario dell'allarme e Enrico finche non c'e un delegato; dopo
+  la nomina basta impostare `BACKUP_ALERT_EXTRA_MENTIONS` con il suo login
+  GitHub, senza modifiche al codice;
 - la prima domenica con due run e il 27 settembre 2026, il primo giorno 1 il
   1 ottobre: in quei giorni deve esistere una sola copia weekly o monthly.
 
@@ -442,12 +454,11 @@ ordini bloccati.
 
 ## Checklist prima della riapertura
 
-- backup scelto anteriore all'incidente e hash validi;
-- ledger, RLS, policy e funzioni confrontati con la versione Git approvata;
-- Auth, messaggi privati, Realtime e Storage firmato verificati;
-- ogni ordine riconciliato con il provider e payout dubbi ancora bloccati;
-- banner e pagina di stato aggiornati, email inviate solo agli utenti coinvolti;
-- decisione di riapertura registrata con nome, data e verifiche eseguite.
+La checklist unica, con autorità e voci consolidate (sito, Auth, database,
+corruzione, backup, Storage, servizi chiave, contenimento, rischi, pagamenti e
+AI spenti, comunicazione, decisione registrata), è nella
+[Incident Card](EMERGENCY_DELEGATE_INCIDENT_CARD.md#checklist-di-riapertura).
+Vale per Enrico e per il delegato.
 
 ## Punti ancora esterni al repository
 
@@ -456,8 +467,9 @@ ordini bloccati.
 - la key temporanea read-only usata per il restore e scaduta e il file locale e
   stato eliminato; la rimozione della voce dalla lista Backblaze non e stata
   confermata indipendentemente e non blocca backup o restore;
-- nominare una persona come delegato e assegnarle `emergency_delegate` con MFA;
-- concedere e provare gli accessi individuali del delegato ai servizi esterni;
+- nominare una persona come delegato ed eseguire l'onboarding
+  (`EMERGENCY_DELEGATE_ONBOARDING.md`): prerequisiti GitHub, MFA, accessi
+  individuali della matrice, ruolo `emergency_delegate`, prova;
 - approvare destinatari, modello e procedura delle email di incidente via Resend;
 - rifissare RTO/RPO per i pagamenti reali dopo le prove elencate in
   "Controllo periodico".

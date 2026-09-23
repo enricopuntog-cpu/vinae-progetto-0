@@ -3780,3 +3780,45 @@ Riapertura mirata, senza toccare restore, architettura B2 o retention:
 Obiettivi Beta: RTO 24 ore, RPO target 24 ore, non garantiti. Supabase
 produzione, pagamenti, AI, status page, DNS e Netlify non sono stati toccati.
 Costi aggiuntivi zero (repository pubblico, pochi MB in piu su B2).
+
+## 23 settembre 2026 — delegato di emergenza preparato, persona non nominata
+
+- Verifica del ruolo `emergency_delegate`. Produzione in sola lettura: il ruolo
+  compare solo in `public.incident_notice_set` (eseguibile da `authenticated`,
+  non da `anon`), zero policy e zero viste lo citano, nessuna funzione o policy
+  legge `user_roles` senza un ruolo letterale, `user_roles` contiene solo
+  `admin=1`. `authenticated` ha solo `SELECT (user_id, role)` su `user_roles`;
+  le tabelle del banner non hanno grant client, la vista pubblica solo
+  `SELECT`.
+- Griglia `supabase/tests/12h_emergency_delegate_matrix.sql` su uno stack
+  locale separato (project id temporaneo, porte 553xx, Supabase CLI 2.117.0,
+  61 migrazioni del checkout): 18/18. Il delegato pubblica, modifica e ritira
+  il banner con URL della status page, con tre righe di audit a suo nome;
+  UPDATE e DELETE del registro rifiutati anche al proprietario; URL `http://`
+  e tipo sconosciuto `22023`; admin ok, utente normale e anon `42501`. Le 17
+  RPC riservate agli admin (dirette o via `private.moderazione_attore`)
+  rifiutano il delegato con `42501` mentre l'admin supera il controllo; sulle
+  altre 88 RPC per `authenticated` e sulle 52 tabelle o viste leggibili il
+  delegato ha gli stessi esiti di un utente normale. Controllo negativo con
+  `moderazione_attore` resa generica: controlli 16 e 17 rossi; ripristino,
+  18/18. Zero utenti e zero ruoli residui. Nessun privilege leak: nessuna
+  modifica al codice SQL o alle policy.
+- Il frontend mappa il delegato a `user` (`ruoloDaSessione`), `/admin`
+  richiede `admin`, `/continuita` ammette `admin` o `emergency_delegate` e usa
+  solo `incident_notice_set`: due test frontend-next, soglia CI 1606.
+- Allarme backup: il freshness watch menziona anche i login della variabile di
+  repository `BACKUP_ALERT_EXTRA_MENTIONS` (massimo 3, validati, mai ripetuti
+  nei log se non validi); oggi non impostata.
+- Fatti per la matrice accessi: repository GitHub pubblico e personale, `main`
+  senza protezioni né ruleset, secret a livello di repository: *write* oggi
+  darebbe accesso ai secret di produzione e backup. Organizzazione Supabase su
+  piano Pro: niente ruolo *Read-only* né ruoli per progetto; Enforce MFA
+  disponibile. Cloudflare offre *Workers Platform (Read-only)*. B2 non ha
+  membri con ruoli ridotti; la decifratura richiede la chiave `age` offline.
+- Documenti: `docs/EMERGENCY_DELEGATE_ACCESS_MATRIX.md`,
+  `docs/EMERGENCY_DELEGATE_ONBOARDING.md` (mandato, checklist, drill
+  trimestrale, revoca ordinaria e urgente),
+  `docs/EMERGENCY_DELEGATE_INCIDENT_CARD.md` (flusso in 14 passi, STOP,
+  checklist di riapertura consolidata, ora unica fonte anche per il runbook).
+- Nessun delegato nominato o invitato, nessun account o accesso creato;
+  produzione invariata salvo i normali deploy del merge.

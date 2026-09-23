@@ -300,7 +300,8 @@ Backend tests run with `APP_ENV=test`, no network, no real MongoDB and no real
 Stripe/AI credentials; use the fakes in `backend/tests/conftest.py`.
 
 Supabase grids under `supabase/tests/` are versioned manual proofs, except
-`12e`/`12f`/`12g` (Club/disputes). The `Supabase DB regression` workflow runs
+`12e`/`12f`/`12g` (Club/disputes) and `12h` (`emergency_delegate` privilege
+matrix). The `Supabase DB regression` workflow runs
 those, plus the full 12g E2E, on an ephemeral local stack built from the
 commit's migrations whenever migrations, Supabase config or those grids
 change. That gate uses no secrets and accepts only loopback targets; never
