@@ -1,6 +1,7 @@
 # Continuità operativa e custodia backup
 
-Stato iniziale: 19 settembre 2026; backup B2 operativo verificato il 22 settembre.
+Stato iniziale: 19 settembre 2026; backup B2, restore reale e primo run
+automatico verificati e chiusi il 23 settembre 2026.
 Questo runbook copre la beta Vinea e non
 sostituisce gli accordi con fornitori, commercialista o consulenti legali.
 
@@ -128,18 +129,34 @@ Riferimenti del provider: [regioni e AWS CLI](https://www.backblaze.com/docs/clo
 [capability delle application key](https://www.backblaze.com/docs/cloud-storage-s3-compatible-app-keys),
 [Lifecycle Rules e interazione con Object Lock](https://www.backblaze.com/docs/cloud-storage-lifecycle-rules).
 
-Nel bucket privato B2 sono presenti due coppie, senza `.tar.gz` in chiaro:
+Le prime due coppie sono state lette anche dal pannello B2. Il primo run
+automatico ha prodotto la terza e ne ha verificato upload e readback, senza
+alcun percorso di upload per il `.tar.gz` in chiaro:
 
 | Run | Oggetto in `daily/2026/09/` | Dimensione UI | Object Lock |
 | --- | --- | ---: | --- |
 | `35736812313` | `vinea-2026-09-22T13-58-35Z.tar.gz.age` e `.sha256` | 3,6 MB e 124 byte | Governance fino al 22 ottobre 2026, 13:58 UTC |
 | `35738026438` | `vinea-2026-09-22T14-09-13Z.tar.gz.age` e `.sha256` | 3,6 MB e 124 byte | Governance fino al 22 ottobre 2026, 14:09 UTC |
+| `35833711496` (`schedule`) | `vinea-2026-09-23T07-51-23Z.tar.gz.age` e `.sha256` | entrambi non vuoti, verificati dal readback | Governance almeno fino al 23 ottobre 2026, 07:51:23 UTC |
 
-Entrambi gli archivi hanno metadata `sha256` e `source=supabase`. Il run
+I primi due archivi hanno metadata `sha256` e `source=supabase`. Il run
 `35738026438` ha verificato in lettura che il metadata SHA-256 coincida con
 il checksum del download e con il `.sha256` remoto. Il controllo della
 retention rilegge i due oggetti e rifiuta mode diverso da Governance o data
 inferiore ai 30 giorni richiesti. Gli artifact GitHub del run sono zero.
+
+Il run `35833711496`, run number 7, e il primo avviato da `schedule` dopo
+l'attivazione del gate. Sul commit
+`2fba30fbcc30942c84aa85c063d5b90835497e0c` e iniziato il 23 settembre alle
+07:49:02 UTC ed e terminato `success` alle 07:51:38 UTC. I log mostrano export
+completo di ruoli, schema, dati e Storage; `MANIFEST.sha256` ha verificato i
+quattro file strutturali e gli 11 blob alle 07:51:23 UTC. Il messaggio finale
+arriva soltanto dopo upload di `.age` e `.sha256`, rilettura della retention di
+entrambi, download S3, controllo dell'header `age`, confronto del checksum
+locale con download, sidecar e metadata. GitHub API riporta zero artifact. Il
+workflow e ancora `active`, il gate e `true` e la cron resta `17 2 * * *` UTC:
+l'avvio alcune ore dopo l'orario nominale e un possibile ritardo del servizio
+schedulato, non una modifica della cron.
 
 ## Ripristino da B2
 
@@ -215,10 +232,61 @@ personalizzazioni gestite richiedono fonti aggiuntive; la prova non sostituisce
 la configurazione esterna di secret, redirect, SMTP, funzioni Edge e dominio
 necessaria in un incidente reale.
 
-Alle 15:42 UTC del 22 settembre il workflow resta `active`, con cron
-`17 2 * * *` UTC e gate `BACKUP_OFFSITE_ENABLED=true`. La prima esecuzione
-automatica dopo l'attivazione non e ancora avvenuta; il run schedulato
-`35701261729` delle 07:46 UTC era stato saltato prima dell'attivazione.
+Il precedente run schedulato `35701261729` delle 07:46 UTC del 22 settembre era
+stato saltato prima dell'attivazione. Lo stato corrente e il run automatico
+`35833711496` riuscito con il gate attivo.
+
+## Failover da zero: tre fonti obbligatorie
+
+Il solo archivio B2 non ricostruisce l'intera infrastruttura. Un failover verso
+un progetto nuovo usa insieme le tre fonti seguenti e registra commit Git,
+oggetto B2 e impostazioni esterne scelti.
+
+| Fonte | Contenuto | Source of truth | Recupero in un failover |
+| --- | --- | --- | --- |
+| **A. Backup B2** | `roles.sql`, `schema.sql`, `data.sql`, dati Auth esportabili, `storage-manifest.json`, blob Storage e `MANIFEST.sha256`, racchiusi nell'archivio `.age` con sidecar `.sha256` | bucket privato B2 `vineawineclub`, versione protetta da Object Lock; hash nel sidecar e nei metadata dell'oggetto | ottenere una credenziale temporanea read-only limitata al bucket/prefisso, scaricare `.age` e `.sha256`, rileggere retention/metadata, poi usare `offsite-restore-verify.sh` con la chiave `age` offline in una macchina isolata |
+| **B. Repository Git** | migrazioni, codice e ledger da ricostruire, Edge Functions, `supabase/config.toml`, configurazioni versionate, applicazione e workflow | commit approvato su `origin/main` in GitHub | clonare il commit scelto, verificare firma/hash e applicare le migrazioni in ordine a un progetto vuoto; verificare il ledger risultante prima di importare dati, distribuire le Edge Functions dal sorgente e usare le configurazioni versionate come baseline |
+| **C. Configurazioni esterne** | nomi e valori dei secret/env, impostazioni progetto Supabase, Auth redirect/callback e provider, SMTP, policy/config gestite Storage e Realtime, webhook/provider, Netlify, dominio/DNS e pagina di stato | dashboard o secret manager del singolo provider e account proprietario; il repository conserva soltanto nomi, contratti e baseline non segrete | creare credenziali nuove per il progetto di destinazione, riconfigurare ogni provider dalla propria console, confrontare con questo runbook e `docs/ENVIRONMENT.md`, quindi provarne il comportamento prima di cambiare DNS o riaprire il servizio |
+
+Nel restore del 22 settembre il ledger 60/60 era gia presente nella branch
+derivata: **non proveniva dal backup B2**. Su un progetto davvero vuoto applicare
+prima le migrazioni del commit Git selezionato, verificare oggetti e ledger,
+quindi usare il dump come fonte dei dati. `schema.sql` serve anche come confronto
+del punto-in-tempo: non va riprodotto ciecamente sopra oggetti gia creati dalle
+migrazioni. Importare `roles.sql` soltanto per i grant applicabili al servizio
+gestito e `data.sql` in una transazione controllata; nel test e stato necessario
+`SET LOCAL session_replication_role=replica` per evitare scritture duplicate dai
+trigger Auth. Ripristinare infine i blob secondo `storage-manifest.json`.
+
+Le personalizzazioni gestite che il dump non ha ricostruito nel test erano un
+trigger Auth, quattro policy Storage e una policy Realtime. Recuperarle dalla
+configurazione del progetto sorgente o dalla baseline verificata, applicarle al
+solo progetto nuovo e confrontarle con le regole versionate. Configurare inoltre:
+
+- URL del nuovo progetto, chiavi pubbliche/server e redirect Auth ammessi;
+- SMTP Resend e impostazioni Auth gestite, senza copiare chiavi nei log;
+- secret e gate delle Edge Functions, mantenendo pagamenti e IA spenti;
+- endpoint e firme dei webhook provider prima di riabilitarli;
+- variabili e secret Netlify, commit di deploy e callback sul dominio stabile;
+- DNS presso il registrar e status page su infrastruttura indipendente.
+
+Il preflight non distruttivo controlla che le fonti versionate minime esistano:
+
+```bash
+bash .github/scripts/disaster-recovery-preflight.sh
+```
+
+Con `--check-env` controlla anche, **solo per nome e senza stampare valori**, gli
+input operatore `B2_S3_ENDPOINT`, `B2_BUCKET`, `B2_KEY_ID`,
+`B2_APPLICATION_KEY`, `BACKUP_AGE_IDENTITY_FILE`, `SUPABASE_URL`,
+`SUPABASE_DB_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NETLIFY_AUTH_TOKEN` e
+`NETLIFY_SITE_ID`. Questi nomi sono l'interfaccia del preflight; i valori restano
+nei provider, nel secret manager o nel file offline indicato. Lo script non crea
+progetti, non legge file di chiave, non contatta servizi e non esegue restore.
+
+Prima del cambio DNS ripetere confronti di tabelle/RLS/policy/funzioni/conteggi,
+utenti Auth e inventario Storage, poi gli smoke Auth, RLS, RPC, Realtime privato
+e Storage privato/firmato. Solo dopo configurare webhook, callback e dominio.
 
 ## Attivazione del piano
 
@@ -242,12 +310,15 @@ token, cookie o dati personali nei ticket.
 7. Prima di riaprire pagamenti, riconciliare ogni ordine con Stripe e lasciare
    bloccati i payout dubbi. La riapertura richiede l'approvazione di Enrico.
 
-## Verifica già eseguita
+## Verifica storica precedente
 
 Il 19 settembre 2026 un restore isolato ha confermato 54 migrazioni, 46 tabelle
 con RLS, 65 policy, hash di policy/funzioni e dati, 10 utenti Auth e 11 oggetti
 Storage. Gli smoke autenticati Auth, messaggi, Realtime e Storage hanno superato
 23 controlli su 23. La copia isolata è stata eliminata al termine.
+
+Questa resta evidenza storica. La prova corrente e il restore del backup B2
+reale del 22 settembre, descritto sopra, seguito dal run automatico del 23.
 
 Le allowlist Edge sono state verificate dal dominio stabile e da localhost con
 10 controlli su 10. Le run scheduler `35450587237` e `35450783027` hanno
@@ -274,12 +345,18 @@ ordini bloccati.
 
 ## Punti ancora esterni al repository
 
-- monitorare la prima esecuzione automatica B2 con il gate attivo;
 - ruotare in seguito la B2 Application Key con least privilege, rimuovendo
   `bypassGovernance` e `deleteFiles`; non è un blocco operativo;
+- la key temporanea read-only usata per il restore e scaduta e il file locale e
+  stato eliminato; la rimozione della voce dalla lista Backblaze non e stata
+  confermata indipendentemente e non blocca backup o restore;
 - nominare una persona come delegato e assegnarle `emergency_delegate` con MFA;
 - concedere e provare gli accessi individuali del delegato ai servizi esterni;
 - approvare destinatari, modello e procedura delle email di incidente via Resend;
 - distribuire `status-page/` su un account/progetto indipendente dal runtime
   principale;
 - riesaminare RTO/RPO 24/24 prima di abilitare pagamenti reali.
+
+Il capitolo tecnico Backup/Disaster Recovery B2 e chiuso. Non riaprirlo senza
+una nuova evidenza di guasto, incidente o requisito; i punti sopra sono
+hardening o dipendenze organizzative esterne, non blocker del backup beta.

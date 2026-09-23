@@ -3505,8 +3505,9 @@ il 22 settembre alle 14:09:29 UTC. Ha caricato una seconda coppia
 3,6 MB e 124 byte nella UI, entrambi Governance fino al 22 ottobre alle
 14:09 UTC. Nel bucket sono visibili solo le due coppie `.age`/`.sha256`,
 nessun `.tar.gz` in chiaro. Artifact del run: zero. Il workflow GitHub è
-`active`, schedule giornaliera `17 2 * * *` UTC e gate `true`; la prima
-esecuzione schedulata con il gate attivo resta da osservare.
+`active`, schedule giornaliera `17 2 * * *` UTC e gate `true`; a questa
+rilevazione la prima esecuzione schedulata con il gate attivo restava da
+osservare. La chiusura del 23 settembre sotto ne registra il successo.
 
 **HARDENING FUTURO:** ruotare la B2 Application Key dopo la prova completa
 di decrypt/restore, rimuovendo capability non necessarie come
@@ -3538,8 +3539,37 @@ confrontate con produzione. Smoke di login Auth, RLS, RPC, Realtime privato e
 Storage privato/firmato riusciti; fixture rimosse. La branch e le copie locali
 del backup sono state eliminate, con assenza verificata. Produzione solo letta.
 
-La prima esecuzione automatica dopo `BACKUP_OFFSITE_ENABLED=true` non era ancora
-avvenuta alle 15:42 UTC: il run `35701261729` era stato saltato alle 07:46 UTC
-prima dell'attivazione. Il debito di hardening della key B2 resta non
-bloccante; la configurazione esterna necessaria a un vero failover non e stata
-ricreata in questa prova.
+Alla rilevazione intermedia delle 15:42 UTC la prima esecuzione automatica dopo
+`BACKUP_OFFSITE_ENABLED=true` non era ancora avvenuta: il run `35701261729` era
+stato saltato alle 07:46 UTC prima dell'attivazione. Lo stato e stato poi
+superato dal run riuscito descritto nella chiusura sotto. Il debito di hardening
+della key B2 resta non bloccante; la configurazione esterna necessaria a un vero
+failover non e stata ricreata in questa prova.
+
+### Chiusura Backup/Disaster Recovery B2 — 23 settembre 2026
+
+Il primo run automatico con il gate attivo e `35833711496`, evento `schedule`,
+run 7 sul commit `2fba30fbcc30942c84aa85c063d5b90835497e0c`. E iniziato alle
+07:49:02 UTC ed e terminato `success` alle 07:51:38 UTC. Il ritardo rispetto
+alla cron nominale `17 2 * * *` UTC e un possibile ritardo di GitHub Actions e
+non una modifica della schedule; workflow `active` e gate `true` sono stati
+riletti.
+
+I log confermano export di ruoli, schema e dati, export Storage, verifica del
+manifest interno con gli 11 blob e i quattro file strutturali, cifratura e
+upload. Il timestamp deterministico dopo il manifest individua la coppia
+`daily/2026/09/vinea-2026-09-23T07-51-23Z.tar.gz.age` e `.sha256`. Il passo ha
+riscaricato entrambi gli oggetti e ha verificato file non vuoti, header `age`,
+SHA-256 locale/remoto/sidecar/metadata e retention `GOVERNANCE` almeno fino al
+`2026-10-23T07:51:23Z`. Lo script elimina il `.tar.gz` prima dell'upload e non
+ha alcun percorso di caricamento in chiaro. GitHub API riporta zero artifact.
+
+La prova di restore reale del 22 settembre resta quella autorevole. Nel relativo
+ambiente derivato il migration ledger 60/60 era preesistente e non proveniva
+dall'archivio B2. Il runbook distingue quindi backup B2, repository Git e
+configurazioni esterne necessarie a un progetto nuovo; il solo archivio non
+ricostruisce l'intera infrastruttura. Il capitolo B2/DR e chiuso e non va
+riaperto senza nuova evidenza di guasto, incidente o requisito. Restano solo la
+rotazione least privilege della key principale e la voce della key temporanea
+read-only scaduta, la cui eliminazione dalla lista Backblaze non e stata
+confermata: entrambi non bloccanti.

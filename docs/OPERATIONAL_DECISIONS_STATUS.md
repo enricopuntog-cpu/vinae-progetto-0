@@ -1,6 +1,6 @@
 # Stato decisioni operative, contestazioni e Club
 
-Aggiornato il 22 settembre 2026. Questo file è la lista persistente dei lavori
+Aggiornato il 23 settembre 2026. Questo file è la lista persistente dei lavori
 conclusi e dei residui che dipendono da account, persone o decisioni esterne.
 
 ## Completato nel repository
@@ -75,9 +75,16 @@ Netlify è rimasta sul Published `8e13f84`, perché il cambiamento non tocca
 il frontend. Questo è il record del preflight: dal 22 settembre il gate B2 è
 `true`. Dopo i fix nelle PR #133/#134, il primo backup reale `35736812313`
 è riuscito; la PR #135 ha aggiunto il download S3 cifrato e il run
-`35738026438` ha verificato SHA-256, metadata e Object Lock. Il bucket
-contiene due coppie `.age`/`.sha256` sotto `daily/2026/09/`, senza archivio
-in chiaro né artifact GitHub. Dettagli nel runbook.
+`35738026438` ha verificato SHA-256, metadata e Object Lock. A quella verifica
+il bucket conteneva due coppie `.age`/`.sha256` sotto `daily/2026/09/`, senza
+archivio in chiaro né artifact GitHub. Dettagli nel runbook.
+
+Il restore reale dal run `35738026438` e stato completato in una branch
+Supabase isolata con database/Auth/Storage e smoke 5/5, poi eliminata. Il primo
+run schedulato con il gate attivo, `35833711496`, e riuscito il 23 settembre:
+pipeline completa, readback S3, SHA-256/sidecar/metadata e Object Lock
+`GOVERNANCE` verificati, zero artifact. Il capitolo B2/DR e chiuso; la rotazione
+least privilege della key principale resta hardening non bloccante.
 
 Gli advisor Supabase continuano a classificare come `SECURITY DEFINER` le viste
 strette e le RPC accessibili agli utenti autenticati, e come "RLS senza policy"
@@ -91,7 +98,7 @@ dei Club; non aprono accessi e non bloccano la beta chiusa.
 
 | Attività | Stato | Prerequisito / prossima azione |
 | --- | --- | --- |
-| Backup B2 | Operativo, gate attivo | Run `35738026438` riuscito con readback cifrato, SHA-256, Object Lock e schedulazione verificati. Resta la prova di decrypt/restore isolato con Enrico; poi rotazione least privilege della key, non bloccante. |
+| Backup B2 / DR | Chiuso tecnicamente | Run reale `35738026438` decifrato e ripristinato in isolamento; primo run automatico `35833711496` riuscito con readback e Object Lock. Il runbook copre le tre fonti del failover da zero. Resta solo la rotazione least privilege della key, non bloccante. |
 | Pagina di stato indipendente | Bloccata esternamente | Scegliere account/progetto e dominio separati; distribuire `status-page/`, poi inserire l'URL HTTPS nel banner. |
 | Delegato di emergenza | Bloccata esternamente | Nominare una persona, abilitarle MFA e assegnare `emergency_delegate`; provare accesso a `/continuita`. |
 | Accessi del delegato | Bloccata esternamente | Concedere alla persona nominata accessi individuali e minimi a GitHub, Supabase, Netlify, DNS e backup; il ruolo applicativo da solo abilita soltanto il banner. |

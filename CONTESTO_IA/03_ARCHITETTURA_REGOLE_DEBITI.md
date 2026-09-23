@@ -287,10 +287,11 @@ successive possono costruire.
   preload` sono in `netlify.toml` e la CSP è in **Report-Only**. Resta aperta la
   CSP enforcing con nonce via middleware, da scrivere dopo aver letto le
   violazioni raccolte in produzione;
-- backup e restore: prova isolata completata il 19 settembre; backup B2
-  cifrato operativo dal 22 settembre. Il backup reale del run `35738026438`
-  e stato decifrato e ricostruito in una branch Supabase temporanea, poi
-  eliminata. HARDENING FUTURO non bloccante: ruotare la B2 Application Key
+- backup e restore: il backup reale del run `35738026438` e stato decifrato e
+  ricostruito in una branch Supabase temporanea, poi eliminata; il primo run
+  automatico `35833711496` ha completato export, cifratura, upload, readback e
+  Object Lock. Il capitolo B2/DR e chiuso e si riapre solo per guasto, incidente
+  o requisito nuovo. HARDENING FUTURO non bloccante: ruotare la B2 Application Key
   con least privilege, rimuovendo
   `bypassGovernance` e `deleteFiles`;
 - Leaked Password Protection in Supabase Auth (azione manuale da dashboard);
@@ -349,6 +350,9 @@ successive possono costruire.
   Object Lock e retention 30 giornalieri, 12 settimanali, 12 mensili. Il job
   è attivo dal 22 settembre 2026 e resta fail-closed se il gate non vale
   esattamente `true` o se configurazione, retention o readback non sono validi.
+  Il run schedulato `35833711496` del 23 settembre 2026 ha verificato il primo
+  ciclo automatico completo con il gate attivo; il ritardo di avvio non modifica
+  la cron `17 2 * * *` UTC.
 
 ## Comandi di verifica
 

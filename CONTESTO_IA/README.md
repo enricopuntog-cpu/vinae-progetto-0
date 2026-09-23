@@ -1,6 +1,6 @@
 # Router del contesto durevole Vinea
 
-Ultimo aggiornamento del router: **22 settembre 2026**.
+Ultimo aggiornamento del router: **23 settembre 2026**.
 
 Questa cartella conserva memoria strutturale e storia datata. Non è il bootstrap
 obbligatorio e non sostituisce le fonti vive.
@@ -22,11 +22,10 @@ Aprire soltanto ciò che serve al task:
 
 - [`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md) — dossier cronologico di misure e
   stati verificati; l'apertura è una fotografia del 9 agosto 2026, non lo stato
-  corrente. L'ultima voce è del 22 settembre 2026: backup B2 attivo, primo run
-  riuscito `35736812313`, readback cifrato e checksum verificati nel run
-  `35738026438`, Object Lock, decrypt, restore Supabase isolato e smoke
-  confermati; branch e file temporanei eliminati. La prima esecuzione
-  schedulata con il gate attivo non era ancora avvenuta alle 15:42 UTC.
+  corrente. L'ultima voce è del 23 settembre 2026: backup B2 attivo, readback
+  cifrato e checksum verificati, decrypt e restore Supabase isolato confermati,
+  branch e file temporanei eliminati, e primo run schedulato con il gate attivo
+  `35833711496` riuscito con pipeline completa e Object Lock.
   Residui e checklist in
   `../docs/SECURITY_FOLLOWUP_PR120.md` e `../docs/PRELAUNCH_TASK_RECONCILIATION.md`.
 - La regola delle porte che fanno uscire denaro — riautenticazione recente
@@ -114,10 +113,11 @@ va riscritto come se la decisione precedente non fosse mai esistita.
   file sotto `supabase/migrations/`. Sulle PR con migrazioni può creare un ramo
   temporaneo ed eseguire la suite; sulle PR senza migrazioni può risultare
   `skipped`. Verificare sempre la testa esatta e il ledger dopo il merge.
-- Il backup B2 è operativo con gate `true`. Run, oggetti, retention, download
-  cifrato e tre Lifecycle Rules sono in
-  `../docs/CONTINUITY_AND_BACKUP_RUNBOOK.md`. Restano la prova completa di
-  decrypt/restore isolato con Enrico e, dopo quella validazione, la rotazione
-  least privilege della Application Key come hardening non bloccante.
+- Il capitolo Backup/Disaster Recovery B2 è chiuso: gate `true`, run automatico
+  `35833711496` verificato, restore reale isolato riuscito e runbook per un
+  progetto nuovo completato. Run, oggetti, retention e fonti di ripristino sono
+  in `../docs/CONTINUITY_AND_BACKUP_RUNBOOK.md`. Resta solo la rotazione least
+  privilege della Application Key come hardening non bloccante; non riaprire il
+  capitolo senza una nuova evidenza di guasto, incidente o requisito.
 
 Per ogni fatto più volatile, rileggere `CHANGES.log` e misurare di nuovo.
