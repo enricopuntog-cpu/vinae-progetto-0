@@ -46,6 +46,56 @@ for day in '' 2026-02-30 2026-9-1 2026-09-01T00:00:00Z; do
   if backup_tiers_for_utc_date "$day" >/dev/null; then exit 1; fi
 done
 
+# Due run nello stesso giorno UTC: daily a ogni run, weekly e monthly una volta.
+mock_existing_keys=''
+mock_list_fails=false
+aws() {
+  [[ "$1 $2" == 's3api list-objects-v2' ]] || return 1
+  [[ "$mock_list_fails" == false ]] || return 254
+  local prefix='' previous='' key
+  local -a matches=()
+  for argument in "$@"; do
+    if [[ "$previous" == --prefix ]]; then prefix="$argument"; fi
+    previous="$argument"
+  done
+  for key in $mock_existing_keys; do
+    if [[ "$key" == "$prefix"* ]]; then matches+=("$key"); fi
+  done
+  if (( ${#matches[@]} == 0 )); then
+    printf 'None\n'
+  else
+    (IFS=$'\t'; printf '%s\n' "${matches[*]}")
+  fi
+}
+tiers_for() { backup_tiers_to_upload https://s3.eu-central-003.backblazeb2.com bucket "$1" 2>/dev/null; }
+sunday_archive='weekly/2026/09/vinea-2026-09-27T07-50-01Z.tar.gz.age'
+assert_equal "$(tiers_for 2026-09-27)" $'daily\nweekly'
+mock_existing_keys="$sunday_archive ${sunday_archive}.sha256"
+assert_equal "$(tiers_for 2026-09-27)" daily
+# Un run interrotto dopo l'archivio e prima del sidecar non conta come copia.
+mock_existing_keys="$sunday_archive"
+assert_equal "$(tiers_for 2026-09-27)" $'daily\nweekly'
+# La copia di un'altra domenica non sostituisce quella di oggi.
+mock_existing_keys='weekly/2026/09/vinea-2026-09-20T07-50-01Z.tar.gz.age weekly/2026/09/vinea-2026-09-20T07-50-01Z.tar.gz.age.sha256'
+assert_equal "$(tiers_for 2026-09-27)" $'daily\nweekly'
+# 1 novembre 2026: domenica e primo del mese.
+mock_existing_keys=''
+assert_equal "$(tiers_for 2026-11-01)" $'daily\nweekly\nmonthly'
+mock_existing_keys='weekly/2026/11/vinea-2026-11-01T07-50-01Z.tar.gz.age weekly/2026/11/vinea-2026-11-01T07-50-01Z.tar.gz.age.sha256'
+assert_equal "$(tiers_for 2026-11-01)" $'daily\nmonthly'
+mock_existing_keys+=' monthly/2026/11/vinea-2026-11-01T07-50-01Z.tar.gz.age monthly/2026/11/vinea-2026-11-01T07-50-01Z.tar.gz.age.sha256'
+assert_equal "$(tiers_for 2026-11-01)" daily
+# B2 non leggibile: nei giorni con weekly/monthly il run si ferma prima degli export.
+mock_list_fails=true
+if tiers_for 2026-09-27 >/dev/null; then
+  echo 'Copie weekly non verificabili accettate.' >&2
+  exit 1
+fi
+# Nei giorni feriali non serve interrogare B2.
+assert_equal "$(tiers_for 2026-09-23)" daily
+mock_list_fails=false
+unset -f aws tiers_for
+
 aws() { printf '%s\n' "$retention_response"; }
 retention_response=$'GOVERNANCE\t2026-10-23T00:00:00+00:00'
 verify_b2_retention https://s3.eu-central-003.backblazeb2.com bucket daily/example.age 2026-10-22T00:00:00Z

@@ -1,0 +1,56 @@
+name: Continuity - backup freshness watch
+
+# Controlla ogni ora, e subito dopo ogni run di backup, l'eta dell'ultimo backup
+# completo realmente presente in B2. Fallisce chiuso e apre una sola issue con
+# etichetta backup-freshness-alert; la chiude quando il backup torna fresco.
+# Non ha gate: se il backup viene sospeso di proposito, disattivare anche questo
+# workflow dalla scheda Actions.
+on:
+  schedule:
+    - cron: "41 * * * *"
+  workflow_run:
+    workflows: ["Continuity - encrypted offsite backup"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      stale_after_hours:
+        description: "Solo per prove: soglia ridotta in ore (0 < h <= 20). Vuoto = 20."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: continuity-backup-freshness
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: Latest B2 backup age
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      # Solo operazioni B2 di lettura (list, head, retention, get); nessun secret
+      # Supabase. La soglia arriva via env e non viene interpolata nello script.
+      - name: Check backup freshness
+        env:
+          B2_S3_ENDPOINT: ${{ vars.B2_S3_ENDPOINT }}
+          B2_BUCKET: ${{ vars.B2_BUCKET }}
+          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          FRESHNESS_STALE_AFTER_HOURS: ${{ inputs.stale_after_hours }}
+        run: |
+          aws --version
+          node .github/scripts/offsite-backup-freshness.mjs

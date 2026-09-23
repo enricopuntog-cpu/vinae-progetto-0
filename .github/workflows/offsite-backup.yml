@@ -1,8 +1,11 @@
 name: Continuity - encrypted offsite backup
 
 on:
+  # Due run al giorno a 12 ore di distanza: GitHub avvia le schedule in ritardo
+  # (circa 5 ore e mezza osservate a settembre 2026), quindi un run solo non
+  # teneva l'RPO entro 24 ore. Il freshness watch misura l'eta reale in B2.
   schedule:
-    - cron: "17 2 * * *"
+    - cron: "17 2,14 * * *"
   workflow_dispatch:
 
 permissions:

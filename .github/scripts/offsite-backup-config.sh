@@ -32,6 +32,51 @@ backup_tiers_for_utc_date() {
   fi
 }
 
+# Il workflow gira piu volte al giorno: la copia daily viene caricata a ogni run,
+# weekly e monthly una sola volta per giorno UTC. Una copia conta come gia
+# presente solo se in B2 esistono sia l'archivio sia il suo sidecar, cosi un run
+# interrotto a meta non impedisce al run successivo di completarla.
+# Ritorna 0 se presente, 1 se assente, 2 se B2 non e verificabile.
+backup_tier_copy_exists() {
+  local endpoint="$1" bucket="$2" tier="$3" day="$4"
+  local prefix listing key
+  local -A keys=()
+  prefix="${tier}/${day:0:4}/${day:5:2}/vinea-${day}T"
+  listing="$(aws s3api list-objects-v2 --endpoint-url "$endpoint" --bucket "$bucket" \
+    --prefix "$prefix" --query 'Contents[].Key' --output text)" || return 2
+  for key in $listing; do
+    [[ "$key" == None ]] || keys["$key"]=1
+  done
+  for key in "${!keys[@]}"; do
+    if [[ "$key" == *.tar.gz.age && -n "${keys["${key}.sha256"]:-}" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+backup_tiers_to_upload() {
+  local endpoint="$1" bucket="$2" day="$3"
+  local tiers tier status
+  tiers="$(backup_tiers_for_utc_date "$day")" || return 1
+  while IFS= read -r tier; do
+    if [[ "$tier" == daily ]]; then
+      printf 'daily\n'
+      continue
+    fi
+    status=0
+    backup_tier_copy_exists "$endpoint" "$bucket" "$tier" "$day" || status=$?
+    case "$status" in
+      0) echo "Copia ${tier} del ${day} gia presente in B2: non duplicata." >&2 ;;
+      1) printf '%s\n' "$tier" ;;
+      *)
+        echo "::error::Impossibile verificare le copie ${tier} esistenti in B2" >&2
+        return 1
+        ;;
+    esac
+  done <<< "$tiers"
+}
+
 write_backup_manifest() {
   local backup_dir="$1"
   (

@@ -148,6 +148,9 @@ jobs:
           bash -n .github/scripts/offsite-backup-config.test.sh
           bash .github/scripts/offsite-backup-config.test.sh
           bash -n .github/scripts/offsite-restore-verify.sh
+          node --check .github/scripts/offsite-backup-freshness.mjs
+          node --test .github/scripts/offsite-backup-freshness.test.mjs
+          bash .github/scripts/offsite-backup-freshness.cli.test.sh
           bash -n .github/scripts/supabase-db-gate-scope.sh
           bash -n supabase/tests/12g_ci_run.sh
           node --check supabase/tests/12g_club_dispute_e2e.mjs
