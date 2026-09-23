@@ -95,9 +95,10 @@ environment con *deployment branches* limitati a `main`:
 `production-payouts` (scheduler dei payout: `SUPABASE_ANON_KEY`,
 `PAYOUTS_JOB_TOKEN`). La destinazione dei valori è l'environment, non il
 repository: un workflow modificato su un altro branch non deve poterli
-leggere. Finché lo spostamento non è eseguito i valori restano a livello di
-repository (stato nella matrice del delegato di emergenza). Le variabili non
-segrete restano variabili di repository.
+leggere (prova negativa superata, anche con `deployment: false`). Dal
+23–24 settembre 2026 i valori esistono solo negli environment: a livello di
+repository non resta alcun secret, e un secret nuovo va creato nell'environment
+del job che lo usa. Le variabili non segrete restano variabili di repository.
 
 ### Origine dei redirect della callback Auth
 

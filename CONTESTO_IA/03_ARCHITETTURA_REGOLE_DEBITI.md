@@ -374,10 +374,20 @@ successive possono costruire.
   force push o cancellazione, sei check di Actions, review di Code Owner) e da
   `.github/CODEOWNERS` (tutto, `.github/` e il file stesso al titolare;
   `/status-page/site/` senza owner). I job con secret dichiarano environment
-  limitati a `main` (`production-backup`, `production-payouts`); un nuovo
-  workflow con secret deve fare lo stesso (test in
-  `operational-foundations.test.ts`) e nessun workflow usa
-  `pull_request_target`.
+  limitati a `main` (`production-backup`, `production-payouts`), che
+  contengono gli **unici** valori: a livello di repository non esiste alcun
+  secret dal 23–24 settembre 2026. Un nuovo secret va creato nell'environment
+  del job che lo usa, mai nel repository (un secret di repository tornerebbe
+  leggibile da un workflow su qualunque branch). Un nuovo workflow con secret
+  dichiara un environment (test in `operational-foundations.test.ts`) e
+  nessun workflow usa `pull_request_target`, che girerebbe con il ref di
+  `main`. Prova negativa: da un altro branch i job con environment, anche con
+  `deployment: false`, sono rifiutati prima di partire.
+- Disaster recovery del delegato di emergenza: modello **A** per la Beta
+  (decisione di Enrico del 24 settembre 2026). Il delegato non riceve la
+  chiave privata `age`, ruoli Supabase *Owner*/*Administrator* né una
+  capacità break-glass; il restore catastrofico resta a Enrico. Il modello B
+  si rivaluta prima dei pagamenti reali.
 - La destinazione offsite scelta e Backblaze B2 EU Central con cifratura `age`,
   Object Lock e retention 30 giornalieri, 12 settimanali, 12 mensili. Il job
   è attivo dal 22 settembre 2026 e resta fail-closed se il gate non vale

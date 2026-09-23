@@ -5,8 +5,11 @@ Nessun accesso è stato concesso a terzi, nessun account è stato creato e il
 ruolo `emergency_delegate` non è assegnato a nessuno (produzione: una sola
 riga in `user_roles`, `admin`). Dalla stessa data il ruolo usa il banner
 solo con una sessione MFA (`aal2`) e `main` è protetto da ruleset e
-CODEOWNERS; lo spostamento dei secret negli environment GitHub è preparato ma
-non ancora eseguito (punto 1 dei prerequisiti).
+CODEOWNERS. Dal 23–24 settembre 2026 i secret di produzione e B2 esistono solo
+negli environment GitHub limitati a `main` (zero secret di repository, prova
+negativa da un branch superata; punto 1 dei prerequisiti). Modello di disaster
+recovery scelto da Enrico per la Beta: **A — delegato operativo limitato**
+(ultima sezione).
 
 Questo documento dice **che cosa** concedere e **perché**. La procedura per
 concederlo, provarlo e revocarlo è in
@@ -58,17 +61,25 @@ cambiano configurazioni che oggi funzionano con un solo operatore.
      *deployment branches* limitati a `main`; i workflow di backup, freshness
      watch e payout dichiarano `environment:` (test in
      `operational-foundations.test.ts`);
-   - **da completare** — spostare i valori: oggi i sei secret
-     (`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`, `B2_KEY_ID`,
-     `B2_APPLICATION_KEY`, `SUPABASE_ANON_KEY`, `PAYOUTS_JOB_TOKEN`) sono
-     ancora **a livello di repository**, e gli environment sono vuoti. GitHub
-     non rilegge i valori; la strada senza esporli è un workflow usa e getta
-     che li sigilla nel runner con la chiave pubblica di ciascun environment,
-     poi la cancellazione dei secret di repository e un dispatch di prova del
-     backup e del freshness watch. Richiede un'autorizzazione esplicita di
-     Enrico (scrittura nel secret store). Finché non è fatto, **un workflow
-     scritto su un branch può ancora leggere i secret di produzione e B2** e
-     l'accesso GitHub del delegato non va concesso.
+   - **fatto** (23–24 settembre 2026, autorizzazione esplicita di Enrico) —
+     valori spostati: `SUPABASE_DB_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+     `B2_KEY_ID`, `B2_APPLICATION_KEY` in `production-backup`;
+     `SUPABASE_ANON_KEY`, `PAYOUTS_JOB_TOKEN` in `production-payouts`. GitHub
+     non rilegge i valori: un workflow usa e getta su un branch orfano
+     temporaneo li ha sigillati nel runner con la chiave pubblica di ciascun
+     environment (sealed box libsodium), e il ciphertext è uscito dal runner
+     solo cifrato una seconda volta con `age` per una chiave effimera locale,
+     poi distrutta; nessun artifact. Prima di cancellare i secret di
+     repository, backup, freshness watch e scheduler dei payout sono passati
+     con i valori degli environment. A livello di repository oggi **non resta
+     alcun secret**; branch, workflow e run temporanei sono stati eliminati.
+   - **prova negativa** — da un branch diverso da `main`: un job senza
+     environment vede i sei nomi vuoti; i job con `environment:
+     production-backup`/`production-payouts` **e** quelli con
+     `deployment: false` vengono rifiutati da GitHub prima di partire
+     (*Branch … is not allowed to deploy … due to environment protection
+     rules*, zero step eseguiti). Per gli eventi `pull_request` la regola
+     confronta `refs/pull/N/merge`, che non coincide con `main`.
 
 2. **Chiave privata `age`.** Gli archivi B2 si decifrano solo con l'identità
    `age` che Enrico custodisce offline. Senza di essa il delegato può
@@ -77,7 +88,8 @@ cambiano configurazioni che oggi funzionano con un solo operatore.
    Card), copia sigillata della chiave in un luogo concordato, oppure un
    secondo destinatario `age` intestato al delegato (oggi lo script di backup
    accetta un solo destinatario: richiederebbe una modifica del backup).
-   Decisione di Enrico.
+   **Deciso (modello A):** nessun accesso del delegato alla chiave; il
+   restore resta a Enrico.
 3. **Netlify — piano.** Il ruolo *Developer* è incluso nei piani a crediti a
    partire dal Pro; sui piani precedenti è un posto a pagamento. Se il piano
    corrente non include il posto, la scelta è di Enrico: il delegato non
@@ -159,8 +171,8 @@ cambiano configurazioni che oggi funzionano con un solo operatore.
   senza approvazione di Enrico; fare force push o cancellare `main`; ottenere
   i secret di produzione e B2 con un workflow modificato su un branch. I primi
   punti sono garantiti dal ruolo *write*; merge, force push e cancellazione dal
-  ruleset e da CODEOWNERS (attivi); l'ultimo solo dopo lo spostamento dei
-  secret negli environment (da completare, punto 1).
+  ruleset e da CODEOWNERS (attivi); l'ultimo dagli environment limitati a
+  `main` (secret spostati e prova negativa superata, punto 1).
 - **Audit del 23 settembre 2026** (configurazione, nessun collaboratore
   invitato): unico collaboratore `enricopuntog-cpu` (admin); permessi di
   default dei workflow `read`; GitHub Actions non può approvare PR; nessun
@@ -320,22 +332,29 @@ cambiano configurazioni che oggi funzionano con un solo operatore.
 
 | Rischio | Dove | Mitigazione |
 | --- | --- | --- |
-| *write* GitHub non riducibile; finché i secret restano a livello di repository equivale ad accesso ai secret | GitHub | ruleset e CODEOWNERS attivi; spostamento dei secret negli environment prima di invitare (punto 1) |
+| *write* GitHub non riducibile | GitHub | ruleset e CODEOWNERS attivi; secret solo negli environment limitati a `main`, prova negativa da branch superata (punto 1); un collaboratore può comunque lanciare da `main` i workflow esistenti |
 | *Developer* Supabase può scrivere nei dati di produzione | Supabase | mandato scritto, MFA imposta, drill; alternativa piano Team o nessun accesso |
 | *Developer* Netlify può cambiare le variabili, incluse quelle dei gate | Netlify | mandato, controllo del registro a ogni drill |
 | permessi DNS dei ruoli Netlify non documentati | Netlify DNS | verifica alla concessione; riserva `vinea-status.pages.dev` |
-| restore impossibile senza chiave `age` | B2 | decisione di Enrico al prerequisito 2 |
+| restore impossibile senza Enrico (chiave `age`, privilegi Supabase) | B2, Supabase | accettato con il modello A per la Beta; da rivalutare prima dei pagamenti reali |
 | l'admin usa il banner anche in `aal1` | Vinea | scelta esplicita (accesso ordinario del titolare invariato); fattore facoltativo da `/account/sicurezza` |
 | TOTP sul progetto ospitato non leggibile dalle API pubbliche | Vinea | attivo di default su Supabase; provato davvero all'enrollment del delegato (onboarding, sezione Test) |
 | login del delegato visibile nelle issue di allarme pubbliche | GitHub | informare la persona prima di configurare la variabile |
 
-## Disaster recovery: due modelli, decisione di Enrico
+## Disaster recovery: modello A scelto per la Beta
 
-Il mandato attuale non dà al delegato il ripristino dei dati. Prima della
-nomina Enrico sceglie **uno** dei due modelli; nessuno dei due è implementato
-oltre a quanto già descritto sopra.
+**Decisione di Enrico (24 settembre 2026): A — delegato operativo limitato.**
+Il delegato può fare diagnosi, banner e status page, rollback Netlify, backup
+manuale (dispatch da `main`), freshness check, smoke test e le procedure
+operative documentate. Il ripristino catastrofico su progetto nuovo resta
+responsabilità di Enrico. Al delegato **non** si consegnano la chiave privata
+`age`, ruoli Supabase *Owner*/*Administrator* né una capacità break-glass
+completa. Il modello B sarà rivalutato prima dei pagamenti reali o se
+cambiano i requisiti di continuità operativa; fino ad allora non va
+implementato.
 
-**A. Delegato operativo limitato** (compatibile con la preparazione attuale).
+**A. Delegato operativo limitato** (scelto; compatibile con la preparazione
+attuale, nessun lavoro aggiuntivo).
 Diagnosi (log, stato Supabase/Netlify, run di Actions), rollback Netlify a un
 deploy precedente, banner e status page, dispatch del backup e del freshness
 watch, smoke test dell'Incident Card, escalation. Un ripristino su progetto
@@ -344,7 +363,8 @@ creare o ripristinare un progetto Supabase. Rischio: con Enrico irraggiungibile
 e il database perso, il servizio resta fermo (banner e status page onesti) fino
 al suo rientro; l'RTO di 24 ore dipende da Enrico.
 
-**B. Delegato break-glass completo.** Oltre ad A, il delegato può decifrare gli
+**B. Delegato break-glass completo** (non scelto; da rivalutare prima dei
+pagamenti reali). Oltre ad A, il delegato può decifrare gli
 archivi B2 e ripristinare un progetto seguendo il runbook. Richiede decisioni
 e lavoro dedicati:
 - custodia della chiave `age`: copia sigillata in un luogo concordato oppure

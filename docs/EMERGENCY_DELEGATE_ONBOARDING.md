@@ -7,9 +7,10 @@ per il ruolo, pagina `/account/sicurezza` per collegare l'app authenticator,
 `main` protetto da ruleset e CODEOWNERS, environment GitHub limitati a
 `main`, matrice degli accessi, Incident Card, checklist di riapertura,
 procedura di revoca, drill periodico e destinatari configurabili dell'allarme
-backup. Mancano lo spostamento dei valori dei secret negli environment
-(autorizzazione di Enrico), la scelta fra i modelli di disaster recovery A e B
-(matrice, ultima sezione) e la persona. Nessun nuovo codice serve per
+backup, secret di produzione e B2 solo negli environment (zero secret di
+repository, prova negativa da branch superata), modello di disaster recovery
+**A — delegato operativo limitato** scelto da Enrico per la Beta (matrice,
+ultima sezione). Manca la persona. Nessun nuovo codice serve per
 l'onboarding.
 Il capitolo si chiude quando esiste una persona reale nominata da Enrico, con
 MFA attiva e accessi provati secondo la checklist sotto, firmata e datata.
@@ -96,13 +97,15 @@ solo date, esiti e iniziali.
 
 - [x] ruleset `main-protection` su `main` e `.github/CODEOWNERS` attivi
       (23 settembre 2026);
-- [ ] secret spostati negli environment `production-backup` e
+- [x] secret spostati negli environment `production-backup` e
       `production-payouts`, `gh secret list` vuoto a livello di repository,
-      poi dispatch di prova di backup e freshness watch riusciti;
-- [ ] modello di disaster recovery scelto: **A** operativo limitato o **B**
-      break-glass completo (matrice, ultima sezione);
-- [ ] decisione sulla chiave `age` registrata (nessun accesso / copia
-      sigillata / secondo destinatario);
+      backup e freshness watch riusciti dopo lo spostamento, prova negativa
+      da branch (anche con `deployment: false`) rifiutata (23–24 settembre
+      2026);
+- [x] modello di disaster recovery scelto: **A** operativo limitato
+      (24 settembre 2026; B da rivalutare prima dei pagamenti reali);
+- [x] decisione sulla chiave `age` registrata: nessun accesso del delegato,
+      il restore catastrofico resta a Enrico (modello A);
 - [ ] decisione Supabase registrata (*Developer* con rischio accettato,
       oppure nessun accesso);
 - [ ] posto Netlify disponibile senza spese non approvate;
@@ -267,8 +270,8 @@ account, fine improvvisa della collaborazione o comportamento anomalo:
 2. Controllare se, nella finestra sospetta, sono cambiati banner, status page,
    variabili Netlify, deploy pubblicati, dati o impostazioni Supabase, run o
    workflow GitHub.
-3. Se la persona poteva leggere secret (per esempio prima dei prerequisiti
-   GitHub): ruotare service role Supabase, password del database, key B2 e
+3. Se la persona poteva leggere secret (con i prerequisiti GitHub attivi non
+   dovrebbe; verificarlo nei run e negli audit log): ruotare service role Supabase, password del database, key B2 e
    token coinvolti.
 4. Completare i passi 5-10 e trattare l'evento secondo la Incident Card
    (categoria sicurezza).
@@ -308,7 +311,16 @@ account, fine improvvisa della collaborazione o comportamento anomalo:
   pubblicato e ritirato, nuova sessione con challenge, codice errato
   rifiutato, utente normale 404.
 - GitHub (23 settembre 2026): ruleset e CODEOWNERS attivi, environment creati
-  e collegati ai workflow; valori dei secret ancora a livello di repository.
+  e collegati ai workflow.
+- Secret (23–24 settembre 2026, autorizzazione di Enrico): i sei valori
+  sigillati nel runner e scritti negli environment senza uscire in chiaro,
+  poi cancellati a livello di repository (zero rimasti). Backup con readback,
+  checksum e Object Lock e freshness watch PASS dopo lo spostamento; prova
+  negativa da un branch non `main`: sei nomi vuoti senza environment, job con
+  environment e con `deployment: false` rifiutati prima di partire. Branch,
+  workflow e run temporanei eliminati.
+- Disaster recovery: modello A scelto da Enrico per la Beta (24 settembre
+  2026).
 
 ## 6. Scheda contatti
 

@@ -43,11 +43,11 @@ Aprire soltanto ciò che serve al task:
 - [`06_PROMPT_CHAT_OPERATIVE.md`](06_PROMPT_CHAT_OPERATIVE.md) — prompt storici,
   conservati come record e non come policy corrente.
 - Delegato di emergenza (PREPARATO, persona non nominata; MFA `aal2` imposta,
-  `main` protetto, secret ancora da spostare negli environment):
+  `main` protetto, secret solo negli environment, disaster recovery modello A):
   `../docs/EMERGENCY_DELEGATE_ONBOARDING.md`,
   `../docs/EMERGENCY_DELEGATE_ACCESS_MATRIX.md` e
   `../docs/EMERGENCY_DELEGATE_INCIDENT_CARD.md`; la regola del ruolo di sola
-  continuità è in `03_ARCHITETTURA_REGOLE_DEBITI.md`, la cronaca del 23
+  continuità è in `03_ARCHITETTURA_REGOLE_DEBITI.md`, la cronaca del 23–24
   settembre 2026 in `01_STATO_ATTUALE.md`.
 - [`07_BACKUP_DR_HANDOFF.md`](07_BACKUP_DR_HANDOFF.md) — handoff finale del
   capitolo Backup/Disaster Recovery B2 chiuso il 23 settembre 2026.
