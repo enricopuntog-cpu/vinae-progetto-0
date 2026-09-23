@@ -1,8 +1,8 @@
 name: Supabase DB regression
 
-# Gate di regressione Club/contestazioni (griglie 12e, 12f, 12g ed E2E 12g
-# completo) su uno stack Supabase locale ed effimero, costruito nel job dalle
-# migrazioni del commit sotto prova.
+# Gate di regressione Club/contestazioni (griglie 12e, 12f, 12g, matrice del
+# delegato di emergenza 12h ed E2E 12g completo) su uno stack Supabase locale
+# ed effimero, costruito nel job dalle migrazioni del commit sotto prova.
 #
 # Perche non la Supabase Preview: il branch Preview e creato dall'integrazione
 # GitHub di Supabase, ma URL, chiavi e password del suo database arrivano ad
@@ -75,7 +75,7 @@ jobs:
           rm -f "$log"
           echo "Stack locale avviato con le migrazioni del commit."
 
-      - name: Run Club/dispute gate (12e, 12f, 12g)
+      - name: Run Club/dispute gate (12e, 12f, 12g) and delegate matrix (12h)
         if: steps.scope.outputs.relevant == 'true'
         run: |
           stack_env="$(supabase status -o env 2>/dev/null)"

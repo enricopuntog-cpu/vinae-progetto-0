@@ -806,3 +806,27 @@ Esiti del 18 settembre 2026: tutti come attesi, dettaglio in
 `CONTESTO_IA/01_STATO_ATTUALE.md`. Gli utenti di prova non si possono
 cancellare da soli perché il ledger è append-only e li referenzia: si elimina
 l'intero branch di anteprima.
+
+## 12h — matrice del delegato di emergenza
+
+[`12h_emergency_delegate_matrix.sql`](12h_emergency_delegate_matrix.sql)
+verifica che `emergency_delegate` abbia **solo** la capability di continuità
+(banner globale, URL della status page, audit append-only) e per il resto gli
+stessi esiti di un utente normale. Crea quattro utenti `@grid-12h.test`, una
+segnalazione e una proposta Club dentro una transazione chiusa da `ROLLBACK`:
+nessun residuo. Il guard rifiuta database con utenti reali (email non
+`.test`), quindi non gira in produzione. Esito atteso: 18 righe, tutte
+`passed = t`.
+
+Gira nel gate CI `Supabase DB regression` (`12g_ci_run.sh`) prima delle
+fixture 12g. A mano, su uno stack locale:
+
+```bash
+docker exec -i <container supabase_db_...> psql -U postgres -X -q -At -f - < supabase/tests/12h_emergency_delegate_matrix.sql
+```
+
+Prima esecuzione: 23 settembre 2026, stack locale Supabase CLI 2.117.0 con le
+61 migrazioni del checkout: 18/18, zero utenti e zero ruoli dopo il rollback.
+Controllo negativo: con `private.moderazione_attore()` riscritta per accettare
+qualunque ruolo, i controlli 16 e 17 falliscono indicando le RPC coinvolte;
+ripristinata la funzione, di nuovo 18/18.
