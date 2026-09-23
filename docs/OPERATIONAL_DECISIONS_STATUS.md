@@ -59,8 +59,8 @@ conclusi e dei residui che dipendono da account, persone o decisioni esterne.
 - `payments-checkout` e `connect-onboarding` rispondono HTTP 503; le tre
   funzioni AI rispondono HTTP 503.
 
-Le nuove migrazioni sono applicate in produzione Supabase. La PR #130 è integrata al commit `8e13f84`; CI su `main` verde, Supabase
-Preview verde e Netlify Published sul medesimo commit. In sessione autenticata
+Le nuove migrazioni sono applicate in produzione Supabase. La PR #130 è
+integrata al commit `8e13f84`; CI su `main` verde, Supabase Preview verde e Netlify Published sul medesimo commit. In sessione autenticata
 owner/admin si aprono i pannelli Club e le code amministrative senza errori
 browser. Le controversie reali sono zero: la decisione su una pratica non è
 stata provata con dati persistenti.
@@ -112,7 +112,7 @@ dei Club; non aprono accessi e non bloccano la beta chiusa.
 | Accessi del delegato | Bloccata esternamente | Concedere alla persona nominata accessi individuali e minimi a GitHub, Supabase, Netlify, DNS e backup; il ruolo applicativo da solo abilita soltanto il banner. |
 | Email di incidente | Bloccata da dati e procedura | Definire destinatari, base giuridica, modello approvato e responsabile invio tramite Resend; evitare broadcast per micro-interruzioni. |
 | RTO/RPO definitivo | Rinviata prima dei pagamenti | Riesaminare l'obiettivo temporaneo 24h/24h dopo la prima prova B2. |
-| Verifica E2E Club/moderatore e contestazioni | Chiusa lato server (PR #141) | Moderatore distinto, isolamento cross-Club, contestazione completa fino a decisione e correzione verificati con JWT reali sul branch Preview, 177/177 dopo quattro correzioni; fixture rimosse. Resta facoltativo uno smoke UI autenticato eseguito da una persona. |
+| Verifica E2E Club/moderatore e contestazioni | Chiusa (PR #141, `e42c14e`, ledger 61) | Moderatore distinto, isolamento cross-Club, contestazione completa fino a decisione e correzione verificati con JWT reali sul branch Preview, 177/177 dopo quattro correzioni; fixture rimosse. Resta facoltativo uno smoke UI autenticato eseguito da una persona. |
 | Contenuti iniziali Club | Bloccata editorialmente | In produzione resta il Club approvato `circolo-vinea`; creare altri Club soltanto con nomi, descrizioni e responsabili reali. |
 | Indici Club suggeriti dagli advisor | Monitoraggio beta | Riesaminare con query e volumi reali le chiavi esterne non coperte; aggiungere soltanto gli indici dimostrati utili. |
 | Supporto operativo | Bloccata esternamente | Definire persone e casella responsabile delle contestazioni prima dei pagamenti reali. |

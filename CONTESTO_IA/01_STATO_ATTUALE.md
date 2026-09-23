@@ -3631,3 +3631,10 @@ sessione e Club gestito, con test comportamentale. Il login browser con gli
 utenti di prova non è stato eseguito: le regole operative dell'agente vietano di
 inserire password o token in un browser. Frontend: 1604 test, typecheck,
 build, lint 0 errori/12 warning preesistenti.
+
+Post-merge: PR #141 integrata a `e42c14e`, sei check verdi. Ledger di
+produzione 61, ultima `20260923160000_club_dispute_e2e_audit_fixes`; griglia
+di regressione 7/7 sugli oggetti effettivi. Netlify Published
+`6ab3caad1e8f400008c3a007` sullo stesso commit; la pagina Club anonima non
+esegue più richieste di gestione. Branch Preview eliminato con la PR; funzioni
+pagamenti, Connect e AI a 503.
