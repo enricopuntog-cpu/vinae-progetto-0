@@ -9,8 +9,9 @@ conclusi e dei residui che dipendono da account, persone o decisioni esterne.
   `admin` o `emergency_delegate`;
 - status page statica in `status-page/site/`, validata in CI e pubblicata su
   Cloudflare Pages (piano gratuito) a `https://status.vineawineclub.com`;
-- workflow giornaliero per backup cifrato Supabase database/Auth e Storage su
-  Backblaze B2, con SHA-256, Object Lock e finestre 30/84/366 giorni per le
+- workflow per backup cifrato Supabase database/Auth e Storage su
+  Backblaze B2 due volte al giorno, con freshness watch orario e issue di
+  allarme oltre 20 ore, con SHA-256, Object Lock e finestre 30/84/366 giorni per le
   copie giornaliere/settimanali/mensili; il conteggio esatto dipende dalle
   Lifecycle Rules e dalla loro corsa quotidiana;
 - verifica e preparazione sicura di un archivio offsite per restore isolato;
@@ -84,6 +85,17 @@ pipeline completa, readback S3, SHA-256/sidecar/metadata e Object Lock
 `GOVERNANCE` verificati, zero artifact. Il capitolo B2/DR e chiuso; la rotazione
 least privilege della key principale resta hardening non bloccante.
 
+Il 23 settembre 2026 la revisione RTO/RPO ha misurato che GitHub avvia le
+schedule con ore di ritardo. Con un backup al giorno l'RPO reale poteva
+superare 24 ore e un run fallito non era segnalato. La PR #148 (`c41102a`) ha
+portato il backup a due run al giorno (`17 2,14 * * *` UTC) con copie weekly e
+monthly una sola volta per giorno UTC, e ha aggiunto il freshness watch: l'eta
+dell'ultimo backup completo in B2 viene controllata ogni ora e dopo ogni run,
+con issue di allarme oltre 20 ore o per run fallito, mai partito o incompleto.
+Verifica reale: backup `35890425580`, watch PASS automatico, prova d'allarme
+con issue #149 aperta e chiusa. Obiettivi Beta: RTO 24 ore, RPO target 24 ore.
+Dettagli nel runbook, sezione "Freschezza del backup".
+
 Il 23 settembre 2026 la PR #141 ha chiuso la verifica end-to-end con
 fixture isolate sul branch Preview `julqmamwwidaqmjhoodx`: owner, moderatore
 distinto, membro, richiedente, outsider, compratore, venditore, compratore di un
@@ -107,12 +119,12 @@ dei Club; non aprono accessi e non bloccano la beta chiusa.
 
 | Attività | Stato | Prerequisito / prossima azione |
 | --- | --- | --- |
-| Backup B2 / DR | Chiuso tecnicamente | Run reale `35738026438` decifrato e ripristinato in isolamento; primo run automatico `35833711496` riuscito con readback e Object Lock. Il runbook copre le tre fonti del failover da zero. Resta solo la rotazione least privilege della key, non bloccante. |
+| Backup B2 / DR | Chiuso tecnicamente | Run reale `35738026438` decifrato e ripristinato in isolamento; primo run automatico `35833711496` riuscito con readback e Object Lock. Il runbook copre le tre fonti del failover da zero. Riapertura mirata del 23/09/2026 chiusa con la PR #148: due backup al giorno e freshness watch con allarme verificati. Resta solo la rotazione least privilege della key, non bloccante. |
 | Pagina di stato indipendente | CHIUSA | Pubblicata il 23/09/2026 su `https://status.vineawineclub.com` (Cloudflare Pages `vinea-status`, piano gratuito, riserva `https://vinea-status.pages.dev`). Unico record DNS aggiunto: `CNAME` `status` → `vinea-status.pages.dev`. HTTPS, header e 375 px verificati live. Aggiornamenti durante un incidente: `status-page/README.md`. |
 | Delegato di emergenza | Bloccata esternamente | Nominare una persona, abilitarle MFA e assegnare `emergency_delegate`; provare accesso a `/continuita`. |
 | Accessi del delegato | Bloccata esternamente | Concedere alla persona nominata accessi individuali e minimi a GitHub, Supabase, Netlify, DNS e backup; il ruolo applicativo da solo abilita soltanto il banner. |
 | Email di incidente | Bloccata da dati e procedura | Definire destinatari, base giuridica, modello approvato e responsabile invio tramite Resend; evitare broadcast per micro-interruzioni. |
-| RTO/RPO definitivo | Rinviata prima dei pagamenti | Riesaminare l'obiettivo temporaneo 24h/24h dopo la prima prova B2. |
+| RTO/RPO Beta | Decisi il 23/09/2026: RTO 24h, RPO target 24h | Sostenuti da due backup B2 al giorno e da un allarme oltre 20 ore verificato in produzione. Obiettivi, non garanzie: GitHub Actions schedulato e best-effort. Prima dei pagamenti reali: nuovi obiettivi dopo prova cronometrata su progetto nuovo, decisione PITR e riconciliazione Stripe post-restore. |
 | Verifica E2E Club/moderatore e contestazioni | Chiusa (PR #141, `e42c14e`, ledger 61) | Moderatore distinto, isolamento cross-Club, contestazione completa fino a decisione e correzione verificati con JWT reali sul branch Preview, 177/177 dopo quattro correzioni; fixture rimosse. Resta facoltativo uno smoke UI autenticato eseguito da una persona. |
 | Contenuti iniziali Club | Bloccata editorialmente | In produzione resta il Club approvato `circolo-vinea`; creare altri Club soltanto con nomi, descrizioni e responsabili reali. |
 | Indici Club suggeriti dagli advisor | Monitoraggio beta | Riesaminare con query e volumi reali le chiavi esterne non coperte; aggiungere soltanto gli indici dimostrati utili. |
@@ -129,6 +141,8 @@ dei Club; non aprono accessi e non bloccano la beta chiusa.
 - i Club sono aperti con `NEXT_PUBLIC_CLUBS_ENABLED=true` e
   `CLUBS_ENABLED=true`; le viste pubbliche mostrano esclusivamente Club
   approvati e le scritture passano dalle RPC autenticate;
-- `BACKUP_OFFSITE_ENABLED=true`; il workflow B2 è attivo e fallisce chiuso
-  se configurazione, retention o readback non sono validi;
+- `BACKUP_OFFSITE_ENABLED=true`; il workflow B2 è attivo due volte al giorno
+  e fallisce chiuso se configurazione, retention o readback non sono validi;
+  il freshness watch non ha gate e va disattivato insieme al backup solo per
+  una sospensione voluta;
 - nessun utente riceve automaticamente `emergency_delegate`.

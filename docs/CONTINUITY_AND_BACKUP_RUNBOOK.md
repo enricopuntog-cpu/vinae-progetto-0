@@ -1,7 +1,9 @@
 # Continuità operativa e custodia backup
 
 Stato iniziale: 19 settembre 2026; backup B2, restore reale e primo run
-automatico verificati e chiusi il 23 settembre 2026.
+automatico verificati e chiusi il 23 settembre 2026. Lo stesso giorno una
+riapertura mirata ha portato il backup a due run al giorno e aggiunto il
+controllo automatico di freschezza (PR #148).
 Questo runbook copre la beta Vinea e non
 sostituisce gli accordi con fornitori, commercialista o consulenti legali.
 
@@ -13,8 +15,23 @@ sostituisce gli accordi con fornitori, commercialista o consulenti legali.
   `emergency_delegate` e disponibile ma non e assegnato a nessuno. Il delegato
   potra pubblicare e ritirare l'avviso di incidente; deve ricevere accesso
   individuale con MFA e non password o codici condivisi.
-- **Obiettivo di ripristino iniziale:** RTO entro 24 ore e RPO entro 24 ore.
-  Sono obiettivi prudenziali della beta, da rivedere prima dei pagamenti.
+- **Obiettivi di ripristino Beta (23 settembre 2026):** RTO 24 ore; RPO
+  target 24 ore. Sono obiettivi operativi, non garanzie: backup e allarme
+  dipendono da GitHub Actions schedulato e da B2, servizi best-effort.
+  - RPO: backup B2 due volte al giorno (`17 2,14 * * *` UTC). GitHub avvia le
+    schedule in ritardo (da circa 2 ore a 5 ore e 35 minuti su 14 run
+    schedulati misurati tra il 20 e il 23 settembre), quindi l'intervallo
+    atteso tra due backup e 12 ore e al massimo circa 16 con i ritardi
+    osservati. Il freshness watch allarma quando l'ultimo backup completo in
+    B2 supera 20 ore: un run perso diventa visibile circa 4 ore prima di
+    superare 24 ore e si recupera con un dispatch manuale (circa 3 minuti).
+    Senza intervento un run perso porta la perdita a circa 24-28 ore.
+  - RTO: il restore isolato del 22 settembre ha richiesto circa 50 minuti
+    (dedotto dai commit delle PR #137/#138, non cronometrato); il ripristino su
+    progetto nuovo non e mai stato cronometrato e c'e un solo operatore.
+    L'RTO copre diagnosi, decisione, ricostruzione, smoke e riapertura.
+  - Prima dei pagamenti reali gli obiettivi vanno rifissati: vedi
+    "Controllo periodico".
 - **Autorita di riapertura:** Enrico; in sua assenza, il delegato formalmente
   nominato dopo una checklist firmata. Il servizio resta chiuso ai pagamenti
   finche database, Storage, Auth, webhook e riconciliazione ordini non sono
@@ -44,6 +61,8 @@ Supabase, Netlify, DNS e backup necessari alle responsabilita approvate.
    esegue export separati di ruoli, schema, dati e oggetti Storage, verifica
    SHA-256, cifra e carica copie daily, weekly (domenica UTC) e monthly
    (primo giorno UTC) con Object Lock rispettivamente per 30, 84 e 366 giorni.
+   Gira due volte al giorno: la copia daily a ogni run, weekly e monthly una
+   sola volta per giorno UTC (vedi "Freschezza del backup").
    Rilegge la retention e riscarica via S3 `.age` e `.sha256` per confrontare
    header age, SHA-256 dei byte, sidecar e metadata. I file temporanei del runner
    sono eliminati alla fine; nessun archivio è pubblicato come artifact GitHub.
@@ -68,8 +87,9 @@ Lock abilitato e una application key limitata al bucket. Configurare in GitHub:
 | Secret | `B2_KEY_ID` |
 | Secret | `B2_APPLICATION_KEY` |
 
-Il gate è `true` dal 22 settembre 2026. Il workflow è `active` e conserva la
-schedule giornaliera `17 2 * * *` UTC; GitHub può avviarla in ritardo.
+Il gate è `true` dal 22 settembre 2026. Il workflow è `active`; dal 23
+settembre 2026 la schedule è `17 2,14 * * *` UTC (prima `17 2 * * *`) e
+GitHub può avviarla con ore di ritardo.
 Il precedente dispatch disabilitato `35695015354` era `skipped`.
 I run `35734887340` e `35735978523` sono falliti prima di qualunque upload;
 le PR #133 e #134 hanno corretto manifest auto-incluso e output AWS CLI non
@@ -120,7 +140,8 @@ impedisce la cancellazione di versioni ancora protette; nascondere non equivale
 a eliminare e una regola di sola cancellazione delle versioni precedenti non
 elimina mai la versione corrente. Le regole girano una volta al giorno, perciò
 30/84/366 sono finestre minime e il numero di copie visibili è **circa**
-30 giornaliere, 12 settimanali e 12 mensili, non un conteggio esatto garantito.
+60 giornaliere (due per giorno dal 23 settembre 2026), 12 settimanali e 12
+mensili, non un conteggio esatto garantito.
 La copia mensile usa 366 giorni, non 12 mesi di calendario. Il 22 settembre il
 pannello mostrava inizialmente `Keep all versions` e nessuna regola salvata;
 le tre regole sopra sono state salvate e rilette nel pannello sul bucket vuoto.
@@ -158,6 +179,85 @@ locale con download, sidecar e metadata. GitHub API riporta zero artifact. Il
 workflow e ancora `active`, il gate e `true` e la cron resta `17 2 * * *` UTC:
 l'avvio alcune ore dopo l'orario nominale e un possibile ritardo del servizio
 schedulato, non una modifica della cron.
+
+## Freschezza del backup
+
+Dal 23 settembre 2026 (PR #148, merge `c41102a`) il backup gira alle 02:17 e
+alle 14:17 UTC. La concurrency del workflow serializza i run; un run dura circa
+3 minuti con timeout di 45. Nome dell'archivio, cartella mensile e tier derivano
+da un unico istante UTC preso prima degli export, quindi il timestamp del nome
+approssima il momento del dato salvato.
+
+- **Copie:** daily a ogni run. Weekly (domenica UTC) e monthly (giorno 1 UTC)
+  sono caricate da un run solo se B2 non contiene gia archivio **e** sidecar
+  dello stesso giorno: un run interrotto a meta non blocca il successivo. Se B2
+  non e leggibile, nei giorni weekly/monthly il run fallisce prima degli
+  export. Retention 30/84/366, Object Lock Governance, readback, checksum e
+  Lifecycle Rules sono invariati.
+- **Watch:** il workflow `Continuity - backup freshness watch`
+  (`offsite-backup-freshness.yml`) gira ogni ora (`41 * * * *`, anch'essa
+  soggetta ai ritardi GitHub), dopo ogni run di backup (`workflow_run`) e a
+  mano. Cerca in `daily/` del mese corrente e precedente il backup completo
+  piu recente e lo accetta solo se esistono archivio e sidecar, il metadata
+  SHA-256 coincide con il sidecar, l'archivio inizia con l'header `age`, entrambi
+  hanno retention `GOVERNANCE` di almeno 30 giorni e la data di caricamento e
+  coerente con il timestamp del nome. Un run GitHub verde senza oggetti B2 non
+  conta. Le operazioni B2 sono solo list, head, retention e get; nessun secret
+  Supabase e coinvolto. Un set piu recente di 60 minuti e considerato in corso.
+- **Soglia 20 ore:** l'intervallo normale tra backup e 12 ore, al massimo circa
+  16 con i ritardi osservati. 20 ore segnalano un run perso lasciando circa 4
+  ore prima delle 24; la soglia di 26 ore avrebbe segnalato solo due run persi,
+  a RPO gia superato. Il dispatch manuale accetta una soglia piu bassa solo per
+  prova (`0 < ore <= 20`), mai piu alta.
+- **Allarme:** il job fallisce, generando la notifica GitHub dei workflow
+  falliti, e apre una sola issue con etichetta `backup-freshness-alert` che
+  menziona l'owner del repository. Commenta solo se cambiano le categorie e
+  chiude l'issue con un commento al primo controllo pulito. Le email dipendono
+  dalle impostazioni di notifica GitHub di Enrico, non verificabili dal
+  repository. I messaggi sono ripuliti dai valori dei secret prima di log e
+  issue.
+
+| Categoria | Significato | Prima azione |
+| --- | --- | --- |
+| `BACKUP_RUN_FAILED` | l'ultimo run di backup concluso non e `success` | aprire il run, correggere la causa e rilanciarlo con `workflow_dispatch` |
+| `BACKUP_NOT_STARTED` | nessun run avviato da 20 ore, ultimo run `skipped` o workflow non `active` | controllare `BACKUP_OFFSITE_ENABLED`, lo stato del workflow e di GitHub Actions; lanciare il backup a mano |
+| `BACKUP_STALE` | nessun backup completo in B2 da oltre 20 ore | lanciare subito il backup a mano; se fallisce, verificare B2 e Supabase |
+| `BACKUP_INCOMPLETE` | il set piu recente oltre 60 minuti manca di archivio o sidecar, o fallisce hash, header, retention o coerenza delle date | aprire il run che l'ha prodotto e rilanciare il backup; il set resta sotto Object Lock e non va cancellato |
+| `CHECK_ERROR` | B2 o API GitHub non verificabili, configurazione errata | verificare variabili, secret e stato dei provider |
+
+Se il backup viene sospeso di proposito, disattivare anche il watch dalla scheda
+Actions e riattivarlo insieme al backup.
+
+Prove del 23 settembre 2026 sul commit `c41102a`, con B2 reale:
+
+| Run | Evento | Esito |
+| --- | --- | --- |
+| `35890337217` | watch, dispatch | PASS: ultimo backup completo `vinea-2026-09-23T07-51-23Z`, eta 8,8 ore |
+| `35890425580` | backup, dispatch | `success` in 2 min 41 s, nuova coppia `daily/2026/09/vinea-2026-09-23T16-41-12Z.tar.gz.age`/`.sha256` |
+| `35890737966` | watch, `workflow_run` | PASS automatico dopo il backup: eta 0,0 ore |
+| `35890844554` | watch, dispatch con soglia 0,05 ore | FAIL atteso con `BACKUP_STALE` e `BACKUP_NOT_STARTED`; issue #149 aperta con menzione, etichetta creata |
+| `35890940055` | watch, dispatch | PASS; issue #149 chiusa con commento di rientro |
+
+Il backup lanciato a mano non sostituisce un run schedulato: il primo run
+schedulato con la nuova cron e atteso il 24 settembre e viene controllato dal
+watch in automatico. Nella CI della PR la AWS CLI reale, puntata a un endpoint B2
+inesistente con credenziali finte, ha prodotto `CHECK_ERROR` senza stampare le
+credenziali. I test coprono due run nella stessa domenica e il 1 novembre 2026
+(domenica e primo del mese), set incompleti, B2 non raggiungibile e run falliti,
+saltati o mai partiti.
+
+Limiti residui:
+
+- backup e watch girano entrambi su GitHub Actions: se lo scheduler GitHub si
+  ferma, o se il repository pubblico resta 60 giorni senza attivita e GitHub
+  disattiva le schedule, non parte neppure l'allarme. Non c'e un monitor
+  esterno;
+- il watch usa la stessa key B2 del backup; esegue solo letture per
+  costruzione, ma una key dedicata in sola lettura rientra nella rotazione
+  least privilege;
+- l'unico destinatario dell'allarme e Enrico finche non c'e un delegato;
+- la prima domenica con due run e il 27 settembre 2026, il primo giorno 1 il
+  1 ottobre: in quei giorni deve esistere una sola copia weekly o monthly.
 
 ## Ripristino da B2
 
@@ -328,10 +428,15 @@ ordini bloccati.
 
 ## Controllo periodico
 
-- Settimanale: esito backup, hash manifest, stato dei gate e ultimo deploy.
+- Settimanale: esito backup, issue `backup-freshness-alert` aperte o chiuse,
+  hash manifest, stato dei gate e ultimo deploy.
 - Mensile: restore isolato campione e smoke essenziali.
-- Prima dei pagamenti: restore completo, due vere esecuzioni scheduler,
-  riconciliazione Stripe in test e revisione degli obiettivi RTO/RPO.
+- Prima dei pagamenti: restore completo e prova cronometrata su progetto
+  nuovo (migrazioni da Git, dati B2, Edge Functions, secret, Auth/SMTP,
+  Netlify), due vere esecuzioni scheduler, rotazione least privilege della key
+  B2, delegato nominato, decisione su PITR Supabase, procedura di
+  riconciliazione Stripe dopo un restore con scheduler payout bloccato, poi
+  nuovi obiettivi RTO/RPO per i pagamenti.
 - Dopo ogni incidente: registrare causa, intervallo dati coinvolto, verifiche e
   modifica necessaria a questo runbook.
 
@@ -354,8 +459,11 @@ ordini bloccati.
 - nominare una persona come delegato e assegnarle `emergency_delegate` con MFA;
 - concedere e provare gli accessi individuali del delegato ai servizi esterni;
 - approvare destinatari, modello e procedura delle email di incidente via Resend;
-- riesaminare RTO/RPO 24/24 prima di abilitare pagamenti reali.
+- rifissare RTO/RPO per i pagamenti reali dopo le prove elencate in
+  "Controllo periodico".
 
-Il capitolo tecnico Backup/Disaster Recovery B2 e chiuso. Non riaprirlo senza
-una nuova evidenza di guasto, incidente o requisito; i punti sopra sono
-hardening o dipendenze organizzative esterne, non blocker del backup beta.
+Il capitolo tecnico Backup/Disaster Recovery B2 e chiuso. La riapertura mirata
+del 23 settembre 2026 per il ritardo dello scheduler si e chiusa con cadenza e
+freshness watch verificati. Non riaprirlo senza una nuova evidenza di guasto,
+incidente o requisito; i punti sopra sono hardening o dipendenze organizzative
+esterne, non blocker del backup beta.
