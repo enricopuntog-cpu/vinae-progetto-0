@@ -276,17 +276,21 @@ successive possono costruire.
   rimborso successivo a un Transfer già creato;
 - schedulazione dell'auto-rilascio: **integrata dalla 7g** con la PR #26 al
   merge squash `f9c53e0`, con sanità oltre 24 ore e modalità read-only quando
-  `PAYMENTS_ENABLED=false`. Restano aperti configurazione di variabile e secret,
-  verifica delle notifiche native e prima invocazione reale con pagamenti spenti;
+  `PAYMENTS_ENABLED=false`. Configurazione, secret e prima invocazione reale
+  con pagamenti spenti sono chiusi: le run `35450587237` e `35450783027` hanno
+  invocato `payouts-release` con `enabled=false` e zero trasferimenti, e le run
+  schedulate successive restano verdi. Resta la verifica delle notifiche native;
 - verifica legale italiana/UE su vendita di alcolici, età, privacy e modello
   marketplace;
 - rate limiting condiviso per RPC/Edge Functions;
 - threat model e revisione indipendente;
 - gestione centralizzata segreti, osservabilità, alert;
 - CSP: dalla PR #119 gli header di sicurezza e HSTS con `includeSubDomains;
-  preload` sono in `netlify.toml` e la CSP è in **Report-Only**. Resta aperta la
-  CSP enforcing con nonce via middleware, da scrivere dopo aver letto le
-  violazioni raccolte in produzione;
+  preload` sono in `netlify.toml`. La PR #123 ha chiuso la CSP enforcing con
+  nonce per richiesta in `frontend-next/src/proxy.ts`, riletta sull'header del
+  dominio reale il 23 settembre 2026. Resta `style-src 'unsafe-inline'`,
+  richiesto dagli stili React/Radix correnti; la policy Report-Only di
+  `netlify.toml` convive per raccogliere violazioni;
 - backup e restore: il backup reale del run `35738026438` e stato decifrato e
   ricostruito in una branch Supabase temporanea, poi eliminata; il primo run
   automatico `35833711496` ha completato export, cifratura, upload, readback e
@@ -294,8 +298,9 @@ successive possono costruire.
   o requisito nuovo. HARDENING FUTURO non bloccante: ruotare la B2 Application Key
   con least privilege, rimuovendo
   `bypassGovernance` e `deleteFiles`;
-- Leaked Password Protection in Supabase Auth (azione manuale da dashboard);
-  valutare le passkey.
+- Leaked Password Protection in Supabase Auth: ON dal 18 settembre 2026 con
+  secure email change e secure password change (record in
+  `docs/PRELAUNCH_TASK_RECONCILIATION.md`); resta da valutare le passkey.
 
 ### Debiti della migrazione
 
@@ -341,8 +346,9 @@ successive possono costruire.
   il motore gia esistente; nessun rimborso o provider viene acceso.
 - I Club nascono come proposte e richiedono approvazione. Possono essere aperti
   o chiusi, hanno richieste di ingresso, moderatori, regolamento versionato,
-  link esterni e audit append-only. La superficie resta chiusa con flag UI
-  spenta e grant pubblici revocati finche flusso UI e contenuti non sono provati.
+  link esterni e audit append-only. Dalla PR #128 la superficie e aperta con
+  `NEXT_PUBLIC_CLUBS_ENABLED=true` e `CLUBS_ENABLED=true`: le viste pubbliche
+  espongono soltanto Club approvati e ogni scrittura passa da RPC autenticate.
 - Il banner incidenti e scrivibile solo da `admin` o `emergency_delegate`, con
   audit append-only. La migrazione non assegna il ruolo a nessuno. La pagina di
   stato statica deve essere distribuita su infrastruttura separata.

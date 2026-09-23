@@ -59,10 +59,7 @@ conclusi e dei residui che dipendono da account, persone o decisioni esterne.
 - `payments-checkout` e `connect-onboarding` rispondono HTTP 503; le tre
   funzioni AI rispondono HTTP 503.
 
-Le nuove migrazioni sono applicate in produzione Supabase. La nuova UI è stata
-verificata localmente; non è ancora documentato un deploy Netlify del suo commit
-né uno smoke autenticato delle azioni amministrative.
-La PR #130 è integrata al commit `8e13f84`; CI su `main` verde, Supabase
+Le nuove migrazioni sono applicate in produzione Supabase. La PR #130 è integrata al commit `8e13f84`; CI su `main` verde, Supabase
 Preview verde e Netlify Published sul medesimo commit. In sessione autenticata
 owner/admin si aprono i pannelli Club e le code amministrative senza errori
 browser. Le controversie reali sono zero: la decisione su una pratica non è
@@ -86,6 +83,17 @@ pipeline completa, readback S3, SHA-256/sidecar/metadata e Object Lock
 `GOVERNANCE` verificati, zero artifact. Il capitolo B2/DR e chiuso; la rotazione
 least privilege della key principale resta hardening non bloccante.
 
+Il 23 settembre 2026 la PR #141 ha chiuso la verifica end-to-end con
+fixture isolate sul branch Preview `julqmamwwidaqmjhoodx`: owner, moderatore
+distinto, membro, richiedente, outsider, compratore, venditore, compratore di un
+altro ordine e admin. Quattro difetti riprodotti prima della correzione e chiusi
+dalla migrazione `20260923160000_club_dispute_e2e_audit_fixes`: prove ed eventi
+di base invisibili all'admin non coinvolto, pratica indecidibile dopo una
+risposta del venditore arrivata a revisione avviata, prove depositate
+cancellabili dalle parti, etichetta di link approvato pubblicata senza
+revisione. Nessun movimento economico, nessun provider chiamato. Dettagli in
+`CONTESTO_IA/01_STATO_ATTUALE.md`.
+
 Gli advisor Supabase continuano a classificare come `SECURITY DEFINER` le viste
 strette e le RPC accessibili agli utenti autenticati, e come "RLS senza policy"
 le tabelle raggiungibili soltanto dalle RPC. In questo disegno è intenzionale:
@@ -104,7 +112,7 @@ dei Club; non aprono accessi e non bloccano la beta chiusa.
 | Accessi del delegato | Bloccata esternamente | Concedere alla persona nominata accessi individuali e minimi a GitHub, Supabase, Netlify, DNS e backup; il ruolo applicativo da solo abilita soltanto il banner. |
 | Email di incidente | Bloccata da dati e procedura | Definire destinatari, base giuridica, modello approvato e responsabile invio tramite Resend; evitare broadcast per micro-interruzioni. |
 | RTO/RPO definitivo | Rinviata prima dei pagamenti | Riesaminare l'obiettivo temporaneo 24h/24h dopo la prima prova B2. |
-| Verifica autenticata delle nuove UI | Parziale | Commit Published e pannelli owner/admin verificati; restano il ruolo moderatore distinto e il percorso decisionale con una pratica reale, senza fixture persistenti indesiderate. |
+| Verifica E2E Club/moderatore e contestazioni | Chiusa lato server (PR #141) | Moderatore distinto, isolamento cross-Club, contestazione completa fino a decisione e correzione verificati con JWT reali sul branch Preview, 177/177 dopo quattro correzioni; fixture rimosse. Resta facoltativo uno smoke UI autenticato eseguito da una persona. |
 | Contenuti iniziali Club | Bloccata editorialmente | In produzione resta il Club approvato `circolo-vinea`; creare altri Club soltanto con nomi, descrizioni e responsabili reali. |
 | Indici Club suggeriti dagli advisor | Monitoraggio beta | Riesaminare con query e volumi reali le chiavi esterne non coperte; aggiungere soltanto gli indici dimostrati utili. |
 | Supporto operativo | Bloccata esternamente | Definire persone e casella responsabile delle contestazioni prima dei pagamenti reali. |

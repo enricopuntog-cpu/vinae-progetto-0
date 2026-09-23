@@ -3573,3 +3573,61 @@ riaperto senza nuova evidenza di guasto, incidente o requisito. Restano solo la
 rotazione least privilege della key principale e la voce della key temporanea
 read-only scaduta, la cui eliminazione dalla lista Backblaze non e stata
 confermata: entrambi non bloccanti.
+
+## 23 settembre 2026 — verifica E2E Club/moderatore e contestazioni
+
+Baseline `origin/main` a `d1754a9` (PR #140), produzione con 60 migrazioni,
+zero contestazioni reali, `PAYMENTS_ENABLED=false`, `AI_ENABLED=false`.
+Ambiente: branch Supabase Preview `julqmamwwidaqmjhoodx` della PR #141,
+creato dall'integrazione GitHub con le stesse 60 migrazioni e verificato vuoto
+prima della fixture. La produzione è stata soltanto letta.
+
+Metodo: `supabase/tests/12g_club_dispute_e2e_fixtures.sql` crea dieci utenti
+Auth reali (guard che rifiuta database con utenti estranei), quattro ordini
+consegnati senza pagamenti e una pratica con finestra venditore scaduta. Il
+driver `12g_club_dispute_e2e.mjs` ottiene JWT con password grant e attraversa
+PostgREST, RPC, RLS e Storage senza `service_role`. Pulizia con
+`12g_club_dispute_e2e_cleanup.sql` e conteggio residui.
+
+Prima delle correzioni: Club 80/81, apertura/revisione 67/71, decisione 22/25.
+Gli otto fallimenti coprivano quattro difetti reali:
+
+1. le policy `disputes_events_participants_or_admin_select` e
+   `dispute_evidence_participants_select` avevano il ramo `has_role(admin)`
+   dentro l'EXISTS su `disputes`/`orders`, letti con la RLS del chiamante:
+   l'admin non coinvolto non firmava le prove e non leggeva gli eventi di
+   base. In produzione non emergeva perché la coda era vuota;
+2. `contestazione_venditore_rispondi` scriveva sempre
+   `lifecycle_status = 'risposta_venditore'`: una risposta entro 48 ore dopo
+   documentazione completa e revisione avviata rendeva la pratica
+   indecidibile sia a database sia in UI;
+3. la policy DELETE del bucket `dispute-evidence` permetteva alle parti di
+   cancellare prove già allegate alla pratica;
+4. `club_link_proponi` aggiornava l'etichetta di un link approvato lasciandolo
+   `approvato`: testo pubblico senza revisione, con risposta `in_attesa`.
+
+La migrazione `20260923160000_club_dispute_e2e_audit_fixes` corregge i quattro
+punti senza riscrivere migrazioni distribuite. Dopo l'applicazione nella
+Preview: 81/81, 71/71, 25/25; griglia `12g_..._regressions.sql` 7/7; `12e`
+10/10. Tentativi di UPDATE/DELETE sui cinque registri append-only rifiutati
+10/10 anche per il proprietario del database. Storico decisioni v1
+`favore_acquirente` → v2 `accordo` con motivo di correzione conservato;
+parti con timeline `revisione_iniziata`, `decisione_registrata`,
+`decisione_corretta` e nessuna nota privata. Hash di stato e importi degli
+ordini identico prima e dopo le decisioni; zero righe in `payments`,
+`payouts`, `balance_*` e `payment_provider_events`.
+
+Il moderatore distinto ha approvato e rifiutato ingressi del proprio Club
+chiuso, proposto regolamento e link, rimosso link; non ha potuto nominare
+moderatori, approvare regolamenti o link, gestire il secondo Club, leggere
+code admin o proposte, né ha ruoli globali. Dopo la revoca da parte del
+proprietario ha perso pannello e revisione restando membro.
+
+Browser: pagina Club anonima sul branch corretta (regolamento v2, requisiti,
+discussione del membro, solo link approvati). La stessa pagina, anche in
+produzione su `circolo-vinea`, interrogava cinque viste di gestione per i
+visitatori anonimi (cinque 401 ed errori console): il loader ora richiede
+sessione e Club gestito, con test comportamentale. Il login browser con gli
+utenti di prova non è stato eseguito: le regole operative dell'agente vietano di
+inserire password o token in un browser. Frontend: 1604 test, typecheck,
+build, lint 0 errori/12 warning preesistenti.
