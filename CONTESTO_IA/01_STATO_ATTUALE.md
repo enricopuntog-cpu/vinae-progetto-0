@@ -3739,3 +3739,44 @@ DNS; nessun token letto o inserito):
   `6ab3caad1e8f400008c3a007` ancora pubblicato.
 
 Procedura di aggiornamento durante un incidente in `status-page/README.md`.
+
+## 23 settembre 2026 — RPO Beta: due backup al giorno e freshness watch
+
+La revisione RTO/RPO ha misurato che GitHub avvia le schedule con ore di
+ritardo: i due run schedulati del backup (`17 2 * * *`) sono partiti alle 07:46
+e 07:49 UTC, e 12 run della cron payout `0 */6 * * *` tra il 20 e il 23
+settembre sono partiti tra 122 e 334 minuti dopo l'orario nominale. Con un
+backup al giorno l'RPO reale poteva superare 24 ore; un run fallito non era
+segnalato e poteva portare la perdita verso 48 ore.
+
+Riapertura mirata, senza toccare restore, architettura B2 o retention:
+
+- PR #148, merge `c41102a`, CI verde. Backup `17 2,14 * * *` UTC; daily a ogni
+  run, weekly/monthly solo se B2 non contiene gia archivio e sidecar dello
+  stesso giorno UTC; nome, cartella e tier da un unico istante preso prima
+  degli export. Object Lock, readback, checksum e retention 30/84/366
+  invariati.
+- Nuovo workflow `Continuity - backup freshness watch`: ogni ora, dopo ogni
+  backup e a mano. Accetta come fresco solo un backup daily con archivio,
+  sidecar, SHA-256 metadata/sidecar concordi, header `age`, Governance di
+  almeno 30 giorni e date coerenti; legge stato e run del workflow di backup.
+  Categorie `BACKUP_RUN_FAILED`, `BACKUP_NOT_STARTED`, `BACKUP_STALE` (oltre
+  20 ore), `BACKUP_INCOMPLETE`, `CHECK_ERROR`. Fallisce chiuso e gestisce una
+  sola issue `backup-freshness-alert` con menzione dell'owner.
+- Test: bash per due run nella stessa domenica e il 1 novembre 2026 (con
+  mutation check), 21 test Node con B2 e GitHub finti, AWS CLI reale in CI
+  verso un endpoint inesistente (`CHECK_ERROR`, credenziali non stampate). Il
+  test sui secret ha trovato un difetto prima del merge: un errore con il
+  valore di un secret sarebbe finito nel testo dell'issue pubblica; i finding
+  sono ora ripuliti in un solo punto.
+- Produzione: watch `35890337217` PASS sul backup delle 07:51 (8,8 ore);
+  backup manuale `35890425580` riuscito in 2 min 41 s con la coppia
+  `daily/2026/09/vinea-2026-09-23T16-41-12Z`; watch automatico `35890737966`
+  PASS; prova `35890844554` con soglia 0,05 ore FAIL con `BACKUP_STALE` e
+  `BACKUP_NOT_STARTED` e issue #149 aperta; watch `35890940055` PASS e issue
+  #149 chiusa. Il dispatch manuale non sostituisce il primo run schedulato con
+  la nuova cron, atteso il 24 settembre.
+
+Obiettivi Beta: RTO 24 ore, RPO target 24 ore, non garantiti. Supabase
+produzione, pagamenti, AI, status page, DNS e Netlify non sono stati toccati.
+Costi aggiuntivi zero (repository pubblico, pochi MB in piu su B2).
