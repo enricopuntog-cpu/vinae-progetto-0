@@ -19,7 +19,8 @@ sostituisce gli accordi con fornitori, commercialista o consulenti legali.
   nominato dopo una checklist firmata. Il servizio resta chiuso ai pagamenti
   finche database, Storage, Auth, webhook e riconciliazione ordini non sono
   verificati.
-- **Canale ufficiale:** banner globale Vinea e pagina di stato indipendente;
+- **Canale ufficiale:** banner globale Vinea e pagina di stato indipendente
+  `https://status.vineawineclub.com` (riserva `https://vinea-status.pages.dev`);
   email transazionale per gli utenti direttamente coinvolti.
 
 Il ruolo applicativo `emergency_delegate` abilita soltanto il pannello del
@@ -353,8 +354,6 @@ ordini bloccati.
 - nominare una persona come delegato e assegnarle `emergency_delegate` con MFA;
 - concedere e provare gli accessi individuali del delegato ai servizi esterni;
 - approvare destinatari, modello e procedura delle email di incidente via Resend;
-- pubblicare `status-page/site/` su Cloudflare Pages come
-  `status.vineawineclub.com` (procedura in `status-page/README.md`);
 - riesaminare RTO/RPO 24/24 prima di abilitare pagamenti reali.
 
 Il capitolo tecnico Backup/Disaster Recovery B2 e chiuso. Non riaprirlo senza
