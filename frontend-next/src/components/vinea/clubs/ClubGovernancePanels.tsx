@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, LoadingBlock } from "@/components/vinea/States";
+import { loadClubManagement } from "@/components/vinea/clubs/load-club-management";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
   createClubGovernanceService,
@@ -147,14 +148,16 @@ export function ClubManagementPanel({ slug }: { slug: string }) {
   const load = useCallback(async () => {
     if (!client) return;
     try {
-      const service = createClubGovernanceService(client);
-      const [clubs, nextMembers, nextRequests, nextRules, nextLinks, auth] = await Promise.all([
-        service.managedClubs(), service.members(slug), service.joinRequests(slug),
-        service.rules(slug), service.links(slug), client.auth.getUser(),
-      ]);
-      setClub(clubs.find((item) => item.slug === slug) ?? null);
-      setMembers(nextMembers); setRequests(nextRequests); setRules(nextRules); setLinks(nextLinks);
-      setCurrentUserId(auth.data.user?.id ?? null); setError(null);
+      const snapshot = await loadClubManagement(
+        slug,
+        async () => (await client.auth.getUser()).data.user?.id ?? null,
+        createClubGovernanceService(client),
+      );
+      setClub(snapshot?.club ?? null);
+      if (!snapshot) return;
+      setMembers(snapshot.members); setRequests(snapshot.requests);
+      setRules(snapshot.rules); setLinks(snapshot.links);
+      setCurrentUserId(snapshot.currentUserId); setError(null);
     } catch { setClub(null); }
   }, [client, slug]);
 
