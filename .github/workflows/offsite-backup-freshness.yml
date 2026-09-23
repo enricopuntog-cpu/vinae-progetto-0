@@ -30,6 +30,9 @@ concurrency:
 jobs:
   watch:
     name: Latest B2 backup age
+    # Secret solo nell'environment production-backup, che accetta job del solo branch
+    # main: un workflow modificato su un altro branch non li riceve.
+    environment: production-backup
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

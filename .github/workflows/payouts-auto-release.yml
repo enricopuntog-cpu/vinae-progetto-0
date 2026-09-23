@@ -15,6 +15,9 @@ concurrency:
 jobs:
   release:
     name: Release due payouts
+    # Secret solo nell'environment production-payouts, che accetta job del solo branch
+    # main: un workflow modificato su un altro branch non li riceve.
+    environment: production-payouts
     runs-on: ubuntu-24.04
     timeout-minutes: 5
 

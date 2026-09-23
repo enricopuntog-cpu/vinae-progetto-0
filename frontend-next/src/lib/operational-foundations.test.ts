@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "bun:test";
 import { eAdminReale, ruoloDaSessione } from "@/lib/auth/role";
@@ -64,6 +64,36 @@ describe("fondamenta operative fail-closed", () => {
     expect(servizio).toInclude('client.rpc("club_ingresso_richiedi"');
     expect(servizio).toInclude('client.rpc("club_abbandona"');
     expect(servizio).toInclude('client.rpc("club_proposta_crea"');
+  });
+
+  it("ogni workflow con secret li prende da un environment ristretto a main", () => {
+    const dir = resolve(root, ".github/workflows");
+    const workflow = readdirSync(dir).filter((f) => f.endsWith(".yml"));
+    expect(workflow.length).toBeGreaterThan(0);
+    const conSecret = workflow.filter((f) => /\$\{\{\s*secrets\./.test(read(`.github/workflows/${f}`)));
+    expect(conSecret.sort()).toEqual([
+      "offsite-backup-freshness.yml",
+      "offsite-backup.yml",
+      "payouts-auto-release.yml",
+    ]);
+    for (const f of conSecret) {
+      expect(read(`.github/workflows/${f}`)).toMatch(/\n {4}environment: production-(backup|payouts)\r?\n/);
+    }
+    // Nessun trigger che esegua codice di una PR nel contesto di main.
+    for (const f of workflow) expect(read(`.github/workflows/${f}`)).not.toInclude("pull_request_target");
+  });
+
+  it("CODEOWNERS copre tutto, .github e se stesso; solo la status page resta senza owner", () => {
+    const righe = read(".github/CODEOWNERS")
+      .split("\n")
+      .map((r) => r.trim())
+      .filter((r) => r && !r.startsWith("#"));
+    expect(righe).toEqual([
+      "*                       @enricopuntog-cpu",
+      "/status-page/site/",
+      "/.github/               @enricopuntog-cpu",
+      "/.github/CODEOWNERS     @enricopuntog-cpu",
+    ]);
   });
 
   it("non esegue il backup offsite senza il gate esatto", () => {
