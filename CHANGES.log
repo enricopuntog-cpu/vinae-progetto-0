@@ -8,14 +8,16 @@
 - Restore B2 verificato il 22 settembre 2026 sul backup reale del run `35738026438`: `.age` e `.sha256` scaricati da B2; checksum del download, sidecar e metadata concordi (`b7eaa109...c9c9c60`), Object Lock Governance riletto fino al 22 ottobre alle 14:09:13 UTC. Lo script `.github/scripts/offsite-restore-verify.sh`, rafforzato nella PR #137, ha decifrato l'archivio in Temp e verificato percorsi, manifest e hash interni. Nessun file inatteso o path traversal.
 - Restore Supabase nella sola branch temporanea `b2-restore-isolated-20260922`: ruoli, schema, dati e 11 blob Storage caricati nell'ordine. Ledger preesistente nella branch 60/60 (non incluso nel dump B2), 60 tabelle applicative con RLS, 48 policy applicative, 200 funzioni e digest funzioni coincidente con produzione; 91 tabelle dati, 288 righe e zero differenze di conteggio; 10 utenti Auth, 11 identita, 6 bucket e 11 oggetti Storage. Tutti gli 11 blob sono stati riscaricati dalla branch e confrontati per SHA-256. Le personalizzazioni dei servizi gestiti Auth, Storage e Realtime non erano nel dump dello schema: trigger Auth, quattro policy Storage e una policy Realtime sono state ripristinate nella sola branch da configurazioni lette prima della ricostruzione e confrontate con produzione. Smoke su fixture isolata riusciti per Auth, RLS, RPC, Realtime privato e Storage privato/firmato; fixture rimosse, branch eliminata e copie locali del backup cancellate. Produzione interrogata solo in lettura.
 - Primo run automatico con il gate attivo: `35833711496`, evento `schedule`, run 7 sul commit `2fba30f`, riuscito il 23 settembre 2026 alle 07:51:38 UTC. I log confermano export di ruoli/schema/dati e Storage, manifest interno, cifratura, upload della coppia `daily/2026/09/vinea-2026-09-23T07-51-23Z.tar.gz.age`/`.sha256`, readback S3, coerenza SHA-256/sidecar/metadata e Object Lock `GOVERNANCE` almeno fino al 23 ottobre 2026 alle 07:51:23 UTC. Nessun upload del `.tar.gz` in chiaro e zero artifact GitHub. Workflow `active`, cron invariata `17 2 * * *` UTC e gate `true`; il ritardo rispetto all'orario nominale e compatibile con GitHub Actions schedulato.
+- PR #139 integrata su `origin/main` a `1dbdd0e`; CI post-merge `35846989974` verde. Runbook fresh-project e preflight non distruttivo sono versionati; checkout Desktop sincronizzato e quattro file personali staged preservati byte per byte.
 - `PAYMENTS_ENABLED=false` e `AI_ENABLED=false` restano invariati. Il cutover della Fase 13 non è implicato.
 
 ## ACTIVE TASK
-Capitolo Backup/Disaster Recovery B2 chiuso: backup cifrato operativo, restore reale isolato verificato e primo run automatico verificato. Riaprire soltanto per nuova evidenza di guasto, incidente o requisito. Produzione non modificata.
+Nessun task Backup/Disaster Recovery attivo. Capitolo chiuso; riaprirlo soltanto per nuova evidenza di guasto, incidente o requisito. Produzione non modificata.
 
 ## NEXT STEPS
-1. Ruotare in seguito la B2 Application Key con least privilege, togliendo `bypassGovernance` e `deleteFiles`; debito di hardening non bloccante.
-2. Pubblicare la pagina di stato su un hosting realmente indipendente.
+1. Pianificare la rotazione della B2 Application Key con least privilege, rimuovendo `bypassGovernance` e `deleteFiles`; non e bloccante.
+2. Pubblicare `status-page/` su un hosting indipendente dal runtime principale.
+3. Riesaminare e approvare RTO/RPO 24h/24h prima di abilitare pagamenti reali.
 
 ## BLOCKERS / NOTES
 - Il blocco Supabase Preview (`Capacity is unavailable at this time`) è risolto: reset riuscito, 60 migrazioni nella Preview, tutti i check verdi sulla testa finale `44c5c83` prima del merge. Anche i sei check del commit su main sono verdi.

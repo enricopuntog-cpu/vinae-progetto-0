@@ -42,6 +42,8 @@ Aprire soltanto ciò che serve al task:
   storiche.
 - [`06_PROMPT_CHAT_OPERATIVE.md`](06_PROMPT_CHAT_OPERATIVE.md) — prompt storici,
   conservati come record e non come policy corrente.
+- [`07_BACKUP_DR_HANDOFF.md`](07_BACKUP_DR_HANDOFF.md) — handoff finale del
+  capitolo Backup/Disaster Recovery B2 chiuso il 23 settembre 2026.
 - [`context-manifest.json`](context-manifest.json) — snapshot machine-readable
   ricostruito il 13 agosto 2026; è datato e non autorevole.
 
