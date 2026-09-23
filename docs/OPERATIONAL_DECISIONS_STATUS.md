@@ -7,7 +7,8 @@ conclusi e dei residui che dipendono da account, persone o decisioni esterne.
 
 - banner globale di incidente con registro append-only e pannello riservato ad
   `admin` o `emergency_delegate`;
-- artefatto statico `status-page/`, pronto per un hosting indipendente;
+- status page statica in `status-page/site/`, pronta per Cloudflare Pages
+  (piano gratuito) su `status.vineawineclub.com`, validata in CI;
 - workflow giornaliero per backup cifrato Supabase database/Auth e Storage su
   Backblaze B2, con SHA-256, Object Lock e finestre 30/84/366 giorni per le
   copie giornaliere/settimanali/mensili; il conteggio esatto dipende dalle
@@ -107,7 +108,7 @@ dei Club; non aprono accessi e non bloccano la beta chiusa.
 | Attività | Stato | Prerequisito / prossima azione |
 | --- | --- | --- |
 | Backup B2 / DR | Chiuso tecnicamente | Run reale `35738026438` decifrato e ripristinato in isolamento; primo run automatico `35833711496` riuscito con readback e Object Lock. Il runbook copre le tre fonti del failover da zero. Resta solo la rotazione least privilege della key, non bloccante. |
-| Pagina di stato indipendente | Bloccata esternamente | Scegliere account/progetto e dominio separati; distribuire `status-page/`, poi inserire l'URL HTTPS nel banner. |
+| Pagina di stato indipendente | In attesa di Enrico (account e DNS) | Provider Cloudflare Pages gratuito, verificato il 23/09/2026. Creare il progetto Git `vinea-status` (output `status-page/site`), aggiungere il dominio `status.vineawineclub.com`, poi il `CNAME` `status` → `vinea-status.pages.dev` su Netlify DNS. Procedura in `status-page/README.md`. Il banner accetta già l'URL. |
 | Delegato di emergenza | Bloccata esternamente | Nominare una persona, abilitarle MFA e assegnare `emergency_delegate`; provare accesso a `/continuita`. |
 | Accessi del delegato | Bloccata esternamente | Concedere alla persona nominata accessi individuali e minimi a GitHub, Supabase, Netlify, DNS e backup; il ruolo applicativo da solo abilita soltanto il banner. |
 | Email di incidente | Bloccata da dati e procedura | Definire destinatari, base giuridica, modello approvato e responsabile invio tramite Resend; evitare broadcast per micro-interruzioni. |

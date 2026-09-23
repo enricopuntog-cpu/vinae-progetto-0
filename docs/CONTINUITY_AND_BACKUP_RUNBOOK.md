@@ -353,8 +353,8 @@ ordini bloccati.
 - nominare una persona come delegato e assegnarle `emergency_delegate` con MFA;
 - concedere e provare gli accessi individuali del delegato ai servizi esterni;
 - approvare destinatari, modello e procedura delle email di incidente via Resend;
-- distribuire `status-page/` su un account/progetto indipendente dal runtime
-  principale;
+- pubblicare `status-page/site/` su Cloudflare Pages come
+  `status.vineawineclub.com` (procedura in `status-page/README.md`);
 - riesaminare RTO/RPO 24/24 prima di abilitare pagamenti reali.
 
 Il capitolo tecnico Backup/Disaster Recovery B2 e chiuso. Non riaprirlo senza

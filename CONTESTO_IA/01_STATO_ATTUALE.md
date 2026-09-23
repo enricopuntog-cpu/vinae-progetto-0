@@ -3688,3 +3688,34 @@ Esecuzioni osservate:
 
 I probe sono stati chiusi senza merge e i loro branch eliminati. La produzione
 non è stata toccata.
+
+## 23 settembre 2026 — status page indipendente su Cloudflare Pages
+
+Baseline `origin/main` a `93fc4f6` (PR #143). Il sito principale resta su
+Netlify, che ospita anche la zona DNS `vineawineclub.com` (NS `nsone.net`);
+nessun record `status` esistente, nessun record CAA.
+
+Provider scelto: Cloudflare Pages, piano gratuito. Verificato alla data sulla
+documentazione ufficiale: richieste agli asset statici "free and unlimited"
+anche sul piano gratuito (`developers.cloudflare.com/pages/functions/pricing/`),
+100 domini personalizzati per progetto, 500 build al mese, 20.000 file
+(`developers.cloudflare.com/pages/platform/limits/`); sottodominio su DNS
+esterno tramite `CNAME` verso `<progetto>.pages.dev` dopo averlo aggiunto al
+progetto (`developers.cloudflare.com/pages/configuration/custom-domains/`).
+GitHub Pages resta il ripiego gratuito, ma non permette header HTTP propri.
+
+Nel repository la pagina è stata spostata in `status-page/site/` (unica
+directory pubblicata; il README non viene servito), con `_headers` Cloudflare al
+posto del vecchio `netlify.toml`, `404.html` e i cinque stati Operativo,
+Investigazione in corso, Problema identificato, Aggiornamento, Risolto. Zero
+JavaScript e zero risorse esterne. `status-page-check.mjs` la valida in CI con
+16 casi negativi. Simulazione locale di operativo, incidente e risolto a 375 px
+e desktop, chiaro e scuro: nessuna richiesta di rete, nessuna violazione CSP.
+
+Il banner Vinea usa già un URL HTTPS per avviso, validato da vincolo SQL e
+parser; è un semplice link, quindi un guasto della status page non tocca il
+sito. Nessuna variabile d'ambiente aggiunta.
+
+Restano a Enrico, per mancanza di credenziali dell'agente: account Cloudflare,
+collegamento GitHub del progetto `vinea-status` e record `CNAME` su Netlify DNS.
+Procedura in `status-page/README.md`.
