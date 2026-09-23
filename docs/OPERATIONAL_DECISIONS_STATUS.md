@@ -59,8 +59,8 @@ conclusi e dei residui che dipendono da account, persone o decisioni esterne.
 - `payments-checkout` e `connect-onboarding` rispondono HTTP 503; le tre
   funzioni AI rispondono HTTP 503.
 
-Le nuove migrazioni sono applicate in produzione Supabase. La PR #130 è integrata al commit `8e13f84`; CI su `main` verde, Supabase
-Preview verde e Netlify Published sul medesimo commit. In sessione autenticata
+Le nuove migrazioni sono applicate in produzione Supabase. La PR #130 è
+integrata al commit `8e13f84`; CI su `main` verde, Supabase Preview verde e Netlify Published sul medesimo commit. In sessione autenticata
 owner/admin si aprono i pannelli Club e le code amministrative senza errori
 browser. Le controversie reali sono zero: la decisione su una pratica non è
 stata provata con dati persistenti.
