@@ -1,0 +1,15 @@
+# Code owner di Vinea. Con il ruleset di main ("Require review from Code
+# Owners") ogni PR che tocca un file con owner richiede l'approvazione del
+# titolare. Vince l'ultima regola che corrisponde al percorso.
+
+# Default: tutto il repository.
+*                       @enricopuntog-cpu
+
+# Pagina di stato statica (Cloudflare Pages): nessun code owner, cosi il
+# delegato di emergenza puo aggiornarla con una PR propria, a check verdi.
+/status-page/site/
+
+# Automazione, workflow, script con accesso ai secret e questo file: sempre
+# sotto il titolare, anche se una regola sopra venisse allargata.
+/.github/               @enricopuntog-cpu
+/.github/CODEOWNERS     @enricopuntog-cpu

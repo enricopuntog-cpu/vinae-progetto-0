@@ -74,7 +74,8 @@ create temp table esiti_12h (
 -- Con p_keep = false gli effetti sono annullati (savepoint), cosi ogni prova
 -- negativa o di confronto e indipendente dalle altre.
 create function pg_temp.prova(
-  p_uid uuid, p_role text, p_sql text, p_keep boolean default false
+  p_uid uuid, p_role text, p_sql text, p_keep boolean default false,
+  p_aal text default 'aal2'
 ) returns text
 language plpgsql as $f$
 declare v text;
@@ -82,7 +83,7 @@ begin
   begin
     perform set_config('request.jwt.claim.sub', coalesce(p_uid::text, ''), true);
     perform set_config('request.jwt.claims',
-      jsonb_build_object('sub', p_uid, 'role', p_role)::text, true);
+      jsonb_strip_nulls(jsonb_build_object('sub', p_uid, 'role', p_role, 'aal', p_aal))::text, true);
     execute format('set local role %I', p_role);
     execute p_sql;
     execute 'reset role';
@@ -98,7 +99,9 @@ begin
 end $f$;
 
 -- Conta le righe di una relazione viste da p_role/p_uid, o lo SQLSTATE.
-create function pg_temp.conta(p_uid uuid, p_role text, p_rel text)
+create function pg_temp.conta(
+  p_uid uuid, p_role text, p_rel text, p_aal text default 'aal2'
+)
 returns text
 language plpgsql as $f$
 declare v bigint;
@@ -106,7 +109,7 @@ begin
   begin
     perform set_config('request.jwt.claim.sub', coalesce(p_uid::text, ''), true);
     perform set_config('request.jwt.claims',
-      jsonb_build_object('sub', p_uid, 'role', p_role)::text, true);
+      jsonb_strip_nulls(jsonb_build_object('sub', p_uid, 'role', p_role, 'aal', p_aal))::text, true);
     execute format('set local role %I', p_role);
     execute format('select count(*) from %s', p_rel) into v;
     execute 'reset role';
@@ -312,6 +315,45 @@ begin
     'delegato non tocca stato utente, config commerciale, note private contestazioni',
     v = '42501' and v2 = '42501' and v3 = '42501',
     format('stato_utente=%s config=%s note=%s', v, v2, v3));
+
+  -- 19-21. Assurance level (MFA). Tutte le prove sopra girano con aal2, il
+  -- caso piu forte per il delegato: anche cosi resta un utente normale fuori
+  -- dal banner. Qui il delegato con sessione aal1, o senza claim aal, deve
+  -- essere rifiutato prima di qualunque scrittura; l'admin mantiene il
+  -- comportamento precedente anche in aal1; l'utente normale resta rifiutato
+  -- anche in aal2.
+  v := pg_temp.prova(c_deleg, 'authenticated', format(
+    'select public.incident_notice_set(%L, %L, %L, true)', 'incidente', c_msg, c_url),
+    true, 'aal1');
+  v2 := pg_temp.prova(c_deleg, 'authenticated', format(
+    'select public.incident_notice_set(%L, %L, %L, false)', 'incidente', c_msg, c_url),
+    true, null);
+  select count(*) into v_n from public.incident_notice_events where actor_id = c_deleg;
+  v3 := pg_temp.conta(null, 'anon', 'public.public_incident_notice');
+  insert into esiti_12h values (19,
+    'delegato aal1 o senza claim aal rifiutato (42501), nessuna scrittura ne audit',
+    v = '42501' and v2 = '42501' and v_n = 3 and v3 = '0',
+    format('aal1=%s senza_aal=%s eventi_delegato=%s anon_vede=%s', v, v2, v_n, v3));
+
+  v := pg_temp.prova(c_user, 'authenticated', format(
+    'select public.incident_notice_set(%L, %L, null, true)', 'manutenzione', c_msg),
+    false, 'aal2');
+  v2 := pg_temp.prova(c_user, 'authenticated', format(
+    'select public.incident_notice_set(%L, %L, null, true)', 'manutenzione', c_msg),
+    false, 'aal1');
+  insert into esiti_12h values (20,
+    'utente normale rifiutato sia in aal2 sia in aal1',
+    v = '42501' and v2 = '42501', format('aal2=%s aal1=%s', v, v2));
+
+  v := pg_temp.prova(c_admin, 'authenticated', format(
+    'select public.incident_notice_set(%L, %L, null, true)', 'manutenzione', c_msg),
+    false, 'aal1');
+  v2 := pg_temp.prova(c_admin, 'authenticated', format(
+    'select public.incident_notice_set(%L, %L, null, true)', 'manutenzione', c_msg),
+    false, 'aal2');
+  insert into esiti_12h values (21,
+    'admin conserva la capability in aal1 e in aal2 (comportamento invariato)',
+    v = 'ok' and v2 = 'ok', format('aal1=%s aal2=%s', v, v2));
 end $$;
 
 -- 16. Ogni RPC protetta da un controllo admin (diretto o via helper) rifiuta

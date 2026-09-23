@@ -88,6 +88,17 @@ menzionare nell'issue di allarme del freshness watch, per esempio il delegato
 di emergenza dopo la nomina; vuota o assente, l'allarme menziona solo l'owner.
 Non esiste in nessun `.env`: vive solo nelle variabili del repository.
 
+Dal 23 settembre 2026 i job GitHub Actions che usano secret dichiarano un
+environment con *deployment branches* limitati a `main`:
+`production-backup` (backup offsite e freshness watch: `SUPABASE_DB_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`, `B2_KEY_ID`, `B2_APPLICATION_KEY`) e
+`production-payouts` (scheduler dei payout: `SUPABASE_ANON_KEY`,
+`PAYOUTS_JOB_TOKEN`). La destinazione dei valori è l'environment, non il
+repository: un workflow modificato su un altro branch non deve poterli
+leggere. Finché lo spostamento non è eseguito i valori restano a livello di
+repository (stato nella matrice del delegato di emergenza). Le variabili non
+segrete restano variabili di repository.
+
 ### Origine dei redirect della callback Auth
 
 Dal 14 settembre 2026 il dominio principale della beta è

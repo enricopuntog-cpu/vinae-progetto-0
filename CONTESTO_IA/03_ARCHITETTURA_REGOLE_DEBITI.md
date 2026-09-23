@@ -362,6 +362,22 @@ successive possono costruire.
   dal banner, e ogni RPC riservata agli admin deve rifiutarlo con `42501`. Una
   nuova porta per il delegato richiede di aggiornare quella griglia e
   `docs/EMERGENCY_DELEGATE_ACCESS_MATRIX.md`.
+- Dal 23 settembre 2026 (migrazione `20260923200000`) il delegato usa il banner
+  solo con `auth.jwt() ->> 'aal' = 'aal2'`: il controllo sta nella porta,
+  prima di validazione, rate limit e scritture, con hint `aal2_required`;
+  claim assente vale aal1. L'admin resta ammesso in aal1 per scelta. Una nuova
+  capability del delegato deve applicare lo stesso vincolo nel database, non
+  solo nella UI. Prove: griglia 12h (controlli 19–21) e
+  `supabase/tests/12h_delegate_mfa_e2e.mjs` con token reali di GoTrue, nel
+  gate CI. La MFA è offerta solo ai ruoli di continuità (`/account/sicurezza`).
+- GitHub: `main` protetto dal ruleset `main-protection` (PR, squash, niente
+  force push o cancellazione, sei check di Actions, review di Code Owner) e da
+  `.github/CODEOWNERS` (tutto, `.github/` e il file stesso al titolare;
+  `/status-page/site/` senza owner). I job con secret dichiarano environment
+  limitati a `main` (`production-backup`, `production-payouts`); un nuovo
+  workflow con secret deve fare lo stesso (test in
+  `operational-foundations.test.ts`) e nessun workflow usa
+  `pull_request_target`.
 - La destinazione offsite scelta e Backblaze B2 EU Central con cifratura `age`,
   Object Lock e retention 30 giornalieri, 12 settimanali, 12 mensili. Il job
   è attivo dal 22 settembre 2026 e resta fail-closed se il gate non vale

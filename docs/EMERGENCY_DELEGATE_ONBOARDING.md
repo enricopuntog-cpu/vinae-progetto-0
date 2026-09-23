@@ -2,9 +2,15 @@
 
 Stato al 23 settembre 2026: **PREPARATO / persona non ancora nominata.**
 
-Pronti: capability applicativa verificata, matrice degli accessi, Incident
-Card, checklist di riapertura, procedura di revoca, drill periodico e
-destinatari configurabili dell'allarme backup. Manca soltanto la persona.
+Pronti: capability applicativa verificata, MFA `aal2` imposta dal database
+per il ruolo, pagina `/account/sicurezza` per collegare l'app authenticator,
+`main` protetto da ruleset e CODEOWNERS, environment GitHub limitati a
+`main`, matrice degli accessi, Incident Card, checklist di riapertura,
+procedura di revoca, drill periodico e destinatari configurabili dell'allarme
+backup. Mancano lo spostamento dei valori dei secret negli environment
+(autorizzazione di Enrico), la scelta fra i modelli di disaster recovery A e B
+(matrice, ultima sezione) e la persona. Nessun nuovo codice serve per
+l'onboarding.
 Il capitolo si chiude quando esiste una persona reale nominata da Enrico, con
 MFA attiva e accessi provati secondo la checklist sotto, firmata e datata.
 
@@ -88,9 +94,13 @@ solo date, esiti e iniziali.
 
 ### Prima dell'invito (Enrico)
 
-- [ ] prerequisito GitHub della matrice attivo: ruleset su `main`,
-      `.github/CODEOWNERS`, secret spostati in un Environment limitato a `main`,
+- [x] ruleset `main-protection` su `main` e `.github/CODEOWNERS` attivi
+      (23 settembre 2026);
+- [ ] secret spostati negli environment `production-backup` e
+      `production-payouts`, `gh secret list` vuoto a livello di repository,
       poi dispatch di prova di backup e freshness watch riusciti;
+- [ ] modello di disaster recovery scelto: **A** operativo limitato o **B**
+      break-glass completo (matrice, ultima sezione);
 - [ ] decisione sulla chiave `age` registrata (nessun accesso / copia
       sigillata / secondo destinatario);
 - [ ] decisione Supabase registrata (*Developer* con rischio accettato,
@@ -116,6 +126,10 @@ solo date, esiti e iniziali.
 - [ ] **Enforce MFA** attivo sull'organizzazione Supabase;
 - [ ] codici di recupero salvati dalla persona nel proprio password manager;
 - [ ] password manager in uso; password dell'account Vinea unica e lunga;
+- [ ] app authenticator collegata all'account Vinea da `/account/sicurezza`
+      (dopo l'assegnazione del ruolo): QR inquadrato o chiave inserita a mano,
+      primo codice confermato. La chiave TOTP resta solo nell'app della
+      persona;
 - [ ] nessuna password, token o codice condiviso con Enrico o con altri;
 - [ ] dispositivo affidabile, personale, con blocco schermo e disco cifrato;
 - [ ] sistema operativo e browser aggiornati.
@@ -138,7 +152,12 @@ solo date, esiti e iniziali.
 
 ### Test (con la persona, senza incidenti pubblici)
 
-- [ ] login a Vinea e apertura di `/continuita`;
+- [ ] login a Vinea con la sola password: `/continuita` porta a
+      `/account/sicurezza` (enrollment se è il primo accesso, codice se il
+      fattore esiste); dopo il codice `/continuita` si apre. Il primo
+      enrollment riuscito è anche la prova che TOTP è attivo sul progetto di
+      produzione;
+- [ ] un codice sbagliato viene rifiutato e `/continuita` resta chiusa;
 - [ ] `/admin` risponde 404 per la persona;
 - [ ] pubblicazione di un banner di prova **solo in un ambiente non
       pubblico**: branch Supabase di anteprima o stack locale con un account
@@ -184,7 +203,8 @@ attesa: circa 45 minuti. Revisione completa della matrice ogni sei mesi.
 Regole: nessun restore distruttivo, nessun banner pubblico in produzione,
 nessun incidente pubblico, nessuna modifica a configurazioni.
 
-1. Login del delegato a Vinea e apertura di `/continuita` (senza salvare);
+1. Login del delegato a Vinea: dopo la password `/continuita` chiede il
+   codice dell'app authenticator; con il codice si apre (senza salvare).
    `/admin` deve rispondere 404.
 2. Login a GitHub, Supabase, Netlify e Cloudflare con MFA; per ogni servizio
    la persona indica dove vedrebbe un guasto.
@@ -201,7 +221,10 @@ nessun incidente pubblico, nessuna modifica a configurazioni.
    Supabase `select user_id, role from public.user_roles where role in
    ('admin','emergency_delegate');` restituisce solo le persone attese.
 8. Il gate CI `Supabase DB regression` deve essere verde sulla testa di
-   `main` per l'ultima modifica a migrazioni: include la matrice 12h.
+   `main` per l'ultima modifica a migrazioni: include la matrice 12h e la
+   prova REST MFA.
+9. GitHub: `rules/branches/main` mostra ancora ruleset e check obbligatori,
+   `gh secret list` a livello di repository è vuoto, CODEOWNERS senza errori.
 
 | Data | Partecipanti | Esito | Problemi | Prossimo drill |
 | --- | --- | --- | --- | --- |
@@ -215,7 +238,9 @@ Per fine collaborazione o cambio di delegato. Enrico esegue, in quest'ordine:
 
 1. Vinea: `delete from public.user_roles where user_id = '<uuid>' and role =
    'emergency_delegate';` poi revoca delle sessioni dell'utente da Supabase
-   Auth.
+   Auth e rimozione dei suoi fattori MFA (Authentication → utente → *Factors*,
+   o `auth.admin.mfa.deleteFactor`), così un eventuale nuovo ruolo richiede
+   un nuovo enrollment.
 2. GitHub: rimozione del collaboratore; chiusura o riassegnazione delle PR
    aperte; nessuna deploy key o webhook della persona.
 3. Supabase: rimozione dall'organizzazione; nessun access token della persona.
@@ -270,6 +295,20 @@ account, fine improvvisa della collaborazione o comportamento anomalo:
   utenti con il ruolo.
 - Allarme backup: variabile `BACKUP_ALERT_EXTRA_MENTIONS` supportata dal
   freshness watch, non impostata.
+- MFA del ruolo (23 settembre 2026): migrazione
+  `20260923200000_incident_notice_delegate_aal2.sql`; griglia 12h a 21
+  controlli (delegato `aal1` o senza claim rifiutato senza scritture, utente
+  normale rifiutato anche in `aal2`, admin invariato); prova REST
+  `12h_delegate_mfa_e2e.mjs` 13/13 con token reali di GoTrue e PostgREST
+  (enrollment, QR/secret, challenge, verify, publish/edit/withdraw in `aal2`,
+  rifiuto `aal1` con hint `aal2_required`), audit `3 1`, zero residui.
+  Controllo prima/dopo: con il corpo precedente della funzione la griglia
+  falliva il controllo 19 e la prova REST 3 casi. Percorso UI provato su stack
+  locale: login, rimando a `/account/sicurezza`, enrollment con QR, banner
+  pubblicato e ritirato, nuova sessione con challenge, codice errato
+  rifiutato, utente normale 404.
+- GitHub (23 settembre 2026): ruleset e CODEOWNERS attivi, environment creati
+  e collegati ai workflow; valori dei secret ancora a livello di repository.
 
 ## 6. Scheda contatti
 

@@ -8,7 +8,9 @@ Pagamenti e AI restano **spenti**, qualunque cosa succeda.
 
 ## Link
 
-- Banner Vinea: `https://vineawineclub.com/continuita`
+- Banner Vinea: `https://vineawineclub.com/continuita` — dopo la password
+  chiede il codice dell'app authenticator (`/account/sicurezza`); senza
+  codice il banner non si pubblica, nemmeno chiamando l'API
 - Status page: `https://status.vineawineclub.com`, riserva
   `https://vinea-status.pages.dev`; procedura in `status-page/README.md`
 - Allarmi backup: issue con etichetta `backup-freshness-alert` nel repository
@@ -47,7 +49,8 @@ nessuna modifica. Aspettare costa meno che rompere.
 4. **Comunica:** banner in `/continuita` con la categoria, un messaggio breve
    (10-500 caratteri) senza dettagli tecnici, e URL
    `https://status.vineawineclub.com`. Status page su *Investigazione in
-   corso*. Se Vinea non si apre, basta la status page.
+   corso*. Se Vinea non si apre, o se non hai l'app authenticator a
+   disposizione, basta la status page: il codice non si aggira.
 5. **Preserva le evidenze:** screenshot, URL e id dei run GitHub, id dei deploy
    Netlify, orari. Non cancellare log, issue, deploy o backup.
 6. **Niente modifiche distruttive premature.** Prima capire, poi agire.

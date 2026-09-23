@@ -42,7 +42,8 @@ Aprire soltanto ciò che serve al task:
   storiche.
 - [`06_PROMPT_CHAT_OPERATIVE.md`](06_PROMPT_CHAT_OPERATIVE.md) — prompt storici,
   conservati come record e non come policy corrente.
-- Delegato di emergenza (PREPARATO, persona non nominata):
+- Delegato di emergenza (PREPARATO, persona non nominata; MFA `aal2` imposta,
+  `main` protetto, secret ancora da spostare negli environment):
   `../docs/EMERGENCY_DELEGATE_ONBOARDING.md`,
   `../docs/EMERGENCY_DELEGATE_ACCESS_MATRIX.md` e
   `../docs/EMERGENCY_DELEGATE_INCIDENT_CARD.md`; la regola del ruolo di sola

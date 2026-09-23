@@ -19,6 +19,9 @@ jobs:
   backup:
     name: Supabase to Backblaze B2
     if: ${{ vars.BACKUP_OFFSITE_ENABLED == 'true' }}
+    # Secret solo nell'environment production-backup, che accetta job del solo branch
+    # main: un workflow modificato su un altro branch non li riceve.
+    environment: production-backup
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:

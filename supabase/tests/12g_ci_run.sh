@@ -134,6 +134,12 @@ cleanup() {
   local status=$?
   if [ "$cleanup_done" = "0" ]; then
     cleanup_done=1
+    # Uscita anticipata durante la prova MFA 12h: i suoi utenti vanno rimossi
+    # prima, altrimenti il guard della pulizia 12g la rifiuta.
+    if [ "$(sql "select count(*) from auth.users where email like '%@mfa-12h.test'" 2>/dev/null)" != "0" ]; then
+      echo "Pulizia fixture 12h MFA."
+      "${PSQL[@]}" -At -f "$TESTS/12h_delegate_mfa_cleanup.sql" >/dev/null || status=1
+    fi
     echo "Pulizia fixture 12g."
     local residui
     if residui="$("${PSQL[@]}" -At -F ' ' -f "$TESTS/12g_club_dispute_e2e_cleanup.sql" | tail -n 1)"; then
@@ -194,6 +200,48 @@ denials="$("${PSQL[@]}" -At -f "$TESTS/12f_club_dispute_role_denials.sql" | tail
 [ "$denials" = "t" ] || die "12f dinieghi di ruolo: controllo finale '$denials'."
 echo "12f dinieghi di ruolo: PASS"
 summary "- 12f dinieghi di ruolo: PASS"
+
+# --- prova REST MFA del delegato (12h) ---------------------------------------
+# Token reali di GoTrue (aal1 dopo la password, aal2 dopo TOTP) attraverso
+# PostgREST. Utenti propri `@mfa-12h.test`, rimossi subito dopo: la fixture
+# 12g richiede un database senza altri utenti.
+
+MFA_PASSWORD="$(openssl rand -hex 24)"
+if [ -n "${GITHUB_ACTIONS:-}" ]; then
+  echo "::add-mask::$MFA_PASSWORD"
+fi
+readonly MFA_DELEGATE="12ab1000-0000-4000-8000-000000000001"
+
+sed "s/'__E2E_PASSWORD__'/:'e2e_password'/" "$TESTS/12h_delegate_mfa_fixture.sql" \
+  | "${PSQL[@]}" -At -F ' ' -v e2e_password="$MFA_PASSWORD" -f - \
+  | tail -n 1 | { read -r utenti ruoli
+      echo "Fixture MFA: utenti=$utenti ruoli=$ruoli"
+      [ "$utenti $ruoli" = "2 1" ] || exit 1; } \
+  || die "Fixture 12h MFA non creata come atteso."
+
+mfa_log="$(mktemp)"
+set +e
+E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_ANON_KEY="$E2E_ANON_KEY" E2E_PASSWORD="$MFA_PASSWORD" \
+  node "$TESTS/12h_delegate_mfa_e2e.mjs" | tee "$mfa_log"
+mfa_rc=${PIPESTATUS[0]}
+set -e
+mfa_last="$(tail -n 1 "$mfa_log")"
+rm -f "$mfa_log"
+mfa_passed="$(printf '%s' "$mfa_last" | sed -nE 's/.*"passed":([0-9]+).*/\1/p')"
+mfa_total="$(printf '%s' "$mfa_last" | sed -nE 's/.*"total":([0-9]+).*/\1/p')"
+
+# Audit: esattamente publish, edit e withdraw del delegato in aal2; nessuna
+# riga dai tentativi aal1.
+mfa_audit="$(sql "select count(*) || ' ' || count(*) filter (where not active)
+  from public.incident_notice_events where actor_id = '$MFA_DELEGATE'")"
+mfa_residui="$("${PSQL[@]}" -At -F ' ' -f "$TESTS/12h_delegate_mfa_cleanup.sql" | tail -n 1)" \
+  || die "Pulizia 12h MFA fallita."
+echo "12h MFA REST: ${mfa_passed:-?}/${mfa_total:-?}; audit delegato (eventi ritiri): $mfa_audit; residui: $mfa_residui"
+summary "- 12h MFA REST (GoTrue + PostgREST): ${mfa_passed:-?}/${mfa_total:-?}, audit \`$mfa_audit\`, residui \`$mfa_residui\`"
+[ "$mfa_rc" = "0" ] && [ -n "$mfa_total" ] && [ "$mfa_passed" = "$mfa_total" ] \
+  || die "12h MFA REST: ${mfa_passed:-?}/${mfa_total:-?} (uscita $mfa_rc)."
+[ "$mfa_audit" = "3 1" ] || die "12h MFA: audit del delegato '$mfa_audit', atteso '3 1'."
+[ "$mfa_residui" = "0 0 0 0 0 0" ] || die "12h MFA: residui dopo la pulizia '$mfa_residui'."
 
 # --- fixture e E2E completo --------------------------------------------------
 

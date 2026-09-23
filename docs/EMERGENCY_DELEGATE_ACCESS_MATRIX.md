@@ -3,7 +3,10 @@
 Stato al 23 settembre 2026: **PREPARATO / persona non ancora nominata.**
 Nessun accesso è stato concesso a terzi, nessun account è stato creato e il
 ruolo `emergency_delegate` non è assegnato a nessuno (produzione: una sola
-riga in `user_roles`, `admin`).
+riga in `user_roles`, `admin`). Dalla stessa data il ruolo usa il banner
+solo con una sessione MFA (`aal2`) e `main` è protetto da ruleset e
+CODEOWNERS; lo spostamento dei secret negli environment GitHub è preparato ma
+non ancora eseguito (punto 1 dei prerequisiti).
 
 Questo documento dice **che cosa** concedere e **perché**. La procedura per
 concederlo, provarlo e revocarlo è in
@@ -37,32 +40,36 @@ cambiano configurazioni che oggi funzionano con un solo operatore.
 
 1. **GitHub — proteggere `main` e i secret.** Il repository
    `enricopuntog-cpu/vinae-progetto-0` è **pubblico e personale** (non in
-   un'organizzazione) e `main` **non ha protezioni né ruleset**. Su un
-   repository personale un collaboratore riceve sempre il livello *write*: può
-   fare push su `main`, fare il merge delle proprie PR e far girare workflow
-   scritti da lui su qualunque branch. I secret sono a livello di repository
-   (`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`, `B2_KEY_ID`,
-   `B2_APPLICATION_KEY`): un workflow su un branch può leggerli. Oggi, quindi,
-   *write* su GitHub equivale di fatto ad accesso completo a produzione e
-   backup. Configurazione proposta, da applicare **prima** di invitare la
-   persona:
-   - ruleset su `main`: PR obbligatoria, blocco di force push e cancellazione,
-     *require review from Code Owners*, nessuna approvazione generica
-     richiesta, *bypass* concesso solo al ruolo *Repository admin* (Enrico);
-   - file `.github/CODEOWNERS` con `* @enricopuntog-cpu` e una riga senza
-     proprietario per `/status-page/site/`: il delegato può così pubblicare da
-     solo gli aggiornamenti della status page, mentre ogni altro percorso
-     richiede l'approvazione di Enrico;
-   - spostare i secret di backup e Supabase in un *Environment* GitHub con
-     *deployment branches* limitati a `main`, e aggiungere `environment:` ai
-     workflow che li usano; a livello di repository non resta nessun secret.
-     Un workflow scritto su un branch non riceve più i secret; il delegato
-     può comunque lanciare a mano i workflow di `main`.
+   un'organizzazione): un collaboratore riceve sempre il livello *write*, e
+   senza protezioni potrebbe fare push su `main`, fare il merge delle proprie
+   PR e far girare workflow scritti da lui su qualunque branch, leggendo i
+   secret di repository. Stato:
+   - **fatto** — ruleset `main-protection` (id 23894067) attivo su `main`:
+     PR obbligatoria con solo *squash*, blocco di force push e cancellazione,
+     *require review from Code Owners* con approvazione dell'ultimo push e
+     review obsolete annullate, nessuna approvazione generica richiesta, i sei
+     check di GitHub Actions obbligatori (`Frontend`, `Frontend Next`,
+     `Payout runner`, `Continuity scripts`, `Backend`, `Supabase 12g`).
+     Unico *bypass*: ruolo *Repository admin* (Enrico), solo tramite PR;
+   - **fatto** — [`.github/CODEOWNERS`](../.github/CODEOWNERS): Enrico owner
+     di tutto, di `.github/` e del file stesso; `/status-page/site/` senza
+     owner. Sintassi validata da GitHub (zero errori);
+   - **fatto** — environment `production-backup` e `production-payouts`,
+     *deployment branches* limitati a `main`; i workflow di backup, freshness
+     watch e payout dichiarano `environment:` (test in
+     `operational-foundations.test.ts`);
+   - **da completare** — spostare i valori: oggi i sei secret
+     (`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`, `B2_KEY_ID`,
+     `B2_APPLICATION_KEY`, `SUPABASE_ANON_KEY`, `PAYOUTS_JOB_TOKEN`) sono
+     ancora **a livello di repository**, e gli environment sono vuoti. GitHub
+     non rilegge i valori; la strada senza esporli è un workflow usa e getta
+     che li sigilla nel runner con la chiave pubblica di ciascun environment,
+     poi la cancellazione dei secret di repository e un dispatch di prova del
+     backup e del freshness watch. Richiede un'autorizzazione esplicita di
+     Enrico (scrittura nel secret store). Finché non è fatto, **un workflow
+     scritto su un branch può ancora leggere i secret di produzione e B2** e
+     l'accesso GitHub del delegato non va concesso.
 
-   Finché questi tre punti non sono attivi, l'accesso GitHub del delegato non
-   va concesso. È un cambio di configurazione del backup: va fatto in un task
-   dedicato, con un dispatch di prova del backup e del freshness watch dopo lo
-   spostamento dei secret.
 2. **Chiave privata `age`.** Gli archivi B2 si decifrano solo con l'identità
    `age` che Enrico custodisce offline. Senza di essa il delegato può
    verificare che i backup esistano, ma non ripristinarli. Opzioni: nessun
@@ -113,9 +120,21 @@ cambiano configurazioni che oggi funzionano con un solo operatore.
   leggibili ha esattamente gli stessi esiti di un utente normale. AI e
   pagamenti dipendono da `AI_ENABLED`/`PAYMENTS_ENABLED`, variabili delle Edge
   Function che il ruolo non raggiunge.
-- **MFA:** Supabase Auth dell'app non impone oggi un secondo fattore agli
-  utenti. Il ruolo si assegna solo a un account con password unica e lunga,
-  custodita nel password manager della persona, e con email verificata.
+- **MFA (imposta dal database):** `incident_notice_set` rifiuta il delegato
+  la cui sessione non ha `aal = aal2` nel JWT, anche se chiama la RPC
+  direttamente (42501, hint `aal2_required`; migrazione
+  `20260923200000_incident_notice_delegate_aal2.sql`). `/continuita` manda
+  il delegato su `/account/sicurezza`: senza fattore configura l'app
+  authenticator (QR o chiave, poi codice), con fattore ma sessione `aal1`
+  chiede il codice attuale. Provato dalla griglia 12h (controlli 19–21) e
+  dalla prova REST
+  [`12h_delegate_mfa_e2e.mjs`](../supabase/tests/12h_delegate_mfa_e2e.mjs)
+  con token reali di GoTrue, entrambe nel gate CI. Gli utenti normali non
+  vedono né usano la MFA. **L'admin conserva l'accesso in `aal1`**: la regola
+  nasce per un'identità di emergenza che entra di rado, non cambia l'accesso
+  ordinario del titolare; Enrico può comunque collegare un fattore dalla
+  stessa pagina. Resta obbligatoria anche una password unica e lunga nel
+  password manager della persona, con email verificata.
 - **Revoca:** `delete from public.user_roles where user_id = '<uuid>' and role
   = 'emergency_delegate';` Effetto immediato su RPC e pagina: il controllo
   avviene a ogni chiamata. Per chiudere anche le sessioni aperte, revocarle da
@@ -137,17 +156,35 @@ cambiano configurazioni che oggi funzionano con un solo operatore.
   commentare le issue.
 - **Non deve poter:** leggere o modificare secret e variabili, impostazioni,
   collaboratori, ruleset; fare il merge di codice fuori da `status-page/site/`
-  senza approvazione di Enrico; fare force push o cancellare `main`. I primi
-  tre punti sono garantiti dal ruolo *write*; gli altri solo con i
-  prerequisiti al punto 1.
+  senza approvazione di Enrico; fare force push o cancellare `main`; ottenere
+  i secret di produzione e B2 con un workflow modificato su un branch. I primi
+  punti sono garantiti dal ruolo *write*; merge, force push e cancellazione dal
+  ruleset e da CODEOWNERS (attivi); l'ultimo solo dopo lo spostamento dei
+  secret negli environment (da completare, punto 1).
+- **Audit del 23 settembre 2026** (configurazione, nessun collaboratore
+  invitato): unico collaboratore `enricopuntog-cpu` (admin); permessi di
+  default dei workflow `read`; GitHub Actions non può approvare PR; nessun
+  workflow `pull_request_target`; l'unico `workflow_run` (freshness watch)
+  esegue codice di `main` e non usa artefatti del run che lo avvia; gli input
+  di `workflow_dispatch` passano da `env`, non interpolati negli script. Un
+  collaboratore potrà comunque lanciare a mano anche `Phase 7 - auto-release
+  payouts`, che su `main` rilascia solo payout già maturati: con
+  `PAYMENTS_ENABLED=false` non c'è nulla da rilasciare, ma va riletto prima
+  dell'apertura dei pagamenti.
 - **MFA:** 2FA dell'account GitHub attiva prima dell'invito (Settings →
   Password and authentication). Su un repository personale non si può imporre:
   va verificata a vista durante l'onboarding.
 - **Revoca:** Settings → Collaborators → *Remove*. Verificare poi che non
   restino deploy key, webhook o PR aperte della persona.
 - **Verifica periodica:** elenco collaboratori
-  (`gh api repos/enricopuntog-cpu/vinae-progetto-0/collaborators`) e
-  ruleset attivi.
+  (`gh api repos/enricopuntog-cpu/vinae-progetto-0/collaborators`), regole
+  effettive su `main` (`gh api repos/enricopuntog-cpu/vinae-progetto-0/rules/branches/main`),
+  `gh secret list` vuoto a livello di repository, errori CODEOWNERS
+  (`gh api repos/enricopuntog-cpu/vinae-progetto-0/codeowners/errors`).
+- **Merge del titolare e degli agenti:** con il ruleset, le PR di Enrico
+  richiedono una review di Code Owner che l'autore non può darsi; si fondono
+  con il bypass dell'admin (`gh pr merge --squash --admin`) **solo a check
+  verdi**, come prescrive `CLAUDE.md`.
 
 ### Supabase
 
@@ -283,10 +320,40 @@ cambiano configurazioni che oggi funzionano con un solo operatore.
 
 | Rischio | Dove | Mitigazione |
 | --- | --- | --- |
-| *write* GitHub non riducibile; oggi equivale ad accesso ai secret | GitHub | prerequisiti al punto 1 prima di invitare |
+| *write* GitHub non riducibile; finché i secret restano a livello di repository equivale ad accesso ai secret | GitHub | ruleset e CODEOWNERS attivi; spostamento dei secret negli environment prima di invitare (punto 1) |
 | *Developer* Supabase può scrivere nei dati di produzione | Supabase | mandato scritto, MFA imposta, drill; alternativa piano Team o nessun accesso |
 | *Developer* Netlify può cambiare le variabili, incluse quelle dei gate | Netlify | mandato, controllo del registro a ogni drill |
 | permessi DNS dei ruoli Netlify non documentati | Netlify DNS | verifica alla concessione; riserva `vinea-status.pages.dev` |
 | restore impossibile senza chiave `age` | B2 | decisione di Enrico al prerequisito 2 |
-| nessuna MFA imposta sugli utenti Supabase Auth dell'app | Vinea | password unica, drill, revoca immediata del ruolo |
+| l'admin usa il banner anche in `aal1` | Vinea | scelta esplicita (accesso ordinario del titolare invariato); fattore facoltativo da `/account/sicurezza` |
+| TOTP sul progetto ospitato non leggibile dalle API pubbliche | Vinea | attivo di default su Supabase; provato davvero all'enrollment del delegato (onboarding, sezione Test) |
 | login del delegato visibile nelle issue di allarme pubbliche | GitHub | informare la persona prima di configurare la variabile |
+
+## Disaster recovery: due modelli, decisione di Enrico
+
+Il mandato attuale non dà al delegato il ripristino dei dati. Prima della
+nomina Enrico sceglie **uno** dei due modelli; nessuno dei due è implementato
+oltre a quanto già descritto sopra.
+
+**A. Delegato operativo limitato** (compatibile con la preparazione attuale).
+Diagnosi (log, stato Supabase/Netlify, run di Actions), rollback Netlify a un
+deploy precedente, banner e status page, dispatch del backup e del freshness
+watch, smoke test dell'Incident Card, escalation. Un ripristino su progetto
+nuovo resta a Enrico: il delegato non ha la chiave `age` né i privilegi per
+creare o ripristinare un progetto Supabase. Rischio: con Enrico irraggiungibile
+e il database perso, il servizio resta fermo (banner e status page onesti) fino
+al suo rientro; l'RTO di 24 ore dipende da Enrico.
+
+**B. Delegato break-glass completo.** Oltre ad A, il delegato può decifrare gli
+archivi B2 e ripristinare un progetto seguendo il runbook. Richiede decisioni
+e lavoro dedicati:
+- custodia della chiave `age`: copia sigillata in un luogo concordato oppure
+  un secondo destinatario `age` intestato al delegato (oggi lo script di
+  backup ne accetta uno solo: modifica del backup e nuovo restore di prova);
+- accesso B2 in lettura (application key read-only del bucket) e privilegi
+  Supabase sufficienti a creare un progetto e a gestirne i secret: *Owner* o
+  *Administrator* dell'organizzazione, oppure una seconda organizzazione di
+  emergenza; entrambi superano il *Developer* della matrice;
+- drill di restore eseguito dal delegato su un progetto usa e getta.
+Rischio: la persona può leggere tutti i dati e agire con privilegi elevati;
+serve un vincolo contrattuale e di riservatezza più forte.
