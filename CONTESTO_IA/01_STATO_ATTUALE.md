@@ -3852,3 +3852,38 @@ Costi aggiuntivi zero (repository pubblico, pochi MB in piu su B2).
   dal classificatore dei permessi dell'agente (scrittura nel secret store) e
   attende l'autorizzazione esplicita di Enrico. Environment ancora vuoti; i sei
   secret restano a livello di repository.
+
+## 23–24 settembre 2026 — secret negli environment e disaster recovery A
+
+- Con l'autorizzazione esplicita di Enrico, i sei secret di repository sono
+  stati spostati: `SUPABASE_DB_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+  `B2_KEY_ID`, `B2_APPLICATION_KEY` in `production-backup`;
+  `SUPABASE_ANON_KEY`, `PAYOUTS_JOB_TOKEN` in `production-payouts`.
+- Metodo: branch orfano temporaneo con un solo workflow (`permissions: {}`,
+  pacchetti Ubuntu firmati `python3-nacl` e `age`) che ha sigillato i valori
+  nel runner con la chiave pubblica di ciascun environment e ha stampato il
+  risultato solo dopo una seconda cifratura `age` per una chiave effimera
+  locale. In locale è stato tolto solo lo strato `age`: i valori non sono mai
+  usciti in chiaro dal runner e non sono stati letti. Nessun artifact. Chiave
+  effimera, file intermedi, run e branch eliminati.
+- Prima della cancellazione a livello di repository (gli environment hanno la
+  precedenza sui secret di repository): backup e freshness watch PASS con i
+  valori degli environment, scheduler dei payout PASS al primo run schedulato
+  (`enabled=false`, nessun movimento). Dopo la cancellazione: backup con
+  readback, SHA-256 e Object Lock e freshness watch PASS; zero secret di
+  repository.
+- Prova negativa dal branch temporaneo: senza environment i sei nomi sono
+  vuoti; i job con `environment: production-backup`/`production-payouts` e
+  quelli con `environment: { name, deployment: false }` sono rifiutati da
+  GitHub prima di partire per la branch policy (zero step). Per
+  `pull_request` la regola confronta `refs/pull/N/merge` (documentazione
+  GitHub), quindi una PR non ottiene i secret; nessuna PR di prova è stata
+  aperta perché non sarebbe cancellabile.
+- Il dispatch manuale dello scheduler dei payout è stato fermato dal
+  classificatore dei permessi dell'agente (transazioni reali): per la verifica
+  si è atteso il run schedulato.
+- Decisione di Enrico: disaster recovery **A — delegato operativo limitato**
+  per la Beta. Restore catastrofico su progetto nuovo a Enrico; al delegato
+  niente chiave `age`, niente *Owner*/*Administrator* Supabase, niente
+  break-glass. Il modello B si rivaluta prima dei pagamenti reali o se
+  cambiano i requisiti di continuità.
