@@ -1106,7 +1106,7 @@ describe("PublicProfileService.cantinaPubblica", () => {
     expect(esito.ok && esito.data[0]!.immagine).toBe("/images/vinea-bottle-1.jpg");
   });
 
-  it("con un annuncio attivo porta l'indirizzo e la sua prima immagine, non il prezzo", async () => {
+  it("con un annuncio attivo porta lo slug canonico e la sua prima immagine, non l'id o il prezzo", async () => {
     const { client } = fakeClient({
       data: [
         rigaBottiglia({
@@ -1126,12 +1126,27 @@ describe("PublicProfileService.cantinaPubblica", () => {
       slug: "azienda-rosso-2019",
       href: "/annuncio/azienda-rosso-2019",
     });
+    expect(bottiglia!.annuncio!.href).not.toContain("aa440000-0000-4000-8000-000000000401");
     expect(bottiglia!.immagine).toBe("/images/annuncio-uno.jpg");
     // Prezzo e disponibilità hanno una sorgente sola, `public_listings`, e la
     // sezione «Annunci attivi» la legge già: qui non arrivano in nessuna forma.
     expect(bottiglia).not.toHaveProperty("prezzo");
     expect(bottiglia).not.toHaveProperty("prezzoCents");
     expect(Object.values(bottiglia!)).not.toContain(4500);
+  });
+
+  it("codifica lo slug quando compone la route canonica dell'annuncio", async () => {
+    const { client } = fakeClient({
+      data: [rigaBottiglia({ listing_slug: "azienda/rosso riserva" })],
+      error: null,
+    });
+
+    const esito = await creaPublicProfileService(client).cantinaPubblica(ALICE);
+
+    expect(esito.ok && esito.data[0]!.annuncio).toEqual({
+      slug: "azienda/rosso riserva",
+      href: "/annuncio/azienda%2Frosso%20riserva",
+    });
   });
 
   it("difende il tipo dello stato invece di fidarsi della riga", async () => {

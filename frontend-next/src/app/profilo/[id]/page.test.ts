@@ -95,14 +95,21 @@ describe("/profilo/[id]", () => {
 
   it("carica la Cantina pubblica solo dopo un profilo valido, e insieme alle altre sezioni", () => {
     const profiloValido = pagina.indexOf("if (!esitoProfilo.data) notFound()");
-    const letturaCantina = pagina.indexOf("service.cantinaPubblica(id)");
+    const letturaCantina = pagina.indexOf("service.cantinaPubblica(id, {");
     expect(profiloValido).toBeGreaterThan(-1);
     expect(letturaCantina).toBeGreaterThan(profiloValido);
     // Le tre letture indipendenti partono insieme: una Cantina lunga non fa
     // aspettare gli annunci.
     expect(pagina).toInclude("await Promise.all([");
-    expect(pagina).toInclude("service.cantinaPubblica(id),");
+    expect(pagina).toInclude(
+      "service.cantinaPubblica(id, { limite: ANTEPRIMA_CANTINA_PUBBLICA }),",
+    );
     expect(pagina.match(/await service\.cantinaPubblica\(/g)).toBeNull();
+  });
+
+  it("la sezione profilo è solo un'anteprima collegata alla pagina dedicata", () => {
+    expect(pagina).toInclude("ANTEPRIMA_CANTINA_PUBBLICA");
+    expect(pagina).toInclude("profiloId={profilo.userId}");
   });
 
   it("una Cantina che non si legge toglie la Cantina, non il profilo", () => {
@@ -115,7 +122,9 @@ describe("/profilo/[id]", () => {
   });
 
   it("la Cantina è una sezione a sé, prima degli annunci e dopo l'anagrafica", () => {
-    expect(pagina).toInclude("<CantinaPubblica bottiglie={cantina} />");
+    expect(pagina).toInclude(
+      "<CantinaPubblica profiloId={profilo.userId} bottiglie={cantina} />",
+    );
     const anagrafica = pagina.indexOf("{profilo.bio}");
     const sezioneCantina = pagina.indexOf("<CantinaPubblica");
     const sezioneAnnunci = pagina.indexOf('aria-labelledby="annunci-attivi"');

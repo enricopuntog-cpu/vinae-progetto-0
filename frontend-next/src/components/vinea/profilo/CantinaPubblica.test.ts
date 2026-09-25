@@ -88,11 +88,16 @@ describe("«in vendita» è un collegamento, non un prezzo", () => {
     expect(sezioneNuda).not.toMatch(/`\/annuncio\/|"\/annuncio\//);
     expect(contratti).toInclude("annuncio: { slug: string; href: string } | null;");
   });
+
+  it("manda il checkout allo slug dello stesso annuncio, mai all'id della bottiglia", () => {
+    expect(sezioneNuda).toInclude("routes.checkout(bottiglia.annuncio.slug)");
+    expect(sezioneNuda).not.toMatch(/routes\.checkout\(bottiglia\.(?:id|wineSlug)\)/);
+  });
 });
 
 describe("Cantina vuota", () => {
   it("ha una frase propria, e non è un errore", () => {
-    expect(sezioneNuda).toInclude("bottiglie.length > 0 ?");
+    expect(sezioneNuda).toInclude("anteprima.length > 0 ?");
     expect(sezioneNuda).toInclude("Cantina riservata");
     expect(sezioneNuda).toInclude(
       "Questa persona non ha ancora reso pubbliche bottiglie della propria Cantina.",
@@ -103,13 +108,30 @@ describe("Cantina vuota", () => {
   });
 });
 
+describe("l'anteprima apre la pagina dedicata", () => {
+  it("mostra il collegamento soltanto quando esiste una collezione da visitare", () => {
+    expect(sezioneNuda).toInclude("{anteprima.length > 0 ? (");
+    expect(sezioneNuda).toInclude("href={indirizzoCantinaPubblica(profiloId)}");
+    expect(sezioneNuda).toInclude('data-testid="cantina-pubblica-visita"');
+    expect(sezioneNuda).toInclude("Visita la cantina");
+    expect(sezioneNuda.indexOf("Visita la cantina")).toBeLessThan(
+      sezioneNuda.indexOf(") : (\n        <CantinaVuota />"),
+    );
+  });
+
+  it("resta un assaggio e non usa il limite predefinito del servizio", () => {
+    expect(sezioneNuda).toInclude("bottiglie.slice(0, ANTEPRIMA_CANTINA_PUBBLICA)");
+  });
+});
+
 describe("la sezione è resa dal server e resta leggibile", () => {
   it("non è un componente client: nessuno stato, nessuna lettura propria", () => {
     expect(sezione).not.toInclude('"use client"');
     expect(sezioneNuda).not.toMatch(/useState|useEffect|\.rpc\(|createClient|fetch\(/);
-    // Le bottiglie arrivano già lette dalla pagina: la sezione non sa nemmeno
-    // di chi è il profilo.
-    expect(sezioneNuda).toInclude("bottiglie }: { bottiglie: BottigliaCantinaPubblica[] }");
+    // Le bottiglie arrivano già lette dalla pagina; l'id serve soltanto a
+    // comporre il collegamento verso la pagina dedicata, non a fare una lettura.
+    expect(sezioneNuda).toInclude("profiloId: string;");
+    expect(sezioneNuda).toInclude("bottiglie: BottigliaCantinaPubblica[];");
     expect(sezioneNuda).not.toInclude("userId");
   });
 

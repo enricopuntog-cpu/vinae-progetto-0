@@ -7,6 +7,7 @@ import { ReportDialog } from "@/components/vinea/ReportDialog";
 import { ReputazionePubblica } from "@/components/vinea/profilo/ReputazionePubblica";
 import { WineCard } from "@/components/vinea/WineCard";
 import { esperienzaLabels } from "@/data/onboarding";
+import { ANTEPRIMA_CANTINA_PUBBLICA } from "@/lib/profilo/cantina-pubblica-vista";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { creaPublicProfileService } from "@/services/public-profile-service";
 
@@ -45,7 +46,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   // `profilo_pubblico`, quindi la reputazione non costa una quarta andata al
   // database.
   const [esitoCantina, esitoAnnunci, esitoRecensioni] = await Promise.all([
-    service.cantinaPubblica(id),
+    service.cantinaPubblica(id, { limite: ANTEPRIMA_CANTINA_PUBBLICA }),
     service.annunciAttivi(id),
     service.recensioni(id),
   ]);
@@ -152,7 +153,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         subito sotto, ed è normale che la stessa bottiglia compaia in tutte e
         due.
       */}
-      <CantinaPubblica bottiglie={cantina} />
+      <CantinaPubblica profiloId={profilo.userId} bottiglie={cantina} />
 
       <section aria-labelledby="annunci-attivi">
         <div className="mb-4 flex items-end justify-between gap-4">
