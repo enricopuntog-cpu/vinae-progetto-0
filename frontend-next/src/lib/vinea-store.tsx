@@ -100,6 +100,9 @@ type StoreState = {
   inVendita: Set<string>;
   prezzoNascosto: Set<string>;
   togglePrezzoNascosto: (id: string) => Promise<Result<void>>;
+  /** I vini che il proprietario espone nella Cantina pubblica del suo profilo. */
+  cantinaPubblica: Set<string>;
+  toggleCantinaPubblica: (id: string) => Promise<Result<void>>;
   bottiglieCantina: CellarBottle[];
   viniCantina: Wine[];
   metaPerVino: Record<string, WineVintageMeta>;

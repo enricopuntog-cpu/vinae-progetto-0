@@ -89,6 +89,21 @@ export type CellarBottle = {
     nota?: string;
   };
   saleStatus: SaleStatus;
+  /**
+   * `bottle_units.visibilita` così com'è, e non dedotta da `saleStatus`.
+   *
+   * `saleStatus` è derivato e dà **una** risposta sola: una bottiglia in vendita
+   * vale `in_vendita` qualunque sia la sua visibilità, quindi da lì non si può
+   * sapere se quella stessa bottiglia comparirà anche nella Cantina pubblica del
+   * profilo. Sono due fatti indipendenti — «la vendo» e «la mostro» — e da
+   * quando il profilo pubblico ha una sezione Cantina servono distinti:
+   * l'interruttore del proprietario legge questo campo e scrive quella colonna.
+   *
+   * Facoltativo per la stessa ragione di `stato`: i dati dimostrativi di
+   * `bottiglieSeed` non hanno una colonna `visibilita`, e `undefined` vale «non
+   * lo so», non «privata».
+   */
+  visibilitaCantina?: "privata" | "cantina_pubblica";
   priceVisibility: PriceVisibility;
   storageLocationId?: string; // → StorageSlot.id
   personalNotes?: string;

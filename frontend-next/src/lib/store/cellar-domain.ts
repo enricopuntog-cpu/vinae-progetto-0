@@ -157,6 +157,25 @@ export function useCellarDomain() {
   );
 
   /**
+   * Quali vini il proprietario ha deciso di mostrare nel proprio profilo.
+   *
+   * È lo stesso indice per vino degli altri due `Set`, e la stessa regola di
+   * `inVendita`: basta un'unità esposta perché la scheda risulti esposta. Il
+   * dato però è distinto da `saleStatus` — una bottiglia può essere in vendita
+   * e restare privata in Cantina, o essere esposta senza essere in vendita — e
+   * per questo viene dalla colonna `visibilita`, non da una sua derivazione.
+   */
+  const cantinaPubblica = useMemo(
+    () =>
+      new Set(
+        bottiglieCantina
+          .filter((b) => b.visibilitaCantina === "cantina_pubblica")
+          .map((b) => b.wineVintageId),
+      ),
+    [bottiglieCantina],
+  );
+
+  /**
    * Nella 6c-1 l'override sta sull'unità, perché è una scelta personale.
    * L'interfaccia però lo mostra per vino: qui si ricompone quell'indice
    * prendendo il primo override trovato fra le proprie unità di quel vino.
@@ -200,6 +219,28 @@ export function useCellarDomain() {
       return applica(esito, nascosto ? "Prezzo visibile agli altri" : "Prezzo nascosto agli altri");
     },
     [applica, prezzoNascosto, servizio, unitaDelVino],
+  );
+
+  /**
+   * L'unico comando che rende pubblica una bottiglia, e l'unico che la
+   * richiude. Scrive la colonna `visibilita` attraverso il `GRANT UPDATE
+   * (visibilita)` e la policy `bottle_units_update_own` che esistevano già: il
+   * proprietario poteva tecnicamente cambiarla da prima della 20260925140000,
+   * ma nell'interfaccia non c'era nessun posto da cui farlo.
+   */
+  const toggleCantinaPubblica = useCallback(
+    async (wineId: string) => {
+      const esposto = cantinaPubblica.has(wineId);
+      const esito = await servizio.impostaVisibilitaCantina(
+        unitaDelVino(wineId),
+        esposto ? "privata" : "cantina_pubblica",
+      );
+      return applica(
+        esito,
+        esposto ? "Bottiglia tolta dal tuo profilo" : "Bottiglia visibile nel tuo profilo",
+      );
+    },
+    [applica, cantinaPubblica, servizio, unitaDelVino],
   );
 
   const setDrinkWindowOverride = useCallback(
@@ -266,6 +307,8 @@ export function useCellarDomain() {
     inVendita,
     prezzoNascosto,
     togglePrezzoNascosto,
+    cantinaPubblica,
+    toggleCantinaPubblica,
     bottiglieCantina,
     viniCantina,
     metaPerVino,

@@ -257,6 +257,10 @@ function rigaABottiglia(riga: RigaBottiglia, slugVino: string): CellarBottle {
     plannedOpenDate: riga.apertura_pianificata ?? undefined,
     override: haOverride ? override : undefined,
     saleStatus: statoDiVendita(annunci, riga.visibilita, riga.ceduta_at),
+    // La colonna com'è, accanto alla sua derivazione e non al posto suo:
+    // `saleStatus` risponde «in_vendita» e si ferma lì, mentre l'interruttore
+    // «Mostra nel mio profilo» deve sapere che cosa c'è scritto davvero.
+    visibilitaCantina: riga.visibilita,
     priceVisibility: riga.prezzo_visibilita,
     storageLocationId: slot ? idPosizione(slot.module_id, slot.riga, slot.colonna) : undefined,
     personalNotes: riga.note_personali || undefined,
@@ -701,6 +705,35 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
           .from("bottle_units")
           .update({ prezzo_visibilita: visibilita })
           .in("id", bottleUnitIds),
+      );
+    },
+
+    /**
+     * L'interruttore «Mostra nel mio profilo».
+     *
+     * NESSUNA RPC NUOVA, ed è una scelta. Il permesso esisteva già ed era già
+     * quello giusto: `authenticated` ha su `bottle_units` un GRANT di **colonna**
+     * `UPDATE (visibilita)` — concesso dalla 20260728193937, sopravvissuto alla
+     * revoca di `stato` e `deleted_at` della 20260729230000 — e la policy
+     * `bottle_units_update_own` restringe la scrittura alla propria riga non
+     * eliminata e non ceduta. Aggiungere una funzione `SECURITY DEFINER` per lo
+     * stesso gesto avrebbe creato una seconda porta da sorvegliare senza
+     * togliere la prima. La migrazione 20260925140000 verifica quel GRANT
+     * invece di rifarlo.
+     *
+     * Prende un elenco di unità come `impostaVisibilitaPrezzo` e per la stessa
+     * ragione: l'interfaccia della Cantina indicizza per vino, la colonna sta
+     * sull'unità.
+     */
+    async impostaVisibilitaCantina(
+      bottleUnitIds: string[],
+      visibilita: "privata" | "cantina_pubblica",
+    ): Promise<Result<void>> {
+      if (!client) return NESSUN_CLIENT;
+      if (bottleUnitIds.length === 0) return { ok: true, data: undefined };
+
+      return scrittura("impostaVisibilitaCantina", async () =>
+        client.from("bottle_units").update({ visibilita }).in("id", bottleUnitIds),
       );
     },
 
