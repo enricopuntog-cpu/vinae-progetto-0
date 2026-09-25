@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BadgeCheck, MapPin } from "lucide-react";
 import { notFound } from "next/navigation";
 import { AvatarPersona } from "@/components/vinea/AvatarPersona";
+import { CantinaPubblica } from "@/components/vinea/profilo/CantinaPubblica";
 import { ReportDialog } from "@/components/vinea/ReportDialog";
 import { ReputazionePubblica } from "@/components/vinea/profilo/ReputazionePubblica";
 import { WineCard } from "@/components/vinea/WineCard";
@@ -38,14 +39,21 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const utente = client ? (await client.auth.getUser()).data.user : null;
   const profiloProprio = utente?.id === profilo.userId;
 
-  // Due letture indipendenti, insieme: gli annunci e la prima pagina di
-  // recensioni non si aspettano a vicenda. Il riepilogo — conteggio e medie —
-  // non è nessuna delle due: viaggia già dentro `profilo_pubblico`, quindi la
-  // reputazione non costa una terza andata al database.
-  const [esitoAnnunci, esitoRecensioni] = await Promise.all([
+  // Tre letture indipendenti, insieme: la Cantina pubblica, gli annunci e la
+  // prima pagina di recensioni non si aspettano a vicenda. Il riepilogo —
+  // conteggio e medie — non è nessuna delle tre: viaggia già dentro
+  // `profilo_pubblico`, quindi la reputazione non costa una quarta andata al
+  // database.
+  const [esitoCantina, esitoAnnunci, esitoRecensioni] = await Promise.all([
+    service.cantinaPubblica(id),
     service.annunciAttivi(id),
     service.recensioni(id),
   ]);
+  // Ogni sezione degrada per conto proprio: una Cantina che non si legge
+  // toglie la Cantina, non il profilo. È la stessa scelta già fatta per annunci
+  // e recensioni, e la ragione per cui `profilo` è l'unica lettura che può
+  // mandare la pagina in `notFound()`.
+  const cantina = esitoCantina.ok ? esitoCantina.data : [];
   const annunci = esitoAnnunci.ok ? esitoAnnunci.data : [];
   const recensioni = esitoRecensioni.ok ? esitoRecensioni.data : [];
 
@@ -136,6 +144,15 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           </div>
         )}
       </section>
+
+      {/*
+        La Cantina viene prima degli annunci, e l'ordine è un'affermazione:
+        questa è la collezione di una persona, non la vetrina di un venditore.
+        Chi non vende nulla ha comunque questa sezione; chi vende la trova
+        subito sotto, ed è normale che la stessa bottiglia compaia in tutte e
+        due.
+      */}
+      <CantinaPubblica bottiglie={cantina} />
 
       <section aria-labelledby="annunci-attivi">
         <div className="mb-4 flex items-end justify-between gap-4">

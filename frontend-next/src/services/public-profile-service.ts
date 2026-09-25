@@ -30,10 +30,17 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { riferimentoAvatarSicuro } from "@/lib/profilo/avatar";
-import { COLONNE_ANNUNCIO_PUBBLICO, rigaAWine, type PublicListingRow } from "./listing-service";
+import {
+  COLONNE_ANNUNCIO_PUBBLICO,
+  IMMAGINE_ASSENTE,
+  rigaAWine,
+  urlImmagine,
+  type PublicListingRow,
+} from "./listing-service";
 import type { Esperienza } from "@/data/onboarding";
 import type { Wine } from "@/data/wines";
 import type {
+  BottigliaCantinaPubblica,
   MedieRecensioni,
   ProfiloPubblico,
   PublicProfileService,
@@ -49,6 +56,7 @@ const NOT_CONFIGURED_ERROR = "Questo profilo non è disponibile in questo moment
 const LETTURA_FALLITA = "Non è stato possibile leggere questo profilo.";
 const ANNUNCI_FALLITI = "Non è stato possibile leggere gli annunci di questa persona.";
 const RECENSIONI_FALLITE = "Non è stato possibile leggere le recensioni di questa persona.";
+const CANTINA_FALLITA = "Non è stato possibile leggere la Cantina di questa persona.";
 
 /**
  * Il nome della funzione SQL, in un posto solo. La firma è
@@ -67,6 +75,26 @@ const RPC_RECENSIONI_PUBBLICHE = "recensioni_pubbliche_elenco";
 
 /** Quante recensioni per pagina, se il chiamante non lo dice. */
 const RECENSIONI_PER_PAGINA = 10;
+
+/**
+ * La Cantina pubblica di quella persona: le bottiglie che ha deciso di
+ * mostrare, una pagina per volta.
+ *
+ * È la terza porta pubblica del dominio e ha la stessa forma delle altre due:
+ * un `uuid` e nient'altro che permetta di chiedere «chi ha bottiglie
+ * pubbliche». `bottle_units` non è leggibile da `anon` — la 20260729230000 le
+ * ha tolto ogni privilegio sulla tabella — e la proiezione pubblicabile sta in
+ * `private.cantina_pubblica`, dove PostgREST non arriva. Non esiste una
+ * chiamata che restituisca le bottiglie di due profili.
+ */
+const RPC_CANTINA_PUBBLICA = "cantina_pubblica_profilo";
+
+/**
+ * Quante bottiglie per pagina, se il chiamante non lo dice. Il profilo ne
+ * mostra una pagina sola: una Cantina non è un catalogo da sfogliare dentro il
+ * profilo di qualcun altro.
+ */
+const CANTINA_PER_PAGINA = 12;
 
 /**
  * Un identificativo malformato non arriva al database.
@@ -252,6 +280,62 @@ function mappaQualifichePubbliche(valore: unknown): QualificaProfessionalePubbli
   return badge;
 }
 
+/**
+ * Una bottiglia della Cantina pubblica, copiata campo per campo.
+ *
+ * LA COPIA ESPLICITA È LA SECONDA BARRIERA, non la prima. La prima è la
+ * funzione SQL, che restituisce quattordici colonne e non ne conosce altre; ma
+ * `bottle_units` è la tabella più privata del progetto — note personali,
+ * posizione nello scaffale, costo d'acquisto, fotografie in un bucket chiuso —
+ * e una colonna aggiunta un giorno alla firma della funzione non deve poter
+ * arrivare in interfaccia per il solo fatto di essere stata aggiunta. Qui
+ * passano queste e nient'altro.
+ *
+ * L'IMMAGINE. `bottle_units.immagini` sta nel bucket privato `cantina` e non
+ * entra in questa fase: renderlo leggibile vorrebbe dire o aprire il bucket —
+ * mai — o firmare URL a tempo per ogni visitatore anonimo, che è un meccanismo
+ * che oggi non esiste e non va improvvisato per una prima versione. Quando la
+ * bottiglia ha un annuncio attivo, le sue fotografie sono già pubbliche e si
+ * riusano; altrimenti resta il segnaposto Vinea, lo stesso degli annunci senza
+ * foto.
+ */
+function mappaBottigliaCantinaPubblica(riga: Record<string, unknown>): BottigliaCantinaPubblica {
+  const immaginiAnnuncio = Array.isArray(riga.listing_immagini)
+    ? riga.listing_immagini.filter((v): v is string => typeof v === "string")
+    : [];
+  const slugAnnuncio = testoOpzionale(riga.listing_slug);
+
+  return {
+    id: testo(riga.bottle_unit_id),
+    wineSlug: testo(riga.wine_slug),
+    produttore: testo(riga.produttore),
+    nome: testo(riga.nome),
+    annata: intero(riga.annata),
+    regione: testo(riga.regione),
+    denominazione: testo(riga.denominazione),
+    tipo: tipoValido(riga.tipo),
+    formato: testo(riga.formato),
+    // La funzione SQL non restituisce `consumata`: la esclude nel proprio
+    // corpo. Qui si difende comunque il tipo invece di fidarsi, perché è ciò
+    // che decide quale badge disegna la scheda.
+    stato: riga.bottiglia_stato === "aperta" ? "aperta" : "chiusa",
+    annuncio:
+      slugAnnuncio === null ? null : { slug: slugAnnuncio, href: `/annuncio/${slugAnnuncio}` },
+    immagine: immaginiAnnuncio.length > 0 ? urlImmagine(immaginiAnnuncio[0]) : IMMAGINE_ASSENTE,
+  };
+}
+
+const TIPI: readonly Wine["tipo"][] = ["Rosso", "Bianco", "Bollicine", "Rosato", "Dolce"] as const;
+
+/**
+ * `wines.tipo` è `text` con un `check`, non un enum: il vincolo vive nel
+ * database e non nel tipo della colonna. Un valore fuori elenco non deve
+ * diventare una classe CSS inesistente o un filtro che non esiste.
+ */
+function tipoValido(valore: unknown): Wine["tipo"] {
+  return TIPI.includes(valore as Wine["tipo"]) ? (valore as Wine["tipo"]) : "Rosso";
+}
+
 export function creaPublicProfileService(client: SupabaseClient | null): PublicProfileService {
   return {
     async profilo(userId: string): Promise<Result<ProfiloPubblico | null>> {
@@ -335,6 +419,41 @@ export function creaPublicProfileService(client: SupabaseClient | null): PublicP
         data: righe
           .filter((r): r is Record<string, unknown> => typeof r === "object" && r !== null)
           .map(mappaRecensionePubblica),
+      };
+    },
+
+    async cantinaPubblica(
+      userId: string,
+      opzioni?: { limite?: number; offset?: number },
+    ): Promise<Result<BottigliaCantinaPubblica[]>> {
+      if (!client) return { ok: false, error: NOT_CONFIGURED_ERROR };
+      if (!UUID.test(userId)) return { ok: true, data: [] };
+
+      // Stessa divisione del lavoro delle recensioni: il limite parte da qui
+      // come preferenza, ma è la funzione SQL a tagliarlo a 48 e a riportare a
+      // zero un offset negativo. Ripetere il taglio qui darebbe due regole da
+      // tenere allineate, e quella che conta è comunque l'altra.
+      const { data, error } = await client.rpc(RPC_CANTINA_PUBBLICA, {
+        p_user_id: userId,
+        p_limit: opzioni?.limite ?? CANTINA_PER_PAGINA,
+        p_offset: opzioni?.offset ?? 0,
+      });
+
+      if (error) {
+        segnalaErrore("lettura della Cantina pubblica", error);
+        return { ok: false, error: CANTINA_FALLITA };
+      }
+
+      // Zero righe non distingue «non ha bottiglie pubbliche» da «non è
+      // visibile»: la funzione applica al proprietario la stessa regola di
+      // `profilo_pubblico`, e i due casi arrivano qui identici. È lo stesso
+      // silenzio deliberato della lettura del profilo.
+      const righe = Array.isArray(data) ? data : [];
+      return {
+        ok: true,
+        data: righe
+          .filter((r): r is Record<string, unknown> => typeof r === "object" && r !== null)
+          .map(mappaBottigliaCantinaPubblica),
       };
     },
   };

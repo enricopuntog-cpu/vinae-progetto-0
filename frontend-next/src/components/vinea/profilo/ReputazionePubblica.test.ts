@@ -120,13 +120,20 @@ describe("la prima pagina arriva dal server", () => {
     expect(paginaNuda).toInclude("service.recensioni(id)");
   });
 
-  it("annunci e recensioni non si aspettano a vicenda, e il riepilogo non costa una terza lettura", () => {
+  it("le sezioni non si aspettano a vicenda, e il riepilogo non costa una lettura in più", () => {
     expect(paginaNuda).toInclude("await Promise.all([");
     expect(paginaNuda).toInclude("service.annunciAttivi(id),");
     expect(paginaNuda).toInclude("totali={profilo.recensioniTotali}");
     expect(paginaNuda).toInclude("medie={profilo.recensioniMedie}");
-    // Il riepilogo viaggia dentro la riga del profilo: nessuna quarta chiamata.
-    expect(paginaNuda.match(/service\./g)).toHaveLength(3);
+    // Quattro letture in tutto e non una di più: il profilo, e poi le tre
+    // sezioni che partono insieme. Il conteggio era tre finché le sezioni erano
+    // due; la Cantina pubblica è la terza e viaggia nello stesso `Promise.all`.
+    // Ciò che non cambia è che il riepilogo della reputazione arriva dentro la
+    // riga del profilo: `service.recensioni` compare una volta sola, ed è la
+    // prima pagina dell'elenco, non una seconda lettura delle medie.
+    expect(paginaNuda.match(/service\./g)).toHaveLength(4);
+    expect(paginaNuda.match(/service\.recensioni\(/g)).toHaveLength(1);
+    expect(paginaNuda).toInclude("service.cantinaPubblica(id),");
   });
 
   it("è la stessa pagina profilo di D8, non una seconda", () => {

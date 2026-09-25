@@ -112,8 +112,16 @@ const COLONNE = [
  */
 export { COLONNE as COLONNE_ANNUNCIO_PUBBLICO };
 
-/** Immagine mostrata quando un annuncio non ne ha nessuna. */
-const IMMAGINE_ASSENTE = "/images/vinea-bottle-1.jpg";
+/**
+ * Immagine mostrata quando un annuncio non ne ha nessuna.
+ *
+ * Esportata perché la Cantina pubblica del profilo ha lo stesso identico
+ * problema e deve dargli la stessa identica risposta: le fotografie caricate in
+ * Cantina stanno nel bucket privato `cantina` e non sono pubblicabili, quindi
+ * una bottiglia senza annuncio attivo mostra questo segnaposto. Una seconda
+ * costante con lo stesso percorso sarebbe una copia da tenere allineata.
+ */
+export const IMMAGINE_ASSENTE = "/images/vinea-bottle-1.jpg";
 
 /** Bucket delle fotografie caricate dai venditori (Fase 6b). */
 export const BUCKET_ANNUNCI = "annunci";

@@ -432,6 +432,57 @@ export type RecensionePubblica = {
 };
 
 /**
+ * Una bottiglia che il proprietario ha deciso di mostrare sul proprio profilo.
+ *
+ * NON È UN ANNUNCIO E NON È UNA `CellarBottle`, ed è la distinzione che tiene
+ * in piedi il tipo. Un annuncio (`Wine`) ha un prezzo, una condizione, una
+ * disponibilità: sono i termini di una vendita, e una bottiglia esposta in
+ * Cantina può non essere in vendita affatto. Una `CellarBottle` è invece la
+ * riga privata del proprietario — note personali, posizione nello scaffale,
+ * costo d'acquisto — e quasi nulla di ciò che contiene è pubblicabile.
+ *
+ * I campi qui sotto sono l'elenco chiuso che
+ * `public.cantina_pubblica_profilo(uuid, int, int)` restituisce. Non c'è un
+ * campo in più che il database sappia dare: niente `note_personali`, niente
+ * `apertura_pianificata`, niente override, niente `acquisition_cost_cents`,
+ * niente ambienti, moduli o slot. Derivarlo con un `Omit<>` da `CellarBottle`
+ * avrebbe legato la superficie pubblica a quella privata.
+ */
+export type BottigliaCantinaPubblica = {
+  /** `bottle_units.id`: chiave di rendering, non un indirizzo raggiungibile. */
+  id: string;
+  wineSlug: string;
+  produttore: string;
+  nome: string;
+  annata: number;
+  regione: string;
+  denominazione: string;
+  tipo: Wine["tipo"];
+  formato: string;
+  /**
+   * `chiusa` oppure `aperta`. Una bottiglia consumata non arriva qui: la
+   * funzione SQL la esclude, come esclude quelle rimosse e quelle cedute.
+   */
+  stato: "chiusa" | "aperta";
+  /**
+   * L'annuncio attivo di questa stessa bottiglia, se c'è.
+   *
+   * Porta due cose sole — l'indirizzo dell'annuncio e la sua immagine — e
+   * deliberatamente **non** il prezzo: prezzo e disponibilità hanno una
+   * sorgente, `public_listings`, e la sezione «Annunci attivi» del profilo la
+   * legge già. Inventarli qui vorrebbe dire mostrare due volte lo stesso fatto
+   * con due strade diverse per sbagliarlo.
+   */
+  annuncio: { slug: string; href: string } | null;
+  /**
+   * L'immagine da mostrare: quella dell'annuncio attivo quando esiste, il
+   * segnaposto Vinea altrimenti. Le fotografie caricate in Cantina stanno nel
+   * bucket privato `cantina` e non passano di qui.
+   */
+  immagine: string;
+};
+
+/**
  * La lettura pubblica di un profilo altrui. Sola lettura: non esiste, e non
  * deve esistere, un metodo che scriva la riga di un'altra persona.
  *
@@ -475,6 +526,24 @@ export interface PublicProfileService {
     userId: string,
     opzioni?: { limite?: number; offset?: number },
   ): Promise<Result<RecensionePubblica[]>>;
+  /**
+   * Una pagina della Cantina pubblica di quella persona.
+   *
+   * STA QUI E NON IN `CellarService`, ed è una separazione di dominio, non di
+   * comodo. `CellarService.carica()` legge la **propria** Cantina: passa per
+   * `bottle_units_select_own`, porta note personali, posizioni, costi, e non
+   * accetta — né deve accettare — un identificativo di proprietario. Questa
+   * lettura è l'opposto: chiede di qualcun altro e riceve la sola allowlist
+   * pubblica, da una funzione che il proprietario non controlla.
+   *
+   * `[]` è una risposta normale: la maggior parte delle persone non ha
+   * dichiarato pubblica nessuna bottiglia, e chi non ne ha dichiarata nessuna è
+   * indistinguibile da chi non ha una Cantina. È voluto.
+   */
+  cantinaPubblica(
+    userId: string,
+    opzioni?: { limite?: number; offset?: number },
+  ): Promise<Result<BottigliaCantinaPubblica[]>>;
 }
 
 // ---- Regioni canoniche -----------------------------------------------------
@@ -585,6 +654,19 @@ export interface CellarService {
   impostaVisibilitaPrezzo(
     bottleUnitIds: string[],
     visibilita: CellarBottle["priceVisibility"],
+  ): Promise<Result<void>>;
+  /**
+   * Mostra o toglie queste unità dalla Cantina pubblica del proprio profilo.
+   *
+   * Scrive `bottle_units.visibilita`, che dal 25 settembre 2026 ha una
+   * conseguenza visibile: `public.cantina_pubblica_profilo(uuid, int, int)` la
+   * legge. È l'unico modo di cambiarla dopo la creazione — il wizard di
+   * aggiunta la sceglie una volta sola — e vale per la propria Cantina soltanto,
+   * perché la policy `bottle_units_update_own` non conosce altre righe.
+   */
+  impostaVisibilitaCantina(
+    bottleUnitIds: string[],
+    visibilita: "privata" | "cantina_pubblica",
   ): Promise<Result<void>>;
   impostaOverrideFinestra(
     bottleUnitIds: string[],
