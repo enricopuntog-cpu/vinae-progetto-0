@@ -206,6 +206,69 @@ primo tocco espone tutto e il secondo ritira tutto, invece di alternare. Una
 futura superficie per singola bottiglia non contraddice questa decisione: la
 sostituisce, e il database non va toccato.
 
+## Valore di riferimento della Cantina pubblica (26 settembre 2026)
+
+Migrazione `20260925220000_public_cellar_value_foundation.sql`. Fondazione DB
+senza interfaccia.
+
+**Opt-in, e il default è OFF.** La preferenza vive in
+`private.cellar_public_settings` (`owner_id` chiave primaria, `mostra_valore`
+non nullo), fuori dalla portata di PostgREST, con RLS attiva e **nessuna
+policy**: anche un GRANT aggiunto per errore resterebbe chiuso. L'assenza della
+riga *è* OFF, quindi non esiste backfill e nessun utente si ritrova esposto da
+una migrazione. Si legge e si scrive solo con
+`public.cantina_pubblica_valore_impostazione()` e
+`public.cantina_pubblica_valore_imposta(boolean)`, owner-only: il proprietario è
+`auth.uid()` e non un parametro, perciò non esiste la forma «imposta il valore
+di qualcun altro». Il setter è idempotente e non muove `updated_at` quando il
+valore non cambia.
+
+**Che cosa esce dalla porta pubblica.** `public.cantina_pubblica_valore(uuid)`
+accetta un solo profilo già noto e restituisce soltanto aggregati: flag di
+visibilità, `generato_at`, valore di riferimento, bottiglie pubbliche,
+bottiglie con riferimento, copertura e una serie di punti aggregati. Non escono
+`bottle_unit_id`, `wine_id`, `order_id`, `acquired_at`, costi, prezzi o
+provenienza: non «non vengono resi dall'interfaccia», proprio non attraversano
+la funzione. Un `do $$` in coda alla migrazione fallisce in applicazione se il
+corpo torna a nominare contabilità o `acquisition_cost_cents`, se la firma
+smette di essere quell'elenco chiuso, o se i ruoli client ottengono un
+privilegio diretto sui setting. OFF, uuid sconosciuto, proprietario non
+pubblico e chiamante rimosso restituiscono **la stessa** riga `visibile=false`
+con serie vuota: la porta non diventa un oracolo sugli stati di moderazione.
+
+**È un valore di riferimento, non un patrimonio.** La sorgente economica è
+esclusivamente `public.wine_reference_snapshots` — le stesse mediane D3 della
+Cantina privata, chiave `(wine_id, formato)`, almeno tre comparabili. «Ultimo
+riferimento» ha una definizione sola in tutto il dominio:
+`observed_at desc, created_at desc`, qui con un `id desc` in più come rottura di
+parità deterministica. Un riferimento mancante è NULL, cioè *ignoto*, e non uno
+zero: ecco perché la copertura viaggia accanto al valore. Costo d'acquisto,
+prezzo dell'annuncio, ordini, pagamenti, payout e saldi non entrano nel calcolo,
+e `cellar_portfolio_analitica()` resta owner-only.
+
+**Lo storico ha una semantica dichiarata e limitata.** Non esiste uno storico
+delle transizioni `privata <-> cantina_pubblica`, quindi non si finge di
+ricostruire «la Cantina che era pubblica quel giorno». È lo storico del valore
+della **collezione attualmente esposta**: si prende l'insieme pubblico di
+adesso, e per quelle sole unità si aggregano gli snapshot reali già esistenti,
+as-of e mai futuri, senza punti prima del primo snapshot vero e senza mostrare
+una posizione prima del suo `acquired_at` — che resta un confine interno e non
+attraversa la porta. Chi leggerà quel grafico sta guardando la collezione di
+oggi valutata nel passato, non la vetrina di allora.
+
+**L'appartenenza non si riscrive.** L'insieme delle bottiglie viene interamente
+da `private.cantina_pubblica`: la funzione non ricostruisce `visibilita`,
+cancellata, ceduta, consumata o visibilità del proprietario. È la stessa ragione
+per cui l'annuncio pubblico lo dichiara solo `public.public_listings`. Il join
+alla tabella base recupera unicamente `acquired_at`.
+
+Prova: `supabase/tests/12j_cantina_pubblica_valore.sql`, 35 invarianti, nel gate
+`Supabase DB regression`. Il caso 12 della `12i` custodisce ora un **elenco
+chiuso di due porte pubbliche** per profilo noto — bottiglie e valore — e
+verifica che anche la seconda, chiamata senza uuid, risponda con la riga chiusa
+invece che con i dati di qualcuno. Aggiungere un nome a quell'elenco è una
+decisione deliberata, non manutenzione.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):
