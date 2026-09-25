@@ -17,13 +17,23 @@
 --   04 proprietario rimosso   05 visitatore rimosso   anon nessun sub
 --
 -- Bottiglie del proprietario A (prefisso ca000000-...-0000000001NN):
---   101 pubblica  chiusa    con annuncio attivo   -> visibile
---   102 pubblica  aperta                          -> visibile
---   103 pubblica  chiusa    senza annuncio        -> visibile
---   104 privata   chiusa                          -> invisibile
---   105 pubblica  consumata                       -> invisibile
---   106 pubblica  chiusa    deleted_at            -> invisibile
---   107 pubblica  chiusa    ceduta_at             -> invisibile
+--   101 pubblica  chiusa    annuncio 201 attivo + 203 scaduto -> visibile
+--   102 pubblica  aperta    annuncio 202 attivo (incoerente)  -> visibile
+--   103 pubblica  chiusa    senza annuncio                    -> visibile
+--   104 privata   chiusa                                      -> invisibile
+--   105 pubblica  consumata                                   -> invisibile
+--   106 pubblica  chiusa    deleted_at                        -> invisibile
+--   107 pubblica  chiusa    ceduta_at                         -> invisibile
+--
+-- Bottiglie del proprietario B, tutte sullo stesso vino 18:
+--   108 pubblica  chiusa    -> visibile
+--   112 privata   chiusa    -> invisibile
+--   113 pubblica  chiusa    -> visibile
+--
+-- Bottiglia del proprietario rimosso: 109.
+--
+-- Venti invarianti. I casi 17-20 sono della 20260925191500: l'annuncio
+-- pubblico lo dichiara `public.public_listings` e nessun altro.
 --
 -- Output: una riga per invariante `id, descrizione, passed, detail`; tutte
 -- devono avere passed = t.
@@ -110,19 +120,66 @@ insert into public.bottle_units (
    '', 'visibile'),
   ('ca000000-0000-4000-8000-000000000109', 'ca000000-0000-4000-8000-000000000004',
    'ca000000-0000-4000-8000-000000000011', 'chiusa', 'cantina_pubblica', null, null,
+   '', 'visibile'),
+  -- 112 e 113 sono sorelle della 108: stesso vino 18, stesso proprietario B,
+  -- visibilita diverse. Servono al caso 20 — la visibilita e una proprieta
+  -- della singola unita, e la Cantina pubblica elenca bottiglie, non vini.
+  ('ca000000-0000-4000-8000-000000000112', 'ca000000-0000-4000-8000-000000000002',
+   'ca000000-0000-4000-8000-000000000018', 'chiusa', 'privata', null, null,
+   'Nota privata 112.', 'visibile'),
+  ('ca000000-0000-4000-8000-000000000113', 'ca000000-0000-4000-8000-000000000002',
+   'ca000000-0000-4000-8000-000000000018', 'chiusa', 'cantina_pubblica', null, null,
    '', 'visibile');
 
--- Un solo annuncio attivo, sulla 101: serve a provare che il collegamento
--- «In vendita» compaia dove l'annuncio esiste e manchi dove non esiste.
+-- Tre annunci, che coprono i tre modi in cui un annuncio puo stare accanto a
+-- una bottiglia esposta:
+--   201 sulla 101  attivo   -> pubblico, e l'unico che deve collegarsi
+--   202 sulla 102  attivo   -> su una bottiglia APERTA: incoerente, non pubblico
+--   203 sulla 101  scaduto  -> storico terminale, non pubblico
 insert into public.listings (
-  id, slug, seller_id, bottle_unit_id, stato, prezzo_cents, immagini
+  id, slug, seller_id, bottle_unit_id, stato, prezzo_cents, immagini, published_at
 ) values (
   'ca000000-0000-4000-8000-000000000201',
   'grid-12i-annuncio-101',
   'ca000000-0000-4000-8000-000000000001',
   'ca000000-0000-4000-8000-000000000101',
-  'attivo', 9900, array['annunci/grid-12i.webp']
+  'attivo', 9900, array['annunci/grid-12i.webp'], now() - interval '1 day'
+), (
+  -- Terminale: l'indice parziale `listings_un_solo_annuncio_non_terminale`
+  -- (20260729230000:317) tiene fuori gli stati terminali dall'unicita, quindi
+  -- questa riga puo convivere con la 201 sulla stessa bottiglia. E anche piu
+  -- recente della 201: se la lateral ordinasse senza filtrare, vincerebbe lei.
+  'ca000000-0000-4000-8000-000000000203',
+  'grid-12i-annuncio-101-storico',
+  'ca000000-0000-4000-8000-000000000001',
+  'ca000000-0000-4000-8000-000000000101',
+  'scaduto', 8800, array['annunci/grid-12i-storico.webp'], now()
 );
+
+-- Lo stato incoerente si costruisce come lo costruirebbe davvero uno scrittore
+-- privilegiato, perche le porte del client lo vietano entrambe: `bottiglia_apri`
+-- rifiuta di aprire una bottiglia in vendita e `listings_bottiglia_idonea`
+-- rifiuta un annuncio non terminale su una bottiglia non chiusa. Cio che nessuno
+-- controlla e un UPDATE diretto su `bottle_units.stato`: non esiste un trigger
+-- che lo leghi a `listings`, e qui la griglia gira proprio con quel privilegio.
+-- Quindi: si richiude la 102, si pubblica, si riapre.
+update public.bottle_units
+  set stato = 'chiusa'
+where id = 'ca000000-0000-4000-8000-000000000102';
+
+insert into public.listings (
+  id, slug, seller_id, bottle_unit_id, stato, prezzo_cents, immagini, published_at
+) values (
+  'ca000000-0000-4000-8000-000000000202',
+  'grid-12i-annuncio-102-incoerente',
+  'ca000000-0000-4000-8000-000000000001',
+  'ca000000-0000-4000-8000-000000000102',
+  'attivo', 7700, array['annunci/grid-12i-102.webp'], now()
+);
+
+update public.bottle_units
+  set stato = 'aperta'
+where id = 'ca000000-0000-4000-8000-000000000102';
 
 create temp table esiti_12i (
   id int primary key,
@@ -196,7 +253,8 @@ begin
   v2 := pg_temp.cantina(c_vis, 'authenticated', c_b);
   insert into esiti_12i values (3,
     'la Cantina di A non contiene bottiglie di B (e viceversa)',
-    v = c_attese and v2 = '108', format('A=%s B=%s', v, v2));
+    v = c_attese and v2 = '108,113' and v2 not like '%112%',
+    format('A=%s B=%s', v, v2));
 
   -- 4. Consumata, eliminata e ceduta: tre modi di non essere piu una bottiglia
   --    presente, tutti e tre esclusi.
@@ -244,7 +302,10 @@ begin
     'anon e authenticated leggono la stessa Cantina pubblica',
     v = v2 and v = c_attese, format('anon=%s authenticated=%s', v, v2));
 
-  -- 8. Il collegamento all'annuncio c'e dove l'annuncio esiste, e solo li.
+  -- 8. Il collegamento all'annuncio c'e dove l'annuncio e *pubblico*, e solo
+  --    li. Tutte e tre le bottiglie di A hanno un annuncio o uno storico
+  --    addosso: la 101 ne ha due (201 attivo, 203 scaduto), la 102 uno attivo
+  --    ma su una bottiglia aperta. Ne esce un collegamento solo.
   --    Nessun prezzo attraversa questa porta: si porta all'annuncio, che e la
   --    sorgente dei termini di vendita.
   v := pg_temp.val(null, 'anon',
@@ -356,6 +417,94 @@ begin
     'privata -> pubblica -> privata si riflette nella Cantina pubblica',
     v = '101,102,103,104' and v2 = c_attese,
     format('dopo_esposizione=%s dopo_ritiro=%s', v, v2));
+
+  -- -------------------------------------------------------------------------
+  -- 17-20 — la sorgente dell'annuncio pubblico (20260925191500)
+  -- -------------------------------------------------------------------------
+
+  -- 17. Il caso che ha motivato la correzione. La 102 e aperta e ha addosso un
+  --     annuncio ancora `attivo`: stato che le porte del client vietano
+  --     entrambe, e che uno scrittore privilegiato produce senza incontrare
+  --     resistenza, come ha fatto la fixture. `public_listings` non lo espone,
+  --     e da qui non deve uscire ne slug ne id — cioe nessun badge «In
+  --     vendita» e nessun collegamento a una pagina che il marketplace
+  --     considera non pubblica. La bottiglia, invece, resta visibile: e
+  --     l'annuncio a non esserci, non lei.
+  select l.stato::text || '/' || bu.stato::text into v
+  from public.listings l
+    join public.bottle_units bu on bu.id = l.bottle_unit_id
+  where l.id = 'ca000000-0000-4000-8000-000000000202';
+
+  select count(*) into v_n
+  from public.public_listings pl
+  where pl.id = 'ca000000-0000-4000-8000-000000000202';
+
+  v2 := pg_temp.val(null, 'anon',
+    'select coalesce(c.listing_slug, ''-'') || ''|'' || coalesce(c.listing_id::text, ''-'')
+     from public.cantina_pubblica_profilo(''ca000000-0000-4000-8000-000000000001''::uuid, 100, 0) c
+     where right(c.bottle_unit_id::text, 3) = ''102''');
+  insert into esiti_12i values (17,
+    'bottiglia aperta con annuncio rimasto attivo: nessun collegamento «In vendita»',
+    v = 'attivo/aperta' and v_n = 0 and v2 = '-|-',
+    format('fixture=%s in_public_listings=%s cantina_102=%s', v, v_n, coalesce(v2, '-')));
+
+  -- 18. Lo storico non collega, e non duplica. Sulla 101 convivono l'attivo 201
+  --     e lo scaduto 203 — l'indice parziale ammette quanti terminali si vuole
+  --     sulla stessa unita — e il 203 e pure il piu recente. Ne esce una riga
+  --     sola, ed e quella dell'annuncio vivo.
+  v := pg_temp.val(null, 'anon',
+    'select count(*)::text || ''/'' || coalesce(max(right(c.listing_id::text, 3)), ''-'')
+     from public.cantina_pubblica_profilo(''ca000000-0000-4000-8000-000000000001''::uuid, 100, 0) c
+     where right(c.bottle_unit_id::text, 3) = ''101''');
+  insert into esiti_12i values (18,
+    'uno storico terminale non collega e non duplica la bottiglia',
+    v = '1/201', format('righe/annuncio_101=%s', v));
+
+  -- 19. L'invariante in forma generale, che e quello che conta: non esiste un
+  --     annuncio collegato da questa Cantina che `public_listings` non
+  --     contenga. Vale per tutti i proprietari della griglia, non per la sola
+  --     101, e la seconda meta della riga verifica che a garantirlo sia la
+  --     derivazione e non una coincidenza di dati — le condizioni di
+  --     pubblicazione non sono ricopiate qui dentro.
+  perform set_config('request.jwt.claim.sub', '', true);
+  perform set_config('request.jwt.claims', '', true);
+
+  select count(*) into v_n
+  from (
+    select c.listing_id
+    from unnest(array[c_a, c_b, c_vis, c_rim_o, c_rim_v]) as u(uid),
+      lateral public.cantina_pubblica_profilo(u.uid, 100, 0) c
+    where c.listing_id is not null
+  ) r
+  where not exists (
+    select 1 from public.public_listings pl where pl.id = r.listing_id
+  );
+
+  v_list := pg_get_viewdef('private.cantina_pubblica'::regclass);
+  insert into esiti_12i values (19,
+    'ogni annuncio collegato esiste in public_listings, unica definizione di annuncio pubblico',
+    v_n = 0
+      and v_list ~ 'public_listings'
+      and v_list !~* 'l\.stato'
+      and v_list !~* 'expires_at',
+    format('collegamenti_non_pubblici=%s deriva_da_public_listings=%s condizioni_ricopiate=%s',
+      v_n,
+      v_list ~ 'public_listings',
+      v_list ~* 'l\.stato' or v_list ~* 'expires_at'));
+
+  -- 20. La visibilita e una proprieta della singola unita, non del vino. Il
+  --     vino 18 ha tre bottiglie di B: la 108 e la 113 esposte, la 112 no. La
+  --     Cantina pubblica ne elenca due, distinte, con lo stesso wine_id. Se un
+  --     giorno l'interfaccia del proprietario decidesse di ragionare per vino,
+  --     quella sarebbe una scelta della UI: qui sotto resta per bottiglia.
+  v := pg_temp.cantina(null, 'anon', c_b);
+  v2 := pg_temp.val(null, 'anon',
+    'select count(*)::text || ''/'' || count(distinct c.wine_id)::text
+     from public.cantina_pubblica_profilo(''ca000000-0000-4000-8000-000000000002''::uuid, 100, 0) c');
+  insert into esiti_12i values (20,
+    'due unita esposte dello stesso vino sono due righe; la sorella privata resta fuori',
+    v = '108,113' and v2 = '2/1' and v not like '%112%',
+    format('cantina_B=%s righe/vini=%s', v, v2));
 end $$;
 
 select id, descrizione, passed, detail from esiti_12i order by id;
