@@ -151,6 +151,61 @@ pubblico, `auth.uid()` o ruolo verificato) e un elenco chiuso di colonne, e va
 aggiunta a questo elenco nella stessa PR. Una vista che compare nel lint 0010 e
 non è in questo elenco è un difetto da esaminare, non un'eccezione.
 
+## Cantina pubblica del profilo e sorgente dell'annuncio (25 settembre 2026)
+
+PR #154, migrazioni `20260925140000_public_cellar_profile`,
+`20260925191500_public_cellar_listing_source` e
+`20260925201500_public_cellar_listing_source_rettifica`.
+
+La Cantina pubblica di un profilo è la vista `private.cantina_pubblica`
+(`security_invoker = off`, `security_barrier = true`), sedici colonne, senza
+alcun privilegio per `anon` e `authenticated`. Sta in `private` proprio perché
+PostgREST non raggiunge quello schema: l'unica porta è
+`public.cantina_pubblica_profilo(uuid, int, int)`, che espone quattordici
+colonne — non `user_id`, non `aggiunta_at` — e accetta un solo uuid per volta,
+senza parametro di ricerca. Non è quindi nel lint 0010 e non entra nell'elenco
+chiuso qui sopra, ma segue le stesse regole: `WHERE` di filtro esplicito
+(`visibilita = 'cantina_pubblica'`, non cancellata, non ceduta) ed elenco
+chiuso di colonne. Il proprietario dev'essere visibile: la join con
+`private.profili_pubblici` porta con sé le due direzioni della decisione 7.6b.
+
+**Regola.** Una superficie pubblica che mostra un annuncio non decide da sé che
+cosa sia un annuncio pubblico: lo deriva da `public.public_listings`, che è
+l'unica definizione. Lo fa già `public_club_posts` dalla 12b; dalla
+20260925191500 lo fa anche la Cantina. La prima stesura aveva ricopiato tre
+delle condizioni di pubblicazione e dimenticato `bu.stato = 'chiusa'`, con il
+risultato che una bottiglia aperta con un annuncio rimasto `attivo` mostrava un
+badge «In vendita» e un collegamento a una pagina che il marketplace considera
+non pubblica. Due definizioni della stessa cosa divergono: questa era divergente
+dal giorno in cui è stata scritta. La 20260925191500 contiene un `do $$` che
+fallisce in applicazione se la vista torna a nominare `l.stato` o `expires_at`.
+
+**Fino a dove arriva un trigger.** Quello stato incoerente è vietato in
+entrambe le direzioni da `listings_bottiglia_idonea` e
+`bottle_units_preserva_annuncio_non_terminale` (20260729234500), che sono
+`security invoker` e valgono anche per `postgres`. Ma i trigger non girano con
+`session_replication_role = replica`, cioè durante ogni `pg_restore`, ogni
+`supabase db reset` da dump e ogni replica logica — e in questo repository i
+ripristini si fanno davvero. Un ripristino riporta i dati com'erano, difetti
+compresi, senza riverificare nulla. Per una superficie pubblica la domanda non è
+se il database sappia impedire uno stato, ma che cosa mostri quando se lo
+ritrova davanti: la risposta dev'essere fail-closed. La griglia
+`supabase/tests/12i_cantina_pubblica_profilo.sql` (21 invarianti, nel gate
+`Supabase DB regression`) costruisce quello stato spegnendo i trigger per il
+solo tempo di un UPDATE, e il caso 21 prova i due rifiuti a trigger in vigore.
+
+**Visibilità: della bottiglia nel database, del vino nell'interfaccia.**
+`bottle_units.visibilita` è una proprietà della singola bottiglia, e la Cantina
+pubblica elenca bottiglie: due unità esposte dello stesso vino sono due righe.
+La scheda della Cantina del proprietario è però del vino, e il suo interruttore
+scrive tutte le unità di quel vino. È un'aggregazione dell'interfaccia, decisa
+il 25 settembre 2026 e non un riflesso della proprietà del database. Perché non
+resti ambigua, lo stato esposto ha tre valori — `nessuna`, `alcune`, `tutte` —
+l'interruttore dichiara `aria-pressed="mixed"` nello stato misto, e da misto il
+primo tocco espone tutto e il secondo ritira tutto, invece di alternare. Una
+futura superficie per singola bottiglia non contraddice questa decisione: la
+sostituisce, e il database non va toccato.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):

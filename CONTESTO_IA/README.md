@@ -1,6 +1,6 @@
 # Router del contesto durevole Vinea
 
-Ultimo aggiornamento del router: **23 settembre 2026**.
+Ultimo aggiornamento del router: **25 settembre 2026**.
 
 Questa cartella conserva memoria strutturale e storia datata. Non è il bootstrap
 obbligatorio e non sostituisce le fonti vive.
@@ -32,6 +32,10 @@ Aprire soltanto ciò che serve al task:
   dopo il ramo di replay — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`.
 - L'eccezione accettata sulle viste `SECURITY DEFINER` (lint 0010) e i grant
   correnti di `public.profiles` sono in `03_ARCHITETTURA_REGOLE_DEBITI.md`.
+- La Cantina pubblica del profilo, la regola «l'annuncio pubblico lo dichiara
+  `public.public_listings` e nessun altro» e la decisione del 25 settembre 2026
+  sulla visibilità per bottiglia o per vino sono in
+  `03_ARCHITETTURA_REGOLE_DEBITI.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono
