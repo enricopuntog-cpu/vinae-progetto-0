@@ -192,6 +192,10 @@ run_grid "12g regressioni audit #141" 12g_club_dispute_e2e_regressions.sql 3
 # residui; gira prima delle fixture 12g perche il suo guard vuole solo utenti
 # `.test`.
 run_grid "12h matrice delegato di emergenza" 12h_emergency_delegate_matrix.sql 3
+# Cantina pubblica del profilo: stessa forma, stessa transazione chiusa da
+# ROLLBACK, stesso guard sugli utenti `.test`. Anche questa prima delle fixture
+# 12g, che pretendono un database senza altri utenti.
+run_grid "12i Cantina pubblica del profilo" 12i_cantina_pubblica_profilo.sql 3
 
 # 12f solleva un'eccezione al primo diniego mancato; l'ultima riga e il
 # controllo sul limite della nota di decisione.

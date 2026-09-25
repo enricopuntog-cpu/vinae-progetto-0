@@ -827,6 +827,387 @@ describe("PublicProfileService.recensioni", () => {
 });
 
 // ===========================================================================
+// [3c] La Cantina pubblica — la migrazione e il servizio
+// ===========================================================================
+//
+// Stessa natura delle asserzioni di [1]: provano che cosa il file SQL dichiara,
+// non che il server lo applichi — quello lo prova la griglia
+// `supabase/tests/12i_cantina_pubblica_profilo.sql`. Qui si ferma, prima di
+// arrivare a un ambiente, la riga che allargasse l'allowlist o concedesse la
+// proiezione privata ai ruoli client.
+
+const CANTINA = leggi("../supabase/migrations/20260925140000_public_cellar_profile.sql").replace(
+  /\r\n/g,
+  "\n",
+);
+const CANTINA_SQL = CANTINA.split("\n")
+  .filter((riga) => !riga.trimStart().startsWith("--"))
+  .join("\n");
+
+describe("migrazione 20260925140000 — allowlist chiusa", () => {
+  it("la funzione dichiara quattordici colonne, nominate una per una", () => {
+    const firma = CANTINA_SQL.slice(
+      CANTINA_SQL.indexOf("returns table ("),
+      CANTINA_SQL.indexOf(")\nlanguage sql"),
+    );
+    const dichiarate = firma
+      .slice(firma.indexOf("(") + 1)
+      .split(",")
+      .map((riga) => riga.trim().split(/\s+/)[0])
+      .filter(Boolean);
+
+    expect(dichiarate).toEqual([
+      "bottle_unit_id",
+      "wine_id",
+      "wine_slug",
+      "produttore",
+      "nome",
+      "annata",
+      "regione",
+      "denominazione",
+      "tipo",
+      "formato",
+      "bottiglia_stato",
+      "listing_id",
+      "listing_slug",
+      "listing_immagini",
+    ]);
+  });
+
+  it("non usa l'asterisco: una colonna aggiunta domani resta privata", () => {
+    expect(CANTINA_SQL).not.toMatch(/select\s+\*/i);
+  });
+
+  it("non nomina nessun dato privato del proprietario", () => {
+    // `bottle_units` è la tabella più privata del progetto. Nessuno di questi
+    // nomi compare nel corpo eseguibile: non sono filtrati a valle, non entrano.
+    const eseguibile = CANTINA_SQL.replace(/comment on [\s\S]*?';\s*/gi, "");
+    for (const privato of [
+      "note_personali",
+      "apertura_pianificata",
+      "degustazione_nota",
+      "prezzo_visibilita",
+      "acquisition_cost_cents",
+      "acquisition_fonte",
+      "acquired_at",
+      "consumed_at",
+      "override_finestra",
+      "override_apice",
+      "override_preferenza",
+      "bu.immagini",
+    ]) {
+      expect(eseguibile).not.toInclude(privato);
+    }
+  });
+
+  it("non tocca i mobili di casa: niente ambienti, moduli, slot", () => {
+    for (const mobile of ["cellar_environments", "cellar_modules", "cellar_slots"]) {
+      expect(CANTINA_SQL).not.toInclude(mobile);
+    }
+  });
+
+  it("espone solo bottiglie ancora presenti e dichiarate pubbliche", () => {
+    expect(CANTINA_SQL).toInclude(
+      "where bu.visibilita = 'cantina_pubblica'::public.bottle_unit_visibilita",
+    );
+    expect(CANTINA_SQL).toInclude("and bu.deleted_at is null");
+    expect(CANTINA_SQL).toInclude("and bu.ceduta_at is null");
+    // Allowlist di stato e non denylist: `consumata` è fuori perché non è
+    // nominata, e lo resterebbe un'etichetta aggiunta domani all'enum.
+    expect(CANTINA_SQL).toInclude("'chiusa'::public.bottle_unit_stato");
+    expect(CANTINA_SQL).toInclude("'aperta'::public.bottle_unit_stato");
+    expect(CANTINA_SQL).not.toInclude("'consumata'");
+  });
+
+  it("riusa la visibilità del proprietario invece di riscriverla", () => {
+    // La regola a due direzioni della 20260825180000 entra con il join, non
+    // ricopiata: se cambia lì, cambia anche qui.
+    expect(CANTINA_SQL).toInclude("join private.profili_pubblici pp");
+    expect(CANTINA_SQL).toInclude("on pp.user_id = bu.owner_id");
+    expect(CANTINA_SQL).not.toInclude("stato_utente");
+  });
+});
+
+describe("migrazione 20260925140000 — nessun allargamento", () => {
+  it("non crea policy, non altera tabelle, non spegne la RLS", () => {
+    expect(CANTINA_SQL).not.toMatch(/create\s+policy/i);
+    expect(CANTINA_SQL).not.toMatch(/alter\s+table/i);
+    expect(CANTINA_SQL).not.toMatch(/disable\s+row\s+level\s+security/i);
+    // La 20260810152500 ha eliminato di proposito la vecchia superficie
+    // interrogabile: non viene ricreata.
+    expect(CANTINA_SQL).not.toInclude("public_bottle_units");
+  });
+
+  it("l'unico grant è l'EXECUTE sulla porta, dopo la revoca esplicita", () => {
+    const grants = CANTINA_SQL.split("\n").filter((riga) => /^\s*grant\b/i.test(riga));
+    expect(grants).toHaveLength(1);
+    expect(grants[0]).toInclude(
+      "execute on function public.cantina_pubblica_profilo(uuid, integer, integer)",
+    );
+    expect(CANTINA_SQL).toInclude("to anon, authenticated;");
+    expect(
+      CANTINA_SQL.indexOf(
+        "revoke all on function public.cantina_pubblica_profilo(uuid, integer, integer) from public",
+      ),
+    ).toBeLessThan(CANTINA_SQL.indexOf(grants[0]!.trim()));
+  });
+
+  it("la proiezione sta in `private` e resta senza privilegi per i ruoli client", () => {
+    expect(CANTINA_SQL).toInclude("create or replace view private.cantina_pubblica");
+    expect(CANTINA_SQL).not.toInclude("view public.cantina_pubblica");
+    expect(CANTINA_SQL).toInclude(
+      "revoke all on private.cantina_pubblica from public, anon, authenticated",
+    );
+  });
+
+  it("la porta è SECURITY DEFINER, stable e con search_path vuoto", () => {
+    const funzione = CANTINA_SQL.slice(
+      CANTINA_SQL.indexOf("create or replace function public.cantina_pubblica_profilo"),
+      CANTINA_SQL.indexOf("$$;"),
+    );
+    expect(funzione).toInclude("security definer");
+    expect(funzione).toInclude("stable");
+    expect(funzione).toInclude("set search_path = ''");
+    expect(funzione).toInclude("from private.cantina_pubblica v");
+  });
+
+  it("non si può elencare: un uuid obbligatorio, nessun filtro di ricerca", () => {
+    const corpo = CANTINA_SQL.slice(CANTINA_SQL.indexOf("as $$"), CANTINA_SQL.indexOf("$$;"));
+    expect(corpo).toInclude("where v.user_id = p_user_id");
+    expect(corpo).not.toMatch(/\bilike\b|p_query|p_regione|p_produttore/i);
+    // `p_user_id` non ha default: una chiamata senza destinatario non compila.
+    expect(CANTINA_SQL).toInclude("p_user_id uuid,\n  p_limit integer default 12");
+  });
+
+  it("il tetto della pagina lo decide il database, non il chiamante", () => {
+    expect(CANTINA_SQL).toInclude("limit least(greatest(coalesce(p_limit, 12), 1), 48)");
+    expect(CANTINA_SQL).toInclude("offset greatest(coalesce(p_offset, 0), 0)");
+  });
+
+  it("verifica il permesso di scrittura del proprietario invece di concederne uno nuovo", () => {
+    // Il gesto «mostra nel mio profilo» usava già `GRANT UPDATE (visibilita)` e
+    // `bottle_units_update_own`. La migrazione non aggiunge una seconda porta:
+    // fissa la prima, e fallisce se qualcuno la smonta.
+    expect(CANTINA_SQL).toInclude(
+      "has_column_privilege('authenticated', 'public.bottle_units', 'visibilita', 'UPDATE')",
+    );
+    expect(CANTINA_SQL).toInclude("has_table_privilege('anon', 'public.bottle_units', 'SELECT')");
+    expect(CANTINA_SQL).not.toMatch(/create or replace function public\.\w*visibilita/i);
+  });
+});
+
+describe("PublicProfileService.cantinaPubblica", () => {
+  const rigaBottiglia = (over: Record<string, unknown> = {}) => ({
+    bottle_unit_id: "aa110000-0000-4000-8000-000000000101",
+    wine_id: "aa220000-0000-4000-8000-000000000201",
+    wine_slug: "azienda-rosso",
+    produttore: "Azienda",
+    nome: "Rosso",
+    annata: 2019,
+    regione: "Toscana",
+    denominazione: "IGT",
+    tipo: "Rosso",
+    formato: "0,75 L",
+    bottiglia_stato: "chiusa",
+    listing_id: null,
+    listing_slug: null,
+    listing_immagini: [],
+    ...over,
+  });
+
+  it("passa dalla porta paginata, mai dalla tabella `bottle_units`", async () => {
+    const { client, relazioni, chiamateRpc } = fakeClient({ data: [], error: null });
+
+    await creaPublicProfileService(client).cantinaPubblica(ALICE, { limite: 24, offset: 12 });
+
+    expect(chiamateRpc).toEqual([
+      {
+        nome: "cantina_pubblica_profilo",
+        argomenti: { p_user_id: ALICE, p_limit: 24, p_offset: 12 },
+      },
+    ]);
+    expect(relazioni).toEqual([]);
+    expect(relazioni).not.toContain("bottle_units");
+  });
+
+  it("senza opzioni chiede la prima pagina di dodici", async () => {
+    const { client, chiamateRpc } = fakeClient({ data: [], error: null });
+
+    await creaPublicProfileService(client).cantinaPubblica(ALICE);
+
+    expect(chiamateRpc[0]!.argomenti).toEqual({ p_user_id: ALICE, p_limit: 12, p_offset: 0 });
+  });
+
+  it("un identificativo malformato è un elenco vuoto, senza arrivare al database", async () => {
+    const { client, chiamateRpc } = fakeClient({ data: [], error: null });
+
+    expect(await creaPublicProfileService(client).cantinaPubblica("pippo")).toEqual({
+      ok: true,
+      data: [],
+    });
+    expect(chiamateRpc).toEqual([]);
+  });
+
+  it("copia la sola allowlist: una colonna privata che arrivasse non passa", async () => {
+    const { client } = fakeClient({
+      data: [
+        rigaBottiglia({
+          note_personali: "sotto le scale, dietro i bianchi",
+          acquisition_cost_cents: 3500,
+          apertura_pianificata: "2027-01-01",
+          slot_id: "aa330000-0000-4000-8000-000000000301",
+          immagini: ["proprietario/bottiglia-privata.webp"],
+        }),
+      ],
+      error: null,
+    });
+
+    const esito = await creaPublicProfileService(client).cantinaPubblica(ALICE);
+    const bottiglia = esito.ok ? (esito.data[0] ?? {}) : {};
+
+    expect(Object.keys(bottiglia).sort()).toEqual([
+      "annata",
+      "annuncio",
+      "denominazione",
+      "formato",
+      "id",
+      "immagine",
+      "nome",
+      "produttore",
+      "regione",
+      "stato",
+      "tipo",
+      "wineSlug",
+    ]);
+    for (const privato of [
+      "notePersonali",
+      "note_personali",
+      "acquisitionCostCents",
+      "acquisition_cost_cents",
+      "aperturaPianificata",
+      "apertura_pianificata",
+      "slotId",
+      "slot_id",
+      "immagini",
+      "prezzo",
+      "prezzoVisibilita",
+    ]) {
+      expect(bottiglia).not.toHaveProperty(privato);
+    }
+  });
+
+  it("senza annuncio attivo non inventa né link né prezzo", async () => {
+    const { client } = fakeClient({ data: [rigaBottiglia()], error: null });
+
+    const esito = await creaPublicProfileService(client).cantinaPubblica(ALICE);
+
+    expect(esito.ok && esito.data[0]!.annuncio).toBeNull();
+    // Il segnaposto, non una fotografia del bucket privato `cantina`.
+    expect(esito.ok && esito.data[0]!.immagine).toBe("/images/vinea-bottle-1.jpg");
+  });
+
+  it("con un annuncio attivo porta l'indirizzo e la sua prima immagine, non il prezzo", async () => {
+    const { client } = fakeClient({
+      data: [
+        rigaBottiglia({
+          listing_id: "aa440000-0000-4000-8000-000000000401",
+          listing_slug: "azienda-rosso-2019",
+          listing_immagini: ["/images/annuncio-uno.jpg", "/images/annuncio-due.jpg"],
+          prezzo_cents: 4500,
+        }),
+      ],
+      error: null,
+    });
+
+    const esito = await creaPublicProfileService(client).cantinaPubblica(ALICE);
+    const bottiglia = esito.ok ? esito.data[0]! : null;
+
+    expect(bottiglia!.annuncio).toEqual({
+      slug: "azienda-rosso-2019",
+      href: "/annuncio/azienda-rosso-2019",
+    });
+    expect(bottiglia!.immagine).toBe("/images/annuncio-uno.jpg");
+    // Prezzo e disponibilità hanno una sorgente sola, `public_listings`, e la
+    // sezione «Annunci attivi» la legge già: qui non arrivano in nessuna forma.
+    expect(bottiglia).not.toHaveProperty("prezzo");
+    expect(bottiglia).not.toHaveProperty("prezzoCents");
+    expect(Object.values(bottiglia!)).not.toContain(4500);
+  });
+
+  it("difende il tipo dello stato invece di fidarsi della riga", async () => {
+    for (const [scritto, atteso] of [
+      ["aperta", "aperta"],
+      ["chiusa", "chiusa"],
+      // La funzione SQL non restituisce `consumata`: se arrivasse, non deve
+      // diventare un badge inventato.
+      ["consumata", "chiusa"],
+      [null, "chiusa"],
+    ] as const) {
+      const { client } = fakeClient({
+        data: [rigaBottiglia({ bottiglia_stato: scritto })],
+        error: null,
+      });
+      const esito = await creaPublicProfileService(client).cantinaPubblica(ALICE);
+      expect(esito.ok && esito.data[0]!.stato).toBe(atteso);
+    }
+  });
+
+  it("un tipo fuori catalogo torna al primo, non a una classe inesistente", async () => {
+    const { client } = fakeClient({ data: [rigaBottiglia({ tipo: "arancione" })], error: null });
+    const esito = await creaPublicProfileService(client).cantinaPubblica(ALICE);
+    expect(esito.ok && esito.data[0]!.tipo).toBe("Rosso");
+  });
+
+  it("una riga che non è un oggetto viene scartata, non disegnata", async () => {
+    const { client } = fakeClient({ data: [null, "bottiglia", rigaBottiglia()], error: null });
+
+    const esito = await creaPublicProfileService(client).cantinaPubblica(ALICE);
+
+    expect(esito.ok && esito.data).toHaveLength(1);
+  });
+
+  it("un elenco vuoto è una risposta normale: quasi nessuno espone la Cantina", async () => {
+    const { client } = fakeClient({ data: [], error: null });
+    expect(await creaPublicProfileService(client).cantinaPubblica(BOB)).toEqual({
+      ok: true,
+      data: [],
+    });
+  });
+
+  it("un errore diventa un messaggio nostro, mai quello di PostgreSQL", async () => {
+    const { client } = fakeClient({
+      data: null,
+      error: { code: "42501", message: "permission denied for schema private" },
+    });
+
+    const esito = await creaPublicProfileService(client).cantinaPubblica(ALICE);
+
+    expect(esito.ok).toBe(false);
+    const messaggio = esito.ok ? "" : esito.error;
+    expect(messaggio).toBe("Non è stato possibile leggere la Cantina di questa persona.");
+    expect(messaggio).not.toInclude("permission denied");
+    expect(messaggio).not.toInclude("42501");
+  });
+
+  it("senza client configurato fallisce chiusa", async () => {
+    const esito = await creaPublicProfileService(null).cantinaPubblica(ALICE);
+    expect(esito.ok).toBe(false);
+  });
+
+  it("non scrive niente, e non passa mai dal dominio privato del proprietario", async () => {
+    const { client, scritture, relazioni } = fakeClient({ data: [rigaBottiglia()], error: null });
+
+    await creaPublicProfileService(client).cantinaPubblica(ALICE);
+
+    expect(scritture).toEqual([]);
+    expect(relazioni).toEqual([]);
+    // `CellarService` resta il dominio del proprietario: questo modulo non lo
+    // nomina affatto.
+    expect(leggi("src/services/public-profile-service.ts")).not.toInclude("CellarService");
+  });
+});
+
+// ===========================================================================
 // [4] Il servizio resta utilizzabile dal server
 // ===========================================================================
 

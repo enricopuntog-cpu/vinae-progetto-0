@@ -93,6 +93,45 @@ describe("/profilo/[id]", () => {
     expect(pagina).toInclude('<WineCard key={annuncio.id} wine={annuncio} variant="list" />');
   });
 
+  it("carica la Cantina pubblica solo dopo un profilo valido, e insieme alle altre sezioni", () => {
+    const profiloValido = pagina.indexOf("if (!esitoProfilo.data) notFound()");
+    const letturaCantina = pagina.indexOf("service.cantinaPubblica(id)");
+    expect(profiloValido).toBeGreaterThan(-1);
+    expect(letturaCantina).toBeGreaterThan(profiloValido);
+    // Le tre letture indipendenti partono insieme: una Cantina lunga non fa
+    // aspettare gli annunci.
+    expect(pagina).toInclude("await Promise.all([");
+    expect(pagina).toInclude("service.cantinaPubblica(id),");
+    expect(pagina.match(/await service\.cantinaPubblica\(/g)).toBeNull();
+  });
+
+  it("una Cantina che non si legge toglie la Cantina, non il profilo", () => {
+    expect(pagina).toInclude("const cantina = esitoCantina.ok ? esitoCantina.data : []");
+    // Nessun ramo di errore proprio: la sezione degrada a elenco vuoto come
+    // annunci e recensioni, e `profilo` resta l'unica lettura che può mandare
+    // la pagina in `notFound()`.
+    expect(pagina).not.toInclude("esitoCantina.error");
+    expect(pagina).not.toMatch(/if \(!esitoCantina\.ok\)/);
+  });
+
+  it("la Cantina è una sezione a sé, prima degli annunci e dopo l'anagrafica", () => {
+    expect(pagina).toInclude("<CantinaPubblica bottiglie={cantina} />");
+    const anagrafica = pagina.indexOf("{profilo.bio}");
+    const sezioneCantina = pagina.indexOf("<CantinaPubblica");
+    const sezioneAnnunci = pagina.indexOf('aria-labelledby="annunci-attivi"');
+    const sezioneReputazione = pagina.indexOf("<ReputazionePubblica");
+    expect(anagrafica).toBeLessThan(sezioneCantina);
+    expect(sezioneCantina).toBeLessThan(sezioneAnnunci);
+    expect(sezioneAnnunci).toBeLessThan(sezioneReputazione);
+  });
+
+  it("non legge la Cantina dal dominio privato del proprietario", () => {
+    // `CellarService` resta il dominio di chi possiede le bottiglie: la pagina
+    // di un profilo altrui non lo conosce, e non tocca la tabella base.
+    expect(codice).not.toMatch(/CellarService|createCellarService|useVinea|bottle_units/);
+    expect(codice).not.toMatch(/note_personali|acquisition_cost|slot|scaffal|ambient/i);
+  });
+
   it("non apre query profilo, directory o azioni sociali alternative", () => {
     expect(codice).not.toMatch(/\.from\(["']profiles["']\)|service_role/);
     // `recension` non compare più fra i vietati: la sezione reputazione è

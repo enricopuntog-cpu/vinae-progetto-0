@@ -23,6 +23,59 @@ export type DrinkOverride = {
   nota?: string;
 };
 
+/**
+ * Quanta parte delle unità di un vino è esposta nel profilo pubblico.
+ *
+ * PERCHÉ TRE VALORI E NON UN BOOLEANO. La visibilità è una colonna di
+ * `bottle_units`: appartiene alla singola bottiglia, e il database la modella
+ * così. L'interfaccia della Cantina però ragiona per vino — una scheda per
+ * `wineVintageId`, e ogni comando accanto ad essa (`togglePrezzoNascosto`,
+ * `setDrinkWindowOverride`) scrive tutte le unità di quel vino. Si è scelto di
+ * tenere quell'aggregazione, non di introdurre una seconda superficie per
+ * bottiglia; ma scegliere l'aggregazione non autorizza a fingere che il dato
+ * sia per vino.
+ *
+ * Un booleano «almeno una esposta» lo fingerebbe, e mentirebbe due volte: la
+ * scheda direbbe «Visibile nel profilo» mentre due bottiglie su tre sono
+ * private, e il comando successivo le renderebbe private tutte e tre senza che
+ * nulla lo annunciasse. Con tre valori lo stato misto ha un nome, si vede, e
+ * `prossimaVisibilita` dice che cosa succede toccandolo.
+ */
+export type EsposizioneVino = "nessuna" | "alcune" | "tutte";
+
+/** Lo stato di esposizione di ogni vino, contando le unità una per una. */
+export const esposizioneDeiVini = (
+  bottiglie: readonly Pick<CellarBottle, "wineVintageId" | "visibilitaCantina">[],
+): Record<string, EsposizioneVino> => {
+  const conteggio = new Map<string, { esposte: number; totale: number }>();
+  for (const b of bottiglie) {
+    const riga = conteggio.get(b.wineVintageId) ?? { esposte: 0, totale: 0 };
+    riga.totale += 1;
+    // `undefined` vale «non lo so» (dati dimostrativi senza colonna), e non lo
+    // so non è esposta: la Cantina resta privata per difetto.
+    if (b.visibilitaCantina === "cantina_pubblica") riga.esposte += 1;
+    conteggio.set(b.wineVintageId, riga);
+  }
+
+  const out: Record<string, EsposizioneVino> = {};
+  for (const [wineId, { esposte, totale }] of conteggio) {
+    out[wineId] = esposte === 0 ? "nessuna" : esposte === totale ? "tutte" : "alcune";
+  }
+  return out;
+};
+
+/**
+ * Dove porta il comando, dato lo stato corrente del vino.
+ *
+ * Si ritira solo da ciò che è esposto per intero. Da uno stato misto il primo
+ * tocco espone tutto — la direzione che il pulsante annuncia — e il secondo
+ * ritira tutto: due gesti, nessuno dei due a sorpresa, e lo stato misto si
+ * risolve invece di alternarsi.
+ */
+export const prossimaVisibilita = (
+  stato: EsposizioneVino | undefined,
+): "privata" | "cantina_pubblica" => (stato === "tutte" ? "privata" : "cantina_pubblica");
+
 const VUOTO = {
   bottiglie: [] as CellarBottle[],
   vini: [] as Wine[],
@@ -157,6 +210,20 @@ export function useCellarDomain() {
   );
 
   /**
+   * Quanta parte di ogni vino il proprietario mostra nel proprio profilo.
+   *
+   * Il dato è distinto da `saleStatus` — una bottiglia può essere in vendita e
+   * restare privata in Cantina, o essere esposta senza essere in vendita — e
+   * per questo viene dalla colonna `visibilita`, non da una sua derivazione.
+   * Non è un `Set` come `inVendita` e `prezzoNascosto`: il motivo è scritto
+   * sopra `esposizioneDeiVini`.
+   */
+  const esposizioneCantina = useMemo(
+    () => esposizioneDeiVini(bottiglieCantina),
+    [bottiglieCantina],
+  );
+
+  /**
    * Nella 6c-1 l'override sta sull'unità, perché è una scelta personale.
    * L'interfaccia però lo mostra per vino: qui si ricompone quell'indice
    * prendendo il primo override trovato fra le proprie unità di quel vino.
@@ -200,6 +267,29 @@ export function useCellarDomain() {
       return applica(esito, nascosto ? "Prezzo visibile agli altri" : "Prezzo nascosto agli altri");
     },
     [applica, prezzoNascosto, servizio, unitaDelVino],
+  );
+
+  /**
+   * L'unico comando che rende pubblica una bottiglia, e l'unico che la
+   * richiude. Scrive la colonna `visibilita` attraverso il `GRANT UPDATE
+   * (visibilita)` e la policy `bottle_units_update_own` che esistevano già: il
+   * proprietario poteva tecnicamente cambiarla da prima della 20260925140000,
+   * ma nell'interfaccia non c'era nessun posto da cui farlo.
+   */
+  const toggleCantinaPubblica = useCallback(
+    async (wineId: string) => {
+      const visibilita = prossimaVisibilita(esposizioneCantina[wineId]);
+      const esito = await servizio.impostaVisibilitaCantina(unitaDelVino(wineId), visibilita);
+      // Il testo non conta le bottiglie perché il comando non ne tocca una: la
+      // scheda è il vino, e la conferma parla della stessa cosa del pulsante.
+      return applica(
+        esito,
+        visibilita === "privata"
+          ? "Questo vino non è più visibile nel tuo profilo"
+          : "Questo vino è visibile nel tuo profilo",
+      );
+    },
+    [applica, esposizioneCantina, servizio, unitaDelVino],
   );
 
   const setDrinkWindowOverride = useCallback(
@@ -266,6 +356,8 @@ export function useCellarDomain() {
     inVendita,
     prezzoNascosto,
     togglePrezzoNascosto,
+    esposizioneCantina,
+    toggleCantinaPubblica,
     bottiglieCantina,
     viniCantina,
     metaPerVino,

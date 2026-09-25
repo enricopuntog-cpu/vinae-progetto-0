@@ -206,3 +206,106 @@ describe("CellarService — analitica del portafoglio", () => {
     expect(esito.ok).toBe(false);
   });
 });
+
+/**
+ * L'interruttore «Mostra nel mio profilo».
+ *
+ * Il permesso di scrivere `bottle_units.visibilita` esisteva già prima della
+ * Cantina pubblica: un GRANT di colonna `UPDATE (visibilita)` più la policy
+ * `bottle_units_update_own`. Quello che non esisteva era un posto da cui usarlo.
+ * Questi test fissano la forma della scrittura — quale tabella, quale colonna,
+ * quali righe — perché è quella forma, e non una RPC nuova, a essere la scelta.
+ */
+describe("CellarService — visibilità nella Cantina pubblica", () => {
+  const fakeAggiornamento = (errore: { code?: string; message?: string } | null = null) => {
+    const scritture: Array<{
+      tabella: string;
+      valori: Record<string, unknown>;
+      colonnaFiltro: string;
+      idFiltro: unknown;
+    }> = [];
+    const client = {
+      from: (tabella: string) => ({
+        update: (valori: Record<string, unknown>) => ({
+          in: (colonnaFiltro: string, idFiltro: unknown) => {
+            scritture.push({ tabella, valori, colonnaFiltro, idFiltro });
+            return Promise.resolve({ error: errore });
+          },
+        }),
+      }),
+    } as unknown as SupabaseClient;
+
+    return { client, scritture };
+  };
+
+  it("espone le unità scrivendo la sola colonna `visibilita`", async () => {
+    const { client, scritture } = fakeAggiornamento();
+
+    const esito = await createCellarService(client).impostaVisibilitaCantina(
+      ["unita-1", "unita-2"],
+      "cantina_pubblica",
+    );
+
+    expect(esito).toEqual({ ok: true, data: undefined });
+    expect(scritture).toEqual([
+      {
+        tabella: "bottle_units",
+        valori: { visibilita: "cantina_pubblica" },
+        colonnaFiltro: "id",
+        idFiltro: ["unita-1", "unita-2"],
+      },
+    ]);
+  });
+
+  it("richiude le stesse unità: l'interruttore va in tutte e due le direzioni", async () => {
+    const { client, scritture } = fakeAggiornamento();
+
+    await createCellarService(client).impostaVisibilitaCantina(["unita-1"], "privata");
+
+    expect(scritture[0]?.valori).toEqual({ visibilita: "privata" });
+  });
+
+  it("non tocca nessun'altra colonna, e nessun'altra tabella", async () => {
+    const { client, scritture } = fakeAggiornamento();
+
+    await createCellarService(client).impostaVisibilitaCantina(["unita-1"], "cantina_pubblica");
+
+    // `stato` e `deleted_at` sono stati revocati dalla 20260729230000: scriverli
+    // qui fallirebbe in produzione e basterebbe un `update` un po' largo per
+    // provarci. La scrittura resta di una chiave sola.
+    expect(Object.keys(scritture[0]?.valori ?? {})).toEqual(["visibilita"]);
+    expect(scritture.map((s) => s.tabella)).toEqual(["bottle_units"]);
+  });
+
+  it("un elenco vuoto non diventa un `update` senza filtro", async () => {
+    const { client, scritture } = fakeAggiornamento();
+
+    // Senza questa uscita anticipata, `.in("id", [])` partirebbe comunque: oggi
+    // PostgREST non aggiornerebbe nulla, ma una scrittura che parte con un
+    // filtro vuoto è una riga di codice che chiede solo di essere sbagliata.
+    expect(await createCellarService(client).impostaVisibilitaCantina([], "privata")).toEqual({
+      ok: true,
+      data: undefined,
+    });
+    expect(scritture).toEqual([]);
+  });
+
+  it("un rifiuto del database non svela il database", async () => {
+    const { client } = fakeAggiornamento({ code: "42501", message: 'permission denied for table "bottle_units"' });
+
+    const esito = await createCellarService(client).impostaVisibilitaCantina(
+      ["unita-di-un-altro"],
+      "cantina_pubblica",
+    );
+
+    expect(esito.ok).toBe(false);
+    expect(esito.ok === false && esito.error).toBe(
+      "Non è stato possibile completare l'operazione. Riprova.",
+    );
+  });
+
+  it("senza client configurato non finge di aver scritto", async () => {
+    const esito = await createCellarService(null).impostaVisibilitaCantina(["u-1"], "privata");
+    expect(esito.ok).toBe(false);
+  });
+});

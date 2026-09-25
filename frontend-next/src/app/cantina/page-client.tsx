@@ -20,6 +20,7 @@ import {
   Loader2,
   TrendingDown,
   TrendingUp,
+  UserRound,
 } from "lucide-react";
 import type { Wine } from "@/data/wines";
 import { WineCard } from "@/components/vinea/WineCard";
@@ -33,7 +34,7 @@ import {
   vocePerformance,
   voceValoreRiferimento,
 } from "@/lib/cantina/presentazione";
-import { useVinea } from "@/lib/vinea-store";
+import { useVinea, type EsposizioneVino } from "@/lib/vinea-store";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -117,6 +118,8 @@ function Cantina() {
     inVendita,
     prezzoNascosto,
     togglePrezzoNascosto,
+    esposizioneCantina,
+    toggleCantinaPubblica,
     bottiglieCantina,
     viniCantina,
     ambienti,
@@ -286,6 +289,8 @@ function Cantina() {
               inVendita={inVendita}
               prezzoNascosto={prezzoNascosto}
               togglePrezzo={togglePrezzoNascosto}
+              esposizioneCantina={esposizioneCantina}
+              toggleCantinaPubblica={toggleCantinaPubblica}
               bottigliaDelVino={bottigliaDelVino}
             />
           )}
@@ -297,6 +302,8 @@ function Cantina() {
             inVendita={inVendita}
             prezzoNascosto={prezzoNascosto}
             togglePrezzo={togglePrezzoNascosto}
+            esposizioneCantina={esposizioneCantina}
+            toggleCantinaPubblica={toggleCantinaPubblica}
             bottigliaDelVino={bottigliaDelVino}
           />
         </TabsContent>
@@ -307,6 +314,8 @@ function Cantina() {
             inVendita={inVendita}
             prezzoNascosto={prezzoNascosto}
             togglePrezzo={togglePrezzoNascosto}
+            esposizioneCantina={esposizioneCantina}
+            toggleCantinaPubblica={toggleCantinaPubblica}
             bottigliaDelVino={bottigliaDelVino}
           />
         </TabsContent>
@@ -317,6 +326,8 @@ function Cantina() {
             inVendita={inVendita}
             prezzoNascosto={prezzoNascosto}
             togglePrezzo={togglePrezzoNascosto}
+            esposizioneCantina={esposizioneCantina}
+            toggleCantinaPubblica={toggleCantinaPubblica}
             bottigliaDelVino={bottigliaDelVino}
           />
         </TabsContent>
@@ -895,6 +906,8 @@ function BottiglieView({
   inVendita,
   prezzoNascosto,
   togglePrezzo,
+  esposizioneCantina,
+  toggleCantinaPubblica,
   bottigliaDelVino,
 }: {
   wines: Wine[];
@@ -902,6 +915,10 @@ function BottiglieView({
   inVendita: Set<string>;
   prezzoNascosto: Set<string>;
   togglePrezzo: (id: string) => Promise<unknown>;
+  // Esposizione nel profilo, non prezzo e non vendita: sono tre scelte
+  // separate, e la scheda le tiene separate anche nei comandi.
+  esposizioneCantina: Record<string, EsposizioneVino>;
+  toggleCantinaPubblica: (id: string) => Promise<unknown>;
   // Era ristretto a `{ bottleId }`, che bastava a comporre il link al wizard.
   // Il comando di apertura ha bisogno della bottiglia intera — stato e annuncio
   // che la blocca — e restringere qui significava solo nasconderli.
@@ -925,6 +942,7 @@ function BottiglieView({
       {list.map((w) => {
         const slug = w.wineSlug ?? w.id;
         const venduta = inVendita.has(slug);
+        const esposta = esposizioneCantina[slug] ?? "nessuna";
         const bottiglia = bottigliaDelVino(w);
         return (
           <div key={w.id} className="space-y-2">
@@ -971,6 +989,42 @@ function BottiglieView({
                   <Eye className="h-3 w-3" />
                 )}
                 {prezzoNascosto.has(slug) ? "Prezzo riservato" : "Prezzo visibile"}
+              </button>
+              {/* Il solo posto da cui una bottiglia entra nella Cantina
+                  pubblica del profilo, ed esce. Il testo dice dove finisce —
+                  «nel mio profilo» — perché è quella la conseguenza visibile
+                  per gli altri, e non il nome della colonna.
+
+                  Tre stati e non due: la scheda è un vino, la visibilità è di
+                  ogni bottiglia, e con più unità dello stesso vino lo stato
+                  misto esiste davvero. `aria-pressed="mixed"` è il valore che
+                  ARIA 1.2 prevede per dirlo; il titolo dice dove porta il
+                  tocco, perché da misto porta a «tutte» e non a «nessuna». */}
+              <button
+                onClick={() => void toggleCantinaPubblica(slug)}
+                aria-pressed={
+                  esposta === "tutte" ? "true" : esposta === "alcune" ? "mixed" : "false"
+                }
+                title={
+                  esposta === "alcune"
+                    ? "Alcune tue bottiglie di questo vino sono nel profilo: mostrale tutte."
+                    : undefined
+                }
+                data-testid="toggle-cantina-pubblica"
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
+                  esposta === "tutte"
+                    ? "border-salvia bg-salvia text-crema"
+                    : esposta === "alcune"
+                      ? "border-salvia bg-card text-salvia"
+                      : "border-border bg-card"
+                }`}
+              >
+                <UserRound className="h-3 w-3" aria-hidden />
+                {esposta === "tutte"
+                  ? "Visibile nel profilo"
+                  : esposta === "alcune"
+                    ? "Alcune bottiglie nel profilo"
+                    : "Mostra nel mio profilo"}
               </button>
               {/* Da qui si apre una bottiglia, e da qui si torna a rileggere la
                   degustazione di una già aperta. Il comando esisteva solo sulla

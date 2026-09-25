@@ -14,6 +14,7 @@ import { useAuthDomain, type DemoRuolo } from "@/lib/store/auth-domain";
 import {
   useCellarDomain,
   type DrinkOverride,
+  type EsposizioneVino,
 } from "@/lib/store/cellar-domain";
 import {
   useRealAuthDomain,
@@ -30,7 +31,7 @@ import type {
 } from "@/services/types";
 import type { ContestoRitornoAuth } from "@/lib/auth/ritorno-auth";
 
-export type { DrinkOverride } from "@/lib/store/cellar-domain";
+export type { DrinkOverride, EsposizioneVino } from "@/lib/store/cellar-domain";
 export type { DemoRuolo } from "@/lib/store/auth-domain";
 
 type StoreState = {
@@ -100,6 +101,14 @@ type StoreState = {
   inVendita: Set<string>;
   prezzoNascosto: Set<string>;
   togglePrezzoNascosto: (id: string) => Promise<Result<void>>;
+  /**
+   * Quanta parte di ogni vino il proprietario espone nella Cantina pubblica
+   * del suo profilo: nessuna unità, alcune, tutte. Non un `Set` come i due
+   * indici qui sopra — la visibilità è della singola bottiglia, e uno stato
+   * misto deve poter esistere invece di arrotondarsi a «esposto».
+   */
+  esposizioneCantina: Record<string, EsposizioneVino>;
+  toggleCantinaPubblica: (id: string) => Promise<Result<void>>;
   bottiglieCantina: CellarBottle[];
   viniCantina: Wine[];
   metaPerVino: Record<string, WineVintageMeta>;
