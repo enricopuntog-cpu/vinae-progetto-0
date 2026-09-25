@@ -32,8 +32,10 @@
 --
 -- Bottiglia del proprietario rimosso: 109.
 --
--- Venti invarianti. I casi 17-20 sono della 20260925191500: l'annuncio
--- pubblico lo dichiara `public.public_listings` e nessun altro.
+-- Ventun invarianti. I casi 17-21 sono della 20260925191500: l'annuncio
+-- pubblico lo dichiara `public.public_listings` e nessun altro, e lo stato
+-- incoerente che lo mette alla prova entra solo da un ripristino a trigger
+-- spenti (caso 21).
 --
 -- Output: una riga per invariante `id, descrizione, passed, detail`; tutte
 -- devono avere passed = t.
@@ -156,13 +158,25 @@ insert into public.listings (
   'scaduto', 8800, array['annunci/grid-12i-storico.webp'], now()
 );
 
--- Lo stato incoerente si costruisce come lo costruirebbe davvero uno scrittore
--- privilegiato, perche le porte del client lo vietano entrambe: `bottiglia_apri`
--- rifiuta di aprire una bottiglia in vendita e `listings_bottiglia_idonea`
--- rifiuta un annuncio non terminale su una bottiglia non chiusa. Cio che nessuno
--- controlla e un UPDATE diretto su `bottle_units.stato`: non esiste un trigger
--- che lo leghi a `listings`, e qui la griglia gira proprio con quel privilegio.
--- Quindi: si richiude la 102, si pubblica, si riapre.
+-- Lo stato incoerente va costruito a trigger spenti, e questo e il fatto piu
+-- importante della griglia. Il database lo difende in tutte e due le direzioni:
+-- `listings_bottiglia_idonea` (20260729234500:218) rifiuta un annuncio non
+-- terminale su una bottiglia non chiusa, e
+-- `bottle_units_preserva_annuncio_non_terminale` (20260729234500:261) rifiuta di
+-- aprire, cancellare o cedere una bottiglia che ha addosso un annuncio non
+-- terminale. Piu in alto ci sono le porte del client — `bottiglia_apri` — e dal
+-- 20260729230000:989 il client non ha nemmeno il GRANT su `bottle_units.stato`.
+-- Il caso 21 prova entrambi i rifiuti invece di affermarli.
+--
+-- Resta allora una sola strada, ed e reale: un caricamento a trigger disattivati.
+-- E cio che fa ogni `pg_restore`, ogni `supabase db reset` da dump e ogni replica
+-- logica, che girano con `session_replication_role = replica`; e cio che fa una
+-- procedura di manutenzione che disattiva un trigger per andare piu veloce. Un
+-- ripristino non ricontrolla gli invarianti: riporta i dati com'erano, difetti
+-- compresi. Quindi la domanda per una superficie pubblica non e se il database
+-- sappia impedire quello stato — lo impedisce — ma che cosa mostri quando se lo
+-- ritrova davanti. La fixture lo riproduce per la via vera: si richiude la 102,
+-- si pubblica, e si riapre con i trigger spenti per il solo tempo di un UPDATE.
 update public.bottle_units
   set stato = 'chiusa'
 where id = 'ca000000-0000-4000-8000-000000000102';
@@ -177,9 +191,23 @@ insert into public.listings (
   'attivo', 7700, array['annunci/grid-12i-102.webp'], now()
 );
 
+-- `set local`: la finestra si chiude comunque al ROLLBACK finale, anche se una
+-- riga piu sotto solleva. Il reset esplicito la chiude subito, cosi ogni caso da
+-- qui in avanti — il 21 in particolare — gira con i trigger in vigore.
+set local session_replication_role = replica;
+
 update public.bottle_units
   set stato = 'aperta'
 where id = 'ca000000-0000-4000-8000-000000000102';
+
+reset session_replication_role;
+
+do $$
+begin
+  if current_setting('session_replication_role') <> 'origin' then
+    raise exception 'Guard 12i: i trigger devono essere in vigore dopo la fixture.';
+  end if;
+end $$;
 
 create temp table esiti_12i (
   id int primary key,
@@ -419,13 +447,13 @@ begin
     format('dopo_esposizione=%s dopo_ritiro=%s', v, v2));
 
   -- -------------------------------------------------------------------------
-  -- 17-20 — la sorgente dell'annuncio pubblico (20260925191500)
+  -- 17-21 — la sorgente dell'annuncio pubblico (20260925191500)
   -- -------------------------------------------------------------------------
 
   -- 17. Il caso che ha motivato la correzione. La 102 e aperta e ha addosso un
-  --     annuncio ancora `attivo`: stato che le porte del client vietano
-  --     entrambe, e che uno scrittore privilegiato produce senza incontrare
-  --     resistenza, come ha fatto la fixture. `public_listings` non lo espone,
+  --     annuncio ancora `attivo`: stato che i trigger vietano in entrambe le
+  --     direzioni (caso 21) e che quindi entra solo da un caricamento a trigger
+  --     spenti — un ripristino da dump. `public_listings` non lo espone,
   --     e da qui non deve uscire ne slug ne id — cioe nessun badge «In
   --     vendita» e nessun collegamento a una pagina che il marketplace
   --     considera non pubblica. La bottiglia, invece, resta visibile: e
@@ -505,6 +533,42 @@ begin
     'due unita esposte dello stesso vino sono due righe; la sorella privata resta fuori',
     v = '108,113' and v2 = '2/1' and v not like '%112%',
     format('cantina_B=%s righe/vini=%s', v, v2));
+
+  -- 21. Quanto sia raggiungibile lo stato del caso 17, misurato invece che
+  --     raccontato. A trigger in vigore il database lo rifiuta da tutte e due
+  --     le parti: non si apre una bottiglia che ha un annuncio non terminale
+  --     (la 101 ha il 201 `attivo`), e non si pubblica un annuncio su una
+  --     bottiglia non chiusa (la 105 e `consumata`). Entrambi i rifiuti sono
+  --     P0001, sollevati dai trigger, non dalle policy: valgono anche per il
+  --     ruolo con cui gira questa griglia. Ecco perche la fixture ha dovuto
+  --     spegnerli, e perche il caso 17 non prova una svista ma un ripristino.
+  begin
+    update public.bottle_units set stato = 'aperta'
+    where id = 'ca000000-0000-4000-8000-000000000101';
+    v := 'nessun errore';
+  exception when others then
+    v := sqlstate;
+  end;
+
+  begin
+    insert into public.listings (
+      id, slug, seller_id, bottle_unit_id, stato, prezzo_cents, immagini, published_at
+    ) values (
+      'ca000000-0000-4000-8000-000000000204',
+      'grid-12i-annuncio-vietato',
+      'ca000000-0000-4000-8000-000000000001',
+      'ca000000-0000-4000-8000-000000000105',
+      'attivo', 6600, array['annunci/grid-12i-vietato.webp'], now()
+    );
+    v2 := 'nessun errore';
+  exception when others then
+    v2 := sqlstate;
+  end;
+
+  insert into esiti_12i values (21,
+    'i trigger vietano lo stato incoerente nelle due direzioni: lo produce solo un caricamento a trigger spenti',
+    v = 'P0001' and v2 = 'P0001',
+    format('apri_bottiglia_con_annuncio=%s pubblica_su_bottiglia_non_chiusa=%s', v, v2));
 end $$;
 
 select id, descrizione, passed, detail from esiti_12i order by id;
