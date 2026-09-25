@@ -36,6 +36,9 @@ Aprire soltanto ciò che serve al task:
   `public.public_listings` e nessun altro» e la decisione del 25 settembre 2026
   sulla visibilità per bottiglia o per vino sono in
   `03_ARCHITETTURA_REGOLE_DEBITI.md`.
+- Il valore di riferimento della Cantina pubblica (opt-in, default OFF, solo
+  aggregati D3 della collezione esposta, storico della collezione attuale) è in
+  `03_ARCHITETTURA_REGOLE_DEBITI.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono

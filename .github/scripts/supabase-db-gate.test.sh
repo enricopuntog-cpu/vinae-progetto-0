@@ -75,6 +75,8 @@ scope_for() {
 check "scope: migrazione pertinente" true "$(scope_for supabase/migrations/20990101000000_x.sql)"
 check "scope: griglia 12g pertinente" true "$(scope_for supabase/tests/12g_club_dispute_e2e.mjs)"
 check "scope: griglia 12h delegato pertinente" true "$(scope_for supabase/tests/12h_emergency_delegate_matrix.sql)"
+check "scope: griglia 12i Cantina pertinente" true "$(scope_for supabase/tests/12i_cantina_pubblica_profilo.sql)"
+check "scope: griglia 12j valore Cantina pertinente" true "$(scope_for supabase/tests/12j_cantina_pubblica_valore.sql)"
 check "scope: config Supabase pertinente" true "$(scope_for supabase/config.toml)"
 check "scope: README saltato" false "$(scope_for README.md)"
 check "scope: frontend saltato" false "$(scope_for frontend-next/src/app/page.tsx)"

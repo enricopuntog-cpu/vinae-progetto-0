@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Gate di regressione Club/contestazioni (12e, 12f, 12g) su uno stack Supabase
-# locale ed effimero, costruito dalle migrazioni del checkout.
+# Gate DB (12e-12j) su uno stack Supabase locale ed effimero, costruito dalle
+# migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
 # uno stack `supabase start` locale:
@@ -196,6 +196,9 @@ run_grid "12h matrice delegato di emergenza" 12h_emergency_delegate_matrix.sql 3
 # ROLLBACK, stesso guard sugli utenti `.test`. Anche questa prima delle fixture
 # 12g, che pretendono un database senza altri utenti.
 run_grid "12i Cantina pubblica del profilo" 12i_cantina_pubblica_profilo.sql 3
+# Valore opzionale della Cantina pubblica: setting owner-only, aggregati D3 e
+# storico as-of. Transazione/guard identici, sempre prima delle fixture 12g.
+run_grid "12j valore della Cantina pubblica" 12j_cantina_pubblica_valore.sql 3
 
 # 12f solleva un'eccezione al primo diniego mancato; l'ultima riga e il
 # controllo sul limite della nota di decisione.

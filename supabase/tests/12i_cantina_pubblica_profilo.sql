@@ -371,14 +371,22 @@ begin
     format('righe_viste_da_terzi=%s', v));
 
   -- 12. Nessuna superficie globale: la funzione vuole un uuid, e senza uuid non
-  --     restituisce «tutto» ma niente. Nessun'altra porta aperta ad anon legge
-  --     la proiezione.
+  --     restituisce «tutto» ma niente. Le sole porte pubbliche che possono
+  --     leggere la proiezione sono quelle dichiarate qui, una per profilo gia
+  --     noto: l'elenco delle bottiglie e, dalla 20260925220000, il valore
+  --     aggregato opt-in. Entrambe devono rifiutare l'enumerazione: la seconda
+  --     senza uuid risponde con la stessa riga chiusa `visibile=false` e serie
+  --     vuota, non con i dati di qualcun altro. Aggiungere un nome a questa
+  --     lista e una decisione deliberata, non una manutenzione.
   v := pg_temp.val(null, 'anon',
     'select count(*)::text from public.cantina_pubblica_profilo(null::uuid, 100, 0)');
+  v2 := pg_temp.val(null, 'anon',
+    'select visibile::text || ''/'' || jsonb_array_length(serie)::text'
+    || ' from public.cantina_pubblica_valore(null::uuid)');
   select string_agg(p.proname, ', ') into v_list
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.prokind = 'f'
-    and p.proname <> 'cantina_pubblica_profilo'
+    and p.proname not in ('cantina_pubblica_profilo', 'cantina_pubblica_valore')
     and (has_function_privilege('anon', p.oid, 'execute')
       or has_function_privilege('authenticated', p.oid, 'execute'))
     -- La vista, non l'etichetta dell'enum: `cantina_pubblica` come valore
@@ -396,9 +404,10 @@ begin
     and (has_table_privilege('anon', format('%I.%I', schemaname, viewname), 'select')
       or has_table_privilege('authenticated', format('%I.%I', schemaname, viewname), 'select'));
   insert into esiti_12i values (12,
-    'nessun elenco globale: uuid obbligatorio, nessuna seconda porta, nessuna vista pubblica per visibilita',
-    v = '0' and v_list is null and v_n = 0,
-    format('senza_uuid=%s altre_porte=%s viste_pubbliche=%s', v, coalesce(v_list, '-'), v_n));
+    'nessun elenco globale: uuid obbligatorio sulle due porte dichiarate, nessuna terza porta, nessuna vista pubblica per visibilita',
+    v = '0' and v2 = 'false/0' and v_list is null and v_n = 0,
+    format('senza_uuid=%s valore_senza_uuid=%s altre_porte=%s viste_pubbliche=%s',
+      v, v2, coalesce(v_list, '-'), v_n));
 
   -- 13. Il tetto lo decide il database. Chiedere diecimila righe non ne
   --     restituisce diecimila, e un offset negativo non e un errore.
