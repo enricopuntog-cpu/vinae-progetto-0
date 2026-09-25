@@ -133,7 +133,9 @@ describe("la prima pagina arriva dal server", () => {
     // prima pagina dell'elenco, non una seconda lettura delle medie.
     expect(paginaNuda.match(/service\./g)).toHaveLength(4);
     expect(paginaNuda.match(/service\.recensioni\(/g)).toHaveLength(1);
-    expect(paginaNuda).toInclude("service.cantinaPubblica(id),");
+    expect(paginaNuda).toInclude(
+      "service.cantinaPubblica(id, { limite: ANTEPRIMA_CANTINA_PUBBLICA }),",
+    );
   });
 
   it("è la stessa pagina profilo di D8, non una seconda", () => {

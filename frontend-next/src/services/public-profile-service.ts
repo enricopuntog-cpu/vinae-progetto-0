@@ -29,6 +29,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { routes } from "@/config/routes";
 import { riferimentoAvatarSicuro } from "@/lib/profilo/avatar";
 import {
   COLONNE_ANNUNCIO_PUBBLICO,
@@ -320,7 +321,9 @@ function mappaBottigliaCantinaPubblica(riga: Record<string, unknown>): Bottiglia
     // che decide quale badge disegna la scheda.
     stato: riga.bottiglia_stato === "aperta" ? "aperta" : "chiusa",
     annuncio:
-      slugAnnuncio === null ? null : { slug: slugAnnuncio, href: `/annuncio/${slugAnnuncio}` },
+      slugAnnuncio === null
+        ? null
+        : { slug: slugAnnuncio, href: routes.annuncio(encodeURIComponent(slugAnnuncio)) },
     immagine: immaginiAnnuncio.length > 0 ? urlImmagine(immaginiAnnuncio[0]) : IMMAGINE_ASSENTE,
   };
 }

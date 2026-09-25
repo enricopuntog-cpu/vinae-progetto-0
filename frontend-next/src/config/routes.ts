@@ -16,6 +16,10 @@ export const routes = {
   messaggi: "/messaggi",
   notifiche: "/notifiche",
   profilo: "/profilo",
+  /** Il profilo pubblico di un'altra persona: un uuid, non uno username. */
+  profiloPubblico: (id: string) => `/profilo/${id}`,
+  /** La Cantina pubblica di quella persona, che è una pagina del suo profilo. */
+  cantinaPubblica: (id: string) => `/profilo/${id}/cantina`,
   venditore: (username: string) => `/venditore/${username}`,
   onboarding: "/onboarding",
   verificaVenditore: "/verifica-venditore",
