@@ -743,6 +743,36 @@ begin
     'where r.event_type = ''grid_12k_forma''');
   perform pg_temp.registra(55, 'le notifiche precedenti restano leggibili con il nuovo campo NULL',
     v like '%club/-%' and v like '%none/-%', format('righe=%s', v));
+
+  -- =========================================================================
+  -- NORMALIZZAZIONE DELLA GUARDIA DI APPLICAZIONE (56-57)
+  -- =========================================================================
+  --
+  -- La guardia fail-closed della `20260926091000` legge `prosrc` e vieta al
+  -- fanout di ricopiare i predicati della Cantina pubblica o di leggere dati
+  -- privati. Ma `prosrc` porta con se anche i commenti, e un commento che
+  -- spiega quali predicati NON vengono riletti e costretto a nominarli: la
+  -- prima stesura intercettava la propria prosa e la migrazione non poteva
+  -- applicarsi su nessun database. Queste due righe misurano la
+  -- normalizzazione nelle due direzioni, con la stessa espressione della
+  -- migrazione applicata a corpi sintetici costruiti qui: il falso positivo
+  -- deve tacere, il vero positivo deve continuare a parlare.
+
+  -- 56. Un nome vietato citato nel solo commento non deve far scattare nulla.
+  v := lower(regexp_replace(
+    e'begin\n  -- qui non si ricontrolla deleted_at ne ceduta_at.\n  select 1;\nend',
+    '--[^\n]*', '', 'g'));
+  perform pg_temp.registra(56, 'la guardia ignora i nomi vietati citati nei soli commenti',
+    v !~ 'deleted_at|ceduta_at|acquisition_cost_cents|note_personali',
+    format('normalizzato=%s', btrim(replace(v, e'\n', ' '))));
+
+  -- 57. Lo stesso nome nel codice eseguibile deve continuare a far scattare.
+  v := lower(regexp_replace(
+    e'begin\n  select 1 from t where t.deleted_at is null;\nend',
+    '--[^\n]*', '', 'g'));
+  perform pg_temp.registra(57, 'la guardia intercetta i nomi vietati nel codice eseguibile',
+    v ~ 'deleted_at|ceduta_at|acquisition_cost_cents|note_personali',
+    format('normalizzato=%s', btrim(replace(v, e'\n', ' '))));
 end $$;
 
 select id, descrizione, passed, detail from esiti_12k order by id;

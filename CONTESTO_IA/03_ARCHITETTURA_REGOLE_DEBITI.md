@@ -337,7 +337,23 @@ già pubblicabili — username ed etichetta — troncato entro i 500 caratteri d
 Fase 8 perché un'etichetta lunga non deve far fallire una pubblicazione
 legittima; posizione fisica, costi, note e quantità private non lo sfiorano.
 
-Prova: `supabase/tests/12k_cantina_follow.sql`, 55 invarianti, cablata nel gate
+**Una guardia su `prosrc` deve leggere il codice, non la prosa.** Le guardie
+fail-closed della `20260926091000` stanno nella migrazione e non in una griglia,
+perché una migrazione futura che allarghi la superficie deve fallire mentre
+viene applicata. Quella che vieta al fanout di ricopiare i predicati della
+Cantina pubblica confrontava `pg_proc.prosrc` con un elenco di nomi vietati — e
+`prosrc` include i commenti, così il commento che spiega quali predicati *non*
+vengono riletti li nominava e la guardia intercettava se stessa: la migrazione
+non poteva applicarsi su nessun database. Ora il confronto avviene sul corpo con
+i commenti di riga rimossi, per tutti e tre i controlli di quella guardia: i due
+positivi ne uscono più stretti, perché un commento non può più soddisfarli. I
+casi 56 e 57 della `12k` misurano le due direzioni della normalizzazione — un
+nome vietato nel solo commento deve tacere, lo stesso nome nel codice eseguibile
+deve continuare a parlare. Regola generale: una guardia che ispeziona il
+sorgente di una funzione normalizza i commenti prima del confronto, altrimenti
+misura ciò che il codice dichiara invece di ciò che esegue.
+
+Prova: `supabase/tests/12k_cantina_follow.sql`, 57 invarianti, cablata nel gate
 `Supabase DB regression`. Alla stesura non era ancora stata eseguita: la
 griglia dimostra qualcosa solo dopo un run reale.
 

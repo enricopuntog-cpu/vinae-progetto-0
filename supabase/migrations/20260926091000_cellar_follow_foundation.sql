@@ -704,7 +704,15 @@ begin
   end if;
 
   -- Il fanout non deve ricostruire le regole di pubblicabilita.
-  select lower(p.prosrc) into v_src
+  --
+  -- `prosrc` porta con se anche i commenti, e un commento che spiega quali
+  -- predicati NON vengono riletti e costretto a nominarli: la prima stesura di
+  -- questa guardia intercettava la propria prosa e la migrazione non poteva
+  -- applicarsi su nessun database. Si ispeziona percio il codice, con i commenti
+  -- di riga rimossi prima del confronto: la guardia misura cio che il fanout
+  -- esegue, non cio che dichiara. La normalizzazione vale anche per i due
+  -- controlli positivi, che da qui un commento non puo piu soddisfare.
+  select lower(regexp_replace(p.prosrc, '--[^\n]*', '', 'g')) into v_src
   from pg_proc p
   where p.oid = 'private.cantina_pubblica_notifica_seguaci(uuid)'::regprocedure;
   if v_src !~ 'private\.cantina_pubblica' then
