@@ -287,3 +287,192 @@ describe("/profilo/[id]/cantina — valore di riferimento", () => {
     expect(componente).not.toInclude('"use client"');
   });
 });
+
+// ===========================================================================
+// Il comando «Segui» nella testata
+//
+// Il repository non monta componenti React nei test: le transizioni di stato
+// sono verificate come funzioni pure in
+// `src/lib/cantina/segui-cantina-stato.test.ts`, e le quattro porte in
+// `src/services/cellar-follow-service.test.ts`. Qui si verifica ciò che resta e
+// che nessuno dei due copre: quali dati la pagina consegna al comando, che il
+// proprietario non lo riceva, che l'anonimo non chiami il database, e che il
+// componente usi davvero quelle funzioni invece di riscriverne la logica.
+// ===========================================================================
+
+describe("/profilo/[id]/cantina — segui la Cantina", () => {
+  const bottone = readFileSync(
+    join(progetto, "src/components/vinea/profilo/SeguiCantinaButton.tsx"),
+    "utf8",
+  );
+  const codiceBottone = bottone
+    .replace(/\{\s*\/\*(?:(?!\*\/)[\s\S])*\*\/\s*\}/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+  const statoFollow = readFileSync(join(progetto, "src/lib/cantina/segui-cantina-stato.ts"), "utf8");
+  // Senza commenti: la prosa nomina apposta ciò che il modulo non fa — «il
+  // follower non compare mai qui» — e un divieto non va cercato nella frase che
+  // lo dichiara.
+  const codiceStatoFollow = statoFollow
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+
+  it("[1] la testata riceve il comando con l'identificativo pubblico e nient'altro", () => {
+    expect(codice).toInclude("<SeguiCantinaButton ownerId={userId} profiloProprio={profiloProprio} />");
+    // Un solo punto di resa, dentro la testata, e non uno per ramo di errore.
+    expect(codice.split("<SeguiCantinaButton").length - 1).toBe(1);
+    expect(codice).toInclude('from "@/components/vinea/profilo/SeguiCantinaButton"');
+  });
+
+  it("[2] nessun dato privato attraversa il confine verso il comando", () => {
+    // `profiloProprio` è un booleano già calcolato dal server; l'identificativo
+    // è nell'URL. Tutto il resto resterebbe dalla parte del server per niente.
+    const resa = codice.slice(codice.indexOf("<SeguiCantinaButton"));
+    const attributi = resa.slice(0, resa.indexOf("/>"));
+    expect(attributi).not.toMatch(/email|utente|token|session|ruolo|valore|moderazione/i);
+    expect(codiceBottone).not.toMatch(/email|moderazione|valore_cents|costoAcquisto/i);
+  });
+
+  it("[3] il proprietario non vede alcun comando di follow", () => {
+    // La decisione sta in un posto solo — dentro il componente — e non in un
+    // secondo `profiloProprio &&` nella pagina che potrebbe divergere.
+    expect(codiceBottone).toInclude("if (profiloProprio) return null;");
+    // E non è un comando disabilitato con una spiegazione: quella frase
+    // racconterebbe il rifiuto `P0001` a chi non ha premuto niente.
+    expect(codiceBottone).not.toMatch(/non puoi seguire la tua/i);
+    // Il proprietario invalida ogni destinatario e non raggiunge la RPC.
+    const ramoProprietario = codiceBottone.slice(codiceBottone.indexOf("if (profiloProprio) {"));
+    expect(ramoProprietario.slice(0, ramoProprietario.indexOf("if (!utenteId)"))).toInclude(
+      "lettoreRef.current = null;",
+    );
+    expect(ramoProprietario.slice(0, ramoProprietario.indexOf("if (!utenteId)"))).not.toInclude(
+      "creaCellarFollowService",
+    );
+  });
+
+  it("[4] l'anonimo vede l'invito ma non chiama il database", () => {
+    const anonimo = codiceBottone.slice(codiceBottone.indexOf("if (!authUser) {"));
+    const finoAlRitorno = anonimo.slice(0, anonimo.indexOf("</Link>"));
+    expect(finoAlRitorno).toInclude("<Link");
+    expect(finoAlRitorno).not.toMatch(/creaCellarFollowService|\.stato\(|\.segui\(|onClick/);
+    // Le tre porte richiedono `authenticated`: una chiamata da anonimo
+    // produrrebbe `42501`, cioè un errore mostrato a chi non ha sbagliato nulla.
+    expect(codiceBottone).toInclude("PARAMETRO_NEXT");
+    expect(codiceBottone).toInclude('from "@/lib/auth/ritorno-auth"');
+    expect(codiceBottone).toInclude("encodeURIComponent(routes.cantinaPubblica(ownerId))");
+    // Nessun sistema di ritorno inventato accanto a quello esistente.
+    expect(codiceBottone).not.toMatch(/\?returnTo=|\?redirect=|localStorage|sessionStorage/);
+  });
+
+  it("[5] finché la sessione non è nota non mostra né l'invito né il comando", () => {
+    const attesa = codiceBottone.indexOf("if (authLoading) {");
+    const anonimo = codiceBottone.indexOf("if (!authUser) {");
+    expect(attesa).toBeGreaterThan(-1);
+    expect(anonimo).toBeGreaterThan(attesa);
+    expect(codiceBottone).toInclude('aria-busy="true"');
+  });
+
+  it("[6] usa davvero le transizioni pure, invece di riscriverle", () => {
+    for (const funzione of [
+      "statoDaEsitoIniziale(esito)",
+      "statoInMutazione(stato)",
+      "statoDaEsitoMutazione(precedente, esito)",
+      "azioneFollow(stato)",
+      "etichettaFollow(stato)",
+      "descrizioneFollow(stato)",
+      "followAbilitato(stato)",
+      "followOccupato(stato)",
+    ]) {
+      expect(codiceBottone).toInclude(funzione);
+    }
+    expect(codiceBottone).toInclude('from "@/lib/cantina/segui-cantina-stato"');
+  });
+
+  it("[7] nessun successo anticipato: lo stato si muove dopo la risposta", () => {
+    // Il difetto che questa prova impedisce: un `setStato({ fase: "seguita" })`
+    // scritto accanto alla chiamata, prima del `then`.
+    expect(codiceBottone).not.toMatch(/setStato\(\{\s*fase:\s*"seguita"/);
+    expect(codiceBottone).not.toMatch(/setStato\(\{\s*fase:\s*"non_seguita"/);
+    // E il toast racconta quello che ha detto il database, non il click.
+    expect(codiceBottone).toInclude("esito.data ? TOAST_SEGUITA : TOAST_NON_SEGUITA");
+    // La lettura iniziale che fallisce non diventa `false`: vive nella funzione
+    // pura, ed è là che si verifica.
+    expect(statoFollow).toInclude('if (!esito.ok) return { fase: "non_disponibile" };');
+  });
+
+  it("[8] un cambio di sessione non lascia lo stato del visitatore precedente", () => {
+    // La risposta in volo appartiene a chi l'ha chiesta: al ritorno si confronta
+    // il token, come in `real-auth-domain.ts`.
+    expect(codiceBottone).toInclude("lettoreRef");
+    expect(codiceBottone).toInclude("if (annullato || lettoreRef.current !== token) return;");
+    expect(codiceBottone).toInclude("if (lettoreRef.current !== token) return;");
+    // Il cleanup invalida anche una mutazione, non soltanto la lettura iniziale.
+    expect(codiceBottone).toInclude(
+      "if (lettoreRef.current === token) lettoreRef.current = null;",
+    );
+    // All'uscita lo stato torna all'inizio invece di restare «Seguita».
+    expect(codiceBottone).toInclude("setStato(STATO_INIZIALE)");
+    // E la lettura riparte quando cambia l'utente, non solo la Cantina.
+    expect(codiceBottone).toMatch(/\[ownerId, profiloProprio, utenteId\]/);
+  });
+
+  it("[9] è un vero `button`, con nome accessibile e stato non affidato al colore", () => {
+    expect(codiceBottone).toInclude('<button');
+    expect(codiceBottone).toInclude('type="button"');
+    expect(codiceBottone).toInclude("aria-label={descrizioneFollow(stato)}");
+    expect(codiceBottone).toInclude("disabled={!followAbilitato(stato)}");
+    expect(codiceBottone).toInclude("aria-busy={followOccupato(stato)}");
+    // L'etichetta è una parola in ogni fase: chi non distingue il bordo legge.
+    expect(codiceBottone).toInclude("{etichettaFollow(stato)}");
+    // Le icone accompagnano il testo e non lo sostituiscono.
+    expect(codiceBottone).toMatch(/<Check className="h-4 w-4" aria-hidden \/>/);
+  });
+
+  it("[10] l'errore di scrittura arriva mediato, senza dettaglio tecnico", () => {
+    expect(codiceBottone).toInclude("toast.error(esito.error)");
+    expect(codiceBottone).not.toMatch(/error\.(code|message|details|hint)/);
+    expect(codiceBottone).not.toMatch(/42501|P0001|22023|22004/);
+  });
+
+  it("[11] non tocca il database se non attraverso il servizio dedicato", () => {
+    expect(codiceBottone).toInclude("creaCellarFollowService(getSupabaseClient())");
+    expect(codiceBottone).not.toMatch(/\.from\(|\.rpc\(|cellar_follows|follower/i);
+    // E non passa da un altro dominio: il follow non sta in PublicProfileService.
+    expect(codiceBottone).not.toMatch(/creaPublicProfileService|creaProfileService|CellarService/);
+  });
+
+  it("[12] non aggiunge il dominio allo store globale", () => {
+    const store = readFileSync(join(progetto, "src/lib/vinea-store.tsx"), "utf8");
+    expect(store).not.toMatch(/follow|segui/i);
+    // Lo stato è locale al comando: una Cantina seguita non è un fatto dell'app.
+    expect(codiceBottone).toInclude("useState<StatoFollow>(STATO_INIZIALE)");
+  });
+
+  it("[13] nessun conteggio di follower, in nessuna direzione", () => {
+    for (const vietato of [
+      /follower/i,
+      /\bseguaci\b/i,
+      /quante?\s+persone/i,
+      /\bconteggio\b/i,
+      /count\(/i,
+    ]) {
+      expect(codiceBottone).not.toMatch(vietato);
+      expect(codiceStatoFollow).not.toMatch(vietato);
+    }
+  });
+
+  it("[14] il comando non porta con sé marketplace, 3D o notifiche nuove", () => {
+    for (const vietato of [
+      "Cellar3D",
+      "carrello",
+      "checkout",
+      "Acquista",
+      "Realtime",
+      "channel(",
+      "push",
+      "email",
+    ]) {
+      expect(codiceBottone).not.toInclude(vietato);
+    }
+  });
+});
