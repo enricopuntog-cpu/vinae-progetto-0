@@ -614,6 +614,100 @@ export interface PublicProfileService {
   valoreCantinaPubblica(userId: string): Promise<Result<ValoreCantinaPubblica>>;
 }
 
+// ---- Segui una Cantina -----------------------------------------------------
+//
+// Si segue **la Cantina**, non la persona: il nome dei tipi lo dice perché è una
+// decisione di prodotto e non un dettaglio. Un `UserFollow` generico inviterebbe
+// il giorno dopo a seguire un venditore o un Club dagli stessi contratti.
+//
+// Il grafo è privato in entrambe le direzioni. Non esiste — qui e nel database —
+// una forma che risponda «chi segue questa Cantina» o «quante persone la
+// seguono»: `private.cellar_follows` non è raggiungibile da PostgREST, e la porta
+// dell'elenco non accetta alcun identificativo di utente.
+
+/**
+ * Una Cantina che il chiamante segue, nell'elenco «Le mie Cantine».
+ *
+ * Sono i soli dati **già pubblici** del proprietario, come li restituisce
+ * `cantine_seguite_page`. Non esiste qui, e non deve nascere, un campo per il
+ * valore della Cantina, per il costo di una bottiglia, per lo stato di
+ * moderazione, per l'email o per un conteggio di follower: quella funzione non li
+ * seleziona, e questo tipo è il secondo posto in cui la stessa assenza è scritta.
+ */
+export type CantinaSeguita = {
+  ownerId: string;
+  username: string;
+  avatarUrl: string;
+  citta: string;
+  provincia: string;
+  /** Quando il chiamante ha iniziato a seguirla: metà del cursore di pagina. */
+  followedAt: string;
+  /**
+   * Quante bottiglie pubbliche ha oggi quella Cantina.
+   *
+   * `0` è un valore legittimo e non un dato mancante: una Cantina pubblica ancora
+   * vuota resta seguibile ed elencata, perché aspettare la prima pubblicazione è
+   * uno dei motivi per seguirla.
+   */
+  bottigliePubbliche: number;
+};
+
+/**
+ * Il cursore di «Le mie Cantine»: le due componenti insieme o nessuna.
+ *
+ * È un oggetto e non due parametri sciolti perché `cantine_seguite_page` rifiuta
+ * con `22023` un istante senza il suo identificativo — l'ordinamento è
+ * `(created_at desc, owner_id desc)` e metà chiave non individua una riga. Un
+ * tipo che non permette di scrivere quel caso è più solido di un controllo che lo
+ * intercetta. Stessa disciplina di `PageCursor` nella Fase 8.
+ */
+export type CursoreCantinaSeguita = {
+  readonly followedAt: string;
+  readonly ownerId: string;
+};
+
+/**
+ * Le quattro porte del follower, viste dal client.
+ *
+ * NESSUN METODO ACCETTA UN FOLLOWER. Il follower è `auth.uid()` dentro il corpo
+ * `security definer` delle funzioni, quindi non è un parametro di questa
+ * interfaccia: non esiste la forma «segui questa Cantina a nome di qualcun
+ * altro», e non esiste la forma «dimmi le Cantine seguite da qualcun altro».
+ */
+export interface CellarFollowService {
+  /**
+   * Seguo io la Cantina di questo profilo?
+   *
+   * `false` copre insieme «non la seguo», «quel profilo non è raggiungibile» e
+   * «quell'identificativo non è un identificativo»: la porta risponde allo stesso
+   * modo per tutti e tre, così non diventa un oracolo sugli stati di moderazione.
+   */
+  stato(ownerId: string): Promise<Result<boolean>>;
+  /**
+   * Inizia a seguire. Idempotente: seguire due volte non crea due righe e non
+   * muove `followedAt`. Restituisce lo stato finale dichiarato dal database, non
+   * un successo presunto dal client.
+   */
+  segui(ownerId: string): Promise<Result<boolean>>;
+  /**
+   * Smette di seguire. Idempotente, e ammessa anche quando il proprietario non è
+   * più pubblico: togliere una relazione riduce l'esposizione, quindi non è
+   * chiusa dietro le condizioni che proteggono una scrittura nuova.
+   */
+  smetti(ownerId: string): Promise<Result<boolean>>;
+  /**
+   * L'elenco delle Cantine seguite dal solo chiamante, una pagina per volta.
+   *
+   * Senza cursore è la prima pagina. Non esiste un conteggio totale, e non va
+   * aggiunto: la pagina successiva si scopre chiedendo una riga in più, non
+   * interrogando due volte una relazione che cambia.
+   */
+  pagina(opzioni?: {
+    cursore?: CursoreCantinaSeguita | null;
+    limite?: number;
+  }): Promise<Result<CantinaSeguita[]>>;
+}
+
 // ---- Regioni canoniche -----------------------------------------------------
 
 /**
