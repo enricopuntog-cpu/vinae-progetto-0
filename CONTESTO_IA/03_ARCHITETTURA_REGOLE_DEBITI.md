@@ -263,11 +263,16 @@ per cui l'annuncio pubblico lo dichiara solo `public.public_listings`. Il join
 alla tabella base recupera unicamente `acquired_at`.
 
 Prova: `supabase/tests/12j_cantina_pubblica_valore.sql`, 35 invarianti, nel gate
-`Supabase DB regression`. Il caso 12 della `12i` custodisce ora un **elenco
-chiuso di due porte pubbliche** per profilo noto — bottiglie e valore — e
-verifica che anche la seconda, chiamata senza uuid, risponda con la riga chiusa
-invece che con i dati di qualcuno. Aggiungere un nome a quell'elenco è una
-decisione deliberata, non manutenzione.
+`Supabase DB regression`. Il caso 12 della `12i` custodisce un **elenco chiuso
+delle porte pubbliche** che possono leggere la proiezione, e verifica che
+nessuna quarta esista. Due sono per profilo noto — bottiglie e valore — e si
+difendono dall'enumerazione con un uuid obbligatorio: anche la seconda,
+chiamata senza uuid, risponde con la riga chiusa invece che con i dati di
+qualcuno. La terza, `cantine_seguite_page` dalla `20260926091000`, non prende
+l'uuid di un proprietario ma il grafo del chiamante, e si difende con
+l'identità: per `anon` non esiste affatto (42501). Aggiungere un nome a
+quell'elenco è una decisione deliberata, non manutenzione, e va accompagnato
+dalla prova di come quel nome rifiuta l'enumerazione.
 
 ## Segui una Cantina (26 settembre 2026)
 
@@ -354,8 +359,9 @@ sorgente di una funzione normalizza i commenti prima del confronto, altrimenti
 misura ciò che il codice dichiara invece di ciò che esegue.
 
 Prova: `supabase/tests/12k_cantina_follow.sql`, 57 invarianti, cablata nel gate
-`Supabase DB regression`. Alla stesura non era ancora stata eseguita: la
-griglia dimostra qualcosa solo dopo un run reale.
+`Supabase DB regression` ed eseguita 57/57 il 26 settembre 2026 sullo stack
+effimero della CI, insieme a `12i` 21/21 e `12j` 35/35. L'esito è stato letto
+dal log del job: un check verde non dice quali griglie hanno girato.
 
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
