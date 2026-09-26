@@ -23,6 +23,8 @@ const conversationRow: Parameters<typeof mapConversation>[0] = {
   created_at: "2026-08-07T11:00:00.000Z",
 };
 
+const OWNER_ID = "cf000000-0000-4000-8000-000000000001";
+
 const notificationRow = {
   id: "notification",
   category: "marketplace" as const,
@@ -33,6 +35,7 @@ const notificationRow = {
   destination_listing_id: null,
   destination_order_id: null,
   destination_club_slug: null,
+  destination_profile_id: null,
   read_at: null,
   created_at: "2026-08-07T12:00:00.000Z",
 };
@@ -92,5 +95,47 @@ describe("mapping Supabase Fase 8", () => {
         destination_order_id: null,
       }).destination,
     ).toEqual({ kind: "none" });
+  });
+
+  it("mappa la destinazione Cantina con l identificativo del profilo", () => {
+    expect(
+      mapNotification({
+        ...notificationRow,
+        destination_kind: "cellar",
+        destination_conversation_id: null,
+        destination_profile_id: OWNER_ID,
+      }).destination,
+    ).toEqual({ kind: "cellar", profileId: OWNER_ID });
+  });
+
+  it("una Cantina senza identificativo del profilo degrada a nessuna destinazione", () => {
+    expect(
+      mapNotification({
+        ...notificationRow,
+        destination_kind: "cellar",
+        destination_conversation_id: null,
+        destination_profile_id: null,
+      }).destination,
+    ).toEqual({ kind: "none" });
+  });
+
+  it("l identificativo del profilo non contamina le destinazioni precedenti", () => {
+    // Una riga malformata con entrambi i campi valorizzati non deve spostare una
+    // conversazione verso la Cantina: vince il tipo dichiarato.
+    expect(
+      mapNotification({
+        ...notificationRow,
+        destination_profile_id: OWNER_ID,
+      }).destination,
+    ).toEqual({ kind: "conversation", conversationId: "conversation" });
+    expect(
+      mapNotification({
+        ...notificationRow,
+        destination_kind: "club",
+        destination_conversation_id: null,
+        destination_club_slug: "amici-del-nebbiolo",
+        destination_profile_id: OWNER_ID,
+      }).destination,
+    ).toEqual({ kind: "club", clubSlug: "amici-del-nebbiolo" });
   });
 });

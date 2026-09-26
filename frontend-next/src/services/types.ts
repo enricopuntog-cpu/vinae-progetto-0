@@ -1968,12 +1968,15 @@ export interface ClubService {
 }
 
 // ---- Notifiche -------------------------------------------------------------
+// Destinazioni tipizzate: nel database vive il tipo piu l'identificativo, mai un
+// URL. `cellar` porta al profilo di una Cantina pubblica seguita.
 export type NotificationDestination =
   | { kind: "none" }
   | { kind: "conversation"; conversationId: string }
   | { kind: "listing"; listingId: string }
   | { kind: "order"; orderId: string }
-  | { kind: "club"; clubSlug: string };
+  | { kind: "club"; clubSlug: string }
+  | { kind: "cellar"; profileId: string };
 
 export type Notification = {
   id: string;

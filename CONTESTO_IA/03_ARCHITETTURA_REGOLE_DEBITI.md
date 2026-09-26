@@ -269,6 +269,78 @@ verifica che anche la seconda, chiamata senza uuid, risponda con la riga chiusa
 invece che con i dati di qualcuno. Aggiungere un nome a quell'elenco è una
 decisione deliberata, non manutenzione.
 
+## Segui una Cantina (26 settembre 2026)
+
+**Si segue la Cantina, non l'utente.** La decisione è di dominio, non di
+implementazione: nessun grafo sociale generico, nessun follow-utente,
+follow-produttore o follow-Club, nessuna coppia follower/following da
+riutilizzare altrove. I nomi restano specifici — `private.cellar_follows`,
+`cantina_segui`, `cantina_smetti_di_seguire`, `cantina_seguita_stato`,
+`cantine_seguite_page`. Chi volesse un giorno un grafo generale apre una
+decisione di prodotto, non generalizza queste porte.
+
+**Il grafo è dato privato del follower.** La tabella vive in `private` con RLS
+attiva e nessuna policy, e i ruoli client non hanno alcun privilegio diretto:
+si passa solo dalle porte controllate. Il proprietario **non** riceve l'elenco
+dei suoi follower e **non** esiste un conteggio pubblico di follower: sono
+assenze deliberate, non funzionalità mancanti. Le sole tre domande legittime
+sono lo stato di *un* profilo noto, la scrittura su *un* profilo noto e
+l'elenco delle Cantine seguite **dal chiamante**. Nessuna RPC accetta un
+`follower_id`: l'identità è sempre `auth.uid()`. Introdurre
+`followers(owner_id)`, una directory o una ricerca di follower violerebbe la
+decisione.
+
+Una relazione verso un proprietario che smette di essere pubblicamente
+raggiungibile **resta** nella tabella ma non appare in `cantine_seguite_page` e
+non genera notifiche: la visibilità si deriva, non si cancella un fatto.
+Smettere di seguire non cancella lo storico delle notifiche già ricevute.
+
+**Le notifiche sono quelle della Fase 8.** Nessuna tabella, nessun canale,
+nessun servizio nuovo: `public.notifications`, la sua deduplica, il conteggio
+non lette e il trigger `private.notifications_after_change` sul topic privato
+`user:<uid>:notifications`, che non è stato toccato. La destinazione nuova è
+tipizzata — `notification_destination_kind` guadagna `cellar` e la tabella la
+colonna `destination_profile_id` — perché nel database vive il tipo più
+l'identificativo, mai un URL.
+
+**Il vincolo di forma era fail-open.** `notifications_destination_shape` della
+Fase 8 è un `CASE destination_kind ... END` senza `ELSE`: per una label non
+elencata vale NULL, e un CHECK che vale NULL non è violato. Ogni destinazione
+aggiunta in futuro vi sarebbe passata senza forma verificata. La
+`20260926091000` lo ricostruisce con tutte e sei le forme e un `else false`
+finale. Una destinazione nuova si aggiunge a quel `CASE`; appoggiarsi al suo
+silenzio è un difetto, non una scorciatoia.
+
+**L'evento è l'ingresso nella Cantina pubblica**, non la creazione di una
+bottiglia: INSERT già `cantina_pubblica`, oppure UPDATE da `privata` a
+`cantina_pubblica`. Pubblico→pubblico, pubblico→privata e le modifiche di campi
+estranei non notificano. La pubblicabilità non viene riaffermata: il fanout
+interroga `private.cantina_pubblica` per l'unità appena scritta e, se non c'è,
+tace. Da quella vista arrivano insieme visibilità, stato della bottiglia,
+cessione, cancellazione e — per la join su `private.profili_pubblici` —
+proprietario non pubblico o rimosso. Stessa lezione dell'annuncio pubblico: una
+superficie che ricopia i predicati altrui prima o poi ne perde uno.
+
+**La deduplica è per pubblicazione, non permanente per vino.** La chiave è
+`cellar:<owner>:<wine>:<txid_current()>` con
+`on conflict (recipient_id, dedupe_key) do nothing`. Tre unità dello stesso
+vino pubblicate nello stesso UPDATE sono **una** notifica per follower; due
+vini nella stessa transazione sono due notifiche; una pubblicazione reale dello
+stesso vino in una transazione futura notifica di nuovo. Una chiave permanente
+`owner+wine` silenzierebbe per sempre il secondo acquisto dello stesso vino, ed
+è per questo che non è stata usata.
+
+**Nessun recupero del passato.** Applicare le migrazioni non genera notifiche
+per le bottiglie già pubbliche, non esiste backfill dei follow, e iniziare a
+seguire non consegna gli eventi precedenti. Il corpo è composto da soli dati
+già pubblicabili — username ed etichetta — troncato entro i 500 caratteri della
+Fase 8 perché un'etichetta lunga non deve far fallire una pubblicazione
+legittima; posizione fisica, costi, note e quantità private non lo sfiorano.
+
+Prova: `supabase/tests/12k_cantina_follow.sql`, 55 invarianti, cablata nel gate
+`Supabase DB regression`. Alla stesura non era ancora stata eseguita: la
+griglia dimostra qualcosa solo dopo un run reale.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):

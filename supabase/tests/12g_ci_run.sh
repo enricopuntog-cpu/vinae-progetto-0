@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12j) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12k) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
@@ -199,6 +199,10 @@ run_grid "12i Cantina pubblica del profilo" 12i_cantina_pubblica_profilo.sql 3
 # Valore opzionale della Cantina pubblica: setting owner-only, aggregati D3 e
 # storico as-of. Transazione/guard identici, sempre prima delle fixture 12g.
 run_grid "12j valore della Cantina pubblica" 12j_cantina_pubblica_valore.sql 3
+# Segui una Cantina: grafo privato, pagina «Le mie Cantine» e fanout delle
+# notifiche all'ingresso di una bottiglia nella Cantina pubblica. Transazione e
+# guard identici, sempre prima delle fixture 12g.
+run_grid "12k segui una Cantina pubblica" 12k_cantina_follow.sql 3
 
 # 12f solleva un'eccezione al primo diniego mancato; l'ultima riga e il
 # controllo sul limite della nota di decisione.

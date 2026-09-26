@@ -100,6 +100,15 @@ describe("contratto TypeScript Fase 8", () => {
     expect(types).toContain("idempotencyKey: string;");
   });
 
+  it("NotificationDestination ammette la Cantina come tipo piu identificativo", () => {
+    const union = types.slice(
+      types.indexOf("export type NotificationDestination"),
+      types.indexOf("};", types.indexOf("export type NotificationDestination")) + 2,
+    );
+    expect(union).toContain('{ kind: "cellar"; profileId: string }');
+    expect(union).not.toMatch(/\b(?:url|href)\s*:/i);
+  });
+
   it("il retry del composer conserva la chiave finche l invio non riesce", () => {
     expect(composer).toContain("idempotencyKey.current");
     expect(composer.indexOf("if (!result.ok)")).toBeLessThan(
