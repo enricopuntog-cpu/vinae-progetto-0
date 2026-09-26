@@ -258,7 +258,7 @@ declare
   c_rim_o constant uuid := 'ca000000-0000-4000-8000-000000000004';
   c_rim_v constant uuid := 'ca000000-0000-4000-8000-000000000005';
   c_attese constant text := '101,102,103';
-  v text; v2 text; v_n bigint; v_list text;
+  v text; v2 text; v3 text; v_n bigint; v_list text;
 begin
   -- 1. Le tre pubbliche di A, e solo quelle. Un anonimo che guarda il profilo
   --    di A vede la sua Cantina: e il caso d'uso, non una concessione.
@@ -376,17 +376,26 @@ begin
   --     noto: l'elenco delle bottiglie e, dalla 20260925220000, il valore
   --     aggregato opt-in. Entrambe devono rifiutare l'enumerazione: la seconda
   --     senza uuid risponde con la stessa riga chiusa `visibile=false` e serie
-  --     vuota, non con i dati di qualcun altro. Aggiungere un nome a questa
-  --     lista e una decisione deliberata, non una manutenzione.
+  --     vuota, non con i dati di qualcun altro. Dalla 20260926091000 la lista
+  --     accoglie un terzo nome, `cantine_seguite_page`, che legge la proiezione
+  --     per contare le bottiglie pubbliche delle Cantine seguite. La sua difesa
+  --     dall'enumerazione non e un argomento obbligatorio ma l'identita: non
+  --     prende l'uuid di un proprietario, prende il grafo del chiamante, e per
+  --     `anon` non esiste affatto. Aggiungere un nome a questa lista e una
+  --     decisione deliberata, non una manutenzione.
   v := pg_temp.val(null, 'anon',
     'select count(*)::text from public.cantina_pubblica_profilo(null::uuid, 100, 0)');
   v2 := pg_temp.val(null, 'anon',
     'select visibile::text || ''/'' || jsonb_array_length(serie)::text'
     || ' from public.cantina_pubblica_valore(null::uuid)');
+  v3 := pg_temp.val(null, 'anon',
+    'select count(*)::text'
+    || ' from public.cantine_seguite_page(null::timestamptz, null::uuid, 24)');
   select string_agg(p.proname, ', ') into v_list
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.prokind = 'f'
-    and p.proname not in ('cantina_pubblica_profilo', 'cantina_pubblica_valore')
+    and p.proname not in (
+      'cantina_pubblica_profilo', 'cantina_pubblica_valore', 'cantine_seguite_page')
     and (has_function_privilege('anon', p.oid, 'execute')
       or has_function_privilege('authenticated', p.oid, 'execute'))
     -- La vista, non l'etichetta dell'enum: `cantina_pubblica` come valore
@@ -404,10 +413,10 @@ begin
     and (has_table_privilege('anon', format('%I.%I', schemaname, viewname), 'select')
       or has_table_privilege('authenticated', format('%I.%I', schemaname, viewname), 'select'));
   insert into esiti_12i values (12,
-    'nessun elenco globale: uuid obbligatorio sulle due porte dichiarate, nessuna terza porta, nessuna vista pubblica per visibilita',
-    v = '0' and v2 = 'false/0' and v_list is null and v_n = 0,
-    format('senza_uuid=%s valore_senza_uuid=%s altre_porte=%s viste_pubbliche=%s',
-      v, v2, coalesce(v_list, '-'), v_n));
+    'nessun elenco globale: uuid obbligatorio sulle porte per profilo, identita sulla terza, nessuna quarta porta, nessuna vista pubblica per visibilita',
+    v = '0' and v2 = 'false/0' and v3 = '42501' and v_list is null and v_n = 0,
+    format('senza_uuid=%s valore_senza_uuid=%s seguite_da_anon=%s altre_porte=%s viste_pubbliche=%s',
+      v, v2, v3, coalesce(v_list, '-'), v_n));
 
   -- 13. Il tetto lo decide il database. Chiedere diecimila righe non ne
   --     restituisce diecimila, e un offset negativo non e un errore.

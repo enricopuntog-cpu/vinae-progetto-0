@@ -16,6 +16,7 @@ type NotificationRow = {
   destination_listing_id: string | null;
   destination_order_id: string | null;
   destination_club_slug: string | null;
+  destination_profile_id: string | null;
   read_at: string | null;
   created_at: string;
 };
@@ -33,6 +34,11 @@ const mapDestination = (row: NotificationRow): NotificationDestination => {
   if (row.destination_kind === "club" && row.destination_club_slug) {
     return { kind: "club", clubSlug: row.destination_club_slug };
   }
+  if (row.destination_kind === "cellar" && row.destination_profile_id) {
+    return { kind: "cellar", profileId: row.destination_profile_id };
+  }
+  // Un tipo senza il suo identificativo degrada a `none`: la notifica resta
+  // leggibile e non diventa un collegamento verso il nulla.
   return { kind: "none" };
 };
 

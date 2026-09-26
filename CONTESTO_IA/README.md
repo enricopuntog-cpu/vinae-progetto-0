@@ -39,6 +39,10 @@ Aprire soltanto ciò che serve al task:
 - Il valore di riferimento della Cantina pubblica (opt-in, default OFF, solo
   aggregati D3 della collezione esposta, storico della collezione attuale) è in
   `03_ARCHITETTURA_REGOLE_DEBITI.md`.
+- «Segui una Cantina» — si segue la Cantina e non l'utente, grafo privato del
+  follower, nessun conteggio di follower, notifiche dalla Fase 8 con
+  destinazione `cellar`, deduplica per pubblicazione e nessun recupero del
+  passato — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono

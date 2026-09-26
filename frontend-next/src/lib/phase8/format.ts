@@ -1,3 +1,4 @@
+import { routes } from "@/config/routes";
 import type { NotificationDestination } from "@/services/types";
 
 export const formatPhase8Time = (value: string): string =>
@@ -17,5 +18,10 @@ export const destinationHref = (destination: NotificationDestination): string | 
   }
   if (destination.kind === "order") return `/ordine/${destination.orderId}`;
   if (destination.kind === "club") return `/community/${destination.clubSlug}`;
+  // Il percorso non si scrive a mano: lo compone il registro delle rotte, cosi
+  // la Cantina pubblica ha un solo indirizzo in tutta l'applicazione.
+  if (destination.kind === "cellar") {
+    return routes.cantinaPubblica(encodeURIComponent(destination.profileId));
+  }
   return null;
 };
