@@ -117,6 +117,22 @@ export function useCellarDomain() {
   const [analiticaErrore, setAnaliticaErrore] = useState<string | null>(null);
   const [analiticaLoading, setAnaliticaLoading] = useState(() => getSupabaseClient() !== null);
 
+  /**
+   * Se il valore di riferimento compare nella propria Cantina pubblica.
+   *
+   * Stato a sé, come l'analitica e per la stessa ragione: è una terza lettura,
+   * con una terza porta, e il suo guasto non deve nascondere né le bottiglie né
+   * la contabilità. `false` qui è l'attesa, non il default del database: finché
+   * `valorePubblicoLoading` è vero nessuno deve disegnare un interruttore spento
+   * come se fosse una risposta.
+   */
+  const [valorePubblicoVisibile, setValorePubblicoVisibile] = useState(false);
+  const [valorePubblicoErrore, setValorePubblicoErrore] = useState<string | null>(null);
+  const [valorePubblicoLoading, setValorePubblicoLoading] = useState(
+    () => getSupabaseClient() !== null,
+  );
+  const [valorePubblicoSalvataggio, setValorePubblicoSalvataggio] = useState(false);
+
   const servizio = useMemo(() => createCellarService(getSupabaseClient()), []);
 
   const caricaCantina = useCallback(
@@ -127,17 +143,26 @@ export function useCellarDomain() {
         setDati(VUOTO);
         setAnalitica(null);
         setAnaliticaErrore(null);
+        // Chiusa la sessione la preferenza torna al suo default, non a quella di
+        // chi se ne è appena andato: un interruttore acceso che resta acceso
+        // racconterebbe la Cantina di un'altra persona.
+        setValorePubblicoVisibile(false);
+        setValorePubblicoErrore(null);
+        setValorePubblicoSalvataggio(false);
         setCantinaLoading(false);
         setAnaliticaLoading(false);
+        setValorePubblicoLoading(false);
         return;
       }
 
-      // Le due letture partono insieme — una sola andata e ritorno ciascuna, non
-      // una per bottiglia — ma l'elenco non aspetta la contabilità: `/cantina`
+      // Le tre letture partono insieme — una sola andata e ritorno ciascuna, non
+      // una per bottiglia — ma l'elenco non aspetta le altre: `/cantina`
       // si mostra appena le bottiglie sono qui, e l'analitica arriva dopo o non
-      // arriva affatto.
+      // arriva affatto. La preferenza del valore pubblico segue la stessa regola.
       setAnaliticaLoading(true);
+      setValorePubblicoLoading(true);
       const promessaAnalitica = servizio.analitica();
+      const promessaValorePubblico = servizio.leggiVisibilitaValorePubblico();
 
       setDati(await servizio.carica());
       setCantinaLoading(false);
@@ -146,6 +171,14 @@ export function useCellarDomain() {
       setAnalitica(esito.ok ? esito.data : null);
       setAnaliticaErrore(esito.ok ? null : esito.error);
       setAnaliticaLoading(false);
+
+      // Lettura fallita: si dichiara l'errore e si lascia il default spento. Non
+      // si finge una preferenza accesa, che esporrebbe in interfaccia uno stato
+      // che il database non ha confermato.
+      const esitoValore = await promessaValorePubblico;
+      setValorePubblicoVisibile(esitoValore.ok ? esitoValore.data : false);
+      setValorePubblicoErrore(esitoValore.ok ? null : esitoValore.error);
+      setValorePubblicoLoading(false);
     },
     [servizio],
   );
@@ -352,6 +385,47 @@ export function useCellarDomain() {
     [applica, servizio],
   );
 
+  /**
+   * Accende o spegne il valore nella propria Cantina pubblica.
+   *
+   * NON PASSA DA `applica`, e la differenza è voluta. `applica` ricarica tutta la
+   * Cantina dopo una scrittura, perché quelle scritture cambiano le bottiglie;
+   * questa non ne tocca nessuna — cambia solo se il valore delle unità già
+   * esposte viene mostrato — e rileggere l'elenco per una preferenza sarebbe
+   * lavoro inutile a ogni click.
+   *
+   * Lo stato si muove **solo** su conferma. Un aggiornamento ottimistico qui
+   * mostrerebbe un interruttore acceso mentre la Cantina pubblica è ancora muta,
+   * cioè una promessa che il database non ha fatto: se la scrittura fallisce il
+   * valore precedente resta dov'era, con un errore dichiarato.
+   */
+  const impostaValorePubblicoVisibile = useCallback(
+    async (visibile: boolean): Promise<Result<boolean>> => {
+      setValorePubblicoSalvataggio(true);
+      try {
+        const esito = await servizio.impostaVisibilitaValorePubblico(visibile);
+        if (!esito.ok) {
+          setValorePubblicoErrore(esito.error);
+          toast.error(esito.error);
+          return esito;
+        }
+
+        setValorePubblicoVisibile(esito.data);
+        setValorePubblicoErrore(null);
+        // La conferma nomina il valore, non le bottiglie: nessuna è cambiata.
+        toast.success(
+          esito.data
+            ? "Il valore della tua Cantina pubblica è ora visibile"
+            : "Il valore della tua Cantina pubblica non è più visibile",
+        );
+        return esito;
+      } finally {
+        setValorePubblicoSalvataggio(false);
+      }
+    },
+    [servizio],
+  );
+
   return {
     inVendita,
     prezzoNascosto,
@@ -365,6 +439,11 @@ export function useCellarDomain() {
     analitica,
     analiticaErrore,
     analiticaLoading,
+    valorePubblicoVisibile,
+    valorePubblicoErrore,
+    valorePubblicoLoading,
+    valorePubblicoSalvataggio,
+    impostaValorePubblicoVisibile,
     ricaricaCantina: ricarica,
     ambienti,
     moduli,

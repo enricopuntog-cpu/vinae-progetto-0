@@ -13,6 +13,12 @@
  * dichiara anche quante posizioni erano coperte a ogni istante. Chi non vede il
  * disegno legge gli stessi numeri, e un valore più basso perché mancava un
  * riferimento non si confonde con un calo del portafoglio.
+ *
+ * IL TESTO È NEUTRO DI PROPOSITO. Lo stesso componente sta nella Cantina privata
+ * e nella Cantina pubblica di un'altra persona: «le tue bottiglie» era giusto
+ * soltanto nella prima, e sarebbe diventato falso nella seconda. Duplicare il
+ * grafico per cambiare una frase avrebbe dato due implementazioni da tenere
+ * d'accordo, quindi la frase non nomina nessun proprietario.
  */
 
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
@@ -63,8 +69,8 @@ export function ValoreNelTempo({
 
       {stato === "vuota" ? (
         <p className="mt-4 rounded-xl border border-dashed border-border bg-secondary/40 p-4 text-sm text-muted-foreground">
-          Nessun riferimento ancora osservato per le tue bottiglie: la storia del valore
-          comincerà dalla prima rilevazione.
+          Nessun riferimento ancora osservato per le bottiglie di questa Cantina: la
+          storia del valore comincerà dalla prima rilevazione.
         </p>
       ) : (
         <>

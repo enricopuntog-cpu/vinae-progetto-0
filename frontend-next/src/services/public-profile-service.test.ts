@@ -1250,3 +1250,271 @@ describe("public-profile-service — forma del modulo", () => {
     expect(sorgente).toInclude("@/lib/profilo/avatar");
   });
 });
+
+// ===========================================================================
+// [5] Il valore di riferimento della Cantina pubblica
+//
+// Un dominio a parte, non un ramo della contabilità del proprietario: qui
+// arriva soltanto quello che la porta pubblica dichiara, e quando la porta dice
+// «non visibile» non c'è niente da mappare. Ogni prova qui sotto difende una
+// delle due direzioni in cui questo può rompersi: mostrare un numero che il
+// database non ha detto, o mostrare zero dove il database ha detto «non lo so».
+// ===========================================================================
+
+describe("PublicProfileService.valoreCantinaPubblica", () => {
+  const SPENTO = {
+    visibile: false,
+    generatoAt: null,
+    valoreRiferimentoCents: null,
+    bottigliePubbliche: null,
+    bottiglieConRiferimento: null,
+    copertura: null,
+    serie: [],
+  };
+
+  const rigaValore = (over: Record<string, unknown> = {}) => ({
+    visibile: true,
+    generato_at: "2026-09-25T22:00:00.000Z",
+    valore_riferimento_cents: 128000,
+    bottiglie_pubbliche: 10,
+    bottiglie_con_riferimento: 8,
+    copertura: "parziale",
+    serie: [],
+    ...over,
+  });
+
+  it("[1] chiama la porta pubblica con il solo `p_user_id`", async () => {
+    const { client, chiamateRpc, relazioni } = fakeClient({ data: [rigaValore()], error: null });
+
+    await creaPublicProfileService(client).valoreCantinaPubblica(ALICE);
+
+    expect(chiamateRpc).toEqual([
+      { nome: "cantina_pubblica_valore", argomenti: { p_user_id: ALICE } },
+    ]);
+    expect(relazioni).toEqual([]);
+  });
+
+  it("[2] acceso: mappa snake_case in camelCase, campo per campo", async () => {
+    const { client } = fakeClient({
+      data: [
+        rigaValore({
+          serie: [{ at: "2026-09-01T00:00:00.000Z", valoreCents: 120000, coperte: 7, scoperte: 3 }],
+        }),
+      ],
+      error: null,
+    });
+
+    expect(await creaPublicProfileService(client).valoreCantinaPubblica(ALICE)).toEqual({
+      ok: true,
+      data: {
+        visibile: true,
+        generatoAt: "2026-09-25T22:00:00.000Z",
+        valoreRiferimentoCents: 128000,
+        bottigliePubbliche: 10,
+        bottiglieConRiferimento: 8,
+        copertura: "parziale",
+        serie: [{ at: "2026-09-01T00:00:00.000Z", valoreCents: 120000, coperte: 7, scoperte: 3 }],
+      },
+    });
+  });
+
+  it("[3] spento: nessun aggregato, e non una riga a metà", async () => {
+    // La porta risponde già `false, null, null, …` quando il proprietario non ha
+    // attivato niente. Il servizio non si fida della forma: legge `visibile` in
+    // forma positiva e, se non è esattamente `true`, ritorna la costante chiusa.
+    const { client } = fakeClient({
+      data: [
+        {
+          visibile: false,
+          generato_at: null,
+          valore_riferimento_cents: null,
+          bottiglie_pubbliche: null,
+          bottiglie_con_riferimento: null,
+          copertura: null,
+          serie: [],
+        },
+      ],
+      error: null,
+    });
+
+    expect(await creaPublicProfileService(client).valoreCantinaPubblica(ALICE)).toEqual({
+      ok: true,
+      data: SPENTO,
+    });
+  });
+
+  it("[4] un bigint serializzato come stringa diventa un numero", async () => {
+    // PostgREST manda `bigint` come testo. Senza coercizione il valore
+    // arriverebbe alla formattazione monetaria come `"128000"`.
+    const { client } = fakeClient({
+      data: [
+        rigaValore({
+          valore_riferimento_cents: "128000",
+          bottiglie_pubbliche: "10",
+          bottiglie_con_riferimento: "8",
+          serie: [
+            { at: "2026-09-01T00:00:00.000Z", valoreCents: "120000", coperte: "7", scoperte: "3" },
+          ],
+        }),
+      ],
+      error: null,
+    });
+
+    const esito = await creaPublicProfileService(client).valoreCantinaPubblica(ALICE);
+    const dati = esito.ok ? esito.data : null;
+
+    expect(dati?.valoreRiferimentoCents).toBe(128000);
+    expect(dati?.bottigliePubbliche).toBe(10);
+    expect(dati?.bottiglieConRiferimento).toBe(8);
+    expect(dati?.serie[0]?.valoreCents).toBe(120000);
+    expect(dati?.serie[0]?.coperte).toBe(7);
+  });
+
+  it("[5] `null` resta `null`: non misurato non è zero", async () => {
+    const { client } = fakeClient({
+      data: [
+        rigaValore({
+          generato_at: null,
+          valore_riferimento_cents: null,
+          bottiglie_con_riferimento: 0,
+          copertura: "non_disponibile",
+        }),
+      ],
+      error: null,
+    });
+
+    const esito = await creaPublicProfileService(client).valoreCantinaPubblica(ALICE);
+    const dati = esito.ok ? esito.data : null;
+
+    expect(dati?.valoreRiferimentoCents).toBeNull();
+    expect(dati?.generatoAt).toBeNull();
+    expect(dati?.valoreRiferimentoCents).not.toBe(0);
+  });
+
+  it("[6] la serie conserva l'ordine e scarta soltanto i punti senza istante", async () => {
+    const { client } = fakeClient({
+      data: [
+        rigaValore({
+          serie: [
+            { at: "2026-07-01T00:00:00.000Z", valoreCents: 90000, coperte: 5, scoperte: 5 },
+            { at: "2026-08-01T00:00:00.000Z", valoreCents: null, coperte: 0, scoperte: 10 },
+            { valoreCents: 99000, coperte: 6, scoperte: 4 },
+            "non un punto",
+            { at: "2026-09-01T00:00:00.000Z", valoreCents: 120000, coperte: 7, scoperte: 3 },
+          ],
+        }),
+      ],
+      error: null,
+    });
+
+    const esito = await creaPublicProfileService(client).valoreCantinaPubblica(ALICE);
+    const serie = esito.ok ? esito.data.serie : [];
+
+    expect(serie.map((p) => p.at)).toEqual([
+      "2026-07-01T00:00:00.000Z",
+      "2026-08-01T00:00:00.000Z",
+      "2026-09-01T00:00:00.000Z",
+    ]);
+    // Un istante osservato in cui nulla era coperto resta nella serie con
+    // `valoreCents` nullo: è un'osservazione vera, non un buco da riempire.
+    expect(serie[1]?.valoreCents).toBeNull();
+  });
+
+  it("[7] copertura completa passa così com'è", async () => {
+    const { client } = fakeClient({
+      data: [rigaValore({ copertura: "completa", bottiglie_con_riferimento: 10 })],
+      error: null,
+    });
+    const esito = await creaPublicProfileService(client).valoreCantinaPubblica(ALICE);
+    expect(esito.ok ? esito.data.copertura : null).toBe("completa");
+  });
+
+  it("[8] copertura parziale passa così com'è", async () => {
+    const { client } = fakeClient({ data: [rigaValore({ copertura: "parziale" })], error: null });
+    const esito = await creaPublicProfileService(client).valoreCantinaPubblica(ALICE);
+    expect(esito.ok ? esito.data.copertura : null).toBe("parziale");
+  });
+
+  it("[9] non_disponibile passa così com'è, una copertura inventata diventa null", async () => {
+    const { client } = fakeClient({
+      data: [rigaValore({ copertura: "non_disponibile" })],
+      error: null,
+    });
+    const esito = await creaPublicProfileService(client).valoreCantinaPubblica(ALICE);
+    expect(esito.ok ? esito.data.copertura : null).toBe("non_disponibile");
+
+    const inventata = fakeClient({ data: [rigaValore({ copertura: "quasi" })], error: null });
+    const altro = await creaPublicProfileService(inventata.client).valoreCantinaPubblica(ALICE);
+    expect(altro.ok ? altro.data.copertura : "ancora").toBeNull();
+  });
+
+  it("[10] un payload malformato chiude la porta invece di aprirla", async () => {
+    // Sei forme che non sono una riga sana. Nessuna deve produrre
+    // `visibile: true`: leggere `visibile` in forma positiva significa che
+    // l'assenza di prova è un no, non un sì.
+    for (const data of [null, "boh", [], [42], [{ senza: "visibile" }], [{ visibile: "true" }]]) {
+      const { client } = fakeClient({ data, error: null });
+      const esito = await creaPublicProfileService(client).valoreCantinaPubblica(ALICE);
+      expect(esito).toEqual({ ok: true, data: SPENTO });
+    }
+  });
+
+  it("[11] un errore del database diventa un messaggio nostro, mai quello di PostgreSQL", async () => {
+    const { client } = fakeClient({
+      data: null,
+      error: { code: "42501", message: "permission denied for schema private" },
+    });
+
+    const esito = await creaPublicProfileService(client).valoreCantinaPubblica(ALICE);
+
+    expect(esito.ok).toBe(false);
+    const messaggio = esito.ok ? "" : esito.error;
+    expect(messaggio).toBe("Non è stato possibile leggere il valore di questa Cantina.");
+    expect(messaggio).not.toInclude("permission denied");
+    expect(messaggio).not.toInclude("42501");
+    expect(messaggio).not.toInclude("private");
+  });
+
+  it("[12] un uuid malformato non arriva al database: nessun 22P02 provocato da noi", async () => {
+    const { client, chiamateRpc, relazioni } = fakeClient({ data: [rigaValore()], error: null });
+
+    expect(await creaPublicProfileService(client).valoreCantinaPubblica("pippo")).toEqual({
+      ok: true,
+      data: SPENTO,
+    });
+    expect(chiamateRpc).toEqual([]);
+    expect(relazioni).toEqual([]);
+
+    // E senza client configurato fallisce chiusa, invece di inventare uno spento.
+    expect((await creaPublicProfileService(null).valoreCantinaPubblica(ALICE)).ok).toBe(false);
+  });
+
+  it("[13] non tocca nessuna tabella: la porta è l'unica sorgente pubblica", async () => {
+    const { client, scritture, relazioni } = fakeClient({ data: [rigaValore()], error: null });
+
+    await creaPublicProfileService(client).valoreCantinaPubblica(ALICE);
+
+    expect(scritture).toEqual([]);
+    expect(relazioni).toEqual([]);
+
+    // Il codice eseguibile, senza i commenti: le prose qui sopra nominano
+    // apposta le tabelle che questo modulo NON tocca, e un divieto non va
+    // cercato nella spiegazione del divieto.
+    const codice = leggi("src/services/public-profile-service.ts")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
+
+    for (const vietato of [
+      "bottle_units",
+      "wine_reference_snapshots",
+      "cellar_public_settings",
+      "cellar_portfolio_analitica",
+      "AnaliticaPortafoglio",
+      "capitaleNotoCents",
+      "performanceCents",
+      "acquisition_cost",
+    ]) {
+      expect(codice).not.toInclude(vietato);
+    }
+  });
+});

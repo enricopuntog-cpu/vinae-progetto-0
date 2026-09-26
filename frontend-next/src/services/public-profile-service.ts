@@ -45,9 +45,11 @@ import type {
   MedieRecensioni,
   ProfiloPubblico,
   PublicProfileService,
+  PuntoValoreCantinaPubblica,
   QualificaProfessionalePubblica,
   RecensionePubblica,
   Result,
+  ValoreCantinaPubblica,
 } from "./types";
 
 /** Vedi `profile-service.ts`: il nome delle variabili d'ambiente non è una cosa
@@ -98,6 +100,23 @@ const RPC_CANTINA_PUBBLICA = "cantina_pubblica_profilo";
 const CANTINA_PER_PAGINA = 12;
 
 /**
+ * Il valore di riferimento aggregato della Cantina pubblica di quella persona.
+ *
+ * Quarta porta pubblica, stessa forma: un `uuid` e nient'altro. La sorgente
+ * economica è `public.wine_reference_snapshots`, che `anon` non legge, e
+ * l'aggregazione avviene dentro la funzione: da qui non passa nessuna riga per
+ * bottiglia e nessun costo.
+ *
+ * NON ESISTE UN EQUIVALENTE PRIVATO DA RIUSARE. `cellar_portfolio_analitica()`
+ * è la contabilità del proprietario, non prende un identificativo e non
+ * potrebbe rispondere su un terzo; chiamarla qui sarebbe un errore di dominio
+ * prima che di permessi.
+ */
+const RPC_VALORE_CANTINA_PUBBLICA = "cantina_pubblica_valore";
+
+const VALORE_FALLITO = "Non è stato possibile leggere il valore di questa Cantina.";
+
+/**
  * Un identificativo malformato non arriva al database.
  *
  * Non è una convalida di sicurezza — la barriera è la funzione SQL, non questa
@@ -146,6 +165,19 @@ function numero(valore: unknown): number | null {
 function intero(valore: unknown): number {
   const n = numero(valore);
   return n === null ? 0 : Math.trunc(n);
+}
+
+/**
+ * Come `intero`, ma `null` resta `null`.
+ *
+ * Serve dove l'assenza di misura è un fatto da mostrare — «riferimento non
+ * ancora disponibile» — e non un conteggio a zero. `intero` va bene per una
+ * annata mancante; qui trasformerebbe «non lo sappiamo» in «sono zero
+ * bottiglie», che è un'affermazione diversa e falsa.
+ */
+function interoOpzionale(valore: unknown): number | null {
+  const n = numero(valore);
+  return n === null ? null : Math.trunc(n);
 }
 
 /**
@@ -328,6 +360,87 @@ function mappaBottigliaCantinaPubblica(riga: Record<string, unknown>): Bottiglia
   };
 }
 
+/**
+ * La forma chiusa, usata quando il valore non c'è: preferenza disattivata,
+ * profilo non pubblico, identificativo che non è un identificativo, payload che
+ * non si riconosce.
+ *
+ * È la stessa riga che la funzione SQL restituisce nel ramo OFF, ricostruita qui
+ * così che ogni strada di fallimento converga su una risposta sola. Gli
+ * aggregati sono `null` e non `0`: «non visibile» non è «vale zero euro», e
+ * `serie: []` non è «il valore è rimasto piatto».
+ */
+const VALORE_NON_VISIBILE: ValoreCantinaPubblica = {
+  visibile: false,
+  generatoAt: null,
+  valoreRiferimentoCents: null,
+  bottigliePubbliche: null,
+  bottiglieConRiferimento: null,
+  copertura: null,
+  serie: [],
+};
+
+const COPERTURE: readonly NonNullable<ValoreCantinaPubblica["copertura"]>[] = [
+  "completa",
+  "parziale",
+  "non_disponibile",
+] as const;
+
+function coperturaValida(valore: unknown): ValoreCantinaPubblica["copertura"] {
+  return COPERTURE.includes(valore as NonNullable<ValoreCantinaPubblica["copertura"]>)
+    ? (valore as NonNullable<ValoreCantinaPubblica["copertura"]>)
+    : null;
+}
+
+/**
+ * Da `serie jsonb` a punti tipati.
+ *
+ * Difensivo su ogni elemento: il campo è `jsonb`, cioè l'unico pezzo della
+ * risposta di cui il tipo di colonna non garantisce la forma. Un punto senza
+ * `at` viene scartato invece di ricevere una data inventata — senza istante non
+ * si può collocare su un asse — mentre `valoreCents` nullo resta nullo, perché
+ * è esattamente ciò che il database dice quando a quell'istante nessuna
+ * posizione aveva un riferimento noto.
+ */
+function mappaSerieValorePubblica(valore: unknown): PuntoValoreCantinaPubblica[] {
+  if (!Array.isArray(valore)) return [];
+
+  return valore
+    .filter((p): p is Record<string, unknown> => typeof p === "object" && p !== null)
+    .map((p) => ({
+      at: testo(p.at),
+      valoreCents: numero(p.valoreCents),
+      coperte: intero(p.coperte),
+      scoperte: intero(p.scoperte),
+    }))
+    .filter((p) => p.at !== "");
+}
+
+/**
+ * Da riga della RPC a `ValoreCantinaPubblica`, campo per campo.
+ *
+ * `visibile` è l'unico interruttore e si legge in positivo: qualunque cosa che
+ * non sia `true` — `false`, `null`, una stringa, un campo assente — porta alla
+ * forma chiusa. Fosse scritto come `riga.visibile !== false`, un payload
+ * malformato aprirebbe la porta invece di chiuderla.
+ */
+function mappaValoreCantinaPubblica(riga: Record<string, unknown>): ValoreCantinaPubblica {
+  if (riga.visibile !== true) return VALORE_NON_VISIBILE;
+
+  return {
+    visibile: true,
+    generatoAt: testoOpzionale(riga.generato_at),
+    // `bigint`: PostgREST lo serializza come stringa quando supera il sicuro di
+    // JavaScript, e `numero` accetta entrambe le forme. `null` sopravvive:
+    // nessuna bottiglia con riferimento non fa un portafoglio da zero euro.
+    valoreRiferimentoCents: numero(riga.valore_riferimento_cents),
+    bottigliePubbliche: interoOpzionale(riga.bottiglie_pubbliche),
+    bottiglieConRiferimento: interoOpzionale(riga.bottiglie_con_riferimento),
+    copertura: coperturaValida(riga.copertura),
+    serie: mappaSerieValorePubblica(riga.serie),
+  };
+}
+
 const TIPI: readonly Wine["tipo"][] = ["Rosso", "Bianco", "Bollicine", "Rosato", "Dolce"] as const;
 
 /**
@@ -458,6 +571,34 @@ export function creaPublicProfileService(client: SupabaseClient | null): PublicP
           .filter((r): r is Record<string, unknown> => typeof r === "object" && r !== null)
           .map(mappaBottigliaCantinaPubblica),
       };
+    },
+
+    async valoreCantinaPubblica(userId: string): Promise<Result<ValoreCantinaPubblica>> {
+      if (!client) return { ok: false, error: NOT_CONFIGURED_ERROR };
+      // Un identificativo malformato non diventa un guasto: la porta chiusa è
+      // già la risposta giusta, e non serve un errore PostgreSQL per darla.
+      if (!UUID.test(userId)) return { ok: true, data: VALORE_NON_VISIBILE };
+
+      // Un solo parametro, ed è tutto ciò che la funzione accetta: la guardia
+      // SQL della 20260925220000 fallisce l'applicazione se la firma cresce.
+      const { data, error } = await client.rpc(RPC_VALORE_CANTINA_PUBBLICA, {
+        p_user_id: userId,
+      });
+
+      if (error) {
+        segnalaErrore("lettura del valore della Cantina pubblica", error);
+        return { ok: false, error: VALORE_FALLITO };
+      }
+
+      // `returns table` con una riga: PostgREST la consegna come array. Zero
+      // righe non dovrebbe capitare — il ramo OFF restituisce comunque una riga
+      // — ma se capita si chiude, non si inventa.
+      const riga = Array.isArray(data) ? data[0] : data;
+      if (typeof riga !== "object" || riga === null) {
+        return { ok: true, data: VALORE_NON_VISIBILE };
+      }
+
+      return { ok: true, data: mappaValoreCantinaPubblica(riga as Record<string, unknown>) };
     },
   };
 }
