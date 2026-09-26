@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createCellarService } from "@/services/cellar-service";
 import type { DatiNuovaBottiglia } from "@/services/types";
@@ -307,5 +309,138 @@ describe("CellarService — visibilità nella Cantina pubblica", () => {
   it("senza client configurato non finge di aver scritto", async () => {
     const esito = await createCellarService(null).impostaVisibilitaCantina(["u-1"], "privata");
     expect(esito.ok).toBe(false);
+  });
+});
+
+// ===========================================================================
+// La preferenza del proprietario sul valore nella Cantina pubblica
+//
+// Due porte owner-only e nient'altro: `private.cellar_public_settings` non ha
+// policy e non ha grant, quindi il client non può leggerla né scriverla nemmeno
+// sbagliando. Queste prove difendono la parte che *potrebbe* sbagliare: passare
+// un identificativo che la porta non accetta, o fidarsi di una risposta che non
+// è un booleano.
+// ===========================================================================
+
+describe("CellarService — valore nella Cantina pubblica", () => {
+  const fakeRpcPreferenza = (risposta: { data: unknown; error: unknown }) => {
+    const chiamateRpc: { nome: string; parametri: unknown }[] = [];
+    const relazioni: string[] = [];
+    const client = {
+      from: (relazione: string) => {
+        relazioni.push(relazione);
+        throw new Error("la preferenza non legge tabelle: passa da due sole RPC");
+      },
+      rpc: (nome: string, parametri?: unknown) => {
+        chiamateRpc.push({ nome, parametri });
+        return Promise.resolve(risposta);
+      },
+    } as unknown as SupabaseClient;
+    return { client, chiamateRpc, relazioni };
+  };
+
+  it("la lettura chiama solo la porta di lettura, senza parametri e senza ownerId", async () => {
+    const { client, chiamateRpc, relazioni } = fakeRpcPreferenza({ data: true, error: null });
+
+    const esito = await createCellarService(client).leggiVisibilitaValorePubblico();
+
+    expect(esito).toEqual({ ok: true, data: true });
+    expect(chiamateRpc).toHaveLength(1);
+    expect(chiamateRpc[0]!.nome).toBe("cantina_pubblica_valore_impostazione");
+    // Nessun identificativo in firma: la riga è quella di `auth.uid()`, e un
+    // parametro qui sarebbe un invito a leggere la preferenza di un altro.
+    expect(chiamateRpc[0]!.parametri).toBeUndefined();
+    expect(relazioni).toEqual([]);
+  });
+
+  it("la lettura riporta `false` quando il database dice false, non un default nostro", async () => {
+    const { client } = fakeRpcPreferenza({ data: false, error: null });
+    expect(await createCellarService(client).leggiVisibilitaValorePubblico()).toEqual({
+      ok: true,
+      data: false,
+    });
+  });
+
+  it("la scrittura accende passando `p_visibile: true` alla sola porta di scrittura", async () => {
+    const { client, chiamateRpc, relazioni } = fakeRpcPreferenza({ data: true, error: null });
+
+    const esito = await createCellarService(client).impostaVisibilitaValorePubblico(true);
+
+    expect(esito).toEqual({ ok: true, data: true });
+    expect(chiamateRpc).toEqual([
+      { nome: "cantina_pubblica_valore_imposta", parametri: { p_visibile: true } },
+    ]);
+    expect(relazioni).toEqual([]);
+  });
+
+  it("la scrittura spegne passando `p_visibile: false`", async () => {
+    const { client, chiamateRpc } = fakeRpcPreferenza({ data: false, error: null });
+
+    const esito = await createCellarService(client).impostaVisibilitaValorePubblico(false);
+
+    expect(esito).toEqual({ ok: true, data: false });
+    expect(chiamateRpc[0]!.parametri).toEqual({ p_visibile: false });
+  });
+
+  it("l'esito arriva dal database, non dall'argomento che abbiamo mandato", async () => {
+    // Se la porta rispondesse diversamente da quanto chiesto, la verità è la
+    // sua: lo stato dell'interruttore non va dedotto dal gesto dell'utente.
+    const { client } = fakeRpcPreferenza({ data: false, error: null });
+    const esito = await createCellarService(client).impostaVisibilitaValorePubblico(true);
+    expect(esito).toEqual({ ok: true, data: false });
+  });
+
+  it("una risposta che non è booleana è un errore mediato, non un `true` per distrazione", async () => {
+    for (const data of [null, undefined, "true", 1, {}]) {
+      const lettura = fakeRpcPreferenza({ data, error: null });
+      const esitoLettura =
+        await createCellarService(lettura.client).leggiVisibilitaValorePubblico();
+      expect(esitoLettura.ok).toBe(false);
+
+      const scrittura = fakeRpcPreferenza({ data, error: null });
+      const esitoScrittura =
+        await createCellarService(scrittura.client).impostaVisibilitaValorePubblico(true);
+      expect(esitoScrittura.ok).toBe(false);
+    }
+  });
+
+  it("un rifiuto del database diventa un messaggio nostro, mai quello di PostgreSQL", async () => {
+    const errore = { code: "42501", message: "permission denied for schema private" };
+
+    const lettura = fakeRpcPreferenza({ data: null, error: errore });
+    const esitoLettura = await createCellarService(lettura.client).leggiVisibilitaValorePubblico();
+    expect(esitoLettura.ok).toBe(false);
+    const messaggioLettura = esitoLettura.ok ? "" : esitoLettura.error;
+    expect(messaggioLettura).toBe("Non è stato possibile leggere questa preferenza.");
+    expect(messaggioLettura).not.toContain("permission denied");
+    expect(messaggioLettura).not.toContain("private");
+
+    const scrittura = fakeRpcPreferenza({ data: null, error: errore });
+    const esitoScrittura = await createCellarService(
+      scrittura.client,
+    ).impostaVisibilitaValorePubblico(true);
+    expect(esitoScrittura.ok).toBe(false);
+    const messaggioScrittura = esitoScrittura.ok ? "" : esitoScrittura.error;
+    expect(messaggioScrittura).toBe("Non è stato possibile salvare questa preferenza. Riprova.");
+    expect(messaggioScrittura).not.toContain("42501");
+  });
+
+  it("senza client configurato nessuna delle due finge un esito", async () => {
+    expect((await createCellarService(null).leggiVisibilitaValorePubblico()).ok).toBe(false);
+    expect((await createCellarService(null).impostaVisibilitaValorePubblico(true)).ok).toBe(false);
+  });
+
+  it("la tabella privata non è nominata dal codice: esistono solo le due porte", () => {
+    const codice = readFileSync(
+      join(import.meta.dir, "../../src/services/cellar-service.ts"),
+      "utf8",
+    )
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
+
+    expect(codice).not.toContain("cellar_public_settings");
+    expect(codice).not.toContain('from("cellar_public_settings")');
+    expect(codice).toContain("cantina_pubblica_valore_impostazione");
+    expect(codice).toContain("cantina_pubblica_valore_imposta");
   });
 });

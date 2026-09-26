@@ -3,6 +3,7 @@ import { ArrowLeft, MapPin, Settings } from "lucide-react";
 import { notFound } from "next/navigation";
 import { AvatarPersona } from "@/components/vinea/AvatarPersona";
 import { CollezionePubblica } from "@/components/vinea/profilo/CollezionePubblica";
+import { ValoreCantinaPubblica } from "@/components/vinea/profilo/ValoreCantinaPubblica";
 import { routes } from "@/config/routes";
 import {
   finestraCollezione,
@@ -24,6 +25,13 @@ export const metadata = { title: "Cantina pubblica — Vinea" };
  * route annidata non deduce l'esistenza di un profilo dalle sue bottiglie e non
  * distingue fra profilo assente, nascosto o moderato. Solo dopo passa alla
  * stessa `cantinaPubblica` usata dall'anteprima, con una finestra più ampia.
+ *
+ * Il valore di riferimento è una lettura in più, e volutamente fragile: parte
+ * insieme alla collezione e può mancare senza conseguenze. Se il proprietario
+ * non l'ha attivato il blocco non esiste — nemmeno come segnaposto, perché un
+ * «valore nascosto» racconterebbe la scelta che doveva restare privata — e se la
+ * lettura fallisce si comporta allo stesso modo: la Cantina e le bottiglie
+ * restano, e un guasto del valore non diventa una collezione non disponibile.
  */
 export default async function Page({
   params,
@@ -46,6 +54,13 @@ export default async function Page({
   const localita = [profilo.citta, profilo.provincia].filter(Boolean).join(", ");
   const utente = client ? (await client.auth.getUser()).data.user : null;
   const profiloProprio = utente?.id === profilo.userId;
+  /*
+   * Il valore parte adesso e si attende dopo: due letture indipendenti che
+   * viaggiano insieme, non una in fila all'altra. Deliberatamente NON un
+   * `Promise.all`: là un rifiuto porta via entrambe, e qui l'intero punto è che
+   * un guasto del valore non tocchi la collezione.
+   */
+  const promessaValore = service.valoreCantinaPubblica(id);
   const esitoCantina = await service.cantinaPubblica(id, finestraCollezione(pagina));
 
   if (!esitoCantina.ok) {
@@ -69,6 +84,14 @@ export default async function Page({
   }
 
   const collezione = paginaDiBottiglie(esitoCantina.data);
+  const esitoValore = await promessaValore;
+  /*
+   * Fail closed, in una riga sola. Una lettura fallita e una preferenza
+   * disattivata portano allo stesso posto — nessun blocco — e non a un avviso
+   * che dica quale dei due è: sarebbe un oracolo su una scelta privata, e un
+   * guasto non deve diventare una pagina «Cantina non disponibile».
+   */
+  const valore = esitoValore.ok && esitoValore.data.visibile ? esitoValore.data : null;
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
@@ -79,6 +102,7 @@ export default async function Page({
         localita={localita}
         profiloProprio={profiloProprio}
       />
+      {valore && <ValoreCantinaPubblica valore={valore} />}
       <CollezionePubblica
         profiloId={profilo.userId}
         bottiglie={collezione.bottiglie}

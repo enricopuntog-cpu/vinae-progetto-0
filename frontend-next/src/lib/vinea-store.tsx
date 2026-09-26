@@ -117,6 +117,19 @@ type StoreState = {
   analitica: AnaliticaPortafoglio | null;
   analiticaErrore: string | null;
   analiticaLoading: boolean;
+  /**
+   * Se il valore di riferimento compare nella propria Cantina pubblica.
+   *
+   * Tre stati distinti e non un booleano solo: `false` mentre
+   * `valorePubblicoLoading` è vero significa «non lo sappiamo ancora», e chi
+   * disegna l'interruttore non deve confondere l'attesa con una risposta.
+   * Accendere questo non rende pubblica nessuna bottiglia in più.
+   */
+  valorePubblicoVisibile: boolean;
+  valorePubblicoErrore: string | null;
+  valorePubblicoLoading: boolean;
+  valorePubblicoSalvataggio: boolean;
+  impostaValorePubblicoVisibile: (visibile: boolean) => Promise<Result<boolean>>;
   ricaricaCantina: () => Promise<void>;
   ambienti: StorageEnvironment[];
   moduli: StorageModule[];

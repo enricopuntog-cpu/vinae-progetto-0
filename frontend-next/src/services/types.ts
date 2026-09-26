@@ -483,6 +483,60 @@ export type BottigliaCantinaPubblica = {
 };
 
 /**
+ * Un punto dello storico del valore pubblico.
+ *
+ * `valoreCents` è **nullable** e non lo è per pignoleria: un istante in cui
+ * nessuna posizione ha un riferimento noto produce `sum(...) = NULL`, che vuol
+ * dire «non misurabile», non «zero euro». `PuntoValorePortafoglio` — il punto
+ * della Cantina privata — ha invece `valoreCents: number`, e appiattire i due
+ * tipi in uno avrebbe costretto la porta pubblica a dichiarare uno zero che il
+ * database non ha mai detto.
+ */
+export type PuntoValoreCantinaPubblica = {
+  /** L'istante di uno snapshot D3 realmente osservato, in ISO 8601. */
+  at: string;
+  /** Somma delle mediane note a quell'istante; `null` quando nessuna lo è. */
+  valoreCents: number | null;
+  coperte: number;
+  scoperte: number;
+};
+
+/**
+ * Il valore di riferimento della Cantina pubblica di una persona.
+ *
+ * ALLOWLIST AUTONOMA. È l'elenco chiuso che
+ * `public.cantina_pubblica_valore(uuid)` restituisce, riscritto qui a mano e
+ * **non** derivato con `Omit<>`/`Pick<>` da `AnaliticaPortafoglio`: quella è la
+ * contabilità del proprietario — capitale noto, incassi trasferiti,
+ * performance, posizioni con costo — e un tipo derivato avrebbe fatto entrare
+ * un campo nuovo nella superficie pubblica appena qualcuno lo aggiunge alla
+ * privata. Qui un campo nuovo deve essere scritto a mano, cioè deciso.
+ *
+ * Semantica da non reinterpretare in frontend:
+ *
+ * - `visibile === false` è la forma OFF, ed è la stessa per preferenza
+ *   disattivata, profilo non pubblico e identificativo sconosciuto. Gli
+ *   aggregati non esistono: non sono zero;
+ * - quando è `true`, gli aggregati riguardano **soltanto** la collezione
+ *   esposta adesso. La sorgente economica sono le mediane D3: nessun costo
+ *   d'acquisto, nessun capitale, nessun incasso, nessuna performance;
+ * - `serie` è il valore nel tempo della collezione **attualmente** esposta,
+ *   valutata su snapshot reali. Non ricostruisce quali bottiglie fossero
+ *   pubbliche in passato, e presentarla come «la Cantina di allora» sarebbe
+ *   falso.
+ */
+export type ValoreCantinaPubblica = {
+  visibile: boolean;
+  generatoAt: string | null;
+  /** Somma delle mediane note; `null` quando nessuna bottiglia ha riferimento. */
+  valoreRiferimentoCents: number | null;
+  bottigliePubbliche: number | null;
+  bottiglieConRiferimento: number | null;
+  copertura: "completa" | "parziale" | "non_disponibile" | null;
+  serie: PuntoValoreCantinaPubblica[];
+};
+
+/**
  * La lettura pubblica di un profilo altrui. Sola lettura: non esiste, e non
  * deve esistere, un metodo che scriva la riga di un'altra persona.
  *
@@ -544,6 +598,20 @@ export interface PublicProfileService {
     userId: string,
     opzioni?: { limite?: number; offset?: number },
   ): Promise<Result<BottigliaCantinaPubblica[]>>;
+  /**
+   * Il valore di riferimento della Cantina pubblica di quella persona.
+   *
+   * STA QUI, accanto a `cantinaPubblica`, per la stessa ragione: chiede di
+   * qualcun altro. `CellarService.analitica()` legge la contabilità **propria**
+   * e non accetta un identificativo di proprietario; usarla per il valore di un
+   * terzo sarebbe sia impossibile sia sbagliato di dominio.
+   *
+   * `{ ok: true, data: { visibile: false, ... } }` è la risposta normale per chi
+   * non ha attivato la preferenza, e la pagina non deve distinguerla da «questa
+   * persona non esiste»: la porta pubblica restituisce la stessa riga chiusa per
+   * entrambe, e la discrezione del proprietario dipende da quel silenzio.
+   */
+  valoreCantinaPubblica(userId: string): Promise<Result<ValoreCantinaPubblica>>;
 }
 
 // ---- Regioni canoniche -----------------------------------------------------
@@ -680,6 +748,29 @@ export interface CellarService {
    * parametri di proprietà: chi chiama è il proprietario.
    */
   analitica(): Promise<Result<import("@/lib/cantina/portfolio").AnaliticaPortafoglio>>;
+  /**
+   * Se il valore di riferimento compare nella propria Cantina pubblica.
+   *
+   * Preferenza owner-only: la riga vive in `private.cellar_public_settings`, che
+   * non è una superficie PostgREST e non ha privilegi client. Le due sole porte
+   * sono le RPC qui sotto, e nessuna delle due prende un identificativo di
+   * proprietario — chi chiama **è** il proprietario, e non c'è un parametro con
+   * cui nominare qualcun altro.
+   *
+   * `false` quando la riga non esiste: l'assenza è il default, e il default non
+   * va indovinato in frontend.
+   */
+  leggiVisibilitaValorePubblico(): Promise<Result<boolean>>;
+  /**
+   * Accende o spegne quella preferenza. Idempotente.
+   *
+   * NON cambia la visibilità di nessuna bottiglia: espone il valore di
+   * riferimento delle sole unità già `visibilita = cantina_pubblica`. Per
+   * mostrare o togliere una bottiglia esiste `impostaVisibilitaCantina`, e
+   * tenere le due cose separate è il punto: accendere il valore non pubblica
+   * nulla di nuovo.
+   */
+  impostaVisibilitaValorePubblico(visibile: boolean): Promise<Result<boolean>>;
 }
 
 // ---- Annunci ---------------------------------------------------------------

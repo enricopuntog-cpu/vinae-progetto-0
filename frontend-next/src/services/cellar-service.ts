@@ -453,6 +453,19 @@ function formaAnaliticaValida(data: unknown): data is PortfolioAnaliticaRisposta
   );
 }
 
+/**
+ * La preferenza «il valore compare nella mia Cantina pubblica».
+ *
+ * Le RPC alzano `42501` per un chiamante non autenticato o un profilo rimosso e
+ * `22004` per una preferenza nulla. Nessuno di quei messaggi arriva all'utente:
+ * `CODICI_LEGGIBILI` ammette il solo `P0001`, e un «Autenticazione richiesta.»
+ * stampato in interfaccia direbbe a chi guarda quale ramo del database ha
+ * parlato. Il dettaglio resta nei log.
+ */
+const ERRORE_VALORE_PUBBLICO_LETTURA = "Non è stato possibile leggere questa preferenza.";
+const ERRORE_VALORE_PUBBLICO_SCRITTURA =
+  "Non è stato possibile salvare questa preferenza. Riprova.";
+
 const NESSUN_CLIENT: Result<never> = {
   ok: false,
   error: "Connessione a Supabase non configurata.",
@@ -800,6 +813,66 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
         segnalaErrore("analitica", errore);
         return { ok: false, error: ERRORE_ANALITICA };
       }
+    },
+
+    /**
+     * Legge la preferenza del valore nella propria Cantina pubblica.
+     *
+     * UNA SOLA PORTA, e non è una tabella. La riga sta in
+     * `private.cellar_public_settings`, che ha RLS senza policy e nessun
+     * privilegio per `anon` e `authenticated`: un `from("cellar_public_settings")`
+     * qui non funzionerebbe, e se un giorno funzionasse sarebbe il difetto.
+     * `cantina_pubblica_valore_impostazione()` non prende parametri — non esiste
+     * un argomento con cui chiedere la preferenza di qualcun altro.
+     *
+     * Il default non si indovina: `false` arriva dal database quando la riga non
+     * c'è, e un valore che non sia un booleano è un guasto, non un `false`.
+     */
+    async leggiVisibilitaValorePubblico(): Promise<Result<boolean>> {
+      if (!client) return NESSUN_CLIENT;
+
+      const { data, error } = await client.rpc("cantina_pubblica_valore_impostazione");
+      if (error) {
+        segnalaErrore("leggiVisibilitaValorePubblico", error);
+        return { ok: false, error: ERRORE_VALORE_PUBBLICO_LETTURA };
+      }
+      if (typeof data !== "boolean") {
+        segnalaErrore("leggiVisibilitaValorePubblico", "Payload RPC malformato");
+        return { ok: false, error: ERRORE_VALORE_PUBBLICO_LETTURA };
+      }
+
+      return { ok: true, data };
+    },
+
+    /**
+     * Accende o spegne quella preferenza, e restituisce lo stato confermato.
+     *
+     * Restituisce il booleano invece di `void` perché lo stato dell'interruttore
+     * deve venire dalla risposta e non dal gesto: aggiornarlo prima di sapere
+     * come è andata mostrerebbe una Cantina pubblica diversa da quella vera.
+     * L'RPC ritorna `p_visibile` dopo l'upsert; se torna qualcos'altro è un
+     * errore, non un successo da cui dedurre un valore.
+     *
+     * NON TOCCA NESSUNA BOTTIGLIA. `bottle_units.visibilita` ha la sua porta
+     * (`impostaVisibilitaCantina`) e resta com'è: qui si decide soltanto se il
+     * valore delle unità **già** esposte viene mostrato.
+     */
+    async impostaVisibilitaValorePubblico(visibile: boolean): Promise<Result<boolean>> {
+      if (!client) return NESSUN_CLIENT;
+
+      const { data, error } = await client.rpc("cantina_pubblica_valore_imposta", {
+        p_visibile: visibile,
+      });
+      if (error) {
+        segnalaErrore("impostaVisibilitaValorePubblico", error);
+        return { ok: false, error: ERRORE_VALORE_PUBBLICO_SCRITTURA };
+      }
+      if (typeof data !== "boolean") {
+        segnalaErrore("impostaVisibilitaValorePubblico", "Payload RPC malformato");
+        return { ok: false, error: ERRORE_VALORE_PUBBLICO_SCRITTURA };
+      }
+
+      return { ok: true, data };
     },
   };
 }

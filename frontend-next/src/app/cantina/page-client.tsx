@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -130,6 +131,11 @@ function Cantina() {
     analitica,
     analiticaErrore,
     analiticaLoading,
+    valorePubblicoVisibile,
+    valorePubblicoErrore,
+    valorePubblicoLoading,
+    valorePubblicoSalvataggio,
+    impostaValorePubblicoVisibile,
   } = useVinea();
 
   const {
@@ -343,6 +349,17 @@ function Cantina() {
         inCorso={analiticaLoading}
       />
 
+      {/* Subito sotto la contabilità, perché parla dello stesso numero: qui si
+          decide se quel valore lo vede anche chi passa dal profilo. Blocco a
+          parte e non una riga dentro la card: è una scelta, non una voce. */}
+      <ValoreNellaCantinaPubblica
+        attivo={valorePubblicoVisibile}
+        errore={valorePubblicoErrore}
+        inCorso={valorePubblicoLoading}
+        inSalvataggio={valorePubblicoSalvataggio}
+        onCambia={impostaValorePubblicoVisibile}
+      />
+
       {/* Dashboard drink-window (icone) */}
       <section className="grid gap-3 md:grid-cols-4">
         <DashCard
@@ -526,6 +543,121 @@ function ContabilitaCantina({
       <div className="border-t border-border p-5 md:p-6">
         <ValoreNelTempo serie={analitica.serieValore} incorniciato={false} />
       </div>
+    </section>
+  );
+}
+
+/**
+ * L'interruttore del valore nella propria Cantina pubblica.
+ *
+ * ## Che cosa accende, e che cosa non accende
+ *
+ * Accende una cosa sola: il valore di riferimento delle bottiglie **già**
+ * esposte nel profilo. Non pubblica una bottiglia in più, non apre la Cantina
+ * privata, non mostra costi d'acquisto né performance — quella contabilità non
+ * ha una porta pubblica, e non è che qui venga filtrata: non esiste. La copia lo
+ * dice invece di lasciarlo capire, perché è la domanda che si fa chi legge
+ * «mostra pubblicamente il valore» e immagina di esporre tutto.
+ *
+ * ## Lo stato viene dal database
+ *
+ * Lo spento iniziale non è cablato qui: `inCorso` dice che la preferenza è in
+ * arrivo, e finché è vero l'interruttore resta disabilitato invece di mostrare
+ * un «no» che nessuno ha dato. Durante il salvataggio è ancora disabilitato, e
+ * si muove solo quando il database ha confermato.
+ *
+ * ## Feedback non affidato al colore
+ *
+ * Il pallino Radix cambia posizione oltre che tinta, e accanto c'è sempre una
+ * frase che dice lo stato a parole: chi non distingue i colori legge «Il valore
+ * è visibile» o «Il valore non è visibile».
+ */
+function ValoreNellaCantinaPubblica({
+  attivo,
+  errore,
+  inCorso,
+  inSalvataggio,
+  onCambia,
+}: {
+  attivo: boolean;
+  errore: string | null;
+  inCorso: boolean;
+  inSalvataggio: boolean;
+  onCambia: (visibile: boolean) => Promise<unknown>;
+}) {
+  const bloccato = inCorso || inSalvataggio;
+
+  return (
+    <section
+      aria-labelledby="valore-profilo-pubblico"
+      className="rounded-3xl border border-border bg-card p-5 md:p-6"
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h2 id="valore-profilo-pubblico" className="font-serif text-2xl">
+            Valore nella Cantina pubblica
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Puoi scegliere se mostrare ai visitatori il valore di riferimento e il suo
+            andamento per le sole bottiglie che hai reso pubbliche.
+          </p>
+        </div>
+
+        {/* L'interruttore non si restringe e non va a capo: a 375 px la colonna
+            del testo si accorcia, questo resta un bersaglio intero. */}
+        <div className="flex shrink-0 items-center gap-3">
+          <Switch
+            id="valore-profilo-pubblico-interruttore"
+            checked={attivo}
+            disabled={bloccato}
+            onCheckedChange={(prossimo) => void onCambia(prossimo)}
+          />
+          <Label
+            htmlFor="valore-profilo-pubblico-interruttore"
+            className="cursor-pointer text-sm font-medium"
+          >
+            Mostra pubblicamente il valore della mia Cantina
+          </Label>
+        </div>
+      </div>
+
+      <p role="status" className="mt-4 text-sm">
+        {inCorso ? (
+          <span className="text-muted-foreground">
+            <Loader2 className="mr-2 inline h-4 w-4 animate-spin text-bordeaux" />
+            Leggo questa preferenza…
+          </span>
+        ) : inSalvataggio ? (
+          <span className="text-muted-foreground">
+            <Loader2 className="mr-2 inline h-4 w-4 animate-spin text-bordeaux" />
+            Salvo questa preferenza…
+          </span>
+        ) : attivo ? (
+          <span className="font-medium text-antracite">
+            Il valore è visibile a chi apre la tua Cantina pubblica.
+          </span>
+        ) : (
+          <span className="font-medium text-antracite">
+            Il valore non è visibile: chi apre la tua Cantina pubblica vede solo le
+            bottiglie.
+          </span>
+        )}
+      </p>
+
+      {errore && !inCorso && !inSalvataggio && (
+        <p
+          role="status"
+          className="mt-3 rounded-xl border border-dashed border-border bg-secondary/40 p-3 text-sm text-muted-foreground"
+        >
+          {errore}
+        </p>
+      )}
+
+      <p className="mt-3 text-xs text-muted-foreground">
+        Questo interruttore non pubblica nessuna bottiglia in più: riguarda soltanto il
+        valore di quelle che hai già scelto di mostrare nel profilo. Capitale, costi
+        d&apos;acquisto e performance restano privati in ogni caso.
+      </p>
     </section>
   );
 }
