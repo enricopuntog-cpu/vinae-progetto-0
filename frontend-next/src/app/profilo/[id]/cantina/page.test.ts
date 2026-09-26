@@ -340,14 +340,13 @@ describe("/profilo/[id]/cantina — segui la Cantina", () => {
     // E non è un comando disabilitato con una spiegazione: quella frase
     // racconterebbe il rifiuto `P0001` a chi non ha premuto niente.
     expect(codiceBottone).not.toMatch(/non puoi seguire la tua/i);
-    // Il proprietario invalida ogni destinatario e non raggiunge la RPC.
-    const ramoProprietario = codiceBottone.slice(codiceBottone.indexOf("if (profiloProprio) {"));
-    expect(ramoProprietario.slice(0, ramoProprietario.indexOf("if (!utenteId)"))).toInclude(
-      "lettoreRef.current = null;",
-    );
-    expect(ramoProprietario.slice(0, ramoProprietario.indexOf("if (!utenteId)"))).not.toInclude(
-      "creaCellarFollowService",
-    );
+    // Il proprietario non produce un'identità destinataria; senza identità
+    // l'effetto invalida il ref e termina prima di costruire il servizio.
+    expect(codiceBottone).toInclude("!profiloProprio && authUser");
+    const senzaIdentita = codiceBottone.slice(codiceBottone.indexOf("if (!identitaCorrente) {"));
+    const primaDellaRpc = senzaIdentita.slice(0, senzaIdentita.indexOf("const token"));
+    expect(primaDellaRpc).toInclude("lettoreRef.current = null;");
+    expect(primaDellaRpc).not.toInclude("creaCellarFollowService");
   });
 
   it("[4] l'anonimo vede l'invito ma non chiama il database", () => {
@@ -376,7 +375,7 @@ describe("/profilo/[id]/cantina — segui la Cantina", () => {
     for (const funzione of [
       "statoDaEsitoIniziale(esito)",
       "statoInMutazione(stato)",
-      "statoDaEsitoMutazione(precedente, esito)",
+      "statoDaEsitoMutazione(precedente.stato, esito)",
       "azioneFollow(stato)",
       "etichettaFollow(stato)",
       "descrizioneFollow(stato)",
@@ -389,18 +388,23 @@ describe("/profilo/[id]/cantina — segui la Cantina", () => {
   });
 
   it("[7] nessun successo anticipato: lo stato si muove dopo la risposta", () => {
-    // Il difetto che questa prova impedisce: un `setStato({ fase: "seguita" })`
-    // scritto accanto alla chiamata, prima del `then`.
-    expect(codiceBottone).not.toMatch(/setStato\(\{\s*fase:\s*"seguita"/);
-    expect(codiceBottone).not.toMatch(/setStato\(\{\s*fase:\s*"non_seguita"/);
-    // E il toast racconta quello che ha detto il database, non il click.
-    expect(codiceBottone).toInclude("esito.data ? TOAST_SEGUITA : TOAST_NON_SEGUITA");
+    // Il difetto che questa prova impedisce: uno stato «seguita» scritto accanto
+    // alla chiamata, prima del `then`.
+    const primaDellaRisposta = codiceBottone.slice(
+      codiceBottone.indexOf('void (azione === "segui"'),
+      codiceBottone.indexOf(".then((esito) =>"),
+    );
+    expect(primaDellaRisposta).not.toMatch(/fase:\s*"(?:seguita|non_seguita)"/);
+    // Il feedback racconta quello che ha detto il database, non il click.
+    expect(codiceBottone).toInclude("esito.data");
+    expect(codiceBottone).toInclude("? TOAST_SEGUITA");
+    expect(codiceBottone).toInclude(": TOAST_NON_SEGUITA");
     // La lettura iniziale che fallisce non diventa `false`: vive nella funzione
     // pura, ed è là che si verifica.
     expect(statoFollow).toInclude('if (!esito.ok) return { fase: "non_disponibile" };');
   });
 
-  it("[8] un cambio di sessione non lascia lo stato del visitatore precedente", () => {
+  it("[8] un cambio di sessione non lascia stato o feedback del visitatore precedente", () => {
     // La risposta in volo appartiene a chi l'ha chiesta: al ritorno si confronta
     // il token, come in `real-auth-domain.ts`.
     expect(codiceBottone).toInclude("lettoreRef");
@@ -410,10 +414,17 @@ describe("/profilo/[id]/cantina — segui la Cantina", () => {
     expect(codiceBottone).toInclude(
       "if (lettoreRef.current === token) lettoreRef.current = null;",
     );
-    // All'uscita lo stato torna all'inizio invece di restare «Seguita».
-    expect(codiceBottone).toInclude("setStato(STATO_INIZIALE)");
-    // E la lettura riparte quando cambia l'utente, non solo la Cantina.
-    expect(codiceBottone).toMatch(/\[ownerId, profiloProprio, utenteId\]/);
+    // Lo stato visibile è derivato dall'identità già durante il render: non deve
+    // aspettare il cleanup passivo dopo un cambio sessione/Cantina.
+    expect(codiceBottone).toInclude("stessaIdentitaFollow(statoLetto?.identita ?? null, identitaCorrente)");
+    expect(codiceBottone).toInclude("? statoLetto!.stato");
+    expect(codiceBottone).toInclude(": STATO_INIZIALE");
+    expect(codiceBottone).toInclude("sessione: authUser");
+    // Anche il toast è mediato da stato identitario e ricontrollato nell'effetto;
+    // il callback tardivo non lo emette direttamente.
+    expect(codiceBottone).toInclude("stessaIdentitaFollow(feedback.identita, identitaCorrente)");
+    const callback = codiceBottone.slice(codiceBottone.indexOf(".then((esito) =>"));
+    expect(callback.slice(0, callback.indexOf("}, [identitaCorrente"))).not.toMatch(/toast\./);
   });
 
   it("[9] è un vero `button`, con nome accessibile e stato non affidato al colore", () => {
@@ -429,7 +440,9 @@ describe("/profilo/[id]/cantina — segui la Cantina", () => {
   });
 
   it("[10] l'errore di scrittura arriva mediato, senza dettaglio tecnico", () => {
-    expect(codiceBottone).toInclude("toast.error(esito.error)");
+    expect(codiceBottone).toInclude(": esito.error");
+    expect(codiceBottone).toInclude('tipo: esito.ok ? "successo" : "errore"');
+    expect(codiceBottone).toInclude("toast.error(feedback.messaggio)");
     expect(codiceBottone).not.toMatch(/error\.(code|message|details|hint)/);
     expect(codiceBottone).not.toMatch(/42501|P0001|22023|22004/);
   });
@@ -445,7 +458,7 @@ describe("/profilo/[id]/cantina — segui la Cantina", () => {
     const store = readFileSync(join(progetto, "src/lib/vinea-store.tsx"), "utf8");
     expect(store).not.toMatch(/follow|segui/i);
     // Lo stato è locale al comando: una Cantina seguita non è un fatto dell'app.
-    expect(codiceBottone).toInclude("useState<StatoFollow>(STATO_INIZIALE)");
+    expect(codiceBottone).toInclude("useState<StatoPerIdentita | null>(null)");
   });
 
   it("[13] nessun conteggio di follower, in nessuna direzione", () => {

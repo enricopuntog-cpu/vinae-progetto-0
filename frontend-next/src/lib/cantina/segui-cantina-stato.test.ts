@@ -6,14 +6,45 @@ import {
   etichettaFollow,
   followAbilitato,
   followOccupato,
+  stessaIdentitaFollow,
   statoDaEsitoIniziale,
   statoDaEsitoMutazione,
   statoInMutazione,
+  type IdentitaFollow,
   type StatoFollow,
 } from "@/lib/cantina/segui-cantina-stato";
 
 const NON_SEGUITA: StatoFollow = { fase: "non_seguita" };
 const SEGUITA: StatoFollow = { fase: "seguita" };
+
+describe("identità dello stato del follow", () => {
+  const sessione = {};
+  const identita = (sessioneCorrente: object, ownerId = "cantina-a"): IdentitaFollow => ({
+    sessione: sessioneCorrente,
+    ownerId,
+  });
+
+  it("coincide soltanto per la stessa sessione e la stessa Cantina", () => {
+    expect(stessaIdentitaFollow(identita(sessione), identita(sessione))).toBe(true);
+    expect(stessaIdentitaFollow(identita(sessione), identita(sessione, "cantina-b"))).toBe(false);
+  });
+
+  it("non confonde due accessi distinti, neppure della stessa persona", () => {
+    const accessoPrimaDelLogout = { userId: "utente-1" };
+    const accessoDopoIlLogin = { userId: "utente-1" };
+    expect(
+      stessaIdentitaFollow(
+        identita(accessoPrimaDelLogout),
+        identita(accessoDopoIlLogin),
+      ),
+    ).toBe(false);
+  });
+
+  it("non considera l'assenza di sessione un destinatario valido", () => {
+    expect(stessaIdentitaFollow(null, null)).toBe(false);
+    expect(stessaIdentitaFollow(identita(sessione), null)).toBe(false);
+  });
+});
 
 describe("lettura iniziale dello stato del follow", () => {
   it("parte in verifica e non finge di conoscere la risposta", () => {

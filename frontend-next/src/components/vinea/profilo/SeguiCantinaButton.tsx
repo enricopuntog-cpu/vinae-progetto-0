@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -15,9 +15,11 @@ import {
   etichettaFollow,
   followAbilitato,
   followOccupato,
+  stessaIdentitaFollow,
   statoDaEsitoIniziale,
   statoDaEsitoMutazione,
   statoInMutazione,
+  type IdentitaFollow,
   type StatoFollow,
 } from "@/lib/cantina/segui-cantina-stato";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -66,6 +68,17 @@ import { creaCellarFollowService } from "@/services/cellar-follow-service";
  * Il componente non rende `null` sull'errore e non solleva: la Cantina, il
  * valore, la collezione e il marketplace continuano a funzionare senza di lui.
  */
+type StatoPerIdentita = {
+  identita: IdentitaFollow;
+  stato: StatoFollow;
+};
+
+type FeedbackFollow = {
+  identita: IdentitaFollow;
+  messaggio: string;
+  tipo: "errore" | "successo";
+};
+
 export function SeguiCantinaButton({
   ownerId,
   profiloProprio,
@@ -74,48 +87,46 @@ export function SeguiCantinaButton({
   profiloProprio: boolean;
 }) {
   const { authUser, authLoading } = useVinea();
-  const [stato, setStato] = useState<StatoFollow>(STATO_INIZIALE);
+  const [statoLetto, setStatoLetto] = useState<StatoPerIdentita | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackFollow | null>(null);
 
   /**
    * Chi è il destinatario legittimo della prossima risposta.
    *
-   * Stessa guardia di `real-auth-domain.ts`: fra la chiamata e la risposta
-   * l'utente può uscire, rientrare o rientrare come qualcun altro. Senza questo
-   * confronto la risposta della sessione precedente scriverebbe «Seguita» nella
-   * sessione corrente — che è lo stato di un altro utente mostrato a questo.
+   * L'oggetto `authUser` è parte dell'identità, non soltanto il suo UUID. Se la
+   * stessa persona esce e rientra, il provider crea un oggetto nuovo: così una
+   * risposta della sessione chiusa non può coincidere con quella appena aperta.
    */
-  type Lettore = { userId: string; ownerId: string };
-  const lettoreRef = useRef<Lettore | null>(null);
-
-  const utenteId = authUser?.userId ?? null;
+  const lettoreRef = useRef<IdentitaFollow | null>(null);
+  const identitaCorrente = useMemo<IdentitaFollow | null>(
+    () => (!profiloProprio && authUser ? { sessione: authUser, ownerId } : null),
+    [authUser, ownerId, profiloProprio],
+  );
+  const stato = stessaIdentitaFollow(statoLetto?.identita ?? null, identitaCorrente)
+    ? statoLetto!.stato
+    : STATO_INIZIALE;
 
   useEffect(() => {
-    // Il proprietario non legge nulla: non c'è comando da popolare.
-    if (profiloProprio) {
+    // Il proprietario e l'anonimo non leggono nulla: non c'è stato privato da
+    // popolare. Lo stato vecchio può restare in memoria, ma la derivazione sopra
+    // non lo renderà mai per un'identità diversa.
+    if (!identitaCorrente) {
       lettoreRef.current = null;
       return;
     }
 
-    if (!utenteId) {
-      // Uscita, o mai entrato. Lo stato torna all'inizio invece di conservare la
-      // risposta di prima: quella riguardava una persona che non è più qui.
-      lettoreRef.current = null;
-      setStato(STATO_INIZIALE);
-      return;
-    }
-
-    const token: Lettore = { userId: utenteId, ownerId };
+    const token = identitaCorrente;
     lettoreRef.current = token;
-    setStato(STATO_INIZIALE);
 
     let annullato = false;
     void creaCellarFollowService(getSupabaseClient())
       .stato(ownerId)
       .then((esito) => {
-        // Tre condizioni e non una: il componente può essere già smontato, la
-        // sessione può essere cambiata, e una seconda lettura può essere partita.
+        // Il ref scarta una risposta superata; `statoLetto.identita` impedisce
+        // inoltre che uno stato già salvato compaia durante la resa successiva,
+        // prima che React esegua il cleanup di questo effetto.
         if (annullato || lettoreRef.current !== token) return;
-        setStato(statoDaEsitoIniziale(esito));
+        setStatoLetto({ identita: token, stato: statoDaEsitoIniziale(esito) });
       });
 
     return () => {
@@ -124,36 +135,45 @@ export function SeguiCantinaButton({
       // usa `annullato`, perché può partire dopo la lettura iniziale.
       if (lettoreRef.current === token) lettoreRef.current = null;
     };
-  }, [ownerId, profiloProprio, utenteId]);
+  }, [identitaCorrente, ownerId]);
+
+  useEffect(() => {
+    if (!feedback || !stessaIdentitaFollow(feedback.identita, identitaCorrente)) return;
+    if (feedback.tipo === "errore") toast.error(feedback.messaggio);
+    else toast.success(feedback.messaggio);
+    setFeedback(null);
+  }, [feedback, identitaCorrente]);
 
   const premi = useCallback(() => {
     const azione = azioneFollow(stato);
     // Non è una difesa ridondante rispetto a `disabled`: uno stato in volo o
     // ignoto non sa quale delle due scritture mandare, e mandarne una a caso
     // sarebbe peggio del click perduto.
-    if (azione === null || !utenteId) return;
+    if (azione === null || !identitaCorrente) return;
 
     const token = lettoreRef.current;
-    if (!token || token.userId !== utenteId || token.ownerId !== ownerId) return;
-    setStato(statoInMutazione(stato));
+    if (!token || !stessaIdentitaFollow(token, identitaCorrente)) return;
+    setStatoLetto({ identita: token, stato: statoInMutazione(stato) });
 
     const servizio = creaCellarFollowService(getSupabaseClient());
     void (azione === "segui" ? servizio.segui(ownerId) : servizio.smetti(ownerId)).then((esito) => {
       if (lettoreRef.current !== token) return;
 
-      setStato((precedente) => statoDaEsitoMutazione(precedente, esito));
-
-      if (!esito.ok) {
-        // La frase arriva già mediata dal servizio: il codice PostgreSQL e il
-        // nome della funzione restano nei log.
-        toast.error(esito.error);
-        return;
-      }
-      // Il toast racconta lo stato che il **database** ha dichiarato, non quello
-      // che il click sperava.
-      toast.success(esito.data ? TOAST_SEGUITA : TOAST_NON_SEGUITA);
+      setStatoLetto((precedente) => {
+        if (!precedente || !stessaIdentitaFollow(precedente.identita, token)) return precedente;
+        return { identita: token, stato: statoDaEsitoMutazione(precedente.stato, esito) };
+      });
+      setFeedback({
+        identita: token,
+        messaggio: esito.ok
+          ? esito.data
+            ? TOAST_SEGUITA
+            : TOAST_NON_SEGUITA
+          : esito.error,
+        tipo: esito.ok ? "successo" : "errore",
+      });
     });
-  }, [ownerId, stato, utenteId]);
+  }, [identitaCorrente, ownerId, stato]);
 
   if (profiloProprio) return null;
 
