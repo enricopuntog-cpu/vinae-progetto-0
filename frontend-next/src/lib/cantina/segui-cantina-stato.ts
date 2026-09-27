@@ -55,12 +55,12 @@ export type StatoFollow =
 export const STATO_INIZIALE: StatoFollow = { fase: "verifica" };
 
 /**
- * L'identità completa a cui appartiene una lettura del follow.
+ * Il destinatario opaco a cui appartiene una lettura del follow.
  *
- * La sessione è un oggetto opaco confrontato per riferimento, non il solo
- * `userId`: dopo logout e nuovo login anche la stessa persona riceve un oggetto
- * nuovo, quindi non può ereditare stato o feedback prodotti dalla sessione
- * precedente. `ownerId` separa invece due Cantine visitate dalla stessa sessione.
+ * Il componente ne crea uno nuovo per ogni combinazione corrente di sessione e
+ * Cantina. Conta l'istanza intera, non soltanto i suoi campi: tornando sulla
+ * stessa Cantina dopo averla lasciata nasce un destinatario nuovo, quindi lo
+ * stato conservato dalla visita precedente resta invisibile fino alla rilettura.
  */
 export type IdentitaFollow = {
   readonly sessione: object;
@@ -68,7 +68,7 @@ export type IdentitaFollow = {
 };
 
 /**
- * Vero soltanto quando due dati appartengono alla stessa sessione e Cantina.
+ * Vero soltanto per la medesima istanza di destinatario.
  *
  * `null` significa che non esiste un destinatario autenticato corrente: due
  * assenze non coincidono, perché nessun dato di follow è mostrabile da anonimo.
@@ -77,12 +77,7 @@ export function stessaIdentitaFollow(
   sinistra: IdentitaFollow | null,
   destra: IdentitaFollow | null,
 ): boolean {
-  return (
-    sinistra !== null &&
-    destra !== null &&
-    sinistra.sessione === destra.sessione &&
-    sinistra.ownerId === destra.ownerId
-  );
+  return sinistra !== null && sinistra === destra;
 }
 
 /**

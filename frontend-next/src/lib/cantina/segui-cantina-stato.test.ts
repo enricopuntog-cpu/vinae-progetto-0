@@ -24,9 +24,16 @@ describe("identità dello stato del follow", () => {
     ownerId,
   });
 
-  it("coincide soltanto per la stessa sessione e la stessa Cantina", () => {
-    expect(stessaIdentitaFollow(identita(sessione), identita(sessione))).toBe(true);
-    expect(stessaIdentitaFollow(identita(sessione), identita(sessione, "cantina-b"))).toBe(false);
+  it("coincide soltanto con la medesima istanza destinataria", () => {
+    const destinatario = identita(sessione);
+    expect(stessaIdentitaFollow(destinatario, destinatario)).toBe(true);
+    expect(stessaIdentitaFollow(identita(sessione), identita(sessione))).toBe(false);
+  });
+
+  it("non riusa lo stato tornando sulla stessa Cantina nella stessa sessione", () => {
+    const primaVisita = identita(sessione, "cantina-a");
+    const secondaVisita = identita(sessione, "cantina-a");
+    expect(stessaIdentitaFollow(primaVisita, secondaVisita)).toBe(false);
   });
 
   it("non confonde due accessi distinti, neppure della stessa persona", () => {
