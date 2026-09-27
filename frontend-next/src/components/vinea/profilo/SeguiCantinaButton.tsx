@@ -93,14 +93,25 @@ export function SeguiCantinaButton({
   /**
    * Chi è il destinatario legittimo della prossima risposta.
    *
-   * L'oggetto `authUser` è parte dell'identità, non soltanto il suo UUID. Se la
-   * stessa persona esce e rientra, il provider crea un oggetto nuovo: così una
-   * risposta della sessione chiusa non può coincidere con quella appena aperta.
+   * `sessionId` resta stabile quando Supabase rinnova il token ma cambia dopo un
+   * nuovo login, anche della stessa persona. Il confronto client con `ownerId`
+   * completa il dato server `profiloProprio`: se l'auth cambia senza refresh dei
+   * Server Component, il proprietario continua a non ricevere alcun comando.
    */
   const lettoreRef = useRef<IdentitaFollow | null>(null);
+  const authUserId = authUser?.userId;
+  const authSessionId = authUser?.sessionId;
+  // La fotografia server governa soltanto la prima resa. Quando il dominio auth
+  // client ha finito di risolversi, è la sessione corrente a decidere: così un
+  // logout o un cambio account in un'altra scheda non lascia nascosto il comando
+  // perché il vecchio RSC apparteneva al proprietario.
+  const utenteProprietario = authLoading ? profiloProprio : authUserId === ownerId;
   const identitaCorrente = useMemo<IdentitaFollow | null>(
-    () => (!profiloProprio && authUser ? { sessione: authUser, ownerId } : null),
-    [authUser, ownerId, profiloProprio],
+    () =>
+      !utenteProprietario && authSessionId
+        ? { sessionId: authSessionId, ownerId }
+        : null,
+    [authSessionId, ownerId, utenteProprietario],
   );
   const stato = stessaIdentitaFollow(statoLetto?.identita ?? null, identitaCorrente)
     ? statoLetto!.stato
@@ -175,7 +186,7 @@ export function SeguiCantinaButton({
     });
   }, [identitaCorrente, ownerId, stato]);
 
-  if (profiloProprio) return null;
+  if (utenteProprietario) return null;
 
   // Finché la sessione non è nota non si mostra né l'invito ad accedere né il
   // comando: sarebbero due risposte diverse alla stessa domanda, e una delle due

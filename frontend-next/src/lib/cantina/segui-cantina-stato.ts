@@ -63,7 +63,7 @@ export const STATO_INIZIALE: StatoFollow = { fase: "verifica" };
  * stato conservato dalla visita precedente resta invisibile fino alla rilettura.
  */
 export type IdentitaFollow = {
-  readonly sessione: object;
+  readonly sessionId: string;
   readonly ownerId: string;
 };
 

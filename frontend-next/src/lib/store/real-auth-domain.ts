@@ -14,7 +14,38 @@ import type {
 import type { ContestoRitornoAuth } from "@/lib/auth/ritorno-auth";
 import { ruoloDaSessione } from "@/lib/auth/role";
 
-export type AuthUser = { userId: string; email: string | null };
+export type AuthUser = {
+  userId: string;
+  email: string | null;
+  /** ID stabile della sessione Supabase; non cambia al refresh del token. */
+  sessionId: string;
+};
+
+/**
+ * Estrae l'identificativo di sessione dal JWT già ricevuto da Supabase.
+ *
+ * Non è una verifica del token e non concede alcuna autorità: l'identità resta
+ * quella stabilita da GoTrue e le porte privilegiate verificano `auth.uid()` nel
+ * database. Serve soltanto a non scambiare `TOKEN_REFRESHED` per un nuovo login,
+ * conservando però la distinzione fra logout e accesso successivo dello stesso
+ * utente. Un JWT illeggibile fallisce chiuso con una stringa vuota.
+ */
+export function sessionIdDaAccessToken(accessToken: string): string {
+  try {
+    const parti = accessToken.split(".");
+    if (parti.length !== 3) return "";
+
+    const base64 = parti[1].replaceAll("-", "+").replaceAll("_", "/");
+    const binario = atob(base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "="));
+    const byte = Uint8Array.from(binario, (carattere) => carattere.charCodeAt(0));
+    const payload = JSON.parse(new TextDecoder().decode(byte)) as {
+      session_id?: unknown;
+    };
+    return typeof payload.session_id === "string" ? payload.session_id : "";
+  } catch {
+    return "";
+  }
+}
 
 /**
  * Stato della verifica del profilo necessaria al requisito di età. Vale per
@@ -88,7 +119,11 @@ export const useRealAuthDomain = () => {
       if (!active) return;
       applicaUtente(
         data.session
-          ? { userId: data.session.user.id, email: data.session.user.email ?? null }
+          ? {
+              userId: data.session.user.id,
+              email: data.session.user.email ?? null,
+              sessionId: sessionIdDaAccessToken(data.session.access_token),
+            }
           : null,
       );
       setAuthLoading(false);
@@ -96,7 +131,13 @@ export const useRealAuthDomain = () => {
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       applicaUtente(
-        session ? { userId: session.user.id, email: session.user.email ?? null } : null,
+        session
+          ? {
+              userId: session.user.id,
+              email: session.user.email ?? null,
+              sessionId: sessionIdDaAccessToken(session.access_token),
+            }
+          : null,
       );
       setAuthLoading(false);
     });

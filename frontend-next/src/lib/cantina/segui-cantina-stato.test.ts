@@ -18,38 +18,35 @@ const NON_SEGUITA: StatoFollow = { fase: "non_seguita" };
 const SEGUITA: StatoFollow = { fase: "seguita" };
 
 describe("identità dello stato del follow", () => {
-  const sessione = {};
-  const identita = (sessioneCorrente: object, ownerId = "cantina-a"): IdentitaFollow => ({
-    sessione: sessioneCorrente,
+  const identita = (sessionId: string, ownerId = "cantina-a"): IdentitaFollow => ({
+    sessionId,
     ownerId,
   });
 
   it("coincide soltanto con la medesima istanza destinataria", () => {
-    const destinatario = identita(sessione);
+    const destinatario = identita("sessione-1");
     expect(stessaIdentitaFollow(destinatario, destinatario)).toBe(true);
-    expect(stessaIdentitaFollow(identita(sessione), identita(sessione))).toBe(false);
+    expect(stessaIdentitaFollow(identita("sessione-1"), identita("sessione-1"))).toBe(false);
   });
 
   it("non riusa lo stato tornando sulla stessa Cantina nella stessa sessione", () => {
-    const primaVisita = identita(sessione, "cantina-a");
-    const secondaVisita = identita(sessione, "cantina-a");
+    const primaVisita = identita("sessione-1", "cantina-a");
+    const secondaVisita = identita("sessione-1", "cantina-a");
     expect(stessaIdentitaFollow(primaVisita, secondaVisita)).toBe(false);
   });
 
   it("non confonde due accessi distinti, neppure della stessa persona", () => {
-    const accessoPrimaDelLogout = { userId: "utente-1" };
-    const accessoDopoIlLogin = { userId: "utente-1" };
     expect(
       stessaIdentitaFollow(
-        identita(accessoPrimaDelLogout),
-        identita(accessoDopoIlLogin),
+        identita("sessione-prima-del-logout"),
+        identita("sessione-dopo-il-login"),
       ),
     ).toBe(false);
   });
 
   it("non considera l'assenza di sessione un destinatario valido", () => {
     expect(stessaIdentitaFollow(null, null)).toBe(false);
-    expect(stessaIdentitaFollow(identita(sessione), null)).toBe(false);
+    expect(stessaIdentitaFollow(identita("sessione-1"), null)).toBe(false);
   });
 });
 

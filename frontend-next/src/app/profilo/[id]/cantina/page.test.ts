@@ -334,15 +334,21 @@ describe("/profilo/[id]/cantina — segui la Cantina", () => {
   });
 
   it("[3] il proprietario non vede alcun comando di follow", () => {
-    // La decisione sta in un posto solo — dentro il componente — e non in un
-    // secondo `profiloProprio &&` nella pagina che potrebbe divergere.
-    expect(codiceBottone).toInclude("if (profiloProprio) return null;");
+    // Il dato server governa la prima resa; quando l'auth client è risolta deve
+    // prevalere la sessione corrente, anche dopo logout o cambio account.
+    expect(codiceBottone).toInclude("const authUserId = authUser?.userId;");
+    expect(codiceBottone).toInclude(
+      "const utenteProprietario = authLoading ? profiloProprio : authUserId === ownerId;",
+    );
+    expect(codiceBottone).not.toInclude("profiloProprio || authUserId === ownerId");
+    expect(codiceBottone).toInclude("if (utenteProprietario) return null;");
     // E non è un comando disabilitato con una spiegazione: quella frase
     // racconterebbe il rifiuto `P0001` a chi non ha premuto niente.
     expect(codiceBottone).not.toMatch(/non puoi seguire la tua/i);
     // Il proprietario non produce un'identità destinataria; senza identità
     // l'effetto invalida il ref e termina prima di costruire il servizio.
-    expect(codiceBottone).toInclude("!profiloProprio && authUser");
+    expect(codiceBottone).toInclude("const authSessionId = authUser?.sessionId;");
+    expect(codiceBottone).toInclude("!utenteProprietario && authSessionId");
     const senzaIdentita = codiceBottone.slice(codiceBottone.indexOf("if (!identitaCorrente) {"));
     const primaDellaRpc = senzaIdentita.slice(0, senzaIdentita.indexOf("const token"));
     expect(primaDellaRpc).toInclude("lettoreRef.current = null;");
@@ -419,7 +425,10 @@ describe("/profilo/[id]/cantina — segui la Cantina", () => {
     expect(codiceBottone).toInclude("stessaIdentitaFollow(statoLetto?.identita ?? null, identitaCorrente)");
     expect(codiceBottone).toInclude("? statoLetto!.stato");
     expect(codiceBottone).toInclude(": STATO_INIZIALE");
-    expect(codiceBottone).toInclude("sessione: authUser");
+    expect(codiceBottone).toInclude("sessionId: authSessionId");
+    // Un refresh del token non cambia `sessionId`: non invalida una mutazione
+    // autentica ancora in corso né avvia una lettura concorrente.
+    expect(codiceBottone).toMatch(/\[authSessionId, ownerId, utenteProprietario\]/);
     // Anche il toast è mediato da stato identitario e ricontrollato nell'effetto;
     // il callback tardivo non lo emette direttamente.
     expect(codiceBottone).toInclude("stessaIdentitaFollow(feedback.identita, identitaCorrente)");
