@@ -20,6 +20,11 @@ export const routes = {
   profiloPubblico: (id: string) => `/profilo/${id}`,
   /** La Cantina pubblica di quella persona, che è una pagina del suo profilo. */
   cantinaPubblica: (id: string) => `/profilo/${id}/cantina`,
+  /**
+   * Le Cantine che io seguo. Privata, e senza parametri: non esiste la forma
+   * «le Cantine seguite da qualcun altro», né qui né nella porta SQL.
+   */
+  cantineSeguite: "/cantine-seguite",
   venditore: (username: string) => `/venditore/${username}`,
   onboarding: "/onboarding",
   verificaVenditore: "/verifica-venditore",

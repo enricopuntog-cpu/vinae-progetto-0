@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Camera, Check, Flag, LogOut, Trash2 } from "lucide-react";
+import { Camera, Check, Flag, LogOut, Trash2, Wine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -478,6 +478,25 @@ export default function AccountPageClient() {
             <span className="block font-medium">Le mie segnalazioni</span>
             <span className="block text-xs font-normal text-muted-foreground">
               Segui lo stato delle pratiche inviate.
+            </span>
+          </span>
+        </Link>
+      </Button>
+      {/*
+        L'unico ingresso a «Le mie Cantine», e deliberatamente uno solo: la
+        pagina è privata, non urgente e non ha un badge da mostrare, quindi non
+        merita un posto nell'intestazione globale. Sta qui accanto alle altre due
+        cose che una persona va a rivedere di proprio conto — le segnalazioni e
+        le vendite — perché è lo stesso gesto: riaprire qualcosa che si è già
+        fatto.
+      */}
+      <Button asChild variant="outline" className="h-auto w-full justify-start rounded-2xl p-4">
+        <Link href={routes.cantineSeguite}>
+          <Wine className="h-4 w-4" />
+          <span className="text-left">
+            <span className="block font-medium">Le mie Cantine</span>
+            <span className="block text-xs font-normal text-muted-foreground">
+              Rivedi le Cantine che segui.
             </span>
           </span>
         </Link>

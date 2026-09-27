@@ -3,6 +3,7 @@ import { ArrowLeft, MapPin, Settings } from "lucide-react";
 import { notFound } from "next/navigation";
 import { AvatarPersona } from "@/components/vinea/AvatarPersona";
 import { CollezionePubblica } from "@/components/vinea/profilo/CollezionePubblica";
+import { SeguiCantinaButton } from "@/components/vinea/profilo/SeguiCantinaButton";
 import { ValoreCantinaPubblica } from "@/components/vinea/profilo/ValoreCantinaPubblica";
 import { routes } from "@/config/routes";
 import {
@@ -186,6 +187,13 @@ function IntestazioneCantina({
             Gestisci la mia cantina
           </Link>
         )}
+        {/*
+         * Il comando del follow, e non un secondo `profiloProprio &&` qui:
+         * la decisione «il proprietario non lo vede» sta dentro il componente,
+         * in un posto solo, insieme al resto dei suoi stati. Riceve i due dati
+         * che gli servono e nessun altro.
+         */}
+        <SeguiCantinaButton ownerId={userId} profiloProprio={profiloProprio} />
       </div>
     </header>
   );
