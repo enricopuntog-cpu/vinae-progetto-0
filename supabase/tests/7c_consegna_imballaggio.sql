@@ -254,6 +254,11 @@ begin
     from public.listing_crea_da_bottiglia(
       v_bottle, v_prezzo, 'Ottimo', '', 'Fixture 7c', '{}'
     ) x;
+    -- WP2 rende questi metadati obbligatori prima della pubblicazione. La
+    -- fixture non prova fotografie o handoff: dichiara i valori minimi validi.
+    perform public.listing_logistica_dichiara(
+      v_listing, 'nessuna_confezione_originale', array[]::text[], 'dropoff_pudo'
+    );
     perform public.listing_pubblica(v_listing);
     v_bottiglie := v_bottiglie || v_bottle;
     v_annunci := v_annunci || v_listing;
