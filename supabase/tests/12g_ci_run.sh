@@ -180,7 +180,12 @@ run_grid() {
   out="$("${PSQL[@]}" -At -F $'\x1f' -f "$TESTS/$file")"
   total="$(printf '%s\n' "$out" | grep -c . || true)"
   ok="$(printf '%s\n' "$out" | awk -F $'\x1f' -v c="$col" '$c == "t"' | grep -c . || true)"
-  printf '%s\n' "$out" | awk -F $'\x1f' -v c="$col" '{ printf "%s %s %s\n", ($c == "t" ? "PASS" : "FAIL"), $1, $2 }'
+  # Un caso fallito stampa anche la colonna successiva, quando la griglia la
+  # produce: e il dettaglio che dice perche, e senza di esso il log costringe a
+  # indovinare. I casi superati restano una riga sola.
+  printf '%s\n' "$out" | awk -F $'\x1f' -v c="$col" '
+    $c == "t" { printf "PASS %s %s\n", $1, $2; next }
+    { printf "FAIL %s %s%s\n", $1, $2, (NF > c ? " :: " $(c + 1) : "") }'
   echo "$label: $ok/$total"
   summary "- $label: $ok/$total"
   [ "$total" -gt 0 ] && [ "$ok" = "$total" ] || die "$label: $ok/$total."

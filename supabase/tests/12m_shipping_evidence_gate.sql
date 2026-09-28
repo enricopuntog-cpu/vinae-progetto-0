@@ -181,9 +181,15 @@ insert into public.disputes (
 
 -- Forma ammessa sia dalla policy (`<36>/<36>/<36>.webp`) sia dal controllo piu
 -- stretto della RPC, che pretende un UUID versione 4 nel nome del file.
+-- Il nome del file deve restare un UUID di 36 caratteri: la policy di INSERT lo
+-- pretende con una espressione regolare, e un percorso lungo 37 sarebbe
+-- rifiutato dalla forma, non dal ramo che il caso vuole provare. Lo slot e
+-- quindi a due cifre fisse: cosi i casi dal 10 in su provano la stessa cosa dei
+-- primi nove.
 create function pg_temp.p(p_order uuid, p_uid uuid, p_n integer) returns text
 language sql immutable as $f$
-  select p_order::text || '/' || p_uid::text || '/aaaaaaa' || p_n::text
+  select p_order::text || '/' || p_uid::text
+      || '/aaaaaa' || lpad(p_n::text, 2, '0')
       || '-bbbb-4ccc-8ddd-eeeeeeeeeeee.webp';
 $f$;
 
