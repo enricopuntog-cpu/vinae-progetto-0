@@ -32,6 +32,24 @@ const SQL = MIGRAZIONE_7C.split("\n")
   .filter((riga) => !riga.trimStart().startsWith("--"))
   .join("\n");
 
+/**
+ * La WP3 ridefinisce `ordine_segna_spedito` in una migrazione successiva: la 7c
+ * continua a contenere la versione che ammetteva `pagato`, e cercare lì il
+ * cancello nuovo troverebbe il codice vecchio. Le due migrazioni si leggono
+ * separate proprio per questo.
+ */
+const MIGRAZIONE_WP3 = readFileSync(
+  join(
+    import.meta.dir,
+    "../../../../supabase/migrations/20260928210000_shipping_evidence_gate.sql",
+  ),
+  "utf8",
+);
+
+const SQL_WP3 = MIGRAZIONE_WP3.split("\n")
+  .filter((riga) => !riga.trimStart().startsWith("--"))
+  .join("\n");
+
 const ordine = (patch: Partial<IstantaneaVenditore>): IstantaneaVenditore => ({
   stato: "pagato",
   preparazione_avviata_at: null,
@@ -180,7 +198,29 @@ describe("coerenza con la migrazione 7c", () => {
 describe("precondizioni delle transizioni", () => {
   it("il venditore prepara solo da pagato o in_preparazione", () => {
     expect(TUTTI_GLI_STATI.filter(puoPreparare)).toEqual(["pagato", "in_preparazione"]);
-    expect(TUTTI_GLI_STATI.filter(puoSpedire)).toEqual(["pagato", "in_preparazione"]);
+  });
+
+  it("WP3: si spedisce solo da in_preparazione e solo con la preparazione confermata", () => {
+    // Nessuno stato basta da solo: il vecchio salto da `pagato` è chiuso.
+    expect(
+      TUTTI_GLI_STATI.filter((stato) =>
+        puoSpedire({ stato, preparazione_confermata_at: "2026-09-28T10:00:00Z" }),
+      ),
+    ).toEqual(["in_preparazione"]);
+    expect(
+      TUTTI_GLI_STATI.filter((stato) =>
+        puoSpedire({ stato, preparazione_confermata_at: null }),
+      ),
+    ).toEqual([]);
+  });
+
+  it("WP3: la regola locale rispecchia il cancello della migrazione", () => {
+    // Se la migrazione tornasse ad ammettere `pagato`, o smettesse di
+    // interrogare il cancello, questa copia sarebbe divergente e va corretta
+    // insieme a quella.
+    expect(SQL_WP3).toContain("if v_order.stato <> 'in_preparazione' then");
+    expect(SQL_WP3).toContain("if not private.ordine_spedizione_pronta(v_order.id) then");
+    expect(SQL_WP3).toContain("preparazione_confermata_at");
   });
 
   it("la consegna si dichiara anche senza passare da in_preparazione", () => {

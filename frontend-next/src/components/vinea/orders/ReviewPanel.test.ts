@@ -58,7 +58,9 @@ describe("chi decide se si può recensire", () => {
     expect(hook.match(/eleggibilita\(\)/g)).toHaveLength(1);
     // Il venditore non la chiede affatto: la funzione risponde sui soli ordini
     // di chi compra, quindi per lui sarebbe una lettura sempre vuota.
-    expect(hookNudo).toInclude("venditore\n        ? Promise.resolve(null)");
+    // Il rientro dipende da quanti elementi ha `Promise.all`: si afferma il
+    // ramo, non l'incolonnamento che il formattatore decide.
+    expect(hookNudo).toMatch(/venditore\s*\?\s*Promise\.resolve\(null\)/);
     expect(hookNudo).toInclude("e.orderId === orderId");
   });
 

@@ -92,8 +92,22 @@ export const ETICHETTE_STATO_COMPRATORE: Record<OrderStatus, string> = {
 export const puoPreparare = (stato: OrderStatus): boolean =>
   stato === "pagato" || stato === "in_preparazione";
 
-export const puoSpedire = (stato: OrderStatus): boolean =>
-  stato === "pagato" || stato === "in_preparazione";
+/**
+ * Dalla WP3 spedire non dipende più dal solo stato.
+ *
+ * `ordine_segna_spedito` ammette un solo stato di partenza —
+ * `in_preparazione` — e richiede in più il cancello di preparazione:
+ * `preparazione_confermata_at` valorizzata, cioè sei voci canoniche spuntate e
+ * prova corrente del collo finale. `pagato` non è più un ingresso: era il salto
+ * che permetteva di spedire senza una sola fotografia.
+ *
+ * Il parametro è l'ordine, non lo stato, proprio perché la condizione non è più
+ * esprimibile su un enum: una firma che accettasse ancora `OrderStatus`
+ * inviterebbe a rimettere lì una regola che il database non ha più.
+ */
+export const puoSpedire = (
+  ordine: Pick<OrderRecord, "stato" | "preparazione_confermata_at">,
+): boolean => ordine.stato === "in_preparazione" && ordine.preparazione_confermata_at !== null;
 
 export const puoSegnalareConsegna = (stato: OrderStatus): boolean =>
   stato === "pagato" || stato === "in_preparazione" || stato === "spedito";
