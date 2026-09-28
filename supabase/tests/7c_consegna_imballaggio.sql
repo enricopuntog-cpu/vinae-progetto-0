@@ -210,7 +210,7 @@ declare
   v_order_b   uuid;
   v_order_c   uuid;
   v_order_d   uuid;
-  v_prezzo    integer := 10000;   -- 100,00 €; commissione 686, totale 10686
+  v_prezzo    integer := 10000;   -- 100,00 €; commissione 1057, totale 11057
   v_imb       integer := 450;     -- 4,50 € di imballaggio, solo per questa prova
   v_riserva   jsonb;
   v_stato     text;
@@ -307,16 +307,16 @@ begin
 
   perform pg_temp.registra_7c(
     2, 'E — totale_cents NON contiene l''imballaggio: la base della 7b non si muove',
-    'totale_cents = 10686 (prezzo 10000 + commissione 686)',
-    v_intero2 = 10686,
+    'totale_cents = 11057 (prezzo 10000 + commissione 1057)',
+    v_intero2 = 11057,
     'totale_cents=' || coalesce(v_intero2::text, 'NULL'),
     v_guasto
   );
 
   perform pg_temp.registra_7c(
     3, 'E — addebito_totale_cents somma l''imballaggio',
-    'addebito_totale_cents = 11136',
-    v_conteggio = 11136,
+    'addebito_totale_cents = 11507',
+    v_conteggio = 11507,
     'addebito=' || coalesce(v_conteggio::text, 'NULL'),
     v_guasto
   );
@@ -329,8 +329,8 @@ begin
   end;
   perform pg_temp.registra_7c(
     4, 'E — il pagamento addebita il totale comprensivo di imballaggio',
-    'payments.amount_cents = 11136',
-    v_intero = 11136,
+    'payments.amount_cents = 11507',
+    v_intero = 11507,
     'amount_cents=' || coalesce(v_intero::text, 'NULL'),
     v_guasto
   );
@@ -357,8 +357,8 @@ begin
   end;
   perform pg_temp.registra_7c(
     5, 'E — cambiare il listino non muove un ordine già nato',
-    'imballaggio_cents ancora 450, addebito ancora 11136',
-    v_intero = v_imb and v_conteggio = 11136,
+    'imballaggio_cents ancora 450, addebito ancora 11507',
+    v_intero = v_imb and v_conteggio = 11507,
     format('cents=%s addebito=%s', v_intero, v_conteggio),
     v_guasto
   );
@@ -378,8 +378,8 @@ begin
   perform set_config('role', 'postgres', true);
   perform pg_temp.registra_7c(
     6, 'E — senza dichiarazione i due totali coincidono e l''ordine è quello della 7b',
-    'codice NULL, cents 0, totale = addebito = 10686',
-    v_testo is null and v_intero = 0 and v_intero2 = 10686 and v_conteggio = 10686,
+    'codice NULL, cents 0, totale = addebito = 11057',
+    v_testo is null and v_intero = 0 and v_intero2 = 11057 and v_conteggio = 11057,
     format('codice=%s cents=%s totale=%s addebito=%s',
            coalesce(v_testo, 'NULL'), v_intero, v_intero2, v_conteggio),
     v_guasto
@@ -573,7 +573,7 @@ begin
   begin
     perform pg_temp.impersona_7c('authenticated', v_buyer);
     perform public.ordine_contestazione_apri(
-      v_order_a, 'Bottiglia danneggiata', 'Capsula rovinata e livello basso.', '{}');
+      v_order_a, 'Pacco danneggiato', 'Capsula rovinata e livello basso.', '{}');
     perform set_config('role', 'postgres', true);
 
     select o.stato::text, o.payout_stato::text, d.stato::text
@@ -646,7 +646,7 @@ begin
     perform set_config('role', 'postgres', true);
     perform pg_temp.impersona_7c('authenticated', v_buyer);
     perform public.ordine_contestazione_apri(
-      v_order_c, 'Livello alterato', 'Il livello sembra sotto la spalla.', '{}');
+      v_order_c, 'Altra difformità oggettiva', 'Il livello sembra sotto la spalla.', '{}');
     -- Stessa ragione del caso 19: claim azzerati, non solo ruolo cambiato.
     perform pg_temp.impersona_7c('postgres', null);
     perform public.ordine_contestazione_risolvi(v_order_c, 'respinta', 'Nessuna irregolarità');
@@ -691,7 +691,7 @@ begin
   perform set_config('role', 'postgres', true);
   perform pg_temp.registra_errore_7c(
     21, 'D — un ordine si recensisce una volta sola',
-    'errore "già stato recensito"', 'già stato recensito', v_sqlstate, v_msg,
+    'errore "gia stato recensito"', 'gia stato recensito', v_sqlstate, v_msg,
     v_guasto);
 
   -- Pulizia
