@@ -231,9 +231,18 @@ run_grid "12m prove di spedizione e cancello di preparazione" 12m_shipping_evide
 # insiemi di risultati. Dopo le griglie in ROLLBACK perche questa committa, e
 # prima delle fixture 12g perche i suoi utenti `@example.invalid` nascono e
 # muoiono dentro il blocco, in entrambi i rami.
-esiti_7c="$("${PSQL[@]}" -At -F $'\x1f' -f "$TESTS/7c_consegna_imballaggio.sql")"
+#
+# La coda della griglia solleva da se quando un caso non passa, e con
+# ON_ERROR_STOP `psql` esce 3: l'uscita va raccolta comunque, altrimenti
+# `set -e` chiude qui e l'elenco dei casi — stampato prima del verdetto — non
+# arriva mai al log. Un caso fallito porta con se atteso e dettaglio.
+rc_7c=0
+esiti_7c="$("${PSQL[@]}" -At -F $'\x1f' -f "$TESTS/7c_consegna_imballaggio.sql")" || rc_7c=$?
 printf '%s\n' "$esiti_7c" \
-  | awk -F $'\x1f' 'NF >= 5 { printf "%s %s %s\n", ($2 == "PASSA" ? "PASS" : "FAIL"), $1, $3 }'
+  | awk -F $'\x1f' '
+      NF < 5 { next }
+      $2 == "PASSA" { printf "PASS %s %s\n", $1, $3; next }
+      { printf "FAIL %s %s :: atteso %s :: %s\n", $1, $3, $4, $5 }'
 riepilogo_7c="$(printf '%s\n' "$esiti_7c" | awk -F $'\x1f' 'NF == 3 { r = $0 } END { print r }')"
 passa_7c="$(printf '%s' "$riepilogo_7c" | cut -d $'\x1f' -f1)"
 totale_7c="$(printf '%s' "$riepilogo_7c" | cut -d $'\x1f' -f3)"
@@ -241,6 +250,7 @@ echo "7c consegna e imballaggio: $passa_7c/$totale_7c"
 summary "- 7c consegna e imballaggio: $passa_7c/$totale_7c"
 [ -n "$totale_7c" ] && [ "$passa_7c" = "$totale_7c" ] \
   || die "7c consegna e imballaggio: $passa_7c/$totale_7c."
+[ "$rc_7c" = "0" ] || die "7c consegna e imballaggio: psql uscito $rc_7c."
 
 # 12f solleva un'eccezione al primo diniego mancato; l'ultima riga e il
 # controllo sul limite della nota di decisione.
