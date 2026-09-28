@@ -19,13 +19,17 @@
 -- SQL. La policy di INSERT estesa dalla migrazione e provata per davvero nei
 -- casi 49-52, che girano a privilegi del chiamante.
 --
--- I casi 53-56 provano la policy di SELECT, cioe la riservatezza. Riusare il
+-- I casi 54-57 provano la policy di SELECT, cioe la riservatezza. Riusare il
 -- bucket delle contestazioni senza toccare quella policy avrebbe dato al
 -- compratore le fotografie dell'imballaggio appena caricate, per ogni ordine e
 -- senza nessuna contestazione: la regola distribuita apriva il fascicolo a
--- entrambe le parti dell'ordine. Il caso 54 mostra che il percorso non e un
+-- entrambe le parti dell'ordine. Il caso 55 mostra che il percorso non e un
 -- segreto — il compratore lo legge da `imballaggio_foto` — e che a negare e la
--- policy; il caso 56 prova l'eccezione dichiarata, il deposito in pratica.
+-- policy; il caso 57 prova l'eccezione dichiarata, il deposito in pratica.
+--
+-- NUMERAZIONE. Gli id sono chiavi, non un ordine di lettura: il caso 53 e un
+-- invariante economico registrato fra il 41 e il 42, perche fu aggiunto dopo e
+-- prese il primo id libero. I casi totali sono 57, non 56.
 
 begin;
 
@@ -1231,7 +1235,7 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- 53-56 — riservatezza delle prove di preparazione (policy di SELECT)
+-- 54-57 — riservatezza delle prove di preparazione (policy di SELECT)
 -- ---------------------------------------------------------------------------
 --
 -- Il caso 47 prova la porta di lettura, che al compratore risponde 42501. Non
@@ -1254,7 +1258,7 @@ begin
   v_venditore := pg_temp.legge(pg_temp.ua(), v_path);
   v_admin := pg_temp.legge(pg_temp.uadmin(), v_path);
 
-  perform pg_temp.registra(53,
+  perform pg_temp.registra(54,
     'il venditore dell ordine e l admin leggono la prova del collo finale',
     v_path is not null and v_venditore = '1' and v_admin = '1',
     format('percorso %s / venditore %s / admin %s',
@@ -1279,7 +1283,7 @@ begin
     'select (imballaggio_foto @> array[%L::text])::text from public.orders where id = %L::uuid',
     v_path, pg_temp.o1()));
 
-  perform pg_temp.registra(54,
+  perform pg_temp.registra(55,
     'il compratore conosce il percorso dalla proiezione ma non legge l oggetto',
     v_compratore = '0' and v_proiezione = 'true',
     format('compratore %s / percorso noto %s', v_compratore, v_proiezione));
@@ -1300,7 +1304,7 @@ begin
 
   -- Per `anon` l'invariante e «nessun accesso»: puo presentarsi come zero
   -- righe sotto RLS oppure come privilegio di tabella negato.
-  perform pg_temp.registra(55,
+  perform pg_temp.registra(56,
     'estraneo, venditore di un altro ordine e anon non leggono nulla',
     v_estraneo = '0' and v_altro_venditore = '0'
     and (v_anon = '0' or pg_temp.negato(v_anon)),
@@ -1330,7 +1334,7 @@ begin
   v_riservata := pg_temp.legge(pg_temp.ub(), pg_temp.p(pg_temp.o4(), pg_temp.ua(), 21));
   v_depositata := pg_temp.legge(pg_temp.ub(), pg_temp.p(pg_temp.o4(), pg_temp.ua(), 22));
 
-  perform pg_temp.registra(56,
+  perform pg_temp.registra(57,
     'depositata in contestazione la prova si apre al compratore, l altra no',
     v_prima = '0' and v_riservata = '0' and v_depositata = '1',
     format('prima del deposito %s / riservata %s / depositata %s',
