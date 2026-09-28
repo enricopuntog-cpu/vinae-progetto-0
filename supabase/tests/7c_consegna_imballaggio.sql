@@ -721,6 +721,8 @@ begin
   delete from public.balance_movimenti where order_id in (
     select id from public.orders where buyer_id = v_buyer);
   alter table public.balance_movimenti enable trigger balance_movimenti_no_delete;
+  delete from public.balance_reservations where order_id in (
+    select id from public.orders where buyer_id = v_buyer);
   delete from public.balance_accounts where owner_id in (v_seller, v_buyer);
   delete from public.order_reviews where order_id in (
     select id from public.orders where buyer_id = v_buyer);
@@ -813,6 +815,8 @@ exception when others then
   delete from public.balance_movimenti where order_id in (
     select id from public.orders where buyer_id = v_buyer);
   alter table public.balance_movimenti enable trigger balance_movimenti_no_delete;
+  delete from public.balance_reservations where order_id in (
+    select id from public.orders where buyer_id = v_buyer);
   delete from public.balance_accounts where owner_id in (v_seller, v_buyer);
   delete from public.order_reviews where order_id in (
     select id from public.orders where buyer_id = v_buyer);
