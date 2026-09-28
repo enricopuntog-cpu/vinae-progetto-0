@@ -726,6 +726,23 @@ begin
   delete from public.balance_accounts where owner_id in (v_seller, v_buyer);
   delete from public.order_reviews where order_id in (
     select id from public.orders where buyer_id = v_buyer);
+  -- Le migrazioni dispute più recenti tengono cronologie append-only con FK
+  -- restrittive. Come la fixture 12g, disarma i trigger utente soltanto mentre
+  -- rimuove i figli dei fascicoli Test7c, poi ripristina subito il ruolo normale.
+  set local session_replication_role = replica;
+  delete from public.dispute_case_events where dispute_id in (
+    select d.id from public.disputes d join public.orders o on o.id = d.order_id
+    where o.buyer_id = v_buyer);
+  delete from public.dispute_decisions where dispute_id in (
+    select d.id from public.disputes d join public.orders o on o.id = d.order_id
+    where o.buyer_id = v_buyer);
+  delete from public.dispute_admin_notes where dispute_id in (
+    select d.id from public.disputes d join public.orders o on o.id = d.order_id
+    where o.buyer_id = v_buyer);
+  delete from public.dispute_events where dispute_id in (
+    select d.id from public.disputes d join public.orders o on o.id = d.order_id
+    where o.buyer_id = v_buyer);
+  set local session_replication_role = origin;
   delete from public.disputes where order_id in (
     select id from public.orders where buyer_id = v_buyer);
   delete from public.tracking_events where order_id in (
@@ -828,6 +845,23 @@ exception when others then
   delete from public.balance_accounts where owner_id in (v_seller, v_buyer);
   delete from public.order_reviews where order_id in (
     select id from public.orders where buyer_id = v_buyer);
+  -- Le migrazioni dispute più recenti tengono cronologie append-only con FK
+  -- restrittive. Come la fixture 12g, disarma i trigger utente soltanto mentre
+  -- rimuove i figli dei fascicoli Test7c, poi ripristina subito il ruolo normale.
+  set local session_replication_role = replica;
+  delete from public.dispute_case_events where dispute_id in (
+    select d.id from public.disputes d join public.orders o on o.id = d.order_id
+    where o.buyer_id = v_buyer);
+  delete from public.dispute_decisions where dispute_id in (
+    select d.id from public.disputes d join public.orders o on o.id = d.order_id
+    where o.buyer_id = v_buyer);
+  delete from public.dispute_admin_notes where dispute_id in (
+    select d.id from public.disputes d join public.orders o on o.id = d.order_id
+    where o.buyer_id = v_buyer);
+  delete from public.dispute_events where dispute_id in (
+    select d.id from public.disputes d join public.orders o on o.id = d.order_id
+    where o.buyer_id = v_buyer);
+  set local session_replication_role = origin;
   delete from public.disputes where order_id in (
     select id from public.orders where buyer_id = v_buyer);
   delete from public.tracking_events where order_id in (
