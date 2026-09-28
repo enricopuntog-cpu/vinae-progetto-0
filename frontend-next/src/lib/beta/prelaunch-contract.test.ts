@@ -150,7 +150,28 @@ describe("contratto di pre-lancio beta", () => {
   });
 
   it("allinea MIN_TESTS al conteggio della suite estesa", () => {
-    expect(leggi("../.github/workflows/ci.yml")).toInclude('MIN_TESTS: "1883"');
+    expect(leggi("../.github/workflows/ci.yml")).toInclude('MIN_TESTS: "1884"');
+  });
+
+  // Lo script si prova da solo in `protected-paths-guard.test.sh`; qui si prova
+  // che sia collegato. Uno script corretto ma non invocato non ha fermato nulla,
+  // ed e esattamente cosi che i quattro file personali sono finiti nel commit
+  // 2015a4d: nessun controllo si opponeva. Servono tre condizioni insieme: la
+  // guardia eseguita, gli SHA dell'evento (su pull_request HEAD del checkout e
+  // il merge commit di prova, non il vero HEAD della branch) e la cronologia
+  // completa, senza la quale il range della branch non e ispezionabile.
+  it("invoca la guardia sui file personali in CI su tutta la cronologia della branch", () => {
+    const ci = leggi("../.github/workflows/ci.yml");
+    expect(ci).toInclude("bash .github/scripts/protected-paths-guard.sh");
+    expect(ci).toInclude("bash .github/scripts/protected-paths-guard.test.sh");
+    expect(ci).toInclude("fetch-depth: 0");
+    expect(ci).toInclude(
+      "GUARDIA_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}",
+    );
+    expect(ci).toInclude(
+      "GUARDIA_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.after }}",
+    );
+    expect(ci).not.toInclude("fetch-depth: 2");
   });
 
   it("non trasforma secret o gate server in variabili pubbliche", () => {
