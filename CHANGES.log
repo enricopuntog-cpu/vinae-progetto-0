@@ -1,21 +1,21 @@
 ## CURRENT STATE
 - WP1 logistica è **CLOSED**: PR #162 integrata su `origin/main` con squash `522fbdc6502235b368274662f47f6e2ebd8e10cd`. Sul progetto Supabase di produzione `pijnmcllmfgjmgsvtcej` il ledger contiene `20260928120000_listing_logistics_metadata`; schema effettivo, ACL della RPC e proiezione pubblica senza `handoff_venditore` sono stati verificati in sola lettura. La griglia `12l_listing_logistics_metadata.sql` è passata 48/48.
-- Il branch locale `feature/listing-logistics-ui` parte esattamente da `522fbdc6502235b368274662f47f6e2ebd8e10cd` ed è dedicato al WP2 UI. Il checkout contiene soltanto modifiche non committate del WP2; i quattro file personali protetti, `supabase/migrations/` e `CLAUDE.md` non sono stati toccati.
+- WP2 logistica è **CLOSED**: PR #163 integrata su `origin/main` con squash `758d5545f574d84fcf5071e9645d36c126c8f422`. Il diff remoto contiene i soli 18 path attesi; i quattro file personali protetti, `supabase/migrations/` e `CLAUDE.md` non sono stati toccati.
 - La suite completa `frontend-next` misura 1931/1931 test su 116 file e 21788 asserzioni; la soglia `MIN_TESTS` è quindi allineata a `1931` nei due punti canonici. `PAYMENTS_ENABLED`, le opzioni di imballaggio di spedizione e il checkout restano invariati.
 
 ## ACTIVE TASK
-- WP2 logistica in modalità **VERIFY & SHIP**: l'implementazione locale è verificata e attende pubblicazione; `/vendi` raccoglie il tipo di confezione originale, fino a quattro fotografie separate e una scelta esplicita fra drop-off PUDO e ritiro a domicilio; il drop-off è indicato come consigliato ma non preselezionato. Il vecchio `BetaDeliverySelector` è stato rimosso.
+- WP2 logistica è stato verificato e pubblicato: `/vendi` raccoglie il tipo di confezione originale, fino a quattro fotografie separate e una scelta esplicita fra drop-off PUDO e ritiro a domicilio; il drop-off è indicato come consigliato ma non preselezionato. Il vecchio `BetaDeliverySelector` è stato rimosso.
 - Il salvataggio usa soltanto `listing_logistica_dichiara`: pubblicazione sequenziale `assicuraBozza → dichiaraLogistica → pubblica`, mentre una bozza incompleta resta salvabile e dichiara solo i dati logistici presenti. Nessun provider, prezzo di spedizione, PUDO reale, etichetta, tracking o modifica economica è stato introdotto.
 - La scheda pubblica legge soltanto `confezione_originale_tipo` e `confezione_originale_foto`, risolve le fotografie con `urlImmagine`, non espone `handoff_venditore` e non inventa dati per gli annunci legacy con tipo NULL. I disclaimer distinguono la confezione del prodotto dall'imballaggio necessario alla spedizione.
 - Validazione VERIFY locale: test mirati WP2/regressioni 140/140 su 9 file e 524 asserzioni; suite completa 1931/1931 su 116 file e 21788 asserzioni; typecheck pulito; lint con 0 errori e 12 warning; build Next.js 16.3.3 completata; `git diff --check` pulito. Il warning nuovo `no-img-element` è stato eliminato usando `next/image` con la configurazione `annunci` esistente.
 
 ## NEXT STEPS
-1. Committare e pubblicare il diff WP2 verificato sul branch `feature/listing-logistics-ui`, quindi aprire la PR verso `main`.
-2. Verificare il diff della PR e tutti i check CI sull'HEAD esatto, incluso il conteggio 1931/1931 nel log Frontend Next.
-3. Verificare Deploy Preview e produzione frontend, eseguire lo smoke browser disponibile e chiudere WP2 solo dopo il merge squash.
+1. Ripartire da `origin/main` (`758d5545f574d84fcf5071e9645d36c126c8f422`) per il prossimo work package ammesso dalla roadmap.
+2. Mantenere `MIN_TESTS=1931` come floor e alzarlo deliberatamente quando vengono aggiunti test a `frontend-next`.
+3. Eseguire uno smoke autenticato di `/vendi` solo quando è disponibile un account di test già autorizzato, senza creare credenziali o dati reali.
 
 ## BLOCKERS / NOTES
-- Nessun blocker locale noto. CI remoto, Deploy Preview, browser smoke, merge e deploy produzione frontend sono **NON VERIFICATI** finché il branch non viene pubblicato; Supabase production apply è **NON APPLICABILE** perché WP2 non contiene migration.
-- Il conteggio completo supera il floor precedente di 47 test esatti (`1884 → 1931`), quindi `.github/workflows/ci.yml` e il contratto beta sono stati aggiornati insieme. Il lint è tornato alla baseline di 12 warning, senza errori.
-- `CONTESTO_IA/` non è stato modificato: il WP2 applica la fondazione e le decisioni durevoli già registrate dal WP1, senza introdurre una nuova decisione architetturale.
-- Non sono ancora stati creati commit, push, PR, merge o deploy; nessuna scrittura è stata eseguita su Supabase.
+- Nessun blocker aperto. Sull'HEAD esatto della PR (`994119f5e8efa8f03b1eb7c1f379ce06e92c3c1a`) i sei check richiesti sono verdi; Frontend Next registra 1931 pass, 0 fail e soglia 1931. Il CI post-merge sullo squash è verde con lo stesso conteggio.
+- Deploy Preview Netlify disponibile e asset verificati con le firme WP2; la produzione `vineawineclub.com` serve asset contenenti il disclaimer della confezione, `dropoff_pudo` e `listing_logistica_dichiara`, senza `BetaDeliverySelector`. Lo smoke browser visuale/autenticato resta **NON VERIFICATO** per indisponibilità dello strumento e assenza di un account di test autorizzato.
+- Supabase production apply è **NON APPLICABILE**: WP2 non contiene migration né richiede scritture. Il check Supabase sullo squash è verde; nessuna scrittura è stata eseguita su Supabase.
+- Il lint è alla baseline di 12 warning, senza errori. `CONTESTO_IA/` non è stato modificato perché WP2 applica le decisioni durevoli del WP1 senza introdurne di nuove.
