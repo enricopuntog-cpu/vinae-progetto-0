@@ -15,6 +15,18 @@ import {
 } from "@/lib/price-intelligence/smart-sell-price";
 import { euroDaCents, richiedeConfermaPrezzoPrecedente } from "@/lib/vendi/prezzo";
 import { acquisizioneDaCampi } from "@/lib/vendi/acquisizione";
+import {
+  ammetteFotoConfezione,
+  logisticaCompleta,
+  messaggioLogisticaMancante,
+  normalizzaLogistica,
+  pubblicaConLogistica,
+  salvaLogisticaBozza,
+  MAX_FOTO_CONFEZIONE,
+  type ConfezioneOriginaleTipo,
+  type HandoffVenditore,
+  type StatoLogisticaWizard,
+} from "@/lib/vendi/logistica-annuncio";
 import { AI_UI, AZIONI_IA_ABILITATE } from "@/config/features";
 import type {
   CatalogazioneSuggerimento,
@@ -154,6 +166,21 @@ export function useSellWizard({
 
   const [foto, setFoto] = useState<FotoCaricata[]>([]);
   const [fotoInCorso, setFotoInCorso] = useState(false);
+
+  // -- Logistica dell'annuncio (passo Consegna) -------------------------------
+  //
+  // Tre stati separati e nessun valore iniziale diverso da `null`. Il drop-off
+  // è consigliato a schermo, non preselezionato: la colonna nasce NULL apposta,
+  // e una scelta scritta senza che nessuno l'abbia fatta resterebbe comunque
+  // sull'annuncio.
+  const [confezioneOriginaleTipo, setConfezioneOriginaleTipo] =
+    useState<ConfezioneOriginaleTipo | null>(null);
+  // Le fotografie della confezione sono un secondo array, mai `foto`: mescolarle
+  // metterebbe l'immagine di un cofanetto nella galleria della bottiglia, dove
+  // si legge come una bottiglia in più, e le manderebbe in `listings.immagini`.
+  const [fotoConfezione, setFotoConfezione] = useState<FotoCaricata[]>([]);
+  const [fotoConfezioneInCorso, setFotoConfezioneInCorso] = useState(false);
+  const [handoffVenditore, setHandoffVenditore] = useState<HandoffVenditore | null>(null);
   const [inviando, setInviando] = useState(false);
   // Id della bozza già creata su Supabase, se c'è.
   const [bozzaId, setBozzaId] = useState<string | null>(null);
@@ -450,6 +477,19 @@ export function useSellWizard({
    * silenzio il guard su una schermata che non ha una Regione.
    */
   const suIdentificazione = steps[step] === "Identificazione";
+  const suConsegna = steps[step] === "Consegna";
+
+  /** Lo stato del passo Consegna nella forma che il modulo puro sa leggere. */
+  const statoLogistica = useMemo<StatoLogisticaWizard>(
+    () => ({
+      confezioneOriginaleTipo,
+      fotoConfezione: fotoConfezione.map((f) => f.percorso),
+      handoffVenditore,
+    }),
+    [confezioneOriginaleTipo, fotoConfezione, handoffVenditore],
+  );
+  const logisticaDichiarata = logisticaCompleta(statoLogistica);
+
   // Il guard sta fuori dall'updater di `setStep`: un updater deve essere puro,
   // e React lo riesegue in sviluppo — un `toast` al suo interno comparirebbe
   // due volte.
@@ -458,8 +498,20 @@ export function useSellWizard({
       toast.error("Scegli una Regione dall'elenco prima di continuare.");
       return;
     }
+    // Le due domande del passo Consegna si rispondono prima dell'Anteprima
+    // perché senza dichiarazione la pubblicazione verrebbe rifiutata dal
+    // database: bloccare qui mostra che cosa manca mentre è ancora a schermo,
+    // invece di far arrivare un errore all'ultimo pulsante. Le fotografie no:
+    // sono facoltative, e "nessuna confezione originale" è una risposta valida.
+    if (suConsegna) {
+      const manca = messaggioLogisticaMancante(statoLogistica);
+      if (manca) {
+        toast.error(manca);
+        return;
+      }
+    }
     setStep((corrente) => Math.min(steps.length - 1, corrente + 1));
-  }, [regioneValida, suIdentificazione, steps.length]);
+  }, [regioneValida, statoLogistica, suConsegna, suIdentificazione, steps.length]);
   const prev = useCallback(() => setStep((s) => Math.max(primoPasso, s - 1)), [primoPasso]);
 
   const caricaFoto = useCallback(async (file: File) => {
@@ -512,6 +564,87 @@ export function useSellWizard({
       // sono URL pubblici del bucket `annunci`: revocarle non fa danno ma non
       // significa niente, e il controllo dice a chi legge che le due specie di
       // anteprima esistono davvero.
+      if (uscente?.anteprima.startsWith("blob:")) URL.revokeObjectURL(uscente.anteprima);
+      return f.filter((_, i) => i !== indice);
+    });
+  }, []);
+
+  /**
+   * Il tipo di confezione, e ciò che il suo cambio comporta.
+   *
+   * Tornare a «nessuna confezione originale» svuota le fotografie già scelte:
+   * non è una pulizia di cortesia, è l'unica forma che la funzione SQL accetta,
+   * che rifiuta con `22023` un array non vuoto senza un tipo reale. Gli oggetti
+   * restano nel bucket, come per le fotografie della bottiglia: la pulizia dei
+   * file orfani resta manutenzione, non un effetto del ripensamento.
+   */
+  const impostaConfezioneOriginaleTipo = useCallback((tipo: ConfezioneOriginaleTipo) => {
+    setConfezioneOriginaleTipo(tipo);
+    if (!ammetteFotoConfezione(tipo)) {
+      setFotoConfezione((attuali) => {
+        for (const uscente of attuali) {
+          if (uscente.anteprima.startsWith("blob:")) URL.revokeObjectURL(uscente.anteprima);
+        }
+        return [];
+      });
+    }
+  }, []);
+
+  /**
+   * Carica una fotografia della confezione originale.
+   *
+   * Stessa porta delle fotografie della bottiglia — `firmaUploadFoto` decide
+   * percorso e token, il bucket `annunci` e i suoi limiti restano quelli — con
+   * due differenze: l'uso è sempre `"annuncio"` perché queste immagini sono
+   * pubbliche quanto l'annuncio, e l'esito finisce in `fotoConfezione`.
+   */
+  const caricaFotoConfezione = useCallback(async (file: File) => {
+    const client = getSupabaseClient();
+    if (!client) {
+      toast.error("Il caricamento delle foto non è disponibile in questo momento.");
+      return;
+    }
+
+    // Il tetto è anche della funzione SQL (`cardinality > 4`): fermarsi qui
+    // evita di caricare un oggetto che la dichiarazione poi rifiuterebbe.
+    if (fotoConfezione.length >= MAX_FOTO_CONFEZIONE) {
+      toast.error(`Puoi caricare al massimo ${MAX_FOTO_CONFEZIONE} fotografie della confezione.`);
+      return;
+    }
+
+    setFotoConfezioneInCorso(true);
+    try {
+      const firma = await firmaUploadFoto(file.type, file.size, "annuncio");
+      if (!firma.ok) {
+        toast.error(firma.error);
+        return;
+      }
+
+      const { error } = await client.storage
+        .from(firma.data.bucket)
+        .uploadToSignedUrl(firma.data.percorso, firma.data.token, file);
+
+      if (error) {
+        // Un caricamento fallito non tocca quelle già caricate: l'array
+        // cresce solo in caso di successo.
+        console.error("[vendi] upload confezione fallito:", error);
+        toast.error("Caricamento non riuscito. Riprova.");
+        return;
+      }
+
+      setFotoConfezione((f) => [
+        ...f,
+        { percorso: firma.data.percorso, anteprima: URL.createObjectURL(file) },
+      ]);
+      toast.success("Fotografia caricata");
+    } finally {
+      setFotoConfezioneInCorso(false);
+    }
+  }, [fotoConfezione.length]);
+
+  const rimuoviFotoConfezione = useCallback((indice: number) => {
+    setFotoConfezione((f) => {
+      const uscente = f[indice];
       if (uscente?.anteprima.startsWith("blob:")) URL.revokeObjectURL(uscente.anteprima);
       return f.filter((_, i) => i !== indice);
     });
@@ -612,12 +745,33 @@ export function useSellWizard({
       return;
     }
 
+    // La stessa condizione del passo Consegna, ripetuta qui perché il pulsante
+    // "Pubblica" vive sull'Anteprima: chi ci è arrivato prima di rispondere —
+    // tornando indietro e cambiando una scelta — riceverebbe altrimenti il
+    // rifiuto del database al posto della domanda rimasta aperta.
+    const manca = messaggioLogisticaMancante(statoLogistica);
+    if (manca) {
+      toast.error(manca);
+      return;
+    }
+
     setInviando(true);
     try {
       const bozza = await assicuraBozza();
       if (!bozza) return;
 
-      const esito = await listingService.pubblica(bozza.id);
+      // Bozza → dichiarazione → pubblicazione, in quest'ordine e in serie.
+      // Entrambe le porte verso `attivo` pretendono le due dichiarazioni sulla
+      // riga, quindi pubblicare prima fallirebbe sempre e in parallelo
+      // fallirebbe a volte. Se la dichiarazione non riesce, `listing_pubblica`
+      // non viene nemmeno chiamata: l'annuncio resta bozza e nessuno annuncia
+      // una pubblicazione che non è avvenuta.
+      const esito = await pubblicaConLogistica({
+        listingId: bozza.id,
+        dichiarazione: normalizzaLogistica(statoLogistica),
+        dichiaraLogistica: listingService.dichiaraLogistica,
+        pubblica: listingService.pubblica,
+      });
       if (!esito.ok) {
         toast.error(esito.error);
         return;
@@ -642,6 +796,7 @@ export function useSellWizard({
     listingService,
     onCantinaCambiata,
     confermaPrezzoRichiesta,
+    statoLogistica,
   ]);
 
   const salvaBozza = useCallback(async () => {
@@ -659,6 +814,24 @@ export function useSellWizard({
     try {
       const bozza = await assicuraBozza();
       if (!bozza) return;
+
+      // Una bozza resta salvabile incompleta — è il senso di «ci torno dopo» —
+      // ma ciò che è già stato scelto va scritto, altrimenti chi riapre la
+      // bozza trova il passo vuoto e crede di non averlo mai toccato. La
+      // normalizzazione toglie le fotografie quando il tipo non le ammette:
+      // non si costruisce uno stato che il database rifiuterebbe.
+      const logistica = await salvaLogisticaBozza({
+        listingId: bozza.id,
+        stato: statoLogistica,
+        dichiaraLogistica: listingService.dichiaraLogistica,
+      });
+      if (!logistica.ok) {
+        // Non si dice "Bozza salvata": l'annuncio esiste, la dichiarazione no,
+        // e un successo pieno qui sarebbe un successo finto.
+        toast.error(logistica.error);
+        return;
+      }
+
       toast.success("Bozza salvata");
       // Anche una bozza è visibile in cantina: la bottiglia esiste, e compare
       // fra le proprie senza il distintivo "In vendita" finché non si pubblica.
@@ -667,7 +840,7 @@ export function useSellWizard({
     } finally {
       setInviando(false);
     }
-  }, [aggiungiInCantina, assicuraBozza, isVendita, onNavigate]);
+  }, [aggiungiInCantina, assicuraBozza, isVendita, listingService, onNavigate, statoLogistica]);
 
   return {
     modalita,
@@ -695,6 +868,15 @@ export function useSellWizard({
     fotoInCorso,
     caricaFoto,
     rimuoviFoto,
+    confezioneOriginaleTipo,
+    impostaConfezioneOriginaleTipo,
+    fotoConfezione,
+    fotoConfezioneInCorso,
+    caricaFotoConfezione,
+    rimuoviFotoConfezione,
+    handoffVenditore,
+    impostaHandoffVenditore: setHandoffVenditore,
+    logisticaDichiarata,
     riusoInCorso,
     prezzoPrecedente,
     prezzoPrecedenteDaConfermare,

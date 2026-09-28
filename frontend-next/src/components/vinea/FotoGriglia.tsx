@@ -18,6 +18,20 @@ type FotoGrigliaProps = {
   onSostituisci?: (indice: number, file: File) => void | Promise<void>;
   onSposta?: (indice: number, direzione: -1 | 1) => void;
   mostraPrincipale?: boolean;
+  /**
+   * Quante caselle mostrare in tutto. Il valore predefinito resta `MAX_FOTO`,
+   * il tetto delle fotografie dell'annuncio; le fotografie della confezione
+   * originale ne hanno un altro, più basso, imposto dalla funzione che le
+   * dichiara. Una griglia con più caselle del consentito inviterebbe a caricare
+   * un file che verrebbe poi rifiutato.
+   */
+  max?: number;
+  /**
+   * Il testo alternativo delle fotografie, numerato. Assente, le immagini
+   * restano decorative (`alt=""`) come nel wizard, dove la didascalia accanto
+   * dice già che cosa sono.
+   */
+  descrizione?: string;
 };
 
 const ACCEPT = "image/jpeg,image/png,image/webp,image/avif";
@@ -35,6 +49,8 @@ export function FotoGriglia({
   onSostituisci,
   onSposta,
   mostraPrincipale = false,
+  max = MAX_FOTO,
+  descrizione,
 }: FotoGrigliaProps) {
   const inputAggiunta = useRef<HTMLInputElement>(null);
   const inputSostituzione = useRef<HTMLInputElement>(null);
@@ -87,7 +103,15 @@ export function FotoGriglia({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={f.anteprima}
-              alt={editor ? (i === 0 ? "Fotografia principale dell'annuncio" : `Fotografia ${i + 1}`) : ""}
+              alt={
+                descrizione
+                  ? `${descrizione} ${i + 1}`
+                  : editor
+                    ? i === 0
+                      ? "Fotografia principale dell'annuncio"
+                      : `Fotografia ${i + 1}`
+                    : ""
+              }
               className="h-full w-full object-cover"
             />
 
@@ -152,7 +176,7 @@ export function FotoGriglia({
           </div>
         ))}
 
-        {Array.from({ length: Math.max(0, MAX_FOTO - foto.length) }).map((_, i) => (
+        {Array.from({ length: Math.max(0, max - foto.length) }).map((_, i) => (
           <button
             type="button"
             key={`vuota-${i}`}

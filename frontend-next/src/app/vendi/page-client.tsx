@@ -33,10 +33,21 @@ import { confidenzaPercento } from "@/lib/phase10/catalogazione";
 import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
 import { FotoGriglia } from "@/components/vinea/FotoGriglia";
 import { BetaActionNotice } from "@/components/vinea/BetaActionNotice";
-import { BetaDeliverySelector } from "@/components/vinea/BetaDeliverySelector";
 import { BottleSelector } from "@/app/vendi/bottle-selector";
 import { SmartSellPricePanel } from "@/components/vinea/SmartSellPricePanel";
 import { chiaveVino } from "@/lib/price-intelligence/insights";
+import {
+  ammetteFotoConfezione,
+  CONFEZIONI_ORIGINALI,
+  DESCRIZIONE_HANDOFF,
+  DISCLAIMER_IMBALLAGGIO,
+  ETICHETTA_CONFEZIONE_ORIGINALE,
+  ETICHETTA_HANDOFF,
+  HANDOFF_CONSIGLIATO,
+  HANDOFF_VENDITORE,
+  MAX_FOTO_CONFEZIONE,
+  NOTA_CONFEZIONE_PRODOTTO,
+} from "@/lib/vendi/logistica-annuncio";
 import { AI_UI } from "@/config/features";
 
 /**
@@ -99,6 +110,15 @@ export default function VendiPageClient() {
     fotoInCorso,
     caricaFoto,
     rimuoviFoto,
+    confezioneOriginaleTipo,
+    impostaConfezioneOriginaleTipo,
+    fotoConfezione,
+    fotoConfezioneInCorso,
+    caricaFotoConfezione,
+    rimuoviFotoConfezione,
+    handoffVenditore,
+    impostaHandoffVenditore,
+    logisticaDichiarata,
     riusoInCorso,
     prezzoPrecedente,
     prezzoPrecedenteDaConfermare,
@@ -667,9 +687,76 @@ export default function VendiPageClient() {
         )}
 
         {isVendita && step === 6 && (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <h2 className="font-serif text-2xl">Consegna</h2>
-            <BetaDeliverySelector />
+
+            {/*
+              Due domande distinte, e vale la pena dire perché non sono una
+              sola. La prima riguarda il PRODOTTO: che cosa compra chi compra,
+              cofanetto incluso o no. La seconda riguarda il TRASPORTO: come il
+              pacco arriva al vettore. Un cofanetto originale non dice niente
+              sul secondo, ed è l'equivoco che questo passo esiste per evitare.
+            */}
+            <section className="space-y-3">
+              <div>
+                <h3 className="font-serif text-lg">Come viene venduta la bottiglia?</h3>
+                <p className="text-xs text-muted-foreground">{NOTA_CONFEZIONE_PRODOTTO}</p>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                {CONFEZIONI_ORIGINALI.map((tipo) => (
+                  <OpzioneLogistica
+                    key={tipo}
+                    active={confezioneOriginaleTipo === tipo}
+                    onClick={() => impostaConfezioneOriginaleTipo(tipo)}
+                    titolo={ETICHETTA_CONFEZIONE_ORIGINALE[tipo]}
+                  />
+                ))}
+              </div>
+
+              {/*
+                Le fotografie compaiono solo quando una confezione c'è, e sono
+                facoltative. Restano un array separato da quello della
+                bottiglia: finiscono in `confezione_originale_foto`, non nella
+                galleria.
+              */}
+              {ammetteFotoConfezione(confezioneOriginaleTipo) ? (
+                <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Fotografie della confezione (facoltative, fino a {MAX_FOTO_CONFEZIONE})
+                  </p>
+                  <FotoGriglia
+                    foto={fotoConfezione}
+                    inCorso={fotoConfezioneInCorso}
+                    onCarica={caricaFotoConfezione}
+                    onRimuovi={rimuoviFotoConfezione}
+                    max={MAX_FOTO_CONFEZIONE}
+                    descrizione="Fotografia della confezione originale"
+                  />
+                </div>
+              ) : null}
+            </section>
+
+            <section className="space-y-3">
+              <h3 className="font-serif text-lg">Come preferisci consegnare il pacco?</h3>
+
+              <div className="grid gap-2">
+                {HANDOFF_VENDITORE.map((modo) => (
+                  <OpzioneLogistica
+                    key={modo}
+                    active={handoffVenditore === modo}
+                    onClick={() => impostaHandoffVenditore(modo)}
+                    titolo={ETICHETTA_HANDOFF[modo]}
+                    sottotitolo={DESCRIZIONE_HANDOFF[modo]}
+                    consigliato={modo === HANDOFF_CONSIGLIATO}
+                  />
+                ))}
+              </div>
+            </section>
+
+            <p className="rounded-xl border border-border bg-secondary/50 p-3 text-xs text-muted-foreground">
+              {DISCLAIMER_IMBALLAGGIO}
+            </p>
           </div>
         )}
 
@@ -703,6 +790,50 @@ export default function VendiPageClient() {
                 </p>
               )}
             </div>
+
+            {/*
+              Il riepilogo della logistica è per il venditore, e include la
+              consegna anche se quella scelta non sarà pubblica: non essere
+              visibile a chi compra non vuol dire non doverla poter rileggere
+              prima di pubblicare.
+            */}
+            {isVendita ? (
+              <div className="space-y-1 rounded-xl border border-border p-4 text-sm">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Consegna</p>
+                <p>
+                  Confezione:{" "}
+                  {confezioneOriginaleTipo
+                    ? ETICHETTA_CONFEZIONE_ORIGINALE[confezioneOriginaleTipo]
+                    : "—"}
+                  {fotoConfezione.length > 0
+                    ? ` — ${fotoConfezione.length} ${fotoConfezione.length === 1 ? "fotografia" : "fotografie"}`
+                    : ""}
+                </p>
+                <p>
+                  Consegna del pacco:{" "}
+                  {handoffVenditore ? ETICHETTA_HANDOFF[handoffVenditore] : "—"}
+                </p>
+                {fotoConfezione.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {fotoConfezione.map((f, i) => (
+                      // Anteprime blob: locali, fuori dalla portata di next/image.
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={f.percorso}
+                        src={f.anteprima}
+                        alt={`Fotografia della confezione originale ${i + 1}`}
+                        className="h-16 w-16 rounded-lg border border-border object-cover"
+                      />
+                    ))}
+                  </div>
+                ) : null}
+                {!logisticaDichiarata ? (
+                  <p className="pt-1 text-xs text-bordeaux">
+                    Torna al passo Consegna: servono entrambe le risposte per pubblicare.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         )}
       </div>
@@ -773,6 +904,53 @@ function ModeCard({
         <p className="text-xs text-muted-foreground">{sottotitolo}</p>
       </div>
       {active && <Check className="ml-auto h-5 w-5 text-bordeaux" />}
+    </button>
+  );
+}
+
+/**
+ * Una scelta del passo Consegna.
+ *
+ * È un `<button>` con `aria-pressed`, non un riquadro cliccabile: la selezione
+ * dev'essere raggiungibile da tastiera e udibile, e il bordo colorato da solo
+ * non la direbbe a chi non distingue i colori. Per questo accanto all'opzione
+ * scelta compare anche la spunta, come già fa `ModeCard`.
+ *
+ * `consigliato` è un suggerimento visivo e nient'altro: non preseleziona, non
+ * cambia l'ordine, non decide al posto del venditore.
+ */
+function OpzioneLogistica({
+  active,
+  onClick,
+  titolo,
+  sottotitolo,
+  consigliato = false,
+}: {
+  active: boolean;
+  onClick: () => void;
+  titolo: string;
+  sottotitolo?: string;
+  consigliato?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition ${active ? "border-bordeaux bg-bordeaux/5" : "border-border hover:bg-secondary"}`}
+    >
+      <div className="min-w-0 space-y-1">
+        <p className="flex flex-wrap items-center gap-2 font-medium">
+          {titolo}
+          {consigliato ? (
+            <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-bordeaux">
+              Consigliato
+            </span>
+          ) : null}
+        </p>
+        {sottotitolo ? <p className="text-xs text-muted-foreground">{sottotitolo}</p> : null}
+      </div>
+      {active && <Check className="ml-auto h-5 w-5 shrink-0 text-bordeaux" />}
     </button>
   );
 }

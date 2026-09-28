@@ -5,6 +5,14 @@ import { ruoloDaSessione } from "@/lib/auth/role";
 
 const progetto = join(import.meta.dir, "../../..");
 const leggi = (percorso: string) => readFileSync(join(progetto, percorso), "utf8");
+// La prosa che spiega un divieto non deve farlo fallire: il commento JSX cade
+// per primo, con l'atomo temperato che impedisce al match di scavalcare il suo
+// `*/` e mangiarsi il codice fino al successivo.
+const senzaCommenti = (sorgente: string) =>
+  sorgente
+    .replace(/\{\s*\/\*(?:(?!\*\/)[\s\S])*\*\/\s*\}/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
 const sorgentiIa = [
   leggi("src/components/vinea/SommelierChat.tsx"),
   leggi("src/hooks/useSellWizard.ts"),
@@ -84,11 +92,40 @@ describe("contratto di pre-lancio beta", () => {
     expect(hook).not.toInclude("functions.invoke");
   });
 
-  it("mantiene spedizione e packaging interamente locali", () => {
-    const selector = leggi("src/components/vinea/BetaDeliverySelector.tsx");
+  // La riga di prima leggeva `BetaDeliverySelector.tsx` e chiedeva che il
+  // selettore di spedizione fosse finto e locale. Quel componente non esiste
+  // più: al suo posto il passo Consegna dichiara una scelta vera, che finisce
+  // su `listings`. Cancellare il test avrebbe tolto la garanzia insieme al
+  // componente, quindi qui c'è la stessa promessa detta con più precisione —
+  // la logistica non è attiva — misurata su ciò che il codice fa adesso.
+  it("dichiara la logistica dell'annuncio senza attivare alcuna spedizione", () => {
+    const wizard = senzaCommenti(leggi("src/hooks/useSellWizard.ts"));
+    const passo = senzaCommenti(leggi("src/app/vendi/page-client.tsx"));
+    const servizio = senzaCommenti(leggi("src/services/listing-service.ts"));
     const checkout = leggi("src/lib/beta/checkout.ts");
-    expect(selector).not.toMatch(/fetch\(|getSupabaseClient|functions\.invoke/);
-    expect(selector).toInclude('<BetaActionNotice tipo="spedizione"');
+
+    // La scelta passa dalla sola funzione interna: nessun fornitore, nessuna
+    // Edge Function, nessuna chiamata di rete propria.
+    expect(servizio).toInclude('client.rpc("listing_logistica_dichiara"');
+    for (const sorgente of [wizard, passo]) {
+      expect(sorgente).not.toMatch(/fetch\(|functions\.invoke/);
+      // I nomi dei corrieri vanno ancorati alla parola: `ups` e `brt` sono
+      // sillabe che ricorrono in italiano e in mezzo alle classi CSS.
+      expect(sorgente).not.toMatch(/\b(dhl|ups|gls|brt|poste|sendcloud|shippo|easypost)\b/i);
+    }
+
+    // Niente etichette, codici a barre o tracciamento: non esistono da
+    // generare, e un annuncio che li promettesse prometterebbe un servizio
+    // inattivo. `tracking` da solo colpirebbe `tracking-wide` di Tailwind,
+    // quindi si cerca il tracciamento vero, non la spaziatura di un titolo.
+    const logistica = wizard + passo;
+    expect(logistica).not.toMatch(
+      /etichetta di spedizione|lettera di vettura|tracciamento|tracking(?:Code|Number|Url)|numero di tracking|\bQR\b/i,
+    );
+
+    // Nessun prezzo di trasporto entra nel wizard, e il checkout beta resta
+    // quello che era: il gate pagamenti non si muove da qui.
+    expect(logistica).not.toMatch(/costoSpedizione|speseSpedizione|shippingCost/);
     expect(checkout).toInclude('provider: "fake"');
   });
 
@@ -150,7 +187,7 @@ describe("contratto di pre-lancio beta", () => {
   });
 
   it("allinea MIN_TESTS al conteggio della suite estesa", () => {
-    expect(leggi("../.github/workflows/ci.yml")).toInclude('MIN_TESTS: "1884"');
+    expect(leggi("../.github/workflows/ci.yml")).toInclude('MIN_TESTS: "1931"');
   });
 
   // Lo script si prova da solo in `protected-paths-guard.test.sh`; qui si prova

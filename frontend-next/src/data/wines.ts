@@ -73,6 +73,27 @@ export type Wine = {
     avatarRef?: string;
   };
   immagini: string[];
+  /**
+   * La confezione originale con cui la bottiglia viene venduta — cofanetto,
+   * cassa di legno, confezione multipla — quando il venditore l'ha dichiarata.
+   *
+   * È dell'ANNUNCIO, non del vino: due bottiglie dello stesso Barolo possono
+   * avere l'una il cofanetto e l'altra no, quindi il campo non può vivere nel
+   * catalogo condiviso. Sta qui perché `Wine` è la forma che le superfici già
+   * leggono, come `condizione` e `conservazione`.
+   *
+   * Assente significa «non dichiarato», ed è il caso di ogni annuncio nato
+   * prima della domanda. Non è `nessuna_confezione_originale`: quella è una
+   * risposta, questa è la sua mancanza, e la scheda non mostra la sezione.
+   *
+   * `foto` sono indirizzi già ricomposti dal bucket `annunci`, e restano
+   * separate da `immagini`: la fotografia di un cofanetto nella galleria della
+   * bottiglia si leggerebbe come una bottiglia in più.
+   */
+  confezioneOriginale?: {
+    tipo: ConfezioneOriginaleTipo;
+    foto: string[];
+  };
   storia: string;
   degustazione: string;
   disponibili: number;
@@ -80,6 +101,7 @@ export type Wine = {
   createdAt: string;
 };
 
+import type { ConfezioneOriginaleTipo } from "@/lib/vendi/logistica-annuncio";
 import { wineImg as img } from "@/lib/wine-images";
 
 export const wines: Wine[] = [

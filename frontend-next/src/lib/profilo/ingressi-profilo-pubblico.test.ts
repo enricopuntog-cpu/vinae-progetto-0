@@ -71,6 +71,8 @@ const RIGA: PublicListingRow = {
   seller_avatar_url: "",
   wine_provenienza: "staff",
   seller_verificato: false,
+  confezione_originale_tipo: null,
+  confezione_originale_foto: null,
 };
 
 describe("annuncio: identita del venditore", () => {

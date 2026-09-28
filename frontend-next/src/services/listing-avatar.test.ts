@@ -40,6 +40,9 @@ const RIGA: PublicListingRow = {
   seller_avatar_url: FOTO_PROPRIA,
   wine_provenienza: "staff",
   seller_verificato: false,
+  // Riga legacy: nata prima che la confezione originale fosse una domanda.
+  confezione_originale_tipo: null,
+  confezione_originale_foto: null,
 };
 
 type RispostaElenco = {
