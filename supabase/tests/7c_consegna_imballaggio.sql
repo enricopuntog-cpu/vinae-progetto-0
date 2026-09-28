@@ -720,10 +720,15 @@ begin
     select id from public.orders where buyer_id = v_buyer);
   -- WP3: archivio privato delle prove e oggetto depositato nel bucket. La
   -- cascata da orders porterebbe via le righe, non l'oggetto di Storage.
+  -- Lo Storage vieta la cancellazione diretta da SQL; il permesso esplicito e
+  -- lo stesso che usa la pulizia della fixture 12g, ed e locale alla
+  -- transazione, quindi si spegne da se al commit come all'errore.
   delete from private.order_shipping_evidence where order_id in (
     select id from public.orders where buyer_id = v_buyer);
+  perform set_config('storage.allow_delete_query', 'true', true);
   delete from storage.objects
   where bucket_id = 'dispute-evidence' and owner in (v_seller, v_buyer);
+  perform set_config('storage.allow_delete_query', 'false', true);
   delete from public.orders where buyer_id = v_buyer;
   delete from public.listings where seller_id in (v_seller, v_buyer);
   delete from public.bottle_units where owner_id in (v_seller, v_buyer);
@@ -798,10 +803,15 @@ exception when others then
     select id from public.orders where buyer_id = v_buyer);
   -- WP3: archivio privato delle prove e oggetto depositato nel bucket. La
   -- cascata da orders porterebbe via le righe, non l'oggetto di Storage.
+  -- Lo Storage vieta la cancellazione diretta da SQL; il permesso esplicito e
+  -- lo stesso che usa la pulizia della fixture 12g, ed e locale alla
+  -- transazione, quindi si spegne da se al commit come all'errore.
   delete from private.order_shipping_evidence where order_id in (
     select id from public.orders where buyer_id = v_buyer);
+  perform set_config('storage.allow_delete_query', 'true', true);
   delete from storage.objects
   where bucket_id = 'dispute-evidence' and owner in (v_seller, v_buyer);
+  perform set_config('storage.allow_delete_query', 'false', true);
   delete from public.orders where buyer_id = v_buyer;
   delete from public.listings where seller_id in (v_seller, v_buyer);
   delete from public.bottle_units where owner_id in (v_seller, v_buyer);
