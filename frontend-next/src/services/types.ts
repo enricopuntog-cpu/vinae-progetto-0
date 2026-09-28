@@ -28,6 +28,10 @@ import type { Wine } from "@/data/wines";
 import type { CodiceErroreAuth } from "@/lib/auth/errori-auth";
 import type { ContestoRitornoAuth } from "@/lib/auth/ritorno-auth";
 import type { MetodiRiautenticazione } from "@/lib/auth/riautenticazione";
+import type {
+  ConfezioneOriginaleTipo,
+  HandoffVenditore,
+} from "@/lib/vendi/logistica-annuncio";
 
 export type Result<T, E = string> = { ok: true; data: T } | { ok: false; error: E };
 
@@ -998,6 +1002,32 @@ export interface ListingService extends ListingReadService {
    */
   mieiAnnunciConEsito(): Promise<Result<import("./listing-service").AnnuncioProprietario[]>>;
   aggiorna(id: string, dati: Partial<DatiModificaAnnuncio>): Promise<Result<void>>;
+  /**
+   * Dichiara confezione originale e modalità di consegna alla rete logistica.
+   *
+   * Non è un `aggiorna()` con tre campi in più. Quelle tre colonne non sono nel
+   * GRANT per colonna di `authenticated`: l'unica porta è
+   * `public.listing_logistica_dichiara`, che verifica `auth.uid()`, la
+   * proprietà della riga, lo stato dell'annuncio, i valori ammessi, il tetto di
+   * quattro fotografie e l'esistenza di ciascun oggetto nel bucket `annunci`.
+   * Un UPDATE diretto tornerebbe indietro con zero righe modificate e nessun
+   * errore, cioè il peggiore dei modi di non funzionare.
+   *
+   * Non prende un `seller_id`: il venditore è la sessione, e passarlo
+   * suggerirebbe di poter dichiarare per conto di un altro.
+   *
+   * Va chiamata PRIMA di `pubblica()`: senza entrambe le dichiarazioni la
+   * transizione verso `attivo` rifiuta l'annuncio.
+   */
+  dichiaraLogistica(
+    listingId: string,
+    dichiarazione: {
+      confezioneOriginaleTipo: ConfezioneOriginaleTipo | null;
+      /** Percorsi nel bucket `annunci`, mai URL: al massimo quattro. */
+      confezioneOriginaleFoto: string[];
+      handoffVenditore: HandoffVenditore | null;
+    },
+  ): Promise<Result<void>>;
   pubblica(id: string): Promise<Result<void>>;
   sospendi(id: string, motivo?: string): Promise<Result<void>>;
   scadi(id: string): Promise<Result<void>>;

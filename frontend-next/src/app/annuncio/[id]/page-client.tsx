@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -47,6 +48,10 @@ import {
 } from "@/components/vinea/PriceIntelligencePanel";
 import type { VistaPriceIntelligence } from "@/lib/price-intelligence/insights";
 import type { AnnuncioProprietario } from "@/services/listing-service";
+import {
+  etichettaConfezioneOriginale,
+  NOTA_CONFEZIONE_PUBBLICA,
+} from "@/lib/vendi/logistica-annuncio";
 import { PAGAMENTI_UI_ABILITATI } from "@/config/features";
 
 export default function AnnuncioDetailPageClient({
@@ -278,6 +283,37 @@ export default function AnnuncioDetailPageClient({
           <Info icon={Truck} label="Condizione" value={wine.condizione} />
         </TabsContent>
       </Tabs>
+
+      {/* La confezione originale è parte del prodotto, non della galleria: se
+          le sue fotografie finissero fra quelle della bottiglia, chi guarda
+          conterebbe come immagini del vino delle immagini di un cofanetto.
+          Sta qui, con il suo titolo e la sua nota, perché è un'informazione
+          sull'oggetto venduto — e perché la nota che la separa dall'imballaggio
+          di spedizione dev'essere letta insieme a ciò che descrive. */}
+      {wine.confezioneOriginale ? (
+        <section className="rounded-2xl border border-border bg-card p-6">
+          <h2 className="font-serif text-xl">Confezione originale</h2>
+          <p className="mt-2 text-sm">
+            {etichettaConfezioneOriginale(wine.confezioneOriginale.tipo)}
+          </p>
+          {wine.confezioneOriginale.foto.length > 0 ? (
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {wine.confezioneOriginale.foto.map((src, i) => (
+                <Image
+                  key={src}
+                  src={src}
+                  width={600}
+                  height={600}
+                  sizes="(max-width: 639px) 50vw, 25vw"
+                  alt={`Confezione originale di ${wine.nome} ${wine.annata}, fotografia ${i + 1}`}
+                  className="aspect-square w-full rounded-xl border border-border object-cover"
+                />
+              ))}
+            </div>
+          ) : null}
+          <p className="mt-4 text-xs text-muted-foreground">{NOTA_CONFEZIONE_PUBBLICA}</p>
+        </section>
+      ) : null}
 
       {/* Suggeriti */}
       {correlati.length > 0 && (

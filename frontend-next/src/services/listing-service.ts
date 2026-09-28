@@ -21,6 +21,11 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { avatarSicuro, riferimentoAvatarSicuro } from "@/lib/profilo/avatar";
+import { confezioneOriginaleTipoDaDb } from "@/lib/vendi/logistica-annuncio";
+import type {
+  ConfezioneOriginaleTipo,
+  HandoffVenditore,
+} from "@/lib/vendi/logistica-annuncio";
 import type { Wine } from "@/data/wines";
 import type {
   DatiModificaAnnuncio,
@@ -67,6 +72,18 @@ export type PublicListingRow = {
    * sostiene: né email, né data di nascita, né fonte, né date.
    */
   seller_verificato: boolean;
+  /**
+   * La confezione originale dichiarata dal venditore (20260928120000), o `null`
+   * per gli annunci nati prima che la domanda esistesse.
+   *
+   * `handoff_venditore` esiste sulla stessa tabella e NON è qui: la vista non
+   * lo espone, perché come il venditore porta il pacco al vettore non è un
+   * fatto del prodotto e non riguarda chi compra. Aggiungerlo a questa riga
+   * significherebbe chiederlo a PostgREST, che risponderebbe `42703`.
+   */
+  confezione_originale_tipo: string | null;
+  /** Percorsi nel bucket `annunci`, mai URL: al massimo quattro. */
+  confezione_originale_foto: string[] | null;
 };
 
 const COLONNE = [
@@ -100,6 +117,8 @@ const COLONNE = [
   "seller_avatar_url",
   "wine_provenienza",
   "seller_verificato",
+  "confezione_originale_tipo",
+  "confezione_originale_foto",
 ].join(",");
 
 /**
@@ -150,12 +169,35 @@ function centesimiInEuro(cents: number): number {
  * già una variabile d'ambiente.
  */
 export function urlImmagine(percorso: string): string {
-  if (percorso.startsWith("/") || percorso.startsWith("http")) return percorso;
+  if (percorso.startsWith("/")) return percorso;
 
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!base) return IMMAGINE_ASSENTE;
 
   return `${base}/storage/v1/object/public/${BUCKET_ANNUNCI}/${percorso}`;
+}
+
+/**
+ * La confezione originale della riga, o `undefined` se non è stata dichiarata.
+ *
+ * Tre casi, e il terzo è quello che conta: tipo valido con fotografie, tipo
+ * valido senza, e `NULL`. `NULL` è un annuncio precedente alla 20260928120000 e
+ * resta assente — tradurlo in `nessuna_confezione_originale` vorrebbe dire
+ * attestare al posto del venditore un fatto che non ha mai dichiarato.
+ *
+ * Le fotografie passano dallo stesso `urlImmagine()` di `listings.immagini`:
+ * la colonna contiene percorsi del bucket `annunci`, non indirizzi, e
+ * ricomporre l'URL a mano qui significherebbe accettare come indirizzo
+ * qualunque stringa arrivi da quel campo.
+ */
+function confezioneOriginaleDaRiga(riga: PublicListingRow): Wine["confezioneOriginale"] {
+  const tipo = confezioneOriginaleTipoDaDb(riga.confezione_originale_tipo);
+  if (!tipo) return undefined;
+
+  return {
+    tipo,
+    foto: (riga.confezione_originale_foto ?? []).map(urlImmagine),
+  };
 }
 
 /**
@@ -227,6 +269,7 @@ export function rigaAWine(riga: PublicListingRow): Wine {
       avatarRef: riferimentoAvatarSicuro(riga.seller_avatar_url, riga.seller_id) ?? "",
     },
     immagini,
+    confezioneOriginale: confezioneOriginaleDaRiga(riga),
     storia: riga.storia,
     degustazione: riga.degustazione,
     disponibili: riga.quantita,
@@ -552,6 +595,39 @@ export function createListingService(client: SupabaseClient | null): ListingServ
     },
 
     mieiAnnunciConEsito: leggiMieiAnnunci,
+
+    /**
+     * Confezione originale e consegna alla rete, dichiarate dal venditore.
+     *
+     * Passa dalla funzione e non da un UPDATE come `aggiorna()` perché le tre
+     * colonne non sono nel GRANT per colonna di `authenticated`: un UPDATE
+     * diretto non fallirebbe, modificherebbe zero righe e racconterebbe un
+     * salvataggio avvenuto. La funzione è l'unica porta, verifica lei
+     * `auth.uid()` e la proprietà dell'annuncio, e per questo non riceve né
+     * `seller_id` né lo stato: darglieli significherebbe farsi dire dal client
+     * chi è il venditore.
+     *
+     * Va chiamata PRIMA di `pubblica()`: entrambe le porte di pubblicazione
+     * rifiutano un annuncio privo delle due dichiarazioni.
+     */
+    async dichiaraLogistica(
+      listingId: string,
+      dichiarazione: {
+        confezioneOriginaleTipo: ConfezioneOriginaleTipo | null;
+        confezioneOriginaleFoto: string[];
+        handoffVenditore: HandoffVenditore | null;
+      },
+    ): Promise<Result<void>> {
+      if (!client) return NESSUN_CLIENT;
+      return scrittura("dichiaraLogistica", async () =>
+        client.rpc("listing_logistica_dichiara", {
+          p_listing_id: listingId,
+          p_confezione_originale_tipo: dichiarazione.confezioneOriginaleTipo,
+          p_confezione_originale_foto: dichiarazione.confezioneOriginaleFoto,
+          p_handoff_venditore: dichiarazione.handoffVenditore,
+        }),
+      );
+    },
 
     /** bozza | modifiche_richieste → attivo. */
     async pubblica(id: string): Promise<Result<void>> {
