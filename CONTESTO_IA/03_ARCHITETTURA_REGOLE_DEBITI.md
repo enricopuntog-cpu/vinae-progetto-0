@@ -363,6 +363,145 @@ Prova: `supabase/tests/12k_cantina_follow.sql`, 57 invarianti, cablata nel gate
 effimero della CI, insieme a `12i` 21/21 e `12j` 35/35. L'esito è stato letto
 dal log del job: un check verde non dice quali griglie hanno girato.
 
+## Confezione originale e consegna del venditore (28 settembre 2026)
+
+Tre concetti che il linguaggio comune confonde e che il database tiene separati
+per sempre.
+
+**A — confezione originale del prodotto.** Descrive *cosa si compra*: nessuna
+confezione originale, cofanetto, cassa di legno, confezione multipla. È una
+proprietà dell'annuncio, non del vino: la stessa bottiglia può essere venduta
+oggi nel suo cofanetto e riannunciata domani senza, e `confezione_multipla_originale`
+deve restare compatibile con la futura evoluzione 1→N di `listing_bottle_units`.
+Per questo vive su `public.listings` (`confezione_originale_tipo`,
+`confezione_originale_foto`) e non su `wines`, e non ha niente a che vedere con
+lo stoccaggio fisico di `bottle_units`.
+
+**B — imballaggio di spedizione.** È la Fase 7c: `listings.imballaggio_codice` è
+un codice di listino di `public.packaging_options`, con un prezzo, che decide
+*come la merce viene protetta in transito*. Non va rinominato, non va riusato e
+non va riletto come confezione originale. I due concetti hanno campi propri
+perché un giorno cambieranno per ragioni diverse.
+
+**La distinzione che si perde più facilmente.**
+`nessuna_confezione_originale` significa che il prodotto non è venduto con
+cofanetto, cassa o confezione originale. **Non** significa che la spedizione non
+richieda imballaggio: quella bottiglia va protetta esattamente come le altre. Il
+contrario vale allo stesso modo: cofanetto, cassa e confezione multipla
+descrivono una parte di ciò che si compra e **non attestano nessuna idoneità al
+trasporto**. Un commento durevole sulla colonna lo dice, perché è la confusione
+che prima o poi qualcuno commetterà leggendo solo il nome del campo.
+
+**C — consegna del venditore alla rete logistica.** `handoff_venditore` dice
+soltanto come il pacco entra nella rete: `dropoff_pudo` o `ritiro_domicilio`. È
+un campo distinto da A e da B. Il drop-off presso un punto di ritiro è lo
+**standard di prodotto**, il ritiro a domicilio l'alternativa; ma lo standard non
+viene scritto nel database come scelta dell'utente. Il campo resta NULL finché il
+venditore non sceglie davvero: una preferenza suggerita dall'interfaccia e una
+dichiarazione del venditore non sono lo stesso fatto, e solo la seconda può
+vincolare una spedizione. Il default lo propone la UI, in modo visibile e
+reversibile.
+
+**Nessun prezzo e nessun provider sono decisi qui.** Il pacchetto fondativo non
+introduce sovrapprezzi, tariffe, corrieri, hub, associazione a un PUDO reale né
+alcuna superficie economica: commissione, importi dell'ordine, payout, checkout
+e `packaging_options` restano invariati. Chi aggiungerà il prezzo del ritiro a
+domicilio lo farà in un pacchetto proprio, con le regole di denaro della 7b/7d.
+
+Superficie: le tre colonne non entrano in nessun `GRANT UPDATE` del client e si
+scrivono solo da `public.listing_logistica_dichiara(uuid, text, text[], text)`,
+owner-only sull'identità del chiamante. `public.public_listings` espone A e
+**non** C: la consegna alla rete logistica è una preferenza operativa del
+venditore, non un dato di catalogo. Nessun backfill: gli annunci anteriori alla
+migrazione restano leggibili e acquistabili con i campi NULL, che significano
+«non dichiarato» e mai «nessuna confezione».
+
+### Le porte verso `attivo`, tutte
+
+Un cancello vale quanto la porta più debole che lo aggira, quindi le porte si
+enumerano invece di fidarsi della prima che si trova. Verso `stato = 'attivo'`
+scrivono tre famiglie di codice, non una.
+
+1. **`public.listing_pubblica`** — la pubblicazione del venditore. **Guardata.**
+2. **`private.moderazione_annuncio_transizione` con `p_stato = 'attivo'`**, cioè
+   `public.moderazione_annuncio_ripristina` della 9b. **Guardata**, sul solo ramo
+   `attivo`. La prima stesura di questa fondazione guardava solo la porta 1 e
+   dichiarava la porta 2 come limite deliberato: era sbagliato. Non è un debito,
+   è un invariante di pubblicazione, e un contratto che si aggira con un
+   ripristino non è un contratto. Le altre transizioni della moderazione —
+   `in_revisione`, `modifiche_richieste`, `sospeso`, `rifiutato` — non sono
+   toccate: servono proprio a chiedere al venditore i dati che mancano, e
+   vincolarle avrebbe chiuso la via d'uscita invece di aprirla.
+3. **Il rilascio di una prenotazione**, `riservato → attivo` quando un ordine
+   scade, viene annullato o rimborsato (migrazioni 7, 7b, 7c). **Non guardata, ed
+   è deliberato**: ripristina uno stato precedente invece di entrare in vendita, e
+   vincolarla lascerebbe la merce bloccata in `riservato` quando un pagamento non
+   va a termine — esattamente il difetto che le regole di denaro vietano. Chi
+   volesse guardarla toccherebbe i percorsi di pagamento, che sono un pacchetto
+   proprio.
+
+La regola, in una riga: gli annunci **già** `attivo` alla migrazione non vengono
+toccati e restano pubblici e acquistabili con i campi NULL; ogni ingresso
+**futuro** in `attivo` pretende entrambe le dichiarazioni, legacy compreso. Non
+serve distinguere annunci legacy da annunci nuovi al momento della riattivazione:
+se un vecchio annuncio vuole tornare in vendita, prima dichiara.
+
+### Nessun vicolo cieco: la matrice degli stati dichiarabili
+
+Un cancello che chiede un dato senza lasciare aperta una porta per scriverlo non
+è un cancello, è un muro. La prima stesura del gate lasciava la porta del
+venditore sui soli tre stati di `listings_update_own` e dichiarava come
+conseguenza operativa che un legacy sospeso sarebbe tornato in vendita passando
+per `in_revisione`/`modifiche_richieste`. Quella conseguenza era incompleta, e
+la parte mancante era una regressione: `moderazione_annuncio_ripristina` riporta
+ad `attivo` da quattro stati, e da **`rifiutato` non esiste nessuna
+transizione** verso uno stato dichiarabile. Un annuncio rifiutato senza i nuovi
+metadati non poteva né compilarli né essere ripristinato: murato.
+
+Perciò `public.listing_logistica_dichiara` accetta anche `sospeso` e
+`rifiutato`. L'eccezione riguarda **solo i tre campi logistici**: la policy
+`listings_update_own`, il `GRANT UPDATE` delle colonne normali e gli stati
+modificabili del frontend non sono stati toccati, e quei due stati non hanno un
+acquisto in corso, quindi completarli non sfiora il denaro. La matrice finale:
+
+| stato | dichiara | perché |
+| --- | --- | --- |
+| `bozza` | sì | non ancora pubblicato |
+| `modifiche_richieste` | sì | tornato al venditore per correzioni |
+| `attivo` | sì | pubblico e modificabile dalla 20260819090000 |
+| `sospeso` | sì | nessun acquisto in corso, la moderazione può ripristinarlo |
+| `rifiutato` | sì | idem, ed era l'unico vicolo cieco senza uscita |
+| `in_revisione` | no | la moderazione sta leggendo la riga; l'uscita è `modifiche_richieste`, che dichiara |
+| `riservato` | no | un acquisto è in corso proprio su questi dati |
+| `venduto` | no | transazione conclusa |
+| `scaduto` | no | terminale: nessuna porta lo riporta ad `attivo`, quindi nessun cancello lo blocca |
+
+Incrocio finale, che è il controllo che conta: dei quattro stati da cui la
+moderazione può tentare il ritorno in vendita, tre dichiarano direttamente e
+`in_revisione` dichiara dopo una transizione. Non resta nessuno stato in cui il
+cancello pretenda un dato che il venditore non possa scrivere.
+
+Il motore di moderazione è stato ricreato con `create or replace` dalla sua
+definizione **effettiva** più recente, non dalla prima che nomina la funzione: la
+9b `20260810180000` riga 642, dopo aver verificato che nessuna migrazione
+successiva la ridefinisca e che nessuna `alter function` la tocchi (la 12c la
+chiama e ne modella una speculare per il Club, senza cambiarne il corpo). Il
+diff contro la 9b è di undici righe — due `declare`, due colonne in più nel
+`select ... for update` e il cancello prima dell'`UPDATE`. I privilegi non sono
+ridichiarati perché `create or replace function` conserva l'ACL. Il controllo sta
+sulla riga già lockata, non su una rilettura. Nessun helper booleano condiviso:
+la porta del venditore deve dire *quale* delle due dichiarazioni manca, la
+moderazione parla allo staff con un messaggio neutro, e un predicato comune
+avrebbe servito un chiamante su due senza ridurre nulla.
+
+Prova: `supabase/tests/12l_listing_logistics_metadata.sql`, 48 invarianti,
+cablata nel gate `Supabase DB regression`. I casi 32-38 coprono le due porte
+guardate e il ciclo completo di un annuncio legacy; 39-41 provano che il resto
+della moderazione è invariato; 42-48 percorrono la matrice qui sopra riga per
+riga, compresi il ripristino da `rifiutato` e quello da `sospeso` che prima
+erano impossibili. **NON VERIFICATO** alla scrittura: mai eseguita, l'ambiente
+di sviluppo non ha né CLI Supabase né Docker attivo.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):
@@ -659,7 +798,8 @@ da [`.github/scripts/supabase-db-gate-scope.sh`](../.github/scripts/supabase-db-
 sul diff `HEAD^1..HEAD`. Sono pertinenti:
 
 - `supabase/migrations/**`, `supabase/config.toml` e `supabase/seed.sql`;
-- `supabase/tests/12e_*`, `12f_*` e `12g_*`;
+- `supabase/tests/12e_*`, `12f_*`, `12g_*`, `12h_*`, `12i_*`, `12j_*`, `12k_*` e
+  `12l_*`;
 - il workflow e lo script di scope stessi.
 
 Per il resto il gate produce uno skip dichiarato (notice e job summary), non un
