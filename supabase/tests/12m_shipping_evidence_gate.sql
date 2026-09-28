@@ -27,9 +27,16 @@
 -- segreto — il compratore lo legge da `imballaggio_foto` — e che a negare e la
 -- policy; il caso 57 prova l'eccezione dichiarata, il deposito in pratica.
 --
+-- I casi 16, 17, 36 e 58 provano la cancellazione. Lo Storage di Supabase
+-- vieta di suo ogni DELETE diretta su `storage.objects`, a chiunque e prima
+-- della RLS, quindi nessuna cancellazione puo riuscire da SQL: l'invariante
+-- viene misurato sul predicato della policy, valutato dal chiamante, con il
+-- testo della policy fissato dal caso 58. Il commento su `pg_temp.cancellabile`
+-- spiega perche l'alternativa non proverebbe niente.
+--
 -- NUMERAZIONE. Gli id sono chiavi, non un ordine di lettura: il caso 53 e un
 -- invariante economico registrato fra il 41 e il 42, perche fu aggiunto dopo e
--- prese il primo id libero. I casi totali sono 57, non 56.
+-- prese il primo id libero. I casi totali sono 58, non 57.
 
 begin;
 
@@ -447,6 +454,24 @@ create function pg_temp.cancella(p_uid uuid, p_name text) returns text language 
     p_name)) || ' / oggetti ' || pg_temp.oggetto(p_name)::text;
 $f$;
 
+-- Decisione della policy di DELETE, a privilegi del chiamante.
+--
+-- LIMITE REALE DELLO STACK. Lo Storage di Supabase vieta di suo la
+-- cancellazione diretta da `storage.objects` — «Direct deletion from storage
+-- tables is not allowed. Use the Storage API instead.» — e la vieta a
+-- chiunque, prima che la RLS entri in gioco. Una griglia SQL che pretendesse
+-- di provare la policy facendo riuscire una cancellazione proverebbe il
+-- divieto dello stack e nient'altro: passerebbe anche senza policy. Quello che
+-- si puo provare, ed e il termine che decide davvero, e il predicato della
+-- policy valutato dal chiamante sul percorso vero. Il caso 58 fissa il testo
+-- della policy, cosi il predicato provato qui e davvero quello che gira.
+create function pg_temp.cancellabile(p_uid uuid, p_name text) returns text
+language sql as $f$
+  select pg_temp.val(p_uid, 'authenticated', format(
+    'select (split_part(%L, ''/'', 2) = (select auth.uid())::text'
+    ' and not private.prova_ordine_depositata(%L))::text', p_name, p_name));
+$f$;
+
 -- Caricamento a privilegi del chiamante: qui si prova la policy di INSERT,
 -- non la RPC.
 create function pg_temp.carica(
@@ -693,20 +718,29 @@ end $$;
 
 do $$
 declare v_corrente text; v_superata text; v_libera text;
+        d_corrente text; d_superata text; d_libera text;
 begin
+  d_corrente := pg_temp.cancellabile(pg_temp.ua(), pg_temp.p(pg_temp.o1(), pg_temp.ua(), 3));
+  d_superata := pg_temp.cancellabile(pg_temp.ua(), pg_temp.p(pg_temp.o1(), pg_temp.ua(), 1));
   v_corrente := pg_temp.cancella(pg_temp.ua(), pg_temp.p(pg_temp.o1(), pg_temp.ua(), 3));
   v_superata := pg_temp.cancella(pg_temp.ua(), pg_temp.p(pg_temp.o1(), pg_temp.ua(), 1));
   perform pg_temp.registra(16,
     'la prova registrata, corrente o superata, non si cancella da Storage',
-    v_corrente like '%oggetti 1' and v_superata like '%oggetti 1',
-    format('corrente %s / superata %s', v_corrente, v_superata));
+    d_corrente = 'false' and d_superata = 'false'
+    and v_corrente like '%oggetti 1' and v_superata like '%oggetti 1',
+    format('policy corrente %s / superata %s / sql corrente %s / superata %s',
+           d_corrente, d_superata, v_corrente, v_superata));
 
   -- Un caricamento mai registrato resta pulibile dal suo autore: la
-  -- protezione riguarda le prove, non la cartella.
+  -- protezione riguarda le prove, non la cartella. E il termine che distingue
+  -- questo caso dal 16, e l'unico che una griglia SQL puo misurare: la
+  -- cancellazione vera passa dalla Storage API, che qui non c'e.
+  d_libera := pg_temp.cancellabile(pg_temp.ua(), pg_temp.p(pg_temp.o1(), pg_temp.ua(), 5));
   v_libera := pg_temp.cancella(pg_temp.ua(), pg_temp.p(pg_temp.o1(), pg_temp.ua(), 5));
   perform pg_temp.registra(17,
     'un caricamento mai registrato resta cancellabile dal suo autore',
-    v_libera = 'ok / oggetti 0', v_libera);
+    d_libera = 'true',
+    format('policy %s / sql %s', d_libera, v_libera));
 end $$;
 
 -- ---------------------------------------------------------------------------
@@ -902,11 +936,13 @@ begin
     left(v_r, 5) = 'P0001' and pg_temp.riga(pg_temp.o1()) = 'spedito|si|2',
     format('%s / riga %s', v_r, pg_temp.riga(pg_temp.o1())));
 
-  v_corrente := pg_temp.cancella(pg_temp.ua(), pg_temp.p(pg_temp.o1(), pg_temp.ua(), 4));
-  v_superata := pg_temp.cancella(pg_temp.ua(), pg_temp.p(pg_temp.o1(), pg_temp.ua(), 3));
+  v_corrente := pg_temp.cancellabile(pg_temp.ua(), pg_temp.p(pg_temp.o1(), pg_temp.ua(), 4))
+    || ' | ' || pg_temp.cancella(pg_temp.ua(), pg_temp.p(pg_temp.o1(), pg_temp.ua(), 4));
+  v_superata := pg_temp.cancellabile(pg_temp.ua(), pg_temp.p(pg_temp.o1(), pg_temp.ua(), 3))
+    || ' | ' || pg_temp.cancella(pg_temp.ua(), pg_temp.p(pg_temp.o1(), pg_temp.ua(), 3));
   perform pg_temp.registra(36,
     'dopo la spedizione le prove depositate restano incancellabili',
-    v_corrente like '%oggetti 1' and v_superata like '%oggetti 1',
+    v_corrente like 'false | %oggetti 1' and v_superata like 'false | %oggetti 1',
     format('corrente %s / superata %s', v_corrente, v_superata));
 end $$;
 
@@ -1345,6 +1381,33 @@ begin
     v_prima = '0' and v_riservata = '0' and v_depositata = '1',
     format('prima del deposito %s / riservata %s / depositata %s',
            v_prima, v_riservata, v_depositata));
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 58 — la policy di DELETE e davvero il predicato provato ai casi 16, 17 e 36
+-- ---------------------------------------------------------------------------
+
+do $$
+declare v_qual text; v_compratore text; v_estraneo text;
+begin
+  select qual into v_qual
+  from pg_policies
+  where schemaname = 'storage' and tablename = 'objects'
+    and policyname = 'dispute_evidence_owner_delete';
+
+  -- Il percorso e quello del caricamento libero del caso 17: per il suo autore
+  -- il predicato vale true, per chiunque altro no. E il termine «nessun altro
+  -- utente cancella», misurato e non dedotto dal testo.
+  v_compratore := pg_temp.cancellabile(pg_temp.ub(), pg_temp.p(pg_temp.o1(), pg_temp.ua(), 5));
+  v_estraneo := pg_temp.cancellabile(pg_temp.ue(), pg_temp.p(pg_temp.o1(), pg_temp.ua(), 5));
+
+  perform pg_temp.registra(58,
+    'la policy di DELETE porta il predicato provato, e nessun altro utente lo soddisfa',
+    v_qual like '%split_part(name, ''/''::text, 2)%'
+    and v_qual like '%prova_ordine_depositata(name)%'
+    and v_compratore = 'false' and v_estraneo = 'false',
+    format('qual %s / compratore %s / estraneo %s',
+           coalesce(v_qual, '<policy assente>'), v_compratore, v_estraneo));
 end $$;
 
 -- ---------------------------------------------------------------------------
