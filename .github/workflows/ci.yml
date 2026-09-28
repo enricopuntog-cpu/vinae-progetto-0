@@ -99,7 +99,7 @@ jobs:
       # che si svuota in silenzio.
       - name: Test
         env:
-          MIN_TESTS: "1883"
+          MIN_TESTS: "1884"
         run: |
           set -o pipefail
           bun run test 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
@@ -141,6 +141,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # La guardia ispeziona ogni commit della branch, non solo l'ultimo:
+          # serve la cronologia completa. Il repository e' piccolo e `fetch-depth:
+          # 0` elimina l'ambiguita' su quanti commit siano disponibili.
+          fetch-depth: 0
+      # Rifiuta i quattro file personali dell'autore se compaiono nell'albero di
+      # HEAD o in QUALUNQUE commit della branch rispetto alla base. Sta in questo
+      # job perche' e' un check gia' obbligatorio sul ruleset di `main`: un job
+      # nuovo non lo sarebbe finche' nessuno lo aggiunge al ruleset.
+      #
+      # Gli SHA arrivano dall'evento: su `pull_request` HEAD del checkout e' il
+      # merge commit di prova, non il vero HEAD della branch. Su `push` il range
+      # e' `before..after`.
+      - name: Protected personal paths
+        env:
+          GUARDIA_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          GUARDIA_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.after }}
+        run: bash .github/scripts/protected-paths-guard.sh
       - name: Validate scripts
         run: |
           bash -n .github/scripts/offsite-backup.sh
@@ -152,6 +170,9 @@ jobs:
           node --test .github/scripts/offsite-backup-freshness.test.mjs
           bash .github/scripts/offsite-backup-freshness.cli.test.sh
           bash -n .github/scripts/supabase-db-gate-scope.sh
+          bash -n .github/scripts/protected-paths-guard.sh
+          bash -n .github/scripts/protected-paths-guard.test.sh
+          bash .github/scripts/protected-paths-guard.test.sh
           bash -n supabase/tests/12g_ci_run.sh
           node --check supabase/tests/12g_club_dispute_e2e.mjs
           bash .github/scripts/supabase-db-gate.test.sh
