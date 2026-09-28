@@ -713,6 +713,15 @@ begin
   delete from private.rate_limit_buckets
   where subject in ('user:' || v_seller::text, 'user:' || v_buyer::text);
   delete from public.payment_provider_events where event_id like 'evt_7c_%';
+  -- La contabilità D1, arrivata dopo la 7c, crea movimenti append-only quando i
+  -- fixture diventano pagati. Soltanto questa pulizia sul database usa e getta
+  -- disarma il trigger già provato dalla sua griglia; nessun fatto monetario è
+  -- modificato durante i casi.
+  alter table public.balance_movimenti disable trigger balance_movimenti_no_delete;
+  delete from public.balance_movimenti where order_id in (
+    select id from public.orders where buyer_id = v_buyer);
+  alter table public.balance_movimenti enable trigger balance_movimenti_no_delete;
+  delete from public.balance_accounts where owner_id in (v_seller, v_buyer);
   delete from public.order_reviews where order_id in (
     select id from public.orders where buyer_id = v_buyer);
   delete from public.disputes where order_id in (
@@ -796,6 +805,15 @@ exception when others then
   delete from private.rate_limit_buckets
   where subject in ('user:' || v_seller::text, 'user:' || v_buyer::text);
   delete from public.payment_provider_events where event_id like 'evt_7c_%';
+  -- La contabilità D1, arrivata dopo la 7c, crea movimenti append-only quando i
+  -- fixture diventano pagati. Soltanto questa pulizia sul database usa e getta
+  -- disarma il trigger già provato dalla sua griglia; nessun fatto monetario è
+  -- modificato durante i casi.
+  alter table public.balance_movimenti disable trigger balance_movimenti_no_delete;
+  delete from public.balance_movimenti where order_id in (
+    select id from public.orders where buyer_id = v_buyer);
+  alter table public.balance_movimenti enable trigger balance_movimenti_no_delete;
+  delete from public.balance_accounts where owner_id in (v_seller, v_buyer);
   delete from public.order_reviews where order_id in (
     select id from public.orders where buyer_id = v_buyer);
   delete from public.disputes where order_id in (
