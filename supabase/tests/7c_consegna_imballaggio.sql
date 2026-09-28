@@ -747,6 +747,14 @@ begin
   perform set_config('storage.allow_delete_query', 'false', true);
   delete from public.orders where buyer_id = v_buyer;
   delete from public.listings where seller_id in (v_seller, v_buyer);
+  -- Price Intelligence registra osservazioni append-only sui listing dei
+  -- fixture. La griglia usa e getta rimuove soltanto quelle dei vini Test7c.
+  alter table public.wine_price_observations
+    disable trigger wine_price_observations_no_delete;
+  delete from public.wine_price_observations where wine_id in (
+    select id from public.wines where produttore = 'Test7c');
+  alter table public.wine_price_observations
+    enable trigger wine_price_observations_no_delete;
   delete from public.bottle_units where owner_id in (v_seller, v_buyer);
   delete from public.wines where produttore = 'Test7c';
   delete from public.packaging_options
@@ -841,6 +849,14 @@ exception when others then
   perform set_config('storage.allow_delete_query', 'false', true);
   delete from public.orders where buyer_id = v_buyer;
   delete from public.listings where seller_id in (v_seller, v_buyer);
+  -- Price Intelligence registra osservazioni append-only sui listing dei
+  -- fixture. La griglia usa e getta rimuove soltanto quelle dei vini Test7c.
+  alter table public.wine_price_observations
+    disable trigger wine_price_observations_no_delete;
+  delete from public.wine_price_observations where wine_id in (
+    select id from public.wines where produttore = 'Test7c');
+  alter table public.wine_price_observations
+    enable trigger wine_price_observations_no_delete;
   delete from public.bottle_units where owner_id in (v_seller, v_buyer);
   delete from public.wines where produttore = 'Test7c';
   delete from public.packaging_options
