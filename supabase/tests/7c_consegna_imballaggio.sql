@@ -5,8 +5,13 @@
 -- Eseguire dopo 20260804160000_phase_7c_delivery_packaging.sql E dopo
 -- 20260805160250_phase_7f_fix_contestazione_enum_cast.sql: senza la 7f il caso
 -- 20 fallisce con 42804, perché è il difetto che quel caso ha scoperto.
+-- Dal 20260928210000_shipping_evidence_gate.sql (WP3) la spedizione passa dal
+-- cancello di preparazione: il caso 9 registra una prova reale del collo finale
+-- e spunta i sei ID canonici, altrimenti il caso 12 non partirebbe. Il cancello
+-- e i suoi rifiuti sono materia della griglia 12m, non di questa.
 -- Crea e cancella due utenti, quattro vini, quattro bottiglie, quattro annunci
--- e i relativi ordini, pagamenti, eventi, contestazioni e recensioni.
+-- e i relativi ordini, pagamenti, eventi, contestazioni, recensioni, una prova
+-- di spedizione e il suo oggetto nel bucket privato.
 -- Richiede autorizzazione fixture separata da quella della migrazione.
 -- Atteso: 22 PASSA, 0 FALLISCE, nessuna riga 99.
 --
@@ -217,6 +222,9 @@ declare
   v_bool      boolean;
   v_sqlstate  text;
   v_msg       text;
+  -- WP3: percorso della prova fotografica del collo finale, senza la quale la
+  -- preparazione non si conferma e la spedizione non parte.
+  v_prova     text;
   -- Guasto dell'azione del caso in corso: lo scrive la guardia, lo legge
   -- registra_7c. Va riazzerato all'inizio di ogni tratto guardato.
   v_guasto    text;
@@ -402,12 +410,31 @@ begin
     8, 'A — il compratore non può preparare la spedizione',
     'errore "Ordine non trovato"', 'ordine non trovato', v_sqlstate, v_msg);
 
+  -- WP3 (20260928210000): la checklist non deposita piu fotografie e la
+  -- spedizione passa dal cancello di preparazione. Perche il caso 12 resti una
+  -- prova della spedizione — e non un modo obliquo di riprovare il cancello —
+  -- la preparazione qui e completa: oggetto nel bucket privato, prova del collo
+  -- finale registrata dalla sua porta, sei ID canonici tutti spuntati. Il
+  -- cancello in se lo prova la griglia 12m, con i suoi rifiuti.
+  v_prova := v_order_a::text || '/' || v_seller::text
+          || '/7c000001-0000-4000-8000-00000000000a.webp';
+  insert into storage.objects (bucket_id, name, owner, metadata)
+  values ('dispute-evidence', v_prova, v_seller,
+          '{"mimetype":"image/webp"}'::jsonb);
+
   v_guasto := null;
   begin
     perform pg_temp.impersona_7c('authenticated', v_seller);
+    perform public.ordine_spedizione_prova_registra(
+      v_order_a, 'collo_finale', v_prova);
     perform public.ordine_prepara_spedizione(
       v_order_a,
-      '[{"id":"foto_frontale","label":"Foto etichetta frontale","done":true}]'::jsonb,
+      '[{"id":"bottiglia_immobilizzata","done":true},
+        {"id":"nessun_movimento","done":true},
+        {"id":"protezione_tutti_lati","done":true},
+        {"id":"cartone_esterno_integro","done":true},
+        {"id":"chiusura_adeguata","done":true},
+        {"id":"confezione_originale_protetta","done":true}]'::jsonb,
       '{}');
     perform set_config('role', 'postgres', true);
 
@@ -691,6 +718,12 @@ begin
     select id from public.orders where buyer_id = v_buyer);
   delete from public.payments where order_id in (
     select id from public.orders where buyer_id = v_buyer);
+  -- WP3: archivio privato delle prove e oggetto depositato nel bucket. La
+  -- cascata da orders porterebbe via le righe, non l'oggetto di Storage.
+  delete from private.order_shipping_evidence where order_id in (
+    select id from public.orders where buyer_id = v_buyer);
+  delete from storage.objects
+  where bucket_id = 'dispute-evidence' and owner in (v_seller, v_buyer);
   delete from public.orders where buyer_id = v_buyer;
   delete from public.listings where seller_id in (v_seller, v_buyer);
   delete from public.bottle_units where owner_id in (v_seller, v_buyer);
@@ -763,6 +796,12 @@ exception when others then
     select id from public.orders where buyer_id = v_buyer);
   delete from public.payments where order_id in (
     select id from public.orders where buyer_id = v_buyer);
+  -- WP3: archivio privato delle prove e oggetto depositato nel bucket. La
+  -- cascata da orders porterebbe via le righe, non l'oggetto di Storage.
+  delete from private.order_shipping_evidence where order_id in (
+    select id from public.orders where buyer_id = v_buyer);
+  delete from storage.objects
+  where bucket_id = 'dispute-evidence' and owner in (v_seller, v_buyer);
   delete from public.orders where buyer_id = v_buyer;
   delete from public.listings where seller_id in (v_seller, v_buyer);
   delete from public.bottle_units where owner_id in (v_seller, v_buyer);

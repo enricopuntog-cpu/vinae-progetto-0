@@ -12,8 +12,11 @@ with checks(id, descrizione, passed) as (
       (select qual ~ 'dispute-evidence.*AND \(has_role\(' from pg_policies
        where schemaname = 'storage' and tablename = 'objects'
          and policyname = 'dispute_evidence_participants_select')),
+    -- Dalla 20260928210000 l'aiutante si chiama prova_ordine_depositata e
+    -- copre anche le prove di spedizione: l'invariante e sempre «un percorso
+    -- depositato non si cancella», l'insieme dei depositati si e allargato.
     (3, 'DELETE delle prove escluso per i percorsi depositati',
-      (select qual like '%prova_contestazione_depositata(name)%' from pg_policies
+      (select qual like '%prova_ordine_depositata(name)%' from pg_policies
        where schemaname = 'storage' and tablename = 'objects'
          and policyname = 'dispute_evidence_owner_delete')),
     (4, 'helper prove SECURITY DEFINER, eseguibile solo da authenticated',
