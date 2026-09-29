@@ -126,16 +126,12 @@ insert into public.orders (
    'grid-12n-o2', now() + interval '1 day', now() - interval '10 days',
    null, null, null, now() - interval '1 day', null, null, 'bloccato'),
   ('1e000000-0000-4000-8000-000000000403', '1e000000-0000-4000-8000-000000000303',
-   '1e000000-0000-4000-8000-000000000303'::uuid, -- segnaposto sostituito sotto
+   '1e000000-0000-4000-8000-000000000002',
    '1e000000-0000-4000-8000-000000000001',
    '1e000000-0000-4000-8000-000000000203', 'consegnato', 'spedizione', 5300,
    'grid-12n-o3', now() + interval '1 day', now() - interval '20 days',
    now() - interval '18 days', now() - interval '15 days', null, null,
    'BRT', 'GRID12N0003', 'trattenuto');
-
-update public.orders
-set buyer_id = '1e000000-0000-4000-8000-000000000002'
-where id = '1e000000-0000-4000-8000-000000000403';
 
 insert into public.disputes (
   id, order_id, aperta_da, motivo, descrizione, venditore_scadenza_at
