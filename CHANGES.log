@@ -1,20 +1,23 @@
 ## CURRENT STATE
-- WP1 logistica, WP2 ciclo vendita, WP3 prove di spedizione e WP4 guida contestuale sono **CLOSED**. WP4: PR #167, squash `50ead286a94b5ef14db5c0c7ab3945b76710f5cc`; handoff PR #168; baseline corrente `origin/main` `721531b66f38c3fe5e0d6034d0f1fc40996f3f80`.
-- WP3 resta l'autorità della preparazione: `private.order_shipping_evidence`, bucket privato `dispute-evidence`, prove correnti e sostituite, URL firmati a 15 minuti. Il ramo admin della policy `dispute_evidence_participants_select` consente già la firma delle prove; nessuna policy Storage è stata allargata.
-- Il prodotto servito resta `frontend/` + `backend/`; `frontend-next/` è la beta target. Nessun cutover appartiene a questo pacchetto.
+- WP1 logistica, WP2 ciclo vendita, WP3 prove di spedizione e WP4 guida contestuale sono **CLOSED**. Baseline precedente `721531b66f38c3fe5e0d6034d0f1fc40996f3f80`.
+- WP5 fascicolo contestazione è **MERGED**: PR #169, squash `d17f9abb056ecdea000d22db72862d32f5eb7a40`, ora `origin/main`. Sull'HEAD esatto tutti i required check erano verdi; il merge è passato da `--squash --admin` perché l'unico blocco era l'auto-approvazione del Code Owner.
+- Misure reali del merge: suite `frontend-next` **2079 test, 0 fail** (soglia CI allineata a **2079** in `.github/workflows/ci.yml` e in `prelaunch-contract.test.ts`); griglia `12n` eseguita sullo stack effimero del gate con **50/50**; regressioni cablate verdi, fra cui 12m prove di spedizione 59/59, 12g dispute e2e 7/7, 12e 10/10 e 7c 22/22.
+- Il frontend di produzione serve il nuovo `main`: il deploy Netlify pubblicato ha `commit_ref` uguale allo squash, stato `ready`.
+- WP3 resta l'autorità della preparazione: `private.order_shipping_evidence`, bucket privato `dispute-evidence`, prove correnti e sostituite, URL firmati a 15 minuti. Nessuna policy Storage è stata allargata.
+- Il prodotto servito resta `frontend/` + `backend/`; `frontend-next/` è la beta target.
 
 ## ACTIVE TASK
-- WP5 fascicolo contestazione / evidence dossier admin è in **VERIFY & SHIP** sul branch `feature/dispute-evidence-dossier`, baseline `721531b66f38c3fe5e0d6034d0f1fc40996f3f80`.
-- Il pacchetto integra il dossier nella coda esistente: annuncio e confezione dichiarata, prove WP3 correnti e sostituite, spedizione/consegna e tracking; le prove già esistenti di acquirente e venditore, timeline e note admin restano nello stesso pannello. Tre classi fotografiche distinte; POD vettore dichiarato non disponibile perché nessun provider logistico è integrato.
-- Una sola migrazione additiva, `20260929140000_dispute_evidence_dossier.sql`, ricrea `moderation_dispute_queue` con dieci colonne in coda e aggiunge le viste admin chiuse `moderation_dispute_shipping_evidence` e `moderation_dispute_tracking`. Nessuna tabella evidence, nessuna modifica al lifecycle, al denaro, ai provider o alle policy Storage.
-- Gate locali verdi: suite completa `frontend-next` **2079 test, 0 fail**, build, lint senza errori (12 warning preesistenti), typecheck, autotest del gate DB e `git diff --check`. `MIN_TESTS` alzato da 2023 a **2079** in `.github/workflows/ci.yml` e in `prelaunch-contract.test.ts`.
+- WP5 **NON è CLOSED**: la migrazione `20260929140000_dispute_evidence_dossier.sql` risulta mergiata ma **non se ne ha prova di applicazione in produzione**. L'integrazione Supabase non pubblica alcuno stato sul commit di `main`, e un merge non dimostra che le sue migrazioni siano state applicate.
+- Il pacchetto integra il dossier nella coda esistente: annuncio e confezione dichiarata, prove WP3 correnti e sostituite, spedizione/consegna e tracking; prove di acquirente e venditore, timeline e note admin restano nello stesso pannello. Tre classi fotografiche distinte; POD vettore dichiarato non disponibile perché nessun provider logistico è integrato.
+- La migrazione è additiva: ricrea `moderation_dispute_queue` conservando le 33 colonne distribuite e aggiungendone dieci, e crea le viste admin chiuse `moderation_dispute_shipping_evidence` e `moderation_dispute_tracking`. Nessuna tabella evidence, nessun cambio di lifecycle, denaro o provider.
 
 ## NEXT STEPS
-1. Verificare sul gate `Supabase DB regression` dell'HEAD esatto che la griglia `12n` giri davvero e chiuda 50/50 senza fallimenti.
-2. Applicare la migrazione WP5 alla produzione dopo il merge e verificare viste, grant e filtro admin in sola lettura.
-3. Eseguire lo smoke browser autenticato del fascicolo admin a 375px e desktop quando lo strumento sarà disponibile.
+1. Leggere il ledger del progetto di produzione `pijnmcllmfgjmgsvtcej` e accertare se `20260929140000` è stata applicata, applicandola da sola se manca.
+2. Verificare in sola lettura sulla produzione le tre viste: colonne, `security_invoker = off`, `security_barrier = true`, filtro admin e grant chiusi.
+3. Eseguire lo smoke browser autenticato del fascicolo admin a 375px e desktop quando esisterà un account admin sicuro già disponibile.
 
 ## BLOCKERS / NOTES
-- Le griglie Supabase non sono eseguibili in postazione (nessun Docker, Supabase CLI o `psql`): la `12n` resta **NON VERIFICATA** finché il gate CI non la riporta eseguita.
-- Lo smoke browser autenticato resta **NON VERIFICATO** per indisponibilità dello strumento; non è un blocco.
+- **Produzione non verificata**: questa postazione non ha Supabase CLI, `psql`, credenziali o MCP Supabase, quindi né l'applicazione né la lettura del ledger di produzione sono eseguibili da qui. Lo stato reale della produzione resta ignoto e va accertato prima di dichiarare WP5 chiuso.
+- I tre marker del fascicolo (`Annuncio collegato alla vendita`, `Prove pre-spedizione del venditore`, `POD vettore: non disponibile`) vivono dietro `/admin`, che risponde `307` a un client anonimo: restano **NON VERIFICATI** in produzione finché non esiste una sessione admin sicura.
+- Le due correzioni trovate dalla CI stavano entrambe nella griglia `12n` e nessuna nella migrazione: una foreign key verificata già all'INSERT e un predicato `%signed%` che pescava `assigned_to`.
 - Nessun file personale e nessun `CLAUDE.md` è stato toccato.
