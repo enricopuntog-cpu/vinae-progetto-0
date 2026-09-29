@@ -15,6 +15,8 @@ import type {
   OrderRecord,
   OrderReviewRecord,
   OrderReviewRispostaRecord,
+  ShippingEvidence,
+  ShippingEvidenceKind,
   TrackingEventRecord,
   VoceChecklist,
 } from "@/services/types";
@@ -37,6 +39,12 @@ export type DettaglioOrdine = {
    * modulo non compare.
    */
   eleggibilita: EleggibilitaRecensione | null;
+  /**
+   * Le prove di preparazione CORRENTI, con URL firmate che scadono. Solo per il
+   * venditore: `ordine_spedizione_prove` risponde a lui e agli amministratori,
+   * e per il compratore sarebbe una chiamata sempre respinta.
+   */
+  proveSpedizione: ShippingEvidence[];
   /** Chi sta guardando. Decide quale pannello compare, non quale permesso c'è. */
   ruolo: "compratore" | "venditore";
 };
@@ -92,17 +100,22 @@ export function useOrderDetail(orderId: string) {
 
     const venditore = ordine.seller_id === userId;
 
-    const [esitoTracking, esitoDispute, esitoReview, esitoEleggibilita] = await Promise.all([
-      tracking.perOrdine(orderId),
-      contestazioni.perOrdine(orderId),
-      recensioni.perOrdine(orderId),
-      // Il venditore non la chiede nemmeno: `ordini_recensibili` risponde sui
-      // soli ordini di chi compra, quindi per lui sarebbe una lettura sempre
-      // vuota.
-      venditore
-        ? Promise.resolve(null)
-        : recensioni.eleggibilita().then((e) => (e.ok ? e.data : null)),
-    ]);
+    const [esitoTracking, esitoDispute, esitoReview, esitoEleggibilita, prove] =
+      await Promise.all([
+        tracking.perOrdine(orderId),
+        contestazioni.perOrdine(orderId),
+        recensioni.perOrdine(orderId),
+        // Il venditore non la chiede nemmeno: `ordini_recensibili` risponde sui
+        // soli ordini di chi compra, quindi per lui sarebbe una lettura sempre
+        // vuota.
+        venditore
+          ? Promise.resolve(null)
+          : recensioni.eleggibilita().then((e) => (e.ok ? e.data : null)),
+        // Speculare: le prove le legge solo chi le ha caricate.
+        venditore
+          ? ordini.proveSpedizione(orderId).then((e) => (e.ok ? e.data : []))
+          : Promise.resolve([] as ShippingEvidence[]),
+      ]);
 
     const contestazione = esitoDispute.ok ? esitoDispute.data : null;
     const esitoEventi = contestazione
@@ -126,6 +139,7 @@ export function useOrderDetail(orderId: string) {
         rispostaRecensione: esitoRisposta?.ok ? esitoRisposta.data : null,
         eleggibilita:
           esitoEleggibilita?.find((e) => e.orderId === orderId) ?? null,
+        proveSpedizione: prove,
         ruolo: venditore ? "venditore" : "compratore",
       },
     });
@@ -215,6 +229,13 @@ export function useOrderDetail(orderId: string) {
     ricarica,
     preparaSpedizione: (checklist: VoceChecklist[], foto?: string[]) =>
       azione(() => ordini.preparaSpedizione(orderId, checklist, foto)),
+    /**
+     * Carica e registra una prova di preparazione. La ricarica che segue
+     * rilegge le prove correnti: le URL firmate sono temporanee e non si
+     * tengono in stato oltre la lettura che le ha prodotte.
+     */
+    registraProvaSpedizione: (kind: ShippingEvidenceKind, file: File) =>
+      azione(() => ordini.registraProvaSpedizione(orderId, kind, file)),
     segnaSpedito: (corriere: string, trackingNumber: string) =>
       azione(() => ordini.segnaSpedito(orderId, corriere, trackingNumber)),
     segnaConsegnato: () => azione(() => ordini.segnaConsegnato(orderId)),

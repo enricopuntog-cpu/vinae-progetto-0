@@ -28,7 +28,17 @@ const browserDeps: EvidenceImageDeps = {
   },
 };
 
-export async function preparaProvaContestazione(
+/**
+ * Prepara una fotografia per il bucket privato delle prove: ridimensiona entro
+ * il lato massimo e ricodifica in WebP. È la ricodifica a eliminare EXIF e GPS,
+ * non un filtro sui metadati.
+ *
+ * Il nome è neutro perché dalla WP3 la stessa pipeline serve due domini: le
+ * prove di contestazione e le prove di preparazione della spedizione. Il
+ * formato, il limite e la sanitizzazione sono gli stessi, e averne due copie
+ * significherebbe poterli far divergere.
+ */
+export async function preparaProvaImmagine(
   file: File,
   deps: EvidenceImageDeps = browserDeps,
 ): Promise<File> {
@@ -59,3 +69,6 @@ export async function preparaProvaContestazione(
     image.close?.();
   }
 }
+
+/** Nome storico del dominio contestazioni. Stessa funzione, non una copia. */
+export const preparaProvaContestazione = preparaProvaImmagine;

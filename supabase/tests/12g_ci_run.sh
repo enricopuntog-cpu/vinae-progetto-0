@@ -180,7 +180,12 @@ run_grid() {
   out="$("${PSQL[@]}" -At -F $'\x1f' -f "$TESTS/$file")"
   total="$(printf '%s\n' "$out" | grep -c . || true)"
   ok="$(printf '%s\n' "$out" | awk -F $'\x1f' -v c="$col" '$c == "t"' | grep -c . || true)"
-  printf '%s\n' "$out" | awk -F $'\x1f' -v c="$col" '{ printf "%s %s %s\n", ($c == "t" ? "PASS" : "FAIL"), $1, $2 }'
+  # Un caso fallito stampa anche la colonna successiva, quando la griglia la
+  # produce: e il dettaglio che dice perche, e senza di esso il log costringe a
+  # indovinare. I casi superati restano una riga sola.
+  printf '%s\n' "$out" | awk -F $'\x1f' -v c="$col" '
+    $c == "t" { printf "PASS %s %s\n", $1, $2; next }
+    { printf "FAIL %s %s%s\n", $1, $2, (NF > c ? " :: " $(c + 1) : "") }'
   echo "$label: $ok/$total"
   summary "- $label: $ok/$total"
   [ "$total" -gt 0 ] && [ "$ok" = "$total" ] || die "$label: $ok/$total."
@@ -208,6 +213,44 @@ run_grid "12k segui una Cantina pubblica" 12k_cantina_follow.sql 3
 # confini economici. Transazione e guard identici, sempre prima delle fixture
 # 12g.
 run_grid "12l metadati logistici dell'annuncio" 12l_listing_logistics_metadata.sql 3
+# Prove fotografiche di spedizione e cancello di preparazione: archivio privato,
+# sostituzione, immutabilita dopo la spedizione e chiusura del salto
+# `pagato -> spedito`. Transazione e guard identici, sempre prima delle fixture
+# 12g.
+run_grid "12m prove di spedizione e cancello di preparazione" 12m_shipping_evidence_gate.sql 3
+
+# Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
+# griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
+# cancello di preparazione, quindi il suo caso 9 registra una prova reale. Una
+# regressione qui non la vedrebbe la 12m, che prova il cancello e non il ciclo
+# attorno, ed e il motivo per cui smette di essere una prova solo manuale.
+#
+# Forma diversa dalle altre: la colonna dell'esito e testuale ('PASSA') e il
+# verdetto in coda solleva da se, quindi non passa da run_grid. I casi hanno
+# cinque colonne, il riepilogo finale tre: e cosi che si distinguono i due
+# insiemi di risultati. Dopo le griglie in ROLLBACK perche questa committa, e
+# prima delle fixture 12g perche i suoi utenti `@example.invalid` nascono e
+# muoiono dentro il blocco, in entrambi i rami.
+#
+# La coda della griglia solleva da se quando un caso non passa, e con
+# ON_ERROR_STOP `psql` esce 3: l'uscita va raccolta comunque, altrimenti
+# `set -e` chiude qui e l'elenco dei casi — stampato prima del verdetto — non
+# arriva mai al log. Un caso fallito porta con se atteso e dettaglio.
+rc_7c=0
+esiti_7c="$("${PSQL[@]}" -At -F $'\x1f' -f "$TESTS/7c_consegna_imballaggio.sql")" || rc_7c=$?
+printf '%s\n' "$esiti_7c" \
+  | awk -F $'\x1f' '
+      NF < 5 { next }
+      $2 == "PASSA" { printf "PASS %s %s\n", $1, $3; next }
+      { printf "FAIL %s %s :: atteso %s :: %s\n", $1, $3, $4, $5 }'
+riepilogo_7c="$(printf '%s\n' "$esiti_7c" | awk -F $'\x1f' 'NF == 3 { r = $0 } END { print r }')"
+passa_7c="$(printf '%s' "$riepilogo_7c" | cut -d $'\x1f' -f1)"
+totale_7c="$(printf '%s' "$riepilogo_7c" | cut -d $'\x1f' -f3)"
+echo "7c consegna e imballaggio: $passa_7c/$totale_7c"
+summary "- 7c consegna e imballaggio: $passa_7c/$totale_7c"
+[ -n "$totale_7c" ] && [ "$passa_7c" = "$totale_7c" ] \
+  || die "7c consegna e imballaggio: $passa_7c/$totale_7c."
+[ "$rc_7c" = "0" ] || die "7c consegna e imballaggio: psql uscito $rc_7c."
 
 # 12f solleva un'eccezione al primo diniego mancato; l'ultima riga e il
 # controllo sul limite della nota di decisione.

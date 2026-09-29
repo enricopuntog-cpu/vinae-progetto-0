@@ -1129,6 +1129,11 @@ export type OrderRecord = {
   corriere: string | null;
   tracking_number: string | null;
   imballaggio_checklist: VoceChecklist[];
+  /**
+   * Proiezione di compatibilità delle sole prove CORRENTI, riscritta dal
+   * database a ogni registrazione. Dalla WP3 non è più una colonna che il
+   * client possa popolare: mandare una stringa qualsiasi non crea una prova.
+   */
   imballaggio_foto: string[];
   /** Il metodo dichiarato dal venditore sull'annuncio, congelato alla creazione. */
   imballaggio_codice: string | null;
@@ -1144,6 +1149,34 @@ export type OrderRecord = {
    * Seconda colonna generata, ed è questo il numero della riga `payments`.
    */
   addebito_totale_cents: number;
+
+  // ---- WP3: cancello di preparazione ----
+  /**
+   * Istante in cui la preparazione è risultata conforme: sei voci canoniche
+   * spuntate e prova corrente del collo finale. `null` finché non lo è, e
+   * torna `null` se una delle due condizioni decade. Finché è `null`
+   * `ordine_segna_spedito` rifiuta: è il database a dirlo, l'interfaccia lo
+   * rispecchia soltanto.
+   */
+  preparazione_confermata_at: string | null;
+};
+
+/**
+ * I due tipi di prova fotografica della preparazione. `collo_finale` è
+ * obbligatoria e mostra il pacco chiuso; `interno_pre_chiusura` è facoltativa
+ * e serve a chi vuole documentare l'imballaggio prima di sigillare.
+ */
+export type ShippingEvidenceKind = "collo_finale" | "interno_pre_chiusura";
+
+/**
+ * Una prova CORRENTE. `url` è una URL firmata a scadenza breve, prodotta al
+ * momento della lettura: il bucket è privato e nel database non c'è nessuna
+ * URL persistente.
+ */
+export type ShippingEvidence = {
+  evidence_kind: ShippingEvidenceKind;
+  created_at: string;
+  url: string;
 };
 
 export type PaymentStatus =
@@ -1198,7 +1231,27 @@ export interface OrderService {
     checklist: VoceChecklist[],
     foto?: string[],
   ): Promise<Result<OrderRecord>>;
-  /** Solo il venditore, da `pagato` o `in_preparazione`. */
+  /**
+   * Prepara la fotografia (ridimensionamento e ricodifica in WebP, che è anche
+   * ciò che elimina EXIF e GPS), la carica nel bucket privato e la registra
+   * come prova CORRENTE del suo tipo. Una prova precedente dello stesso tipo
+   * non viene cancellata: diventa sostituita. Ritorna `true` se ha sostituito
+   * qualcosa.
+   *
+   * Il percorso non torna al chiamante e non va mostrato: l'interfaccia lavora
+   * su URL firmate a scadenza breve.
+   */
+  registraProvaSpedizione(
+    id: string,
+    kind: ShippingEvidenceKind,
+    file: File,
+  ): Promise<Result<{ replaced: boolean }>>;
+  /** Le sole prove correnti dell'ordine, già firmate. Solo il venditore. */
+  proveSpedizione(id: string): Promise<Result<ShippingEvidence[]>>;
+  /**
+   * Solo il venditore, solo da `in_preparazione` e solo con la preparazione
+   * confermata. Dalla WP3 `pagato` non è più uno stato di partenza ammesso.
+   */
   segnaSpedito(id: string, corriere: string, trackingNumber: string): Promise<Result<OrderRecord>>;
   /** Solo il venditore. Fa partire la finestra di verifica. */
   segnaConsegnato(id: string): Promise<Result<OrderRecord>>;

@@ -1,6 +1,22 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { MIME_PROVA, preparaProvaImmagine } from "@/lib/orders/prepara-prova-contestazione";
 import { noClient, serviceError } from "@/services/phase7/shared";
-import type { OrderRecord, OrderService, Result, VoceChecklist } from "@/services/types";
+import type {
+  OrderRecord,
+  OrderService,
+  Result,
+  ShippingEvidence,
+  ShippingEvidenceKind,
+  VoceChecklist,
+} from "@/services/types";
+
+/**
+ * Lo stesso bucket privato delle prove di contestazione: un ordine ha un solo
+ * fascicolo fotografico, e due bucket vorrebbero dire due formati di percorso e
+ * due politiche da riconciliare a mano.
+ */
+const BUCKET_PROVE = "dispute-evidence";
+const SCADENZA_FIRMA_S = 15 * 60;
 
 /**
  * Le colonne di `orders` che i ruoli client possono davvero leggere.
@@ -61,6 +77,8 @@ const COLONNE_ORDINE = [
   "imballaggio_punto_nome",
   "imballaggio_scelto_at",
   "addebito_totale_cents",
+  // WP3: `grant select (preparazione_confermata_at) on public.orders`
+  "preparazione_confermata_at",
 ].join(",");
 
 export { COLONNE_ORDINE };
@@ -121,6 +139,76 @@ export const createOrderService = (client: SupabaseClient | null): OrderService 
       p_checklist: checklist,
       p_foto: foto ?? [],
     }),
+  registraProvaSpedizione: async (id, kind: ShippingEvidenceKind, file) => {
+    if (!client) return noClient();
+    const { data: auth } = await client.auth.getUser();
+    if (!auth.user) return { ok: false, error: "Accedi per caricare le prove." };
+
+    let preparata: File;
+    try {
+      preparata = await preparaProvaImmagine(file);
+    } catch (errore) {
+      return {
+        ok: false,
+        error: errore instanceof Error ? errore.message : "Fotografia non valida.",
+      };
+    }
+
+    // Il percorso lo compone il client, ma non è il client a decidere che sia
+    // valido: la policy di Storage e la RPC lo riconfrontano con l'ordine e con
+    // chi carica.
+    const path = `${id}/${auth.user.id}/${crypto.randomUUID()}.webp`;
+    const caricamento = await client.storage
+      .from(BUCKET_PROVE)
+      .upload(path, preparata, { contentType: MIME_PROVA, upsert: false });
+    if (caricamento.error) {
+      return serviceError("shipping evidence upload", caricamento.error);
+    }
+
+    const { data, error } = await client.rpc("ordine_spedizione_prova_registra", {
+      p_order_id: id,
+      p_evidence_kind: kind,
+      p_storage_path: path,
+    });
+    if (error) {
+      // Registrazione rifiutata: l'oggetto non è ancora una prova e va tolto,
+      // altrimenti resterebbe nel bucket senza nessuno che lo citi.
+      await client.storage.from(BUCKET_PROVE).remove([path]);
+      return serviceError("ordine_spedizione_prova_registra", error);
+    }
+    const esito = (data ?? {}) as { replaced?: boolean };
+    return { ok: true, data: { replaced: esito.replaced === true } };
+  },
+
+  proveSpedizione: async (id) => {
+    if (!client) return noClient();
+    const { data, error } = await client.rpc("ordine_spedizione_prove", { p_order_id: id });
+    if (error) return serviceError("ordine_spedizione_prove", error);
+
+    const righe = (data ?? []) as Array<{
+      evidence_kind: ShippingEvidenceKind;
+      storage_path: string;
+      created_at: string;
+    }>;
+    if (righe.length === 0) return { ok: true, data: [] };
+
+    // Il bucket è privato: le URL nascono qui, scadono, e non vengono mai
+    // scritte da nessuna parte.
+    const firme = await client.storage
+      .from(BUCKET_PROVE)
+      .createSignedUrls(righe.map((r) => r.storage_path), SCADENZA_FIRMA_S);
+    if (firme.error) return serviceError("shipping evidence signed urls", firme.error);
+
+    const prove: ShippingEvidence[] = righe
+      .map((riga, indice) => ({
+        evidence_kind: riga.evidence_kind,
+        created_at: riga.created_at,
+        url: firme.data?.[indice]?.signedUrl ?? "",
+      }))
+      .filter((prova) => prova.url.length > 0);
+    return { ok: true, data: prove };
+  },
+
   segnaSpedito: (id, corriere, trackingNumber) =>
     transizione(client, "ordine_segna_spedito", {
       p_order_id: id,

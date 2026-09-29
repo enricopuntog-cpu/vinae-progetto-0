@@ -5,8 +5,13 @@
 -- Eseguire dopo 20260804160000_phase_7c_delivery_packaging.sql E dopo
 -- 20260805160250_phase_7f_fix_contestazione_enum_cast.sql: senza la 7f il caso
 -- 20 fallisce con 42804, perché è il difetto che quel caso ha scoperto.
+-- Dal 20260928210000_shipping_evidence_gate.sql (WP3) la spedizione passa dal
+-- cancello di preparazione: il caso 9 registra una prova reale del collo finale
+-- e spunta i sei ID canonici, altrimenti il caso 12 non partirebbe. Il cancello
+-- e i suoi rifiuti sono materia della griglia 12m, non di questa.
 -- Crea e cancella due utenti, quattro vini, quattro bottiglie, quattro annunci
--- e i relativi ordini, pagamenti, eventi, contestazioni e recensioni.
+-- e i relativi ordini, pagamenti, eventi, contestazioni, recensioni, una prova
+-- di spedizione e il suo oggetto nel bucket privato.
 -- Richiede autorizzazione fixture separata da quella della migrazione.
 -- Atteso: 22 PASSA, 0 FALLISCE, nessuna riga 99.
 --
@@ -205,7 +210,7 @@ declare
   v_order_b   uuid;
   v_order_c   uuid;
   v_order_d   uuid;
-  v_prezzo    integer := 10000;   -- 100,00 €; commissione 686, totale 10686
+  v_prezzo    integer := 10000;   -- 100,00 €; commissione 1057, totale 11057
   v_imb       integer := 450;     -- 4,50 € di imballaggio, solo per questa prova
   v_riserva   jsonb;
   v_stato     text;
@@ -217,6 +222,9 @@ declare
   v_bool      boolean;
   v_sqlstate  text;
   v_msg       text;
+  -- WP3: percorso della prova fotografica del collo finale, senza la quale la
+  -- preparazione non si conferma e la spedizione non parte.
+  v_prova     text;
   -- Guasto dell'azione del caso in corso: lo scrive la guardia, lo legge
   -- registra_7c. Va riazzerato all'inizio di ogni tratto guardato.
   v_guasto    text;
@@ -246,6 +254,11 @@ begin
     from public.listing_crea_da_bottiglia(
       v_bottle, v_prezzo, 'Ottimo', '', 'Fixture 7c', '{}'
     ) x;
+    -- WP2 rende questi metadati obbligatori prima della pubblicazione. La
+    -- fixture non prova fotografie o handoff: dichiara i valori minimi validi.
+    perform public.listing_logistica_dichiara(
+      v_listing, 'nessuna_confezione_originale', array[]::text[], 'dropoff_pudo'
+    );
     perform public.listing_pubblica(v_listing);
     v_bottiglie := v_bottiglie || v_bottle;
     v_annunci := v_annunci || v_listing;
@@ -294,16 +307,16 @@ begin
 
   perform pg_temp.registra_7c(
     2, 'E — totale_cents NON contiene l''imballaggio: la base della 7b non si muove',
-    'totale_cents = 10686 (prezzo 10000 + commissione 686)',
-    v_intero2 = 10686,
+    'totale_cents = 11057 (prezzo 10000 + commissione 1057)',
+    v_intero2 = 11057,
     'totale_cents=' || coalesce(v_intero2::text, 'NULL'),
     v_guasto
   );
 
   perform pg_temp.registra_7c(
     3, 'E — addebito_totale_cents somma l''imballaggio',
-    'addebito_totale_cents = 11136',
-    v_conteggio = 11136,
+    'addebito_totale_cents = 11507',
+    v_conteggio = 11507,
     'addebito=' || coalesce(v_conteggio::text, 'NULL'),
     v_guasto
   );
@@ -316,8 +329,8 @@ begin
   end;
   perform pg_temp.registra_7c(
     4, 'E — il pagamento addebita il totale comprensivo di imballaggio',
-    'payments.amount_cents = 11136',
-    v_intero = 11136,
+    'payments.amount_cents = 11507',
+    v_intero = 11507,
     'amount_cents=' || coalesce(v_intero::text, 'NULL'),
     v_guasto
   );
@@ -344,8 +357,8 @@ begin
   end;
   perform pg_temp.registra_7c(
     5, 'E — cambiare il listino non muove un ordine già nato',
-    'imballaggio_cents ancora 450, addebito ancora 11136',
-    v_intero = v_imb and v_conteggio = 11136,
+    'imballaggio_cents ancora 450, addebito ancora 11507',
+    v_intero = v_imb and v_conteggio = 11507,
     format('cents=%s addebito=%s', v_intero, v_conteggio),
     v_guasto
   );
@@ -365,8 +378,8 @@ begin
   perform set_config('role', 'postgres', true);
   perform pg_temp.registra_7c(
     6, 'E — senza dichiarazione i due totali coincidono e l''ordine è quello della 7b',
-    'codice NULL, cents 0, totale = addebito = 10686',
-    v_testo is null and v_intero = 0 and v_intero2 = 10686 and v_conteggio = 10686,
+    'codice NULL, cents 0, totale = addebito = 11057',
+    v_testo is null and v_intero = 0 and v_intero2 = 11057 and v_conteggio = 11057,
     format('codice=%s cents=%s totale=%s addebito=%s',
            coalesce(v_testo, 'NULL'), v_intero, v_intero2, v_conteggio),
     v_guasto
@@ -402,12 +415,31 @@ begin
     8, 'A — il compratore non può preparare la spedizione',
     'errore "Ordine non trovato"', 'ordine non trovato', v_sqlstate, v_msg);
 
+  -- WP3 (20260928210000): la checklist non deposita piu fotografie e la
+  -- spedizione passa dal cancello di preparazione. Perche il caso 12 resti una
+  -- prova della spedizione — e non un modo obliquo di riprovare il cancello —
+  -- la preparazione qui e completa: oggetto nel bucket privato, prova del collo
+  -- finale registrata dalla sua porta, sei ID canonici tutti spuntati. Il
+  -- cancello in se lo prova la griglia 12m, con i suoi rifiuti.
+  v_prova := v_order_a::text || '/' || v_seller::text
+          || '/7c000001-0000-4000-8000-00000000000a.webp';
+  insert into storage.objects (bucket_id, name, owner, metadata)
+  values ('dispute-evidence', v_prova, v_seller,
+          '{"mimetype":"image/webp"}'::jsonb);
+
   v_guasto := null;
   begin
     perform pg_temp.impersona_7c('authenticated', v_seller);
+    perform public.ordine_spedizione_prova_registra(
+      v_order_a, 'collo_finale', v_prova);
     perform public.ordine_prepara_spedizione(
       v_order_a,
-      '[{"id":"foto_frontale","label":"Foto etichetta frontale","done":true}]'::jsonb,
+      '[{"id":"bottiglia_immobilizzata","done":true},
+        {"id":"nessun_movimento","done":true},
+        {"id":"protezione_tutti_lati","done":true},
+        {"id":"cartone_esterno_integro","done":true},
+        {"id":"chiusura_adeguata","done":true},
+        {"id":"confezione_originale_protetta","done":true}]'::jsonb,
       '{}');
     perform set_config('role', 'postgres', true);
 
@@ -541,7 +573,7 @@ begin
   begin
     perform pg_temp.impersona_7c('authenticated', v_buyer);
     perform public.ordine_contestazione_apri(
-      v_order_a, 'Bottiglia danneggiata', 'Capsula rovinata e livello basso.', '{}');
+      v_order_a, 'Pacco danneggiato', 'Capsula rovinata e livello basso.', '{}');
     perform set_config('role', 'postgres', true);
 
     select o.stato::text, o.payout_stato::text, d.stato::text
@@ -614,7 +646,7 @@ begin
     perform set_config('role', 'postgres', true);
     perform pg_temp.impersona_7c('authenticated', v_buyer);
     perform public.ordine_contestazione_apri(
-      v_order_c, 'Livello alterato', 'Il livello sembra sotto la spalla.', '{}');
+      v_order_c, 'Altra difformità oggettiva', 'Il livello sembra sotto la spalla.', '{}');
     -- Stessa ragione del caso 19: claim azzerati, non solo ruolo cambiato.
     perform pg_temp.impersona_7c('postgres', null);
     perform public.ordine_contestazione_risolvi(v_order_c, 'respinta', 'Nessuna irregolarità');
@@ -659,7 +691,7 @@ begin
   perform set_config('role', 'postgres', true);
   perform pg_temp.registra_errore_7c(
     21, 'D — un ordine si recensisce una volta sola',
-    'errore "già stato recensito"', 'già stato recensito', v_sqlstate, v_msg,
+    'errore "gia stato recensito"', 'gia stato recensito', v_sqlstate, v_msg,
     v_guasto);
 
   -- Pulizia
@@ -681,8 +713,36 @@ begin
   delete from private.rate_limit_buckets
   where subject in ('user:' || v_seller::text, 'user:' || v_buyer::text);
   delete from public.payment_provider_events where event_id like 'evt_7c_%';
+  -- La contabilità D1, arrivata dopo la 7c, crea movimenti append-only quando i
+  -- fixture diventano pagati. Soltanto questa pulizia sul database usa e getta
+  -- disarma il trigger già provato dalla sua griglia; nessun fatto monetario è
+  -- modificato durante i casi.
+  alter table public.balance_movimenti disable trigger balance_movimenti_no_delete;
+  delete from public.balance_movimenti where order_id in (
+    select id from public.orders where buyer_id = v_buyer);
+  alter table public.balance_movimenti enable trigger balance_movimenti_no_delete;
+  delete from public.balance_reservations where order_id in (
+    select id from public.orders where buyer_id = v_buyer);
+  delete from public.balance_accounts where owner_id in (v_seller, v_buyer);
   delete from public.order_reviews where order_id in (
     select id from public.orders where buyer_id = v_buyer);
+  -- Le migrazioni dispute più recenti tengono cronologie append-only con FK
+  -- restrittive. Come la fixture 12g, disarma i trigger utente soltanto mentre
+  -- rimuove i figli dei fascicoli Test7c, poi ripristina subito il ruolo normale.
+  set local session_replication_role = replica;
+  delete from public.dispute_case_events where dispute_id in (
+    select d.id from public.disputes d join public.orders o on o.id = d.order_id
+    where o.buyer_id = v_buyer);
+  delete from public.dispute_decisions where dispute_id in (
+    select d.id from public.disputes d join public.orders o on o.id = d.order_id
+    where o.buyer_id = v_buyer);
+  delete from public.dispute_admin_notes where dispute_id in (
+    select d.id from public.disputes d join public.orders o on o.id = d.order_id
+    where o.buyer_id = v_buyer);
+  delete from public.dispute_events where dispute_id in (
+    select d.id from public.disputes d join public.orders o on o.id = d.order_id
+    where o.buyer_id = v_buyer);
+  set local session_replication_role = origin;
   delete from public.disputes where order_id in (
     select id from public.orders where buyer_id = v_buyer);
   delete from public.tracking_events where order_id in (
@@ -691,8 +751,27 @@ begin
     select id from public.orders where buyer_id = v_buyer);
   delete from public.payments where order_id in (
     select id from public.orders where buyer_id = v_buyer);
+  -- WP3: archivio privato delle prove e oggetto depositato nel bucket. La
+  -- cascata da orders porterebbe via le righe, non l'oggetto di Storage.
+  -- Lo Storage vieta la cancellazione diretta da SQL; il permesso esplicito e
+  -- lo stesso che usa la pulizia della fixture 12g, ed e locale alla
+  -- transazione, quindi si spegne da se al commit come all'errore.
+  delete from private.order_shipping_evidence where order_id in (
+    select id from public.orders where buyer_id = v_buyer);
+  perform set_config('storage.allow_delete_query', 'true', true);
+  delete from storage.objects
+  where bucket_id = 'dispute-evidence' and owner in (v_seller, v_buyer);
+  perform set_config('storage.allow_delete_query', 'false', true);
   delete from public.orders where buyer_id = v_buyer;
   delete from public.listings where seller_id in (v_seller, v_buyer);
+  -- Price Intelligence registra osservazioni append-only sui listing dei
+  -- fixture. La griglia usa e getta rimuove soltanto quelle dei vini Test7c.
+  alter table public.wine_price_observations
+    disable trigger wine_price_observations_no_delete;
+  delete from public.wine_price_observations where wine_id in (
+    select id from public.wines where produttore = 'Test7c');
+  alter table public.wine_price_observations
+    enable trigger wine_price_observations_no_delete;
   delete from public.bottle_units where owner_id in (v_seller, v_buyer);
   delete from public.wines where produttore = 'Test7c';
   delete from public.packaging_options
@@ -753,8 +832,36 @@ exception when others then
   delete from private.rate_limit_buckets
   where subject in ('user:' || v_seller::text, 'user:' || v_buyer::text);
   delete from public.payment_provider_events where event_id like 'evt_7c_%';
+  -- La contabilità D1, arrivata dopo la 7c, crea movimenti append-only quando i
+  -- fixture diventano pagati. Soltanto questa pulizia sul database usa e getta
+  -- disarma il trigger già provato dalla sua griglia; nessun fatto monetario è
+  -- modificato durante i casi.
+  alter table public.balance_movimenti disable trigger balance_movimenti_no_delete;
+  delete from public.balance_movimenti where order_id in (
+    select id from public.orders where buyer_id = v_buyer);
+  alter table public.balance_movimenti enable trigger balance_movimenti_no_delete;
+  delete from public.balance_reservations where order_id in (
+    select id from public.orders where buyer_id = v_buyer);
+  delete from public.balance_accounts where owner_id in (v_seller, v_buyer);
   delete from public.order_reviews where order_id in (
     select id from public.orders where buyer_id = v_buyer);
+  -- Le migrazioni dispute più recenti tengono cronologie append-only con FK
+  -- restrittive. Come la fixture 12g, disarma i trigger utente soltanto mentre
+  -- rimuove i figli dei fascicoli Test7c, poi ripristina subito il ruolo normale.
+  set local session_replication_role = replica;
+  delete from public.dispute_case_events where dispute_id in (
+    select d.id from public.disputes d join public.orders o on o.id = d.order_id
+    where o.buyer_id = v_buyer);
+  delete from public.dispute_decisions where dispute_id in (
+    select d.id from public.disputes d join public.orders o on o.id = d.order_id
+    where o.buyer_id = v_buyer);
+  delete from public.dispute_admin_notes where dispute_id in (
+    select d.id from public.disputes d join public.orders o on o.id = d.order_id
+    where o.buyer_id = v_buyer);
+  delete from public.dispute_events where dispute_id in (
+    select d.id from public.disputes d join public.orders o on o.id = d.order_id
+    where o.buyer_id = v_buyer);
+  set local session_replication_role = origin;
   delete from public.disputes where order_id in (
     select id from public.orders where buyer_id = v_buyer);
   delete from public.tracking_events where order_id in (
@@ -763,8 +870,27 @@ exception when others then
     select id from public.orders where buyer_id = v_buyer);
   delete from public.payments where order_id in (
     select id from public.orders where buyer_id = v_buyer);
+  -- WP3: archivio privato delle prove e oggetto depositato nel bucket. La
+  -- cascata da orders porterebbe via le righe, non l'oggetto di Storage.
+  -- Lo Storage vieta la cancellazione diretta da SQL; il permesso esplicito e
+  -- lo stesso che usa la pulizia della fixture 12g, ed e locale alla
+  -- transazione, quindi si spegne da se al commit come all'errore.
+  delete from private.order_shipping_evidence where order_id in (
+    select id from public.orders where buyer_id = v_buyer);
+  perform set_config('storage.allow_delete_query', 'true', true);
+  delete from storage.objects
+  where bucket_id = 'dispute-evidence' and owner in (v_seller, v_buyer);
+  perform set_config('storage.allow_delete_query', 'false', true);
   delete from public.orders where buyer_id = v_buyer;
   delete from public.listings where seller_id in (v_seller, v_buyer);
+  -- Price Intelligence registra osservazioni append-only sui listing dei
+  -- fixture. La griglia usa e getta rimuove soltanto quelle dei vini Test7c.
+  alter table public.wine_price_observations
+    disable trigger wine_price_observations_no_delete;
+  delete from public.wine_price_observations where wine_id in (
+    select id from public.wines where produttore = 'Test7c');
+  alter table public.wine_price_observations
+    enable trigger wine_price_observations_no_delete;
   delete from public.bottle_units where owner_id in (v_seller, v_buyer);
   delete from public.wines where produttore = 'Test7c';
   delete from public.packaging_options
