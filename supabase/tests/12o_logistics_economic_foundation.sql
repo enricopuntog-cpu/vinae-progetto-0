@@ -114,8 +114,18 @@ insert into public.orders (
 
 -- Buffer non nullo: con buffer zero il caso 45 non distinguerebbe «sommato» da
 -- «dimenticato».
+--
+-- La riga seminata dalla migrazione si chiude un'ora indietro solo se e nata
+-- prima: su uno stack effimero ha l'eta del `supabase start`, e `now() - 1 hour`
+-- precede il suo `effective_from` violando `logistics_quote_config_finestra`.
+-- `greatest` con l'istante immediatamente successivo alla sua apertura la chiude
+-- comunque, che il database abbia un secondo o un mese: al motore serve solo che
+-- `effective_to` non sia piu nullo.
 update private.logistics_quote_config
-   set effective_to = now() - interval '1 hour'
+   set effective_to = greatest(
+         effective_from + interval '1 microsecond',
+         now() - interval '1 hour'
+       )
  where effective_to is null;
 
 insert into private.logistics_quote_config (
