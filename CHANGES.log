@@ -7,7 +7,7 @@
 - Il prodotto servito resta `frontend/` + `backend/`; `frontend-next/` è la beta target.
 
 ## ACTIVE TASK
-- WP5 **NON è CLOSED**: la migrazione `20260929140000_dispute_evidence_dossier.sql` risulta mergiata ma **non se ne ha prova di applicazione in produzione**. L'integrazione Supabase non pubblica alcuno stato sul commit di `main`, e un merge non dimostra che le sue migrazioni siano state applicate.
+- WP5 **NON è CLOSED**: la migrazione `20260929140000_dispute_evidence_dossier.sql` risulta mergiata e il check Supabase sullo squash è verde, ma il ledger e le definizioni effettive non sono stati riletti; un check verde o un merge non dimostrano da soli che gli oggetti siano corretti.
 - Il pacchetto integra il dossier nella coda esistente: annuncio e confezione dichiarata, prove WP3 correnti e sostituite, spedizione/consegna e tracking; prove di acquirente e venditore, timeline e note admin restano nello stesso pannello. Tre classi fotografiche distinte; POD vettore dichiarato non disponibile perché nessun provider logistico è integrato.
 - La migrazione è additiva: ricrea `moderation_dispute_queue` conservando le 33 colonne distribuite e aggiungendone dieci, e crea le viste admin chiuse `moderation_dispute_shipping_evidence` e `moderation_dispute_tracking`. Nessuna tabella evidence, nessun cambio di lifecycle, denaro o provider.
 
@@ -17,7 +17,7 @@
 3. Eseguire lo smoke browser autenticato del fascicolo admin a 375px e desktop quando esisterà un account admin sicuro già disponibile.
 
 ## BLOCKERS / NOTES
-- **Produzione non verificata**: questa postazione non ha Supabase CLI, `psql`, credenziali o MCP Supabase, quindi né l'applicazione né la lettura del ledger di produzione sono eseguibili da qui. Lo stato reale della produzione resta ignoto e va accertato prima di dichiarare WP5 chiuso.
-- I tre marker del fascicolo (`Annuncio collegato alla vendita`, `Prove pre-spedizione del venditore`, `POD vettore: non disponibile`) vivono dietro `/admin`, che risponde `307` a un client anonimo: restano **NON VERIFICATI** in produzione finché non esiste una sessione admin sicura.
+- **Produzione parzialmente verificata**: il check Supabase dello squash `d17f9abb` è `success` e punta al progetto atteso `pijnmcllmfgjmgsvtcej`. Sonde REST anonime di sola lettura sullo stesso progetto distinguono le tre viste WP5 da una risorsa inesistente e ricevono `42501 permission denied` su tutte e tre, provando presenza nello schema API e grant anon chiusi. Questa postazione non ha Supabase CLI, `psql`, credenziali o MCP Supabase: ledger, opzioni delle viste, filtro admin, grant `authenticated` e definizioni effettive restano **NON VERIFICATI**.
+- Il deploy Netlify dello squash WP5 è `ready`, ma i tre marker del fascicolo (`Annuncio collegato alla vendita`, `Prove pre-spedizione del venditore`, `POD vettore: non disponibile`) vivono dietro `/admin`, che risponde `307` a un client anonimo: lo smoke resta **NON VERIFICATO** finché non esiste una sessione admin sicura.
 - Le due correzioni trovate dalla CI stavano entrambe nella griglia `12n` e nessuna nella migrazione: una foreign key verificata già all'INSERT e un predicato `%signed%` che pescava `assigned_to`.
 - Nessun file personale e nessun `CLAUDE.md` è stato toccato.
