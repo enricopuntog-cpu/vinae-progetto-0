@@ -45,6 +45,11 @@ import {
   type AdminDisputeFocus,
   type AdminReportFocus,
 } from "@/components/vinea/moderation/AdminOperationsSearch";
+import {
+  DisputeListingEvidence,
+  DisputeShippingEvidence,
+  DisputeTrackingPanel,
+} from "@/components/vinea/moderation/DisputeDossier";
 import { messaggioAzione } from "@/components/vinea/moderation/ListingModerationActions";
 import { IncidentNoticeAdmin } from "@/components/vinea/moderation/IncidentNoticeAdmin";
 import { AdminClubGovernance } from "@/components/vinea/clubs/ClubGovernancePanels";
@@ -577,27 +582,63 @@ const RigaContestazione = ({
         </div>
       </div>
       {riga.descrizione ? <p className="text-sm">{riga.descrizione}</p> : null}
-      {riga.foto.length > 0 ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {riga.foto.map((url, index) => (
-            // eslint-disable-next-line @next/next/no-img-element -- URL firmato temporaneo.
-            <img key={url} src={url} alt={`Prova acquirente ${index + 1}`} className="aspect-square rounded-lg border object-cover" />
-          ))}
-        </div>
-      ) : null}
 
-      {riga.sellerResponse ? (
-        <div className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
-          <p className="font-medium">Risposta venditore · {riga.sellerResponseKind}</p>
-          <p>{riga.sellerResponse}</p>
-          {riga.sellerEvidence.length > 0 ? (
+      {/*
+        L'ORDINE DEL FASCICOLO segue il ragionamento di chi deve decidere, non
+        la struttura delle tabelle:
+
+          1. che cosa era stato promesso      — annuncio e confezione originale
+          2. che cosa e partito               — prove pre-spedizione del venditore
+          3. che cosa e successo al pacco     — spedizione, consegna, tracking
+          4. che cosa contesta chi ha comprato
+          5. che cosa risponde chi ha venduto
+          6. i dati del caso, la timeline, le note, la decisione
+
+        Le tre classi di fotografia restano in tre sezioni con tre titoli
+        distinti: nessuna griglia le riunisce.
+      */}
+      <DisputeListingEvidence riga={riga} />
+      <DisputeShippingEvidence riga={riga} />
+      <DisputeTrackingPanel riga={riga} />
+
+      <div className="space-y-2 rounded-lg border p-3" data-testid={`contestazione-prove-acquirente-${riga.orderId}`}>
+        <p className="text-xs font-semibold uppercase">Prove caricate dall&apos;acquirente</p>
+        {riga.foto.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Nessuna prova caricata dall&apos;acquirente.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {riga.foto.map((url, index) => (
+              // eslint-disable-next-line @next/next/no-img-element -- URL firmato temporaneo.
+              <img key={url} src={url} alt={`Prova acquirente ${index + 1}`} className="aspect-square rounded-lg border object-cover" />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {riga.sellerResponse || riga.sellerResponseKind || riga.sellerResponseAt || riga.sellerEvidence.length > 0 ? (
+        <div className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm" data-testid={`contestazione-prove-venditore-${riga.orderId}`}>
+          <p className="font-medium">
+            Risposta venditore
+            {riga.sellerResponseKind ? ` · ${riga.sellerResponseKind}` : ""}
+          </p>
+          <p>{riga.sellerResponse ?? "Testo della risposta non disponibile."}</p>
+          {/*
+            Titolo distinto da «Prove pre-spedizione del venditore»: sono dello
+            stesso venditore e nello stesso bucket, ma non sono lo stesso atto.
+            Quelle documentano il pacco prima della partenza; queste sono la
+            difesa depositata dentro la pratica, dopo l'accusa.
+          */}
+          <p className="text-xs font-semibold uppercase">Prove caricate dal venditore nella contestazione</p>
+          {riga.sellerEvidence.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nessuna prova allegata alla risposta.</p>
+          ) : (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {riga.sellerEvidence.map((url, index) => (
                 // eslint-disable-next-line @next/next/no-img-element -- URL firmato temporaneo.
                 <img key={url} src={url} alt={`Prova venditore ${index + 1}`} className="aspect-square rounded-lg border object-cover" />
               ))}
             </div>
-          ) : null}
+          )}
         </div>
       ) : null}
 

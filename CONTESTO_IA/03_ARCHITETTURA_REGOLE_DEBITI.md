@@ -683,6 +683,80 @@ Prove: `frontend-next/src/lib/orders/guida-imballaggio.test.ts` (22),
 `src/hooks/ordine-contesto-annuncio.test.ts` (6) e
 `src/components/vinea/orders/seller-prep-contestuale.test.ts` (18).
 
+## Fascicolo prove della contestazione (29 settembre 2026)
+
+Migrazione `20260929140000_dispute_evidence_dossier.sql`.
+
+**1 — Un read model, non un secondo sistema di contestazioni.** Il fascicolo
+amministrativo vive nella coda esistente: `moderation_dispute_queue` conserva le
+33 colonne già distribuite nello stesso ordine e ne aggiunge dieci in coda;
+`codaContestazioni()` resta l'unica porta del servizio e `ModerationPanelClient`
+il solo pannello. Le due viste nuove proiettano prove pre-spedizione e tracking,
+ma non esiste una nuova tabella evidence, una seconda RPC di coda o un lifecycle
+parallelo. Le cinque porte di presa in carico, revisione, nota, decisione e
+risoluzione non vengono modificate né chiamate dal dossier: **il fascicolo legge,
+non decide**.
+
+**2 — Le tre classi fotografiche sono prove di natura diversa e non si
+mescolano.** (A) immagini dell'annuncio e della confezione originale dichiarata:
+riferimento pubblico del prodotto; (B) prove pre-spedizione WP3 del venditore:
+stato del pacco prima della partenza; (C) fotografie depositate nella pratica da
+compratore e venditore: accusa e difesa. Restano in sezioni titolate e contenitori
+distinti. Una foto di catalogo non diventa prova di imballaggio solo perché viene
+mostrata accanto alla pratica.
+
+**3 — L'annuncio collegato non è uno snapshot storico.** La coda fa un `left
+join` sulla riga corrente di `public.listings`: mantiene visibile la pratica se
+l'annuncio non è raggiungibile, ma non conserva la versione dell'annuncio al
+momento dell'acquisto. L'interfaccia lo dichiara come «dati dell'annuncio come
+sono adesso». Anche qui `confezione_originale_tipo = NULL` resta **non
+dichiarata**, mai reinterpretata come `nessuna_confezione_originale`; le
+etichette riusano il dominio logistico già esistente.
+
+**4 — Le prove WP3 sostituite restano materiale probatorio.** La vista
+`moderation_dispute_shipping_evidence` espone una lista chiusa senza
+`uploader_id`, porta sia righe correnti sia righe con `superseded_at`, e calcola
+`is_current = (superseded_at is null)`. Fuori da una contestazione interessa
+l'ultima prova; dentro una contestazione conta anche che una fotografia sia
+stata sostituita e quando. L'interfaccia quindi marca «Corrente»/«Sostituita» e
+non filtra lo storico.
+
+**5 — Gli oggetti privati si firmano al momento della lettura, in un solo
+giro.** I percorsi di `disputes.foto`, `venditore_foto` e delle prove WP3 vengono
+deduplicati e passati a `createSignedUrls(..., 15 * 60)` sul bucket privato
+`dispute-evidence`; nessun `storage_path` esce nel contratto UI e nessuna URL
+firmata è persistita. Un percorso che non riceve una firma non produce un
+riquadro muto; un errore di firma ferma il fascicolo. Le immagini pubbliche di
+annuncio e confezione passano invece dallo stesso risolutore indurito del
+catalogo, estratto in `lib/images/url-annuncio.ts`: nessun `getPublicUrl` per
+oggetti privati e nessun URL Supabase composto a mano nel dossier.
+
+**6 — Le viste sono porte admin chiuse; lo Storage non cambia.** Le tre viste
+usano `security_invoker = off`, `security_barrier = true`, lista di colonne
+esplicita e il predicato interno `public.has_role((select auth.uid()), 'admin')`;
+`anon` e `public` non hanno grant, `authenticated` ha il solo `SELECT`. L'audit
+della policy WP3 ha confermato che `dispute_evidence_participants_select` ha già
+un ramo admin esterno alla sottoquery RLS sugli ordini: il moderatore può firmare
+l'oggetto. Perciò la migrazione non crea, modifica o allarga alcuna policy
+Storage. Se quel ramo viene meno, la soluzione non è aprire il bucket: il dossier
+deve fallire chiuso finché non esiste una porta deliberata e stretta.
+
+**7 — Consegna registrata non significa POD del vettore.** Corriere, tracking,
+`spedito_at`, `consegnato_at`, `ricezione_confermata_at` e gli eventi del nostro
+dominio sono contesto, non attestazioni del provider. Nessun provider logistico
+è integrato e non esiste un dato POD: il pannello scrive «POD vettore: non
+disponibile» e spiega che arriverà con il provider, senza inferirlo da
+`consegnato_at`, senza nuova colonna e senza deep-link al sito di un corriere.
+Il pacchetto non aggiunge inoltre azioni economiche: importi e payout già
+presenti nella coda restano invariati e nessuna vista nuova espone denaro.
+
+Prove BUILD: `frontend-next/src/services/phase9/dispute-dossier.test.ts` (25),
+`src/components/vinea/moderation/dispute-dossier.test.ts` (29) e la regressione
+`src/services/phase9/moderation-service.test.ts` (41), tutte verdi. La griglia
+`supabase/tests/12n_dispute_evidence_dossier.sql` contiene 50 casi, è cablata nel
+gate `Supabase DB regression` e resta **NON VERIFICATA** alla scrittura perché la
+postazione non ha stack Supabase locale, CLI o `psql`.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):
@@ -979,8 +1053,8 @@ da [`.github/scripts/supabase-db-gate-scope.sh`](../.github/scripts/supabase-db-
 sul diff `HEAD^1..HEAD`. Sono pertinenti:
 
 - `supabase/migrations/**`, `supabase/config.toml` e `supabase/seed.sql`;
-- `supabase/tests/12e_*`, `12f_*`, `12g_*`, `12h_*`, `12i_*`, `12j_*`, `12k_*` e
-  `12l_*`;
+- `supabase/tests/12e_*`, `12f_*`, `12g_*`, `12h_*`, `12i_*`, `12j_*`, `12k_*`,
+  `12l_*`, `12m_*` e `12n_*`;
 - il workflow e lo script di scope stessi.
 
 Per il resto il gate produce uno skip dichiarato (notice e job summary), non un

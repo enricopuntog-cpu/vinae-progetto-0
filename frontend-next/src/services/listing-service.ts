@@ -20,6 +20,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { IMMAGINE_ASSENTE, urlImmagine } from "@/lib/images/url-annuncio";
 import { avatarSicuro, riferimentoAvatarSicuro } from "@/lib/profilo/avatar";
 import {
   confezioneOriginaleTipoDaDb,
@@ -135,18 +136,18 @@ const COLONNE = [
 export { COLONNE as COLONNE_ANNUNCIO_PUBBLICO };
 
 /**
- * Immagine mostrata quando un annuncio non ne ha nessuna.
- *
- * Esportata perché la Cantina pubblica del profilo ha lo stesso identico
- * problema e deve dargli la stessa identica risposta: le fotografie caricate in
- * Cantina stanno nel bucket privato `cantina` e non sono pubblicabili, quindi
- * una bottiglia senza annuncio attivo mostra questo segnaposto. Una seconda
- * costante con lo stesso percorso sarebbe una copia da tenere allineata.
+ * `IMMAGINE_ASSENTE`, `BUCKET_ANNUNCI` e `urlImmagine` vivono in
+ * `@/lib/images/url-annuncio` e sono riesportate da qui, dove sono sempre
+ * state: ogni importazione esistente continua a valere. Sono state spostate in
+ * un modulo senza dipendenze perché anche il fascicolo di contestazione deve
+ * risolvere le fotografie di un annuncio, e l'unica alternativa era ricomporre
+ * l'URL una seconda volta altrove.
  */
-export const IMMAGINE_ASSENTE = "/images/vinea-bottle-1.jpg";
-
-/** Bucket delle fotografie caricate dai venditori (Fase 6b). */
-export const BUCKET_ANNUNCI = "annunci";
+export {
+  BUCKET_ANNUNCI,
+  IMMAGINE_ASSENTE,
+  urlImmagine,
+} from "@/lib/images/url-annuncio";
 
 const LISTING_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -155,29 +156,6 @@ export const listingLookupField = (value: string): "id" | "slug" =>
 
 function centesimiInEuro(cents: number): number {
   return cents / 100;
-}
-
-/**
- * `listings.immagini` contiene due specie diverse di stringa, e si distinguono
- * dalla prima lettera:
- *
- * - `/images/…` è un asset statico servito da frontend-next/public — sono le
- *   illustrazioni usate dai dati di prova della 6a, e restano dove sono;
- * - `<uid>/<uuid>.jpg` è un oggetto dentro il bucket `annunci`, caricato da un
- *   venditore in Fase 6b.
- *
- * Nel database si salva il percorso e non l'URL completo: l'URL contiene
- * l'indirizzo del progetto Supabase, e inciderlo in ogni riga legherebbe i
- * dati a un progetto specifico. L'URL si ricompone qui, dove l'indirizzo è
- * già una variabile d'ambiente.
- */
-export function urlImmagine(percorso: string): string {
-  if (percorso.startsWith("/")) return percorso;
-
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!base) return IMMAGINE_ASSENTE;
-
-  return `${base}/storage/v1/object/public/${BUCKET_ANNUNCI}/${percorso}`;
 }
 
 /**

@@ -1,27 +1,20 @@
 ## CURRENT STATE
-- WP1 logistica è **CLOSED**: PR #162 integrata su `origin/main` con squash `522fbdc6502235b368274662f47f6e2ebd8e10cd`. Sul progetto Supabase di produzione `pijnmcllmfgjmgsvtcej` il ledger contiene `20260928120000_listing_logistics_metadata`; schema effettivo, ACL della RPC e proiezione pubblica senza `handoff_venditore` verificati in sola lettura. Griglia `12l_listing_logistics_metadata.sql` 48/48.
-- WP2 logistica è **CLOSED**: PR #163 integrata con squash `758d5545f574d84fcf5071e9645d36c126c8f422`; documentazione di chiusura nella PR #164.
-- WP3 prove di spedizione è **CLOSED**: PR #165 MERGED con squash `702b5040e228d39a78103c8383520dd3a587e09e`, PR #166 di handoff MERGED. Runtime del gate sull'HEAD esatto: `12m` **59/59**, `7c` **22/22**. Alla chiusura della WP3 la suite `frontend-next` contava **1962** test e `MIN_TESTS` valeva `1962`.
-- WP4 guida contestuale di preparazione pacco è **CLOSED**: PR #167 MERGED con squash `50ead286a94b5ef14db5c0c7ab3945b76710f5cc`. `origin/main` corrente è `50ead28`. Sull'HEAD esatto dello squash `CI` e `Supabase DB regression` sono entrambe `success`.
-- Certificazione WP4 sull'HEAD integrato: suite `frontend-next` **2023/2023** su 122 file, `tsc --noEmit` pulito, `bun run lint` senza errori, `bun run build` completato. `MIN_TESTS` alzato da `1962` a **2023**, lo stesso valore in `.github/workflows/ci.yml` e in `src/lib/beta/prelaunch-contract.test.ts`: è il conteggio reale misurato, non una stima.
-- Perimetro dello squash verificato da `origin/main`: 14 file, nessuno sotto `supabase/migrations/`, nessun `.sql`, nessun file personale, `CLAUDE.md` invariato. WP4 è frontend e read model esistente: non ha migrazioni da applicare e non ha attivato nessuna griglia.
-- Il frontend di produzione serve la nuova `main`: sulla rotta `/ordine/[id]` di `timely-lokum-43a12e.netlify.app` il chunk client `/_next/static/chunks/16gh15zj_82jc.js` contiene «Confezione dichiarata nell'annuncio», «Come preparare il pacco», «La disponibilità operativa sarà confermata» e le guide specifiche di cassa in legno e confezione multipla. Nessun marker di fornitore, prezzo o Vinea Pack operativo.
-- Ledger di produzione riletto dalla Cabina: `20260928210000_shipping_evidence_gate` **PRESENTE** e `20260929083156_shipping_preparation_confirmation_event` **PRESENTE**. Schema effettivo, ACL e policy Storage del cancello di preparazione **VERIFICATI dalla Cabina** in sola lettura su `pijnmcllmfgjmgsvtcej`.
-- Il cancello WP3 è attivo in produzione e invariato dopo la WP4: `ordine_segna_spedito` ammette il solo stato `in_preparazione` e richiede `preparazione_confermata_at`, le sei voci canoniche spuntate, la prova corrente `collo_finale` del venditore e il pagamento `paid`. Autorità delle prove: `private.order_shipping_evidence`, bucket privato `dispute-evidence`, URL firmate a 15 minuti mai persistite.
+- WP1 logistica, WP2 ciclo vendita, WP3 prove di spedizione e WP4 guida contestuale sono **CLOSED**. WP4: PR #167, squash `50ead286a94b5ef14db5c0c7ab3945b76710f5cc`; handoff PR #168; baseline corrente `origin/main` `721531b66f38c3fe5e0d6034d0f1fc40996f3f80`.
+- WP3 resta l'autorità della preparazione: `private.order_shipping_evidence`, bucket privato `dispute-evidence`, prove correnti e sostituite, URL firmati a 15 minuti. Il ramo admin della policy `dispute_evidence_participants_select` consente già la firma delle prove; nessuna policy Storage è stata allargata.
+- Il prodotto servito resta `frontend/` + `backend/`; `frontend-next/` è la beta target. Nessun cutover appartiene a questo pacchetto.
 
 ## ACTIVE TASK
-- Nessuna work package aperta. La pista logistica WP1 → WP4 è chiusa; l'apertura della successiva è una decisione di prodotto e non segue automaticamente da una PR verde.
-- Invariante da preservare: il tipo di confezione dichiarato sull'annuncio cambia **solo la lingua** della guida e l'etichetta della sesta voce di checklist. Gli ID della checklist restano sei, `confezione_originale_tipo = NULL` riceve la guida generale e non viene reinterpretato come «nessuna confezione», e readiness e autorità dello stato restano quelle della WP3.
-- Confine fra riferimento e prova: le foto della confezione sull'annuncio sono materiale di riferimento in sola lettura nel Seller Prep, che non può caricarle, modificarle né cancellarle. Le prove di spedizione WP3 restano l'unica evidenza.
+- WP5 fascicolo contestazione / evidence dossier admin è in **VERIFY & SHIP** sul branch `feature/dispute-evidence-dossier`, baseline `721531b66f38c3fe5e0d6034d0f1fc40996f3f80`.
+- Il pacchetto integra il dossier nella coda esistente: annuncio e confezione dichiarata, prove WP3 correnti e sostituite, spedizione/consegna e tracking; le prove già esistenti di acquirente e venditore, timeline e note admin restano nello stesso pannello. Tre classi fotografiche distinte; POD vettore dichiarato non disponibile perché nessun provider logistico è integrato.
+- Una sola migrazione additiva, `20260929140000_dispute_evidence_dossier.sql`, ricrea `moderation_dispute_queue` con dieci colonne in coda e aggiunge le viste admin chiuse `moderation_dispute_shipping_evidence` e `moderation_dispute_tracking`. Nessuna tabella evidence, nessuna modifica al lifecycle, al denaro, ai provider o alle policy Storage.
+- Gate locali verdi: suite completa `frontend-next` **2079 test, 0 fail**, build, lint senza errori (12 warning preesistenti), typecheck, autotest del gate DB e `git diff --check`. `MIN_TESTS` alzato da 2023 a **2079** in `.github/workflows/ci.yml` e in `prelaunch-contract.test.ts`.
 
 ## NEXT STEPS
-1. Attendere la decisione di prodotto sulla prossima work package prima di aprire codice nuovo.
-2. Alzare `MIN_TESTS` nei due file insieme al primo aumento reale della suite `frontend-next`, mai abbassarlo come pulizia.
-3. Eseguire lo smoke browser autenticato della guida a 375px e su desktop quando lo strumento sarà disponibile.
+1. Verificare sul gate `Supabase DB regression` dell'HEAD esatto che la griglia `12n` giri davvero e chiuda 50/50 senza fallimenti.
+2. Applicare la migrazione WP5 alla produzione dopo il merge e verificare viste, grant e filtro admin in sola lettura.
+3. Eseguire lo smoke browser autenticato del fascicolo admin a 375px e desktop quando lo strumento sarà disponibile.
 
 ## BLOCKERS / NOTES
-- Le griglie Supabase non sono eseguibili in postazione (nessun Docker, nessuna CLI): l'unica prova ammessa resta il gate CI sull'HEAD esatto.
-- La verifica diretta del database di produzione resta **NON VERIFICATA in postazione** (nessun `psql`, nessuna CLI, nessun MCP, nessuna credenziale): i fatti di produzione qui registrati provengono dalla Cabina, tranne la verifica del frontend servito, fatta sui chunk client pubblici.
-- Lo smoke browser autenticato resta **NON VERIFICATO** per indisponibilità dello strumento: la resa a 375px, tablet e desktop della guida è argomentata sulle classi e provata sui sorgenti, non misurata in un browser.
-- `src/services/listing-ciclo-vita.test.ts` è stato toccato dalla WP4 per una sola ragione tecnica: `RigaAnnuncioProprietario` ora dichiara le tre colonne, e la fixture WP2 senza di esse non compilava. Le tre sono aggiunte a `null`, cioè esattamente il caso legacy che quel test già descriveva.
-- Nessuna area di denaro è stata toccata: `payments`, `payouts`, `balance`, commissione, totale, addebito, checkout reserve ed eventi del provider sono invariati.
+- Le griglie Supabase non sono eseguibili in postazione (nessun Docker, Supabase CLI o `psql`): la `12n` resta **NON VERIFICATA** finché il gate CI non la riporta eseguita.
+- Lo smoke browser autenticato resta **NON VERIFICATO** per indisponibilità dello strumento; non è un blocco.
+- Nessun file personale e nessun `CLAUDE.md` è stato toccato.
