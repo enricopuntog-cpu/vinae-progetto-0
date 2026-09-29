@@ -701,7 +701,9 @@ begin
     into v_c
   from information_schema.columns
   where table_schema = 'public' and table_name = any (pg_temp.viste())
-    and (column_name like '%signed%' or column_name like '%url%'
+    -- `%signed%` da solo pescherebbe `as|signed|_to`: due colonne distribuite
+    -- della coda, che con gli URL firmati non c'entrano nulla.
+    and (column_name like '%signed\_url%' or column_name like '%url%'
          or column_name like '%firmat%');
   perform pg_temp.registra(50, 'nessun URL firmato e persistito nel read model',
     v_c = 'nessuna', v_c);
