@@ -43,6 +43,10 @@ Aprire soltanto ciò che serve al task:
   follower, nessun conteggio di follower, notifiche dalla Fase 8 con
   destinazione `cellar`, deduplica per pubblicazione e nessun recupero del
   passato — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`.
+- La fondazione economica della logistica — tabelle autoritative in `private`,
+  `public.packaging_options` che resta il dominio 7c, una sola autorità sull'8%
+  con la commissione come componente separata, rotte generiche `pudo`/`domicilio`
+  e preventivo immutabile — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono
