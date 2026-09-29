@@ -76,6 +76,12 @@ const rigaMinima = {
     },
   },
   profiles: { username: "enrico", citta: "Torino", avatar_url: "/avatar/uno.svg" },
+  // Annuncio anteriore alla 20260928120000: le tre colonne esistono nella riga
+  // ma non sono mai state dichiarate. E' il caso legacy, e va tenuto qui dentro
+  // perche' e' la riga con cui si prova che la sospensione non perde dati.
+  confezione_originale_tipo: null,
+  confezione_originale_foto: null,
+  handoff_venditore: null,
 };
 
 describe("CTA desktop della Cantina", () => {

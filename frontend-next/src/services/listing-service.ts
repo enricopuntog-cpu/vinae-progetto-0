@@ -21,7 +21,10 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { avatarSicuro, riferimentoAvatarSicuro } from "@/lib/profilo/avatar";
-import { confezioneOriginaleTipoDaDb } from "@/lib/vendi/logistica-annuncio";
+import {
+  confezioneOriginaleTipoDaDb,
+  handoffVenditoreDaDb,
+} from "@/lib/vendi/logistica-annuncio";
 import type {
   ConfezioneOriginaleTipo,
   HandoffVenditore,
@@ -734,6 +737,37 @@ export type AnnuncioProprietario = {
   immaginiPercorsi: string[];
   modificabile: boolean;
   sospendibile: boolean;
+  /** Le tre dichiarazioni della 20260928120000, viste dal proprietario. */
+  logistica: LogisticaProprietario;
+};
+
+/**
+ * Confezione originale e consegna alla rete, come le legge chi ha scritto
+ * l'annuncio.
+ *
+ * Sta in un campo suo e non dentro `wine` di proposito. `Wine` è la forma del
+ * **prodotto** ed è condivisa con il catalogo pubblico: `handoff_venditore` non
+ * è un fatto del prodotto, è una scelta privata del venditore che
+ * `public_listings` non espone. Infilarcelo dentro significherebbe darle un
+ * campo che il ramo pubblico non può mai riempire, e prima o poi qualcuno lo
+ * leggerebbe da una scheda pubblica trovandolo sempre vuoto — o peggio, lo
+ * aggiungerebbe alla vista per riempirlo.
+ *
+ * `Wine.confezioneOriginale` resta dov'è per il ramo pubblico; qui la
+ * confezione è ripetuta perché questa riga non passa dalla vista.
+ */
+export type LogisticaProprietario = {
+  /** `null` per gli annunci anteriori alla 20260928120000. */
+  confezioneOriginaleTipo: ConfezioneOriginaleTipo | null;
+  /**
+   * URL già ricomposti da `urlImmagine()`, pronti per essere mostrati — non i
+   * percorsi del bucket. Il nome lo dice perché la distinzione è la stessa che
+   * separa `immaginiPercorsi` da `wine.immagini`, e confonderle qui produrrebbe
+   * un `<img>` con dentro `<uid>/<uuid>.jpg`.
+   */
+  confezioneOriginaleFotoUrl: string[];
+  /** `null` finché il venditore non ha scelto, e per gli annunci legacy. */
+  handoffVenditore: HandoffVenditore | null;
 };
 
 /**
@@ -774,6 +808,15 @@ type RigaAnnuncioProprietario = {
     } | null;
   } | null;
   profiles: { username: string; citta: string; avatar_url: string } | null;
+  /**
+   * Le tre colonne della 20260928120000. Sono leggibili da qui — e solo da qui —
+   * perché quella migrazione le ha messe nel `GRANT SELECT` per colonna di
+   * `authenticated` su `public.listings`, e `listings_select_own` non guarda lo
+   * stato: il venditore continua a leggerle dopo la vendita.
+   */
+  confezione_originale_tipo: string | null;
+  confezione_originale_foto: string[] | null;
+  handoff_venditore: string | null;
 };
 
 const COLONNE_PROPRIETARIO = [
@@ -790,9 +833,48 @@ const COLONNE_PROPRIETARIO = [
   "tag",
   "published_at",
   "created_at",
+  "confezione_originale_tipo",
+  "confezione_originale_foto",
+  "handoff_venditore",
   "bottle_units!inner(wines!inner(id,slug,produttore,nome,annata,regione,denominazione,tipo,formato,provenienza))",
   "profiles!listings_seller_id_fkey(username,citta,avatar_url)",
 ].join(",");
+
+/**
+ * L'allowlist del proprietario, esportata per essere verificata invece che
+ * riletta a occhio: è l'elenco che deve restare dentro il `GRANT SELECT` per
+ * colonna di `authenticated`, e una voce di troppo qui non è un campo inutile,
+ * è un `42501` su tutta la query.
+ */
+export { COLONNE_PROPRIETARIO };
+
+/**
+ * Le tre dichiarazioni della riga, nella forma del dominio.
+ *
+ * Il parametro si chiama `listing` e non `riga` come gli altri mappatori di
+ * questo file, e la differenza è voluta: `listing-logistica.test.ts` vieta la
+ * stringa `riga.handoff_venditore` in tutto il file per impedire che un
+ * mappatore di `public_listings` legga una colonna che quella vista non espone.
+ * Il divieto resta giusto — e resta in vigore su `rigaAWine`, il cui parametro
+ * *è* `riga` — ma questa lettura è l'altra: la tabella, letta dal proprietario,
+ * dove la colonna esiste e il `GRANT` la concede. Un nome diverso dice quale
+ * delle due sorgenti si sta leggendo; la prova precisa dell'invariante pubblica
+ * sta in `guida-imballaggio-proprietario.test.ts`.
+ *
+ * `null` non diventa mai un'etichetta: `confezioneOriginaleTipoDaDb()` e
+ * `handoffVenditoreDaDb()` tengono il terzo stato, e chi disegna decide come
+ * chiamare un'assenza.
+ */
+function logisticaProprietaria(listing: RigaAnnuncioProprietario): LogisticaProprietario {
+  return {
+    confezioneOriginaleTipo: confezioneOriginaleTipoDaDb(listing.confezione_originale_tipo),
+    // Stesso risolutore delle altre fotografie dell'annuncio: la colonna porta
+    // percorsi del bucket `annunci`, e comporre l'URL a mano qui vorrebbe dire
+    // accettare come indirizzo qualunque stringa ci sia dentro.
+    confezioneOriginaleFotoUrl: (listing.confezione_originale_foto ?? []).map(urlImmagine),
+    handoffVenditore: handoffVenditoreDaDb(listing.handoff_venditore),
+  };
+}
 
 /**
  * Da riga della tabella ad `AnnuncioProprietario`, per la scheda singola e per
@@ -812,6 +894,7 @@ export function annuncioProprietarioDaRiga(
     immaginiPercorsi: riga.immagini ?? [],
     modificabile: STATI_MODIFICABILI.includes(riga.stato),
     sospendibile: STATI_SOSPENDIBILI.includes(riga.stato),
+    logistica: logisticaProprietaria(riga),
   };
 }
 

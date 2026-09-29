@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { createListingService } from "@/services/listing-service";
+import type { LogisticaProprietario } from "@/services/listing-service";
 import { createOrderService } from "@/services/phase7/order-service";
 import { createDisputeService } from "@/services/phase7c/dispute-service";
 import { createReviewService } from "@/services/phase7c/review-service";
@@ -45,6 +47,17 @@ export type DettaglioOrdine = {
    * e per il compratore sarebbe una chiamata sempre respinta.
    */
   proveSpedizione: ShippingEvidence[];
+  /**
+   * La logistica dichiarata sull'**annuncio** collegato, letta dal venditore.
+   *
+   * È contesto per la guida di preparazione, non un fatto dell'ordine: la
+   * confezione originale resta un attributo del listing e non viene copiata su
+   * `orders`. Da qui esce `null` in tre casi che non vanno confusi a valle —
+   * chi guarda è il compratore, l'annuncio non è leggibile, oppure l'annuncio
+   * è anteriore alla 20260928120000 — e in tutti e tre la conseguenza è la
+   * stessa: guida generica, e nessuna conseguenza sul cancello di spedizione.
+   */
+  logisticaAnnuncio: LogisticaProprietario | null;
   /** Chi sta guardando. Decide quale pannello compare, non quale permesso c'è. */
   ruolo: "compratore" | "venditore";
 };
@@ -78,6 +91,7 @@ export function useOrderDetail(orderId: string) {
   const tracking = createTrackingService(client);
   const contestazioni = createDisputeService(client);
   const recensioni = createReviewService(client);
+  const annunci = createListingService(client);
 
   const carica = useCallback(async (userId: string | null) => {
     if (!client) return;
@@ -100,7 +114,7 @@ export function useOrderDetail(orderId: string) {
 
     const venditore = ordine.seller_id === userId;
 
-    const [esitoTracking, esitoDispute, esitoReview, esitoEleggibilita, prove] =
+    const [esitoTracking, esitoDispute, esitoReview, esitoEleggibilita, prove, logisticaAnnuncio] =
       await Promise.all([
         tracking.perOrdine(orderId),
         contestazioni.perOrdine(orderId),
@@ -115,6 +129,20 @@ export function useOrderDetail(orderId: string) {
         venditore
           ? ordini.proveSpedizione(orderId).then((e) => (e.ok ? e.data : []))
           : Promise.resolve([] as ShippingEvidence[]),
+        // Il contesto dell'annuncio: solo per il venditore, perché
+        // `listings_select_own` filtra su `seller_id = auth.uid()` e per il
+        // compratore la riga non esiste — chiederla sarebbe una lettura vuota a
+        // ogni apertura. Il `catch` non è scaramanzia: `mioAnnuncio()` risponde
+        // già `null` sui propri errori, ma questa promessa sta dentro la stessa
+        // `Promise.all` dell'ordine, e un rifiuto imprevisto qui farebbe
+        // fallire il caricamento di tutta la pagina per un dato che è soltanto
+        // illustrativo.
+        venditore
+          ? annunci
+              .mioAnnuncio(ordine.listing_id)
+              .then((annuncio) => annuncio?.logistica ?? null)
+              .catch(() => null)
+          : Promise.resolve(null),
       ]);
 
     const contestazione = esitoDispute.ok ? esitoDispute.data : null;
@@ -140,6 +168,7 @@ export function useOrderDetail(orderId: string) {
         eleggibilita:
           esitoEleggibilita?.find((e) => e.orderId === orderId) ?? null,
         proveSpedizione: prove,
+        logisticaAnnuncio,
         ruolo: venditore ? "venditore" : "compratore",
       },
     });
