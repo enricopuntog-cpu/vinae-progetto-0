@@ -502,6 +502,127 @@ riga, compresi il ripristino da `rifiutato` e quello da `sospeso` che prima
 erano impossibili. **NON VERIFICATO** alla scrittura: mai eseguita, l'ambiente
 di sviluppo non ha né CLI Supabase né Docker attivo.
 
+## Prove di spedizione e cancello di preparazione (28 settembre 2026)
+
+Migrazione `20260928210000_shipping_evidence_gate.sql`.
+
+**Il difetto chiuso.** Fino a questa migrazione `public.ordine_segna_spedito`
+accettava anche lo stato `pagato`. Un venditore poteva portare un ordine da
+`pagato` a `spedito` senza aprire la preparazione, senza checklist e senza una
+sola fotografia — e in caso di contestazione non esisteva nulla che dicesse come
+la merce fosse partita. **Un ordine non può più saltare `pagato → spedito`**:
+l'unico stato di partenza ammesso è `in_preparazione`, e in più
+`private.ordine_spedizione_pronta()` deve dire di sì.
+
+**L'autorità delle prove è `private.order_shipping_evidence`**, non
+`orders.imballaggio_foto`. La tabella conserva tipo, caricatore (sempre
+`auth.uid()`, mai un parametro), percorso, istante e `superseded_at`. La
+sostituzione non cancella: marca la precedente e inserisce la nuova, così lo
+storico resta verificabile. Un indice parziale
+`(order_id, evidence_kind) where superseded_at is null` è il vincolo vero della
+regola «una sola prova corrente per tipo»: non dipende dal fatto che la RPC si
+ricordi di marcare quella prima. RLS attiva **senza policy**, più `revoke all`
+dai ruoli client: si passa solo dalle due porte `SECURITY DEFINER`.
+
+**`orders.imballaggio_foto` è una proiezione di compatibilità**, riscritta dal
+database a ogni registrazione con le sole prove CORRENTI. Non è più una colonna
+che il client possa popolare: mandare una stringa qualsiasi non crea una prova,
+e nessuna lettura deve trattarla come autorità — né in SQL né nel frontend.
+
+**Due tipi, e solo due.** `collo_finale` (il collo chiuso) è **obbligatoria** ed
+entra nel cancello; `interno_pre_chiusura` è **facoltativa** e non ci entra: è
+documentazione utile in contestazione, non una condizione per spedire. L'elenco
+è un `check` sulla colonna: un terzo tipo non si aggiunge dal codice applicativo.
+
+**Stesso bucket privato delle contestazioni, `dispute-evidence`.** Prova di
+preparazione e prova di contestazione appartengono al fascicolo dello stesso
+ordine: due bucket significherebbero due formati di percorso, due politiche e
+due TTL da riconciliare a mano per mostrarle insieme. Restano il limite di
+5 MiB, il solo `image/webp` e la sanitizzazione per ricodifica (è la ricodifica
+a togliere EXIF e GPS, non un filtro sui metadati). La policy di INSERT si
+estende di **un ramo solo** — il venditore di *quell'ordine*, finché lo stato è
+`pagato` o `in_preparazione` — e i due rami delle contestazioni sono riportati
+identici. `private.prova_ordine_depositata()` estende l'immutabilità alle prove
+di spedizione, correnti **o sostituite**: una prova sostituita è ancora citata
+dallo storico, quindi il suo oggetto deve continuare a esistere.
+
+**Il riuso del bucket ha richiesto di stringere la policy di SELECT, e questo è
+il punto più delicato della migrazione.** La regola in vigore dalla
+`20260923160000` diceva: «admin, oppure compratore o venditore dell'ordine, su
+qualunque oggetto sotto `<order_id>/`». Finché sotto quel prefisso c'erano solo
+prove di contestazione — depositate da chi le aveva caricate, in una pratica
+aperta — era la regola giusta. Depositarci anche le fotografie
+dell'imballaggio l'avrebbe trasformata in **una finestra permanente del
+compratore sulle prove di spedizione di ogni ordine, senza alcuna
+contestazione**. E il percorso non è un segreto che protegga: `imballaggio_foto`
+è leggibile da entrambe le parti e contiene i percorsi esatti. È la policy a
+dover negare, mai l'ignoranza del nome.
+
+Il ramo del compratore ora chiede due cose e non una: che sia parte
+dell'ordine **e** che l'oggetto sia o un proprio caricamento
+(`split_part(name, '/', 2) = auth.uid()`) o un percorso depositato in una
+contestazione (`private.prova_contestazione_depositata(name)`). È esattamente il
+confine del fascicolo: finché una prova non è citata da `disputes.foto` o
+`venditore_foto` resta del venditore; dal deposito in poi segue le regole della
+contestazione e il compratore la legge, perché è su quella che deve poter
+rispondere. Il ramo del venditore e quello dell'admin non cambiano, e
+`has_role()` resta **fuori** dalla sottoquery su `public.orders`, che è protetta
+da RLS. Un effetto collaterale voluto: si chiude anche la finestra fra
+`upload` e registrazione, in cui un oggetto orfano del venditore era leggibile
+dal compratore. Regressioni: casi 54-57 della 12m.
+
+**Nessuna URL persistita.** Il bucket è privato: il database conserva il
+percorso, e la lettura produce URL firmate a 15 minuti al momento in cui
+servono. Il frontend non costruisce percorsi e non riceve quelli privati.
+
+**Il cancello è riusabile, ed è il punto di aggancio del futuro fornitore.**
+`private.ordine_spedizione_pronta(uuid)` risponde sulla riga: ordine
+`in_preparazione`, `preparazione_confermata_at` valorizzata, sei voci canoniche
+di `private.imballaggio_checklist_voci()` tutte spuntate, prova corrente
+`collo_finale` caricata dal venditore dell'ordine, pagamento `paid`. Quando
+arriverà un adattatore logistico, **`createShipment`/`generateLabel` devono
+interrogare questa funzione prima di creare una spedizione**, non riscrivere la
+condizione: una seconda copia della regola è esattamente il modo in cui il
+bypass tornerebbe. Questo work package non integra nessun fornitore, nessun QR,
+nessuna etichetta reale, nessun PUDO reale, nessuna API di tracking, nessun
+prezzo logistico e nessuna assicurazione.
+
+**La checklist ha sei voci canoniche**, dichiarazioni di sicurezza e non più le
+quattro voci fotografiche della 7c (`foto_frontale` e le altre): erano spunte
+che *affermavano* una fotografia senza che ne esistesse una, e la fotografia ora
+si carica davvero. `private.imballaggio_checklist_completa(jsonb)` conta totale,
+distinti e spuntati contro l'elenco: «più qualcosa» non è completa e un ID
+inventato non sostituisce quello che manca. La copia TypeScript in
+`frontend-next/src/lib/orders/imballaggio-checklist.ts` serve ad accendere un
+bottone, non a decidere: il suo test rilegge la migrazione e fallisce quando le
+due divergono.
+
+**L'evento di conferma nasce solo nella transizione reale.** La migrazione
+additiva `20260929083156_shipping_preparation_confirmation_event.sql` chiude un
+difetto trovato in audit sulla versione distribuita: `ordine_prepara_spedizione`
+rendeva idempotente l'istante `preparazione_confermata_at` con un `coalesce`, ma
+poi decideva l'evento `shipping_preparation_confirmed` sulla sola condizione
+«l'istante non è nullo». Risultato: ogni risalvataggio conforme di una
+preparazione già confermata aggiungeva un evento di audit identico, e il
+registro diceva N conferme dove ce n'era una. Ora la transizione è calcolata
+prima dell'`update` (`v_completa and v_collo and preparazione_confermata_at is
+null`) e solo quella emette l'evento. Una conferma che decade — prova sostituita
+o checklist rotta — e poi si rifà torna a essere una transizione vera e produce
+il suo evento: il caso 40 della 12m conta infatti tre conferme su O1, che sono
+tre transizioni reali. La 20260928210000 **non è stata modificata**: era già
+stata applicata al branch Supabase Preview della PR #165 e quindi congelata; la
+regola di immutabilità vale anche per i branch di anteprima.
+
+Prova: `supabase/tests/12m_shipping_evidence_gate.sql`, 59 casi, e la
+regressione `supabase/tests/7c_consegna_imballaggio.sql`, 22 casi, entrambe
+cablate nel gate `Supabase DB regression`. Eseguite sull'HEAD esatto
+`3e7c26f1b3711f24a95e314f2b3f09bd3a79e8fb` della PR #165: **12m 59/59**, **7c
+22/22**, con 12e 10/10, 12g SQL 7/7, 12h 21/21, 12i 21/21, 12j 35/35, 12k 57/57,
+12l 48/48, dinieghi di ruolo 12f PASS, MFA REST 13/13 ed E2E 12g PASS su 177
+controlli; nessun movimento economico e residui di pulizia a zero. Il caso 59
+prova in particolare che risalvare senza modifiche una preparazione già
+confermata non sposta l'istante e non duplica l'evento.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):
