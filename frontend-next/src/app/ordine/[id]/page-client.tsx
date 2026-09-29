@@ -45,6 +45,7 @@ export default function OrdineDetailPageClient({ orderId }: { orderId: string })
     rispostaRecensione,
     eleggibilita,
     proveSpedizione,
+    logisticaAnnuncio,
     ruolo,
   } =
     o.stato.dati;
@@ -88,6 +89,7 @@ export default function OrdineDetailPageClient({ orderId }: { orderId: string })
             <SellerPrepPanel
               ordine={ordine}
               prove={proveSpedizione}
+              logistica={logisticaAnnuncio}
               inCorso={o.inCorso}
               onPrepara={o.preparaSpedizione}
               onRegistraProva={o.registraProvaSpedizione}

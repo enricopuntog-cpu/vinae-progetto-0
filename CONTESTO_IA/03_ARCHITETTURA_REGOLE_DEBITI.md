@@ -623,6 +623,66 @@ controlli; nessun movimento economico e residui di pulizia a zero. Il caso 59
 prova in particolare che risalvare senza modifiche una preparazione già
 confermata non sposta l'istante e non duplica l'evento.
 
+## Guida contestuale di preparazione del pacco (29 settembre 2026)
+
+Il pannello di preparazione della WP3 chiedeva le stesse quattro frasi generiche
+a una bottiglia nuda e a una cassa di legno. La WP4 le rende contestuali, e lo fa
+senza toccare il database: cinque decisioni durevoli, tutte sul lato lettura.
+
+**Le istruzioni derivano dalla confezione dichiarata sull'annuncio.**
+`confezione_originale_tipo` sceglie quale guida leggere — titolo, introduzione,
+passi numerati — e come è scritta la sesta voce della checklist. Il dominio è
+puro (`frontend-next/src/lib/orders/guida-imballaggio.ts`): nessun JSX, nessuna
+lettura, cinque guide costanti e tre etichette.
+
+**La sorgente è la lettura da proprietario, anche dopo la vendita.** Non
+`public_listings`: quella vista filtra `stato = 'attivo'`, e l'annuncio dietro un
+ordine da preparare è `venduto`, quindi da lì non uscirebbe più. Si legge la
+tabella `listings` con `ListingService.mioAnnuncio()`, sotto `listings_select_own`,
+che filtra sul venditore e sullo stato non guarda affatto. Le tre colonne entrano
+in `COLONNE_PROPRIETARIO`, dove il `GRANT` per colonna della 20260928120000 le
+concedeva già: nessun grant nuovo, e una colonna fuori dall'allowlist non darebbe
+un campo vuoto ma un `42501` su tutta la lettura.
+
+**L'attributo resta dell'annuncio: niente viene copiato sull'ordine.** L'ordine
+ha già `listing_id`. Congelare lì la confezione creerebbe una seconda sorgente
+dello stesso fatto, che divergerebbe alla prima modifica dell'annuncio, e
+sarebbe una migrazione per un dato che serve solo a scegliere quali frasi
+mostrare. La lettura vive nell'hook dell'ordine, la chiede il solo venditore ed è
+isolata: se fallisce, il pannello lo dichiara e mostra la guida generale, mentre
+l'ordine continua a rendersi.
+
+**NULL è «non dichiarata», mai «nessuna confezione originale».** Gli annunci
+anteriori alla 20260928120000 ricevono la guida prudente — quella che protegge
+ciò che *potrebbe* esserci — e la sesta voce condizionale «se presente». È la
+stessa regola già scritta per il catalogo, riaffermata dove sarebbe più comodo
+violarla: un pannello che attesta l'assenza di un cofanetto che nessuno ha mai
+negato farebbe firmare al venditore una dichiarazione falsa.
+
+**Il tipo di confezione cambia la lingua, non il cancello.** Gli ID della
+checklist restano i sei canonici e la sostituzione della sesta etichetta avviene
+per identità, dentro lo stesso `.map` sull'elenco canonico. Può farlo perché
+`private.imballaggio_checklist_completa()` legge `id` e `done` e la `label` la
+registra senza confrontarla: il testo che si salva è esattamente la frase che il
+venditore ha letto mentre spuntava. `preparazione_confermata_at` e
+`ordine_segna_spedito` restano le uniche autorità, e nessuna condizione
+dell'interfaccia sfiora il tipo di confezione — se lo facesse, un annuncio
+legacy avrebbe un cancello diverso da uno scritto oggi, e la differenza sarebbe
+invisibile.
+
+**Due domini fotografici convivono e non si mescolano.** Le foto della confezione
+vengono dal bucket pubblico `annunci`, passano dal risolutore già indurito e sono
+*reference* del prodotto, in sola lettura: dal pannello non si caricano, non si
+sostituiscono, non si cancellano. Le prove della WP3 stanno nel bucket privato,
+hanno URL firmate che scadono, e sono le sole di cui il database tenga conto. Il
+pannello lo dice per iscritto, perché due griglie di immagini nella stessa
+schermata si confondono se nessuno spiega che cosa sono.
+
+Prove: `frontend-next/src/lib/orders/guida-imballaggio.test.ts` (22),
+`src/services/guida-imballaggio-proprietario.test.ts` (9),
+`src/hooks/ordine-contesto-annuncio.test.ts` (6) e
+`src/components/vinea/orders/seller-prep-contestuale.test.ts` (18).
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):
