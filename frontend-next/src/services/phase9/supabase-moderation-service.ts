@@ -23,6 +23,9 @@
 // e `motiviAmmessi`, che ModerationService non contempla.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { urlImmagine } from "@/lib/images/url-annuncio";
+import { confezioneOriginaleTipoDaDb } from "@/lib/vendi/logistica-annuncio";
+import type { ConfezioneOriginaleTipo } from "@/lib/vendi/logistica-annuncio";
 import { noPhase9Client, phase9Throw } from "@/services/phase9/shared";
 import type { ModerationService } from "@/services/types";
 // types.ts importa questi tipi da @/data/moderation senza riesportarli: la
@@ -93,6 +96,84 @@ type AuditRow = {
   report_id: string | null;
 };
 
+// ---------------------------------------------------------------------------
+// Il fascicolo di contestazione
+// ---------------------------------------------------------------------------
+//
+// Tre classi di fotografia convivono in una contestazione e NON sono la stessa
+// cosa, per quanto si somiglino a schermo:
+//
+//   A  FOTOGRAFIE DELL'ANNUNCIO e della CONFEZIONE ORIGINALE dichiarata.
+//      Bucket PUBBLICO `annunci`, percorsi risolti da `urlImmagine()`. Sono il
+//      riferimento: che cosa era stato promesso.
+//   B  PROVE PRE-SPEDIZIONE del venditore (WP3). Bucket PRIVATO
+//      `dispute-evidence`, URL firmato a scadenza. Sono lo stato della merce
+//      al momento della chiusura del pacco, correnti e sostituite.
+//   C  PROVE DELLA PRATICA, caricate dal compratore (`foto`) e dal venditore
+//      nella sua risposta (`sellerEvidence`). Stesso bucket privato di B, ma
+//      un atto diverso: sono l'accusa e la difesa.
+//
+// Sono campi separati fino alla UI proprio perche mescolarle e il modo piu
+// semplice di far decidere male: una fotografia di catalogo scambiata per una
+// prova di imballaggio cambia il verdetto.
+
+/** Una prova pre-spedizione del venditore, corrente o sostituita. */
+export type DisputeShippingEvidenceItem = {
+  id: string;
+  kind: "collo_finale" | "interno_pre_chiusura";
+  /** URL firmato a 15 minuti. Non viene mai persistito, da nessuna parte. */
+  signedUrl: string;
+  createdAt: string;
+  supersededAt: string | null;
+  current: boolean;
+};
+
+/** Un evento di tracking del NOSTRO dominio, non del vettore. */
+export type DisputeTrackingEvent = {
+  id: number;
+  tipo: string;
+  titolo: string;
+  descrizione: string | null;
+  luogo: string | null;
+  createdAt: string;
+};
+
+/**
+ * L'annuncio collegato alla vendita.
+ *
+ * NON e uno snapshot storico: e l'annuncio com'e adesso, letto in join. Se il
+ * venditore lo ha modificato dopo la vendita, qui si legge la versione
+ * modificata — la UI lo dice, invece di far credere al moderatore di guardare
+ * il momento dell'acquisto.
+ *
+ * `originalPackagingType` a `null` significa "non dichiarata", mai "nessuna
+ * confezione originale": quest'ultima e un valore esplicito dell'elenco chiuso.
+ */
+export type DisputeListingEvidence = {
+  id: string | null;
+  slug: string | null;
+  images: string[];
+  originalPackagingType: ConfezioneOriginaleTipo | null;
+  originalPackagingImages: string[];
+};
+
+/**
+ * Spedizione e consegna come le conosce il nostro dominio.
+ *
+ * `deliveredAt` e `orders.consegnato_at`, cioe uno stato nostro. NON e una
+ * prova di consegna del vettore: nessun provider logistico e integrato, quindi
+ * il POD non esiste e non viene simulato.
+ */
+export type DisputeShipmentEvidence = {
+  carrier: string | null;
+  trackingNumber: string | null;
+  shippedAt: string | null;
+  deliveredAt: string | null;
+  receiptConfirmedAt: string | null;
+  trackingEvents: DisputeTrackingEvent[];
+  evidence: DisputeShippingEvidenceItem[];
+};
+
 export type DisputeQueueRow = {
   id: string;
   orderId: string;
@@ -137,6 +218,8 @@ export type DisputeQueueRow = {
     actorKind: "compratore" | "venditore" | "admin" | "sistema";
     createdAt: string;
   }>;
+  listing: DisputeListingEvidence;
+  shipment: DisputeShipmentEvidence;
 };
 
 // ---------------------------------------------------------------------------
@@ -252,6 +335,19 @@ export const mapDisputeRow = (row: {
   resolution_note?: string | null;
   resolved_at?: string | null;
   resolution_version?: number;
+  // Fascicolo. Tutte facoltative: una riga letta da una coda anteriore alla
+  // 20260929140000 non le porta, e il fascicolo deve degradare a vuoto invece
+  // di far sparire la contestazione dalla coda.
+  listing_id?: string | null;
+  listing_slug?: string | null;
+  listing_immagini?: string[] | null;
+  confezione_originale_tipo?: string | null;
+  confezione_originale_foto?: string[] | null;
+  corriere?: string | null;
+  tracking_number?: string | null;
+  spedito_at?: string | null;
+  consegnato_at?: string | null;
+  ricezione_confermata_at?: string | null;
 }): DisputeQueueRow => ({
   id: row.id,
   orderId: row.order_id,
@@ -288,6 +384,25 @@ export const mapDisputeRow = (row: {
   resolutionVersion: Number(row.resolution_version ?? 0),
   adminNotes: [],
   timeline: [],
+  listing: {
+    id: row.listing_id ?? null,
+    slug: row.listing_slug ?? null,
+    // Bucket PUBBLICO `annunci`: stesso risolutore del catalogo, mai un URL
+    // ricomposto a mano qui.
+    images: (row.listing_immagini ?? []).map(urlImmagine),
+    // `null` resta `null`: "non dichiarata" non e "nessuna confezione".
+    originalPackagingType: confezioneOriginaleTipoDaDb(row.confezione_originale_tipo),
+    originalPackagingImages: (row.confezione_originale_foto ?? []).map(urlImmagine),
+  },
+  shipment: {
+    carrier: row.corriere ?? null,
+    trackingNumber: row.tracking_number ?? null,
+    shippedAt: row.spedito_at ?? null,
+    deliveredAt: row.consegnato_at ?? null,
+    receiptConfirmedAt: row.ricezione_confermata_at ?? null,
+    trackingEvents: [],
+    evidence: [],
+  },
 });
 
 // Le proiezioni non sono paginate: ModerationService dichiara Promise<Report[]>
@@ -653,7 +768,18 @@ export const codaContestazioni = async (
   );
   if (righe.length === 0) return [];
   const disputeIds = righe.map((riga) => riga.id);
-  const [noteResult, baseTimelineResult, caseTimelineResult] = await Promise.all([
+  // Le due letture del fascicolo viaggiano insieme a note e timeline: sono
+  // interrogazioni indipendenti sugli stessi id, e serializzarle aggiungerebbe
+  // due giri di rete senza cambiare una riga del risultato. La firma degli
+  // oggetti privati resta invece l'ultimo passo, perche ha bisogno di tutti i
+  // percorsi raccolti.
+  const [
+    noteResult,
+    baseTimelineResult,
+    caseTimelineResult,
+    shippingEvidenceResult,
+    trackingResult,
+  ] = await Promise.all([
     client.from("moderation_dispute_admin_notes")
       .select("id,dispute_id,author_username,note,created_at")
       .in("dispute_id", disputeIds)
@@ -666,11 +792,27 @@ export const codaContestazioni = async (
       .select("id,dispute_id,event_kind,created_at")
       .in("dispute_id", disputeIds)
       .order("created_at", { ascending: true }),
+    // Correnti E sostituite: dentro una pratica la storia delle sostituzioni e
+    // essa stessa materiale probatorio. L'ordine e per tipo e poi cronologico,
+    // cosi la sequenza "documentata, poi ricaricata" si legge da sola.
+    client.from("moderation_dispute_shipping_evidence")
+      .select("dispute_id,order_id,evidence_id,evidence_kind,storage_path,created_at,superseded_at,is_current")
+      .in("dispute_id", disputeIds)
+      .order("evidence_kind", { ascending: true })
+      .order("created_at", { ascending: true }),
+    client.from("moderation_dispute_tracking")
+      .select("dispute_id,order_id,tracking_event_id,tipo,titolo,descrizione,luogo,created_at")
+      .in("dispute_id", disputeIds)
+      .order("created_at", { ascending: true }),
   ]);
   const { data: noteData, error: noteError } = noteResult;
   if (noteError) return phase9Throw("moderation_dispute_admin_notes", noteError);
   if (baseTimelineResult.error) return phase9Throw("dispute_events", baseTimelineResult.error);
   if (caseTimelineResult.error) return phase9Throw("dispute_case_timeline", caseTimelineResult.error);
+  if (shippingEvidenceResult.error) {
+    return phase9Throw("moderation_dispute_shipping_evidence", shippingEvidenceResult.error);
+  }
+  if (trackingResult.error) return phase9Throw("moderation_dispute_tracking", trackingResult.error);
   const notePerDispute = new Map<string, DisputeQueueRow["adminNotes"]>();
   for (const raw of noteData ?? []) {
     const row = raw as { id: number; dispute_id: string; author_username: string | null; note: string; created_at: string };
@@ -695,13 +837,80 @@ export const codaContestazioni = async (
     const row = raw as { id: number; dispute_id: string; event_kind: string; created_at: string };
     appendTimeline(row.dispute_id, { id: `case-${row.id}`, eventKind: row.event_kind, actorKind: "admin", createdAt: row.created_at });
   }
+  // Le prove pre-spedizione restano qui con il loro `storage_path`: e cio che
+  // va firmato. Il percorso non prosegue oltre — la riga che esce di qui porta
+  // un URL firmato e nient'altro.
+  type ProvaDaFirmare = Omit<DisputeShippingEvidenceItem, "signedUrl"> & { storagePath: string };
+  const provePerDispute = new Map<string, ProvaDaFirmare[]>();
+  for (const raw of shippingEvidenceResult.data ?? []) {
+    const row = raw as {
+      dispute_id: string;
+      evidence_id: string;
+      evidence_kind: DisputeShippingEvidenceItem["kind"];
+      storage_path: string;
+      created_at: string;
+      superseded_at: string | null;
+      is_current: boolean;
+    };
+    const prove = provePerDispute.get(row.dispute_id) ?? [];
+    prove.push({
+      id: row.evidence_id,
+      kind: row.evidence_kind,
+      storagePath: row.storage_path,
+      createdAt: row.created_at,
+      supersededAt: row.superseded_at,
+      current: row.is_current,
+    });
+    provePerDispute.set(row.dispute_id, prove);
+  }
+  const trackingPerDispute = new Map<string, DisputeTrackingEvent[]>();
+  for (const raw of trackingResult.data ?? []) {
+    const row = raw as {
+      dispute_id: string;
+      tracking_event_id: number;
+      tipo: string;
+      titolo: string;
+      descrizione: string | null;
+      luogo: string | null;
+      created_at: string;
+    };
+    const eventi = trackingPerDispute.get(row.dispute_id) ?? [];
+    eventi.push({
+      id: row.tracking_event_id,
+      tipo: row.tipo,
+      titolo: row.titolo,
+      descrizione: row.descrizione,
+      luogo: row.luogo,
+      createdAt: row.created_at,
+    });
+    trackingPerDispute.set(row.dispute_id, eventi);
+  }
   const conDettagli = righe.map((riga) => ({
     ...riga,
     adminNotes: notePerDispute.get(riga.id) ?? [],
     timeline: (timelinePerDispute.get(riga.id) ?? [])
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    shipment: {
+      ...riga.shipment,
+      trackingEvents: trackingPerDispute.get(riga.id) ?? [],
+    },
   }));
-  const percorsi = [...new Set(righe.flatMap((riga) => [...riga.foto, ...riga.sellerEvidence]))];
+  // Un solo giro di firma per le tre sorgenti private: prove del compratore,
+  // prove del venditore nella pratica e prove pre-spedizione stanno tutte nel
+  // bucket `dispute-evidence`, e l'admin le raggiunge per il ramo admin della
+  // policy di SELECT distribuita con il cancello di spedizione.
+  const provePerRiga = new Map<string, ProvaDaFirmare[]>(
+    conDettagli.map((riga) => [riga.id, provePerDispute.get(riga.id) ?? []]),
+  );
+  const percorsi = [
+    ...new Set(
+      conDettagli.flatMap((riga) => [
+        ...riga.foto,
+        ...riga.sellerEvidence,
+        ...(provePerRiga.get(riga.id) ?? []).map((prova) => prova.storagePath),
+      ]),
+    ),
+  ];
   if (percorsi.length === 0) return conDettagli;
 
   const { data: firmate, error: firmaError } = await client.storage
@@ -721,6 +930,16 @@ export const codaContestazioni = async (
     sellerEvidence: riga.sellerEvidence
       .map((percorso) => urlPerPercorso.get(percorso))
       .filter((url): url is string => typeof url === "string"),
+    shipment: {
+      ...riga.shipment,
+      // Una prova che non si e riusciti a firmare sparisce, come gia sparisce
+      // una fotografia della pratica: meglio un fascicolo con un buco visibile
+      // che un riquadro rotto spacciato per prova assente.
+      evidence: (provePerRiga.get(riga.id) ?? []).flatMap(({ storagePath, ...prova }) => {
+        const signedUrl = urlPerPercorso.get(storagePath);
+        return typeof signedUrl === "string" ? [{ ...prova, signedUrl }] : [];
+      }),
+    },
   }));
 };
 

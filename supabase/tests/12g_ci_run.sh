@@ -218,6 +218,11 @@ run_grid "12l metadati logistici dell'annuncio" 12l_listing_logistics_metadata.s
 # `pagato -> spedito`. Transazione e guard identici, sempre prima delle fixture
 # 12g.
 run_grid "12m prove di spedizione e cancello di preparazione" 12m_shipping_evidence_gate.sql 3
+# Fascicolo amministrativo della contestazione: proiezioni chiuse per annuncio,
+# prove pre-spedizione e tracking, con matrice anon/parti/estraneo/admin. La
+# transazione e il guard restano quelli delle altre griglie, prima delle fixture
+# 12g e della griglia 7c che committa.
+run_grid "12n fascicolo prove della contestazione" 12n_dispute_evidence_dossier.sql 3
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
