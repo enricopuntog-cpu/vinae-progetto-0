@@ -770,6 +770,103 @@ Prove: `frontend-next/src/services/phase9/dispute-dossier.test.ts` (28),
 gate `Supabase DB regression` ed è stata eseguita davvero sullo stack effimero
 del gate con esito **50/50** (PR #169, squash `d17f9ab`).
 
+## Fondazione economica della logistica (29 settembre 2026)
+
+Migrazione `20260930090000_logistics_economic_foundation.sql`. Dominio nuovo:
+non integra alcun vettore, non entra nel checkout, non muove denaro.
+
+**1 — Un listino di fornitura non è una API pubblica.** Le undici tabelle
+autoritative stanno in `private` (`logistics_packaging_skus`,
+`pack_definitions`, `pack_lines`, `pack_fulfillment_orders`,
+`pack_fulfillment_order_lines`, `packaging_stock`, `shipping_rates`,
+`rate_surcharges`, `fulfillment_costs`, `quote_config`, `quotes`) e non hanno
+alcun grant per `anon` o `authenticated`. Le sole porte sono funzioni
+`public.*` `security definer` con `set search_path = ''`. Un costo di
+fornitura leggibile dal browser sarebbe un listino all'ingrosso pubblicato;
+qui non esiste nemmeno la superficie per chiederlo.
+
+**2 — `public.packaging_options` resta il dominio 7c.** Descrive le modalità di
+consegna (`kit_domicilio`, `centro_partner`, `punto_quartiere`), non gli
+imballaggi fisici. WP6A non la rinomina, non la riconverte, non ne altera la
+semantica e non la usa come scorciatoia: il catalogo fisico è
+`private.logistics_packaging_skus`, tabella distinta. Riciclare una tabella
+perché il nome somiglia è il modo più rapido di far quadrare i conti oggi e
+sbagliarli per sempre.
+
+**3 — Una sola autorità sull'8%.** Il margine resta
+`marketplace_config.margine_obiettivo_bps`, riletto dal motore via
+`private.marketplace_config_corrente()` e `private.marketplace_totale_cents()`.
+Il dominio logistico non ha una propria colonna di commissione, nessun default
+`800`, nessun `logistics_commission_rate`. La commissione esce dal preventivo
+come **componente separata**: mai dentro packaging, distribuzione imballaggi,
+trasporto, tecnologia, fulfillment, buffer logistico, upgrade dell'acquirente,
+decurtazione al venditore o totale logistico. Due copie della stessa
+percentuale divergono, e la divergenza si scopre su una fattura.
+
+**4 — La rotta è generica, i fornitori sono dati.** `origin_kind` e
+`destination_kind` valgono `pudo` o `domicilio` e coprono le quattro rotte del
+modello prodotto, upgrade dell'acquirente e ritiro al domicilio del venditore
+compresi. `provider_code` e `service_code` sono testo configurato: nessun
+`check (provider_code in (...))`, nessun nome commerciale in un file di
+runtime. Un vettore scelto domani è una riga, non un deploy.
+
+**5 — Un preventivo emesso è una promessa, quindi è immutabile.** La riga in
+`private.logistics_quotes` conserva le componenti e gli identificativi di
+versione (packaging, tariffa, tariffa di destinazione, tariffa di origine,
+configurazione di preventivo, configurazione marketplace) che hanno prodotto
+quel numero. Un trigger la difende anche da uno scrittore privilegiato. Per la
+stessa ragione «versionare» non significa modificare: la riga corrente si
+chiude con `effective_to` e ne nasce una nuova, perché un preventivo di ieri
+deve restare ricostruibile.
+
+**6 — Aritmetica intera, niente virgola mobile.** Centesimi e bps sono
+`integer`; l'arrotondamento è half-up esplicito (`((base * bps) + 5000) /
+10000`) e il volume è `ceil(l * w * h / 1000)` cm³, senza divisori volumetrici
+inventati. Il motore fallisce chiuso quando manca la tariffa: preferibile un
+rifiuto a un totale plausibile.
+
+**7 — Un costo di periodo non si spalma su una spedizione.** `monthly_fee`,
+`setup` e `storage` non hanno componente di preventivo: `quote_component` resta
+`NULL`. Allocare un canone mensile a un singolo pacco produrrebbe un prezzo che
+dipende da quanti pacchi passeranno quel mese, cioè da un dato che al momento
+del preventivo non esiste.
+
+**8 — Il buffer logistico non è la commissione.** È configurazione separata,
+può valere zero, e nel seed vale zero: un valore neutro di partenza, non un
+prezzo commerciale deciso da una migrazione. Nessun listino, nessuna tariffa,
+nessun costo di fulfillment è seminato; tutto entra dalle sette porte admin,
+ciascuna con `auth.uid()`, `has_role(..., 'admin')`, rate limit e nessuna
+riscrittura in place dello storico.
+
+**9 — WP6A non tocca il denaro.** `orders`, `payments`, `payouts`, `balance_*`,
+`order_checkout_reserve` e Stripe restano invariati; lo snapshot legacy
+`imballaggio_*` sull'ordine non viene riscritto. `logistics_quote_conferma`
+lega preventivo e ordine e si ferma lì, con ramo di replay idempotente.
+L'integrazione nel checkout è **WP7** ed è l'unico luogo in cui il preventivo
+potrà diventare un addebito.
+
+Prove: `frontend-next/src/services/logistics/` — servizio preventivo, servizio
+configurazione e guardrail sulla sorgente — dentro i **2131 test** della suite
+estesa, che è ora la soglia `MIN_TESTS` in CI. La griglia
+`supabase/tests/12o_logistics_economic_foundation.sql` è cablata nel gate
+`Supabase DB regression` ed è stata **eseguita davvero** sullo stack effimero
+del gate con esito **78/78**, accanto a 12l 48/48, 12m 59/59, 12n 50/50 e 7c
+22/22, zero residui di fixture.
+
+**10 — I tre difetti trovati erano della griglia, non del dominio.** Meritano di
+restare scritti perché ciascuno avrebbe potuto far modificare una migrazione
+corretta per compiacere una prova sbagliata. (a) La griglia ritirava la
+configurazione seminata con `now() - interval '1 hour'`: su uno stack effimero
+quella riga ha l'età di `supabase start`, e una chiusura nel passato viola
+`logistics_quote_config_finestra`; il ritiro corretto usa `greatest(effective_from
++ interval '1 microsecond', now() - interval '1 hour')`. (b) Il controllo sulle
+porte confrontava `proconfig` con `search_path=`, mentre PostgreSQL conserva il
+valore virgolettato `search_path=""` — l'idioma già documentato in
+`supabase/tests/README.md` e usato dalla 9a. (c) Un caso pretendeva
+`imballaggio_cents` e `addebito_totale_cents` nulle sull'ordine, impossibile: la
+prima è `not null default 0` dalla 7c e la seconda è generata. L'invariante vero
+— la conferma non muove quelle colonne — è ciò che il caso misura adesso.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):
