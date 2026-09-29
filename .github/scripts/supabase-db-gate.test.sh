@@ -80,6 +80,7 @@ check "scope: griglia 12j valore Cantina pertinente" true "$(scope_for supabase/
 check "scope: griglia 12k segui Cantina pertinente" true "$(scope_for supabase/tests/12k_cantina_follow.sql)"
 check "scope: griglia 12l logistica annuncio pertinente" true "$(scope_for supabase/tests/12l_listing_logistics_metadata.sql)"
 check "scope: griglia 12m prove di spedizione pertinente" true "$(scope_for supabase/tests/12m_shipping_evidence_gate.sql)"
+check "scope: griglia 12o fondazione economica logistica pertinente" true "$(scope_for supabase/tests/12o_logistics_economic_foundation.sql)"
 check "scope: griglia 7c consegna e imballaggio pertinente" true "$(scope_for supabase/tests/7c_consegna_imballaggio.sql)"
 check "scope: config Supabase pertinente" true "$(scope_for supabase/config.toml)"
 check "scope: README saltato" false "$(scope_for README.md)"

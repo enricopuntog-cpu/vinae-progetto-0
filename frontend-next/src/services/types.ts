@@ -2394,3 +2394,364 @@ export type WinePriceStoricoInput = {
   formato?: string;
   limite?: number;
 } & ({ wineId: string; wineSlug?: never } | { wineSlug: string; wineId?: never });
+
+// ---- Logistica — WP6A ------------------------------------------------------
+//
+// Il dominio logistico vive in `private`: nessun ruolo client ha un `GRANT`
+// sulle tabelle autoritative, e questi contratti descrivono soltanto ciò che
+// le porte `SECURITY DEFINER` restituiscono. Un tipo qui non è un permesso:
+// se il database non espone un campo, aggiungerlo a questi tipi non lo rende
+// leggibile.
+
+/** Le due estremità di una rotta. Generiche di proposito: niente nomi di
+ * corriere, niente enum commerciali. */
+export type LogisticsEndpointKind = "pudo" | "domicilio";
+
+/**
+ * Cosa il client può dire su un preventivo: la merce, l'imballaggio scelto e
+ * la rotta. **Nessun importo logistico**: tariffa, IVA, buffer e commissione
+ * li legge il motore dal database. `itemPriceCents` non fa eccezione — è una
+ * simulazione finché non esiste un ordine, e la conferma lo riconcilia con
+ * `orders.prezzo_cents` prima di legare i due.
+ */
+export type LogisticsQuoteInput = {
+  itemPriceCents: number;
+  packagingSku: string;
+  originKind: LogisticsEndpointKind;
+  destinationKind: LogisticsEndpointKind;
+  /** Peso della merce; il motore ci somma il peso prudenziale dell'imballaggio. */
+  weightG?: number;
+  serviceLevel?: string;
+};
+
+/**
+ * Il preventivo come lo emette il motore. Le componenti restano **distinte**
+ * per contratto: `marketplaceCommissionCents` è la commissione del
+ * marketplace, non entra in nessuna voce logistica e non è compresa in
+ * `buyerLogisticsTotalCents`. `sellerPickupDeductionCents` è una decurtazione
+ * sul ricavo del venditore: non è un importo che l'acquirente paga.
+ */
+export type LogisticsQuote = {
+  quoteId: string;
+  packagingCents: number;
+  packagingDistributionCents: number;
+  transportStandardCents: number;
+  technologyCents: number;
+  otherTransactionalCents: number;
+  logisticsBufferCents: number;
+  buyerUpgradeCents: number;
+  sellerPickupDeductionCents: number;
+  buyerLogisticsTotalCents: number;
+  realLogisticsCostCents: number;
+  marketplaceCommissionCents: number;
+  marketplaceMarginBps: number;
+  currency: string;
+  providerCode: string;
+  serviceCode: string;
+  weightG: number;
+  volumeCm3: number;
+  /** Versioni che hanno prodotto il numero: senza di queste il preventivo non
+   * sarebbe ricostruibile a distanza di mesi. */
+  packagingVersionId: string;
+  rateVersionId: string;
+  rateDestinationVersionId: string | null;
+  rateOriginVersionId: string | null;
+  quoteConfigVersionId: string;
+  marketplaceConfigId: number;
+  calculatedAt: string;
+  expiresAt: string;
+};
+
+/** Rilettura del proprio preventivo: le stesse componenti più gli estremi e
+ * lo stato di conferma. Owner-scoped nel database, non nella UI. */
+export type LogisticsQuoteSnapshot = LogisticsQuote & {
+  itemPriceCents: number;
+  packagingSku: string;
+  originKind: LogisticsEndpointKind;
+  destinationKind: LogisticsEndpointKind;
+  serviceLevel: string;
+  confirmedOrderId: string | null;
+  confirmedAt: string | null;
+};
+
+/** Esito della conferma. `alreadyConfirmed` distingue il replay idempotente
+ * dalla prima conferma: nessuno dei due muove denaro. */
+export type LogisticsQuoteConfirmation = {
+  quoteId: string;
+  confirmedOrderId: string;
+  confirmedAt: string;
+  alreadyConfirmed: boolean;
+};
+
+export interface LogisticsQuoteService {
+  calcola(input: LogisticsQuoteInput): Promise<Result<LogisticsQuote>>;
+  leggi(quoteId: string): Promise<Result<LogisticsQuoteSnapshot>>;
+  /**
+   * Lega un preventivo a un ordine e si ferma lì: non scrive su `orders`, non
+   * tocca `payments`, `payouts` o `balance_*`. L'aggancio dal checkout è WP7.
+   */
+  conferma(quoteId: string, orderId: string): Promise<Result<LogisticsQuoteConfirmation>>;
+}
+
+// --- Configurazione (solo ruolo admin) --------------------------------------
+
+export type LogisticsPackagingFormat =
+  | "bottiglia_1"
+  | "bottiglia_2"
+  | "bottiglia_3"
+  | "bottiglia_6"
+  | "magnum_1_5l"
+  | "bottiglia_12";
+
+export type LogisticsPackagingSku = {
+  id: string;
+  sku: string;
+  formato: LogisticsPackagingFormat;
+  etichetta: string;
+  lunghezzaMm: number;
+  larghezzaMm: number;
+  altezzaMm: number;
+  pesoImballaggioG: number;
+  pesoPrudenzialeG: number;
+  providerCode: string | null;
+  costoCents: number;
+  vatBps: number;
+  currency: string;
+  active: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+};
+
+export type LogisticsShippingRate = {
+  id: string;
+  providerCode: string;
+  serviceCode: string;
+  serviceLevel: string;
+  originKind: LogisticsEndpointKind;
+  destinationKind: LogisticsEndpointKind;
+  minWeightG: number;
+  maxWeightG: number;
+  minVolumeCm3: number;
+  maxVolumeCm3: number | null;
+  baseRateCents: number;
+  fuelSurchargeBps: number;
+  vatBps: number;
+  currency: string;
+  active: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+};
+
+export type LogisticsRateSurcharge = {
+  id: string;
+  rateId: string;
+  code: string;
+  label: string;
+  amountCents: number;
+  percentageBps: number;
+  active: boolean;
+};
+
+export type LogisticsCostType =
+  | "inbound"
+  | "storage"
+  | "picking"
+  | "packing"
+  | "packaging_distribution"
+  | "monthly_fee"
+  | "setup"
+  | "technology";
+
+export type LogisticsBillingUnit = "per_unit" | "per_order" | "per_month" | "fixed";
+
+/** Dove finisce il costo dentro il preventivo. `null` significa «costo di
+ * periodo»: resta nel modello economico e non viene spalmato su una spedizione. */
+export type LogisticsQuoteComponent =
+  | "packaging_distribution"
+  | "technology"
+  | "other_transactional";
+
+export type LogisticsFulfillmentCost = {
+  id: string;
+  providerCode: string | null;
+  costType: LogisticsCostType;
+  billingUnit: LogisticsBillingUnit;
+  amountCents: number;
+  vatBps: number;
+  minThreshold: number | null;
+  maxThreshold: number | null;
+  discountBps: number | null;
+  quoteComponent: LogisticsQuoteComponent | null;
+  currency: string;
+  active: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+};
+
+/** Il buffer logistico è separato dalla commissione del marketplace e può
+ * valere zero. Non è una seconda copia dell'8%. */
+export type LogisticsQuoteConfig = {
+  id: string;
+  bufferFixedCents: number;
+  bufferBps: number;
+  validitaSecondi: number;
+  active: boolean;
+  note: string | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+};
+
+export type LogisticsPackKind = "single" | "fixed" | "mixed";
+
+export type LogisticsPackLine = {
+  id: string;
+  sku: string;
+  minQuantity: number;
+  maxQuantity: number;
+  defaultQuantity: number;
+};
+
+export type LogisticsPackDefinition = {
+  id: string;
+  code: string;
+  label: string;
+  packKind: LogisticsPackKind;
+  minTotalUnits: number;
+  maxTotalUnits: number | null;
+  active: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  lines: LogisticsPackLine[];
+};
+
+export type LogisticsPackagingStock = {
+  id: string;
+  sku: string;
+  providerCode: string | null;
+  availableQuantity: number;
+  reservedQuantity: number;
+  reorderPoint: number;
+  reorderTarget: number;
+};
+
+export type LogisticsAdminConfig = {
+  packagingSkus: LogisticsPackagingSku[];
+  shippingRates: LogisticsShippingRate[];
+  rateSurcharges: LogisticsRateSurcharge[];
+  fulfillmentCosts: LogisticsFulfillmentCost[];
+  quoteConfig: LogisticsQuoteConfig | null;
+  packDefinitions: LogisticsPackDefinition[];
+  packagingStock: LogisticsPackagingStock[];
+};
+
+/** Esito di un versionamento: la riga corrente è nuova, la precedente è
+ * chiusa. Nessuna modifica in place dello storico. */
+export type LogisticsVersionResult = {
+  id: string;
+  effectiveFrom: string;
+};
+
+export type LogisticsPackagingSkuInput = {
+  sku: string;
+  formato: LogisticsPackagingFormat;
+  etichetta: string;
+  lunghezzaMm: number;
+  larghezzaMm: number;
+  altezzaMm: number;
+  pesoImballaggioG: number;
+  pesoPrudenzialeG: number;
+  providerCode?: string | null;
+  costoCents: number;
+  vatBps?: number;
+  active?: boolean;
+};
+
+export type LogisticsRateSurchargeInput = {
+  code: string;
+  label: string;
+  amountCents?: number;
+  percentageBps?: number;
+  active?: boolean;
+};
+
+export type LogisticsShippingRateInput = {
+  providerCode: string;
+  serviceCode: string;
+  serviceLevel?: string;
+  originKind: LogisticsEndpointKind;
+  destinationKind: LogisticsEndpointKind;
+  minWeightG?: number;
+  maxWeightG: number;
+  minVolumeCm3?: number;
+  maxVolumeCm3?: number | null;
+  baseRateCents: number;
+  fuelSurchargeBps?: number;
+  vatBps?: number;
+  active?: boolean;
+  surcharges?: LogisticsRateSurchargeInput[];
+};
+
+export type LogisticsFulfillmentCostInput = {
+  providerCode?: string | null;
+  costType: LogisticsCostType;
+  billingUnit: LogisticsBillingUnit;
+  amountCents: number;
+  vatBps?: number;
+  minThreshold?: number | null;
+  maxThreshold?: number | null;
+  discountBps?: number | null;
+  quoteComponent?: LogisticsQuoteComponent | null;
+  active?: boolean;
+};
+
+export type LogisticsQuoteConfigInput = {
+  bufferFixedCents?: number;
+  bufferBps?: number;
+  validitaSecondi?: number;
+  active?: boolean;
+  note?: string | null;
+};
+
+export type LogisticsPackLineInput = {
+  sku: string;
+  minQuantity: number;
+  maxQuantity: number;
+  defaultQuantity: number;
+};
+
+export type LogisticsPackInput = {
+  code: string;
+  label: string;
+  packKind: LogisticsPackKind;
+  minTotalUnits: number;
+  maxTotalUnits?: number | null;
+  active?: boolean;
+  lines?: LogisticsPackLineInput[];
+};
+
+export type LogisticsStockInput = {
+  sku: string;
+  providerCode?: string | null;
+  availableQuantity?: number;
+  reservedQuantity?: number;
+  reorderPoint?: number;
+  reorderTarget?: number;
+};
+
+/**
+ * La configurazione si legge e si versiona soltanto da qui. Ogni metodo
+ * corrisponde a una porta `SECURITY DEFINER` che verifica `auth.uid()` e il
+ * ruolo `admin`: essere in una pagina admin non è un permesso, e questo
+ * servizio non ne concede nessuno per conto proprio.
+ */
+export interface LogisticsConfigService {
+  leggi(): Promise<Result<LogisticsAdminConfig>>;
+  versionaPackaging(input: LogisticsPackagingSkuInput): Promise<Result<LogisticsVersionResult>>;
+  versionaRate(input: LogisticsShippingRateInput): Promise<Result<LogisticsVersionResult>>;
+  versionaCostoFulfillment(
+    input: LogisticsFulfillmentCostInput,
+  ): Promise<Result<LogisticsVersionResult>>;
+  versionaQuoteConfig(input: LogisticsQuoteConfigInput): Promise<Result<LogisticsVersionResult>>;
+  versionaPack(input: LogisticsPackInput): Promise<Result<LogisticsVersionResult>>;
+  impostaStock(input: LogisticsStockInput): Promise<Result<{ id: string; sku: string }>>;
+}

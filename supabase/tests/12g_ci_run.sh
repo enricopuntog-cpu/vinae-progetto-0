@@ -223,6 +223,11 @@ run_grid "12m prove di spedizione e cancello di preparazione" 12m_shipping_evide
 # transazione e il guard restano quelli delle altre griglie, prima delle fixture
 # 12g e della griglia 7c che committa.
 run_grid "12n fascicolo prove della contestazione" 12n_dispute_evidence_dossier.sql 3
+# Fondazione economica della logistica WP6A: catalogo imballaggi, tariffe,
+# costi di fulfillment, motore di preventivo, snapshot immutabile e porte admin.
+# Prova anche che il dominio 7c e l'autorita della commissione di marketplace
+# restano intatti. Transazione e guard identici, sempre prima delle fixture 12g.
+run_grid "12o fondazione economica della logistica" 12o_logistics_economic_foundation.sql 3
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
