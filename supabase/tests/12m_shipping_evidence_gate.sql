@@ -36,7 +36,7 @@
 --
 -- NUMERAZIONE. Gli id sono chiavi, non un ordine di lettura: il caso 53 e un
 -- invariante economico registrato fra il 41 e il 42, perche fu aggiunto dopo e
--- prese il primo id libero. I casi totali sono 58, non 57.
+-- prese il primo id libero. I casi totali sono 59, non 58.
 
 begin;
 
@@ -794,11 +794,17 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- 24-27 — la conferma vuole le sei voci E la foto del collo finale
+-- 24-27 e 59 — conferma completa e salvataggio invariato idempotente
 -- ---------------------------------------------------------------------------
 
 do $$
-declare v_r text; v_letto text;
+declare
+  v_r text;
+  v_letto text;
+  v_conferma_prima timestamptz;
+  v_conferma_dopo timestamptz;
+  v_eventi_prima integer;
+  v_eventi_dopo integer;
 begin
   -- O8 non ha ancora alcuna prova: sei voci vere non bastano.
   v_r := pg_temp.prepara(pg_temp.ua(), pg_temp.o8(), pg_temp.cl_completa());
@@ -833,6 +839,33 @@ begin
   perform pg_temp.registra(27,
     'il venditore legge preparazione_confermata_at dal proprio ordine',
     v_letto = 'valorizzata', v_letto);
+
+  -- Salvare di nuovo una preparazione gia confermata e invariata non e una
+  -- nuova conferma: l'istante resta uguale e l'audit non si duplica.
+  select o.preparazione_confermata_at into v_conferma_prima
+  from public.orders o where o.id = pg_temp.o8();
+  select count(*) into v_eventi_prima from public.order_events e
+  where e.order_id = pg_temp.o8()
+    and e.tipo = 'shipping_preparation_confirmed';
+
+  v_r := pg_temp.prepara(
+    pg_temp.ua(), pg_temp.o8(), pg_temp.cl_completa(),
+    array[pg_temp.p(pg_temp.o8(), pg_temp.ua(), 1)]
+  );
+
+  select o.preparazione_confermata_at into v_conferma_dopo
+  from public.orders o where o.id = pg_temp.o8();
+  select count(*) into v_eventi_dopo from public.order_events e
+  where e.order_id = pg_temp.o8()
+    and e.tipo = 'shipping_preparation_confirmed';
+
+  perform pg_temp.registra(59,
+    'salvare una preparazione confermata invariata non duplica la conferma',
+    v_r = 'ok'
+    and v_conferma_dopo = v_conferma_prima
+    and v_eventi_dopo = v_eventi_prima,
+    format('%s / istante uguale %s / eventi %s -> %s', v_r,
+           v_conferma_dopo = v_conferma_prima, v_eventi_prima, v_eventi_dopo));
 end $$;
 
 -- ---------------------------------------------------------------------------
