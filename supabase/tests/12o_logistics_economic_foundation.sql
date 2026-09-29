@@ -329,9 +329,13 @@ $f$;
 -- Una porta e sicura solo se e SECURITY DEFINER *e* ha il percorso di ricerca
 -- vuoto. Una sola delle due non basta: definer con search_path ereditato e una
 -- escalation, invoker con search_path vuoto e soltanto inutile.
+-- `proconfig` conserva il valore virgolettato: `set search_path = ''` si rilegge
+-- come `search_path=""`, non come `search_path=`. Confrontare la forma nuda fa
+-- fallire ogni porta corretta — un difetto della griglia, non del dominio, gia
+-- registrato in `README.md` e nella 9a.
 create function pg_temp.porta_sicura(p_nome text) returns text language sql stable as $f$
   select coalesce(string_agg(
-    case when p.prosecdef and p.proconfig @> array['search_path=']
+    case when p.prosecdef and p.proconfig @> array['search_path=""']
          then 'ok' else 'ko' end, ',' order by p.oid), 'assente')
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.proname = p_nome;
@@ -1079,15 +1083,30 @@ end $$;
 
 -- La conferma lega, non addebita: il denaro dell'ordine resta intatto e la
 -- sua integrazione arriva in WP7, dal checkout, non da qui.
+-- `imballaggio_cents` e `not null default 0` dalla 7c e `addebito_totale_cents`
+-- e generata da prezzo + commissione + imballaggio: nessuna delle due e mai
+-- nulla, e pretenderle nulle misurerebbe la 7c invece della conferma. L'
+-- invariante vero e che la conferma non le muova — imballaggio mai scelto,
+-- costo fermo a zero, addebito ancora pari alla sola somma 7b.
 select pg_temp.registra(70, 'La conferma non tocca le colonne economiche dell''ordine',
   (select bool_and(
       imballaggio_codice is null and imballaggio_provider is null
-      and imballaggio_etichetta is null and imballaggio_cents is null
-      and addebito_totale_cents is null and prezzo_cents in (5000, 7700))
+      and imballaggio_etichetta is null and imballaggio_scelto_at is null
+      and imballaggio_cents = 0
+      and addebito_totale_cents = prezzo_cents + commissione_cents
+      and prezzo_cents = 5000)
    from public.orders
    where id in ('60000000-0000-4000-8000-000000000401',
                 '60000000-0000-4000-8000-000000000403')),
-  'ordini o1 e o3');
+  (select coalesce(string_agg(
+      right(id::text, 3) || ': prezzo=' || prezzo_cents
+        || ' commissione=' || commissione_cents
+        || ' imballaggio=' || imballaggio_cents
+        || ' addebito=' || coalesce(addebito_totale_cents::text, 'null')
+        || ' codice=' || coalesce(imballaggio_codice, 'null'), ' | '), 'nessun ordine')
+   from public.orders
+   where id in ('60000000-0000-4000-8000-000000000401',
+                '60000000-0000-4000-8000-000000000403')));
 
 select pg_temp.registra(71, 'Nessun movimento di pagamento, payout o saldo',
   (select count(*) from public.payments) = 0
