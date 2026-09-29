@@ -25,7 +25,13 @@ import { Phase9Error } from "@/services/phase9/shared";
 const PROGETTO = "https://vinea-test.supabase.co";
 process.env.NEXT_PUBLIC_SUPABASE_URL = PROGETTO;
 
-type Risposta = { data?: unknown; error?: { code?: string; message?: string } | null };
+// `count` esiste per poter simulare la sola cosa che il servizio non puo
+// vedere da solo: un server che dichiara piu righe di quante ne consegni.
+type Risposta = {
+  data?: unknown;
+  count?: number;
+  error?: { code?: string; message?: string } | null;
+};
 
 /**
  * Doppio del client con lo Storage incluso: il fascicolo firma, e senza firma
@@ -39,15 +45,38 @@ const fakeClient = (
   } = {},
 ) => {
   const tabelleLette: string[] = [];
+  const finestre: { tabella: string; da: number; a: number }[] = [];
   const firmate: { bucket: string; percorsi: string[]; ttl: number }[] = [];
   const bucketPubblici: string[] = [];
 
   const builder = (tabella: string) => {
     tabelleLette.push(tabella);
-    const risultato = risposte[tabella] ?? { data: [] };
+    const risposta = risposte[tabella] ?? { data: [] };
     const chain: Record<string, unknown> = {};
     for (const metodo of ["select", "order", "limit", "in", "eq"]) chain[metodo] = () => chain;
-    chain.then = (onOk: (v: Risposta) => unknown) => Promise.resolve(risultato).then(onOk);
+    // Il doppio onora `range` come lo onora PostgREST: la finestra taglia le
+    // righe, il conteggio no. Senza questo, una lettura paginata gli
+    // chiederebbe la seconda finestra e si vedrebbe restituire di nuovo la
+    // prima.
+    let finestra: { da: number; a: number } | null = null;
+    chain.range = (da: number, a: number) => {
+      finestra = { da, a };
+      finestre.push({ tabella, da, a });
+      return chain;
+    };
+    chain.then = (onOk: (v: Risposta) => unknown) => {
+      const righe = (risposta.data ?? []) as unknown[];
+      const risultato: Risposta = risposta.error
+        ? risposta
+        : {
+            data: finestra
+              ? righe.slice(finestra.da, finestra.a + 1)
+              : righe,
+            count: risposta.count ?? righe.length,
+            error: null,
+          };
+      return Promise.resolve(risultato).then(onOk);
+    };
     return chain;
   };
 
@@ -77,7 +106,7 @@ const fakeClient = (
     },
   } as unknown as SupabaseClient;
 
-  return { client, tabelleLette, firmate, bucketPubblici };
+  return { client, tabelleLette, finestre, firmate, bucketPubblici };
 };
 
 // ---------------------------------------------------------------------------
@@ -186,6 +215,55 @@ describe("Fascicolo — la porta di lettura", () => {
     for (const base of ["disputes", "orders", "listings", "tracking_events", "order_shipping_evidence"]) {
       expect(tabelleLette).not.toContain(base);
     }
+  });
+
+  // PostgREST tronca oltre `max_rows` senza dirlo. Su materiale probatorio la
+  // differenza fra "non ci sono altre prove" e "non te le ho date" non puo
+  // restare invisibile, quindi le letture figlie chiedono finestre e le
+  // contano.
+  it("chiede le righe figlie a finestre, non in un'unica risposta illimitata", async () => {
+    const { client, finestre } = codaCompleta();
+    await codaContestazioni(client);
+    expect(finestre).toContainEqual({
+      tabella: "moderation_dispute_shipping_evidence",
+      da: 0,
+      a: 499,
+    });
+    expect(finestre).toContainEqual({
+      tabella: "moderation_dispute_tracking",
+      da: 0,
+      a: 499,
+    });
+  });
+
+  it("prosegue oltre la prima finestra invece di fermarsi al suo taglio", async () => {
+    const prove = Array.from({ length: 620 }, (_, index) => ({
+      ...provaSostituita,
+      evidence_id: `e-${index}`,
+      storage_path: `o1/u2/e-${index}.webp`,
+    }));
+    const { client, finestre } = codaCompleta({
+      moderation_dispute_shipping_evidence: { data: prove },
+    });
+    const [riga] = await codaContestazioni(client);
+    expect(riga?.shipment.evidence).toHaveLength(620);
+    expect(finestre).toContainEqual({
+      tabella: "moderation_dispute_shipping_evidence",
+      da: 500,
+      a: 999,
+    });
+  });
+
+  it("fallisce ad alta voce se il server consegna meno righe di quante ne dichiara", async () => {
+    const prove = Array.from({ length: 300 }, (_, index) => ({
+      ...provaSostituita,
+      evidence_id: `e-${index}`,
+      storage_path: `o1/u2/e-${index}.webp`,
+    }));
+    const { client } = codaCompleta({
+      moderation_dispute_shipping_evidence: { data: prove, count: 900 },
+    });
+    await expect(codaContestazioni(client)).rejects.toBeInstanceOf(Phase9Error);
   });
 
   it("con coda vuota non interroga ne il fascicolo ne lo Storage", async () => {
@@ -395,7 +473,7 @@ describe("Fascicolo — URL firmati e riservatezza", () => {
       },
       { error: { message: "storage down" } },
     );
-    expect(codaContestazioni(rotto)).rejects.toBeInstanceOf(Phase9Error);
+    await expect(codaContestazioni(rotto)).rejects.toBeInstanceOf(Phase9Error);
     expect((await codaContestazioni(client))[0]?.shipment.evidence).toHaveLength(2);
   });
 });
@@ -462,13 +540,13 @@ describe("Fascicolo — errori dichiarati", () => {
     const { client } = codaCompleta({
       moderation_dispute_shipping_evidence: { error: { code: "42501", message: "denied" } },
     });
-    expect(codaContestazioni(client)).rejects.toBeInstanceOf(Phase9Error);
+    await expect(codaContestazioni(client)).rejects.toBeInstanceOf(Phase9Error);
   });
 
   it("un errore sulla vista di tracking nomina quella vista", async () => {
     const { client } = codaCompleta({
       moderation_dispute_tracking: { error: { code: "42501", message: "denied" } },
     });
-    expect(codaContestazioni(client)).rejects.toBeInstanceOf(Phase9Error);
+    await expect(codaContestazioni(client)).rejects.toBeInstanceOf(Phase9Error);
   });
 });
