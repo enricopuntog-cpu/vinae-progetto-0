@@ -405,11 +405,11 @@ export const mapDisputeRow = (row: {
   },
 });
 
-// Le proiezioni non sono paginate: ModerationService dichiara Promise<Report[]>
-// e non una pagina con cursore. Un tetto esplicito e comunque necessario,
-// perche una coda senza limite diventa una lettura illimitata il giorno in cui
-// le righe crescono. Quando servira la paginazione andra cambiata
-// l'interfaccia, che e una decisione e non una correzione.
+// Le due code non sono paginate verso il chiamante: ModerationService dichiara
+// Promise<Report[]> e non una pagina con cursore. Un tetto esplicito e
+// comunque necessario, perche una coda senza limite diventa una lettura
+// illimitata il giorno in cui le righe crescono. Quando servira la paginazione
+// andra cambiata l'interfaccia, che e una decisione e non una correzione.
 const TETTO_CODA = 200;
 const TETTO_AUDIT = 200;
 
