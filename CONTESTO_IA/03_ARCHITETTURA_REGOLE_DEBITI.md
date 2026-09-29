@@ -134,7 +134,7 @@ colonne: per esempio `moderation_report_queue` filtra su
 `user_roles.role = 'admin'`, `my_reports` su `reporter_id = auth.uid()`,
 `public_listings` su `stato = 'attivo'` senza colonne PII.
 
-Elenco chiuso delle sedici viste accettate al 18 settembre 2026, tutte di
+Elenco chiuso delle diciotto viste accettate al 29 settembre 2026, tutte di
 proprietà di `postgres`:
 
 - pubbliche: `public_listings`, `public_clubs`, `public_club_posts`,
@@ -143,7 +143,8 @@ proprietà di `postgres`:
 - del proprietario: `my_reports`, `my_report_events`, `my_certifications`,
   `my_listing_moderation`, `my_sommelier_messages`;
 - di moderazione: `moderation_report_queue`, `moderation_report_events`,
-  `moderation_dispute_queue`, `moderation_audit_log`.
+  `moderation_dispute_queue`, `moderation_dispute_shipping_evidence`,
+  `moderation_dispute_tracking`, `moderation_audit_log`.
 
 Regola: una nuova vista `public_*`, `my_*` o `moderation_*` con
 `security_invoker = off` deve avere un `WHERE` di filtro esplicito (stato
@@ -750,12 +751,24 @@ disponibile» e spiega che arriverà con il provider, senza inferirlo da
 Il pacchetto non aggiunge inoltre azioni economiche: importi e payout già
 presenti nella coda restano invariati e nessuna vista nuova espone denaro.
 
-Prove BUILD: `frontend-next/src/services/phase9/dispute-dossier.test.ts` (25),
+**8 — Un fascicolo parziale non può sembrare intero.** PostgREST tronca una
+risposta più lunga di `max_rows` senza produrre un errore: sulle letture figlie
+della coda — note, timeline, prove WP3, tracking — significherebbe decidere su
+prove mancanti senza saperlo. Ogni lettura figlia chiede quindi finestre da 500
+righe con `count: "exact"` e avanza finché il conteggio conferma di aver letto
+tutto, con un ordinamento che include sempre la chiave perché due righe dello
+stesso istante non hanno un ordine garantito e una finestra instabile
+ripeterebbe una riga saltandone un'altra. Oltre venti finestre la lettura
+fallisce con `Phase9Error`. La regola per chi aggiunge una proiezione figlia:
+**mai una `.select()` senza tetto né finestra**, e se il tetto viene raggiunto
+si fallisce ad alta voce invece di consegnare meno righe di quante ne esistano.
+
+Prove: `frontend-next/src/services/phase9/dispute-dossier.test.ts` (28),
 `src/components/vinea/moderation/dispute-dossier.test.ts` (29) e la regressione
 `src/services/phase9/moderation-service.test.ts` (41), tutte verdi. La griglia
 `supabase/tests/12n_dispute_evidence_dossier.sql` contiene 50 casi, è cablata nel
-gate `Supabase DB regression` e resta **NON VERIFICATA** alla scrittura perché la
-postazione non ha stack Supabase locale, CLI o `psql`.
+gate `Supabase DB regression` ed è stata eseguita davvero sullo stack effimero
+del gate con esito **50/50** (PR #169, squash `d17f9ab`).
 
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 

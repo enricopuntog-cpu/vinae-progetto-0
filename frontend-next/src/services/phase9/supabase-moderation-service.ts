@@ -405,13 +405,66 @@ export const mapDisputeRow = (row: {
   },
 });
 
-// Le proiezioni non sono paginate: ModerationService dichiara Promise<Report[]>
-// e non una pagina con cursore. Un tetto esplicito e comunque necessario,
-// perche una coda senza limite diventa una lettura illimitata il giorno in cui
-// le righe crescono. Quando servira la paginazione andra cambiata
-// l'interfaccia, che e una decisione e non una correzione.
+// Le due code non sono paginate verso il chiamante: ModerationService dichiara
+// Promise<Report[]> e non una pagina con cursore. Un tetto esplicito e
+// comunque necessario, perche una coda senza limite diventa una lettura
+// illimitata il giorno in cui le righe crescono. Quando servira la paginazione
+// andra cambiata l'interfaccia, che e una decisione e non una correzione.
 const TETTO_CODA = 200;
 const TETTO_AUDIT = 200;
+
+// LE LETTURE FIGLIE DELLA CODA.
+// PostgREST tronca in silenzio una risposta piu lunga del suo `max_rows`: non
+// arriva un errore, arrivano meno righe. Sul fascicolo e il difetto peggiore
+// possibile, perche un fascicolo incompleto si presenta identico a uno
+// completo — un moderatore deciderebbe su prove mancanti senza saperlo. Le
+// righe figlie non si chiedono quindi in un colpo solo: si chiede una finestra
+// per volta e si avanza finche il conteggio esatto, che `max_rows` non tocca,
+// conferma di averle lette tutte. Il tetto di finestre tiene la lettura finita:
+// oltre quel volume si fallisce ad alta voce invece di consegnare meno prove di
+// quante ne esistano.
+const FINESTRA_FIGLI = 500;
+const FINESTRE_MASSIME_FIGLI = 20;
+
+type ErroreLettura = { code?: string; message?: string };
+
+type FinestraFigli = {
+  data: unknown[] | null;
+  error: ErroreLettura | null;
+  count: number | null;
+};
+
+const troncata: ErroreLettura = {
+  code: "PGRST",
+  message: "La coda contiene troppe righe per una lettura completa.",
+};
+
+const leggiTutte = async (
+  finestra: (da: number, a: number) => Promise<FinestraFigli>,
+): Promise<{ righe: unknown[]; error: ErroreLettura | null }> => {
+  const righe: unknown[] = [];
+  for (let giro = 0; giro < FINESTRE_MASSIME_FIGLI; giro += 1) {
+    const { data, error, count } = await finestra(
+      righe.length,
+      righe.length + FINESTRA_FIGLI - 1,
+    );
+    if (error) return { righe: [], error };
+    const lette = data ?? [];
+    righe.push(...lette);
+    if (typeof count === "number") {
+      if (righe.length >= count) return { righe, error: null };
+      // Il server dichiara piu righe di quante ne consegni: la finestra
+      // successiva non puo che essere vuota, e restituire quel che c'e
+      // significherebbe spacciare per intero un fascicolo mutilato.
+      if (lette.length === 0) return { righe: [], error: troncata };
+      continue;
+    }
+    // Senza conteggio resta l'unica prova disponibile: una finestra vuota dice
+    // che il server non ha altro da dare.
+    if (lette.length === 0) return { righe, error: null };
+  }
+  return { righe: [], error: troncata };
+};
 
 // ---------------------------------------------------------------------------
 // Adapter
@@ -780,41 +833,71 @@ export const codaContestazioni = async (
     shippingEvidenceResult,
     trackingResult,
   ] = await Promise.all([
-    client.from("moderation_dispute_admin_notes")
-      .select("id,dispute_id,author_username,note,created_at")
-      .in("dispute_id", disputeIds)
-      .order("created_at", { ascending: true }),
-    client.from("dispute_events")
-      .select("id,dispute_id,actor_kind,event_kind,created_at")
-      .in("dispute_id", disputeIds)
-      .order("created_at", { ascending: true }),
-    client.from("dispute_case_timeline")
-      .select("id,dispute_id,event_kind,created_at")
-      .in("dispute_id", disputeIds)
-      .order("created_at", { ascending: true }),
+    leggiTutte(async (da, a) =>
+      client.from("moderation_dispute_admin_notes")
+        .select("id,dispute_id,author_username,note,created_at", { count: "exact" })
+        .in("dispute_id", disputeIds)
+        .order("created_at", { ascending: true })
+        // Secondo criterio sulla chiave: due righe con lo stesso istante non
+        // hanno un ordine garantito, e senza ordine stabile le finestre
+        // possono ripetere una riga e saltarne un'altra.
+        .order("id", { ascending: true })
+        .range(da, a),
+    ),
+    leggiTutte(async (da, a) =>
+      client.from("dispute_events")
+        .select("id,dispute_id,actor_kind,event_kind,created_at", { count: "exact" })
+        .in("dispute_id", disputeIds)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(da, a),
+    ),
+    leggiTutte(async (da, a) =>
+      client.from("dispute_case_timeline")
+        .select("id,dispute_id,event_kind,created_at", { count: "exact" })
+        .in("dispute_id", disputeIds)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(da, a),
+    ),
     // Correnti E sostituite: dentro una pratica la storia delle sostituzioni e
-    // essa stessa materiale probatorio. L'ordine e per tipo e poi cronologico,
-    // cosi la sequenza "documentata, poi ricaricata" si legge da sola.
-    client.from("moderation_dispute_shipping_evidence")
-      .select("dispute_id,order_id,evidence_id,evidence_kind,storage_path,created_at,superseded_at,is_current")
-      .in("dispute_id", disputeIds)
-      .order("evidence_kind", { ascending: true })
-      .order("created_at", { ascending: true }),
-    client.from("moderation_dispute_tracking")
-      .select("dispute_id,order_id,tracking_event_id,tipo,titolo,descrizione,luogo,created_at")
-      .in("dispute_id", disputeIds)
-      .order("created_at", { ascending: true }),
+    // essa stessa materiale probatorio.
+    leggiTutte(async (da, a) =>
+      client.from("moderation_dispute_shipping_evidence")
+        .select(
+          "dispute_id,order_id,evidence_id,evidence_kind,storage_path,created_at,superseded_at,is_current",
+          { count: "exact" },
+        )
+        .in("dispute_id", disputeIds)
+        .order("evidence_kind", { ascending: true })
+        .order("created_at", { ascending: true })
+        .order("evidence_id", { ascending: true })
+        .range(da, a),
+    ),
+    leggiTutte(async (da, a) =>
+      client.from("moderation_dispute_tracking")
+        .select(
+          "dispute_id,order_id,tracking_event_id,tipo,titolo,descrizione,luogo,created_at",
+          { count: "exact" },
+        )
+        .in("dispute_id", disputeIds)
+        .order("created_at", { ascending: true })
+        .order("tracking_event_id", { ascending: true })
+        .range(da, a),
+    ),
   ]);
-  const { data: noteData, error: noteError } = noteResult;
-  if (noteError) return phase9Throw("moderation_dispute_admin_notes", noteError);
+  if (noteResult.error) return phase9Throw("moderation_dispute_admin_notes", noteResult.error);
   if (baseTimelineResult.error) return phase9Throw("dispute_events", baseTimelineResult.error);
   if (caseTimelineResult.error) return phase9Throw("dispute_case_timeline", caseTimelineResult.error);
   if (shippingEvidenceResult.error) {
     return phase9Throw("moderation_dispute_shipping_evidence", shippingEvidenceResult.error);
   }
   if (trackingResult.error) return phase9Throw("moderation_dispute_tracking", trackingResult.error);
+  const noteData = noteResult.righe;
+  const shippingEvidenceData = shippingEvidenceResult.righe;
+  const trackingData = trackingResult.righe;
   const notePerDispute = new Map<string, DisputeQueueRow["adminNotes"]>();
-  for (const raw of noteData ?? []) {
+  for (const raw of noteData) {
     const row = raw as { id: number; dispute_id: string; author_username: string | null; note: string; created_at: string };
     const notes = notePerDispute.get(row.dispute_id) ?? [];
     notes.push({ id: row.id, authorUsername: row.author_username, note: row.note, createdAt: row.created_at });
@@ -829,11 +912,11 @@ export const codaContestazioni = async (
     events.push(event);
     timelinePerDispute.set(disputeId, events);
   };
-  for (const raw of baseTimelineResult.data ?? []) {
+  for (const raw of baseTimelineResult.righe) {
     const row = raw as { id: number; dispute_id: string; actor_kind: DisputeQueueRow["timeline"][number]["actorKind"]; event_kind: string; created_at: string };
     appendTimeline(row.dispute_id, { id: `base-${row.id}`, eventKind: row.event_kind, actorKind: row.actor_kind, createdAt: row.created_at });
   }
-  for (const raw of caseTimelineResult.data ?? []) {
+  for (const raw of caseTimelineResult.righe) {
     const row = raw as { id: number; dispute_id: string; event_kind: string; created_at: string };
     appendTimeline(row.dispute_id, { id: `case-${row.id}`, eventKind: row.event_kind, actorKind: "admin", createdAt: row.created_at });
   }
@@ -842,7 +925,7 @@ export const codaContestazioni = async (
   // un URL firmato e nient'altro.
   type ProvaDaFirmare = Omit<DisputeShippingEvidenceItem, "signedUrl"> & { storagePath: string };
   const provePerDispute = new Map<string, ProvaDaFirmare[]>();
-  for (const raw of shippingEvidenceResult.data ?? []) {
+  for (const raw of shippingEvidenceData) {
     const row = raw as {
       dispute_id: string;
       evidence_id: string;
@@ -864,7 +947,7 @@ export const codaContestazioni = async (
     provePerDispute.set(row.dispute_id, prove);
   }
   const trackingPerDispute = new Map<string, DisputeTrackingEvent[]>();
-  for (const raw of trackingResult.data ?? []) {
+  for (const raw of trackingData) {
     const row = raw as {
       dispute_id: string;
       tracking_event_id: number;

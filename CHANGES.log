@@ -1,23 +1,26 @@
 ## CURRENT STATE
 - WP1 logistica, WP2 ciclo vendita, WP3 prove di spedizione e WP4 guida contestuale sono **CLOSED**. Baseline precedente `721531b66f38c3fe5e0d6034d0f1fc40996f3f80`.
 - WP5 fascicolo contestazione è **MERGED**: PR #169, squash `d17f9abb056ecdea000d22db72862d32f5eb7a40`, ora `origin/main`. Sull'HEAD esatto tutti i required check erano verdi; il merge è passato da `--squash --admin` perché l'unico blocco era l'auto-approvazione del Code Owner.
-- Misure reali del merge: suite `frontend-next` **2079 test, 0 fail** (soglia CI allineata a **2079** in `.github/workflows/ci.yml` e in `prelaunch-contract.test.ts`); griglia `12n` eseguita sullo stack effimero del gate con **50/50**; regressioni cablate verdi, fra cui 12m prove di spedizione 59/59, 12g dispute e2e 7/7, 12e 10/10 e 7c 22/22.
+- Misure reali del merge: suite `frontend-next` **2079 test, 0 fail**; griglia `12n` eseguita sullo stack effimero del gate con **50/50**; regressioni cablate verdi, fra cui 12m prove di spedizione 59/59, 12g dispute e2e 7/7, 12e 10/10 e 7c 22/22.
 - Il frontend di produzione serve il nuovo `main`: il deploy Netlify pubblicato ha `commit_ref` uguale allo squash, stato `ready`.
 - WP3 resta l'autorità della preparazione: `private.order_shipping_evidence`, bucket privato `dispute-evidence`, prove correnti e sostituite, URL firmati a 15 minuti. Nessuna policy Storage è stata allargata.
 - Il prodotto servito resta `frontend/` + `backend/`; `frontend-next/` è la beta target.
 
 ## ACTIVE TASK
-- WP5 **NON è CLOSED**: la migrazione `20260929140000_dispute_evidence_dossier.sql` risulta mergiata e il check Supabase sullo squash è verde, ma il ledger e le definizioni effettive non sono stati riletti; un check verde o un merge non dimostrano da soli che gli oggetti siano corretti.
-- Il pacchetto integra il dossier nella coda esistente: annuncio e confezione dichiarata, prove WP3 correnti e sostituite, spedizione/consegna e tracking; prove di acquirente e venditore, timeline e note admin restano nello stesso pannello. Tre classi fotografiche distinte; POD vettore dichiarato non disponibile perché nessun provider logistico è integrato.
-- La migrazione è additiva: ricrea `moderation_dispute_queue` conservando le 33 colonne distribuite e aggiungendone dieci, e crea le viste admin chiuse `moderation_dispute_shipping_evidence` e `moderation_dispute_tracking`. Nessuna tabella evidence, nessun cambio di lifecycle, denaro o provider.
+- Correzione post-audit del fascicolo, branch `fix/wp5-audit-findings` su `c8765e804f64a2dbd5029ab038e7f45eee801ad0`. L'audit indipendente non ha trovato difetti di migrazione o di sicurezza; questi sono i tre rilievi residui.
+- **Troncamento silenzioso**: le letture figlie della coda (note admin, `dispute_events`, `dispute_case_timeline`, prove WP3, tracking) chiedevano tutte le righe in una `.select()` senza tetto. Oltre `max_rows` PostgREST taglia la risposta senza errore, e un fascicolo mutilato è indistinguibile da uno intero. Ora ogni lettura figlia scorre finestre da 500 righe con `count: "exact"`, ordina sempre anche sulla chiave perché le finestre siano stabili, e oltre venti finestre fallisce con `Phase9Error` invece di consegnare meno prove di quante ne esistano.
+- **Elenco lint 0010**: `moderation_dispute_shipping_evidence` e `moderation_dispute_tracking` erano descritte a parole ma non nell'elenco chiuso di `CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md`; l'elenco passa da sedici a diciotto viste.
+- **Asserzioni non attese**: tre `expect(...).rejects` senza `await` non potevano fallire. Ora sono attese.
+- Misure locali su questa postazione: lint 0 errori e 12 warning preesistenti, typecheck pulito, suite **2082 test, 0 fail, 22.397 expect** su 124 file, build di produzione verde, `git diff --check` pulito. La soglia `MIN_TESTS` è allineata a **2082** in `.github/workflows/ci.yml` e in `prelaunch-contract.test.ts`.
 
 ## NEXT STEPS
-1. Leggere il ledger del progetto di produzione `pijnmcllmfgjmgsvtcej` e accertare se `20260929140000` è stata applicata, applicandola da sola se manca.
-2. Verificare in sola lettura sulla produzione le tre viste: colonne, `security_invoker = off`, `security_barrier = true`, filtro admin e grant chiusi.
-3. Eseguire lo smoke browser autenticato del fascicolo admin a 375px e desktop quando esisterà un account admin sicuro già disponibile.
+1. Aprire la PR di `fix/wp5-audit-findings`, verificare i sei required check sull'HEAD esatto e fare merge squash.
+2. Leggere il ledger del progetto di produzione `pijnmcllmfgjmgsvtcej` e accertare se `20260929140000` è stata applicata, applicandola da sola se manca.
+3. Verificare in sola lettura sulla produzione le tre viste: colonne, `security_invoker = off`, `security_barrier = true`, filtro admin e grant chiusi.
 
 ## BLOCKERS / NOTES
-- **Produzione parzialmente verificata**: il check Supabase dello squash `d17f9abb` è `success` e punta al progetto atteso `pijnmcllmfgjmgsvtcej`. Sonde REST anonime di sola lettura sullo stesso progetto distinguono le tre viste WP5 da una risorsa inesistente e ricevono `42501 permission denied` su tutte e tre, provando presenza nello schema API e grant anon chiusi. Questa postazione non ha Supabase CLI, `psql`, credenziali o MCP Supabase: ledger, opzioni delle viste, filtro admin, grant `authenticated` e definizioni effettive restano **NON VERIFICATI**.
-- Il deploy Netlify dello squash WP5 è `ready`, ma i tre marker del fascicolo (`Annuncio collegato alla vendita`, `Prove pre-spedizione del venditore`, `POD vettore: non disponibile`) vivono dietro `/admin`, che risponde `307` a un client anonimo: lo smoke resta **NON VERIFICATO** finché non esiste una sessione admin sicura.
-- Le due correzioni trovate dalla CI stavano entrambe nella griglia `12n` e nessuna nella migrazione: una foreign key verificata già all'INSERT e un predicato `%signed%` che pescava `assigned_to`.
+- **Produzione parzialmente verificata**: il check Supabase dello squash `d17f9ab` è `success` e punta al progetto atteso `pijnmcllmfgjmgsvtcej`. Sonde REST anonime di sola lettura sullo stesso progetto distinguono le tre viste WP5 da una risorsa inesistente e ricevono `42501 permission denied` su tutte e tre, provando presenza nello schema API e grant anon chiusi. Questa postazione non ha Supabase CLI, `psql`, credenziali o MCP Supabase: ledger, opzioni delle viste, filtro admin, grant `authenticated` e definizioni effettive restano **NON VERIFICATI**.
+- Il deploy Netlify dello squash WP5 è `ready` e il chunk client servito contiene i marker del fascicolo, ma `/admin` risponde `307` a un client anonimo: lo smoke autenticato resta **NON VERIFICATO** finché non esiste una sessione admin sicura.
+- Il rilievo cosmetico dell'audit — più immagini d'annuncio irrisolte producono la stessa chiave React di fallback — non è stato toccato: non altera quali prove vengono mostrate.
+- Le due correzioni trovate dalla CI su PR #169 stavano entrambe nella griglia `12n` e nessuna nella migrazione: una foreign key verificata già all'INSERT e un predicato `%signed%` che pescava `assigned_to`.
 - Nessun file personale e nessun `CLAUDE.md` è stato toccato.
