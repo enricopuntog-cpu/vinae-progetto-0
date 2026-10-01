@@ -14,8 +14,12 @@ const RADICE = join(import.meta.dir, "../../..");
 
 const leggi = (percorso: string) => readFileSync(join(RADICE, percorso), "utf8");
 
-const MIGRAZIONE = readFileSync(
+const MIGRAZIONE_PROVE = readFileSync(
   join(RADICE, "../supabase/migrations/20260928210000_shipping_evidence_gate.sql"),
+  "utf8",
+);
+const MIGRAZIONE_ROUTING = readFileSync(
+  join(RADICE, "../supabase/migrations/20260930170000_logistics_beta_routing.sql"),
   "utf8",
 );
 
@@ -24,34 +28,57 @@ const completa = (): VoceChecklist[] =>
 
 describe("i due tipi di prova", () => {
   it("sono esattamente due, e sono quelli che il database accetta", () => {
-    expect(PROVE_SPEDIZIONE.map((p) => p.kind)).toEqual(["collo_finale", "interno_pre_chiusura"]);
+    const kinds = PROVE_SPEDIZIONE.map((p) => p.kind);
+    expect(kinds).toHaveLength(2);
+    expect(new Set(kinds).size).toBe(2);
+    expect(kinds).toContain("interno_pre_chiusura");
+    expect(kinds).toContain("collo_finale");
     // Il vincolo della tabella è l'elenco autorevole: un terzo tipo qui
     // verrebbe rifiutato con 23514 al primo caricamento.
-    expect(MIGRAZIONE).toContain(
+    expect(MIGRAZIONE_PROVE).toContain(
       "check (evidence_kind in ('collo_finale', 'interno_pre_chiusura'))",
     );
+  });
+
+  it("interno_pre_chiusura è obbligatoria e porta la copy prescritta", () => {
+    const interno = PROVE_SPEDIZIONE.find((p) => p.kind === "interno_pre_chiusura");
+    expect(interno?.obbligatoria).toBe(true);
+    expect(interno?.obbligo).toBe("Obbligatoria");
+    expect(interno?.aiuto).toBe("Fotografa l'interno del collo prima di chiuderlo.");
   });
 
   it("collo_finale è obbligatoria e porta la copy prescritta", () => {
     const collo = PROVE_SPEDIZIONE.find((p) => p.kind === "collo_finale");
     expect(collo?.obbligatoria).toBe(true);
+    expect(collo?.obbligo).toBe("Obbligatoria");
     expect(collo?.aiuto).toBe("Fotografa il collo finale già chiuso e pronto alla spedizione.");
   });
 
-  it("interno_pre_chiusura è facoltativa e non entra nel cancello", () => {
-    const interno = PROVE_SPEDIZIONE.find((p) => p.kind === "interno_pre_chiusura");
-    expect(interno?.obbligatoria).toBe(false);
-    expect(interno?.aiuto).toBe("Facoltativa, ma utile in caso di contestazione.");
+  it("entrambe sono obbligatorie e nessuna, da sola, chiude il cancello", () => {
     expect(preparazioneConfermabile(completa(), ["interno_pre_chiusura"])).toBe(false);
-    expect(preparazioneConfermabile(completa(), ["collo_finale"])).toBe(true);
+    expect(preparazioneConfermabile(completa(), ["collo_finale"])).toBe(false);
+    expect(
+      preparazioneConfermabile(completa(), ["interno_pre_chiusura", "collo_finale"]),
+    ).toBe(true);
+  });
+
+  it("rispecchia la porta WP6B, che pretende entrambe le prove correnti", () => {
+    expect(MIGRAZIONE_ROUTING).toContain(
+      "private.ordine_prova_corrente_esiste(o.id, 'interno_pre_chiusura')",
+    );
+    expect(MIGRAZIONE_ROUTING).toContain(
+      "private.ordine_prova_corrente_esiste(o.id, 'collo_finale')",
+    );
+    expect(MIGRAZIONE_ROUTING).toContain("'has_inner_evidence', true");
+    expect(MIGRAZIONE_ROUTING).toContain("'has_final_evidence', true");
   });
 });
 
 describe("le sei voci canoniche", () => {
   it("sono gli stessi sei ID di private.imballaggio_checklist_voci()", () => {
-    const elenco = MIGRAZIONE.slice(
-      MIGRAZIONE.indexOf("function private.imballaggio_checklist_voci()"),
-      MIGRAZIONE.indexOf("comment on function private.imballaggio_checklist_voci()"),
+    const elenco = MIGRAZIONE_PROVE.slice(
+      MIGRAZIONE_PROVE.indexOf("function private.imballaggio_checklist_voci()"),
+      MIGRAZIONE_PROVE.indexOf("comment on function private.imballaggio_checklist_voci()"),
     );
     const idSql = [...elenco.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
     expect(idSql).toEqual([...ID_IMBALLAGGIO]);
@@ -81,7 +108,9 @@ describe("checklistCompleta", () => {
   it("una checklist incompleta non è pronta, e resta comunque salvabile", () => {
     const parziale = completa().map((v, i) => (i === 0 ? { ...v, done: false } : v));
     expect(checklistCompleta(parziale)).toBe(false);
-    expect(preparazioneConfermabile(parziale, ["collo_finale"])).toBe(false);
+    expect(
+      preparazioneConfermabile(parziale, ["interno_pre_chiusura", "collo_finale"]),
+    ).toBe(false);
 
     const mancante = completa().slice(1);
     expect(checklistCompleta(mancante)).toBe(false);
@@ -106,9 +135,9 @@ describe("checklistCompleta", () => {
   });
 
   it("rispecchia la regola SQL, che conta totale, distinti e spuntati", () => {
-    expect(MIGRAZIONE).toContain("return v_totale = array_length(v_voci, 1)");
-    expect(MIGRAZIONE).toContain("and v_distinti = array_length(v_voci, 1)");
-    expect(MIGRAZIONE).toContain("and v_spuntate = array_length(v_voci, 1)");
+    expect(MIGRAZIONE_PROVE).toContain("return v_totale = array_length(v_voci, 1)");
+    expect(MIGRAZIONE_PROVE).toContain("and v_distinti = array_length(v_voci, 1)");
+    expect(MIGRAZIONE_PROVE).toContain("and v_spuntate = array_length(v_voci, 1)");
   });
 });
 
@@ -122,11 +151,18 @@ describe("il pannello del venditore", () => {
     expect(PANNELLO).not.toMatch(/const (VOCI|PROVE)\s*[:=]/);
   });
 
-  it("spegne «Segna come spedito» finché la preparazione non è confermata", () => {
-    expect(PANNELLO).toContain("!puoSpedire(ordine)");
-    // La condizione passa l'ordine, non lo stato: `pagato` da solo non basta
-    // più e una firma su `OrderStatus` non saprebbe dirlo.
-    expect(PANNELLO).not.toContain("puoSpedire(ordine.stato)");
+  it("non lascia più scegliere corriere o tracking al venditore", () => {
+    for (const vietato of [
+      "CORRIERI",
+      "onSpedisci",
+      "trackingValido",
+      "Segna come spedito",
+      "Numero tracking",
+      "Corriere Vinea",
+    ]) {
+      expect(PANNELLO).not.toContain(vietato);
+    }
+    expect(PANNELLO).toContain("Servizio logistico assegnato da Vinea");
   });
 
   it("mostra la conferma con il suo istante, e regge un ordine che non ce l'ha", () => {

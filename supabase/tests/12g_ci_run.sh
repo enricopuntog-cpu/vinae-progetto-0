@@ -234,6 +234,13 @@ run_grid "12n fascicolo prove della contestazione" 12n_dispute_evidence_dossier.
 # Prova anche che il dominio 7c e l'autorita della commissione di marketplace
 # restano intatti. Transazione e guard identici, sempre prima delle fixture 12g.
 run_grid "12o fondazione economica della logistica" 12o_logistics_economic_foundation.sql 3
+# Instradamento logistico della Beta WP6B: superficie delle tabelle private,
+# fail closed del motore di compatibilita e servibilita dei punti, le tre porte
+# della rotta, il prezzo del Vinea Pack e il congelamento della spedizione.
+# Prova anche la Sezione S: la preparazione non conferma piu senza una rotta
+# pronta, che e la regressione che la 12m e la 7c non vedrebbero da sole.
+# Transazione e guard identici, sempre prima delle fixture 12g.
+run_grid "12p instradamento logistico della Beta" 12p_logistics_beta_routing.sql 3
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal

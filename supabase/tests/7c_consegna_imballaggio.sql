@@ -9,9 +9,16 @@
 -- cancello di preparazione: il caso 9 registra una prova reale del collo finale
 -- e spunta i sei ID canonici, altrimenti il caso 12 non partirebbe. Il cancello
 -- e i suoi rifiuti sono materia della griglia 12m, non di questa.
+-- Dal 20260930170000_logistics_beta_routing.sql (WP6B) lo stesso cancello
+-- chiede due prove fotografiche invece di una — interno prima della chiusura e
+-- collo finale — e una rotta pronta: il caso 9 registra entrambe le prove e
+-- l'allestimento monta una catena PUDO_TO_PUDO completa su un provider
+-- fittizio, altrimenti la preparazione non confermerebbe. Prova mancante e
+-- rotta mancante sono materia delle griglie 12m e 12p, non di questa.
 -- Crea e cancella due utenti, quattro vini, quattro bottiglie, quattro annunci
--- e i relativi ordini, pagamenti, eventi, contestazioni, recensioni, una prova
--- di spedizione e il suo oggetto nel bucket privato.
+-- e i relativi ordini, pagamenti, eventi, contestazioni, recensioni, due prove
+-- di spedizione con i loro oggetti nel bucket privato e la configurazione
+-- logistica fittizia con il piano di spedizione dell'ordine A.
 -- Richiede autorizzazione fixture separata da quella della migrazione.
 -- Atteso: 22 PASSA, 0 FALLISCE, nessuna riga 99.
 --
@@ -225,6 +232,7 @@ declare
   -- WP3: percorso della prova fotografica del collo finale, senza la quale la
   -- preparazione non si conferma e la spedizione non parte.
   v_prova     text;
+  v_prova_int text;
   -- Guasto dell'azione del caso in corso: lo scrive la guardia, lo legge
   -- registra_7c. Va riazzerato all'inizio di ogni tratto guardato.
   v_guasto    text;
@@ -415,21 +423,100 @@ begin
     8, 'A — il compratore non può preparare la spedizione',
     'errore "Ordine non trovato"', 'ordine non trovato', v_sqlstate, v_msg);
 
+  -- WP6B (20260930170000): il cancello di preparazione chiede anche una rotta
+  -- pronta. Senza, il caso 9 non confermerebbe e il caso 12 non partirebbe, per
+  -- una ragione che nessuno dei due sta provando. La rotta e quindi parte
+  -- dell'allestimento; che la sua assenza blocchi davvero la conferma lo prova
+  -- la griglia 12p.
+  --
+  -- Catena completa PUDO_TO_PUDO, coerente con l'handoff `dropoff_pudo`
+  -- dichiarato sugli annunci della fixture: rete associata al servizio per
+  -- entrambi gli estremi, punto di partenza e punto di destinazione. Provider
+  -- fittizio: nessun codice di rete o punto reale entra in questa griglia.
+  insert into private.logistics_service_definitions (
+    id, provider_code, service_code, service_level,
+    max_weight_g, max_length_mm, max_width_mm, max_height_mm, max_volume_cm3,
+    eligible_packaging_formats, operational_eligibility, active, effective_from
+  ) values (
+    '7c000002-0000-4000-8000-00000000000a', 'provider_7c', 'serv_7c', 'standard',
+    20000, 600, 400, 400, 96000,
+    array['bottiglia_1']::text[], true, true, now() - interval '30 days'
+  );
+
+  insert into private.logistics_service_capabilities (service_definition_id, capability)
+  values ('7c000002-0000-4000-8000-00000000000a', 'PUDO_TO_PUDO');
+
+  insert into private.logistics_pudo_networks (
+    id, provider_code, network_code, label, active, effective_from
+  ) values (
+    '7c000002-0000-4000-8000-00000000000b', 'provider_7c', 'net_7c',
+    'Rete 7c', true, now() - interval '30 days'
+  );
+
+  insert into private.logistics_service_pudo_networks (
+    service_definition_id, network_id, endpoint_role
+  ) values (
+    '7c000002-0000-4000-8000-00000000000a',
+    '7c000002-0000-4000-8000-00000000000b', 'both'
+  );
+
+  insert into private.logistics_pickup_points (
+    id, provider_code, network_code, external_point_id, label, address,
+    postal_code, city, province, active, fetched_at
+  ) values
+    ('7c000002-0000-4000-8000-00000000000c', 'provider_7c', 'net_7c', 'ext_7c_orig',
+     'Punto 7c partenza', 'Via della Fixture 7', '10100', 'Torino', 'TO', true, now()),
+    ('7c000002-0000-4000-8000-00000000000d', 'provider_7c', 'net_7c', 'ext_7c_dest',
+     'Punto 7c destinazione', 'Via della Fixture 12', '20100', 'Milano', 'MI', true, now());
+
+  -- Prezzo lordo finale di 5,00 €. `billable_cents` non e libero: un CHECK
+  -- pretende che sia l'arrotondamento half-up di `source_gross_micros`.
+  insert into private.logistics_commercial_rate_sources (
+    provider_code, service_code, packaging_format, capability,
+    source_gross_micros, billable_cents, status, effective_from
+  ) values (
+    'provider_7c', 'serv_7c', 'bottiglia_1', 'PUDO_TO_PUDO',
+    5000000, 500, 'active', now() - interval '30 days'
+  );
+
+  insert into private.logistics_shipment_plans (
+    order_id, seller_handoff, destination_kind, packaging_format,
+    weight_g, length_mm, width_mm, height_mm, volume_cm3,
+    destination_pickup_point_id, service_definition_id, origin_pickup_point_id,
+    status
+  ) values (
+    v_order_a, 'dropoff_pudo', 'pudo', 'bottiglia_1',
+    1500, 400, 120, 120, 5760,
+    '7c000002-0000-4000-8000-00000000000d',
+    '7c000002-0000-4000-8000-00000000000a',
+    '7c000002-0000-4000-8000-00000000000c',
+    'ready'
+  );
+
   -- WP3 (20260928210000): la checklist non deposita piu fotografie e la
   -- spedizione passa dal cancello di preparazione. Perche il caso 12 resti una
   -- prova della spedizione — e non un modo obliquo di riprovare il cancello —
-  -- la preparazione qui e completa: oggetto nel bucket privato, prova del collo
-  -- finale registrata dalla sua porta, sei ID canonici tutti spuntati. Il
-  -- cancello in se lo prova la griglia 12m, con i suoi rifiuti.
+  -- la preparazione qui e completa: oggetti nel bucket privato, ENTRAMBE le
+  -- prove registrate dalla loro porta, sei ID canonici tutti spuntati. Da WP6B
+  -- la seconda fotografia, l'interno prima della chiusura, non e piu
+  -- facoltativa: una fixture con la sola foto del collo finale smetterebbe di
+  -- confermare, e il caso 12 fallirebbe per una ragione che non sta provando.
+  -- Il cancello in se lo prova la griglia 12m, con i suoi rifiuti.
   v_prova := v_order_a::text || '/' || v_seller::text
           || '/7c000001-0000-4000-8000-00000000000a.webp';
+  v_prova_int := v_order_a::text || '/' || v_seller::text
+          || '/7c000001-0000-4000-8000-00000000000b.webp';
   insert into storage.objects (bucket_id, name, owner, metadata)
   values ('dispute-evidence', v_prova, v_seller,
+          '{"mimetype":"image/webp"}'::jsonb),
+         ('dispute-evidence', v_prova_int, v_seller,
           '{"mimetype":"image/webp"}'::jsonb);
 
   v_guasto := null;
   begin
     perform pg_temp.impersona_7c('authenticated', v_seller);
+    perform public.ordine_spedizione_prova_registra(
+      v_order_a, 'interno_pre_chiusura', v_prova_int);
     perform public.ordine_spedizione_prova_registra(
       v_order_a, 'collo_finale', v_prova);
     perform public.ordine_prepara_spedizione(
@@ -763,6 +850,15 @@ begin
   where bucket_id = 'dispute-evidence' and owner in (v_seller, v_buyer);
   perform set_config('storage.allow_delete_query', 'false', true);
   delete from public.orders where buyer_id = v_buyer;
+  -- WP6B: il piano di spedizione se ne va in cascata con l'ordine, ma la
+  -- configurazione del provider fittizio no, e i punti sono protetti da una FK
+  -- `on delete restrict`: vanno rimossi qui, dopo gli ordini. Capability e
+  -- associazioni rete-servizio cadono in cascata dai loro genitori.
+  delete from private.logistics_commercial_rate_sources
+  where provider_code = 'provider_7c';
+  delete from private.logistics_pickup_points where provider_code = 'provider_7c';
+  delete from private.logistics_service_definitions where provider_code = 'provider_7c';
+  delete from private.logistics_pudo_networks where provider_code = 'provider_7c';
   delete from public.listings where seller_id in (v_seller, v_buyer);
   -- Price Intelligence registra osservazioni append-only sui listing dei
   -- fixture. La griglia usa e getta rimuove soltanto quelle dei vini Test7c.
@@ -882,6 +978,15 @@ exception when others then
   where bucket_id = 'dispute-evidence' and owner in (v_seller, v_buyer);
   perform set_config('storage.allow_delete_query', 'false', true);
   delete from public.orders where buyer_id = v_buyer;
+  -- WP6B: il piano di spedizione se ne va in cascata con l'ordine, ma la
+  -- configurazione del provider fittizio no, e i punti sono protetti da una FK
+  -- `on delete restrict`: vanno rimossi qui, dopo gli ordini. Capability e
+  -- associazioni rete-servizio cadono in cascata dai loro genitori.
+  delete from private.logistics_commercial_rate_sources
+  where provider_code = 'provider_7c';
+  delete from private.logistics_pickup_points where provider_code = 'provider_7c';
+  delete from private.logistics_service_definitions where provider_code = 'provider_7c';
+  delete from private.logistics_pudo_networks where provider_code = 'provider_7c';
   delete from public.listings where seller_id in (v_seller, v_buyer);
   -- Price Intelligence registra osservazioni append-only sui listing dei
   -- fixture. La griglia usa e getta rimuove soltanto quelle dei vini Test7c.

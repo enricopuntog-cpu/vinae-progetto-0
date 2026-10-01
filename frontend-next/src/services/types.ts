@@ -1150,21 +1150,20 @@ export type OrderRecord = {
    */
   addebito_totale_cents: number;
 
-  // ---- WP3: cancello di preparazione ----
+  // ---- WP6B: cancello di preparazione ----
   /**
-   * Istante in cui la preparazione è risultata conforme: sei voci canoniche
-   * spuntate e prova corrente del collo finale. `null` finché non lo è, e
-   * torna `null` se una delle due condizioni decade. Finché è `null`
-   * `ordine_segna_spedito` rifiuta: è il database a dirlo, l'interfaccia lo
-   * rispecchia soltanto.
+   * Istante in cui la preparazione è risultata conforme: sei voci canoniche,
+   * entrambe le prove correnti e rotta pronta. `null` finché uno dei requisiti
+   * manca; una riapertura strutturale lo azzera prima di correggere le prove.
+   * Il database è l'autorità, l'interfaccia lo rispecchia soltanto.
    */
   preparazione_confermata_at: string | null;
 };
 
 /**
- * I due tipi di prova fotografica della preparazione. `collo_finale` è
- * obbligatoria e mostra il pacco chiuso; `interno_pre_chiusura` è facoltativa
- * e serve a chi vuole documentare l'imballaggio prima di sigillare.
+ * I due tipi obbligatori di prova fotografica della preparazione:
+ * `interno_pre_chiusura` documenta l'imballaggio ancora aperto e
+ * `collo_finale` il pacco chiuso. Devono essere entrambe correnti.
  */
 export type ShippingEvidenceKind = "collo_finale" | "interno_pre_chiusura";
 
@@ -2754,4 +2753,190 @@ export interface LogisticsConfigService {
   versionaQuoteConfig(input: LogisticsQuoteConfigInput): Promise<Result<LogisticsVersionResult>>;
   versionaPack(input: LogisticsPackInput): Promise<Result<LogisticsVersionResult>>;
   impostaStock(input: LogisticsStockInput): Promise<Result<{ id: string; sku: string }>>;
+}
+
+// ---- WP6B — Spedizione: contratto provider-neutral --------------------------
+/**
+ * `ShipmentProvider` è il contratto del **corriere**, e non va confuso con
+ * `PackagingProvider` della 7c, che resta il fornitore dell'imballaggio: due
+ * domini, due cataloghi, due cicli di vita. Un unico nome li avrebbe fatti
+ * collassare alla prima implementazione.
+ *
+ * Qui dentro non compare nessun corriere per nome. `providerCode` e
+ * `serviceCode` sono stringhe opache che arrivano dalla configurazione
+ * versionata (WP6A) e attraversano questo strato senza essere interpretate: un
+ * confronto fra `providerCode` e il nome di un corriere, in questo file o in
+ * chi lo usa, sposterebbe nel codice una decisione commerciale che vive nei
+ * dati e che cambia senza rilascio.
+ *
+ * Nessun fornitore reale è implementato. L'unico adattatore che esiste è
+ * `createFakeShipmentProvider`, che non fa rete: la Beta assegna la rotta e
+ * congela le prove, ma non compra ancora spedizioni.
+ */
+
+/**
+ * La forma della **tratta**, non il corriere che la percorre. La Beta ne ammette
+ * due sole: consegna del venditore a un punto della rete, oppure ritiro a
+ * domicilio del venditore; la destinazione è sempre un punto di ritiro.
+ *
+ * `pudo_to_home` e `home_to_home` non esistono qui: non sono "non configurati",
+ * sono fuori dal perimetro Beta, e un tipo che li nominasse inviterebbe a
+ * scriverne il ramo.
+ */
+export type ShippingCapability = "pudo_to_pudo" | "home_to_pudo";
+
+/**
+ * Come il venditore consegna il collo alla rete, nella forma che serve al
+ * provider. `modalita` riusa il vocabolario già dichiarato sull'annuncio
+ * (`HandoffVenditore`) invece di aprirne un secondo: due elenchi delle stesse
+ * due scelte divergono al primo cambiamento.
+ */
+export type SellerHandoff = {
+  modalita: HandoffVenditore;
+  /** Il punto scelto, quando la modalità è la consegna a un punto della rete. */
+  pickupPointId: string | null;
+};
+
+/** Millimetri, sempre. L'unità è nel tipo perché un numero nudo si sbaglia. */
+export type ParcelDimensions = {
+  lunghezzaMm: number;
+  larghezzaMm: number;
+  altezzaMm: number;
+};
+
+export type ShipmentParcel = {
+  dimensioni: ParcelDimensions;
+  pesoG: number;
+  /** Quanti colli: la Beta ne prevede uno, il contratto non lo impone. */
+  quantita: number;
+};
+
+/**
+ * Un punto della rete, dal lato del provider. `networkCode` distingue le reti
+ * di uno stesso fornitore senza che questo strato sappia quali siano.
+ */
+export type PickupPoint = {
+  id: string;
+  providerCode: string;
+  networkCode: string;
+  nome: string;
+  indirizzo: string;
+  cap: string;
+  citta: string;
+  paese: string;
+};
+
+/** La rotta assegnata da Vinea: né il compratore né il venditore la scelgono. */
+export type ShipmentRoute = {
+  providerCode: string;
+  serviceCode: string;
+  capability: ShippingCapability;
+  origine: SellerHandoff;
+  destinazionePickupPointId: string;
+};
+
+export type ProviderShipmentQuote = {
+  providerCode: string;
+  serviceCode: string;
+  /** Interi in centesimi: nessun float attraversa il confine del denaro. */
+  importoCents: number;
+  valuta: "EUR";
+};
+
+export type ProviderShipmentStato = "creata" | "annullata";
+
+export type ProviderShipment = {
+  shipmentId: string;
+  providerCode: string;
+  serviceCode: string;
+  trackingNumber: string;
+  stato: ProviderShipmentStato;
+  creataAt: string;
+};
+
+/**
+ * L'etichetta **generata dal fornitore**, presa e conservata così com'è.
+ *
+ * `pdfUrl` è il riferimento al documento; `zpl` esiste solo per le stampanti
+ * termiche che lo accettano ed è facoltativo — `null` non è un guasto. Vinea non
+ * ridisegna codici a barre né QR e non ritaglia l'etichetta: un barcode
+ * rigenerato o tagliato è un collo che la rete rifiuta.
+ */
+export type ProviderLabel = {
+  formato: ShipmentLabelFormat;
+  pdfUrl: string;
+  /** Riferimento opaco del fornitore, utile a ristampare senza ricreare. */
+  reference: string;
+  zpl: string | null;
+};
+
+/** I due soli fogli previsti: A4 210×297 mm e termica 100×150 mm. */
+export type ShipmentLabelFormat = "a4" | "thermal_100x150";
+
+export type ProviderTrackingStato =
+  | "creata"
+  | "in_transito"
+  | "in_consegna"
+  | "consegnata"
+  | "giacenza"
+  | "annullata";
+
+export type ProviderTrackingEvent = {
+  at: string;
+  stato: ProviderTrackingStato;
+  descrizione: string;
+};
+
+export type ProviderTrackingState = {
+  shipmentId: string;
+  stato: ProviderTrackingStato;
+  eventi: ProviderTrackingEvent[];
+};
+
+export type ProofOfDelivery = {
+  shipmentId: string;
+  consegnataAt: string;
+  /** Chi ha firmato, quando il fornitore lo dichiara. */
+  firmatarioNome: string | null;
+  documentoUrl: string | null;
+};
+
+/**
+ * Il contratto del corriere. Ogni metodo torna un `Result`: un fornitore che
+ * rifiuta non è un'eccezione del programma, è una risposta prevista, e lo strato
+ * sopra la normalizza prima di mostrarla.
+ */
+export interface ShipmentProvider {
+  /** I punti dove il compratore può ritirare. */
+  listDestinationPickupPoints(input: {
+    paese: string;
+    cap: string;
+    serviceCode: string;
+  }): Promise<Result<PickupPoint[]>>;
+  /** I punti dove il venditore può consegnare il collo. */
+  listOriginDropoffPoints(input: {
+    paese: string;
+    cap: string;
+    serviceCode: string;
+  }): Promise<Result<PickupPoint[]>>;
+  quoteShipment(input: {
+    rotta: ShipmentRoute;
+    collo: ShipmentParcel;
+  }): Promise<Result<ProviderShipmentQuote>>;
+  createShipment(input: {
+    rotta: ShipmentRoute;
+    collo: ShipmentParcel;
+    riferimentoOrdine: string;
+  }): Promise<Result<ProviderShipment>>;
+  getLabel(input: {
+    shipmentId: string;
+    formato: ShipmentLabelFormat;
+  }): Promise<Result<ProviderLabel>>;
+  cancelShipment(input: { shipmentId: string }): Promise<Result<void>>;
+  getTracking(input: { shipmentId: string }): Promise<Result<ProviderTrackingState>>;
+  /** Il payload arriva non fidato: l'adattatore lo valida prima di tradurlo. */
+  handleTrackingWebhook(input: {
+    payload: unknown;
+  }): Promise<Result<ProviderTrackingState>>;
+  getProofOfDelivery(input: { shipmentId: string }): Promise<Result<ProofOfDelivery>>;
 }

@@ -37,8 +37,10 @@ export const VOCI_IMBALLAGGIO: ReadonlyArray<{ id: string; label: string }> = [
 export const ID_IMBALLAGGIO: readonly string[] = VOCI_IMBALLAGGIO.map((v) => v.id);
 
 /**
- * Le due prove fotografiche. Una sola CORRENTE per tipo: ricaricare sostituisce
- * e la precedente resta archiviata, finché l'ordine non è spedito.
+ * Le due prove fotografiche obbligatorie. Una sola CORRENTE per tipo: ricaricare
+ * sostituisce e la precedente resta archiviata, finché la preparazione non viene
+ * confermata. Per correggerla dopo, il venditore deve prima riaprire
+ * strutturalmente la preparazione.
  */
 export const PROVE_SPEDIZIONE: ReadonlyArray<{
   kind: ShippingEvidenceKind;
@@ -48,18 +50,18 @@ export const PROVE_SPEDIZIONE: ReadonlyArray<{
   aiuto: string;
 }> = [
   {
+    kind: "interno_pre_chiusura",
+    titolo: "Foto dell'interno prima della chiusura",
+    obbligatoria: true,
+    obbligo: "Obbligatoria",
+    aiuto: "Fotografa l'interno del collo prima di chiuderlo.",
+  },
+  {
     kind: "collo_finale",
     titolo: "Foto del pacco chiuso",
     obbligatoria: true,
     obbligo: "Obbligatoria",
     aiuto: "Fotografa il collo finale già chiuso e pronto alla spedizione.",
-  },
-  {
-    kind: "interno_pre_chiusura",
-    titolo: "Foto dell'interno prima della chiusura",
-    obbligatoria: false,
-    obbligo: "Facoltativa",
-    aiuto: "Facoltativa, ma utile in caso di contestazione.",
   },
 ];
 
@@ -83,4 +85,7 @@ export const checklistCompleta = (voci: readonly VoceChecklist[]): boolean => {
 export const preparazioneConfermabile = (
   voci: readonly VoceChecklist[],
   proveCorrenti: readonly ShippingEvidenceKind[],
-): boolean => checklistCompleta(voci) && proveCorrenti.includes("collo_finale");
+): boolean =>
+  checklistCompleta(voci) &&
+  proveCorrenti.includes("interno_pre_chiusura") &&
+  proveCorrenti.includes("collo_finale");

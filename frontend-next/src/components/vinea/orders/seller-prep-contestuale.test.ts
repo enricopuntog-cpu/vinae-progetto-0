@@ -5,9 +5,9 @@
  * ma che il pannello la mostri senza lasciarle toccare nulla di ciò che decide.
  * Tre confini, e sono i tre che un pannello più ricco tende a sfondare:
  *
- * - i bottoni non guardano la confezione: `preparazione_confermata_at` e
- *   `ordine_segna_spedito` restano le uniche autorità, e la condizione che li
- *   accende nell'interfaccia non deve nemmeno sfiorare `tipoConfezione`;
+ * - i bottoni non guardano la confezione: il database resta l'autorità della
+ *   conferma, e la condizione locale non deve nemmeno sfiorare
+ *   `tipoConfezione`; il percorso attivo non espone più la spedizione manuale;
  * - le fotografie dell'annuncio sono in sola lettura e stanno lontane da quelle
  *   che il database conta — due griglie di immagini nella stessa schermata si
  *   confondono, se nessuno dice che cosa sono;
@@ -76,7 +76,6 @@ describe("il contesto dell'annuncio dentro il pannello", () => {
     expect(posizione("DISCLAIMER_IMBALLAGGIO")).toBeLessThan(posizione("Checklist di sicurezza"));
     expect(posizione("Checklist di sicurezza")).toBeLessThan(posizione("Prove fotografiche"));
     expect(posizione("Prove fotografiche")).toBeLessThan(posizione("Conferma preparazione"));
-    expect(posizione("Conferma preparazione")).toBeLessThan(posizione("Segna come spedito"));
   });
 
   it("riusa il disclaimer dell'annuncio invece di riscriverne uno", () => {
@@ -124,7 +123,7 @@ describe("la sesta voce, rietichettata", () => {
   });
 });
 
-describe("il cancello WP3, che la guida non tocca", () => {
+describe("il cancello WP6B, che la guida non tocca", () => {
   it("nessun bottone guarda la confezione dichiarata", () => {
     expect(PULITO).not.toMatch(/disabled=\{[^}]*tipoConfezione/);
     expect(PULITO).not.toMatch(/disabled=\{[^}]*guida\./);
@@ -132,12 +131,28 @@ describe("il cancello WP3, che la guida non tocca", () => {
     expect(PULITO).not.toMatch(/disabled=\{[^}]*logistica/);
   });
 
-  it("le condizioni restano quelle della WP3", () => {
+  it("la conferma locale usa checklist e due prove, non il contesto dell'annuncio", () => {
     expect(PULITO).toInclude("inCorso || !confermabile");
-    expect(PULITO).toInclude("!puoSpedire(ordine)");
+    expect(PULITO).toInclude("internoCaricato && colloCaricato");
     expect(PULITO).toInclude("confermataAt !== null");
-    // La confermabilità non incrocia mai il contesto dell'annuncio.
     expect(PULITO).not.toMatch(/confermabile[\s\S]{0,120}tipoConfezione/);
+  });
+
+  it("non espone più la spedizione manuale del venditore", () => {
+    for (const vietato of [
+      "CORRIERI",
+      "onSpedisci",
+      "trackingValido",
+      "Numero tracking",
+      "Segna come spedito",
+      "Corriere Vinea",
+      "<Select",
+      "<Input",
+    ]) {
+      expect(PULITO).not.toInclude(vietato);
+    }
+    expect(PAGINA).not.toInclude("onSpedisci=");
+    expect(PULITO).toInclude("Servizio logistico assegnato da Vinea");
   });
 
   it("un contesto mancante non nasconde il pannello né la preparazione", () => {

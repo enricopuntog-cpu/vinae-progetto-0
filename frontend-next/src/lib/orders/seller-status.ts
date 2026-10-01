@@ -93,13 +93,12 @@ export const puoPreparare = (stato: OrderStatus): boolean =>
   stato === "pagato" || stato === "in_preparazione";
 
 /**
- * Dalla WP3 spedire non dipende più dal solo stato.
+ * Spedire non dipende più dal solo stato.
  *
- * `ordine_segna_spedito` ammette un solo stato di partenza —
+ * La porta legacy `ordine_segna_spedito` ammette un solo stato di partenza —
  * `in_preparazione` — e richiede in più il cancello di preparazione:
- * `preparazione_confermata_at` valorizzata, cioè sei voci canoniche spuntate e
- * prova corrente del collo finale. `pagato` non è più un ingresso: era il salto
- * che permetteva di spedire senza una sola fotografia.
+ * `preparazione_confermata_at` valorizzata, cioè sei voci canoniche, entrambe le
+ * prove correnti e rotta pronta. `pagato` non è più un ingresso.
  *
  * Il parametro è l'ordine, non lo stato, proprio perché la condizione non è più
  * esprimibile su un enum: una firma che accettasse ancora `OrderStatus`
