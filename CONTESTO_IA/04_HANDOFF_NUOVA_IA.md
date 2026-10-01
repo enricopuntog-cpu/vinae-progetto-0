@@ -85,6 +85,27 @@ residuo, registrarlo in `CHANGES.log`.
   quando la classe di difetto vive lì.
 - Per enum, castare entrambi i rami di un `CASE` al tipo esatto e verificare le
   label prima della prova.
+- **Senza credenziali la produzione si verifica comunque, in sola lettura.** La
+  chiave pubblicabile sta nei chunk client del sito servito, come per qualunque
+  browser, e PostgREST distingue due risposte che sembrano uguali e non lo sono:
+  `404 PGRST202` significa «nessuna funzione con questa firma», `401 42501
+  permission denied for function X` significa «la funzione esiste e non ti è
+  concessa». La seconda prova due cose insieme — che la migrazione ha davvero
+  creato l'oggetto e che il ruolo è chiuso — ed è più forte di una riga di
+  ledger, che attesta la versione e non il corpo. Prima della prova serve il
+  controllo negativo su un nome che non può esistere, altrimenti non si sa cosa
+  si sta misurando. Attenzione al falso negativo: chiamare con `{}` una funzione
+  dai parametri nominati dà `PGRST202` anche se esiste, quindi si passa la firma
+  esatta letta dalla migrazione. Una migrazione è atomica: provati alcuni
+  oggetti, ci sono tutti. Per le tabelle ci sono due livelli — assenti da
+  `public` (`404 PGRST205`) e schema non esposto (`406 PGRST106`). Interrogare
+  solo porte di lettura quando basta; se serve provare una porta che scrive,
+  verificare prima che il controllo di ruolo stia nella dichiarazione delle
+  variabili, così il diniego precede ogni istruzione.
+- Il deploy Netlify di produzione non arriva su GitHub: si lega al merge
+  confrontando le impronte dei chunk client fra il sito servito e le due
+  preview, quella della PR fusa e quella precedente. Coincidenza totale con la
+  nuova e parziale con la vecchia è la prova; il solo `200` non lo è.
 
 ## Se il lavoro riguarda una nuova fase
 
