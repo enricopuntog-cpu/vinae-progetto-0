@@ -14,6 +14,15 @@
 -- istante e storia delle sostituzioni. `imballaggio_foto` resta una proiezione
 -- di compatibilita delle sole prove CORRENTI (casi 15 e 20-23).
 --
+-- Dal pacchetto WP6B il cancello e cambiato in due punti. Primo: le prove
+-- fotografiche richieste sono DUE, l'interno prima della chiusura e il collo
+-- finale, entrambe correnti (casi 26 e 60); la foto interna non e piu
+-- facoltativa, e il caso 26 — che prima provava la sua facoltativita — prova
+-- ora l'opposto. Secondo: il cancello chiede anche una rotta pronta. Questa
+-- griglia prova le PROVE: la rotta e nell'allestimento, uguale per tutti gli
+-- ordini, cosi nessun caso cambia esito per una ragione che non sta provando.
+-- Il cancello della rotta e materia della griglia 12p.
+--
 -- LIMITE DICHIARATO. Gli oggetti di Storage della fixture nascono come
 -- `postgres`, che su Supabase ha BYPASSRLS: servono come bersaglio delle porte
 -- SQL. La policy di INSERT estesa dalla migrazione e provata per davvero nei
@@ -36,7 +45,8 @@
 --
 -- NUMERAZIONE. Gli id sono chiavi, non un ordine di lettura: il caso 53 e un
 -- invariante economico registrato fra il 41 e il 42, perche fu aggiunto dopo e
--- prese il primo id libero. I casi totali sono 59, non 58.
+-- prese il primo id libero; allo stesso modo il 60 sta accanto al 26 e i 61-62
+-- accanto al 28, perche ne completano le transizioni. I casi totali sono 62.
 
 begin;
 
@@ -183,6 +193,81 @@ insert into public.disputes (
 );
 
 -- ---------------------------------------------------------------------------
+-- Rotta logistica della fixture (WP6B)
+-- ---------------------------------------------------------------------------
+--
+-- Da WP6B `private.ordine_spedizione_pronta` richiede anche una rotta pronta e
+-- `public.ordine_prepara_spedizione` non conferma piu senza. Questa griglia
+-- prova il cancello delle PROVE: senza una rotta pronta ogni caso di conferma
+-- fallirebbe per una ragione che non sta provando, e il difetto vero resterebbe
+-- coperto. La rotta e quindi parte della fixture, non dell'oggetto in prova.
+-- Che la rotta mancante blocchi davvero la conferma e provato dalla 12p.
+--
+-- Handoff `home_pickup`: il ritiro a domicilio non ha punto di partenza, quindi
+-- la catena minima e destinazione + servizio, senza rete di origine. Nessun
+-- dato di provider reale: codici fittizi, come nella 12o e nella 12p.
+insert into private.logistics_service_definitions (
+  id, provider_code, service_code, service_level,
+  max_weight_g, max_length_mm, max_width_mm, max_height_mm, max_volume_cm3,
+  eligible_packaging_formats, operational_eligibility, active, effective_from
+) values (
+  '1d000000-0000-4000-8000-000000000501', 'provider_a', 'serv_12m', 'standard',
+  20000, 600, 400, 400, 96000,
+  array['bottiglia_1']::text[], true, true, now() - interval '30 days'
+);
+
+insert into private.logistics_service_capabilities (service_definition_id, capability)
+values ('1d000000-0000-4000-8000-000000000501', 'HOME_TO_PUDO');
+
+insert into private.logistics_pudo_networks (
+  id, provider_code, network_code, label, active, effective_from
+) values (
+  '1d000000-0000-4000-8000-000000000502', 'provider_a', 'net_12m',
+  'Rete 12m', true, now() - interval '30 days'
+);
+
+insert into private.logistics_service_pudo_networks (
+  service_definition_id, network_id, endpoint_role
+) values (
+  '1d000000-0000-4000-8000-000000000501',
+  '1d000000-0000-4000-8000-000000000502', 'destination'
+);
+
+insert into private.logistics_pickup_points (
+  id, provider_code, network_code, external_point_id, label, address,
+  postal_code, city, province, active, fetched_at
+) values (
+  '1d000000-0000-4000-8000-000000000503', 'provider_a', 'net_12m', 'ext_12m',
+  'Punto 12m', 'Via della Griglia 12', '10100', 'Torino', 'TO', true, now()
+);
+
+-- Prezzo lordo finale di 5,00 EUR. `billable_cents` non e libero: un CHECK
+-- pretende che sia l'arrotondamento half-up di `source_gross_micros`.
+insert into private.logistics_commercial_rate_sources (
+  provider_code, service_code, packaging_format, capability,
+  source_gross_micros, billable_cents, status, effective_from
+) values (
+  'provider_a', 'serv_12m', 'bottiglia_1', 'HOME_TO_PUDO',
+  5000000, 500, 'active', now() - interval '30 days'
+);
+
+-- Un piano pronto per ogni ordine della fixture, storici compresi: cosi la
+-- rotta non e mai la ragione per cui un caso passa o fallisce. Il collo sta
+-- dentro tutti i limiti del servizio (5 760 cm3 contro 96 000).
+insert into private.logistics_shipment_plans (
+  order_id, seller_handoff, destination_kind, packaging_format,
+  weight_g, length_mm, width_mm, height_mm, volume_cm3,
+  destination_pickup_point_id, service_definition_id, status
+)
+select
+  o.id, 'home_pickup', 'pudo', 'bottiglia_1',
+  1500, 400, 120, 120, 5760,
+  '1d000000-0000-4000-8000-000000000503',
+  '1d000000-0000-4000-8000-000000000501', 'ready'
+from public.orders o
+where o.id::text like '1d000000-0000-4000-8000-0000000004%';
+
+-- ---------------------------------------------------------------------------
 -- Percorsi e oggetti nel bucket privato `dispute-evidence`
 -- ---------------------------------------------------------------------------
 
@@ -237,11 +322,14 @@ select 'dispute-evidence', pg_temp.p(pg_temp.o1(), pg_temp.ua(), n),
        pg_temp.ua(), '{"mimetype":"image/webp"}'::jsonb
 from generate_series(1, 6) as n;
 
--- Oggetto di A su O8 (caso 26) e oggetti che devono essere rifiutati dalla
--- RPC: uno nella cartella dell'estraneo (caso 7), uno di un altro ordine
--- (caso 8), uno con estensione diversa (caso 10).
+-- Oggetti di A su O8: 1 collo finale (caso 26), 2 interno prima della chiusura
+-- (caso 60, la seconda prova che da WP6B e obbligatoria). Poi gli oggetti che
+-- devono essere rifiutati dalla RPC: uno nella cartella dell'estraneo (caso 7),
+-- uno di un altro ordine (caso 8), uno con estensione diversa (caso 10).
 insert into storage.objects (bucket_id, name, owner, metadata) values
   ('dispute-evidence', pg_temp.p(pg_temp.o8(), pg_temp.ua(), 1), pg_temp.ua(),
+   '{"mimetype":"image/webp"}'::jsonb),
+  ('dispute-evidence', pg_temp.p(pg_temp.o8(), pg_temp.ua(), 2), pg_temp.ua(),
    '{"mimetype":"image/webp"}'::jsonb),
   ('dispute-evidence', pg_temp.p(pg_temp.o1(), pg_temp.ue(), 1), pg_temp.ue(),
    '{"mimetype":"image/webp"}'::jsonb),
@@ -571,7 +659,7 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- 4-5 — il venditore dell'ordine pagato registra i due tipi ammessi
+-- 4-5 — il venditore dell'ordine pagato registra i due tipi richiesti
 -- ---------------------------------------------------------------------------
 
 do $$
@@ -587,7 +675,8 @@ begin
 
   v_r := pg_temp.prova(pg_temp.ua(), pg_temp.o1(), 'interno_pre_chiusura',
                        pg_temp.p(pg_temp.o1(), pg_temp.ua(), 2));
-  perform pg_temp.registra(5, 'il venditore registra la foto interna facoltativa',
+  perform pg_temp.registra(5,
+    'il venditore registra la foto interna prima della chiusura',
     v_r = 'ok' and pg_temp.storico(pg_temp.o1()) = '2/0',
     format('%s / storico %s', v_r, pg_temp.storico(pg_temp.o1())));
 end $$;
@@ -794,7 +883,8 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- 24-27 e 59 — conferma completa e salvataggio invariato idempotente
+-- 24-27, 59 e 60 — la coppia di prove, la conferma e il salvataggio
+--                  invariato idempotente
 -- ---------------------------------------------------------------------------
 
 do $$
@@ -809,27 +899,43 @@ begin
   -- O8 non ha ancora alcuna prova: sei voci vere non bastano.
   v_r := pg_temp.prepara(pg_temp.ua(), pg_temp.o8(), pg_temp.cl_completa());
   perform pg_temp.registra(24,
-    'sei voci spuntate senza foto del collo finale non confermano',
+    'sei voci spuntate senza prove fotografiche non confermano',
     v_r = 'ok' and pg_temp.riga(pg_temp.o8()) = 'in_preparazione|no|0',
     format('%s / riga %s', v_r, pg_temp.riga(pg_temp.o8())));
 
-  -- O1 ha la prova corrente del collo finale dal caso 13.
+  -- O1 ha entrambe le prove correnti: il collo dal caso 13, l'interno dal 5.
   v_r := pg_temp.prepara(pg_temp.ua(), pg_temp.o1(), pg_temp.cl_completa());
   perform pg_temp.registra(25,
-    'checklist completa e foto del collo finale confermano la preparazione',
+    'checklist completa e le due prove correnti confermano la preparazione',
     v_r = 'ok' and pg_temp.riga(pg_temp.o1()) = 'in_preparazione|si|2',
     format('%s / riga %s', v_r, pg_temp.riga(pg_temp.o1())));
 
-  -- Su O8 la prova facoltativa non viene mai caricata: non deve servire.
+  -- Da WP6B la seconda prova non e piu facoltativa: su O8 il collo finale da
+  -- solo lascia il cancello chiuso. E la meta del fascicolo che dimostra come
+  -- le bottiglie erano calzate dentro, e senza quella meta la conferma non
+  -- nasce.
   v_r := pg_temp.prova(pg_temp.ua(), pg_temp.o8(), 'collo_finale',
                        pg_temp.p(pg_temp.o8(), pg_temp.ua(), 1));
   v_r := v_r || ' / ' || pg_temp.prepara(pg_temp.ua(), pg_temp.o8(), pg_temp.cl_completa());
   perform pg_temp.registra(26,
-    'l''assenza della foto interna facoltativa non blocca la conferma',
-    v_r = 'ok / ok' and pg_temp.riga(pg_temp.o8()) = 'in_preparazione|si|1'
+    'la sola foto del collo finale non conferma piu la preparazione',
+    v_r = 'ok / ok' and pg_temp.riga(pg_temp.o8()) = 'in_preparazione|no|1'
     and pg_temp.correnti(pg_temp.o8())
         = 'collo_finale=' || pg_temp.p(pg_temp.o8(), pg_temp.ua(), 1),
     format('%s / riga %s', v_r, pg_temp.riga(pg_temp.o8())));
+
+  -- Aggiunta la prova interna, la coppia e completa e la conferma nasce.
+  v_r := pg_temp.prova(pg_temp.ua(), pg_temp.o8(), 'interno_pre_chiusura',
+                       pg_temp.p(pg_temp.o8(), pg_temp.ua(), 2));
+  v_r := v_r || ' / ' || pg_temp.prepara(pg_temp.ua(), pg_temp.o8(), pg_temp.cl_completa());
+  perform pg_temp.registra(60,
+    'le due prove correnti insieme confermano la preparazione',
+    v_r = 'ok / ok' and pg_temp.riga(pg_temp.o8()) = 'in_preparazione|si|2'
+    and pg_temp.correnti(pg_temp.o8())
+        = 'collo_finale=' || pg_temp.p(pg_temp.o8(), pg_temp.ua(), 1)
+       || ',interno_pre_chiusura=' || pg_temp.p(pg_temp.o8(), pg_temp.ua(), 2),
+    format('%s / riga %s / correnti %s', v_r, pg_temp.riga(pg_temp.o8()),
+           pg_temp.correnti(pg_temp.o8())));
 
   -- Il venditore legge l'istante della conferma: e una colonna concessa, non
   -- un dato da ricostruire in frontend.
@@ -869,24 +975,48 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- 28-29 — la conferma decade se cambia una delle due condizioni
+-- 28-29 e 61-62 — dopo la conferma il fascicolo si corregge solo riaprendo
 -- ---------------------------------------------------------------------------
 
 do $$
 declare v_r text;
 begin
-  -- Sostituire la foto dopo la conferma riapre la preparazione: la conferma
-  -- riguardava quella fotografia, non l'ordine in astratto.
+  -- Una conferma fotografa la coppia corrente. Sostituirne una senza prima
+  -- riaprire il lavoro cambierebbe il fascicolo confermato sotto i piedi
+  -- dell'audit: la porta deve rifiutare e lasciare tutto immutato.
   v_r := pg_temp.prova(pg_temp.ua(), pg_temp.o1(), 'collo_finale',
                        pg_temp.p(pg_temp.o1(), pg_temp.ua(), 4));
   perform pg_temp.registra(28,
-    'sostituire la prova dopo la conferma azzera la conferma',
+    'dopo la conferma una prova non si sostituisce direttamente',
+    left(v_r, 5) = 'P0001' and position('riapri' in v_r) > 0
+    and pg_temp.riga(pg_temp.o1()) = 'in_preparazione|si|2'
+    and pg_temp.storico(pg_temp.o1()) = '3/1',
+    format('%s / riga %s / storico %s', v_r, pg_temp.riga(pg_temp.o1()),
+           pg_temp.storico(pg_temp.o1())));
+
+  -- La porta strutturale e la checklist: salvarla incompleta fa decadere la
+  -- conferma senza toccare le due prove correnti.
+  v_r := pg_temp.prepara(pg_temp.ua(), pg_temp.o1(), pg_temp.cl_falsa());
+  perform pg_temp.registra(61,
+    'la riapertura strutturale fa decadere la conferma ma conserva le prove',
+    v_r = 'ok' and pg_temp.riga(pg_temp.o1()) = 'in_preparazione|no|2'
+    and pg_temp.storico(pg_temp.o1()) = '3/1',
+    format('%s / riga %s / storico %s', v_r, pg_temp.riga(pg_temp.o1()),
+           pg_temp.storico(pg_temp.o1())));
+
+  -- Solo dopo la riapertura la sostituzione e ammessa; la vecchia riga resta
+  -- superata nello storico.
+  v_r := pg_temp.prova(pg_temp.ua(), pg_temp.o1(), 'collo_finale',
+                       pg_temp.p(pg_temp.o1(), pg_temp.ua(), 4));
+  perform pg_temp.registra(62,
+    'dopo la riapertura la prova si sostituisce senza cancellare lo storico',
     v_r = 'ok' and pg_temp.riga(pg_temp.o1()) = 'in_preparazione|no|2'
     and pg_temp.storico(pg_temp.o1()) = '4/2',
     format('%s / riga %s / storico %s', v_r, pg_temp.riga(pg_temp.o1()),
            pg_temp.storico(pg_temp.o1())));
 
-  -- Riconferma, poi checklist di nuovo incompleta.
+  -- Riconferma, poi checklist di nuovo incompleta: la stessa porta resta il
+  -- modo dichiarato di riaprire anche dopo una correzione.
   v_r := pg_temp.prepara(pg_temp.ua(), pg_temp.o1(), pg_temp.cl_completa());
   v_r := v_r || ' / ' || pg_temp.prepara(pg_temp.ua(), pg_temp.o1(), pg_temp.cl_falsa());
   perform pg_temp.registra(29,
@@ -937,14 +1067,14 @@ end $$;
 do $$
 declare v_tracking text; v_corriere text;
 begin
-  -- O8 e confermato dal caso 26: se passasse, passerebbe per il cancello, non
+  -- O8 e confermato dal caso 60: se passasse, passerebbe per il cancello, non
   -- per una validazione saltata.
   v_tracking := pg_temp.spedisci(pg_temp.ua(), pg_temp.o8(), 'Corriere Vinea', 'ab');
   v_corriere := pg_temp.spedisci(pg_temp.ua(), pg_temp.o8(), 'X', 'VIN87654321');
   perform pg_temp.registra(33,
     'tracking e corriere malformati restano rifiutati',
     left(v_tracking, 5) = '22023' and left(v_corriere, 5) = '22023'
-    and pg_temp.riga(pg_temp.o8()) = 'in_preparazione|si|1',
+    and pg_temp.riga(pg_temp.o8()) = 'in_preparazione|si|2',
     format('tracking %s / corriere %s / riga %s', v_tracking, v_corriere,
            pg_temp.riga(pg_temp.o8())));
 end $$;
@@ -1046,6 +1176,9 @@ begin
     and exists (
       select 1 from public.order_events e
       where e.order_id = pg_temp.o1() and e.tipo = 'shipping_preparation_confirmed'
+        -- WP6B: il payload dichiara ENTRAMBE le prove, perche entrambe hanno
+        -- concorso alla conferma.
+        and e.payload ->> 'has_inner_evidence' = 'true'
         and e.payload ->> 'has_final_evidence' = 'true'
         and e.payload ->> 'voci_checklist' = '6'),
     format('conferme %s / payload %s', v_conferme, v_payload));

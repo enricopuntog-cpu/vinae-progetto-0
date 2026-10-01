@@ -867,6 +867,186 @@ valore virgolettato `search_path=""` — l'idioma già documentato in
 prima è `not null default 0` dalla 7c e la seconda è generata. L'invariante vero
 — la conferma non muove quelle colonne — è ciò che il caso misura adesso.
 
+## Instradamento logistico della Beta e contratto corriere (1 ottobre 2026)
+
+WP6B, migrazione `20260930170000_logistics_beta_routing.sql` e strato
+provider-neutral in `frontend-next`. WP6A aveva dato l'economia; qui si decide
+**chi porta il pacco e per quale tratta**, e si scrive il contratto del corriere
+senza implementarne nessuno. Le decisioni che seguono sono durevoli: valgono
+oltre la Beta e vanno riaperte esplicitamente, non erose da una feature.
+
+**1 — Né l'acquirente né il venditore scelgono il corriere.** Non esiste un
+selettore di vettore in nessuna superficie, e non deve comparirne uno. Il
+venditore sceglie una cosa sola, la modalità di consegna del pacco alla rete
+(`dropoff_pudo` o `ritiro_domicilio`); l'acquirente sceglie il punto di ritiro
+di destinazione. Il vettore non è una preferenza dell'utente: è il risultato di
+un vincolo di copertura e di un listino.
+
+**2 — È Vinea ad assegnare `provider_code` e `service_code`.** L'assegnazione è
+di `private.logistics_service_assegna`, che sceglie fra i servizi compatibili
+con la capability **esatta** della rotta. Nessuna capability è implicita e
+nessuna è derivata: un servizio che copre `PUDO_TO_PUDO` non copre
+`HOME_TO_PUDO` finché qualcuno non lo dichiara in
+`private.logistics_service_capabilities`.
+
+**3 — Le capability sono dati di configurazione, mai un ramo di codice.**
+Provider e servizi sono stringhe opache versionate; la griglia di copertura è
+una tabella. Un `if providerCode === "<nome corriere>"`, ovunque, sposterebbe
+nel codice una decisione commerciale che oggi cambia senza rilascio e senza
+migrazione — e i nomi commerciali sono esattamente ciò che cambia più spesso.
+Per questo nel codice TypeScript non compare nessun corriere per nome, e i test
+lo verificano sui sorgenti.
+
+**4 — In Beta la destinazione è sempre un punto di ritiro.** `PUDO_TO_HOME` e
+`HOME_TO_HOME` esistono come etichette nel `check` della migrazione perché la
+griglia è generica, ma sono fuori perimetro: nessun servizio le dichiara e il
+tipo `ShippingCapability` lato TypeScript ammette solo `pudo_to_pudo` e
+`home_to_pudo`, così che nessuno ne scriva il ramo prima che la decisione sia
+presa.
+
+**5 — La messaggistica non è un atto logistico.** Un accordo preso in chat non
+cambia la rotta. Nessun percorso di messaggistica scrive
+`private.logistics_shipment_plans`, e il trigger
+`logistics_shipment_plans_rotta_congelata` lega anche gli scrittori che oggi non
+esistono: una porta è una promessa, un trigger è un vincolo.
+
+**6 — Le prove fotografiche sono due e sono entrambe obbligatorie.**
+`interno_pre_chiusura` (imballaggio ancora aperto) e `collo_finale` (pacco
+chiuso), entrambe **correnti**. La 7c/WP3 ne chiedeva una sola e trattava
+l'altra come facoltativa: quella asimmetria rendeva indimostrabile la
+contestazione sul contenuto, che è il caso che conta. Il cancello è
+`private.ordine_spedizione_pronta`, che ora somma preparazione confermata,
+checklist canonica completa, entrambe le prove correnti, pagamento incassato
+**e** rotta pronta.
+
+**7 — Le prove si congelano alla conferma della preparazione, la rotta più
+tardi.** Due confini deliberatamente diversi: le prove non si correggono dopo
+`preparazione_confermata_at` se non con una riapertura strutturale, mentre la
+rotta resta modificabile finché `private.logistics_label_ready` non diventa
+vera. La prova documenta un istante e non va rifatta a posteriori; la rotta è
+una scelta finché non è stata consegnata a qualcuno.
+
+**8 — `private.logistics_label_ready(order_id)` è l'autorità, e non ha copie.**
+È il cancello WP3 esteso alla rotta, non un secondo cancello parallelo. Il
+TypeScript **non** lo riscrive e non ne deduce il verdetto: l'orchestratore
+riceve una porta (`LetturaProntezza`) che interroga quella funzione lato server
+ed è fail-closed su tre esiti — no, guasto della porta ed eccezione fermano
+tutti e tre la chiamata al fornitore, ma solo «no» è un rifiuto e gli altri due
+sono un guasto da segnalare. Un cancello duplicato in TypeScript sarebbe un
+cancello che diverge.
+
+**9 — `ShipmentProvider` è distinto da `PackagingProvider`, e resterà tale.** Il
+corriere e il fornitore dell'imballaggio sono due domini, due cataloghi, due
+cicli di vita; `public.packaging_options` resta il dominio 7c, non rinominato e
+non riconvertito. Un nome unico li avrebbe fatti collassare alla prima
+implementazione reale. Il contratto ha nove metodi (punti di destinazione e di
+origine, preventivo, creazione, etichetta, annullamento, tracciamento, webhook
+di tracciamento, prova di consegna) e vive in
+`frontend-next/src/services/types.ts` con gli altri contratti di servizio.
+
+**10 — L'unico adattatore che esiste è finto, e non è raggiungibile dal
+prodotto.** `createFakeShipmentProvider` non fa rete: nessun `fetch`, nessuna
+credenziale, nessun URL risolvibile (usa solo il dominio riservato `.invalid`),
+e i suoi codici sono anonimi (`provider_a`, `service_a`, `network_a`). Nessun
+componente, pagina o servizio lo importa, e un test lo verifica camminando
+l'albero dei sorgenti: un finto corriere raggiungibile dalla UI sarebbe peggio
+di nessun corriere, perché stamperebbe etichette che nessuna rete accetta.
+
+**11 — L'etichetta del fornitore si stampa com'è.** Non si rigenerano codici a
+barre né QR, non si ricompone il layout del corriere. L'unico calcolo ammesso è
+geometrico, in `frontend-next/src/lib/orders/shipping-label.ts`: regola
+`contain` sui due soli fogli previsti — A4 210×297 mm e termica 100×150 mm — con
+fattore di scala mai superiore a 1, proporzioni conservate e spazio residuo
+bianco. Mai `cover`, mai un ritaglio: un codice riscalato in modo anisotropo o
+tagliato al bordo è un codice che il lettore della rete rifiuta, e il PDF
+sembrerà comunque a posto a chi lo guarda.
+
+**12 — Il checkout resta WP7.** WP6B assegna la rotta, congela le prove e
+definisce il contratto; non compra spedizioni, non chiama fornitori e non tocca
+`orders`, `payments`, `payouts` o `balance_*`. Il preventivo entra nel checkout
+in WP7, e prima di allora nessuna porta logistica deve essere chiamata da un
+percorso di pagamento.
+
+**13 — Tre prezzi diversi dell'imballaggio, tre domini separati.** Il costo che
+paghiamo al fornitore del cartone, il contributo di imballaggio che l'acquirente
+versa nella transazione e l'economia della spedizione sono tre numeri distinti,
+e devono poter divergere senza che nessuno li allinei per sbaglio. Vivono in
+tabelle diverse — `private.logistics_packaging_supplier_price_tiers`,
+`private.logistics_packaging_contributions`, le sezioni di listino della rotta —
+e si leggono da finestre admin diverse:
+`public.admin_logistics_supplier_catalogo_leggi` e
+`public.admin_logistics_beta_config_leggi` sono separate di proposito. La
+coincidenza è già qui, ed è il motivo della regola: 369 centesimi sono insieme
+il primo scaglione d'acquisto del cartone da sei e un contributo possibile della
+Beta. Due significati che oggi hanno lo stesso valore sono esattamente il caso
+in cui una riga di codice «semplificatrice» li fonde per sempre. Un margine si
+calcola leggendo i due domini, non facendone uno.
+
+**14 — Il nome del fornitore è un dato, non un ramo del programma.** Il listino
+reale del fornitore di imballaggi della Beta esiste come configurazione
+versionata, raccolta in un unico blocco delimitato in fondo alla migrazione fra
+i marcatori `>>> SEED COMMERCIALE BETA` e `<<< SEED COMMERCIALE BETA`. Fuori da
+quel blocco il codice non conosce nessun nome: il risolutore degli scaglioni
+riceve un codice fornitore come parametro e legge il MOQ dal profilo invece di
+cablare il numero. La regola è la stessa del punto 3, applicata al lato
+acquisto, e la verifica non è una promessa in un commento:
+`frontend-next/src/services/logistics/procurement-guardrails.test.ts` misura i
+sorgenti e distingue il vincolo di forma della colonna
+(`check (supplier_code ~ '^[a-z0-9_]{2,40}$')`, lecito) dal confronto con un
+nome commerciale (un ramo, vietato).
+
+**15 — I metadati d'acquisto non entrano in nessuna decisione di rotta.**
+Palletizzazione, unità per pallet, altezza del pallet misto, scorta pianificata,
+soglia e quantità di riordino, MOQ: sono condizioni d'acquisto, e non devono
+influenzare compatibilità del vettore, graduatoria delle rotte, assegnazione di
+provider/servizio, filtro dei punti di ritiro, prontezza della spedizione o
+producibilità dell'etichetta. Il confine è strutturale — tabelle private con RLS
+attiva, nessun privilegio a `public`/`anon`/`authenticated`, accesso solo
+tramite porte admin `security definer` con `search_path` vuoto — e in più è
+misurato: nessuna delle quarantatré funzioni di dominio che non sono del
+fornitore nomina quel vocabolario, e la griglia 12p verifica a runtime che
+versionare il listino non muova la firma delle rotte.
+
+**16 — Ciò che non abbiamo misurato resta vuoto.** Il peso prudenziale del collo
+pieno non esiste come colonna del dominio d'acquisto: dipende dal vino, non dal
+cartone, e una stima inventata diventerebbe un dato operativo. Soglia e quantità
+di riordino sono colonne senza `default`, inizializzate a `NULL`, perché la
+decisione non è stata presa. La scorta **pianificata**
+(`planned_initial_stock_min`/`_max`) è distinta dalla giacenza reale di WP6A:
+non valorizza `available_quantity` né `reserved_quantity`, che restano a zero
+finché un carico vero non le muove. L'articolo da dodici bottiglie è registrato
+come prodotto del fornitore ma è `inactive_beta`, senza palletizzazione, senza
+scorta e senza scaglioni: esiste nel listino, non nel perimetro Beta.
+L'altezza massima del pallet misto, 2400 mm, è un vincolo dichiarato dal
+fornitore, non una composizione validata: WP6B non compone pallet. WP6A resta
+**CLOSED**: la sua migrazione non è stata riaperta e
+`private.logistics_packaging_skus` non è stata ricostruita — il formato dei suoi
+`sku` (`^[a-z0-9_]{2,40}$`) e quello degli SKU del fornitore
+(`^[A-Z0-9][A-Z0-9-]{1,39}$`) sono incompatibili per costruzione, e questo è il
+confine fra un codice d'acquisto e un codice operativo, non un attrito da
+smussare.
+
+**17 — Il prezzo si legge a una data, e la data è l'inizio della transazione.**
+Ogni lettore versionato della logistica — listino, override del pack, capability,
+reti — filtra `effective_from <= p_now` con `p_now` che vale `now()` per
+default, cioè l'istante d'inizio della transazione. È ciò che rende rileggibile
+il prezzo di un preventivo già emesso: si ripassa l'istante di allora e si
+ottiene lo stesso numero. Le porte di versionamento, invece, timbrano il taglio
+con `private.logistics_versione_istante`, che usa `clock_timestamp()` perché due
+versionamenti nella stessa transazione devono produrre due istanti distinti.
+I due fatti insieme hanno una conseguenza che va saputa in anticipo: **dentro
+una sola transazione, una riga appena scritta da una porta nasce qualche
+microsecondo nel futuro e non si applica alle letture di quella transazione.**
+In produzione non si vede, perché ogni richiesta PostgREST è una transazione
+nuova; si vede nelle griglie SQL, che girano tutte in un unico `begin`/`rollback`.
+Per questo le fixture della 12o e della 12p nascono a `now() - interval '1 hour'`,
+e per questo i casi che devono passare dalla porta di versionamento rileggono
+il motore a `clock_timestamp()`. La correzione sta nella griglia, mai nel motore:
+portare il lettore a `clock_timestamp()` farebbe passare i test e renderebbe
+irriproducibile ogni prezzo storico. Il caso 106 della 12p asserisce entrambi i
+lati — l'override vale all'istante in cui è efficace e non vale a `now()` —
+proprio perché nessuno lo «aggiusti» una terza volta.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):

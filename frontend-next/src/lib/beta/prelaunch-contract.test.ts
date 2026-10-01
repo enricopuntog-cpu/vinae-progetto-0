@@ -187,7 +187,7 @@ describe("contratto di pre-lancio beta", () => {
   });
 
   it("allinea MIN_TESTS al conteggio della suite estesa", () => {
-    expect(leggi("../.github/workflows/ci.yml")).toInclude('MIN_TESTS: "2131"');
+    expect(leggi("../.github/workflows/ci.yml")).toInclude('MIN_TESTS: "2181"');
   });
 
   // Lo script si prova da solo in `protected-paths-guard.test.sh`; qui si prova

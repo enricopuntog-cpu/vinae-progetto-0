@@ -93,7 +93,6 @@ export default function OrdineDetailPageClient({ orderId }: { orderId: string })
               inCorso={o.inCorso}
               onPrepara={o.preparaSpedizione}
               onRegistraProva={o.registraProvaSpedizione}
-              onSpedisci={o.segnaSpedito}
             />
           )}
 
