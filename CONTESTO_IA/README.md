@@ -47,6 +47,25 @@ Aprire soltanto ciò che serve al task:
   `public.packaging_options` che resta il dominio 7c, una sola autorità sull'8%
   con la commissione come componente separata, rotte generiche `pudo`/`domicilio`
   e preventivo immutabile — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`.
+- L'instradamento logistico della Beta — né acquirente né venditore scelgono il
+  corriere, Vinea assegna provider e servizio, capability come dati e mai come
+  ramo, destinazione sempre a punto di ritiro, messaggistica non autorevole,
+  due prove obbligatorie congelate alla conferma,
+  `private.logistics_label_ready` come unica autorità, `ShipmentProvider`
+  distinto da `PackagingProvider`, adattatore solo finto, etichetta del
+  fornitore stampata com'è e checkout rinviato a WP7 — è in
+  `03_ARCHITETTURA_REGOLE_DEBITI.md`. Lì c'è anche la lettura del prezzo «a una
+  data» e la trappola che ne deriva nelle griglie SQL, dove una riga appena
+  versionata non si applica alla transazione che l'ha scritta: da leggere prima
+  di toccare un lettore versionato o un caso di griglia che passa da una porta
+  di versionamento.
+- L'approvvigionamento dell'imballaggio — tre prezzi diversi in tre domini
+  separati (costo d'acquisto, contributo della transazione, economia della
+  spedizione), nome del fornitore come dato in un unico blocco di seme e mai
+  come ramo, metadati d'acquisto (pallet, MOQ, scorta pianificata, riordino)
+  fuori da ogni decisione di rotta, scorta pianificata distinta dalla giacenza
+  reale e nessuna stima inventata dove il dato manca — è in
+  `03_ARCHITETTURA_REGOLE_DEBITI.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono
