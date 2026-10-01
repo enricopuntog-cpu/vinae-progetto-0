@@ -2178,15 +2178,31 @@ end $$;
 -- Il prezzo di catalogo e l'eccezione dichiarata: vince sul motore, ma il
 -- valore di regola resta leggibile accanto, perche una eccezione senza termine
 -- di paragone non si sa piu perche esiste.
+--
+-- La porta timbra il taglio con `clock_timestamp()`, perche due versionamenti
+-- nella stessa transazione devono restare distinti; il motore confronta
+-- `effective_from <= p_now` e `p_now` vale `now()`, cioe l'inizio della
+-- transazione. Dentro una sola transazione un override appena scritto e quindi
+-- ancora nel futuro di qualche microsecondo, e si legge all'istante di
+-- orologio: in produzione ogni richiesta e una transazione nuova e il caso non
+-- esiste. E la stessa ragione per cui ogni fixture qui sopra nasce a
+-- `now() - 1 hour`.
+--
+-- Le ultime due asserzioni tengono fermo il lato as-of: letto a `now()`
+-- l'override non si applica ancora e il prezzo resta quello di regola. Non e
+-- un difetto da «aggiustare» portando il motore a `clock_timestamp()`, che
+-- renderebbe irriproducibile il prezzo storico di un preventivo gia emesso.
 do $$
-declare v_porta jsonb; v jsonb;
+declare v_porta jsonb; v jsonb; v_adesso jsonb;
 begin
   v_porta := pg_temp.val(pg_temp.u(1), 'authenticated',
     'select public.admin_logistics_pack_override_versiona(''{'
     '"packCode":"pack_12p",'
     '"composizione":[{"formato":"bottiglia_1","quantita":6}],'
     '"priceCents":1450,"status":"active","note":"Griglia 12p"}''::jsonb)::text')::jsonb;
-  v := pg_temp.val(pg_temp.u(1), 'authenticated',
+  v := private.logistics_pack_prezzo('pack_12p',
+    '[{"formato":"bottiglia_1","quantita":6}]'::jsonb, clock_timestamp());
+  v_adesso := pg_temp.val(pg_temp.u(1), 'authenticated',
     'select public.admin_logistics_pack_prezzo_simula(''pack_12p'', '
     '''[{"formato":"bottiglia_1","quantita":6}]''::jsonb)::text')::jsonb;
   perform pg_temp.registra(106,
@@ -2195,12 +2211,19 @@ begin
       and (v ->> 'overrideApplied') = 'true'
       and (v ->> 'priceCents') = '1450'
       and (v ->> 'ruleCents') = '1500'
-      and (v ->> 'overrideId') = (v_porta ->> 'id'),
-    v_porta::text || ' / ' || v::text);
+      and (v ->> 'overrideId') = (v_porta ->> 'id')
+      and (v_adesso ->> 'overrideApplied') = 'false'
+      and (v_adesso ->> 'priceCents') = '1500',
+    v_porta::text || ' / ' || v::text || ' / as-of now(): ' || v_adesso::text);
 end $$;
 
 -- Un override in preparazione e un lavoro in corso, non un prezzo: versionarlo
 -- chiude il precedente e il motore torna alla regola.
+--
+-- Anche qui la lettura e all'istante di orologio, e non per comodita: a `now()`
+-- nessun override appena scritto si applica, quindi il caso passerebbe anche
+-- se il motore ignorasse del tutto `status`. Letto quando la riga e davvero
+-- efficace, «non attivo non si applica» torna a essere una misura.
 do $$
 declare v jsonb; v_righe text;
 begin
@@ -2209,9 +2232,8 @@ begin
     '"packCode":"pack_12p",'
     '"composizione":[{"formato":"bottiglia_1","quantita":6}],'
     '"priceCents":1450}''::jsonb)::text');
-  v := pg_temp.val(pg_temp.u(1), 'authenticated',
-    'select public.admin_logistics_pack_prezzo_simula(''pack_12p'', '
-    '''[{"formato":"bottiglia_1","quantita":6}]''::jsonb)::text')::jsonb;
+  v := private.logistics_pack_prezzo('pack_12p',
+    '[{"formato":"bottiglia_1","quantita":6}]'::jsonb, clock_timestamp());
   select count(*)::text into v_righe
   from private.logistics_pack_price_overrides
   where pack_code = 'pack_12p' and effective_to is null;
@@ -2232,9 +2254,9 @@ begin
     '"packCode":"pack_12p",'
     '"composizione":[{"formato":"bottiglia_1","quantita":2},{"formato":"bottiglia_1","quantita":4}],'
     '"priceCents":1300,"status":"active"}''::jsonb)::text');
-  v := pg_temp.val(pg_temp.u(1), 'authenticated',
-    'select public.admin_logistics_pack_prezzo_simula(''pack_12p'', '
-    '''[{"formato":"bottiglia_1","quantita":6}]''::jsonb)::text')::jsonb;
+  -- Letto all'istante di orologio, per la ragione spiegata al caso 106.
+  v := private.logistics_pack_prezzo('pack_12p',
+    '[{"formato":"bottiglia_1","quantita":6}]'::jsonb, clock_timestamp());
   perform pg_temp.registra(108,
     'Un override scritto in disordine si aggancia alla stessa firma e vale per la composizione canonica',
     (v ->> 'overrideApplied') = 'true' and (v ->> 'priceCents') = '1300', v::text);
