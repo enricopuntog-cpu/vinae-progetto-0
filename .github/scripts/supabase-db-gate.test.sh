@@ -82,6 +82,7 @@ check "scope: griglia 12l logistica annuncio pertinente" true "$(scope_for supab
 check "scope: griglia 12m prove di spedizione pertinente" true "$(scope_for supabase/tests/12m_shipping_evidence_gate.sql)"
 check "scope: griglia 12o fondazione economica logistica pertinente" true "$(scope_for supabase/tests/12o_logistics_economic_foundation.sql)"
 check "scope: griglia 12p instradamento logistico pertinente" true "$(scope_for supabase/tests/12p_logistics_beta_routing.sql)"
+check "scope: griglia 12q configurazione commerciale pertinente" true "$(scope_for supabase/tests/12q_logistics_beta_commercial_config.sql)"
 check "scope: griglia 7c consegna e imballaggio pertinente" true "$(scope_for supabase/tests/7c_consegna_imballaggio.sql)"
 check "scope: config Supabase pertinente" true "$(scope_for supabase/config.toml)"
 check "scope: README saltato" false "$(scope_for README.md)"

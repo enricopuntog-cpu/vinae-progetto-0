@@ -241,6 +241,16 @@ run_grid "12o fondazione economica della logistica" 12o_logistics_economic_found
 # pronta, che e la regressione che la 12m e la 7c non vedrebbero da sole.
 # Transazione e guard identici, sempre prima delle fixture 12g.
 run_grid "12p instradamento logistico della Beta" 12p_logistics_beta_routing.sql 3
+# Configurazione commerciale della Beta WP6C: capability approvate, venti
+# tariffe Umbria Hub con arrotondamento HALF-UP unico e nessuna seconda IVA,
+# contributi di imballaggio, soglia di unit economics, catalogo e prezzi del
+# Vinea Pack. La prova che conta non e che i dati siano caricati: e che con i
+# dati caricati il motore continui a non assegnare nessuna rotta, perche
+# mancano reti, punti e limiti reali. Prova anche che il buffer di WP6A resta a
+# zero, che la commissione dell'8% e intatta e che il listino del fornitore non
+# e stato sovrascritto dai contributi. Sola lettura, ma transazione e guard
+# identici alle altre, sempre prima delle fixture 12g.
+run_grid "12q configurazione commerciale della Beta" 12q_logistics_beta_commercial_config.sql 3
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
