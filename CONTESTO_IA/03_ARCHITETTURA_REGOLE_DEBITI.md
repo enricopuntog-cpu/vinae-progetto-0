@@ -1047,6 +1047,117 @@ irriproducibile ogni prezzo storico. Il caso 106 della 12p asserisce entrambi i
 lati — l'override vale all'istante in cui è efficace e non vale a `now()` —
 proprio perché nessuno lo «aggiusti» una terza volta.
 
+## Configurazione commerciale della Beta (1 ottobre 2026)
+
+Migrazione `20261001150000_logistics_beta_commercial_config.sql` (WP6C), di soli
+dati: nessuna DDL, nessuna funzione, nessuna porta. Carica come configurazione
+versionata i dati commerciali già approvati dal titolare del prodotto —
+capability per provider, venti tariffe finali Umbria Hub, cinque contributi di
+imballaggio, soglia di unit economics, catalogo e prezzi del Vinea Pack — che
+fino a quel momento risultavano vuoti.
+
+**Configurazione commerciale conosciuta non è rotta percorribile.** È la frase
+che questo lavoro mette per scritto, perché è l'unico punto in cui il dominio
+può rompersi in modo persuasivo: un database pieno di capability approvate e di
+tariffe reali *sembra* pronto. Non lo è, e la distanza fra le due cose è
+deliberata. Capability e listino sono il **dato commerciale**: che cosa è stato
+negoziato, a quale prezzo, per quale rotta. Reti PUDO, rubrica dei punti,
+limiti operativi di peso e dimensione e conferma operativa su vetro e
+responsabilità sono il **dato operativo**: se quella rotta si può davvero
+percorrere oggi. Il secondo insieme non si deduce dal primo, e **nessuna delle
+due metà va completata per somiglianza con l'altra.**
+
+Il fail-closed resta percio chiuso da **cinque lucchetti indipendenti**, e
+servono tutti e cinque aperti per assegnare un servizio: i cinque limiti
+operativi sono `NULL`; `operational_eligibility` è `false`; `active` è `false`;
+le tariffe commerciali sono in `preactivation` e non `active`; non esiste
+nessuna rete PUDO né nessun punto di ritiro. Sono lucchetti diversi di
+proposito: ognuno corrisponde a una cosa diversa che manca, e aprirne uno per
+sbaglio non apre la porta. `eligibility_note` dice per iscritto, servizio per
+servizio, che cosa manca — così chi leggerà la tabella fra sei mesi saprà che
+la bozza è voluta e saprà che cosa serve per chiuderla.
+
+Un limite assente **non** significa «illimitato»: significa che il motore
+esclude. È la ragione per cui non è stata scritta nessuna riga in
+`private.logistics_shipping_rates`, che esige `max_weight_g not null check (> 0)`:
+la fascia di peso reale non la conosciamo, e inventarne una plausibile avrebbe
+prodotto una rotta verde al prezzo del fail-closed. Il dato commerciale vive in
+`logistics_commercial_rate_sources`, che non ha quel vincolo perché descrive un
+prezzo e non una fascia operativa; la tariffa operativa si attiverà quando i
+parametri saranno reali.
+
+I prezzi Umbria Hub sono **finali e lordi**: l'IVA è dentro.
+`source_gross_micros` conserva il valore esatto, frazione sotto il centesimo
+compresa (5,9405 — 7,96027 — 11,28695 — 6,29693), e `billable_cents` è
+l'arrotondamento HALF-UP applicato **una sola volta**, verificato dal CHECK
+`logistics_commercial_rate_sources_arrotondamento`, che ricalcola il fatturabile
+con `private.logistics_micros_to_cents` e rifiuta la riga se divergono: è il
+database a verificare le venti conversioni, non l'autore della migrazione. Il
+rischio concreto è la **seconda IVA**, e non somiglierebbe a un difetto:
+`logistics_shipping_rates.vat_bps` ha `default 2200`, quindi materializzare una
+di queste tariffe senza azzerare esplicitamente IVA e fuel porterebbe InPost
+formato 1 da 415 a 506 centesimi, con l'aria di essere giusto.
+
+Due coincidenze di cifre che non sono fusioni di dominio, entrambe presidiate da
+un caso di griglia. La prima: 369 centesimi è il contributo di imballaggio del
+formato da **due** bottiglie **e** il primo scaglione del cartone da **sei** nel
+listino Vigoroso. Il contributo del cartone da sei vale 609, non 369, ed è la
+prova che i due domini non si sono fusi — il costo d'acquisto del fornitore non
+è il contributo della transazione. La seconda: il 5% di buffer del Vinea Pack
+somiglia a un buffer di preventivo, ma `private.logistics_quote_config` di WP6A
+resta `buffer_bps = 0` e `buffer_fixed_cents = 0`; portarlo lì per somiglianza
+rincarerebbe ogni preventivo logistico del marketplace. La commissione di
+marketplace (800 bps) resta un'altra autorità e resta **sempre esclusa**
+dall'unit economics, che è una guardia osservabile e non un rifiuto: riferisce,
+non blocca.
+
+La soglia di 1500 centesimi IVA inclusa è percio target e report. Dai dati
+configurati emergono, senza che nessun numero sia scritto come costante:
+InPost `PUDO_TO_PUDO` 734/791/801/1031/931 e il fallback SDA
+832/1011/1021/1259/1022, tutti sotto soglia; e le deduzioni del ritiro a
+domicilio 179/199/199/411/199, che sono la differenza fra il minimo
+`HOME_TO_PUDO` e il minimo `PUDO_TO_PUDO` dello stesso formato — quanto costa in
+più non portare il collo al punto. Quei valori **discendono dalla
+configurazione** e cambiano con essa; la griglia li deriva dal listino proprio
+per provarlo.
+
+Il formato da 12 bottiglie non è Standard Beta: non ha tariffa, non ha
+contributo, non compare fra i formati ammessi e il suo articolo fornitore resta
+`inactive_beta`. L'assenza è la forma corretta della decisione. Allo stesso
+modo non sono state create reti PUDO finte, punti di ritiro finti, coordinate,
+mappe o chiamate a API di provider: **reti e punti reali restano dati futuri del
+provider**, con una scadenza, e una copia inventata manderebbe un venditore
+davanti a una saracinesca chiusa con un'etichetta già pagata.
+
+La griglia `supabase/tests/12q_logistics_beta_commercial_config.sql` (32 casi,
+sola lettura in `begin`/`rollback`) misura tutto questo, e porta un **secondo
+guard** oltre a quello sugli utenti Auth reali: si ferma se la configurazione
+WP6C è assente. Metà dei suoi casi afferma assenze — zero reti, zero punti,
+zero rotte, zero tariffe a 12 bottiglie — e un'assenza passa anche su un
+database dove la migrazione non è mai girata; senza quel guard la griglia
+stamperebbe trenta PASS vuoti. Il caso centrale chiede al motore una rotta per
+tutte e dieci le combinazioni commerciali configurate, con un collo di 500 g e
+10×10×10 cm che nessun limite reale escluderebbe, e verifica che non ne arrivi
+nessuna: l'esclusione non può essere confusa con un pacco fuori misura.
+
+Per lo stesso motivo la `12p` è salita da 165 a 166 casi. I suoi casi 16, 17 e
+153 pinnavano la **premessa** «le migrazioni non seminano servizi, tariffe né
+contributi», che il prodotto ha deliberatamente cambiato; la **conclusione** che
+deve sopravvivere — nessuna rotta è assegnabile — è invariata, e il nuovo caso
+166 la asserisce direttamente. È un test bug, non un difetto di dominio: una
+griglia che pinna una premessa invece della conclusione fallisce il giorno in
+cui il prodotto avanza come previsto. Gli id si aggiungono in coda perché
+`esiti_12p.id` è una chiave primaria e rinumerare centosessanta casi renderebbe
+illeggibile ogni diff futuro.
+
+Entrambe le griglie sono state **eseguite davvero** il 2 ottobre 2026 dal gate
+`Supabase DB regression` sullo stack effimero della PR #178: `12q` 32/32 e `12p`
+166/166, con 12l 48/48, 12m 62/62, 12n 50/50, 12o 78/78, 7c 22/22, 12g 177
+controlli E2E e residui 0. Nello stesso giro il check `Supabase Preview` ha
+applicato la migrazione a un branch Preview (progetto `qsknroyjzempizibcywa`,
+non la produzione), che è una seconda prova indipendente che il file si applica
+su un database vuoto e non solo su quello costruito dal gate.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):
@@ -1343,8 +1454,8 @@ da [`.github/scripts/supabase-db-gate-scope.sh`](../.github/scripts/supabase-db-
 sul diff `HEAD^1..HEAD`. Sono pertinenti:
 
 - `supabase/migrations/**`, `supabase/config.toml` e `supabase/seed.sql`;
-- `supabase/tests/12e_*`, `12f_*`, `12g_*`, `12h_*`, `12i_*`, `12j_*`, `12k_*`,
-  `12l_*`, `12m_*` e `12n_*`;
+- `supabase/tests/7c_*`, `12e_*`, `12f_*`, `12g_*`, `12h_*`, `12i_*`, `12j_*`,
+  `12k_*`, `12l_*`, `12m_*`, `12n_*`, `12o_*`, `12p_*` e `12q_*`;
 - il workflow e lo script di scope stessi.
 
 Per il resto il gate produce uno skip dichiarato (notice e job summary), non un

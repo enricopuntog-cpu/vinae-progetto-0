@@ -374,11 +374,34 @@ insert into private.logistics_pickup_points (
    45.075000, 7.691000, true, now() - interval '1 hour', null);
 
 -- Contributi di imballaggio e soglia di unit economics.
+--
+-- WP6C semina i cinque contributi Beta approvati e la soglia di 1500, ed
+-- entrambe le tabelle hanno un indice di unicita sulla riga CORRENTE. Questa
+-- griglia deve poter stabilire il proprio mondo — due soli formati con un
+-- contributo e una soglia di 900, scelta bassa di proposito per poter vedere
+-- uno sforamento — quindi chiude le versioni correnti prima di installare le
+-- proprie, con lo stesso motivo e lo stesso istante usati piu sotto per la
+-- configurazione di prezzo del pack. La traccia storica resta: le righe di
+-- WP6C non vengono cancellate, vengono versionate.
+update private.logistics_packaging_contributions
+   set effective_to = greatest(
+         effective_from + interval '1 microsecond',
+         now() - interval '1 hour'
+       )
+ where effective_to is null;
+
 insert into private.logistics_packaging_contributions (
   id, packaging_format, contribution_cents, status, effective_from
 ) values
   ('70000000-0000-4000-8000-000000001001', 'bottiglia_1', 200, 'test', now() - interval '1 hour'),
   ('70000000-0000-4000-8000-000000001002', 'bottiglia_2', 300, 'test', now() - interval '1 hour');
+
+update private.logistics_unit_economics_config
+   set effective_to = greatest(
+         effective_from + interval '1 microsecond',
+         now() - interval '1 hour'
+       )
+ where effective_to is null;
 
 insert into private.logistics_unit_economics_config (
   id, target_cents, active, note, effective_from
@@ -985,17 +1008,64 @@ begin
     v = '23514', v);
 end $$;
 
--- Le tre prove che la beta nasce fail closed: senza dati commerciali caricati
--- dall'admin, il motore non ha nulla da assegnare.
+-- Le tre prove che la beta resta fail closed.
+--
+-- WP6B non seminava nessun servizio e questi casi lo misuravano contando zero
+-- righe. WP6C semina i tre servizi commerciali della Beta, quindi la premessa
+-- «non c'e niente» non e piu vera — ma la CONCLUSIONE che questi casi
+-- proteggono non e cambiata di una virgola: nessuna rotta e percorribile. Ora
+-- la si misura dove vive davvero, cioe sul motore, invece di dedurla
+-- dall'assenza di configurazione. E una prova piu forte della precedente:
+-- prima bastava che la tabella fosse vuota, ora i servizi esistono con le loro
+-- capability e le loro tariffe e il motore deve comunque escluderli tutti.
 do $$
 declare v text;
 begin
-  select count(*)::text into v
+  select count(*)::text || '|'
+      || count(*) filter (
+           where max_weight_g is null and max_length_mm is null
+             and max_width_mm is null and max_height_mm is null
+             and max_volume_cm3 is null)::text || '|'
+      || count(*) filter (where not operational_eligibility)::text || '|'
+      || count(*) filter (where not active)::text
+    into v
   from private.logistics_service_definitions
-  where id::text not like '70000000-%';
+  where id::text not like '70000000-%' and effective_to is null;
   perform pg_temp.registra(16,
-    'La migrazione non semina nessun servizio: la beta nasce senza rotte',
-    v = '0', 'servizi non-fixture: ' || v);
+    'I tre servizi commerciali di WP6C esistono e sono tutti fail closed su limiti, idoneita e attivazione: 3|3|3|3',
+    v = '3|3|3|3', 'servizi|senza_limiti|non_idonei|non_attivi = ' || v);
+end $$;
+
+-- La prova che conta: con capability dichiarate e tariffe caricate, il motore
+-- non restituisce nessuno dei tre servizi di WP6C per le proprie rotte. Il
+-- collo passato e volutamente piccolo, cosi l'esclusione non puo essere
+-- scambiata per un collo fuori misura.
+do $$
+declare v text; v_tot integer := 0; r record;
+begin
+  for r in
+    select * from (values
+      ('PUDO_TO_PUDO', 'bottiglia_1'), ('PUDO_TO_PUDO', 'bottiglia_2'),
+      ('PUDO_TO_PUDO', 'bottiglia_3'), ('PUDO_TO_PUDO', 'bottiglia_6'),
+      ('PUDO_TO_PUDO', 'magnum_1_5l'), ('HOME_TO_PUDO', 'bottiglia_1'),
+      ('HOME_TO_PUDO', 'bottiglia_2'), ('HOME_TO_PUDO', 'bottiglia_3'),
+      ('HOME_TO_PUDO', 'bottiglia_6'), ('HOME_TO_PUDO', 'magnum_1_5l')
+    ) as t (capability, formato)
+  loop
+    select v_tot + count(*) into v_tot
+    from private.logistics_service_compatibili(
+      r.capability, r.formato, null, 500, 100, 100, 100, 1000
+    ) c
+    where c.provider_code in ('inpost', 'sda', 'brt');
+  end loop;
+  v := v_tot::text;
+  -- Id 166 e non 17-bis: gli identificativi sono la chiave primaria della
+  -- tabella degli esiti e si aggiungono in coda, perche rinumerare centosessanta
+  -- casi per inserirne uno renderebbe illeggibile ogni diff futuro. Il caso
+  -- viene eseguito qui, dove lo stato e ancora quello della sola migrazione.
+  perform pg_temp.registra(166,
+    'Nessuna delle dieci rotte commerciali di WP6C e percorribile: il motore ne esclude tutti i servizi',
+    v = '0', 'servizi compatibili sulle dieci combinazioni: ' || v);
 end $$;
 
 do $$
@@ -1007,8 +1077,8 @@ begin
       || '|' || (select count(*) from private.logistics_pack_catalog where id::text not like '70000000-%')::text
     into v;
   perform pg_temp.registra(17,
-    'La migrazione non semina reti, punti, tariffe ne pack: reti|punti|tariffe|pack = 0|0|0|0',
-    v = '0|0|0|0', v);
+    'Le migrazioni seminano tariffe e pack ma nessuna rete e nessun punto: reti|punti|tariffe|pack = 0|0|20|4',
+    v = '0|0|20|4', v);
 end $$;
 
 -- L'unica cosa che la migrazione semina davvero e la configurazione di prezzo
@@ -3196,33 +3266,49 @@ begin
 end $$;
 
 -- Il costo d'acquisto non e il contributo di imballaggio della transazione.
--- 369 centesimi e il primo scaglione del cartone da sei E un contributo della
--- Beta: due numeri che oggi coincidono e significano cose diverse. Il seme
--- dell'approvvigionamento non ha scritto nulla nella Sezione N, che qui porta
--- ancora i soli due contributi della fixture.
+-- 369 centesimi e il primo scaglione del cartone da sei E il contributo Beta
+-- del formato da DUE bottiglie: due numeri che coincidono e significano cose
+-- diverse.
+--
+-- Finche WP6C non esisteva, la prova era che nessuna riga della Sezione N
+-- portasse uno dei cinque numeri commerciali — il seme del fornitore non
+-- aveva scritto la. Ora quei cinque numeri sono legittimamente in Sezione N,
+-- perche sono i contributi approvati, e contarli non misura piu niente. La
+-- prova corretta e piu stretta: se i due domini si fossero fusi, il contributo
+-- del cartone da SEI sarebbe 369 come il suo scaglione. Vale invece 609, e il
+-- 369 sta sul formato da due. Una coincidenza di cifre, non una fusione.
 do $$
-declare v_contr integer; v_righe text; v_sovrapposti integer; v_tier integer;
+declare
+  v_contr integer; v_righe text; v_tier integer;
+  v_c6 integer; v_c2 integer;
 begin
   select count(*) into v_contr
   from private.logistics_packaging_contributions where effective_to is null;
   select string_agg(packaging_format || '=' || contribution_cents::text,
     ',' order by packaging_format) into v_righe
   from private.logistics_packaging_contributions where effective_to is null;
-  select count(*) into v_sovrapposti
-  from private.logistics_packaging_contributions
-  where contribution_cents in (319, 369, 379, 609, 509);
   select t.unit_net_cents into v_tier
   from private.logistics_packaging_supplier_price_tiers t
   join private.logistics_packaging_supplier_items i on i.id = t.supplier_item_id
   where i.supplier_sku = 'TRIPLEX06-A' and t.min_quantity = 50
     and t.effective_to is null and i.effective_to is null;
+  -- I contributi approvati di WP6C, chiusi dalla fixture ma non cancellati.
+  select contribution_cents into v_c6
+  from private.logistics_packaging_contributions
+  where packaging_format = 'bottiglia_6' and id::text not like '70000000-%'
+  order by effective_from limit 1;
+  select contribution_cents into v_c2
+  from private.logistics_packaging_contributions
+  where packaging_format = 'bottiglia_2' and id::text not like '70000000-%'
+  order by effective_from limit 1;
   perform pg_temp.registra(153,
     'Il costo d''acquisto del fornitore non ha toccato nessun contributo di imballaggio della transazione',
     v_contr = 2 and v_righe = 'bottiglia_1=200,bottiglia_2=300'
-      and v_sovrapposti = 0 and v_tier = 369,
+      and v_tier = 369 and v_c6 = 609 and v_c2 = 369,
     'contributi=' || v_contr::text || ' righe=' || coalesce(v_righe, 'nessuna')
-      || ' sovrapposti=' || v_sovrapposti::text
-      || ' tier_6=' || coalesce(v_tier::text, 'null'));
+      || ' tier_6=' || coalesce(v_tier::text, 'null')
+      || ' contributo_6=' || coalesce(v_c6::text, 'null')
+      || ' contributo_2=' || coalesce(v_c2::text, 'null'));
 end $$;
 
 do $$

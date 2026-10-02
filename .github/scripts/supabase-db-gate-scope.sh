@@ -2,8 +2,8 @@
 # Decide se il gate DB 12g deve girare per questo commit.
 #
 # Pertinenti: migrazioni, configurazione dello stack locale, seed, griglie
-# 7c e 12e/12f/12g/12h/12i/12j/12k/12l/12m/12n/12o/12p e l'automazione stessa. Il
-# resto produce uno skip dichiarato.
+# 7c e 12e/12f/12g/12h/12i/12j/12k/12l/12m/12n/12o/12p/12q e l'automazione
+# stessa. Il resto produce uno skip dichiarato.
 # Fail-closed: se il diff non e calcolabile il gate gira.
 #
 # Il diff e HEAD^1..HEAD: su pull_request HEAD e il merge commit di prova e il
@@ -21,6 +21,7 @@ is_relevant_path() {
       | supabase/tests/12h_* | supabase/tests/12i_* | supabase/tests/12j_* \
       | supabase/tests/12k_* | supabase/tests/12l_* | supabase/tests/12m_* \
       | supabase/tests/12n_* | supabase/tests/12o_* | supabase/tests/12p_* \
+      | supabase/tests/12q_* \
       | .github/workflows/supabase-db-regression.yml \
       | .github/scripts/supabase-db-gate-scope.sh)
       return 0 ;;
@@ -45,10 +46,10 @@ else
 fi
 
 if [ "$relevant" = "false" ]; then
-  echo "::notice title=Gate 12g saltato::Nessuna migrazione, griglia 7c o 12e/12f/12g/12h/12i/12j/12k/12l/12m/12n/12o/12p o configurazione Supabase modificata."
+  echo "::notice title=Gate 12g saltato::Nessuna migrazione, griglia 7c o 12e/12f/12g/12h/12i/12j/12k/12l/12m/12n/12o/12p/12q o configurazione Supabase modificata."
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     printf '%s\n' "### Gate 12g — SKIP intenzionale" "" \
-      "Nessun percorso pertinente modificato (migrazioni, config Supabase, griglie 7c e 12e/12f/12g/12h/12i/12j/12k/12l/12m/12n/12o/12p, workflow)." \
+      "Nessun percorso pertinente modificato (migrazioni, config Supabase, griglie 7c e 12e/12f/12g/12h/12i/12j/12k/12l/12m/12n/12o/12p/12q, workflow)." \
       >> "$GITHUB_STEP_SUMMARY"
   fi
 fi
