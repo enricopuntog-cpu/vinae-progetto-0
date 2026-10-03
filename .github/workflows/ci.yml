@@ -82,8 +82,20 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # `bun audit` resta un hard gate: il wrapper lo esegue e non ne filtra la
+      # severity. Ammette per nome la sola GHSA-vfj7-8cjw-p6xm su braces 3.0.3
+      # — advisory senza versione corretta pubblicata, raggiungibile solo da
+      # tooling di sviluppo — e fallisce su qualunque altro avviso, su un
+      # intervallo vulnerabile allargato, su una versione installata diversa, se
+      # braces entra nel grafo di runtime o diventa dipendenza diretta, e su
+      # output non interpretabile. I casi della policy girano prima del gate:
+      # una policy rotta non puo' passare per verde.
       - name: Audit dependencies
-        run: bun audit
+        working-directory: .
+        run: |
+          node --check .github/scripts/frontend-next-audit.mjs
+          node --test .github/scripts/frontend-next-audit.test.mjs
+          node .github/scripts/frontend-next-audit.mjs
 
       - name: Lint
         run: bun run lint
