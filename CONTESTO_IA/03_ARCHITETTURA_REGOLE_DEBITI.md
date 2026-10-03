@@ -1158,6 +1158,23 @@ applicato la migrazione a un branch Preview (progetto `qsknroyjzempizibcywa`,
 non la produzione), che è una seconda prova indipendente che il file si applica
 su un database vuoto e non solo su quello costruito dal gate.
 
+La produzione è stata poi **certificata in sola lettura** il 3 ottobre 2026 sul
+progetto `pijnmcllmfgjmgsvtcej`: la migrazione è presente nel ledger e i
+conteggi coincidono con la configurazione attesa — 3 definizioni di servizio, 4
+capability, 20 tariffe commerciali correnti, 0 tariffe operative, 0 reti PUDO, 0
+punti di ritiro, 5 contributi 319/369/379/609/509, target 1500, catalogo pack a
+quattro righe con prezzi 500/1000/1000/1000, spedizione kit 550 in `planning`,
+quattro prezzi di catalogo 1000/2190/3190/5390, buffer di preventivo WP6A 0/0,
+commissione di marketplace 800 bps, Vigoroso con 1 profilo, 6 articoli e 25
+scaglioni, e nessuna riga di actual packaging stock non nulla. Tutti i servizi
+restano `active = false` con `operational_eligibility = false` e nessuna rotta è
+percorribile: **il fail-closed sopravvive al caricamento della configurazione in
+produzione**, che è esattamente ciò che questo lavoro doveva dimostrare. La
+lettura chiude anche l'unico rischio residuo della migrazione: gli otto `insert`
+sono guardati da `not exists` sulla riga corrente, quindi una riga preesistente
+e diversa sarebbe stata saltata in silenzio invece di essere sovrascritta, e
+solo un conteggio reale poteva escluderlo.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):
