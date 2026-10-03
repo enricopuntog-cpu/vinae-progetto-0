@@ -1158,6 +1158,23 @@ applicato la migrazione a un branch Preview (progetto `qsknroyjzempizibcywa`,
 non la produzione), che è una seconda prova indipendente che il file si applica
 su un database vuoto e non solo su quello costruito dal gate.
 
+La produzione è stata poi **certificata in sola lettura** il 3 ottobre 2026 sul
+progetto `pijnmcllmfgjmgsvtcej`: la migrazione è presente nel ledger e i
+conteggi coincidono con la configurazione attesa — 3 definizioni di servizio, 4
+capability, 20 tariffe commerciali correnti, 0 tariffe operative, 0 reti PUDO, 0
+punti di ritiro, 5 contributi 319/369/379/609/509, target 1500, catalogo pack a
+quattro righe con prezzi 500/1000/1000/1000, spedizione kit 550 in `planning`,
+quattro prezzi di catalogo 1000/2190/3190/5390, buffer di preventivo WP6A 0/0,
+commissione di marketplace 800 bps, Vigoroso con 1 profilo, 6 articoli e 25
+scaglioni, e nessuna riga di actual packaging stock non nulla. Tutti i servizi
+restano `active = false` con `operational_eligibility = false` e nessuna rotta è
+percorribile: **il fail-closed sopravvive al caricamento della configurazione in
+produzione**, che è esattamente ciò che questo lavoro doveva dimostrare. La
+lettura chiude anche l'unico rischio residuo della migrazione: gli otto `insert`
+sono guardati da `not exists` sulla riga corrente, quindi una riga preesistente
+e diversa sarebbe stata saltata in silenzio invece di essere sovrascritta, e
+solo un conteggio reale poteva escluderlo.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):
@@ -1402,6 +1419,42 @@ successive possono costruire.
   Il run schedulato `35833711496` del 23 settembre 2026 ha verificato il primo
   ciclo automatico completo con il gate attivo; il ritardo di avvio non modifica
   la cron `17 2 * * *` UTC.
+
+## Eccezione nominativa dell'audit delle dipendenze (3 ottobre 2026)
+
+`bun audit` gira nel solo job `Frontend Next` e prima di lint, typecheck, test e
+build: un avviso nuovo fa cadere il check richiesto senza che la soglia dei test
+venga nemmeno misurata. Il 3 ottobre 2026 GHSA-vfj7-8cjw-p6xm (high, stack
+exhaustion in `braces <= 3.0.3`) ha reso rossa ogni PR verso `main` senza che il
+repository fosse cambiato: albero delle dipendenze identico, stesso job verde il
+giorno prima. L'ultima `braces` pubblicata è la 3.0.3, quindi non esiste
+versione corretta da installare, e né attendere upstream né disattivare l'audit
+erano opzioni.
+
+Lo step `Audit dependencies` esegue `.github/scripts/frontend-next-audit.mjs`,
+che legge `bun audit --json` e ammette **un solo** finding, per nome:
+GHSA-vfj7-8cjw-p6xm su `braces` 3.0.3 con intervallo vulnerabile `<=3.0.3`, e
+soltanto mentre il pacchetto resta transitivo di tooling di sviluppo
+(`shadcn › fast-glob › micromatch › braces` ed `eslint-config-next ›
+@next/eslint-plugin-next › fast-glob › micromatch › braces`). La regola durevole
+è che l'eccezione è **fail-closed fuori da quel caso esatto**: una seconda
+advisory, la stessa advisory su un altro pacchetto, un intervallo vulnerabile
+allargato, una versione installata diversa o doppia, `braces` raggiungibile dal
+grafo di runtime dell'applicazione, `braces` dichiarata fra le dipendenze
+dirette, un output non interpretabile o un'uscita inattesa di `bun` tornano a
+bloccare il check richiesto. Il confine dev-only non è assunto: la chiusura di
+runtime è calcolata da `bun.lock` partendo dalle sole `dependencies` del
+workspace e seguendo anche i rami `optionalDependencies` e `peerDependencies`,
+e un ramo irrisolvibile conta come runtime, perché un grafo illeggibile non deve
+poter tenere in vita un'eccezione. I casi della policy stanno in
+`.github/scripts/frontend-next-audit.test.mjs` e girano nello stesso step prima
+del gate, così una policy rotta non passa per verde.
+
+Nessun `continue-on-error`, nessun `|| true`, nessun filtro di severity e
+`MIN_TESTS` invariato: l'unico modo di ammettere un'altra vulnerabilità è
+scriverla, con la sua motivazione, nello script e qui. Quando `braces` esce
+dall'intervallo vulnerabile — nuova pubblicazione upstream o tooling che non la
+tira più dentro — l'eccezione va rimossa, non lasciata a dormire.
 
 ## Comandi di verifica
 
