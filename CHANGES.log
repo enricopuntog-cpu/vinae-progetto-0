@@ -1,6 +1,6 @@
 ## CURRENT STATE
 - WP6A, WP6B e WP6C sono CLOSED. Non sono stati riaperti; MV2, MV3 e Fase 11 AI non sono iniziati.
-- Market Validation MV1 è CLOSED: PR #181, exact-head `011722f286c9c9ae7152cc7e471628b2feae7ed1`, squash `d14d7aec69502f111daa719529f05b8873c3ef64`, che coincide con `origin/main`.
+- Market Validation MV1 è CLOSED: PR #181, exact-head `011722f286c9c9ae7152cc7e471628b2feae7ed1` e squash di implementazione `d14d7aec69502f111daa719529f05b8873c3ef64`.
 - La fondazione MV1 resta separata in `frontend-next/`: flag pubblica/server fail-closed, route non navigabile `/beta-test`, codice pseudonimo V001–V999, capability anonima riprendibile, analytics first-party, fixture `mv_demo_*` versionate e costo shipping demo dedicato.
 - La migrazione `20261003170000_market_validation_foundation` risulta nel ledger del progetto produzione `pijnmcllmfgjmgsvtcej`; tabelle private con RLS, zero grant tabella client, RPC controllate `SECURITY DEFINER` con `search_path=''` e helper private non eseguibili dai client sono stati riletti sullo schema effettivo.
 - In produzione `beta_validation_sessions = 0` e `beta_validation_events = 0`; ordini/pagamenti/piani spedizione restano a zero, annunci e stock restano 11/11. Entrambe le flag MV sono assenti su Netlify, `/beta-test` risponde 404 e il deploy main dello squash è READY.
