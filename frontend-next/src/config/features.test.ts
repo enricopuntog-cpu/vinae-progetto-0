@@ -1,7 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { AI_UI, valoreFlagEsattamenteTrue } from "@/config/features";
+import {
+  AI_UI,
+  marketValidationAbilitataServer,
+  valoreFlagEsattamenteTrue,
+} from "@/config/features";
 
 const sorgentiSuperfici = {
   sommelier: readFileSync(join(import.meta.dir, "../components/vinea/Layout.tsx"), "utf8"),
@@ -55,6 +59,28 @@ describe("flag pubblica delle superfici IA", () => {
     ]);
     expect(envExample).toInclude("\nAI_ENABLED=false");
     expect(envExample).toInclude("\nOPENAI_API_KEY=");
+  });
+
+  it("mantiene Market Validation fail-closed e separa il gate server", () => {
+    const precedente = process.env.MARKET_VALIDATION_ENABLED;
+    try {
+      delete process.env.MARKET_VALIDATION_ENABLED;
+      expect(marketValidationAbilitataServer()).toBeFalse();
+      for (const valore of ["", "false", "TRUE", "1", " true "]) {
+        process.env.MARKET_VALIDATION_ENABLED = valore;
+        expect(marketValidationAbilitataServer()).toBeFalse();
+      }
+      process.env.MARKET_VALIDATION_ENABLED = "true";
+      expect(marketValidationAbilitataServer()).toBeTrue();
+    } finally {
+      if (precedente === undefined) delete process.env.MARKET_VALIDATION_ENABLED;
+      else process.env.MARKET_VALIDATION_ENABLED = precedente;
+    }
+
+    expect(sorgenteFlag).toInclude("NEXT_PUBLIC_MARKET_VALIDATION_ENABLED");
+    expect(sorgenteFlag).toInclude("process.env.MARKET_VALIDATION_ENABLED");
+    expect(envExample).toInclude("NEXT_PUBLIC_MARKET_VALIDATION_ENABLED=false");
+    expect(envExample).toInclude("MARKET_VALIDATION_ENABLED=false");
   });
 
   it("rende irraggiungibile il pannello demo degli sfondi nel target", () => {

@@ -35,6 +35,8 @@ export const routes = {
   segnalazioni: "/segnalazioni",
   admin: "/admin",
   adminStati: "/admin/stati",
+  /** Porta non navigabile del programma separato Market Validation. */
+  betaTest: "/beta-test",
 } as const;
 
 export type RouteKey = keyof typeof routes;

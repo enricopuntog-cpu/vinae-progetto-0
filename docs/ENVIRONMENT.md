@@ -61,6 +61,9 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `NEXT_PUBLIC_DEMO_UI_ENABLED` | client | Mostra soltanto il selettore locale Guest/User/Admin; non abilita fallback di dati mock. Assente o diverso da `true` usa sessione e ruolo reali. |
 | `NEXT_PUBLIC_CLUBS_ENABLED` | client | Mostra la navigazione Club soltanto con `true` esatto. Non autorizza le route. |
 | `CLUBS_ENABLED` | solo server | Gate autoritativo delle route Club. Si aprono soltanto quando anche `NEXT_PUBLIC_CLUBS_ENABLED` e `true`; assente o diverso da `true` risponde 404. |
+| `NEXT_PUBLIC_MARKET_VALIDATION_ENABLED` | client/server | Visibilità della porta `/beta-test` soltanto; non autorizza scritture. Solo `true` esatto abilita. |
+| `MARKET_VALIDATION_ENABLED` | solo server | Gate autoritativo della route e delle azioni Market Validation. Assente o diverso da `true` fallisce chiuso. |
+| `MARKET_VALIDATION_SHIPPING_FEE_CENTS` | solo server | Costo demo esclusivo MV, default `1290`. Non legge né modifica tariffe WP6, contributi o commissioni. |
 | `AI_ENABLED` | Edge Function | Kill switch delle funzioni AI (Fase 10). **Fallisce chiuso**: assente o diverso da `true` significa spento. |
 | `AI_ALLOWED_ORIGINS` | Edge Function | Allowlist CORS delle sole function AI, origini complete separate da virgole. **Non sostituisce `PAYMENT_ALLOWED_ORIGINS`**: le due convivono. |
 | `OPENAI_API_KEY` | Edge Function | Chiave del fornitore di prova. Assente, il provider è quello disabilitato e ogni chiamata dà 503. |

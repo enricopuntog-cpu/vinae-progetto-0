@@ -35,6 +35,56 @@ import type {
 
 export type Result<T, E = string> = { ok: true; data: T } | { ok: false; error: E };
 
+// ---- Market Validation -------------------------------------------------
+export type MarketValidationParticipantCode = `V${number}`;
+
+export type MarketValidationEventName =
+  | "beta_started"
+  | "marketplace_viewed"
+  | "demo_listing_viewed"
+  | "favorite_added"
+  | "checkout_started"
+  | "shipping_cost_viewed"
+  | "checkout_beta_completed"
+  | "sell_started"
+  | "sell_photo_selected"
+  | "sell_completed"
+  | "ai_preview_viewed"
+  | "ai_interest_clicked"
+  | "club_viewed"
+  | "beta_completed";
+
+export type MarketValidationPriceBand = "15–30" | "30–60" | "60–100" | "100–200" | "200+";
+export type MarketValidationDeviceCategory = "mobile" | "tablet" | "desktop";
+
+export type MarketValidationEventMetadata = Readonly<{
+  demo_listing_id?: `mv_demo_${string}`;
+  price_cents?: number;
+  price_band?: MarketValidationPriceBand;
+  device_category?: MarketValidationDeviceCategory;
+}>;
+
+export type MarketValidationSession = Readonly<{
+  sessionId: string;
+  participantCode: MarketValidationParticipantCode;
+  capability: string;
+  startedAt: string;
+  resumed: boolean;
+}>;
+
+/** Contratto esclusivo MV: nessuna porta commerciale entra in questa interfaccia. */
+export interface MarketValidationService {
+  startOrResume(
+    participantCode: MarketValidationParticipantCode,
+    capability: string,
+  ): Promise<Result<MarketValidationSession>>;
+  recordEvent(
+    session: MarketValidationSession,
+    eventName: Exclude<MarketValidationEventName, "beta_started">,
+    metadata?: MarketValidationEventMetadata,
+  ): Promise<Result<{ eventId: string }>>;
+}
+
 // ---- Auth --------------------------------------------------------------
 // Google e Facebook aggiunti in Fase 5b. Client ID/Secret vivono solo nella
 // dashboard Supabase: qui si nomina soltanto il provider.

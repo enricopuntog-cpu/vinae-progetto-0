@@ -66,6 +66,11 @@ Aprire soltanto ciò che serve al task:
   fuori da ogni decisione di rotta, scorta pianificata distinta dalla giacenza
   reale e nessuna stima inventata dove il dato manca — è in
   `03_ARCHITETTURA_REGOLE_DEBITI.md`.
+- La separazione Market Validation — codice partecipante pseudonimo e non
+  account, capability anonima in forma hash, niente fingerprinting o identità
+  IP, dataset `mv_demo_*` fuori dal marketplace, costo shipping solo demo,
+  nessun side effect commerciale o IA e futuro admin MV3 sui ruoli esistenti —
+  è in `03_ARCHITETTURA_REGOLE_DEBITI.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono
