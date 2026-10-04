@@ -1,22 +1,22 @@
 ## CURRENT STATE
 - WP6A, WP6B e WP6C sono CLOSED. Non sono stati riaperti; MV2, MV3 e Fase 11 AI non sono iniziati.
-- Il branch `feature/market-validation-foundation` parte esattamente da `origin/main = e3cb0670a71ad660f932b299d01907e65b393b17`. Market Validation MV1 è in VERIFY & SHIP e non è ancora CLOSED.
-- La fondazione MV1 è separata in `frontend-next/`: flag pubblica/server fail-closed, route non navigabile `/beta-test`, codice pseudonimo V001–V999, capability anonima riprendibile, analytics first-party, fixture `mv_demo_*` versionate e costo shipping demo dedicato.
-- La migrazione additiva `20261003170000_market_validation_foundation.sql` mantiene sessioni ed eventi in `private`, senza grant client sulle tabelle. Le sole porte anonime controllate sono apertura/ripresa e append evento; nessun ordine, pagamento, annuncio, inventario, provider logistico o IA viene chiamato.
-- Verifiche locali complete: 2192/2192 test PASS, typecheck PASS, lint 0 errori, build PASS, gate DB di scope PASS, `git diff --check` PASS e `MIN_TESTS` alzato a 2192. Il runtime PostgreSQL della 12r è demandato al gate CI effimero.
+- Market Validation MV1 è CLOSED: PR #181, exact-head `011722f286c9c9ae7152cc7e471628b2feae7ed1`, squash `d14d7aec69502f111daa719529f05b8873c3ef64`, che coincide con `origin/main`.
+- La fondazione MV1 resta separata in `frontend-next/`: flag pubblica/server fail-closed, route non navigabile `/beta-test`, codice pseudonimo V001–V999, capability anonima riprendibile, analytics first-party, fixture `mv_demo_*` versionate e costo shipping demo dedicato.
+- La migrazione `20261003170000_market_validation_foundation` risulta nel ledger del progetto produzione `pijnmcllmfgjmgsvtcej`; tabelle private con RLS, zero grant tabella client, RPC controllate `SECURITY DEFINER` con `search_path=''` e helper private non eseguibili dai client sono stati riletti sullo schema effettivo.
+- In produzione `beta_validation_sessions = 0` e `beta_validation_events = 0`; ordini/pagamenti/piani spedizione restano a zero, annunci e stock restano 11/11. Entrambe le flag MV sono assenti su Netlify, `/beta-test` risponde 404 e il deploy main dello squash è READY.
 
 ## ACTIVE TASK
-- Distribuire la branch MV1, ottenere il runtime 12r e tutte le regressioni exact-head verdi in CI, quindi eseguire squash merge e verifiche post-merge.
-- La griglia transazionale `supabase/tests/12r_market_validation_foundation.sql` contiene 33 casi, inclusi i dinieghi cross-session A→B espliciti, ed è cablata nel gate Supabase effimero; nessun PASS SQL viene dichiarato prima del log CI.
-- Dopo il merge, applicare alla produzione soltanto `20261003170000_market_validation_foundation`, verificare schema, zero righe iniziali, invarianti commerciali, advisor e deploy Netlify mantenendo entrambe le flag MV spente.
+- Nessuna: MV1 è chiuso dopo CI exact-head, merge, apply automatico dell'unica migrazione e verifiche read-only di Supabase e Netlify.
+- La 12r ha eseguito 33/33 casi in CI, inclusi participant/capability mismatch, sessione A che non registra né completa B e DML diretto negato; le regressioni 7c e 12l–12q sono verdi e la pulizia riporta zero residui.
+- Gli advisor MV1 riportano soltanto finding coerenti con il disegno o informativi: due tabelle private RLS senza policy, due porte anon/auth `SECURITY DEFINER` intenzionali, FK eventi senza indice composito dedicato e indici nuovi ancora inutilizzati a zero righe.
 
 ## NEXT STEPS
-1. Commit, push e apertura PR della sola fondazione MV1.
-2. Attendere e verificare tutti i check CI sull'exact-head, inclusa 12r 33/33 con zero residui.
-3. Eseguire squash merge, apply della sola migrazione MV1 e verifiche read-only di produzione/Netlify.
+1. MV2 BUILD
+2. MV2 VERIFY
+3. MV3 dashboard/QR/acceptance
 
 ## BLOCKERS / NOTES
-- HARD GATE VERIFY: `12r runtime = NON VERIFICATO` fino all'esecuzione nella CI effimera; l'assenza locale di Docker/Supabase CLI/psql non è un blocker.
-- Browser smoke non richiesto con le flag MV spente; lo stato del deploy Netlify va provato sull'artefatto reale dopo il merge.
-- Nessun file di migrazione già distribuito, `CLAUDE.md`, implementazione WP6, pagamento/ordine/spedizione, Fase 10/11 AI o file personale è stato modificato intenzionalmente.
-- Nessuna operazione di produzione è stata ancora eseguita; le flag `MARKET_VALIDATION_ENABLED` e `NEXT_PUBLIC_MARKET_VALIDATION_ENABLED` devono restare OFF/assenti.
+- Nessun blocker MV1 aperto; browser funnel non richiesto perché le flag MV restano OFF/assenti.
+- Frontend Next exact-head: audit wrapper PASS, lint 0 errori, typecheck PASS, 2192/2192 test PASS, build PASS e `MIN_TESTS = 2192`.
+- Nessun utente, sessione tester, evento fixture, annuncio demo DB, ordine, pagamento o shipment è stato creato in produzione.
+- Gli indici nuovi risultano naturalmente unused con zero righe; l'assenza di un indice `(session_id, participant_code)` è un finding performance INFO non bloccante per MV1 e potrà essere rivalutato soltanto con carico reale.
