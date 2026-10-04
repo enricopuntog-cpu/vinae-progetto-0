@@ -1175,6 +1175,50 @@ sono guardati da `not exists` sulla riga corrente, quindi una riga preesistente
 e diversa sarebbe stata saltata in silenzio invece di essere sovrascritta, e
 solo un conteggio reale poteva escluderlo.
 
+## Market Validation separata (MV1, 3 ottobre 2026)
+
+Market Validation è un programma separato in `frontend-next/`, non una variante
+di marketplace, checkout, logistica o IA. MV1 ne costruisce soltanto la
+fondazione chiusa: porta `/beta-test`, sessione anonima riprendibile, analytics
+first-party, contratto dei dati demo e costo di spedizione dimostrativo. WP6A,
+WP6B e WP6C restano **CLOSED**; WP7, MV2, MV3 e Fase 11 non sono aperte da questa
+fondazione.
+
+- Il `participant_code` canonico `V001`–`V999` è uno pseudonimo di test, non un
+  account e non un'identità sensibile. Non è globalmente univoco: lo stesso
+  codice può avere più sessioni concluse. Il dominio non raccoglie nome,
+  cognome, email, telefono o credenziali e non usa IP, GPS, advertising ID,
+  user-agent completo o fingerprinting come identità.
+- L'autorizzazione anonima è una capability UUID casuale generata nel browser.
+  Il database conserva solo il suo SHA-256 e accetta una sessione o un evento
+  soltanto quando `session_id`, codice e hash coincidono. Il browser conserva
+  esclusivamente codice e capability come suggerimento di ripresa; il server e
+  il database rivalidano prima di mostrare la sessione. Dopo completion o
+  scadenza il database ruota il vecchio hash, così la stessa capability locale
+  può aprire una sessione nuova senza riattribuire quella chiusa.
+- `private.beta_validation_sessions` e
+  `private.beta_validation_events` non hanno grant client di lettura o scrittura.
+  Le sole porte client sono due RPC `SECURITY DEFINER` a `search_path` vuoto:
+  apertura/ripresa e append di un evento allowlisted. Gli eventi sono
+  append-only dal client; `completed_at` cambia soltanto insieme a
+  `beta_completed`. Rate limit condiviso e lock advisory serializzano gli avvii.
+- I record `mv_demo_*`, tipizzati e versionati, non sono `public.listings`, non
+  hanno venditore e non possono creare ordini o inventario. Anche i preferiti MV
+  restano stato della sessione e non fanno rivivere i preferiti legacy.
+- `MARKET_VALIDATION_SHIPPING_FEE_CENTS` è configurazione server esclusiva del
+  percorso demo. Non legge né modifica tariffe WP6, preventivi, contributi di
+  imballaggio, commissioni, `ShipmentProvider`, carrier o piani di spedizione.
+  Nessuna spedizione reale o finta viene acquistata o simulata dal provider.
+- L'eventuale anteprima IA futura di MV resta contenuto statico del programma e
+  non usa `AiService`, provider o bucket fotografici. Non modifica la Fase 10 e
+  non apre la Fase 11.
+- L'eventuale pannello MV3 vivrà nell'area admin esistente e riuserà
+  `user_roles` più `eAdminReale`; non introduce una route in MV1 e non crea un
+  nuovo ruolo amministrativo.
+- La griglia `12r_market_validation_foundation.sql` è cablata nel gate Supabase
+  effimero. Finché non viene eseguita lì, il suo runtime resta **NON VERIFICATO**:
+  una revisione statica locale non è evidenza PostgreSQL/PostgREST.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):

@@ -100,6 +100,19 @@ export const CLUB_UI_ABILITATA = valoreFlagEsattamenteTrue(
 );
 
 /**
+ * Market Validation: la variabile pubblica rende visibile soltanto la porta.
+ * Le scritture restano autorizzate dal gate server e, nel database, dalla
+ * capability anonima della singola sessione.
+ */
+export const MARKET_VALIDATION_UI_ABILITATA = valoreFlagEsattamenteTrue(
+  process.env.NEXT_PUBLIC_MARKET_VALIDATION_ENABLED,
+);
+
+/** Gate autoritativo della route e delle azioni server Market Validation. */
+export const marketValidationAbilitataServer = (): boolean =>
+  valoreFlagEsattamenteTrue(process.env.MARKET_VALIDATION_ENABLED);
+
+/**
  * Gate server-side dell'imballaggio. Da leggere solo in codice che gira sul
  * server: in un componente client `process.env.PACKAGING_ENABLED` è
  * `undefined`, quindi risulterebbe spento e non acceso — il verso giusto in cui

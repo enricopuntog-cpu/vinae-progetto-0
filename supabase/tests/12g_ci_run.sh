@@ -251,6 +251,10 @@ run_grid "12p instradamento logistico della Beta" 12p_logistics_beta_routing.sql
 # e stato sovrascritto dai contributi. Sola lettura, ma transazione e guard
 # identici alle altre, sempre prima delle fixture 12g.
 run_grid "12q configurazione commerciale della Beta" 12q_logistics_beta_commercial_config.sql 3
+# Market Validation MV1: sessioni pseudonime, capability anonime, tassonomia
+# chiusa, metadata senza PII e assenza di side effect commerciali. La griglia
+# scrive solo fixture private dentro una transazione chiusa da ROLLBACK.
+run_grid "12r fondazione Market Validation" 12r_market_validation_foundation.sql 3
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
