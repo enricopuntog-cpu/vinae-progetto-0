@@ -1,22 +1,19 @@
 ## CURRENT STATE
-- WP6A, WP6B e WP6C sono CLOSED. Non sono stati riaperti; MV2, MV3 e Fase 11 AI non sono iniziati.
-- Market Validation MV1 è CLOSED: PR #181, exact-head `011722f286c9c9ae7152cc7e471628b2feae7ed1` e squash di implementazione `d14d7aec69502f111daa719529f05b8873c3ef64`.
-- La fondazione MV1 resta separata in `frontend-next/`: flag pubblica/server fail-closed, route non navigabile `/beta-test`, codice pseudonimo V001–V999, capability anonima riprendibile, analytics first-party, fixture `mv_demo_*` versionate e costo shipping demo dedicato.
-- La migrazione `20261003170000_market_validation_foundation` risulta nel ledger del progetto produzione `pijnmcllmfgjmgsvtcej`; tabelle private con RLS, zero grant tabella client, RPC controllate `SECURITY DEFINER` con `search_path=''` e helper private non eseguibili dai client sono stati riletti sullo schema effettivo.
-- In produzione `beta_validation_sessions = 0` e `beta_validation_events = 0`; ordini/pagamenti/piani spedizione restano a zero, annunci e stock restano 11/11. Entrambe le flag MV sono assenti su Netlify, `/beta-test` risponde 404 e il deploy main dello squash è READY.
+- Market Validation MV1 è CLOSED: fondazione su `origin/main` baseline `2a4e54b24f8e2019e4b6b4d3dc2927348fa3a47a`, migrazione applicata e verificata, flag pubblica/server ancora OFF o assente e `/beta-test` non esposta in produzione.
+- WP6A, WP6B e WP6C restano CLOSED. Pagamenti, ordini, logistica, ListingService write, AI Fase 10/11, PhotoRoom e scritture Club non sono stati riaperti o modificati.
+- `MIN_TESTS` è 2214 sia nel job CI `frontend-next` sia nel contratto di pre-lancio.
 
 ## ACTIVE TASK
-- Nessuna: MV1 è chiuso dopo CI exact-head, merge, apply automatico dell'unica migrazione e verifiche read-only di Supabase e Netlify.
-- La 12r ha eseguito 33/33 casi in CI, inclusi participant/capability mismatch, sessione A che non registra né completa B e DML diretto negato; le regressioni 7c e 12l–12q sono verdi e la pulizia riporta zero residui.
-- Gli advisor MV1 riportano soltanto finding coerenti con il disegno o informativi: due tabelle private RLS senza policy, due porte anon/auth `SECURITY DEFINER` intenzionali, FK eventi senza indice composito dedicato e indici nuovi ancora inutilizzati a zero righe.
+- MV2 BUILD è ACTIVE sul branch `feature/market-validation-experience`: esperienza mobile-first single-route `/beta-test` con hub tester, 40 annunci demo (8 per ciascuna fascia canonica), dettaglio interno, preferiti locali, checkout simulato con shipping MV1 risolto server-side e vendita simulata.
+- Buyer e seller sono obbligatori per `beta_completed`; AI e Club sono preview statiche facoltative. La foto seller usa soltanto un object URL locale revocato, senza upload. Il progresso MV2 è separato dalla reference MV1 e non conserva dati del form o del file.
+- BUILD locale: test MV mirati 27/27, 573 asserzioni; typecheck PASS; lint PASS con 12 warning preesistenti e zero errori. Nessuna suite completa o build eseguita, come richiesto dal perimetro BUILD.
 
 ## NEXT STEPS
-1. MV2 BUILD
-2. MV2 VERIFY
-3. MV3 dashboard/QR/acceptance
+1. Eseguire MV2 VERIFY sul diff completo e sugli invarianti di isolamento.
+2. Eseguire MV3 BUILD per dashboard, QR e flusso operativo ammesso.
+3. Eseguire MV3 VERIFY e acceptance end-to-end del programma Market Validation.
 
 ## BLOCKERS / NOTES
-- Nessun blocker MV1 aperto; browser funnel non richiesto perché le flag MV restano OFF/assenti.
-- Frontend Next exact-head: audit wrapper PASS, lint 0 errori, typecheck PASS, 2192/2192 test PASS, build PASS e `MIN_TESTS = 2192`.
-- Nessun utente, sessione tester, evento fixture, annuncio demo DB, ordine, pagamento o shipment è stato creato in produzione.
-- Gli indici nuovi risultano naturalmente unused con zero righe; l'assenza di un indice `(session_id, participant_code)` è un finding performance INFO non bloccante per MV1 e potrà essere rivalutato soltanto con carico reale.
+- Nessun blocker di implementazione MV2 aperto. Runtime browser e chiamate RPC reali restano NON VERIFICATI in BUILD perché le flag di produzione non sono state attivate e non è stato richiesto uno smoke.
+- I tre asset AI sono copie byte-identiche degli originali OneDrive: SHA-256 `0DB89344…D30C`, `52AAB4B1…2976`, `35B63672…18A5`; gli originali non sono stati modificati.
+- Nessuna migration nuova, nessuna modifica alla migration MV1, nessun commit, push, PR, merge, deploy, scrittura Supabase produzione o attivazione di flag è parte di questo BUILD.
