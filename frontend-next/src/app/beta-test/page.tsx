@@ -5,6 +5,7 @@ import {
   MARKET_VALIDATION_UI_ABILITATA,
   marketValidationAbilitataServer,
 } from "@/config/features";
+import { marketValidationShippingFeeCents } from "@/lib/market-validation/config";
 import BetaTestPageClient from "./page-client";
 
 export const metadata: Metadata = {
@@ -19,5 +20,9 @@ export default async function Page() {
     notFound();
   }
 
-  return <BetaTestPageClient />;
+  return (
+    <BetaTestPageClient
+      shippingFeeCents={marketValidationShippingFeeCents()}
+    />
+  );
 }

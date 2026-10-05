@@ -104,7 +104,7 @@ describe("Market Validation MV1", () => {
   });
 
   it("usa fixture demo tipizzate/versionate e impossibili da confondere con listing", () => {
-    expect(MARKET_VALIDATION_DEMO_DATASET_VERSION).toBe("mv1-2026-10-03");
+    expect(MARKET_VALIDATION_DEMO_DATASET_VERSION).toBe("mv2-2026-10-05");
     expect(MARKET_VALIDATION_DEMO_LISTINGS.length).toBeGreaterThan(0);
     for (const listing of MARKET_VALIDATION_DEMO_LISTINGS) {
       expect(listing.id).toMatch(/^mv_demo_/);
@@ -215,7 +215,7 @@ describe("Market Validation MV1", () => {
     const client = read("frontend-next/src/app/beta-test/page-client.tsx");
     expect(client).toInclude("Codice partecipante");
     expect(client).toInclude("Inizia il test");
-    expect(client).toInclude("Test {session.participantCode}");
+    expect(client).toInclude("participantCode={session.participantCode}");
     for (const forbidden of [
       "Nome",
       "Cognome",

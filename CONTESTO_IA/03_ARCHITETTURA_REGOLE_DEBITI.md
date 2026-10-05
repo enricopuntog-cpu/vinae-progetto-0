@@ -1209,9 +1209,21 @@ fondazione.
   percorso demo. Non legge né modifica tariffe WP6, preventivi, contributi di
   imballaggio, commissioni, `ShipmentProvider`, carrier o piani di spedizione.
   Nessuna spedizione reale o finta viene acquistata o simulata dal provider.
-- L'eventuale anteprima IA futura di MV resta contenuto statico del programma e
-  non usa `AiService`, provider o bucket fotografici. Non modifica la Fase 10 e
-  non apre la Fase 11.
+- MV2 resta interamente nella singola route `/beta-test`: hub, marketplace da 40
+  annunci fittizi, dettaglio, checkout, percorso venditore e preview non creano
+  route commerciali né aprono i domini di produzione. Il costo di spedizione è
+  risolto dalla configurazione MV1 sul server; checkout e vendita sono
+  simulazioni senza ordine, pagamento, annuncio, inventario o spedizione.
+- Il progresso MV2 usa una chiave locale distinta dalla reference di sessione
+  MV1. Conserva soltanto completion buyer/seller, acknowledgement delle preview
+  e ID `mv_demo_*` preferiti; non conserva form venditore, note, file, nome file,
+  MIME o object URL. Buyer e seller sono entrambi necessari per `beta_completed`;
+  AI e Club sono facoltativi.
+- La foto venditore facoltativa è soltanto un object URL del browser, revocato
+  alla sostituzione, completion o unmount: zero upload. L'anteprima AI usa tre
+  asset statici approvati e nessun `AiService`, provider, PhotoRoom o bucket;
+  la preview Club è sola lettura e non usa porte di scrittura Club. MV2 non
+  modifica la Fase 10, non apre la Fase 11 e non produce side effect commerciali.
 - L'eventuale pannello MV3 vivrà nell'area admin esistente e riuserà
   `user_roles` più `eAdminReale`; non introduce una route in MV1 e non crea un
   nuovo ruolo amministrativo.
