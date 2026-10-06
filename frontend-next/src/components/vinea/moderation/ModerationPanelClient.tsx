@@ -7,7 +7,9 @@
 // generale delle segnalazioni resta condivisa e mantiene le sue sette azioni.
 // Ogni motivazione richiesta dalla UI e verificata di nuovo dalle RPC.
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { BarChart3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -960,9 +962,16 @@ export const ModerationPanelClient = () => {
             Overview, segnalazioni, controversie, utenti, annunci, ordini e club.
           </p>
         </div>
-        <Button variant="outline" onClick={() => void reload()} disabled={!online}>
-          Aggiorna
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline">
+            <Link href="/admin/beta-validation">
+              <BarChart3 /> Market Validation
+            </Link>
+          </Button>
+          <Button variant="outline" onClick={() => void reload()} disabled={!online}>
+            Aggiorna
+          </Button>
+        </div>
       </header>
 
       {error ? (

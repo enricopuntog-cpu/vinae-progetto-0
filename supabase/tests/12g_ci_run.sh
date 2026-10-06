@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12l) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12s) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
@@ -255,6 +255,9 @@ run_grid "12q configurazione commerciale della Beta" 12q_logistics_beta_commerci
 # chiusa, metadata senza PII e assenza di side effect commerciali. La griglia
 # scrive solo fixture private dentro una transazione chiusa da ROLLBACK.
 run_grid "12r fondazione Market Validation" 12r_market_validation_foundation.sql 3
+# Market Validation MV3: porte admin read-only, aggregazione one-row-per-code,
+# KPI/funnel distinct-code, paginazione e assenza di capability/PII.
+run_grid "12s analytics admin Market Validation" 12s_market_validation_admin_analytics.sql 3
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal

@@ -1224,12 +1224,32 @@ fondazione.
   asset statici approvati e nessun `AiService`, provider, PhotoRoom o bucket;
   la preview Club è sola lettura e non usa porte di scrittura Club. MV2 non
   modifica la Fase 10, non apre la Fase 11 e non produce side effect commerciali.
-- L'eventuale pannello MV3 vivrà nell'area admin esistente e riuserà
-  `user_roles` più `eAdminReale`; non introduce una route in MV1 e non crea un
-  nuovo ruolo amministrativo.
-- La griglia `12r_market_validation_foundation.sql` è cablata nel gate Supabase
-  effimero. Finché non viene eseguita lì, il suo runtime resta **NON VERIFICATO**:
-  una revisione statica locale non è evidenza PostgreSQL/PostgREST.
+- MV3 aggiunge `/admin/beta-validation` nell'area admin esistente e riusa
+  `user_roles` più `eAdminReale`; non crea un nuovo ruolo amministrativo. Le
+  tabelle MV restano `private`, senza `SELECT` browser o policy pubbliche: due RPC
+  `SECURITY DEFINER`, stabili, bounded e con `search_path` vuoto ricontrollano
+  `auth.uid()` e il ruolo reale prima di restituire analytics in sola lettura.
+- L'unità principale delle analytics MV3 è il `participant_code` distinto. Il CSV
+  ha una riga per codice, aggrega gli eventuali rientri e non espone capability,
+  UUID di sessione, metadata, IP, user-agent o PII. Il filtro accetta soltanto il
+  formato canonico `V001`–`V999`; summary e tabella non leggono direttamente le
+  tabelle private dal browser.
+- L'URL finale da codificare e stampare è esattamente
+  `https://vineawineclub.com/beta-test`, senza query, shortener o tracking. PNG e
+  SVG sono generati deterministicamente in locale, conservano una quiet zone di
+  quattro moduli e vengono decodificati nei test; la scansione smartphone e la
+  resa di stampa restano acceptance necessaria, non una prova della BUILD.
+- L'attivazione richiede insieme i valori esatti
+  `NEXT_PUBLIC_MARKET_VALIDATION_ENABLED=true` e
+  `MARKET_VALIDATION_ENABLED=true`. La seconda è il kill switch server: falsa o
+  assente chiude route e azioni. Il programma resta indipendente da
+  `AI_ENABLED`, `PAYMENTS_ENABLED`, shipping operativo, scritture Club, selettore
+  demo e ogni altra feature flag.
+- Le griglie `12r_market_validation_foundation.sql` e
+  `12s_market_validation_admin_analytics.sql` sono cablate nel gate Supabase
+  effimero. Finché una nuova griglia non viene eseguita lì, il suo runtime resta
+  **NON VERIFICATO**: una revisione statica locale non è evidenza
+  PostgreSQL/PostgREST.
 
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
