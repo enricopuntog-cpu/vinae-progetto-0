@@ -146,7 +146,12 @@ describe("Market Validation MV2 UI contract", () => {
     const migration = read("supabase/migrations/20261003170000_market_validation_foundation.sql");
     expect(migration).toInclude("create function public.beta_validation_event_record(");
     expect(migration).not.toInclude("mv2");
-    expect(readdirSync(resolve(root, "supabase/migrations")).filter((name) => name.includes("market_validation"))).toEqual([
+    // `readdirSync` segue l'ordine della directory, che su ext4 in CI non è
+    // quello alfabetico di NTFS: l'inventario va ordinato prima di confrontarlo.
+    const inventario = readdirSync(resolve(root, "supabase/migrations"))
+      .filter((name) => name.includes("market_validation"))
+      .sort();
+    expect(inventario).toEqual([
       "20261003170000_market_validation_foundation.sql",
       "20261006160000_market_validation_admin_analytics.sql",
     ]);
