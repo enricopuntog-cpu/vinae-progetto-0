@@ -148,6 +148,7 @@ describe("Market Validation MV2 UI contract", () => {
     expect(migration).not.toInclude("mv2");
     expect(readdirSync(resolve(root, "supabase/migrations")).filter((name) => name.includes("market_validation"))).toEqual([
       "20261003170000_market_validation_foundation.sql",
+      "20261006160000_market_validation_admin_analytics.sql",
     ]);
   });
 });
