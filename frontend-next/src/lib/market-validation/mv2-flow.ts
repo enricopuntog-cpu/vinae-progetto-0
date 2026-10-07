@@ -3,30 +3,6 @@ export type MarketValidationRequiredProgress = Readonly<{
   sellerCompleted: boolean;
 }>;
 
-export type MarketValidationSellerDraft = Readonly<{
-  producer: string;
-  wine: string;
-  vintage: string;
-  format: string;
-  condition: string;
-  desiredPrice: string;
-  notes: string;
-}>;
-
-export const EMPTY_MARKET_VALIDATION_SELLER_DRAFT: MarketValidationSellerDraft = {
-  producer: "",
-  wine: "",
-  vintage: "",
-  format: "",
-  condition: "",
-  desiredPrice: "",
-  notes: "",
-};
-
-export type MarketValidationSellerErrors = Partial<
-  Record<Exclude<keyof MarketValidationSellerDraft, "notes">, string>
->;
-
 export function marketValidationCanComplete(
   progress: MarketValidationRequiredProgress,
 ): boolean {
@@ -84,57 +60,4 @@ export function marketValidationPriceBandMatches(
     case "200+":
       return euro >= 200;
   }
-}
-
-export function validateMarketValidationSellerDraft(
-  draft: MarketValidationSellerDraft,
-  currentYear = new Date().getFullYear(),
-): MarketValidationSellerErrors {
-  const errors: MarketValidationSellerErrors = {};
-  if (!draft.producer.trim()) errors.producer = "Indica il produttore.";
-  if (!draft.wine.trim()) errors.wine = "Indica il vino.";
-
-  const vintage = Number(draft.vintage);
-  if (
-    !/^\d{4}$/.test(draft.vintage.trim()) ||
-    !Number.isInteger(vintage) ||
-    vintage < 1900 ||
-    vintage > currentYear
-  ) {
-    errors.vintage = "Indica un'annata valida.";
-  }
-
-  if (!draft.format) errors.format = "Seleziona il formato.";
-  if (!draft.condition) errors.condition = "Seleziona la condizione.";
-
-  const desiredPrice = Number(draft.desiredPrice.replace(",", "."));
-  if (
-    !draft.desiredPrice.trim() ||
-    !Number.isFinite(desiredPrice) ||
-    desiredPrice < 1 ||
-    desiredPrice > 100_000
-  ) {
-    errors.desiredPrice = "Indica un prezzo desiderato valido.";
-  }
-  return errors;
-}
-
-export const MARKET_VALIDATION_PHOTO_MIME_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-] as const;
-
-export function revokeMarketValidationPhotoUrl(url: string | null): void {
-  if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
-}
-
-export function marketValidationPhotoAccepted(file: Pick<File, "type" | "size">): boolean {
-  return (
-    MARKET_VALIDATION_PHOTO_MIME_TYPES.includes(
-      file.type as (typeof MARKET_VALIDATION_PHOTO_MIME_TYPES)[number],
-    ) &&
-    file.size > 0 &&
-    file.size <= 10 * 1024 * 1024
-  );
 }

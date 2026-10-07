@@ -1224,6 +1224,17 @@ fondazione.
   asset statici approvati e nessun `AiService`, provider, PhotoRoom o bucket;
   la preview Club è sola lettura e non usa porte di scrittura Club. MV2 non
   modifica la Fase 10, non apre la Fase 11 e non produce side effect commerciali.
+- Correzione UX (7 ottobre 2026; supera i due punti MV2 precedenti su percorso
+  venditore, foto locale e preview Club): l'hub «Prova Vinea» resta il tutorial e
+  l'acquisto resta simulato. Vendi e Club non hanno più una copia interna: aprono
+  in nuova scheda le vere `/vendi` e `/community`, registrando `sell_started` e
+  `club_viewed`. Il venditore si completa solo con la conferma esplicita al
+  ritorno e `sell_completed` registrato, senza pubblicare annunci;
+  `sell_photo_selected` resta nel contratto e nel CSV solo come storico.
+  L'anteprima AI spiega Sommelier, catalogazione e abbinamenti con link reali
+  governati da `AI_UI` e presenta la foto/sfondo come funzione in sviluppo. Il
+  codice MV importa solo moduli MV, UI e tipi: navigare verso Vinea reale è
+  ammesso, chiamarne le porte di dominio no.
 - MV3 aggiunge `/admin/beta-validation` nell'area admin esistente e riusa
   `user_roles` più `eAdminReale`; non crea un nuovo ruolo amministrativo. Le
   tabelle MV restano `private`, senza `SELECT` browser o policy pubbliche: due RPC

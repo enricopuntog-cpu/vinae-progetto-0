@@ -31,11 +31,9 @@ import {
   type MarketValidationProgress,
 } from "@/lib/market-validation/progress";
 import { startMarketValidationSession } from "./actions";
-import { ClubPreview } from "./_components/ClubPreview";
 import { DemoCheckout } from "./_components/DemoCheckout";
 import { DemoListingDetail } from "./_components/DemoListingDetail";
 import { DemoMarketplace } from "./_components/DemoMarketplace";
-import { DemoSellerFlow } from "./_components/DemoSellerFlow";
 import { StaticAiPreview } from "./_components/StaticAiPreview";
 import {
   ValidationHub,
@@ -159,9 +157,9 @@ export default function BetaTestPageClient({
         <p className="mt-5 max-w-xl whitespace-pre-line text-sm leading-6 text-muted-foreground md:text-base">
           {`Stai partecipando alla fase di Beta Testing di Vinea Wine Club.
 Puoi esplorare il marketplace, simulare un acquisto e provare
-a mettere in vendita una bottiglia.
-Nessuna operazione comporterà un pagamento,
-una vendita o una spedizione reale.`}
+il vero percorso per mettere in vendita una bottiglia.
+L'acquisto è simulato: non comporterà un pagamento,
+un ordine o una spedizione reale.`}
         </p>
 
         <form className="mt-6 max-w-sm space-y-4" onSubmit={begin}>
@@ -230,6 +228,9 @@ function MarketValidationExperience({
     useState<MarketValidationDemoListing | null>(null);
   const [completing, setCompleting] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
+  const [sellerOpened, setSellerOpened] = useState(false);
+  const [sellerConfirming, setSellerConfirming] = useState(false);
+  const [sellerError, setSellerError] = useState<string | null>(null);
   const track = useMarketValidationTracker(session);
 
   const updateProgress = useCallback(
@@ -299,6 +300,37 @@ function MarketValidationExperience({
     setScreen("complete");
   };
 
+  // Vendi e Club aprono le vere pagine di Vinea in una nuova scheda: qui si
+  // registra soltanto l'apertura, senza bloccare la navigazione del link.
+  const openSeller = () => {
+    setSellerOpened(true);
+    setSellerError(null);
+    void track("sell_started", {}, "sell_started");
+  };
+
+  // Il percorso venditore si chiude solo sulla conferma esplicita al ritorno,
+  // mai sul semplice click, e solo se l'evento è stato registrato.
+  const confirmSeller = async () => {
+    if (sellerConfirming || progress.sellerCompleted) return;
+    setSellerConfirming(true);
+    setSellerError(null);
+    const result = await track("sell_completed", {}, "sell_completed");
+    setSellerConfirming(false);
+    if (!result.ok) {
+      setSellerError("Non siamo riusciti a registrare la conferma. Puoi riprovare.");
+      return;
+    }
+    updateProgress((current) => ({ ...current, sellerCompleted: true }));
+  };
+
+  const openClub = () => {
+    void track("club_viewed", {}, "club_viewed").then((result) => {
+      if (result.ok) {
+        updateProgress((current) => ({ ...current, clubViewed: true }));
+      }
+    });
+  };
+
   if (screen === "complete") return <ValidationComplete />;
   if (screen === "marketplace") {
     return (
@@ -337,18 +369,6 @@ function MarketValidationExperience({
       />
     );
   }
-  if (screen === "seller") {
-    return (
-      <DemoSellerFlow
-        completed={progress.sellerCompleted}
-        track={track}
-        onCompleted={() =>
-          updateProgress((current) => ({ ...current, sellerCompleted: true }))
-        }
-        onBack={() => open("hub")}
-      />
-    );
-  }
   if (screen === "ai") {
     return (
       <StaticAiPreview
@@ -364,25 +384,19 @@ function MarketValidationExperience({
       />
     );
   }
-  if (screen === "club") {
-    return (
-      <ClubPreview
-        track={track}
-        onViewed={() =>
-          updateProgress((current) => ({ ...current, clubViewed: true }))
-        }
-        onBack={() => open("hub")}
-      />
-    );
-  }
-
   return (
     <ValidationHub
       participantCode={session.participantCode}
       progress={progress}
       completing={completing}
       completionError={completionError}
+      sellerOpened={sellerOpened}
+      sellerConfirming={sellerConfirming}
+      sellerError={sellerError}
       onOpen={open}
+      onSellerOpen={openSeller}
+      onSellerConfirm={confirmSeller}
+      onClubOpen={openClub}
       onComplete={complete}
     />
   );
