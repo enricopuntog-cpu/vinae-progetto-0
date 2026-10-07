@@ -15,11 +15,17 @@ import {
  * estetici, voci della contabilità — sono quelle della Cantina vera, così il
  * tester riconosce poi le stesse parole in `/cantina`.
  *
- * La Cantina è una scoperta facoltativa: non è un percorso del test, non ha
- * un evento e non entra nel conteggio «0 di 2».
+ * La Cantina è una scoperta facoltativa: non è uno step del test, non ha un
+ * evento e non entra nel conteggio «0 di 2».
  */
 
-export const MARKET_VALIDATION_CELLAR_PREVIEW_VERSION = "mv-cellar-2026-10-07" as const;
+export const MARKET_VALIDATION_CELLAR_PREVIEW_VERSION = "mv-cellar-2026-10-07b" as const;
+
+/**
+ * Anno di riferimento fisso delle finestre di bevuta d'esempio: l'anteprima
+ * non legge l'orologio, così il risultato è identico per ogni tester.
+ */
+export const MARKET_VALIDATION_CELLAR_REFERENCE_YEAR = 2026;
 
 export type MarketValidationCellarStatus = Exclude<SaleStatus, "venduta">;
 
@@ -34,6 +40,19 @@ export const MARKET_VALIDATION_CELLAR_STATUS_LABEL: Record<MarketValidationCella
   cantina_pubblica: "Visibile nel profilo",
 };
 
+/** Che cosa significa ciascuno stato, in una riga. */
+export const MARKET_VALIDATION_CELLAR_STATUS_TEXT: Record<MarketValidationCellarStatus, string> = {
+  in_vendita: "È anche un annuncio del marketplace, con prezzo, spedizione e proposte.",
+  privata: "La vedi soltanto tu: è il tuo archivio privato, senza prezzo obbligatorio.",
+  cantina_pubblica: "Gli altri la vedono nel tuo profilo, ma non è in vendita: è la tua vetrina.",
+};
+
+export const MARKET_VALIDATION_CELLAR_STATUS_ORDER: readonly MarketValidationCellarStatus[] = [
+  "in_vendita",
+  "privata",
+  "cantina_pubblica",
+];
+
 export type MarketValidationCellarBottle = Readonly<{
   id: `mv_cellar_${string}`;
   producer: string;
@@ -44,6 +63,9 @@ export type MarketValidationCellarBottle = Readonly<{
   referenceValueCents: number;
   status: MarketValidationCellarStatus;
   phase: Extract<DrinkPhase, "attesa" | "pronto" | "ideale" | "presto">;
+  drinkFrom: number;
+  drinkTo: number;
+  image: `/images/${string}`;
   plannedOpening?: string;
   example: true;
 }>;
@@ -60,6 +82,9 @@ export const MARKET_VALIDATION_CELLAR_BOTTLES: readonly MarketValidationCellarBo
     referenceValueCents: 9500,
     status: "in_vendita",
     phase: "ideale",
+    drinkFrom: 2023,
+    drinkTo: 2035,
+    image: "/images/vinea-bottle-1.jpg",
     example: true,
   },
   {
@@ -72,6 +97,9 @@ export const MARKET_VALIDATION_CELLAR_BOTTLES: readonly MarketValidationCellarBo
     referenceValueCents: 6800,
     status: "privata",
     phase: "attesa",
+    drinkFrom: 2027,
+    drinkTo: 2040,
+    image: "/images/vinea-bottle-2.jpg",
     example: true,
   },
   {
@@ -84,6 +112,9 @@ export const MARKET_VALIDATION_CELLAR_BOTTLES: readonly MarketValidationCellarBo
     referenceValueCents: 2400,
     status: "cantina_pubblica",
     phase: "pronto",
+    drinkFrom: 2024,
+    drinkTo: 2028,
+    image: "/images/vinea-white.jpg",
     example: true,
   },
   {
@@ -96,7 +127,40 @@ export const MARKET_VALIDATION_CELLAR_BOTTLES: readonly MarketValidationCellarBo
     referenceValueCents: 4200,
     status: "privata",
     phase: "presto",
+    drinkFrom: 2022,
+    drinkTo: 2026,
+    image: "/images/vinea-champagne.jpg",
     plannedOpening: "31 dicembre",
+    example: true,
+  },
+  {
+    id: "mv_cellar_vento_sera_2020",
+    producer: "Corte del Vento",
+    wine: "Vento di Sera",
+    denomination: "Valpolicella Ripasso DOC",
+    vintage: 2020,
+    quantity: 1,
+    referenceValueCents: 2550,
+    status: "in_vendita",
+    phase: "pronto",
+    drinkFrom: 2023,
+    drinkTo: 2029,
+    image: "/images/vinea-label.jpg",
+    example: true,
+  },
+  {
+    id: "mv_cellar_terre_alte_2017",
+    producer: "Terre Alte",
+    wine: "Terre Alte Riserva",
+    denomination: "Taurasi DOCG",
+    vintage: 2017,
+    quantity: 2,
+    referenceValueCents: 5200,
+    status: "cantina_pubblica",
+    phase: "attesa",
+    drinkFrom: 2027,
+    drinkTo: 2038,
+    image: "/images/vinea-capsule.jpg",
     example: true,
   },
 ];
@@ -104,6 +168,20 @@ export const MARKET_VALIDATION_CELLAR_BOTTLES: readonly MarketValidationCellarBo
 export const marketValidationCellarPhaseLabel = (
   phase: MarketValidationCellarBottle["phase"],
 ): string => phaseLabel[phase];
+
+/**
+ * Posizione dell'anno di riferimento dentro la finestra di bevuta, da 0 a 100:
+ * 0 prima dell'apertura della finestra, 100 alla sua chiusura o oltre.
+ */
+export function marketValidationCellarMaturityPercent(
+  bottle: Pick<MarketValidationCellarBottle, "drinkFrom" | "drinkTo">,
+  year: number = MARKET_VALIDATION_CELLAR_REFERENCE_YEAR,
+): number {
+  const span = bottle.drinkTo - bottle.drinkFrom;
+  if (span <= 0) return year >= bottle.drinkTo ? 100 : 0;
+  const ratio = (year - bottle.drinkFrom) / span;
+  return Math.round(Math.min(1, Math.max(0, ratio)) * 100);
+}
 
 const READY_PHASES = new Set<DrinkPhase>(["pronto", "ideale"]);
 
@@ -128,6 +206,17 @@ export function marketValidationCellarKpis(
     }),
     { bottles: 0, referenceValueCents: 0, forSale: 0, readyToDrink: 0 },
   );
+}
+
+/** Quante etichette d'esempio ci sono per ciascuno stato di visibilità. */
+export function marketValidationCellarStatusCounts(
+  bottles: readonly MarketValidationCellarBottle[] = MARKET_VALIDATION_CELLAR_BOTTLES,
+): Record<MarketValidationCellarStatus, number> {
+  return {
+    in_vendita: bottles.filter((bottle) => bottle.status === "in_vendita").length,
+    privata: bottles.filter((bottle) => bottle.status === "privata").length,
+    cantina_pubblica: bottles.filter((bottle) => bottle.status === "cantina_pubblica").length,
+  };
 }
 
 export type MarketValidationCellarDrinkWindow = Readonly<{
@@ -157,15 +246,15 @@ export function marketValidationCellarDrinkWindow(
 export const MARKET_VALIDATION_CELLAR_VALUE_SERIES: ReadonlyArray<
   Readonly<{ month: string; valueCents: number }>
 > = [
-  { month: "mag", valueCents: 41200 },
-  { month: "giu", valueCents: 42000 },
-  { month: "lug", valueCents: 43100 },
-  { month: "ago", valueCents: 42600 },
-  { month: "set", valueCents: 44800 },
+  { month: "mag", valueCents: 52100 },
+  { month: "giu", valueCents: 53000 },
+  { month: "lug", valueCents: 54600 },
+  { month: "ago", valueCents: 54100 },
+  { month: "set", valueCents: 56800 },
   { month: "ott", valueCents: marketValidationCellarKpis().referenceValueCents },
 ];
 
-/** Tre preset estetici reali del configuratore; cambiano solo l'anteprima. */
+/** Tre preset estetici reali del configuratore, citati nella sezione 3D. */
 export const MARKET_VALIDATION_CELLAR_THEMES = ["moderna", "classica", "rustica"] as const satisfies
   readonly EnvTheme[];
 

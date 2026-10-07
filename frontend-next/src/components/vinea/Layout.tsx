@@ -85,9 +85,13 @@ export function VineaLayout({
   const vociDesktop = desktopLinks.filter(
     (voce) => CLUB_UI_ABILITATA || voce.to !== "/community",
   );
-  // Nella guida Market Validation la navigazione principale non si disegna:
-  // si esce soltanto dalle CTA della guida. Le voci restano quelle di sempre.
+  // Nella guida Market Validation la navigazione principale, le azioni
+  // dell'header e il Sommelier non si disegnano e il marchio non è un link:
+  // il tester resta dentro la guida. Le voci restano quelle di sempre.
   const focus = modalitaFocus(pathname);
+  const legaleInFocus = focus
+    ? ({ target: "_blank", rel: "noopener noreferrer" } as const)
+    : {};
 
   return (
     <div
@@ -103,23 +107,17 @@ export function VineaLayout({
         data-testid="app-header"
       >
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 md:py-4">
-          <Link href="/" className="flex items-center gap-2.5" data-testid="brand-logo-link">
-            <VineaLogo />
-            <span className="flex flex-col leading-none">
-              <span className="font-serif text-2xl font-semibold tracking-tight text-bordeaux">
-                Vinea
-              </span>
-              <span className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.35em] text-oro">
-                Wine Club
-              </span>
-            </span>
-            <span
-              className="rounded-full border border-oro/50 bg-oro/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-bordeaux"
-              data-testid="beta-badge"
-            >
-              Beta
-            </span>
-          </Link>
+          {/* In focus il marchio resta visibile ma non porta da nessuna parte:
+              un tocco sul logo faceva uscire il tester dalla guida. */}
+          {focus ? (
+            <div className="flex items-center gap-2.5" data-testid="brand-logo-static">
+              <Marchio />
+            </div>
+          ) : (
+            <Link href="/" className="flex items-center gap-2.5" data-testid="brand-logo-link">
+              <Marchio />
+            </Link>
+          )}
 
           {!focus && (
             <nav
@@ -171,59 +169,63 @@ export function VineaLayout({
             </nav>
           )}
 
-          <div className="ml-auto flex items-center gap-2">
-            {ruolo === "guest" && (
-              // Punta a /registrati e non a /onboarding: il wizard di
-              // onboarding non è portato (i suoi passi obiettivi/preferenze/
-              // profilo appartengono a ProfileService, fase successiva),
-              // mentre /registrati è la registrazione reale introdotta in
-              // Fase 5a. Conseguenza diretta della scelta di scope minimale
-              // già approvata, non una deviazione a sé.
+          {/* In focus nessuna azione dell'header: registrazione, ricerca, inbox
+              e account porterebbero fuori dalla guida. */}
+          {!focus && (
+            <div className="ml-auto flex items-center gap-2">
+              {ruolo === "guest" && (
+                // Punta a /registrati e non a /onboarding: il wizard di
+                // onboarding non è portato (i suoi passi obiettivi/preferenze/
+                // profilo appartengono a ProfileService, fase successiva),
+                // mentre /registrati è la registrazione reale introdotta in
+                // Fase 5a. Conseguenza diretta della scelta di scope minimale
+                // già approvata, non una deviazione a sé.
+                <Link
+                  href="/registrati"
+                  data-testid="cta-register"
+                  className="hidden rounded-full bg-bordeaux px-3 py-1.5 text-xs font-semibold text-crema hover:bg-bordeaux/90 sm:inline-flex"
+                >
+                  Registrati
+                </Link>
+              )}
+              {DEMO_UI_ABILITATA ? <DemoSwitch ruolo={ruolo} setRuolo={setRuolo} /> : null}
               <Link
-                href="/registrati"
-                data-testid="cta-register"
-                className="hidden rounded-full bg-bordeaux px-3 py-1.5 text-xs font-semibold text-crema hover:bg-bordeaux/90 sm:inline-flex"
+                href="/esplora"
+                aria-label="Ricerca"
+                data-testid="header-search-link"
+                className={`rounded-full p-2 hover:bg-secondary ${classiRicercaHeader(autenticato)}`}
               >
-                Registrati
+                <Search className="h-5 w-5" />
               </Link>
-            )}
-            {DEMO_UI_ABILITATA ? <DemoSwitch ruolo={ruolo} setRuolo={setRuolo} /> : null}
-            <Link
-              href="/esplora"
-              aria-label="Ricerca"
-              data-testid="header-search-link"
-              className={`rounded-full p-2 hover:bg-secondary ${classiRicercaHeader(autenticato)}`}
-            >
-              <Search className="h-5 w-5" />
-            </Link>
-            {/* Messaggi e Notifiche, in quest'ordine, dall'infrastruttura della
-                Fase 8 gia in uso: nessuna messaggistica nuova passa di qui. */}
-            <HeaderInboxActions />
-            {autenticato && (
-              // Ultimo elemento di una riga che scorre da sinistra a destra:
-              // e cosi che l'avatar sta all'estrema destra, senza posizionamento
-              // assoluto che poi litiga con il resto.
-              //
-              // Solo mobile: su desktop la barra principale ha gia la voce
-              // Account, e questo task non tocca quella shell.
-              <Link
-                href="/account"
-                aria-label="Account"
-                data-testid="header-avatar-link"
-                // Stesso confronto della barra: `startsWith` nudo direbbe
-                // "pagina corrente" anche su una futura rotta che comincia per
-                // /account senza esserlo, ed e' la bugia che gli screen reader
-                // leggono per prima.
-                aria-current={percorsoAttivo("/account", pathname) ? "page" : undefined}
-                className="rounded-full p-0.5 hover:bg-secondary md:hidden"
-              >
-                <AvatarPersona
-                  avatarUrl={authProfilo?.avatarUrl}
-                  proprietarioId={authProfilo?.userId}
-                />
-              </Link>
-            )}
-          </div>
+              {/* Messaggi e Notifiche, in quest'ordine, dall'infrastruttura della
+                  Fase 8 gia in uso: nessuna messaggistica nuova passa di qui. */}
+              <HeaderInboxActions />
+              {autenticato && (
+                // Ultimo elemento di una riga che scorre da sinistra a destra:
+                // e cosi che l'avatar sta all'estrema destra, senza posizionamento
+                // assoluto che poi litiga con il resto.
+                //
+                // Solo mobile: su desktop la barra principale ha gia la voce
+                // Account, e questo task non tocca quella shell.
+                <Link
+                  href="/account"
+                  aria-label="Account"
+                  data-testid="header-avatar-link"
+                  // Stesso confronto della barra: `startsWith` nudo direbbe
+                  // "pagina corrente" anche su una futura rotta che comincia per
+                  // /account senza esserlo, ed e' la bugia che gli screen reader
+                  // leggono per prima.
+                  aria-current={percorsoAttivo("/account", pathname) ? "page" : undefined}
+                  className="rounded-full p-0.5 hover:bg-secondary md:hidden"
+                >
+                  <AvatarPersona
+                    avatarUrl={authProfilo?.avatarUrl}
+                    proprietarioId={authProfilo?.userId}
+                  />
+                </Link>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
@@ -237,16 +239,18 @@ export function VineaLayout({
         {children}
       </main>
 
+      {/* In focus i rimandi legali restano raggiungibili ma si aprono in una
+          nuova scheda: leggerli non deve far uscire il tester dalla guida. */}
       <footer className="mx-auto max-w-6xl px-4 pb-6 text-center text-xs text-muted-foreground">
-          <Link href="/legale" className="underline-offset-2 hover:text-bordeaux hover:underline">
+          <Link href="/legale" {...legaleInFocus} className="underline-offset-2 hover:text-bordeaux hover:underline">
             Centro legale
           </Link>
           <span aria-hidden="true" className="mx-2">·</span>
-          <Link href="/legale#privacy" className="underline-offset-2 hover:text-bordeaux hover:underline">Privacy</Link>
+          <Link href="/legale#privacy" {...legaleInFocus} className="underline-offset-2 hover:text-bordeaux hover:underline">Privacy</Link>
           <span aria-hidden="true" className="mx-2">·</span>
-          <Link href="/legale#termini" className="underline-offset-2 hover:text-bordeaux hover:underline">Termini</Link>
+          <Link href="/legale#termini" {...legaleInFocus} className="underline-offset-2 hover:text-bordeaux hover:underline">Termini</Link>
           <span aria-hidden="true" className="mx-2">·</span>
-          <Link href="/legale#cookie" className="underline-offset-2 hover:text-bordeaux hover:underline">Cookie</Link>
+          <Link href="/legale#cookie" {...legaleInFocus} className="underline-offset-2 hover:text-bordeaux hover:underline">Cookie</Link>
       </footer>
 
       {!focus && (
@@ -301,8 +305,32 @@ export function VineaLayout({
 
       <Toaster position="top-center" richColors />
 
-      {AI_UI.sommelier && <SommelierChat />}
+      {/* Il Sommelier non fa parte della guida Market Validation: in focus il
+          launcher non si monta. */}
+      {!focus && AI_UI.sommelier && <SommelierChat />}
     </div>
+  );
+}
+
+function Marchio() {
+  return (
+    <>
+      <VineaLogo />
+      <span className="flex flex-col leading-none">
+        <span className="font-serif text-2xl font-semibold tracking-tight text-bordeaux">
+          Vinea
+        </span>
+        <span className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.35em] text-oro">
+          Wine Club
+        </span>
+      </span>
+      <span
+        className="rounded-full border border-oro/50 bg-oro/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-bordeaux"
+        data-testid="beta-badge"
+      >
+        Beta
+      </span>
+    </>
   );
 }
 

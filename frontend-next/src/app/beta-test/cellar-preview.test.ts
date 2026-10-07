@@ -1,14 +1,17 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { phaseLabel, THEME_LABELS } from "@/data/cellar";
 import {
   MARKET_VALIDATION_CELLAR_BOTTLES,
+  MARKET_VALIDATION_CELLAR_REFERENCE_YEAR,
   MARKET_VALIDATION_CELLAR_STATUS_LABEL,
   MARKET_VALIDATION_CELLAR_THEMES,
   MARKET_VALIDATION_CELLAR_VALUE_SERIES,
   marketValidationCellarDrinkWindow,
   marketValidationCellarKpis,
+  marketValidationCellarMaturityPercent,
+  marketValidationCellarStatusCounts,
   marketValidationCellarThemeLabel,
 } from "@/lib/market-validation/cellar-preview";
 import {
@@ -29,12 +32,13 @@ describe("card Cantina nell'hub", () => {
     const source = hub();
     const areasStart = source.indexOf("const areas");
     const areas = source.slice(areasStart, source.indexOf("return (", areasStart));
-    expect(areas).not.toInclude("Cantina");
-    expect(areas).not.toInclude("cellar");
+    // «Cantina» compare nella copy di Vendi: qui conta che la card non sia uno step.
+    expect(areas).not.toInclude("La tua Cantina");
+    expect(areas).not.toInclude("\"cellar\"");
 
     const grid = source.indexOf("{areas.map((area) => (");
     const card = source.indexOf('onClick={() => onOpen("cellar")}');
-    const banner = source.indexOf("Il percorso di acquisto è simulato");
+    const banner = source.indexOf("Tutto il test si svolge qui");
     expect(grid).toBeGreaterThan(0);
     expect(card).toBeGreaterThan(grid);
     expect(banner).toBeGreaterThan(card);
@@ -44,7 +48,7 @@ describe("card Cantina nell'hub", () => {
     const source = hub();
     const card = source.slice(
       source.indexOf('onClick={() => onOpen("cellar")}'),
-      source.indexOf("Il percorso di acquisto è simulato"),
+      source.indexOf("Tutto il test si svolge qui"),
     );
     expect(card).toInclude("La tua Cantina");
     expect(card).toInclude(">Scopri<");
@@ -60,7 +64,8 @@ describe("card Cantina nell'hub", () => {
 
   it("non tocca il conteggio «0 di 2» né la completion", () => {
     const source = hub();
-    expect(source).toInclude("{percent / 50} di 2 completati");
+    expect(source).toInclude("const stepsDone = percent / 50;");
+    expect(source).toInclude("{stepsDone} di 2 completati");
     expect(source).toInclude("const completed = marketValidationCanComplete(progress);");
     // La completion dipende solo da acquisto e vendita, qualunque altra cosa sia vista.
     expect(marketValidationCanComplete(INITIAL_MARKET_VALIDATION_PROGRESS)).toBeFalse();
@@ -90,12 +95,11 @@ describe("anteprima Cantina", () => {
     expect(source).toInclude("Dati di esempio.");
     expect(source).toInclude("Nessuna bottiglia reale viene aggiunta");
     expect(source).toInclude("Dati di esempio, non dati di mercato.");
-    expect(source).toInclude("La scelta cambia solo questa anteprima e non viene salvata.");
   });
 
-  it("mostra fra tre e cinque bottiglie d'esempio con gli stati della Cantina reale", () => {
-    expect(MARKET_VALIDATION_CELLAR_BOTTLES.length).toBeGreaterThanOrEqual(3);
-    expect(MARKET_VALIDATION_CELLAR_BOTTLES.length).toBeLessThanOrEqual(5);
+  it("mostra fra quattro e otto bottiglie d'esempio con gli stati della Cantina reale", () => {
+    expect(MARKET_VALIDATION_CELLAR_BOTTLES.length).toBeGreaterThanOrEqual(4);
+    expect(MARKET_VALIDATION_CELLAR_BOTTLES.length).toBeLessThanOrEqual(8);
     const statuses = new Set(MARKET_VALIDATION_CELLAR_BOTTLES.map((bottle) => bottle.status));
     expect([...statuses].sort()).toEqual(["cantina_pubblica", "in_vendita", "privata"]);
     expect(MARKET_VALIDATION_CELLAR_STATUS_LABEL).toEqual({
@@ -123,10 +127,10 @@ describe("anteprima Cantina", () => {
 
   it("deriva i KPI d'esempio dalle bottiglie d'esempio e li etichetta come esempio", () => {
     expect(marketValidationCellarKpis()).toEqual({
-      bottles: 7,
-      referenceValueCents: 46000,
-      forSale: 2,
-      readyToDrink: 3,
+      bottles: 10,
+      referenceValueCents: 58950,
+      forSale: 3,
+      readyToDrink: 4,
     });
     const source = preview();
     for (const label of ["Bottiglie", "Valore di riferimento", "In vendita", "Pronte da bere"]) {
@@ -171,9 +175,9 @@ describe("anteprima Cantina", () => {
 
   it("mostra la finestra di bevuta con i quattro riquadri della Cantina reale", () => {
     expect(marketValidationCellarDrinkWindow()).toEqual({
-      drinkNow: 2,
+      drinkNow: 3,
       drinkSoon: 1,
-      wait: 1,
+      wait: 2,
       plannedOpenings: 1,
     });
     const source = preview();
@@ -185,7 +189,7 @@ describe("anteprima Cantina", () => {
     expect(source).toInclude("La Cantina non è solo un valore");
   });
 
-  it("usa tre preset estetici reali che cambiano solo l'anteprima locale", () => {
+  it("racconta il 3D con un'immagine d'esempio, senza una finta esperienza 3D", () => {
     expect([...MARKET_VALIDATION_CELLAR_THEMES]).toEqual(["moderna", "classica", "rustica"]);
     expect(MARKET_VALIDATION_CELLAR_THEMES.map(marketValidationCellarThemeLabel)).toEqual([
       THEME_LABELS.moderna,
@@ -194,21 +198,74 @@ describe("anteprima Cantina", () => {
     ]);
     const source = preview();
     expect(source).toInclude("La Cantina può essere organizzata e personalizzata in base al tuo spazio");
-    expect(source).toInclude('useState<MarketValidationCellarTheme>("moderna")');
-    expect(source).toInclude("aria-pressed={theme === option}");
+    expect(source).toInclude("li arredi e li guardi anche in 3D");
+    expect(source).toInclude('src="/images/vinea-cellar.jpg"');
+    expect(source).toInclude("Immagine d&apos;esempio");
+    expect(source).toInclude("In questa anteprima la vista 3D non è disponibile.");
+    // Niente rack interattivo, preset selezionabili o motore 3D.
+    for (const removed of [
+      "useState<MarketValidationCellarTheme>",
+      "aria-pressed={theme === option}",
+      "mv-cellar-rack",
+      "Cellar3D",
+      "three",
+      "@react-three",
+      "<canvas",
+    ]) {
+      expect(source).not.toInclude(removed);
+    }
     expect(source).not.toMatch(/localStorage|sessionStorage|creaAmbiente|useEnvironmentConfigurator/);
   });
 
-  it("chiude con la vera Cantina in nuova scheda e spiega che serve un account", () => {
+  it("presenta le bottiglie come schede visive consultabili, con filtri e dettaglio", () => {
     const source = preview();
-    expect(source).toInclude("Per utilizzare la tua Cantina personale serve un account Vinea.");
-    const links = source.match(/<Link\b[^>]*>/g) ?? [];
-    expect(links).toHaveLength(1);
-    expect(links[0]).toInclude('href="/cantina"');
-    expect(links[0]).toInclude('target="_blank"');
-    expect(links[0]).toInclude('rel="noopener noreferrer"');
-    expect(source).toInclude("Apri la vera Cantina");
+    expect(source).toInclude("<WineThumbnail src={bottle.image}");
+    expect(source).toInclude('const [filter, setFilter] = useState<Filter>("tutte")');
+    expect(source).toInclude("aria-pressed={filter === option}");
+    expect(source).toInclude("onClick={() => setSelected(bottle)}");
+    expect(source).toInclude("<CellarBottleDetail bottle={selected} onBack={() => setSelected(null)} />");
+    expect(source).toInclude("Tre modi di tenere una bottiglia");
+    expect(source).toInclude("Finestra di bevuta");
+    expect(marketValidationCellarStatusCounts()).toEqual({ in_vendita: 2, privata: 2, cantina_pubblica: 2 });
+    for (const bottle of MARKET_VALIDATION_CELLAR_BOTTLES) {
+      expect(existsSync(resolve(root, "frontend-next/public", `.${bottle.image}`))).toBeTrue();
+      expect(bottle.drinkTo).toBeGreaterThan(bottle.drinkFrom);
+    }
+    for (const image of ["vinea-crate.jpg", "vinea-cellar.jpg"]) {
+      expect(existsSync(resolve(root, "frontend-next/public/images", image))).toBeTrue();
+    }
+  });
+
+  it("colloca l'anno di riferimento fisso dentro la finestra di bevuta", () => {
+    expect(MARKET_VALIDATION_CELLAR_REFERENCE_YEAR).toBe(2026);
+    expect(marketValidationCellarMaturityPercent({ drinkFrom: 2027, drinkTo: 2040 })).toBe(0);
+    expect(marketValidationCellarMaturityPercent({ drinkFrom: 2022, drinkTo: 2026 })).toBe(100);
+    expect(marketValidationCellarMaturityPercent({ drinkFrom: 2024, drinkTo: 2028 })).toBe(50);
+    expect(marketValidationCellarMaturityPercent({ drinkFrom: 2030, drinkTo: 2030 })).toBe(0);
+    // La fase dichiarata è coerente con la posizione nella finestra.
+    for (const bottle of MARKET_VALIDATION_CELLAR_BOTTLES) {
+      const percent = marketValidationCellarMaturityPercent(bottle);
+      if (bottle.phase === "attesa") expect(percent).toBe(0);
+      if (bottle.phase === "presto") expect(percent).toBe(100);
+      if (bottle.phase === "pronto" || bottle.phase === "ideale") {
+        expect(percent).toBeGreaterThan(0);
+        expect(percent).toBeLessThan(100);
+      }
+    }
+    // L'anteprima non legge l'orologio.
+    expect(preview()).not.toMatch(/new Date|Date\.now/);
+    expect(data()).not.toMatch(/new Date|Date\.now/);
+  });
+
+  it("resta dentro la guida: nessun link alla vera Cantina o al sito", () => {
+    const source = preview();
+    expect(source).not.toMatch(/<Link\b/);
+    expect(source).not.toInclude("next/link");
+    expect(source).not.toInclude("href");
+    expect(source).not.toInclude("Apri la vera Cantina");
     expect(source).not.toMatch(/registrati|\/accedi/i);
+    expect(source).toInclude("<DemoBackButton onBack={onBack} />");
+    expect(source).toInclude("Torna al test");
   });
 
   it("è una preview UI: nessun servizio, store, rete o scrittura", () => {

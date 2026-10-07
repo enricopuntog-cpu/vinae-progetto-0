@@ -71,12 +71,58 @@ describe("la shell applica la modalità focus", () => {
     expect(guardia).toBeGreaterThan(layout.indexOf('data-testid="brand-logo-link"'));
     expect(desktop).toBeGreaterThan(guardia);
     expect(layout.slice(guardia, desktop)).not.toInclude("</nav>");
-    // Marchio e azioni dell'header restano fuori dalla guardia.
     expect(layout.indexOf('data-testid="app-header"')).toBeLessThan(guardia);
-    expect(layout.indexOf('className="ml-auto flex items-center gap-2"')).toBeGreaterThan(
-      layout.indexOf("</nav>", desktop),
+    // Navigazione desktop, azioni dell'header e barra mobile.
+    expect(layout.match(/\{!focus && \(/g)).toHaveLength(3);
+  });
+
+  it("in focus il marchio resta visibile ma non è un link", () => {
+    const ramo = layout.slice(layout.indexOf("{focus ? ("), layout.indexOf(") : (", layout.indexOf("{focus ? (")));
+    expect(ramo).toInclude('data-testid="brand-logo-static"');
+    expect(ramo).toInclude("<Marchio />");
+    expect(ramo).not.toInclude("<Link");
+    expect(ramo).not.toInclude("href");
+    // Fuori dalla guida il marchio porta alla home come prima.
+    const link = layout.slice(layout.indexOf(") : (", layout.indexOf("{focus ? (")));
+    expect(link.slice(0, link.indexOf("</Link>"))).toInclude(
+      '<Link href="/" className="flex items-center gap-2.5" data-testid="brand-logo-link">',
     );
-    expect(layout.match(/\{!focus && \(/g)).toHaveLength(2);
+    expect(layout.match(/data-testid="beta-badge"/g)).toHaveLength(1);
+  });
+
+  it("in focus non disegna nessuna azione dell'header", () => {
+    const azioni = layout.indexOf('className="ml-auto flex items-center gap-2"');
+    const guardia = layout.lastIndexOf("{!focus && (", azioni);
+    expect(guardia).toBeGreaterThan(layout.indexOf("</nav>", layout.indexOf('data-testid="desktop-nav"')));
+    // Tra la guardia e il contenitore delle azioni c'è solo il contenitore.
+    expect(layout.slice(guardia + "{!focus && (".length, azioni).trim()).toBe("<div");
+    const fine = layout.indexOf("</header>");
+    const blocco = layout.slice(azioni, fine);
+    for (const azione of ["cta-register", "header-search-link", "<HeaderInboxActions />", "header-avatar-link", "<DemoSwitch"]) {
+      expect(blocco).toInclude(azione);
+    }
+  });
+
+  it("in focus non monta il Sommelier, che non fa parte della guida", () => {
+    expect(layout).toInclude("{!focus && AI_UI.sommelier && <SommelierChat />}");
+    expect(layout.match(/<SommelierChat \/>/g)).toHaveLength(1);
+  });
+
+  it("in focus apre i rimandi legali del footer in una nuova scheda, altrove come prima", () => {
+    expect(layout).toInclude(
+      'const legaleInFocus = focus\n    ? ({ target: "_blank", rel: "noopener noreferrer" } as const)\n    : {};',
+    );
+    const footer = layout.slice(layout.indexOf("<footer"), layout.indexOf("</footer>"));
+    const link = footer.match(/<Link [^>]*>/g) ?? [];
+    expect(link.map((tag) => tag.match(/href="([^"]+)"/)?.[1])).toEqual([
+      "/legale",
+      "/legale#privacy",
+      "/legale#termini",
+      "/legale#cookie",
+    ]);
+    for (const tag of link) expect(tag).toInclude("{...legaleInFocus}");
+    // Nessun altro target nel footer: fuori dalla guida lo spread è vuoto.
+    expect(footer).not.toInclude("target=");
   });
 
   it("toglie lo spazio della barra inferiore solo in focus", () => {

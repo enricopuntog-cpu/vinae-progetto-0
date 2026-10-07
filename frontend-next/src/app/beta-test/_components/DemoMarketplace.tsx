@@ -23,6 +23,7 @@ import {
 } from "@/lib/market-validation/demo-data";
 import { formatMarketValidationEuroCents } from "@/lib/market-validation/mv2-flow";
 import type { MarketValidationDemoId } from "@/lib/market-validation/progress";
+import { DemoBackButton } from "./DemoBackButton";
 import type { MarketValidationTrack } from "./types";
 
 export function DemoMarketplace({
@@ -71,13 +72,11 @@ export function DemoMarketplace({
 
   return (
     <section className="space-y-5" aria-labelledby="marketplace-title">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-bordeaux">Simulazione acquisto</p>
-          <h1 id="marketplace-title" className="mt-1 font-serif text-3xl font-semibold">Marketplace demo</h1>
-          <p className="mt-2 text-sm text-muted-foreground">40 annunci fittizi, nessuna bottiglia realmente in vendita.</p>
-        </div>
-        <Button type="button" variant="outline" className="min-h-11 shrink-0" onClick={onBack}>Hub</Button>
+      <DemoBackButton onBack={onBack} />
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-bordeaux">Step 1 · Simulazione acquisto</p>
+        <h1 id="marketplace-title" className="mt-1 font-serif text-3xl font-semibold">Marketplace demo</h1>
+        <p className="mt-2 text-base text-muted-foreground">40 annunci fittizi, nessuna bottiglia realmente in vendita.</p>
       </div>
 
       <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-2">
