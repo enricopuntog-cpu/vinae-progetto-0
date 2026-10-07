@@ -1235,6 +1235,23 @@ fondazione.
   governati da `AI_UI` e presenta la foto/sfondo come funzione in sviluppo. Il
   codice MV importa solo moduli MV, UI e tipi: navigare verso Vinea reale è
   ammesso, chiamarne le porte di dominio no.
+- Guida autocontenuta (7 ottobre 2026, dopo la PR #187; supera il punto
+  precedente sulle uscite verso Vinea reale): durante il test la guida non porta
+  mai al sito. Vendi e Club tornano schermate interne (`SellDemo`, `ClubDemo`)
+  con fixture statiche `mv_sell_*` e `mv_club_*`, senza upload, form persistiti,
+  iscrizioni, post o follow. Vendi ricalca `/vendi` (foto d'esempio, assistente
+  AI con suggerimenti statici, le tre destinazioni con le stesse parole,
+  riepilogo) e si completa solo sulla conferma finale dopo `sell_completed`
+  registrato; Club registra `club_viewed` all'apertura e descrive soltanto
+  funzioni reali. Anteprima AI e Cantina non hanno link; l'unica uscita è
+  «Continua a esplorare Vinea» dopo `beta_completed`. In modalità focus
+  (`/beta-test`) la shell non disegna navigazione, azioni dell'header né
+  Sommelier e il marchio non è un link; il footer legale resta raggiungibile ma
+  apre Centro legale, Privacy, Termini e Cookie in una nuova scheda
+  (`noopener noreferrer`), mentre fuori dalla guida resta identico. I Club
+  d'esempio portano un segno «Esempio» in elenco e nel dettaglio. La UI parla di
+  «Step 1/2» e «Approfondimento», ma la completion resta legata ad acquisto e
+  vendita. Tassonomia eventi, DB e RPC sono invariati.
 - MV3 aggiunge `/admin/beta-validation` nell'area admin esistente e riusa
   `user_roles` più `eAdminReale`; non crea un nuovo ruolo amministrativo. Le
   tabelle MV restano `private`, senza `SELECT` browser o policy pubbliche: due RPC

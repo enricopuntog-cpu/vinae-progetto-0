@@ -1,10 +1,8 @@
-import Link from "next/link";
-import type { ReactNode } from "react";
 import {
   Bot,
   Check,
   ChevronRight,
-  ExternalLink,
+  Flag,
   Grape,
   ShoppingBag,
   Store,
@@ -25,187 +23,130 @@ export type MarketValidationScreen =
   | "marketplace"
   | "detail"
   | "checkout"
+  | "seller"
   | "ai"
+  | "club"
   | "cellar"
   | "complete";
 
-// Vendi e Club non hanno una copia dentro il test: la card apre la vera
-// superficie di Vinea in una nuova scheda, così questa guida resta aperta.
+// Ogni card apre una schermata interna della guida: nessuna porta verso le
+// pagine reali di Vinea. I due step contano per il traguardo; gli
+// approfondimenti si scoprono quando si vuole.
 type HubArea = {
   key: string;
+  screen: MarketValidationScreen;
   icon: LucideIcon;
   title: string;
   text: string;
-  note?: string;
   done: boolean;
-  required: boolean;
+  badge: "Step 1" | "Step 2" | "Approfondimento";
   cta: string;
-} & (
-  | { kind: "screen"; screen: MarketValidationScreen }
-  | { kind: "real"; href: "/vendi" | "/community"; onOpen: () => void }
-);
+};
 
 const CARD_CLASS =
-  "group flex min-h-36 flex-1 flex-col rounded-2xl border border-border bg-card p-5 text-left shadow-sm transition hover:border-bordeaux/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "group flex min-h-36 w-full flex-1 flex-col rounded-2xl border border-border bg-card p-5 text-left shadow-sm transition hover:border-bordeaux/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export function ValidationHub({
   participantCode,
   progress,
   completing,
   completionError,
-  sellerOpened,
-  sellerConfirming,
-  sellerError,
   onOpen,
-  onSellerOpen,
-  onSellerConfirm,
-  onClubOpen,
   onComplete,
 }: {
   participantCode: string;
   progress: MarketValidationProgress;
   completing: boolean;
   completionError: string | null;
-  sellerOpened: boolean;
-  sellerConfirming: boolean;
-  sellerError: string | null;
   onOpen: (screen: MarketValidationScreen) => void;
-  onSellerOpen: () => void;
-  onSellerConfirm: () => void;
-  onClubOpen: () => void;
   onComplete: () => void;
 }) {
   const completed = marketValidationCanComplete(progress);
   const percent = marketValidationProgressPercent(progress);
+  const stepsDone = percent / 50;
   const areas: HubArea[] = [
     {
       key: "buyer",
-      kind: "screen",
       screen: "marketplace",
       icon: ShoppingBag,
       title: "Acquista",
-      text: "Esplora 40 annunci demo e completa un checkout simulato.",
+      text: "Esplora 40 annunci demo e completa un acquisto simulato.",
       done: progress.buyerCompleted,
-      required: true,
-      cta: "Apri",
+      badge: "Step 1",
+      cta: "Inizia",
     },
     {
       key: "seller",
-      kind: "real",
-      href: "/vendi",
-      onOpen: onSellerOpen,
+      screen: "seller",
       icon: Store,
       title: "Vendi",
-      text: "Prova il vero percorso di Vinea per aggiungere una bottiglia alla cantina o metterla in vendita.",
-      note: "Apre la vera funzione di Vinea in una nuova scheda: per alcune azioni può servirti un account. Non serve pubblicare un annuncio per completare il test.",
+      text: "Aggiungi una bottiglia con l'aiuto dell'AI e scegli se tenerla in Cantina o metterla in vendita.",
       done: progress.sellerCompleted,
-      required: true,
-      cta: "Prova la vendita",
+      badge: "Step 2",
+      cta: "Inizia",
     },
     {
       key: "ai",
-      kind: "screen",
       screen: "ai",
       icon: Bot,
       title: "Anteprima AI",
-      text: "Scopri come Vinea usa l'AI e guarda un'anteprima fotografica.",
+      text: "Scopri dove Vinea usa l'AI e guarda un'anteprima fotografica.",
       done: progress.aiPreviewViewed,
-      required: false,
-      cta: "Apri",
+      badge: "Approfondimento",
+      cta: "Scopri",
     },
     {
       key: "club",
-      kind: "real",
-      href: "/community",
-      onOpen: onClubOpen,
+      screen: "club",
       icon: Users,
       title: "Club",
-      text: "Scopri le community di Vinea: trova Club dedicati a territori, denominazioni, produttori e passioni.",
-      note: "Leggi le discussioni; con un account puoi seguire i Club e crearne di nuovi. I Club aperti accolgono subito, quelli chiusi su approvazione.",
+      text: "Scopri le community di Vinea dedicate a territori, denominazioni, produttori e passioni.",
       done: progress.clubViewed,
-      required: false,
-      cta: "Esplora i Club",
+      badge: "Approfondimento",
+      cta: "Scopri",
     },
   ];
+  const nextStep = areas.find((area) => area.badge !== "Approfondimento" && !area.done);
 
   return (
     <section className="space-y-6" aria-labelledby="mv-hub-title">
       <div className="rounded-3xl border border-border bg-card p-5 md:p-8">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-bordeaux">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-bordeaux">
               Hub tester
             </p>
             <h1 id="mv-hub-title" className="mt-2 font-serif text-3xl font-semibold md:text-4xl">
               Prova Vinea
             </h1>
           </div>
-          <span className="rounded-full border border-bordeaux/20 bg-bordeaux/5 px-3 py-1 text-xs font-semibold text-bordeaux">
+          <span className="rounded-full border border-bordeaux/20 bg-bordeaux/5 px-3 py-1 text-sm font-semibold text-bordeaux">
             Test {participantCode}
           </span>
         </div>
 
         <div className="mt-6 space-y-2">
-          <div className="flex items-center justify-between gap-4 text-sm">
-            <span className="font-medium">Percorsi obbligatori</span>
-            <span className="text-muted-foreground">{percent / 50} di 2 completati</span>
+          <div className="flex items-center justify-between gap-4 text-base">
+            <span className="font-semibold">Step del test</span>
+            <span className="text-muted-foreground">{stepsDone} di 2 completati</span>
           </div>
-          <Progress value={percent} aria-label={`${percent}% del test obbligatorio completato`} />
-          <p className="text-xs text-muted-foreground">
-            Acquisto e vendita sono obbligatori. AI e Club sono facoltativi.
+          <Progress value={percent} aria-label={`${stepsDone} step del test su 2 completati`} />
+          <p className="text-base leading-7 text-muted-foreground">
+            Completa i due step, Acquista e Vendi, per raggiungere il traguardo. AI, Club e Cantina sono approfondimenti da scoprire quando vuoi.
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {areas.map((area) => (
-          <div key={area.key} className="flex flex-col gap-2">
-            {area.kind === "screen" ? (
-              <button type="button" onClick={() => onOpen(area.screen)} className={CARD_CLASS}>
-                <CardBody area={area} icon={<ChevronRight className="h-4 w-4" aria-hidden />} />
-              </button>
-            ) : (
-              <Link
-                href={area.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={area.onOpen}
-                className={CARD_CLASS}
-              >
-                <CardBody area={area} icon={<ExternalLink className="h-4 w-4" aria-hidden />} />
-                <span className="sr-only"> (si apre in una nuova scheda)</span>
-              </Link>
-            )}
-            {area.key === "seller" && sellerOpened && !progress.sellerCompleted && (
-              <div
-                role="group"
-                aria-labelledby="mv-seller-confirm-title"
-                className="space-y-3 rounded-2xl border border-bordeaux/20 bg-bordeaux/5 p-4"
-              >
-                <p id="mv-seller-confirm-title" className="text-sm font-semibold">
-                  Hai provato il percorso di vendita?
-                </p>
-                <Button
-                  type="button"
-                  className="min-h-11 w-full bg-bordeaux hover:bg-bordeaux/90"
-                  disabled={sellerConfirming}
-                  onClick={onSellerConfirm}
-                >
-                  {sellerConfirming ? "Registrazione in corso…" : "Sì, l'ho provato"}
-                </Button>
-                {sellerError && (
-                  <p role="alert" className="text-sm text-bordeaux">
-                    {sellerError}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
+          <button key={area.key} type="button" onClick={() => onOpen(area.screen)} className={CARD_CLASS}>
+            <CardBody area={area} />
+          </button>
         ))}
       </div>
 
-      {/* Scoperta facoltativa fuori da `areas`: non è un percorso del test e
-          non entra nel conteggio dei percorsi obbligatori. */}
+      {/* Scoperta facoltativa fuori da `areas`: non è uno step del test e non
+          entra nel conteggio degli step. */}
       <button
         type="button"
         onClick={() => onOpen("cellar")}
@@ -217,52 +158,52 @@ export function ValidationHub({
         <span className="flex-1">
           <span className="flex items-start justify-between gap-3">
             <span className="font-serif text-xl font-semibold group-hover:text-bordeaux">La tua Cantina</span>
-            <span className="rounded-full bg-secondary px-2.5 py-1 text-xs text-muted-foreground">Scopri</span>
+            <span className="rounded-full bg-secondary px-2.5 py-1 text-sm text-muted-foreground">Scopri</span>
           </span>
-          <span className="mt-1 block text-sm leading-5 text-muted-foreground">
+          <span className="mt-1 block text-base leading-6 text-muted-foreground">
             Organizza la tua collezione, decidi quali bottiglie mostrare o vendere e segui nel tempo il valore della Cantina.
           </span>
-          <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-bordeaux">
+          <span className="mt-3 inline-flex items-center gap-1 text-base font-medium text-bordeaux">
             Scopri la Cantina <ChevronRight className="h-4 w-4" aria-hidden />
           </span>
         </span>
       </button>
 
-      <div className="rounded-2xl border border-oro/40 bg-oro/10 p-4 text-sm text-antracite">
+      <div className="rounded-2xl border border-oro/40 bg-oro/10 p-4 text-base leading-7 text-antracite">
         <div className="flex gap-3">
-          <Grape className="mt-0.5 h-5 w-5 shrink-0 text-bordeaux" aria-hidden />
+          <Grape className="mt-1 h-5 w-5 shrink-0 text-bordeaux" aria-hidden />
           <p>
-            Il percorso di acquisto è simulato e non crea ordini o pagamenti. Alcune
-            sezioni della guida aprono le vere funzioni di Vinea: non è necessario
-            pubblicare un annuncio reale per completare il test.
+            Tutto il test si svolge qui ed è una simulazione: non crea ordini,
+            pagamenti, annunci o spedizioni reali. Prenditi il tempo che vuoi.
           </p>
         </div>
       </div>
 
       {completionError && (
-        <p role="alert" className="rounded-xl border border-bordeaux/30 bg-bordeaux/5 p-3 text-sm text-bordeaux">
+        <p role="alert" className="rounded-xl border border-bordeaux/30 bg-bordeaux/5 p-3 text-base text-bordeaux">
           {completionError}
         </p>
       )}
       <Button
         type="button"
         size="lg"
-        className="min-h-12 w-full bg-bordeaux hover:bg-bordeaux/90"
+        className="min-h-12 w-full gap-2 bg-bordeaux text-base hover:bg-bordeaux/90"
         disabled={!completed || completing}
         onClick={onComplete}
       >
-        {completing ? "Completamento in corso…" : "Completa il test"}
+        <Flag className="h-4 w-4" aria-hidden />
+        {completing ? "Completamento in corso…" : "Raggiungi il traguardo"}
       </Button>
-      {!completed && (
-        <p className="text-center text-xs text-muted-foreground">
-          Completa prima i percorsi di acquisto e vendita.
-        </p>
-      )}
+      <p className="text-center text-base text-muted-foreground">
+        {completed
+          ? "Hai completato entrambi gli step: concludi quando vuoi."
+          : nextStep && `Prossimo passo: ${nextStep.badge}, ${nextStep.title}.`}
+      </p>
     </section>
   );
 }
 
-function CardBody({ area, icon }: { area: HubArea; icon: ReactNode }) {
+function CardBody({ area }: { area: HubArea }) {
   const Icon = area.icon;
   return (
     <>
@@ -271,20 +212,25 @@ function CardBody({ area, icon }: { area: HubArea; icon: ReactNode }) {
           <Icon className="h-5 w-5" aria-hidden />
         </span>
         {area.done ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-salvia/15 px-2.5 py-1 text-xs font-semibold text-salvia">
-            <Check className="h-3.5 w-3.5" aria-hidden /> Completato
+          <span className="inline-flex items-center gap-1 rounded-full bg-salvia/15 px-2.5 py-1 text-sm font-semibold text-salvia">
+            <Check className="h-4 w-4" aria-hidden /> Completato
           </span>
         ) : (
-          <span className="rounded-full bg-secondary px-2.5 py-1 text-xs text-muted-foreground">
-            {area.required ? "Obbligatorio" : "Facoltativo"}
+          <span
+            className={`rounded-full px-2.5 py-1 text-sm ${
+              area.badge === "Approfondimento"
+                ? "bg-secondary text-muted-foreground"
+                : "bg-bordeaux/10 font-semibold text-bordeaux"
+            }`}
+          >
+            {area.badge}
           </span>
         )}
       </div>
       <h2 className="mt-4 font-serif text-xl font-semibold group-hover:text-bordeaux">{area.title}</h2>
-      <p className="mt-1 text-sm leading-5 text-muted-foreground">{area.text}</p>
-      {area.note && <p className="mt-2 text-xs leading-5 text-muted-foreground">{area.note}</p>}
-      <span className="mt-auto inline-flex items-center gap-1 pt-3 text-sm font-medium text-bordeaux">
-        {area.cta} {icon}
+      <p className="mt-1 text-base leading-6 text-muted-foreground">{area.text}</p>
+      <span className="mt-auto inline-flex items-center gap-1 pt-3 text-base font-medium text-bordeaux">
+        {area.cta} <ChevronRight className="h-4 w-4" aria-hidden />
       </span>
     </>
   );

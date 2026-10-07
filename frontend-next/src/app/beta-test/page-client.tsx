@@ -32,9 +32,11 @@ import {
 } from "@/lib/market-validation/progress";
 import { startMarketValidationSession } from "./actions";
 import { CellarPreview } from "./_components/CellarPreview";
+import { ClubDemo } from "./_components/ClubDemo";
 import { DemoCheckout } from "./_components/DemoCheckout";
 import { DemoListingDetail } from "./_components/DemoListingDetail";
 import { DemoMarketplace } from "./_components/DemoMarketplace";
+import { SellDemo } from "./_components/SellDemo";
 import { StaticAiPreview } from "./_components/StaticAiPreview";
 import {
   ValidationHub,
@@ -147,7 +149,7 @@ export default function BetaTestPageClient({
     <div className="mx-auto max-w-2xl space-y-6">
       <section className="rounded-3xl border border-border bg-card p-5 md:p-8">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-bordeaux">
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-bordeaux">
             Market Validation
           </p>
           <h1 className="mt-2 font-serif text-3xl font-semibold md:text-4xl">
@@ -155,12 +157,12 @@ export default function BetaTestPageClient({
           </h1>
         </div>
 
-        <p className="mt-5 max-w-xl whitespace-pre-line text-sm leading-6 text-muted-foreground md:text-base">
+        <p className="mt-5 max-w-xl whitespace-pre-line text-base leading-7 text-muted-foreground md:text-lg">
           {`Stai partecipando alla fase di Beta Testing di Vinea Wine Club.
-Puoi esplorare il marketplace, simulare un acquisto e provare
-il vero percorso per mettere in vendita una bottiglia.
-L'acquisto è simulato: non comporterà un pagamento,
-un ordine o una spedizione reale.`}
+In due step proverai ad acquistare una bottiglia e ad aggiungerne
+una tua, poi potrai scoprire AI, Club e Cantina.
+Tutto si svolge qui ed è una simulazione: nessun pagamento,
+ordine, annuncio o spedizione reale.`}
         </p>
 
         <form className="mt-6 max-w-sm space-y-4" onSubmit={begin}>
@@ -185,7 +187,7 @@ un ordine o una spedizione reale.`}
               disabled={!ready || pending}
               className="min-h-11"
             />
-            <p id="participant-code-help" className="text-xs text-muted-foreground">
+            <p id="participant-code-help" className="text-sm text-muted-foreground">
               Usa il codice V001–V999 ricevuto per il test.
             </p>
           </div>
@@ -202,7 +204,7 @@ un ordine o una spedizione reale.`}
 
           <Button
             type="submit"
-            className="min-h-12 w-full bg-bordeaux hover:bg-bordeaux/90"
+            className="min-h-12 w-full bg-bordeaux text-base hover:bg-bordeaux/90"
             disabled={!ready || pending}
           >
             {pending ? "Avvio in corso…" : "Inizia il test"}
@@ -229,9 +231,6 @@ function MarketValidationExperience({
     useState<MarketValidationDemoListing | null>(null);
   const [completing, setCompleting] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
-  const [sellerOpened, setSellerOpened] = useState(false);
-  const [sellerConfirming, setSellerConfirming] = useState(false);
-  const [sellerError, setSellerError] = useState<string | null>(null);
   const track = useMarketValidationTracker(session);
 
   const updateProgress = useCallback(
@@ -265,6 +264,12 @@ function MarketValidationExperience({
     }
     writeMarketValidationProgress(window.localStorage, progress);
   }, [progress, screen]);
+
+  // Ogni schermata della guida si apre dall'alto: su smartphone le card stanno
+  // a metà pagina e il «← Indietro» deve essere subito visibile.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [screen]);
 
   const open = (next: MarketValidationScreen) => {
     setCompletionError(null);
@@ -301,36 +306,17 @@ function MarketValidationExperience({
     setScreen("complete");
   };
 
-  // Vendi e Club aprono le vere pagine di Vinea in una nuova scheda: qui si
-  // registra soltanto l'apertura, senza bloccare la navigazione del link.
-  const openSeller = () => {
-    setSellerOpened(true);
-    setSellerError(null);
-    void track("sell_started", {}, "sell_started");
-  };
+  // Lo step Vendi si chiude solo quando la demo interna ha registrato
+  // `sell_completed` sulla conferma esplicita dell'ultimo passo.
+  const markSellerCompleted = useCallback(
+    () => updateProgress((current) => ({ ...current, sellerCompleted: true })),
+    [updateProgress],
+  );
 
-  // Il percorso venditore si chiude solo sulla conferma esplicita al ritorno,
-  // mai sul semplice click, e solo se l'evento è stato registrato.
-  const confirmSeller = async () => {
-    if (sellerConfirming || progress.sellerCompleted) return;
-    setSellerConfirming(true);
-    setSellerError(null);
-    const result = await track("sell_completed", {}, "sell_completed");
-    setSellerConfirming(false);
-    if (!result.ok) {
-      setSellerError("Non siamo riusciti a registrare la conferma. Puoi riprovare.");
-      return;
-    }
-    updateProgress((current) => ({ ...current, sellerCompleted: true }));
-  };
-
-  const openClub = () => {
-    void track("club_viewed", {}, "club_viewed").then((result) => {
-      if (result.ok) {
-        updateProgress((current) => ({ ...current, clubViewed: true }));
-      }
-    });
-  };
+  const markClubViewed = useCallback(
+    () => updateProgress((current) => ({ ...current, clubViewed: true })),
+    [updateProgress],
+  );
 
   if (screen === "complete") return <ValidationComplete />;
   if (screen === "marketplace") {
@@ -370,6 +356,19 @@ function MarketValidationExperience({
       />
     );
   }
+  if (screen === "seller") {
+    return (
+      <SellDemo
+        completed={progress.sellerCompleted}
+        track={track}
+        onCompleted={markSellerCompleted}
+        onBack={() => open("hub")}
+      />
+    );
+  }
+  if (screen === "club") {
+    return <ClubDemo track={track} onViewed={markClubViewed} onBack={() => open("hub")} />;
+  }
   // La Cantina è una scoperta facoltativa: nessun evento, nessun progresso.
   if (screen === "cellar") return <CellarPreview onBack={() => open("hub")} />;
   if (screen === "ai") {
@@ -393,13 +392,7 @@ function MarketValidationExperience({
       progress={progress}
       completing={completing}
       completionError={completionError}
-      sellerOpened={sellerOpened}
-      sellerConfirming={sellerConfirming}
-      sellerError={sellerError}
       onOpen={open}
-      onSellerOpen={openSeller}
-      onSellerConfirm={confirmSeller}
-      onClubOpen={openClub}
       onComplete={complete}
     />
   );

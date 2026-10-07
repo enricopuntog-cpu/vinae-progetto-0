@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { extname, join, relative, resolve } from "node:path";
+import { MARKET_VALIDATION_CLUB_DEMOS } from "@/lib/market-validation/club-demo";
+import {
+  MARKET_VALIDATION_SELL_DEMO_BOTTLES,
+  MARKET_VALIDATION_SELL_DEMO_DESTINATIONS,
+} from "@/lib/market-validation/sell-demo";
 
 const root = resolve(import.meta.dir, "../../../..");
 const read = (path: string) => readFileSync(resolve(root, path), "utf8");
@@ -31,29 +36,37 @@ const betaSource = () =>
     .map((file) => readFileSync(file, "utf8"))
     .join("\n");
 
-// Le sole superfici reali verso cui la guida può navigare: semplici link,
-// mai una copia della funzione dentro il test. `/cantina` parte solo
-// dall'anteprima Cantina e `/` solo dalla schermata finale.
-const REAL_DESTINATIONS = ["/", "/cantina", "/community", "/esplora", "/vendi"];
+const component = (name: string) => read(`frontend-next/src/app/beta-test/_components/${name}.tsx`);
+
+// Le schermate interne che hanno un ritorno: tutte con lo stesso «← Indietro».
+const SCREENS_WITH_BACK = [
+  "DemoMarketplace",
+  "DemoListingDetail",
+  "DemoCheckout",
+  "SellDemo",
+  "StaticAiPreview",
+  "ClubDemo",
+  "CellarPreview",
+];
 
 describe("Market Validation MV2 UI contract", () => {
-  it("resta single-route: Vendi e Club non sono più schermate interne", () => {
+  it("resta single-route con Vendi e Club come schermate interne della guida", () => {
     const client = read("frontend-next/src/app/beta-test/page-client.tsx");
-    const hub = read("frontend-next/src/app/beta-test/_components/ValidationHub.tsx");
+    const hub = component("ValidationHub");
     expect(client).toInclude("MarketValidationScreen");
     expect(client).toInclude('useState<MarketValidationScreen>("hub")');
     expect(client).not.toInclude("useRouter");
     expect(client).not.toInclude("router.push");
     expect(client).not.toInclude("<Link");
-    expect(client).not.toInclude('screen === "seller"');
-    expect(client).not.toInclude('screen === "club"');
+    expect(client).toInclude('if (screen === "seller")');
+    expect(client).toInclude('if (screen === "club")');
+    expect(client).toInclude("<SellDemo");
+    expect(client).toInclude("<ClubDemo");
     const unionStart = hub.indexOf("export type MarketValidationScreen");
     const screenUnion = hub.slice(unionStart, hub.indexOf(";", unionStart));
-    for (const screen of ["hub", "marketplace", "detail", "checkout", "ai", "cellar", "complete"]) {
+    for (const screen of ["hub", "marketplace", "detail", "checkout", "seller", "ai", "club", "cellar", "complete"]) {
       expect(screenUnion).toInclude(`"${screen}"`);
     }
-    expect(screenUnion).not.toInclude('"seller"');
-    expect(screenUnion).not.toInclude('"club"');
 
     const routes = sourceFiles(resolve(root, "frontend-next/src/app/beta-test"))
       .filter((file) => /[\\/]page\.tsx$/.test(file));
@@ -63,7 +76,7 @@ describe("Market Validation MV2 UI contract", () => {
   it("risolve lo shipping sul server e completa solo dopo gli eventi hard-gated", () => {
     const page = read("frontend-next/src/app/beta-test/page.tsx");
     const client = read("frontend-next/src/app/beta-test/page-client.tsx");
-    const checkout = read("frontend-next/src/app/beta-test/_components/DemoCheckout.tsx");
+    const checkout = component("DemoCheckout");
     expect(page).toInclude("marketValidationShippingFeeCents()");
     expect(page).toInclude("shippingFeeCents=");
     expect(client.indexOf('track("beta_completed"')).toBeLessThan(client.indexOf('setScreen("complete")'));
@@ -73,9 +86,9 @@ describe("Market Validation MV2 UI contract", () => {
 
   it("mantiene il percorso Acquista demo: marketplace, dettaglio, preferiti e checkout", () => {
     const client = read("frontend-next/src/app/beta-test/page-client.tsx");
-    for (const component of ["DemoMarketplace", "DemoListingDetail", "DemoCheckout", "ValidationComplete"]) {
-      expect(existsSync(resolve(betaRoot, `_components/${component}.tsx`))).toBeTrue();
-      expect(client).toInclude(`<${component}`);
+    for (const name of ["DemoMarketplace", "DemoListingDetail", "DemoCheckout", "ValidationComplete"]) {
+      expect(existsSync(resolve(betaRoot, `_components/${name}.tsx`))).toBeTrue();
+      expect(client).toInclude(`<${name}`);
     }
     expect(client).toInclude("favoriteDemoIds");
     expect(client).toInclude("buyerCompleted: true");
@@ -92,25 +105,29 @@ describe("Market Validation MV2 UI contract", () => {
     }
   });
 
-  it("conserva struttura, ordine delle 4 card e obbligatorietà dell'hub approvato", () => {
-    const hub = read("frontend-next/src/app/beta-test/_components/ValidationHub.tsx");
+  it("conserva struttura e ordine delle 4 card, presentate come step e approfondimenti", () => {
+    const hub = component("ValidationHub");
     for (const fixed of [
       "Hub tester",
       "Prova Vinea",
       "Test {participantCode}",
-      "Percorsi obbligatori",
-      "di 2 completati",
-      "Acquisto e vendita sono obbligatori. AI e Club sono facoltativi.",
-      "Obbligatorio",
-      "Facoltativo",
+      "Step del test",
+      "{stepsDone} di 2 completati",
+      "Completa i due step, Acquista e Vendi, per raggiungere il traguardo.",
+      "AI, Club e Cantina sono approfondimenti da scoprire quando vuoi.",
       "Completato",
       "marketValidationCanComplete(progress)",
       "disabled={!completed || completing}",
-      "Completa il test",
+      "Raggiungi il traguardo",
+      "Prossimo passo: ",
       "min-h-12",
       "sm:grid-cols-2",
     ]) {
       expect(hub).toInclude(fixed);
+    }
+    // Nessuna parola di obbligo nell'hub.
+    for (const removed of ["Obbligatorio", "obbligatori", "Facoltativo", "facoltativi", "Percorsi obbligatori"]) {
+      expect(hub).not.toInclude(removed);
     }
     const titles = ['title: "Acquista"', 'title: "Vendi"', 'title: "Anteprima AI"', 'title: "Club"'];
     const positions = titles.map((title) => hub.indexOf(title));
@@ -118,39 +135,163 @@ describe("Market Validation MV2 UI contract", () => {
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
     const areasStart = hub.indexOf("const areas");
     const cards = hub.slice(areasStart, hub.indexOf("return (", areasStart));
-    expect(cards.match(/required: true/g)).toHaveLength(2);
-    expect(cards.match(/required: false/g)).toHaveLength(2);
-    expect(cards.indexOf("required: true")).toBeGreaterThan(cards.indexOf('title: "Acquista"'));
-    expect(cards.lastIndexOf("required: true")).toBeLessThan(cards.indexOf('title: "Anteprima AI"'));
+    expect(cards.match(/badge: "Step 1"/g)).toHaveLength(1);
+    expect(cards.match(/badge: "Step 2"/g)).toHaveLength(1);
+    expect(cards.match(/badge: "Approfondimento"/g)).toHaveLength(2);
+    expect(cards.indexOf('badge: "Step 1"')).toBeGreaterThan(cards.indexOf('title: "Acquista"'));
+    expect(cards.indexOf('badge: "Step 2"')).toBeGreaterThan(cards.indexOf('title: "Vendi"'));
+    expect(cards.indexOf('badge: "Step 2"')).toBeLessThan(cards.indexOf('title: "Anteprima AI"'));
+    // Ogni card apre una schermata interna: nessun link, nessuna nuova scheda.
+    expect(hub).not.toInclude("next/link");
+    expect(hub).not.toInclude("href");
+    expect(hub).not.toInclude("target=");
+    expect(hub).not.toInclude("ExternalLink");
   });
 
-  it("apre il vero /vendi e chiude il percorso solo sulla conferma al ritorno", () => {
-    const hub = read("frontend-next/src/app/beta-test/_components/ValidationHub.tsx");
+  it("aumenta la leggibilità mobile dell'hub senza testi sotto il corpo base", () => {
+    const hub = component("ValidationHub");
+    const body = hub.slice(hub.indexOf("function CardBody"));
+    expect(body).toInclude('className="mt-1 text-base leading-6 text-muted-foreground">{area.text}</p>');
+    expect(body).not.toInclude("text-xs");
+    expect(hub).toInclude("text-base leading-7 text-muted-foreground");
     const client = read("frontend-next/src/app/beta-test/page-client.tsx");
-    expect(hub).toInclude("Prova il vero percorso di Vinea per aggiungere una bottiglia alla cantina o metterla in vendita.");
-    expect(hub).toInclude('cta: "Prova la vendita"');
-    expect(hub).toInclude('href: "/vendi"');
-    expect(hub).toInclude("Apre la vera funzione di Vinea in una nuova scheda: per alcune azioni può servirti un account.");
-    expect(hub).toInclude("onOpen: onSellerOpen");
-    expect(hub).toInclude("Hai provato il percorso di vendita?");
-    expect(hub).toInclude("Sì, l'ho provato");
-    expect(hub).toInclude("sellerOpened && !progress.sellerCompleted");
-    expect(hub).not.toInclude("Simula la pubblicazione locale");
-
-    const openSeller = client.slice(client.indexOf("const openSeller"), client.indexOf("const confirmSeller"));
-    expect(openSeller).toInclude('track("sell_started", {}, "sell_started")');
-    expect(openSeller).not.toInclude("sellerCompleted");
-    expect(openSeller).not.toInclude("sell_completed");
-
-    const confirmSeller = client.slice(client.indexOf("const confirmSeller"), client.indexOf("const openClub"));
-    expect(confirmSeller.indexOf('track("sell_completed", {}, "sell_completed")'))
-      .toBeLessThan(confirmSeller.indexOf("if (!result.ok)"));
-    expect(confirmSeller.indexOf("if (!result.ok)"))
-      .toBeLessThan(confirmSeller.indexOf("sellerCompleted: true"));
-    expect(client.match(/sellerCompleted: true/g)).toHaveLength(1);
+    expect(client).toInclude("whitespace-pre-line text-base leading-7 text-muted-foreground md:text-lg");
   });
 
-  it("rimuove il seller demo, la preview Club finta e ogni form o foto locale", () => {
+  it("usa un unico «← Indietro» a sinistra in tutte le schermate della guida", () => {
+    const back = component("DemoBackButton");
+    expect(back).toInclude("<ArrowLeft");
+    expect(back).toInclude("Indietro");
+    expect(back).toInclude("self-start");
+    for (const name of SCREENS_WITH_BACK) {
+      const source = component(name);
+      expect(source).toInclude('import { DemoBackButton } from "./DemoBackButton";');
+      expect(source).toInclude("<DemoBackButton onBack=");
+      expect(source).not.toMatch(/>\s*Hub\s*</);
+    }
+    expect(betaSource()).not.toInclude("← Torna");
+  });
+
+  it("Vendi è una demo interna che si completa solo sulla conferma finale", () => {
+    const hub = component("ValidationHub");
+    const client = read("frontend-next/src/app/beta-test/page-client.tsx");
+    const sell = component("SellDemo");
+    const seller = hub.slice(hub.indexOf('key: "seller"'), hub.indexOf('key: "ai"'));
+    expect(seller).toInclude('screen: "seller"');
+    expect(seller).toInclude('title: "Vendi"');
+    expect(seller).toInclude("Aggiungi una bottiglia con l'aiuto dell'AI e scegli se tenerla in Cantina o metterla in vendita.");
+
+    // Apertura: solo `sell_started`, mai il completamento.
+    const start = sell.slice(sell.indexOf("useEffect(() => {"), sell.indexOf("}, [track]);"));
+    expect(start).toInclude('track("sell_started", {}, "sell_started")');
+    expect(start).not.toInclude("sell_completed");
+    expect(start).not.toInclude("onCompleted");
+
+    // Completamento: solo dopo la conferma esplicita e l'evento registrato.
+    const confirm = sell.slice(sell.indexOf("const confirm = async"), sell.indexOf("if (showSuccess)"));
+    expect(confirm).toInclude("if (pending || !bottle || !aiFilled || !destination) return;");
+    expect(confirm.indexOf('track("sell_completed", {}, "sell_completed")')).toBeGreaterThan(0);
+    expect(confirm.indexOf('track("sell_completed", {}, "sell_completed")')).toBeLessThan(confirm.indexOf("if (!result.ok)"));
+    expect(confirm.indexOf("if (!result.ok)")).toBeLessThan(confirm.indexOf("onCompleted();"));
+    expect(sell.match(/onCompleted\(\)/g)).toHaveLength(1);
+    expect(sell).toInclude("onClick={confirm}");
+    expect(sell).toInclude("Conferma la simulazione");
+    expect(client.match(/sellerCompleted: true/g)).toHaveLength(1);
+    expect(client).toInclude("onCompleted={markSellerCompleted}");
+
+    // Nessuna conferma «l'ho provato» né apertura del vero /vendi.
+    for (const removed of ["Sì, l'ho provato", "Hai provato il percorso di vendita?", "sellerOpened", "onSellerConfirm", "Prova la vendita"]) {
+      expect(betaSource()).not.toInclude(removed);
+    }
+  });
+
+  it("la demo Vendi ricalca /vendi: foto, assistente AI, destinazione e riepilogo, senza upload", () => {
+    const sell = component("SellDemo");
+    const data = read("frontend-next/src/lib/market-validation/sell-demo.ts");
+    for (const step of ["Scegli la foto della bottiglia", "L'assistente AI compila per te", "Come vuoi usare questa bottiglia?", "Riepilogo"]) {
+      expect(sell).toInclude(step);
+    }
+    expect(data).toInclude('"Foto",\n  "Assistente AI",\n  "Destinazione",\n  "Riepilogo",');
+    expect(sell).toInclude("non pubblica nulla da solo");
+    expect(sell).toInclude("in questa demo nessuna AI analizza la foto");
+    // Le tre destinazioni hanno le stesse parole delle opzioni di /vendi.
+    const vendi = read("frontend-next/src/app/vendi/page-client.tsx");
+    expect(MARKET_VALIDATION_SELL_DEMO_DESTINATIONS.map((option) => option.status)).toEqual([
+      "privata",
+      "cantina_pubblica",
+      "in_vendita",
+    ]);
+    for (const option of MARKET_VALIDATION_SELL_DEMO_DESTINATIONS) {
+      expect(vendi).toInclude(option.title);
+      expect(vendi).toInclude(option.text);
+    }
+    for (const bottle of MARKET_VALIDATION_SELL_DEMO_BOTTLES) {
+      expect(bottle.id.startsWith("mv_sell_")).toBeTrue();
+      expect(bottle.example).toBeTrue();
+      expect(existsSync(resolve(root, "frontend-next/public", `.${bottle.image}`))).toBeTrue();
+    }
+    for (const forbidden of ['type="file"', "URL.createObjectURL", "<form", "<Input", "<Textarea", '"sell_photo_selected"', "FileReader"]) {
+      expect(sell).not.toInclude(forbidden);
+    }
+  });
+
+  it("Club è una demo interna con club_viewed e soltanto funzioni reali dei Club", () => {
+    const hub = component("ValidationHub");
+    const client = read("frontend-next/src/app/beta-test/page-client.tsx");
+    const club = component("ClubDemo");
+    const data = read("frontend-next/src/lib/market-validation/club-demo.ts");
+    const card = hub.slice(hub.indexOf('key: "club"'), hub.indexOf("];", hub.indexOf('key: "club"')));
+    expect(card).toInclude('screen: "club"');
+    expect(card).toInclude("Scopri le community di Vinea dedicate a territori, denominazioni, produttori e passioni.");
+
+    expect(club.indexOf('track("club_viewed", {}, "club_viewed")')).toBeGreaterThan(0);
+    const viewed = club.slice(club.indexOf('track("club_viewed"'), club.indexOf("onViewed();"));
+    expect(viewed).toInclude("if (active && result.ok)");
+    expect(client).toInclude("onViewed={markClubViewed}");
+    expect(client.match(/clubViewed: true/g)).toHaveLength(1);
+
+    for (const fact of [
+      "un territorio, a una denominazione, a un produttore o a una passione",
+      "Aperti o su approvazione",
+      "Nei Club aperti entri subito",
+      "invii una richiesta che i gestori del Club valutano",
+      "Discussioni verticali",
+      "Proponi un Club con nome, descrizione, regole e copertina: diventa pubblico dopo la revisione di Vinea.",
+      "non ti iscrivi, non pubblichi e non segui nessun Club",
+    ]) {
+      expect(club).toInclude(fact);
+    }
+    // Accesso e tipi di post sono quelli dei Club reali.
+    const types = read("frontend-next/src/services/types.ts");
+    expect(types).toInclude('export type ClubAccessType = "aperto" | "chiuso";');
+    for (const kind of ["discussione", "domanda", "degustazione", "consiglio"]) {
+      expect(types.slice(types.indexOf("export type ClubPostTipo"))).toInclude(`| "${kind}"`);
+    }
+    expect(types).toInclude("il Club diventa pubblico soltanto dopo la");
+    expect(new Set(MARKET_VALIDATION_CLUB_DEMOS.map((demo) => demo.access))).toEqual(new Set(["aperto", "chiuso"]));
+    expect(new Set(MARKET_VALIDATION_CLUB_DEMOS.map((demo) => demo.axis))).toEqual(
+      new Set(["Territorio", "Denominazione", "Produttore", "Passione"]),
+    );
+    for (const demo of MARKET_VALIDATION_CLUB_DEMOS) {
+      expect(existsSync(resolve(root, "frontend-next/public", `.${demo.cover}`))).toBeTrue();
+      expect(demo.example).toBeTrue();
+    }
+    // Ogni Club, in elenco e nel dettaglio, porta il segno «Esempio»: non sono
+    // community reali dichiarate.
+    expect(club.match(/<ExampleBadge \/>/g)).toHaveLength(2);
+    expect(club).toInclude('data-testid="club-demo-example"');
+    for (const source of [club, data, card]) {
+      for (const notYet of ["premium", "a pagamento", "abbonament", "professionist"]) {
+        expect(source.toLocaleLowerCase("it-IT")).not.toInclude(notYet);
+      }
+    }
+    // Nessun bottone che finga un'iscrizione, un follow o un post.
+    for (const fakeAction of ["Unisciti", "Iscriviti", "Segui il Club", "Pubblica", "Richiedi l'ingresso"]) {
+      expect(club).not.toInclude(`>${fakeAction}`);
+    }
+  });
+
+  it("non riusa i nomi della vecchia preview Club né form o foto locali", () => {
     expect(existsSync(resolve(betaRoot, "_components/DemoSellerFlow.tsx"))).toBeFalse();
     expect(existsSync(resolve(betaRoot, "_components/ClubPreview.tsx"))).toBeFalse();
     const source = betaSource();
@@ -177,44 +318,27 @@ describe("Market Validation MV2 UI contract", () => {
     expect(progress).not.toInclude("photoUrl");
   });
 
-  it("apre il vero /community con club_viewed e spiega solo funzioni reali dei Club", () => {
-    const hub = read("frontend-next/src/app/beta-test/_components/ValidationHub.tsx");
-    const client = read("frontend-next/src/app/beta-test/page-client.tsx");
-    expect(hub).toInclude('title: "Club"');
-    expect(hub).toInclude("Scopri le community di Vinea: trova Club dedicati a territori, denominazioni, produttori e passioni.");
-    expect(hub).toInclude('cta: "Esplora i Club"');
-    expect(hub).toInclude('href: "/community"');
-    expect(hub).toInclude("onOpen: onClubOpen");
-    expect(hub).toInclude("seguire i Club e crearne di nuovi");
-    expect(hub).toInclude("quelli chiusi su approvazione");
-    expect(hub).not.toInclude("Anteprima Club");
-    for (const notYet of ["premium", "a pagamento", "professionist"]) {
-      expect(hub.toLocaleLowerCase("it-IT")).not.toInclude(notYet);
-    }
-    const openClub = client.slice(client.indexOf("const openClub"));
-    expect(openClub.indexOf('track("club_viewed", {}, "club_viewed")'))
-      .toBeLessThan(openClub.indexOf("clubViewed: true"));
-    expect(openClub.slice(0, openClub.indexOf("clubViewed: true"))).toInclude("if (result.ok)");
-  });
-
-  it("apre le superfici reali in una nuova scheda lasciando aperta la guida", () => {
+  it("durante il test non porta mai al sito reale: l'unico link è dopo il traguardo", () => {
     const source = betaSource();
     const links = source.match(/<Link\b[^>]*>/g) ?? [];
-    // Hub (Vendi/Club), Anteprima AI, Anteprima Cantina, schermata finale.
-    expect(links).toHaveLength(4);
-    for (const link of links) {
-      expect(link).toInclude('target="_blank"');
-      expect(link).toInclude('rel="noopener noreferrer"');
-    }
+    expect(links).toHaveLength(1);
+    expect(links[0]).toInclude('href="/"');
+    expect(links[0]).toInclude('target="_blank"');
+    expect(links[0]).toInclude('rel="noopener noreferrer"');
     const destinations = [...source.matchAll(/href(?:=|: )"([^"]+)"/g)].map((match) => match[1]);
-    expect([...new Set(destinations)].sort()).toEqual(REAL_DESTINATIONS);
+    expect([...new Set(destinations)]).toEqual(["/"]);
+    for (const name of ["ValidationHub", ...SCREENS_WITH_BACK]) {
+      const screen = component(name);
+      expect(screen).not.toInclude("next/link");
+      expect(screen).not.toInclude("href");
+    }
     for (const navigation of ["useRouter", "router.push", "window.open", "window.location", "<a "]) {
       expect(source).not.toInclude(navigation);
     }
   });
 
   it("offre «Continua a esplorare Vinea» solo dopo beta_completed, senza condizionarlo", () => {
-    const complete = read("frontend-next/src/app/beta-test/_components/ValidationComplete.tsx");
+    const complete = component("ValidationComplete");
     const client = read("frontend-next/src/app/beta-test/page-client.tsx");
     const link = complete.match(/<Link\b[^>]*>/g) ?? [];
     expect(link).toHaveLength(1);
@@ -229,14 +353,14 @@ describe("Market Validation MV2 UI contract", () => {
     expect(client).toInclude('if (screen === "complete") return <ValidationComplete />;');
   });
 
-  it("dice che solo l'acquisto è simulato e non promette più che tutto lo sia", () => {
-    const hub = read("frontend-next/src/app/beta-test/_components/ValidationHub.tsx");
+  it("dichiara che tutto il test si svolge nella guida ed è simulato", () => {
+    const hub = component("ValidationHub");
     const client = read("frontend-next/src/app/beta-test/page-client.tsx");
-    expect(hub).not.toInclude("È tutto simulato");
-    expect(hub).not.toInclude("Le foto scelte restano nel browser");
-    expect(hub).toInclude("Il percorso di acquisto è simulato e non crea ordini o pagamenti.");
-    expect(hub).toInclude("aprono le vere funzioni di Vinea");
-    expect(hub).toInclude("pubblicare un annuncio reale per completare il test.");
+    expect(hub).toInclude("Tutto il test si svolge qui ed è una simulazione: non crea ordini,");
+    expect(hub).toInclude("pagamenti, annunci o spedizioni reali.");
+    expect(hub).not.toInclude("aprono le vere funzioni di Vinea");
+    expect(client).toInclude("Tutto si svolge qui ed è una simulazione: nessun pagamento,");
+    expect(client).not.toInclude("il vero percorso per mettere in vendita");
     expect(client).not.toInclude("Nessuna operazione comporterà");
   });
 
@@ -248,7 +372,7 @@ describe("Market Validation MV2 UI contract", () => {
     ]) {
       expect(existsSync(resolve(root, asset))).toBeTrue();
     }
-    const ai = read("frontend-next/src/app/beta-test/_components/StaticAiPreview.tsx");
+    const ai = component("StaticAiPreview");
     expect(ai).toInclude('sourcePosition: "left center"');
     expect(ai).toInclude('src: "/images/market-validation/ai/mv-ai-result-full.png"');
     expect(ai).toInclude('sourcePosition: "right center"');
@@ -261,15 +385,17 @@ describe("Market Validation MV2 UI contract", () => {
     expect(ai.indexOf('track("ai_interest_clicked"')).toBeLessThan(ai.indexOf("onInterest();"));
   });
 
-  it("spiega Sommelier, catalogazione, abbinamenti e foto come funzione in sviluppo", () => {
-    const ai = read("frontend-next/src/app/beta-test/_components/StaticAiPreview.tsx");
+  it("spiega le quattro aree AI e a cosa servono, senza link al sito", () => {
+    const ai = component("StaticAiPreview");
     // Le costanti precedono il JSX: l'ordine visivo si verifica dentro il render.
     const render = ai.slice(ai.indexOf("return (\n    <section"));
     const renderOrder = [
+      "<DemoBackButton onBack={onBack} />",
       ">Vinea AI<",
       "L&apos;intelligenza artificiale in Vinea supporta diverse parti dell&apos;esperienza.",
       "Come Vinea usa l&apos;AI",
       "AI_SURFACES.map",
+      "A cosa serve.",
       "Foto e presentazione",
       "Anteprima foto AI",
       "Anteprima di una funzione in sviluppo",
@@ -279,26 +405,28 @@ describe("Market Validation MV2 UI contract", () => {
     expect(renderOrder.every((position) => position >= 0)).toBeTrue();
     expect([...renderOrder].sort((a, b) => a - b)).toEqual(renderOrder);
 
-    const surfaces = ['title: "Sommelier AI"', 'title: "Assistente AI per la bottiglia"', 'title: "Abbinamenti AI"']
-      .map((title) => ai.indexOf(title));
+    const surfaces = [
+      'title: "Sommelier AI"',
+      "title: \"Assistente AI per l'annuncio\"",
+      'title: "Foto e sfondo AI"',
+      'title: "Abbinamenti AI"',
+    ].map((title) => ai.indexOf(title));
     expect(surfaces.every((position) => position > 0)).toBeTrue();
     expect([...surfaces].sort((a, b) => a - b)).toEqual(surfaces);
+    expect(ai.match(/purpose: "Serve /g)).toHaveLength(4);
     expect(ai).toInclude("puoi fare domande, approfondire bottiglie e orientarti tra vini, caratteristiche e abbinamenti");
-    expect(ai).toInclude("pulsante Sommelier in basso a destra");
     expect(ai).toInclude("suggerendo le informazioni da inserire");
     expect(ai).toInclude("non pubblica nulla da solo e ogni campo resta sotto il tuo controllo");
     expect(ai).toInclude("possibili abbinamenti tra vino e cibo");
-    expect(ai).toInclude("«Per abbinamento cibo»");
-    expect(read("frontend-next/src/app/esplora/page-client.tsx")).toInclude(">Per abbinamento cibo<");
-    expect(ai).toInclude('{ href: "/vendi", label: "Provalo in Vendi" }');
-    expect(ai).toInclude('{ href: "/esplora", label: "Scopri gli abbinamenti" }');
-    // Il Sommelier è globale nel Layout: nessuna rotta inventata per lui.
-    const sommelier = ai.slice(ai.indexOf('surface: "sommelier"'), ai.indexOf('surface: "catalogazione"'));
-    expect(sommelier).not.toInclude("link:");
-    expect(read("frontend-next/src/components/vinea/Layout.tsx")).toInclude("AI_UI.sommelier && <SommelierChat />");
-    // Le CTA seguono le stesse flag che montano la superficie reale.
-    expect(ai).toInclude("link && AI_UI[surface]");
+    // Lo stato delle tre superfici reali segue le flag che le montano;
+    // la foto è dichiarata in sviluppo.
+    expect(ai).toInclude('if (surface === "foto") return "Funzione in sviluppo";');
+    expect(ai).toInclude('return AI_UI[surface] ? null : "Non ancora attiva in questa versione di Vinea";');
     expect(ai).toInclude('import type { SuperficieIA } from "@/lib/phase10/etichette-ia";');
+    // Nessun link alle pagine reali e nessun rimando al launcher, assente nella guida.
+    for (const removed of ["next/link", "<Link", "href", "ExternalLink", "Provalo in Vendi", "Scopri gli abbinamenti", "in basso a destra"]) {
+      expect(ai).not.toInclude(removed);
+    }
   });
 
   it("collega tutti gli eventi della nuova UX alla porta server MV1 esistente", () => {
@@ -387,16 +515,9 @@ describe("Market Validation MV2 UI contract", () => {
     ]) {
       expect(source).not.toInclude(forbidden);
     }
-    for (const destination of ["/checkout/", "/annuncio/", "/ordine/", "/cantina/"]) {
+    for (const destination of ["/checkout", "/annuncio", "/ordine", "/cantina", "/vendi", "/community", "/esplora"]) {
       expect(source).not.toInclude(`href="${destination}`);
       expect(source).not.toInclude(`href: "${destination}`);
-    }
-    // La vera Cantina è un semplice link, e soltanto dall'anteprima Cantina.
-    for (const file of productionSources()) {
-      const text = readFileSync(file, "utf8");
-      if (text.includes('href="/cantina"') || text.includes('href: "/cantina"')) {
-        expect(relative(betaRoot, file)).toBe(join("_components", "CellarPreview.tsx"));
-      }
     }
   });
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { WineThumbnail } from "@/components/vinea/WineThumbnail";
 import type { MarketValidationDemoListing } from "@/lib/market-validation/demo-data";
 import { formatMarketValidationEuroCents } from "@/lib/market-validation/mv2-flow";
+import { DemoBackButton } from "./DemoBackButton";
 import type { MarketValidationTrack } from "./types";
 
 export function DemoListingDetail({
@@ -42,7 +43,7 @@ export function DemoListingDetail({
 
   return (
     <section className="space-y-5" aria-labelledby="listing-title">
-      <Button type="button" variant="outline" className="min-h-11" onClick={onBack}>← Torna agli annunci</Button>
+      <DemoBackButton onBack={onBack} />
       <div className="grid overflow-hidden rounded-3xl border border-border bg-card md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="aspect-[4/5] min-w-0 bg-secondary md:aspect-auto">
           <WineThumbnail src={listing.image} alt={`${listing.wine}, immagine dimostrativa`} className="h-full w-full object-cover" sizes="(max-width: 768px) 100vw, 45vw" />

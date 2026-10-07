@@ -8,6 +8,7 @@ import {
   formatMarketValidationEuroCents,
   marketValidationCheckoutTotalCents,
 } from "@/lib/market-validation/mv2-flow";
+import { DemoBackButton } from "./DemoBackButton";
 import type { MarketValidationTrack } from "./types";
 
 export function DemoCheckout({
@@ -75,7 +76,7 @@ export function DemoCheckout({
 
   return (
     <section className="mx-auto max-w-xl space-y-5" aria-labelledby="checkout-title">
-      <Button type="button" variant="outline" className="min-h-11" onClick={onBack}>← Torna al dettaglio</Button>
+      <DemoBackButton onBack={onBack} />
       <div className="rounded-3xl border border-border bg-card p-5 md:p-8">
         <div className="flex items-start gap-3">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-bordeaux/10 text-bordeaux"><PackageCheck className="h-5 w-5" aria-hidden /></span>

@@ -37,7 +37,8 @@ describe("flag pubblica delle superfici IA", () => {
     ]);
 
     const puntiMontaggio = {
-      sommelier: "{AI_UI.sommelier && <SommelierChat />}",
+      // In focus (guida Market Validation) il launcher non si monta.
+      sommelier: "{!focus && AI_UI.sommelier && <SommelierChat />}",
       catalogazione: "{AI_UI.catalogazione && (",
       abbinamento:
         'const abbinamentoAttivo = AI_UI.abbinamento && mode === "abbinamento";',
