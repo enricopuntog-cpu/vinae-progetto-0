@@ -32,8 +32,9 @@ const betaSource = () =>
     .join("\n");
 
 // Le sole superfici reali verso cui la guida può navigare: semplici link,
-// mai una copia della funzione dentro il test.
-const REAL_DESTINATIONS = ["/community", "/esplora", "/vendi"];
+// mai una copia della funzione dentro il test. `/cantina` parte solo
+// dall'anteprima Cantina e `/` solo dalla schermata finale.
+const REAL_DESTINATIONS = ["/", "/cantina", "/community", "/esplora", "/vendi"];
 
 describe("Market Validation MV2 UI contract", () => {
   it("resta single-route: Vendi e Club non sono più schermate interne", () => {
@@ -48,7 +49,7 @@ describe("Market Validation MV2 UI contract", () => {
     expect(client).not.toInclude('screen === "club"');
     const unionStart = hub.indexOf("export type MarketValidationScreen");
     const screenUnion = hub.slice(unionStart, hub.indexOf(";", unionStart));
-    for (const screen of ["hub", "marketplace", "detail", "checkout", "ai", "complete"]) {
+    for (const screen of ["hub", "marketplace", "detail", "checkout", "ai", "cellar", "complete"]) {
       expect(screenUnion).toInclude(`"${screen}"`);
     }
     expect(screenUnion).not.toInclude('"seller"');
@@ -199,7 +200,8 @@ describe("Market Validation MV2 UI contract", () => {
   it("apre le superfici reali in una nuova scheda lasciando aperta la guida", () => {
     const source = betaSource();
     const links = source.match(/<Link\b[^>]*>/g) ?? [];
-    expect(links).toHaveLength(2);
+    // Hub (Vendi/Club), Anteprima AI, Anteprima Cantina, schermata finale.
+    expect(links).toHaveLength(4);
     for (const link of links) {
       expect(link).toInclude('target="_blank"');
       expect(link).toInclude('rel="noopener noreferrer"');
@@ -209,6 +211,22 @@ describe("Market Validation MV2 UI contract", () => {
     for (const navigation of ["useRouter", "router.push", "window.open", "window.location", "<a "]) {
       expect(source).not.toInclude(navigation);
     }
+  });
+
+  it("offre «Continua a esplorare Vinea» solo dopo beta_completed, senza condizionarlo", () => {
+    const complete = read("frontend-next/src/app/beta-test/_components/ValidationComplete.tsx");
+    const client = read("frontend-next/src/app/beta-test/page-client.tsx");
+    const link = complete.match(/<Link\b[^>]*>/g) ?? [];
+    expect(link).toHaveLength(1);
+    expect(link[0]).toInclude('href="/"');
+    expect(link[0]).toInclude('target="_blank"');
+    expect(complete).toInclude("Continua a esplorare Vinea");
+    expect(complete).not.toInclude("track(");
+    expect(complete).not.toInclude("MarketValidationTrack");
+    expect(complete).not.toInclude("onClick");
+    // La schermata finale si monta solo dopo l'evento registrato.
+    expect(client.indexOf('track("beta_completed"')).toBeLessThan(client.indexOf('setScreen("complete")'));
+    expect(client).toInclude('if (screen === "complete") return <ValidationComplete />;');
   });
 
   it("dice che solo l'acquisto è simulato e non promette più che tutto lo sia", () => {
@@ -314,6 +332,8 @@ describe("Market Validation MV2 UI contract", () => {
       /^@\/components\/ui\//,
       /^@\/components\/vinea\/WineThumbnail$/,
       /^@\/config\/features$/,
+      // Solo etichette e tipi della Cantina per l'anteprima statica.
+      /^@\/data\/cellar$/,
       /^@\/lib\/market-validation\//,
       /^@\/lib\/phase10\/etichette-ia$/,
       /^@\/lib\/supabase\/server$/,
@@ -367,9 +387,16 @@ describe("Market Validation MV2 UI contract", () => {
     ]) {
       expect(source).not.toInclude(forbidden);
     }
-    for (const destination of ["/checkout/", "/annuncio/", "/ordine/", "/cantina"]) {
+    for (const destination of ["/checkout/", "/annuncio/", "/ordine/", "/cantina/"]) {
       expect(source).not.toInclude(`href="${destination}`);
       expect(source).not.toInclude(`href: "${destination}`);
+    }
+    // La vera Cantina è un semplice link, e soltanto dall'anteprima Cantina.
+    for (const file of productionSources()) {
+      const text = readFileSync(file, "utf8");
+      if (text.includes('href="/cantina"') || text.includes('href: "/cantina"')) {
+        expect(relative(betaRoot, file)).toBe(join("_components", "CellarPreview.tsx"));
+      }
     }
   });
 

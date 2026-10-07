@@ -31,6 +31,7 @@ import {
   type MarketValidationProgress,
 } from "@/lib/market-validation/progress";
 import { startMarketValidationSession } from "./actions";
+import { CellarPreview } from "./_components/CellarPreview";
 import { DemoCheckout } from "./_components/DemoCheckout";
 import { DemoListingDetail } from "./_components/DemoListingDetail";
 import { DemoMarketplace } from "./_components/DemoMarketplace";
@@ -369,6 +370,8 @@ function MarketValidationExperience({
       />
     );
   }
+  // La Cantina è una scoperta facoltativa: nessun evento, nessun progresso.
+  if (screen === "cellar") return <CellarPreview onBack={() => open("hub")} />;
   if (screen === "ai") {
     return (
       <StaticAiPreview

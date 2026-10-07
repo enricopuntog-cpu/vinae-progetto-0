@@ -9,6 +9,7 @@ import {
   ShoppingBag,
   Store,
   Users,
+  Wine,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ export type MarketValidationScreen =
   | "detail"
   | "checkout"
   | "ai"
+  | "cellar"
   | "complete";
 
 // Vendi e Club non hanno una copia dentro il test: la card apre la vera
@@ -201,6 +203,30 @@ export function ValidationHub({
           </div>
         ))}
       </div>
+
+      {/* Scoperta facoltativa fuori da `areas`: non è un percorso del test e
+          non entra nel conteggio dei percorsi obbligatori. */}
+      <button
+        type="button"
+        onClick={() => onOpen("cellar")}
+        className="group flex w-full items-start gap-4 rounded-2xl border border-border bg-card p-5 text-left shadow-sm transition hover:border-bordeaux/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-bordeaux/10 text-bordeaux">
+          <Wine className="h-5 w-5" aria-hidden />
+        </span>
+        <span className="flex-1">
+          <span className="flex items-start justify-between gap-3">
+            <span className="font-serif text-xl font-semibold group-hover:text-bordeaux">La tua Cantina</span>
+            <span className="rounded-full bg-secondary px-2.5 py-1 text-xs text-muted-foreground">Scopri</span>
+          </span>
+          <span className="mt-1 block text-sm leading-5 text-muted-foreground">
+            Organizza la tua collezione, decidi quali bottiglie mostrare o vendere e segui nel tempo il valore della Cantina.
+          </span>
+          <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-bordeaux">
+            Scopri la Cantina <ChevronRight className="h-4 w-4" aria-hidden />
+          </span>
+        </span>
+      </button>
 
       <div className="rounded-2xl border border-oro/40 bg-oro/10 p-4 text-sm text-antracite">
         <div className="flex gap-3">
