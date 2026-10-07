@@ -12,15 +12,13 @@ import {
   parseMarketValidationRecordableEvent,
   parseMarketValidationSession,
 } from "./event-validation";
+import * as mv2Flow from "./mv2-flow";
 import {
-  EMPTY_MARKET_VALIDATION_SELLER_DRAFT,
   formatMarketValidationEuroCents,
   marketValidationCanComplete,
   marketValidationCheckoutTotalCents,
-  marketValidationPhotoAccepted,
   marketValidationPriceBandMatches,
-  revokeMarketValidationPhotoUrl,
-  validateMarketValidationSellerDraft,
+  marketValidationProgressPercent,
 } from "./mv2-flow";
 import {
   clearMarketValidationProgress,
@@ -90,46 +88,28 @@ describe("Market Validation MV2", () => {
     expect(marketValidationCanComplete({ buyerCompleted: true, sellerCompleted: true })).toBeTrue();
   });
 
-  it("valida il minimo venditore e non rende obbligatorie le note", () => {
-    expect(validateMarketValidationSellerDraft(EMPTY_MARKET_VALIDATION_SELLER_DRAFT, 2026)).toEqual({
-      producer: "Indica il produttore.",
-      wine: "Indica il vino.",
-      vintage: "Indica un'annata valida.",
-      format: "Seleziona il formato.",
-      condition: "Seleziona la condizione.",
-      desiredPrice: "Indica un prezzo desiderato valido.",
-    });
-    expect(validateMarketValidationSellerDraft({
-      producer: "Cantina Demo",
-      wine: "Rosso Demo",
-      vintage: "2020",
-      format: "0,75 L",
-      condition: "Ottima",
-      desiredPrice: "39,50",
-      notes: "",
-    }, 2026)).toEqual({});
+  it("conta soltanto acquisto e vendita nella barra 0 di 2", () => {
+    expect(marketValidationProgressPercent({ buyerCompleted: false, sellerCompleted: false })).toBe(0);
+    expect(marketValidationProgressPercent({ buyerCompleted: true, sellerCompleted: false })).toBe(50);
+    expect(marketValidationProgressPercent({ buyerCompleted: false, sellerCompleted: true })).toBe(50);
+    expect(marketValidationProgressPercent({ buyerCompleted: true, sellerCompleted: true })).toBe(100);
   });
 
-  it("ammette soltanto immagini locali piccole e tipizzate", () => {
-    expect(marketValidationPhotoAccepted({ type: "image/jpeg", size: 10 })).toBeTrue();
-    expect(marketValidationPhotoAccepted({ type: "image/png", size: 10 * 1024 * 1024 })).toBeTrue();
-    expect(marketValidationPhotoAccepted({ type: "image/svg+xml", size: 10 })).toBeFalse();
-    expect(marketValidationPhotoAccepted({ type: "image/webp", size: 0 })).toBeFalse();
-    expect(marketValidationPhotoAccepted({ type: "image/webp", size: 10 * 1024 * 1024 + 1 })).toBeFalse();
+  it("non espone più helper del form venditore o della foto locale", () => {
+    expect(Object.keys(mv2Flow).sort()).toEqual([
+      "formatMarketValidationEuroCents",
+      "marketValidationCanComplete",
+      "marketValidationCheckoutTotalCents",
+      "marketValidationPriceBandMatches",
+      "marketValidationProgressPercent",
+    ]);
   });
 
-  it("revoca soltanto object URL locali", () => {
-    const revoked: string[] = [];
-    const original = URL.revokeObjectURL;
-    URL.revokeObjectURL = (url) => revoked.push(url);
-    try {
-      revokeMarketValidationPhotoUrl("blob:market-validation-photo");
-      revokeMarketValidationPhotoUrl("/images/demo.jpg");
-      revokeMarketValidationPhotoUrl(null);
-    } finally {
-      URL.revokeObjectURL = original;
-    }
-    expect(revoked).toEqual(["blob:market-validation-photo"]);
+  it("tiene sell_photo_selected registrabile per compatibilità storica", () => {
+    expect(parseMarketValidationRecordableEvent("sell_photo_selected")).toBe("sell_photo_selected");
+    expect(parseMarketValidationRecordableEvent("sell_started")).toBe("sell_started");
+    expect(parseMarketValidationRecordableEvent("sell_completed")).toBe("sell_completed");
+    expect(parseMarketValidationRecordableEvent("club_viewed")).toBe("club_viewed");
   });
 
   it("persiste MV2 in una chiave separata, chiusa e priva di dati venditore", () => {
