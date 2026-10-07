@@ -29,6 +29,7 @@ import {
   voceNavAttiva,
   type IconaNavMobile,
 } from "@/lib/shell/navigazione-mobile";
+import { modalitaFocus } from "@/lib/shell/modalita-focus";
 import { useVinea, type DemoRuolo } from "@/lib/vinea-store";
 
 // Il launcher carica il pannello Sommelier soltanto al primo click.
@@ -84,9 +85,15 @@ export function VineaLayout({
   const vociDesktop = desktopLinks.filter(
     (voce) => CLUB_UI_ABILITATA || voce.to !== "/community",
   );
+  // Nella guida Market Validation la navigazione principale non si disegna:
+  // si esce soltanto dalle CTA della guida. Le voci restano quelle di sempre.
+  const focus = modalitaFocus(pathname);
 
   return (
-    <div className="min-h-dvh bg-background text-foreground pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
+    <div
+      className={`min-h-dvh bg-background text-foreground ${focus ? "" : "pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"}`}
+      data-focus-mode={focus ? "true" : undefined}
+    >
       <a href="#contenuto-principale" className="skip-link" data-testid="skip-link">
         Vai al contenuto principale
       </a>
@@ -114,53 +121,55 @@ export function VineaLayout({
             </span>
           </Link>
 
-          <nav
-            className="ml-6 hidden items-center gap-0.5 md:flex"
-            aria-label="Navigazione principale"
-            data-testid="desktop-nav"
-          >
-            {vociDesktop.map((n) => {
-              const active = n.exact
-                ? pathname === n.to || (n.to === "/" && pathname === "/home")
-                : pathname === n.to || pathname.startsWith(n.to + "/");
-              return (
+          {!focus && (
+            <nav
+              className="ml-6 hidden items-center gap-0.5 md:flex"
+              aria-label="Navigazione principale"
+              data-testid="desktop-nav"
+            >
+              {vociDesktop.map((n) => {
+                const active = n.exact
+                  ? pathname === n.to || (n.to === "/" && pathname === "/home")
+                  : pathname === n.to || pathname.startsWith(n.to + "/");
+                return (
+                  <Link
+                    key={n.to}
+                    href={n.to}
+                    prefetch={n.to === "/esplora" || n.to === "/community" ? null : undefined}
+                    aria-current={active ? "page" : undefined}
+                    data-testid={`nav-link-${n.label.toLowerCase().replace(/\s+/g, "-")}`}
+                    className={`relative rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                      active
+                        ? "bg-bordeaux text-crema font-semibold shadow-sm ring-1 ring-bordeaux/30"
+                        : "text-antracite hover:bg-secondary"
+                    }`}
+                  >
+                    {n.label}
+                  </Link>
+                );
+              })}
+              {/*
+                D10. Il ruolo **reale**, non quello del selettore. Prima bastava
+                scegliere «Admin» nello switcher demo per far comparire questa
+                voce, che portava a una pagina che ora risponde `notFound()`: un
+                collegamento che non porta da nessuna parte e peggio di un
+                collegamento assente. Il confine resta `user_roles`; questa riga
+                decide solo che cosa si vede.
+              */}
+              {authRuolo === "admin" && (
                 <Link
-                  key={n.to}
-                  href={n.to}
-                  prefetch={n.to === "/esplora" || n.to === "/community" ? null : undefined}
-                  aria-current={active ? "page" : undefined}
-                  data-testid={`nav-link-${n.label.toLowerCase().replace(/\s+/g, "-")}`}
-                  className={`relative rounded-full px-3 py-1.5 text-sm font-medium transition ${
-                    active
-                      ? "bg-bordeaux text-crema font-semibold shadow-sm ring-1 ring-bordeaux/30"
-                      : "text-antracite hover:bg-secondary"
-                  }`}
+                  href="/admin"
+                  data-testid="nav-link-admin"
+                  aria-current={pathname.startsWith("/admin") ? "page" : undefined}
+                  className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${pathname.startsWith("/admin") ? "bg-antracite text-crema font-semibold" : "text-antracite hover:bg-secondary"}`}
                 >
-                  {n.label}
+                  <span className="inline-flex items-center gap-1">
+                    <Shield className="h-3.5 w-3.5" /> Admin
+                  </span>
                 </Link>
-              );
-            })}
-            {/*
-              D10. Il ruolo **reale**, non quello del selettore. Prima bastava
-              scegliere «Admin» nello switcher demo per far comparire questa
-              voce, che portava a una pagina che ora risponde `notFound()`: un
-              collegamento che non porta da nessuna parte e peggio di un
-              collegamento assente. Il confine resta `user_roles`; questa riga
-              decide solo che cosa si vede.
-            */}
-            {authRuolo === "admin" && (
-              <Link
-                href="/admin"
-                data-testid="nav-link-admin"
-                aria-current={pathname.startsWith("/admin") ? "page" : undefined}
-                className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${pathname.startsWith("/admin") ? "bg-antracite text-crema font-semibold" : "text-antracite hover:bg-secondary"}`}
-              >
-                <span className="inline-flex items-center gap-1">
-                  <Shield className="h-3.5 w-3.5" /> Admin
-                </span>
-              </Link>
-            )}
-          </nav>
+              )}
+            </nav>
+          )}
 
           <div className="ml-auto flex items-center gap-2">
             {ruolo === "guest" && (
@@ -240,53 +249,55 @@ export function VineaLayout({
           <Link href="/legale#cookie" className="underline-offset-2 hover:text-bordeaux hover:underline">Cookie</Link>
       </footer>
 
-      <nav
-        className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-crema/90 pb-safe header-blur md:hidden"
-        aria-label="Navigazione principale"
-        data-testid="mobile-nav"
-      >
-        <ul className="grid grid-cols-5">
-          {vociMobile.map((n) => {
-            const active = voceNavAttiva(n, pathname);
-            const Icon = ICONE_NAV[n.icona];
-            const isSell = n.to === "/vendi";
-            return (
-              <li key={n.to} className="flex">
-                <Link
-                  href={n.to}
-                  prefetch={n.to === "/esplora" || n.to === "/community" ? null : undefined}
-                  aria-current={active ? "page" : undefined}
-                  aria-label={n.label}
-                  data-testid={`mobile-nav-${n.label.toLowerCase()}`}
-                  className={`relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 text-[11px] ${
-                    active ? "text-bordeaux font-semibold" : "text-antracite/70 font-medium"
-                  }`}
-                >
-                  {active && !isSell && (
-                    <span
-                      aria-hidden
-                      className="absolute top-0 h-0.5 w-8 rounded-full bg-bordeaux"
-                    />
-                  )}
-                  {isSell ? (
-                    <span
-                      className={`grid h-10 w-10 -mt-3 place-items-center rounded-full bg-bordeaux text-crema shadow-lg ${active ? "ring-2 ring-oro" : ""}`}
-                    >
-                      <Icon className="h-5 w-5" />
-                    </span>
-                  ) : (
-                    <Icon
-                      className={`h-5 w-5 ${active ? "text-bordeaux" : ""}`}
-                      strokeWidth={active ? 2.5 : 2}
-                    />
-                  )}
-                  <span>{n.label}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+      {!focus && (
+        <nav
+          className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-crema/90 pb-safe header-blur md:hidden"
+          aria-label="Navigazione principale"
+          data-testid="mobile-nav"
+        >
+          <ul className="grid grid-cols-5">
+            {vociMobile.map((n) => {
+              const active = voceNavAttiva(n, pathname);
+              const Icon = ICONE_NAV[n.icona];
+              const isSell = n.to === "/vendi";
+              return (
+                <li key={n.to} className="flex">
+                  <Link
+                    href={n.to}
+                    prefetch={n.to === "/esplora" || n.to === "/community" ? null : undefined}
+                    aria-current={active ? "page" : undefined}
+                    aria-label={n.label}
+                    data-testid={`mobile-nav-${n.label.toLowerCase()}`}
+                    className={`relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 text-[11px] ${
+                      active ? "text-bordeaux font-semibold" : "text-antracite/70 font-medium"
+                    }`}
+                  >
+                    {active && !isSell && (
+                      <span
+                        aria-hidden
+                        className="absolute top-0 h-0.5 w-8 rounded-full bg-bordeaux"
+                      />
+                    )}
+                    {isSell ? (
+                      <span
+                        className={`grid h-10 w-10 -mt-3 place-items-center rounded-full bg-bordeaux text-crema shadow-lg ${active ? "ring-2 ring-oro" : ""}`}
+                      >
+                        <Icon className="h-5 w-5" />
+                      </span>
+                    ) : (
+                      <Icon
+                        className={`h-5 w-5 ${active ? "text-bordeaux" : ""}`}
+                        strokeWidth={active ? 2.5 : 2}
+                      />
+                    )}
+                    <span>{n.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      )}
 
       <Toaster position="top-center" richColors />
 
