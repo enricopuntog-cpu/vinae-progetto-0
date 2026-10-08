@@ -1313,6 +1313,8 @@ fondazione.
   invariate e il client admin non legge tabelle. La decodifica delle risposte
   usa soltanto le label di `frontend-next/src/lib/market-validation/questionnaire.ts`.
   La griglia `12u` è cablata nel gate DB effimero (42/42 alla PR #191).
+  In produzione la migrazione è applicata (merge `3cb23c9`), corpi e ACL
+  verificati; QV2 resta OFF finché non arriva l'attivazione controllata.
   L'export QV2 segue i filtri attivi: senza filtri è completo, con codice o
   coorte il bottone dichiara «filtrato»; pagina fino a `total_count` e fallisce
   invece di troncare.
