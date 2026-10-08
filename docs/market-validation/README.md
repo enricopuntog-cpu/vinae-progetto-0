@@ -52,3 +52,32 @@ MARKET_VALIDATION_ENABLED=false
 ```
 
 Dopo la disattivazione verificare che `/beta-test` risponda con 404 e che non sia più possibile aprire o registrare sessioni. La BUILD non modifica le variabili Netlify, non attiva la route e non esegue sessioni o pilot reali.
+
+## Dashboard admin `/admin/beta-validation`
+
+Accesso: sessione autenticata e ruolo `admin` reale in `public.user_roles`, controllati dalla pagina e di nuovo da ogni RPC. La dashboard è in sola lettura e non dipende da `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED`: può essere distribuita prima che il questionario pubblico venga attivato, e senza dati QV2 mostra gli stati vuoti.
+
+Porte (migrazione `20261008180000_market_validation_qv2_admin.sql`, tutte `stable`, `security definer`, `search_path` vuoto, EXECUTE solo ad `authenticated`):
+
+- `beta_validation_qv2_admin_summary()` — KPI della coorte QV2 (test iniziati, PRE, acquisto, vendita, Core Beta, POST, Market Validation completa, completion rate) e metriche legacy separate;
+- `beta_validation_qv2_admin_participants(codice, coorte, limit, offset)` — una riga per `participant_code` con stato, conteggi eventi e risposte Q01–Q20; limit 1–200, offset 0–999, `total_count` per la paginazione;
+- `beta_validation_qv2_admin_participant_detail(codice)` — risposte, eventi e timestamp di completion di un solo codice; `null` se il codice non esiste;
+- `beta_validation_qv2_admin_distributions()` — conteggi per opzione e base rispondenti delle domande chiuse.
+
+Le porte MV3 `beta_validation_admin_summary` e `beta_validation_admin_participants` restano invariate.
+
+Regole di lettura:
+
+- **Coorte QV2**: codici con una sessione in `private.beta_validation_qv2`. Per loro contano solo quella sessione, le sue risposte e i suoi eventi; un'eventuale sessione legacy con lo stesso codice non si mescola. I denominatori QV2 non includono mai i tester legacy.
+- **Legacy**: codici senza questionario; come in MV3 i conteggi sommano tutte le sessioni del codice. Le colonne del questionario restano vuote.
+- **Core Beta** = `beta_completed` (guida conclusa). **Market Validation completa** = `validation_completed` (POST chiuso). Non sono la stessa metrica.
+- Funnel: ogni passaggio conta i codici QV2 che hanno raggiunto il traguardo, con base fissa sui test iniziati; acquisto e vendita sono percorsi indipendenti.
+- Distribuzioni: solo risposte registrate; base = rispondenti della domanda. Per Q5, Q7 e Q19 (scelte multiple) la somma delle percentuali può superare il 100%.
+- Le risposte aperte (Q8, Q17, Q18), i campi condizionali e il feedback finale si leggono nel dettaglio del tester e nel CSV; nessuna classificazione automatica.
+
+Export:
+
+- **Esporta CSV completo** — una riga per `participant_code`, UTF-8 con BOM, separatore `;`, CRLF, intestazioni stabili (identità, PRE Q01–Q13, comportamento, POST Q14–Q20, completamento). Le scelte multiple sono codici stabili nell'ordine registrato separati da ` | `. Le celle che iniziano con `=`, `+`, `-`, `@`, tab o ritorno a capo sono prefissate con `'`. L'export pagina fino al `total_count` e fallisce se le righe non coincidono: nessuna troncatura silenziosa.
+- **CSV MV3** — l'export originale per codice, invariato.
+
+Né la dashboard né i CSV contengono capability, hash, UUID di sessione, metadata, IP, user-agent o dati di account. La griglia `supabase/tests/12u_market_validation_questionnaire_admin.sql` prova queste regole nel gate DB effimero.

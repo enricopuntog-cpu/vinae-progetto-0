@@ -558,6 +558,7 @@ describe("Market Validation MV2 UI contract", () => {
       "20261003170000_market_validation_foundation.sql",
       "20261006160000_market_validation_admin_analytics.sql",
       "20261008120000_market_validation_questionnaire_qv2.sql",
+      "20261008180000_market_validation_qv2_admin.sql",
     ]);
   });
 });
