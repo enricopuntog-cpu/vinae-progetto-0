@@ -1,15 +1,13 @@
 ## CURRENT STATE
 - Market Validation MV1, MV2, MV3 e la guida autocontenuta (PR #188) sono CLOSED e online su `https://vineawineclub.com/beta-test` con le flag MV di produzione ON.
-- QV1 = CLOSED. PR #189 squash-merged in `5bc7e06`, chiusura documentale PR #190 in `a9d66e5`. Produzione Supabase `pijnmcllmfgjmgsvtcej`: `20261008120000_market_validation_questionnaire_qv2` applicata, `private.beta_validation_qv2` con RLS on, 0 policy, nessun grant client.
-- Questionnaire V2 OFF in produzione: `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED` non attivato (solo `true` esatto abilita); `/beta-test` serve la guida approvata della PR #188.
-- QV2 (dashboard admin) = PR #191 su `main`:
-  - migrazione additiva `20261008180000_market_validation_qv2_admin.sql`: helper privato `private.beta_validation_qv2_admin_rows()` e quattro porte read-only `public.beta_validation_qv2_admin_{summary,participants,participant_detail,distributions}` (`stable`, `security definer`, `search_path` vuoto, EXECUTE solo `authenticated`, ricontrollo admin in `public.user_roles`); porte MV3 e QV1 invariate;
-  - `/admin/beta-validation`: KPI e funnel della coorte QV2 (legacy fuori dai denominatori), statistiche MV3 conservate, distribuzioni PRE/POST, tabella tester con ricerca/coorte/paginazione, dettaglio per codice (dichiarato vs provato, PRE, comportamento, POST, completamento), CSV QV2 (completo o filtrato, dichiarato sul bottone) e CSV MV3;
-  - griglia `12u` nel gate DB effimero: 42/42 alla PR #191, con `12e`–`12t` e `7c` verdi;
-  - `frontend-next` 2364 test, `MIN_TESTS` = 2364.
+- QV1 = CLOSED. PR #189 squash-merged in `5bc7e06`, chiusura documentale PR #190 in `a9d66e5`.
+- QV2 (dashboard admin del questionario) = CLOSED. PR #191 squash-merged in `3cb23c9` (head verificata `d6cd090`): sei check obbligatori verdi sulla head esatta, `12u` 42/42 nel gate DB effimero insieme a `12e`–`12t` e `7c`, `frontend-next` 2364 test (`MIN_TESTS` = 2364), build verde.
+- Produzione Supabase `pijnmcllmfgjmgsvtcej`: l'integrazione ha applicato `20261008180000_market_validation_qv2_admin` al merge; ledger di 79 migrazioni allineato a `main`. Le quattro porte `public.beta_validation_qv2_admin_{summary,participants,participant_detail,distributions}` sono `security definer`, `stable`, `search_path` vuoto, EXECUTE solo `postgres` e `authenticated`; l'helper `private.beta_validation_qv2_admin_rows()` è eseguibile solo da `postgres`; i corpi coincidono (md5) con quelli generati dal file su `main`. `anon` e un autenticato non-admin ricevono 42501 su porte, helper e tabella privata; il ruolo admin reale legge QV2 a zero e 2 codici legacy. `private.beta_validation_qv2`: RLS on, 0 policy, nessun grant client, 0 righe.
+- Netlify produzione: deploy `6ac799f65b716200081c45d4` READY, `main`, `commit_ref` `3cb23c9`. `/admin/beta-validation` con account admin reale mostra lo stato vuoto QV2, le statistiche legacy, la tabella e il dettaglio legacy («Questionario non disponibile»); l'ospite è rediretto ad `/accedi`.
+- Questionnaire V2 OFF: `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED` non attivato; `/beta-test` serve la guida approvata della PR #188 senza domande del questionario.
 
 ## ACTIVE TASK
-- QV2 VERIFY & SHIP: dopo il merge della PR #191, applicazione e verifica in produzione della migrazione `20261008180000` e verifica del deploy Netlify di `main`; chiusura documentale a verifica conclusa.
+- Nessun task attivo: QV2 VERIFY & SHIP chiuso; il prossimo mandato è l'attivazione controllata di Questionnaire V2.
 
 ## NEXT STEPS
 1. Attivazione controllata Questionnaire V2
@@ -17,7 +15,6 @@
 3. Pilot 5 tester
 
 ## BLOCKERS / NOTES
-- La migrazione `20261008180000` va applicata in produzione dopo il merge: rileggere il ledger e verificare corpo, grant e ACL delle quattro porte e dell'helper privato. Un merge non prova l'applicazione.
 - Non attivare `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED` senza un mandato esplicito; in produzione non esiste alcuna riga QV2.
-- Lo smoke admin con dati è stato eseguito su fixture isolate locali (Supabase simulato sopra PostgreSQL PGlite con le migrazioni reali), non su PostgREST/GoTrue reali; in produzione resta da verificare accesso admin, route ed empty state con un account admin reale.
+- La dashboard con dati QV2 (KPI, funnel, distribuzioni, dettaglio PRE/POST, CSV) è stata provata su fixture isolate locali (Supabase simulato sopra PostgreSQL PGlite con le migrazioni reali, 390px e 1366px), non con dati QV2 reali: va riverificata durante l'acceptance E2E.
 - La scansione QR con smartphone e il pilot restano acceptance NON VERIFICATE.
