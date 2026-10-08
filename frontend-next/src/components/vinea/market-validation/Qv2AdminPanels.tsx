@@ -92,8 +92,8 @@ export function Qv2KpiSection({ summary }: { summary: Qv2AdminSummary }) {
         <h2 id="qv2-kpi-title" className="font-serif text-2xl">Questionario Market Validation</h2>
         <p className="max-w-3xl text-sm text-muted-foreground">
           Coorte QV2: solo i codici che hanno iniziato il questionario. I tester legacy restano fuori da
-          questi denominatori. «Core Beta» è la guida Prova Vinea conclusa; «Market Validation completa»
-          richiede anche il POST.
+          questi denominatori. «Prova Vinea 5/5» richiede Acquisto, Vendita, Vinea AI, Club e Cantina
+          registrati; «Market Validation completa» richiede anche il POST.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -101,7 +101,14 @@ export function Qv2KpiSection({ summary }: { summary: Qv2AdminSummary }) {
         <StatCard value={summary.qv2.preCompleted} label="PRE completati" detail={share(summary.qv2.preCompleted)} />
         <StatCard value={summary.qv2.buyCompleted} label="Acquisto completato" detail={share(summary.qv2.buyCompleted)} />
         <StatCard value={summary.qv2.sellCompleted} label="Vendita completata" detail={share(summary.qv2.sellCompleted)} />
-        <StatCard value={summary.qv2.coreCompleted} label="Core Beta completata" detail={share(summary.qv2.coreCompleted)} />
+        <StatCard value={summary.qv2.aiViewed} label="Vinea AI visitata" detail={share(summary.qv2.aiViewed)} />
+        <StatCard value={summary.qv2.clubViewed} label="Club visitato" detail={share(summary.qv2.clubViewed)} />
+        <StatCard value={summary.qv2.cellarViewed} label="Cantina visitata" detail={share(summary.qv2.cellarViewed)} />
+        <StatCard
+          value={summary.qv2.experienceCompleted}
+          label="Prova Vinea 5/5"
+          detail={share(summary.qv2.experienceCompleted)}
+        />
         <StatCard value={summary.qv2.postCompleted} label="POST completati" detail={share(summary.qv2.postCompleted)} />
         <StatCard
           value={summary.qv2.validationCompleted}
@@ -126,7 +133,7 @@ export function Qv2FunnelCard({ summary }: { summary: Qv2AdminSummary }) {
         <CardTitle className="font-serif text-2xl">Funnel QV2</CardTitle>
         <CardDescription>
           Ogni passaggio conta i codici QV2 che hanno raggiunto il traguardo; la base è sempre il numero di test
-          iniziati. Acquisto e vendita sono percorsi indipendenti, senza un ordine obbligatorio.
+          iniziati. Le cinque aree della Prova Vinea sono percorsi indipendenti, senza un ordine obbligatorio.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -199,7 +206,7 @@ export function Qv2TesterTable({
               <TableCell className="whitespace-nowrap">{dateTime(participant.lastActivityAt)}</TableCell>
               {QV2_STATUS_COLUMNS.map((column) => (
                 <TableCell key={column.key} className="text-center">
-                  {participant.cohort === "legacy" && (column.key === "pre" || column.key === "post" || column.key === "complete") ? (
+                  {participant.cohort === "legacy" && (column.key === "pre" || column.key === "experience" || column.key === "post" || column.key === "complete") ? (
                     <span className="text-muted-foreground" title="Non previsto nel percorso legacy">·</span>
                   ) : (
                     <Check value={status[column.key]} title={column.title} />
@@ -382,21 +389,44 @@ function ComparisonBlock({ detail }: { detail: Qv2ParticipantDetail }) {
   );
 }
 
+const firstAt = (events: Qv2EventDetail[], name: Qv2EventDetail["event"]) =>
+  events.find((event) => event.event === name)?.firstAt ?? null;
+
+// Stato del tester nell'ordine del percorso: PRE, le cinque aree della Prova
+// Vinea, esperienza 5/5, POST e Market Validation completa. Le aree vengono
+// solo dagli eventi registrati.
 function CompletionBlock({ detail }: { detail: Qv2ParticipantDetail }) {
-  const items = [
-    ["PRE completato", detail.completion.preCompletedAt],
-    ["Core Beta completata", detail.completion.coreCompletedAt],
-    ["POST completato", detail.completion.postCompletedAt],
-    ["Market Validation completa", detail.completion.validationCompletedAt],
+  const areas = [
+    ["ACQUISTO", "checkout_beta_completed"],
+    ["VENDITA", "sell_completed"],
+    ["AI", "ai_preview_viewed"],
+    ["CLUB", "club_viewed"],
+    ["CANTINA", "cellar_viewed"],
   ] as const;
+  const areasDone = areas.filter(([, event]) => eventCount(detail.events, event) > 0).length;
+  const items: ReadonlyArray<readonly [string, boolean, string | null]> = [
+    ["PRE", detail.completion.preCompletedAt !== null, detail.completion.preCompletedAt],
+    ...areas.map(([label, event]) => [label, eventCount(detail.events, event) > 0, firstAt(detail.events, event)] as const),
+    [`EXPERIENCE ${areasDone}/5`, detail.completion.experienceCompleted, null],
+    ["POST", detail.completion.postCompletedAt !== null, detail.completion.postCompletedAt],
+    ["COMPLETE", detail.completion.validationCompletedAt !== null, detail.completion.validationCompletedAt],
+  ];
+  const previousRule =
+    detail.cohort === "qv2" && detail.completion.coreCompletedAt !== null && !detail.completion.experienceCompleted;
   return (
     <section className="space-y-2">
       <h3 className="font-serif text-xl">D · Completamento</h3>
+      {previousRule ? (
+        <p className="rounded-md border border-oro/40 bg-oro/10 p-3 text-sm">
+          Prova Vinea chiusa con la regola precedente (Acquisto + Vendita) il {dateTime(detail.completion.coreCompletedAt)}:
+          le aree non registrate restano non visitate.
+        </p>
+      ) : null}
       <ul className="divide-y divide-border rounded-md border border-border">
-        {items.map(([label, at]) => (
+        {items.map(([label, done, at]) => (
           <li key={label} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
-            <span className="flex items-center gap-2"><Check value={at !== null} title={label} /> {label}</span>
-            <span className="text-muted-foreground">{dateTime(at)}</span>
+            <span className="flex items-center gap-2 font-medium"><Check value={done} title={label} /> {label}</span>
+            <span className="text-muted-foreground">{at ? dateTime(at) : done ? "" : "—"}</span>
           </li>
         ))}
       </ul>

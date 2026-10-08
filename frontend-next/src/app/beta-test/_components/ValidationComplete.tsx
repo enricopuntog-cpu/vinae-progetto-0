@@ -23,8 +23,8 @@ export function ValidationComplete({
       {qv2 ? (
         <>
           {participantCode && (
-            <p className="mt-4 text-sm">
-              Codice partecipante <span className="font-mono font-semibold text-bordeaux">{participantCode}</span>
+            <p className="mt-4 text-lg font-semibold" data-participant-code={participantCode}>
+              Codice test: <span className="font-mono text-bordeaux">{participantCode}</span>
             </p>
           )}
           <p className="mt-4 text-sm leading-6 text-muted-foreground">Il questionario online è stato completato. Grazie per il feedback.</p>

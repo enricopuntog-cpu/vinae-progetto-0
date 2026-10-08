@@ -7,6 +7,7 @@ import {
   Q10_ACTIONS,
   QUESTIONS,
   answerValid,
+  multiSelectHint,
   questionKey,
   type QuestionnaireAnswer,
   type QuestionnaireState,
@@ -79,7 +80,7 @@ export function QuestionnaireFlow({
   if (number > end) return (
     <section className="mx-auto max-w-2xl space-y-5 rounded-3xl border border-border bg-card p-5 md:p-8">
       {phase === "pre" ? (
-        <><h1 className="font-serif text-3xl font-semibold">Ora prova Vinea</h1><p className="text-base leading-7">Adesso esplora Vinea e prova in prima persona le due funzioni principali.</p></>
+        <><h1 className="font-serif text-3xl font-semibold">Ora prova Vinea</h1><p className="text-base leading-7">Adesso esplora Vinea e prova in prima persona tutte e cinque le aree: Acquisto, Vendita, Vinea AI, Club e Cantina.</p></>
       ) : (
         <><h1 className="font-serif text-3xl font-semibold">Un'ultima cosa</h1><label htmlFor="final-feedback" className="block text-base font-medium">Una cosa che vorresti dirci su Vinea (facoltativo)</label><textarea id="final-feedback" value={feedback} onChange={(event) => setFeedback(event.target.value)} maxLength={1000} rows={4} className="w-full rounded-xl border border-border bg-background p-3 text-base" /></>
       )}
@@ -113,7 +114,7 @@ export function QuestionnaireFlow({
     <section className="mx-auto max-w-2xl space-y-5 rounded-3xl border border-border bg-card p-5 md:p-8" aria-labelledby="question-title">
       <div className="space-y-2"><p className="text-sm font-semibold text-bordeaux">{phase === "pre" ? `Domanda ${number} di 13` : `Domanda ${number} di 20`}</p><Progress value={((number - start + 1) / (end - start + 1)) * 100} aria-label={`Progresso questionario: domanda ${number}`} /></div>
       <h1 id="question-title" className="font-serif text-2xl font-semibold leading-snug md:text-3xl">{question.title}</h1>
-      {question.maximum && <p className="text-sm text-muted-foreground">Scegline massimo {question.maximum}</p>}
+      {question.kind === "multi" && <p className="text-base font-medium text-bordeaux">{multiSelectHint(question.maximum)}</p>}
       {question.kind === "text" ? (
         <textarea aria-label={question.title} rows={4} maxLength={1000} value={typeof answer === "string" ? answer : ""} onChange={(event) => setAnswer(event.target.value)} className="w-full rounded-xl border border-border bg-background p-3 text-base" />
       ) : (
@@ -124,7 +125,7 @@ export function QuestionnaireFlow({
           })}
         </div>
       )}
-      {hasCondition && question.number === 10 && <div className="space-y-3"><p className="font-medium">Cosa ne hai fatto?</p>{options.map(([code, label]) => { const actions = Array.isArray(object.actions) ? object.actions : []; return <button key={code} type="button" aria-pressed={actions.includes(code)} className={`block min-h-12 w-full rounded-xl border p-3 text-left ${actions.includes(code) ? "border-bordeaux bg-bordeaux/10" : "border-border"}`} onClick={() => toggle(code, actions, (next) => updateField("actions", next))}>{label}</button>; })}{Array.isArray(object.actions) && object.actions.includes("other") && <input aria-label="Altro" maxLength={200} value={typeof object.other === "string" ? object.other : ""} onChange={(event) => updateField("other", event.target.value)} className="min-h-12 w-full rounded-xl border border-border bg-background p-3" />}</div>}
+      {hasCondition && question.number === 10 && <div className="space-y-3"><p className="font-medium">Cosa ne hai fatto?</p><p className="text-base font-medium text-bordeaux">{multiSelectHint()}</p>{options.map(([code, label]) => { const actions = Array.isArray(object.actions) ? object.actions : []; return <button key={code} type="button" aria-pressed={actions.includes(code)} className={`block min-h-12 w-full rounded-xl border p-3 text-left ${actions.includes(code) ? "border-bordeaux bg-bordeaux/10" : "border-border"}`} onClick={() => toggle(code, actions, (next) => updateField("actions", next))}>{label}</button>; })}{Array.isArray(object.actions) && object.actions.includes("other") && <input aria-label="Altro" maxLength={200} value={typeof object.other === "string" ? object.other : ""} onChange={(event) => updateField("other", event.target.value)} className="min-h-12 w-full rounded-xl border border-border bg-background p-3" />}</div>}
       {hasCondition && question.condition && question.number !== 10 && <label className="block space-y-2 text-base"><span>{question.condition.label}</span><input maxLength={question.condition.optional ? 200 : 500} value={typeof object[question.condition.field] === "string" ? object[question.condition.field] : ""} onChange={(event) => updateField(question.condition!.field, event.target.value)} className="min-h-12 w-full rounded-xl border border-border bg-background p-3 text-base" /></label>}
       {hasCondition && question.secondCondition && <label className="block space-y-2 text-base"><span>{question.secondCondition.label}</span><input maxLength={500} value={typeof object[question.secondCondition.field] === "string" ? object[question.secondCondition.field] : ""} onChange={(event) => updateField(question.secondCondition!.field, event.target.value)} className="min-h-12 w-full rounded-xl border border-border bg-background p-3 text-base" /></label>}
       {error && <p role="alert" className="text-bordeaux">{error}</p>}

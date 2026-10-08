@@ -21,7 +21,10 @@ const html = (node: React.ReactNode) => renderToStaticMarkup(<>{node}</>);
 const text = (markup: string) => markup.replace(/<[^>]+>/g, " ").replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/\s+/g, " ");
 
 const summary = parseQv2AdminSummary({
-  qv2: { started: 4, preCompleted: 3, buyCompleted: 2, sellCompleted: 2, coreCompleted: 1, postCompleted: 1, validationCompleted: 1, completionRate: 25 },
+  qv2: {
+    started: 4, preCompleted: 3, buyCompleted: 2, sellCompleted: 2, aiViewed: 2, clubViewed: 2, cellarViewed: 1,
+    experienceCompleted: 1, coreCompleted: 1, postCompleted: 1, validationCompleted: 1, completionRate: 25,
+  },
   legacy: { codes: 2, coreCompleted: 1, coreCompletionRate: 50 },
   allCodes: 6,
 });
@@ -54,11 +57,12 @@ const detail = (overrides: Record<string, unknown> = {}): Qv2ParticipantDetail =
 };
 
 describe("Pannelli admin QV2 renderizzati", () => {
-  it("KPI con etichette comprensibili e CORE distinto da FULL", () => {
+  it("KPI con etichette comprensibili, cinque aree e 5/5 distinto da FULL", () => {
     const output = text(html(<Qv2KpiSection summary={summary} />));
     for (const label of [
-      "Test iniziati", "PRE completati", "Acquisto completato", "Vendita completata",
-      "Core Beta completata", "POST completati", "Market Validation completate", "Completion rate",
+      "Test iniziati", "PRE completati", "Acquisto completato", "Vendita completata", "Vinea AI visitata",
+      "Club visitato", "Cantina visitata", "Prova Vinea 5/5", "POST completati", "Market Validation completate",
+      "Completion rate",
     ]) {
       expect(output).toInclude(label);
     }
@@ -72,7 +76,8 @@ describe("Pannelli admin QV2 renderizzati", () => {
     expect(output).toInclude("3 su 4 · 75%");
     expect(output).toInclude("Market Validation completa");
     expect(output).toInclude("1 su 4 · 25%");
-    expect(output.match(/percorso indipendente/g)).toHaveLength(2);
+    expect(output).toInclude("Prova Vinea 5/5");
+    expect(output.match(/percorso indipendente/g)).toHaveLength(5);
   });
 
   it("tabella compatta con ✓/— e legacy senza stati PRE/POST", () => {
@@ -87,7 +92,9 @@ describe("Pannelli admin QV2 renderizzati", () => {
     expect(output).toInclude("QV2");
     expect(output).toInclude("Legacy");
     expect(markup).toInclude('aria-label="Questionario PRE completato: sì"');
-    expect(markup).toInclude('aria-label="Vendita completata: no"');
+    expect(markup).toInclude('aria-label="Vendita completata (sell_completed): no"');
+    expect(markup).toInclude('aria-label="Cantina visualizzata (cellar_viewed): no"');
+    for (const label of ["BUY", "SELL", "AI", "CLUB", "CELLAR", "5/5", "FULL"]) expect(output).toInclude(label);
     expect(markup).toInclude('title="Non previsto nel percorso legacy"');
     expect(markup.match(/<tr/g)).toHaveLength(3);
   });
@@ -108,6 +115,35 @@ describe("Pannelli admin QV2 renderizzati", () => {
     expect(output).toInclude("Marketplace visualizzato");
     expect(output).toInclude("2×");
     expect(output).toInclude("non registrato");
+  });
+
+  it("dettaglio: stato PRE, cinque aree, EXPERIENCE 5/5, POST e COMPLETE", () => {
+    const fullMarkup = html(<Qv2ParticipantDetailView detail={detail({
+      events: ["checkout_beta_completed", "sell_completed", "ai_preview_viewed", "club_viewed", "cellar_viewed", "beta_completed"]
+        .map((event) => ({ event, count: 1, firstAt: "2026-10-05T09:20:00+00:00", lastAt: "2026-10-05T09:20:00+00:00" })),
+      completion: {
+        preCompletedAt: "2026-10-05T09:10:00+00:00", experienceCompleted: true, coreCompletedAt: "2026-10-05T09:30:00+00:00",
+        postCompletedAt: "2026-10-05T09:50:00+00:00", validationCompletedAt: "2026-10-05T09:50:00+00:00",
+      },
+    })} />);
+    const full = text(fullMarkup);
+    for (const label of ["PRE: sì", "ACQUISTO: sì", "VENDITA: sì", "AI: sì", "CLUB: sì", "CANTINA: sì", "EXPERIENCE 5/5: sì", "POST: sì", "COMPLETE: sì"]) {
+      expect(fullMarkup).toInclude(`aria-label="${label}"`);
+    }
+    expect(full).toInclude("Cantina visualizzata");
+    expect(full).not.toInclude("regola precedente");
+
+    const previous = html(<Qv2ParticipantDetailView detail={detail({
+      events: ["checkout_beta_completed", "sell_completed", "ai_preview_viewed", "beta_completed"]
+        .map((event) => ({ event, count: 1, firstAt: "2026-10-05T09:20:00+00:00", lastAt: "2026-10-05T09:20:00+00:00" })),
+      completion: {
+        preCompletedAt: "2026-10-05T09:10:00+00:00", experienceCompleted: false, coreCompletedAt: "2026-10-05T09:30:00+00:00",
+        postCompletedAt: null, validationCompletedAt: null,
+      },
+    })} />);
+    expect(previous).toInclude('aria-label="EXPERIENCE 3/5: no"');
+    expect(previous).toInclude('aria-label="CANTINA: no"');
+    expect(text(previous)).toInclude("regola precedente (Acquisto + Vendita)");
   });
 
   it("dettaglio legacy: questionario non disponibile, senza risposte inventate", () => {

@@ -15,6 +15,10 @@ const state = (overrides: Partial<QuestionnaireState> = {}): QuestionnaireState 
   validation_completed_at: null,
   buyer_completed: false,
   seller_completed: false,
+  ai_viewed: false,
+  club_viewed: false,
+  cellar_viewed: false,
+  experience_completed: false,
   core_completed: false,
   answers: {},
   ...overrides,
@@ -23,14 +27,24 @@ const question = (number: number) => QUESTIONS[number - 1];
 const AT = "2026-10-08T10:00:00.000Z";
 
 describe("Questionario QV2: lifecycle", () => {
-  it("segue LANDING → PRE → CORE → POST → GRAZIE dallo stato server", () => {
+  it("segue LANDING → PRE → PROVA VINEA 5/5 → POST → GRAZIE dallo stato server", () => {
     expect(questionnaireStage(state())).toBe("pre-questionnaire");
     // Anche con eventi core già registrati, il PRE aperto ha la precedenza.
-    expect(questionnaireStage(state({ core_completed: true }))).toBe("pre-questionnaire");
+    expect(questionnaireStage(state({ core_completed: true, experience_completed: true }))).toBe("pre-questionnaire");
     expect(questionnaireStage(state({ pre_finished_at: AT }))).toBe("hub");
     expect(questionnaireStage(state({ pre_finished_at: AT, buyer_completed: true, seller_completed: true }))).toBe("hub");
-    expect(questionnaireStage(state({ pre_finished_at: AT, core_completed: true }))).toBe("post-questionnaire");
-    expect(questionnaireStage(state({ pre_finished_at: AT, core_completed: true, post_finished_at: AT }))).toBe("complete");
+    // 5/5 senza la chiusura registrata dal server: si resta nell'hub.
+    expect(questionnaireStage(state({ pre_finished_at: AT, experience_completed: true }))).toBe("hub");
+    expect(questionnaireStage(state({ pre_finished_at: AT, core_completed: true, experience_completed: true }))).toBe("post-questionnaire");
+    expect(questionnaireStage(state({
+      pre_finished_at: AT, core_completed: true, experience_completed: true, post_finished_at: AT,
+    }))).toBe("complete");
+  });
+
+  it("una Prova Vinea chiusa con la sola regola Acquisto + Vendita non apre il POST", () => {
+    expect(questionnaireStage(state({
+      pre_finished_at: AT, buyer_completed: true, seller_completed: true, ai_viewed: true, core_completed: true,
+    }))).toBe("previous-rule");
   });
 
   it("numera Q1-Q20 con le chiavi SQL q01-q20, senza final_feedback", () => {

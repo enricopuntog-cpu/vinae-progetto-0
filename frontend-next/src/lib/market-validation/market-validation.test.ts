@@ -99,6 +99,7 @@ describe("Market Validation MV1", () => {
       "ai_preview_viewed",
       "ai_interest_clicked",
       "club_viewed",
+      "cellar_viewed",
       "beta_completed",
     ]);
   });

@@ -28,6 +28,7 @@ export const MARKET_VALIDATION_EVENT_NAMES = [
   "ai_preview_viewed",
   "ai_interest_clicked",
   "club_viewed",
+  "cellar_viewed",
   "beta_completed",
 ] as const satisfies readonly MarketValidationEventName[];
 
