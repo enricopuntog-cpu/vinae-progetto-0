@@ -1,12 +1,12 @@
 ## CURRENT STATE
-- Market Validation MV1, MV2, MV3 e la guida autocontenuta (PR #188) sono CLOSED; QV1 (PR #189/#190), QV2 admin (PR #191/#192), l'allineamento finale QV2 (PR #193/#194/#195) e le cinque prove obbligatorie (PR #196/#197) sono CLOSED.
+- Market Validation MV1, MV2, MV3 e la guida autocontenuta (PR #188) sono CLOSED; QV1 (PR #189/#190), QV2 admin (PR #191/#192), l'allineamento finale QV2 (PR #193/#194/#195), le cinque prove obbligatorie (PR #196/#197) e il Beta Test anonimo (PR #198) sono CLOSED.
 - Test reali su iPhone di Enrico in produzione (8 ottobre 2026): V002 chiuso con la regola precedente (Acquisto + Vendita, POST non chiuso, intatto); V003 completato (PRE, POST, conclusione).
-- Beta Test anonimo (8 ottobre 2026, nessuna migrazione): causa del login riprodotta in produzione con un browser pulito più un cookie di sessione Supabase non valido. L'AgeGate globale copriva `/beta-test` con «Verifica dell'accesso…» e, con un qualunque cookie di sessione, rimandava a `/completa-profilo` (flusso account con email, password e Google); le porte server MV inoltravano inoltre quel JWT a PostgREST e l'assegnazione del codice falliva (PGRST301). Ora `/beta-test` è esente dall'AgeGate e ogni porta MV usa un client anon senza cookie; RPC, ACL e `/admin/beta-validation` invariati.
-- Verifica locale (stack Supabase CLI 2.117.0 con tutte le migrazioni, browser senza cookie né storage): landing → INIZIA IL TEST → PRE 13/13 → Acquisto, Vendita, Vinea AI, Club, Cantina (5/5) → POST → GRAZIE con codice, URL sempre `/beta-test`, zero testi di accesso, zero utenti `auth.users`; stesso avvio riuscito anche con un cookie di sessione residuo. Capability errata rifiutata (42501) su lettura, risposta ed evento; schema `private` non esposto; RPC admin negate ad `anon`; `/admin/beta-validation` anonimo → `/accedi`.
-- Netlify `timely-lokum-43a12e`: `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=true` nel solo contesto production, `PAYMENTS_ENABLED=false`.
+- Beta Test anonimo (PR #198, merge `ea81597`, nessuna migrazione): causa del login riprodotta in produzione con un browser pulito più un cookie di sessione Supabase non valido. L'AgeGate globale copriva `/beta-test` con «Verifica dell'accesso…» e, con un qualunque cookie di sessione, rimandava a `/completa-profilo` (flusso account con email, password e Google); le porte server MV inoltravano inoltre quel JWT a PostgREST e l'assegnazione del codice falliva (PGRST301). Ora `/beta-test` è esente dall'AgeGate e ogni porta MV usa un client anon senza cookie; RPC, ACL e `/admin/beta-validation` invariati; ledger produzione invariato a 81 migrazioni.
+- Verifica locale (stack Supabase CLI 2.117.0 con tutte le migrazioni, browser senza cookie né storage): landing → INIZIA IL TEST → PRE 13/13 → Acquisto, Vendita, Vinea AI, Club, Cantina (5/5) → POST → GRAZIE con codice, URL sempre `/beta-test`, zero testi di accesso, zero utenti `auth.users`. Capability errata rifiutata (42501) su lettura, risposta ed evento; schema `private` non esposto; RPC admin negate ad `anon`.
+- Netlify `timely-lokum-43a12e`: deploy production `6ac7f9bddb28130008644682` READY su `ea81597`. In produzione: `/beta-test` senza overlay nell'HTML servito; con un cookie di sessione non valido resta su `/beta-test` (prima del fix andava a `/completa-profilo`); da browser vergine INIZIA IL TEST assegna V004 e apre la Domanda 1 senza cookie né login; `/admin/beta-validation` anonimo → `/accedi`. `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=true` nel solo contesto production, `PAYMENTS_ENABLED=false`.
 
 ## ACTIVE TASK
-- Beta Test anonimo: merge, deploy production e verifica anonima su vineawineclub.com.
+- Nessuno: Beta Test anonimo in produzione, pronto per il pilot.
 
 ## NEXT STEPS
 1. Nuovo test di Enrico su iPhone in navigazione privata (nessuna sessione Vinea), fino al GRAZIE
@@ -14,6 +14,6 @@
 3. Pilot 5 tester
 
 ## BLOCKERS / NOTES
-- Le sessioni esistenti (V001 ×3, V002, V003, V999 ×2) non vengono modificate da questo fix.
+- V004 è la sessione di smoke anonimo in produzione (8 ottobre 2026, 20:16 UTC): solo `beta_started`, PRE non iniziato; conservata, non cancellata. Il prossimo tester riceverà V005. Le 7 sessioni precedenti (V001 ×3, V002, V003, V999 ×2) hanno impronte identiche a prima del merge.
 - Il caricamento di sfondo dei provider globali (Cantina, notifiche, messaggi) resta attivo anche su `/beta-test` quando il browser ha una sessione Vinea: è invisibile al tester e non condiziona il test, ma non è isolato.
 - Disattivazione immediata: `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=false` (o rimossa) e nuovo deploy da un commit che tocca `frontend-next/`; `/beta-test` torna alla guida senza questionario.
