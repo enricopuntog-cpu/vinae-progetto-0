@@ -36,8 +36,8 @@ function stateFrom(value: unknown): MarketValidationQuestionnaireState | null {
   // SQL keeps typed columns separate; expose the conditional questions as the
   // same closed objects the form submits, without leaking internal column names.
   for (const [key, fields] of Object.entries({
-    q02: ["other"], q05: ["other"], q06: ["where", "why"],
-    q10: ["actions", "other"], q11: ["where", "main_difficulty"], q15: ["why_not"],
+    q02: ["other"], q05: ["other"], q06: ["where", "why"], q07: ["other"],
+    q10: ["actions", "other"], q11: ["where", "main_difficulty"], q15: ["why_not"], q19: ["other"],
   })) {
     const base = answers[key];
     if (base === null) continue;
@@ -48,7 +48,7 @@ function stateFrom(value: unknown): MarketValidationQuestionnaireState | null {
       if (typeof extra === "string" || (field === "actions" && Array.isArray(extra)))
         extras[field] = extra as string | string[];
     }
-    if (key === "q05") answers[key] = { choices: base as string[], ...extras };
+    if (key === "q05" || key === "q07" || key === "q19") answers[key] = { choices: base as string[], ...extras };
     else answers[key] = { choice: base as string, ...extras };
   }
   if (typeof rawAnswers.final_feedback === "string") answers.final_feedback = rawAnswers.final_feedback;

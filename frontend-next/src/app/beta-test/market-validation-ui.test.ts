@@ -173,7 +173,7 @@ describe("Market Validation MV2 UI contract", () => {
     expect(body).not.toInclude("text-xs");
     expect(hub).toInclude("text-base leading-7 text-muted-foreground");
     const client = read(clientPath);
-    expect(client).toInclude("whitespace-pre-line text-base leading-7 text-muted-foreground md:text-lg");
+    expect(client).toInclude("text-base leading-7 text-muted-foreground md:text-lg");
   });
 
   it("usa un unico «← Indietro» a sinistra in tutte le schermate della guida", () => {
@@ -370,10 +370,11 @@ describe("Market Validation MV2 UI contract", () => {
     // La schermata finale si monta solo dopo l'evento registrato.
     expect(legacy.indexOf('track("beta_completed"')).toBeLessThan(legacy.indexOf('setScreen("complete")'));
     expect(legacy).toInclude('if (screen === "complete") return <ValidationComplete />;');
-    // QV2: GRAZIE con il solo comando esplicito «Nuovo tester», fornito dal client.
-    expect(qv2).toMatch(/<ValidationComplete\s+qv2\s+action=\{/);
+    // QV2: GRAZIE con il codice concluso e il solo comando esplicito
+    // «Fai provare Vinea a un'altra persona», fornito dal client.
+    expect(qv2).toMatch(/<ValidationComplete\s+qv2\s+participantCode=\{session\.participantCode\}\s+action=\{/);
     expect(qv2).toInclude("<Button onClick={onNewTester}");
-    expect(qv2).toInclude("Nuovo tester");
+    expect(qv2).toInclude("{NEW_TESTER_LABEL}");
   });
 
   it.each(GUIDE_CLIENTS)("dichiara che tutto il test si svolge nella guida ed è simulato (%s)", (clientPath) => {
@@ -382,7 +383,10 @@ describe("Market Validation MV2 UI contract", () => {
     expect(hub).toInclude("Tutto il test si svolge qui ed è una simulazione: non crea ordini,");
     expect(hub).toInclude("pagamenti, annunci o spedizioni reali.");
     expect(hub).not.toInclude("aprono le vere funzioni di Vinea");
-    expect(client).toInclude("Tutto si svolge qui ed è una simulazione: nessun pagamento,");
+    // La landing QV2 dichiara la Beta di ricerca con la copy approvata.
+    expect(client).toInclude(clientPath === QV2_CLIENT
+      ? "Questa è una Beta di ricerca. Nessun pagamento, vendita o spedizione reale verrà effettuato."
+      : "Tutto si svolge qui ed è una simulazione: nessun pagamento,");
     expect(client).not.toInclude("il vero percorso per mettere in vendita");
     expect(client).not.toInclude("Nessuna operazione comporterà");
   });
@@ -559,6 +563,7 @@ describe("Market Validation MV2 UI contract", () => {
       "20261006160000_market_validation_admin_analytics.sql",
       "20261008120000_market_validation_questionnaire_qv2.sql",
       "20261008180000_market_validation_qv2_admin.sql",
+      "20261008220000_market_validation_qv2_other_options.sql",
     ]);
   });
 });

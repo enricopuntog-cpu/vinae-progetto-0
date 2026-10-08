@@ -24,8 +24,8 @@ export type Qv2CohortFilter = Qv2Cohort | null;
 
 const STRING_FIELDS = [
   "q01", "q02", "q02_other", "q03", "q04", "q05_other", "q06", "q06_where", "q06_why",
-  "q08", "q09", "q10", "q10_other", "q11", "q11_where", "q11_main_difficulty", "q12", "q13",
-  "q14", "q15", "q15_why_not", "q16", "q17", "q18", "q20", "final_feedback",
+  "q07_other", "q08", "q09", "q10", "q10_other", "q11", "q11_where", "q11_main_difficulty", "q12", "q13",
+  "q14", "q15", "q15_why_not", "q16", "q17", "q18", "q19_other", "q20", "final_feedback",
 ] as const;
 const ARRAY_FIELDS = ["q05", "q07", "q10_actions", "q19"] as const;
 
@@ -452,12 +452,14 @@ function extrasFor(number: number, answers: Qv2Answers): DecodedExtra[] {
       case 2: return [[first, answers.q02_other]];
       case 5: return [[first, answers.q05_other]];
       case 6: return [[first, answers.q06_where], [second, answers.q06_why]];
+      case 7: return [[first, answers.q07_other]];
       case 10: return [
         [first, answers.q10_actions?.map((code) => optionLabel(Q10_ACTIONS, code)).join(", ") ?? null],
         [q10OtherLabel, answers.q10_other],
       ];
       case 11: return [[first, answers.q11_where], [second, answers.q11_main_difficulty]];
       case 15: return [[first, answers.q15_why_not]];
+      case 19: return [[first, answers.q19_other]];
       default: return [];
     }
   })();
@@ -570,6 +572,7 @@ const QV2_CSV_COLUMNS: ReadonlyArray<readonly [string, (participant: Qv2AdminPar
   ["q06_where", (p) => answer(p, "q06_where")],
   ["q06_why", (p) => answer(p, "q06_why")],
   ["q07_private_purchase_concerns", (p) => list(p, "q07")],
+  ["q07_other", (p) => answer(p, "q07_other")],
   ["q08_trust_requirements", (p) => answer(p, "q08")],
   ["q09_sellable_bottles", (p) => answer(p, "q09")],
   ["q10_had_unwanted_bottles", (p) => answer(p, "q10")],
@@ -602,6 +605,7 @@ const QV2_CSV_COLUMNS: ReadonlyArray<readonly [string, (participant: Qv2AdminPar
   ["q17_main_barrier", (p) => answer(p, "q17")],
   ["q18_missing_improvement", (p) => answer(p, "q18")],
   ["q19_important_services", (p) => list(p, "q19")],
+  ["q19_other", (p) => answer(p, "q19_other")],
   ["q20_first_use", (p) => answer(p, "q20")],
   ["final_feedback", (p) => answer(p, "final_feedback")],
   ["post_completed_at", (p) => p.postCompletedAt],

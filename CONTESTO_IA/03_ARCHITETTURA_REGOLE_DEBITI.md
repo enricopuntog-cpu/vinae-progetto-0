@@ -1318,6 +1318,18 @@ fondazione.
   L'export QV2 segue i filtri attivi: senza filtri è completo, con codice o
   coorte il bottone dichiara «filtrato»; pagina fino a `total_count` e fallisce
   invece di troncare.
+- Allineamento finale QV2 (8 ottobre 2026, migrazione `20261008220000`):
+  Q7 e Q19 hanno l'opzione `other` con `q07_other`/`q19_other` (1–500
+  caratteri), obbligatoria con `other` e vietata senza, imposta sia dalla porta
+  `beta_validation_qv2_answer` (forma `{choices, other?}` accanto all'array)
+  sia dai CHECK di tabella; `other` conta nel massimo (3/2). La migrazione
+  allarga soltanto le allowlist, non riscrive righe, ricrea
+  `beta_validation_qv2_admin_participants` (tipo di ritorno cambiato) con le
+  stesse ACL e lascia invariate QV1 e QV2 admin. Il client conserva la
+  capability QV2 in una chiave propria (`vinea:market-validation:qv2-session:v1`)
+  e non la cancella più al GRAZIE: ricarica e riapertura restano sul test
+  concluso dello stesso codice, e solo «Fai provare Vinea a un'altra persona»
+  la libera. La griglia `12v` è cablata nel gate DB effimero.
 
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
