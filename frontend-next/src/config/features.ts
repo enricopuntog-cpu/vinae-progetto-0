@@ -112,6 +112,10 @@ export const MARKET_VALIDATION_UI_ABILITATA = valoreFlagEsattamenteTrue(
 export const marketValidationAbilitataServer = (): boolean =>
   valoreFlagEsattamenteTrue(process.env.MARKET_VALIDATION_ENABLED);
 
+/** Solo la stringa esatta true apre il questionario nuovo. La guida MV resta attiva. */
+export const marketValidationQuestionnaireV2AbilitatoServer = (): boolean =>
+  valoreFlagEsattamenteTrue(process.env.MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED);
+
 /**
  * Gate server-side dell'imballaggio. Da leggere solo in codice che gira sul
  * server: in un componente client `process.env.PACKAGING_ENABLED` è

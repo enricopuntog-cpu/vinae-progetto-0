@@ -27,6 +27,8 @@ export type MarketValidationScreen =
   | "ai"
   | "club"
   | "cellar"
+  | "pre-questionnaire"
+  | "post-questionnaire"
   | "complete";
 
 // Ogni card apre una schermata interna della guida: nessuna porta verso le

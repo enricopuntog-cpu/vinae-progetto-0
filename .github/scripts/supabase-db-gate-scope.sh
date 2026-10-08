@@ -21,7 +21,7 @@ is_relevant_path() {
       | supabase/tests/12h_* | supabase/tests/12i_* | supabase/tests/12j_* \
       | supabase/tests/12k_* | supabase/tests/12l_* | supabase/tests/12m_* \
       | supabase/tests/12n_* | supabase/tests/12o_* | supabase/tests/12p_* \
-      | supabase/tests/12q_* | supabase/tests/12r_* | supabase/tests/12s_* \
+      | supabase/tests/12q_* | supabase/tests/12r_* | supabase/tests/12s_* | supabase/tests/12t_* \
       | .github/workflows/supabase-db-regression.yml \
       | .github/scripts/supabase-db-gate-scope.sh)
       return 0 ;;
