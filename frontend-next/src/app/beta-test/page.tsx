@@ -4,9 +4,11 @@ import { connection } from "next/server";
 import {
   MARKET_VALIDATION_UI_ABILITATA,
   marketValidationAbilitataServer,
+  marketValidationQuestionnaireV2AbilitatoServer,
 } from "@/config/features";
 import { marketValidationShippingFeeCents } from "@/lib/market-validation/config";
 import BetaTestPageClient from "./page-client";
+import LegacyBetaTestPageClient from "./page-client-legacy";
 
 export const metadata: Metadata = {
   title: "Prova Vinea",
@@ -20,9 +22,8 @@ export default async function Page() {
     notFound();
   }
 
-  return (
-    <BetaTestPageClient
-      shippingFeeCents={marketValidationShippingFeeCents()}
-    />
-  );
+  const shippingFeeCents = marketValidationShippingFeeCents();
+  return marketValidationQuestionnaireV2AbilitatoServer()
+    ? <BetaTestPageClient shippingFeeCents={shippingFeeCents} />
+    : <LegacyBetaTestPageClient shippingFeeCents={shippingFeeCents} />;
 }

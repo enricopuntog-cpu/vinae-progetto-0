@@ -49,6 +49,17 @@ export const QUESTIONS: readonly Question[] = [
 export const Q10_ACTIONS: readonly Option[] = [["drank", "Bevute"], ["gifted", "Regalate"], ["sold", "Vendute"], ["traded", "Scambiate"], ["still_in_cellar", "Ancora in cantina"], ["other", "Altro"]];
 export const questionKey = (number: number) => `q${String(number).padStart(2, "0")}`;
 
+export type QuestionnaireStage = "pre-questionnaire" | "hub" | "post-questionnaire" | "complete";
+
+// Lifecycle LANDING → PRE → CORE → POST → GRAZIE, derivato soltanto dallo
+// stato server: un resume riprende sempre dalla fase ancora aperta.
+export function questionnaireStage(state: QuestionnaireState): QuestionnaireStage {
+  if (!state.pre_finished_at) return "pre-questionnaire";
+  if (!state.core_completed) return "hub";
+  if (!state.post_finished_at) return "post-questionnaire";
+  return "complete";
+}
+
 export function firstIncomplete(answers: QuestionnaireState["answers"], from: number, to: number): number | null {
   for (let number = from; number <= to; number++) {
     if (answers[questionKey(number)] === null || answers[questionKey(number)] === undefined) return number;

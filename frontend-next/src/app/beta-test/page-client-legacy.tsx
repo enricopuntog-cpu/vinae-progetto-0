@@ -5,17 +5,22 @@ import {
   useEffect,
   useState,
   type Dispatch,
+  type FormEvent,
   type SetStateAction,
 } from "react";
 import { Button } from "@/components/ui/button";
-import type { MarketValidationSession, MarketValidationQuestionnaireState } from "@/services/types";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  parseMarketValidationParticipantCode,
+  type MarketValidationSession,
+} from "@/lib/market-validation/contract";
 import type { MarketValidationDemoListing } from "@/lib/market-validation/demo-data";
-import { questionKey, questionnaireStage, type QuestionnaireAnswer } from "@/lib/market-validation/questionnaire";
 import {
   clearMarketValidationSession,
+  newMarketValidationCapability,
   readMarketValidationSession,
   writeMarketValidationSession,
-  newMarketValidationCapability,
 } from "@/lib/market-validation/persistence";
 import { marketValidationCanComplete } from "@/lib/market-validation/mv2-flow";
 import {
@@ -25,16 +30,9 @@ import {
   writeMarketValidationProgress,
   type MarketValidationProgress,
 } from "@/lib/market-validation/progress";
-import {
-  finishQuestionnairePost,
-  finishQuestionnairePre,
-  readQuestionnaire,
-  saveQuestionnaireAnswer,
-  startQuestionnaire,
-} from "./actions";
+import { startMarketValidationSession } from "./actions";
 import { CellarPreview } from "./_components/CellarPreview";
 import { ClubDemo } from "./_components/ClubDemo";
-import { QuestionnaireFlow } from "./_components/QuestionnaireFlow";
 import { DemoCheckout } from "./_components/DemoCheckout";
 import { DemoListingDetail } from "./_components/DemoListingDetail";
 import { DemoMarketplace } from "./_components/DemoMarketplace";
@@ -47,14 +45,16 @@ import {
 import { ValidationComplete } from "./_components/ValidationComplete";
 import { useMarketValidationTracker } from "./use-market-validation-tracker";
 
-export default function BetaTestPageClient({
+export default function LegacyBetaTestPageClient({
   shippingFeeCents,
 }: {
   shippingFeeCents: number;
 }) {
+  const [participantCode, setParticipantCode] = useState("");
   const [session, setSession] = useState<MarketValidationSession | null>(null);
-  const [questionnaire, setQuestionnaire] = useState<MarketValidationQuestionnaireState | null>(null);
-  const [progress, setProgress] = useState<MarketValidationProgress>(INITIAL_MARKET_VALIDATION_PROGRESS);
+  const [progress, setProgress] = useState<MarketValidationProgress>(
+    INITIAL_MARKET_VALIDATION_PROGRESS,
+  );
   const [ready, setReady] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,57 +63,81 @@ export default function BetaTestPageClient({
     let active = true;
     const resume = async () => {
       const stored = readMarketValidationSession(window.localStorage);
-      if (stored) {
-        const result = await startQuestionnaire(stored.capability);
-        if (!active) return;
-        if (result.ok) {
-          writeMarketValidationSession(window.localStorage, result.data.session);
-          setProgress(restoreMarketValidationProgress(window.localStorage, true));
-          setQuestionnaire(result.data.state);
-          setSession(result.data.session);
-        } else {
-          setError(result.error);
-        }
+      if (!stored) {
+        clearMarketValidationProgress(window.localStorage);
+        if (active) setReady(true);
+        return;
       }
-      if (active) setReady(true);
+
+      if (active) setParticipantCode(stored.participantCode);
+      const result = await startMarketValidationSession(
+        stored.participantCode,
+        stored.capability,
+      );
+      if (!active) return;
+
+      if (result.ok) {
+        writeMarketValidationSession(window.localStorage, result.data);
+        setProgress(
+          restoreMarketValidationProgress(
+            window.localStorage,
+            result.data.resumed,
+          ),
+        );
+        setSession(result.data);
+      } else {
+        clearMarketValidationSession(window.localStorage);
+        clearMarketValidationProgress(window.localStorage);
+        setError(result.error);
+      }
+      setReady(true);
     };
+
     void resume();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const begin = async (fresh = false) => {
+  const begin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (pending) return;
+
+    const canonical = parseMarketValidationParticipantCode(participantCode);
+    if (!canonical) {
+      setError("Inserisci un codice da V001 a V999.");
+      return;
+    }
+
+    const stored = readMarketValidationSession(window.localStorage);
+    const capability =
+      stored?.participantCode === canonical
+        ? stored.capability
+        : newMarketValidationCapability();
+
     setPending(true);
     setError(null);
-    const stored = fresh ? null : readMarketValidationSession(window.localStorage);
-    const capability = stored?.capability ?? newMarketValidationCapability();
-    const result = await startQuestionnaire(capability);
+    const result = await startMarketValidationSession(canonical, capability);
     setPending(false);
-    if (!result.ok) { setError(result.error); return; }
-    if (fresh) clearMarketValidationProgress(window.localStorage);
-    writeMarketValidationSession(window.localStorage, result.data.session);
-    setProgress(restoreMarketValidationProgress(window.localStorage, !fresh));
-    setQuestionnaire(result.data.state);
-    setSession(result.data.session);
+    if (!result.ok) {
+      clearMarketValidationSession(window.localStorage);
+      clearMarketValidationProgress(window.localStorage);
+      setError(result.error);
+      return;
+    }
+
+    writeMarketValidationSession(window.localStorage, result.data);
+    setProgress(
+      restoreMarketValidationProgress(window.localStorage, result.data.resumed),
+    );
+    setSession(result.data);
+    setParticipantCode(result.data.participantCode);
   };
 
-  const newTester = () => {
-    clearMarketValidationSession(window.localStorage);
-    clearMarketValidationProgress(window.localStorage);
-    setSession(null);
-    setQuestionnaire(null);
-    setProgress(INITIAL_MARKET_VALIDATION_PROGRESS);
-    setError(null);
-  };
-
-  if (session && questionnaire) {
+  if (session) {
     return (
       <MarketValidationExperience
-        key={session.sessionId}
         session={session}
-        questionnaire={questionnaire}
-        onQuestionnaire={setQuestionnaire}
-        onNewTester={newTester}
         shippingFeeCents={shippingFeeCents}
         progress={progress}
         onProgress={setProgress}
@@ -124,8 +148,15 @@ export default function BetaTestPageClient({
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <section className="rounded-3xl border border-border bg-card p-5 md:p-8">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-bordeaux">Market Validation</p>
-        <h1 className="mt-2 font-serif text-3xl font-semibold md:text-4xl">Prova Vinea</h1>
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-bordeaux">
+            Market Validation
+          </p>
+          <h1 className="mt-2 font-serif text-3xl font-semibold md:text-4xl">
+            Prova Vinea
+          </h1>
+        </div>
+
         <p className="mt-5 max-w-xl whitespace-pre-line text-base leading-7 text-muted-foreground md:text-lg">
           {`Stai partecipando alla fase di Beta Testing di Vinea Wine Club.
 In due step proverai ad acquistare una bottiglia e ad aggiungerne
@@ -133,10 +164,52 @@ una tua, poi potrai scoprire AI, Club e Cantina.
 Tutto si svolge qui ed è una simulazione: nessun pagamento,
 ordine, annuncio o spedizione reale.`}
         </p>
-        {error && <p role="alert" className="mt-4 text-bordeaux">{error}</p>}
-        <Button className="mt-6 min-h-12 w-full bg-bordeaux text-base hover:bg-bordeaux/90" disabled={!ready || pending} onClick={() => void begin()}>
-          {pending ? "Avvio in corso…" : "Inizia il test"}
-        </Button>
+
+        <form className="mt-6 max-w-sm space-y-4" onSubmit={begin}>
+          <div className="space-y-2">
+            <Label htmlFor="participant-code">Codice partecipante</Label>
+            <Input
+              id="participant-code"
+              value={participantCode}
+              onChange={(event) => {
+                setParticipantCode(event.target.value.toUpperCase());
+                setError(null);
+              }}
+              placeholder="V017"
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              inputMode="text"
+              maxLength={4}
+              aria-describedby={
+                error ? "participant-code-error" : "participant-code-help"
+              }
+              disabled={!ready || pending}
+              className="min-h-11"
+            />
+            <p id="participant-code-help" className="text-sm text-muted-foreground">
+              Usa il codice V001–V999 ricevuto per il test.
+            </p>
+          </div>
+
+          {error && (
+            <p
+              id="participant-code-error"
+              role="alert"
+              className="rounded-xl border border-bordeaux/30 bg-bordeaux/5 p-3 text-sm text-bordeaux"
+            >
+              {error}
+            </p>
+          )}
+
+          <Button
+            type="submit"
+            className="min-h-12 w-full bg-bordeaux text-base hover:bg-bordeaux/90"
+            disabled={!ready || pending}
+          >
+            {pending ? "Avvio in corso…" : "Inizia il test"}
+          </Button>
+        </form>
       </section>
     </div>
   );
@@ -144,23 +217,16 @@ ordine, annuncio o spedizione reale.`}
 
 function MarketValidationExperience({
   session,
-  questionnaire,
-  onQuestionnaire,
-  onNewTester,
   shippingFeeCents,
   progress,
   onProgress,
 }: {
   session: MarketValidationSession;
-  questionnaire: MarketValidationQuestionnaireState;
-  onQuestionnaire: (next: MarketValidationQuestionnaireState) => void;
-  onNewTester: () => void;
   shippingFeeCents: number;
   progress: MarketValidationProgress;
   onProgress: Dispatch<SetStateAction<MarketValidationProgress>>;
 }) {
-  // QV2: la prima schermata dipende dalla fase aperta sul server, non dal client.
-  const [screen, setScreen] = useState<MarketValidationScreen>(() => questionnaireStage(questionnaire));
+  const [screen, setScreen] = useState<MarketValidationScreen>("hub");
   const [selectedListing, setSelectedListing] =
     useState<MarketValidationDemoListing | null>(null);
   const [completing, setCompleting] = useState(false);
@@ -224,39 +290,6 @@ function MarketValidationExperience({
     }));
   };
 
-  // Ricarica lo stato autoritativo dopo ogni cambio di fase.
-  const refreshQuestionnaire = useCallback(async () => {
-    const result = await readQuestionnaire(session.sessionId, session.capability);
-    if (result.ok) onQuestionnaire(result.data.state);
-    return result.ok;
-  }, [session, onQuestionnaire]);
-
-  const saveQuestionnaire = useCallback(async (questionNumber: number, answer: QuestionnaireAnswer) => {
-    const result = await saveQuestionnaireAnswer(session.sessionId, session.capability, questionKey(questionNumber), answer);
-    return result.ok;
-  }, [session]);
-
-  // PRE concluso: si apre la guida Prova Vinea (CORE) già approvata.
-  const finishPreQuestionnaire = useCallback(async () => {
-    const result = await finishQuestionnairePre(session.sessionId, session.capability);
-    if (!result.ok) return false;
-    await refreshQuestionnaire();
-    setScreen("hub");
-    return true;
-  }, [session, refreshQuestionnaire]);
-
-  // POST concluso: il feedback finale è facoltativo e si salva prima della chiusura.
-  const finishPostQuestionnaire = useCallback(async (feedback?: string) => {
-    if (feedback !== undefined && feedback.trim() !== "") {
-      const saved = await saveQuestionnaireAnswer(session.sessionId, session.capability, "final_feedback", feedback);
-      if (!saved.ok) return false;
-    }
-    const result = await finishQuestionnairePost(session.sessionId, session.capability);
-    if (!result.ok) return false;
-    setScreen("complete");
-    return true;
-  }, [session]);
-
   const complete = async () => {
     if (completing || !marketValidationCanComplete(progress)) return;
     setCompleting(true);
@@ -269,9 +302,8 @@ function MarketValidationExperience({
       );
       return;
     }
-    // CORE concluso con beta_completed registrato: si apre il POST (Q14-Q20).
-    await refreshQuestionnaire();
-    setScreen("post-questionnaire");
+    // Prima monta lo stato finale in memoria; l'effect terminale pulisce poi le chiavi.
+    setScreen("complete");
   };
 
   // Lo step Vendi si chiude solo quando la demo interna ha registrato
@@ -286,18 +318,7 @@ function MarketValidationExperience({
     [updateProgress],
   );
 
-  if (screen === "complete") {
-    return (
-      <ValidationComplete
-        qv2
-        action={
-          <Button onClick={onNewTester} className="mt-6 min-h-12 w-full bg-bordeaux text-base hover:bg-bordeaux/90">
-            Nuovo tester
-          </Button>
-        }
-      />
-    );
-  }
+  if (screen === "complete") return <ValidationComplete />;
   if (screen === "marketplace") {
     return (
       <DemoMarketplace
@@ -348,14 +369,8 @@ function MarketValidationExperience({
   if (screen === "club") {
     return <ClubDemo track={track} onViewed={markClubViewed} onBack={() => open("hub")} />;
   }
+  // La Cantina è una scoperta facoltativa: nessun evento, nessun progresso.
   if (screen === "cellar") return <CellarPreview onBack={() => open("hub")} />;
-  // Questionario QV2: PRE (Q1-Q13) prima della guida, POST (Q14-Q20) dopo beta_completed.
-  if (screen === "pre-questionnaire") {
-    return <QuestionnaireFlow phase="pre" state={questionnaire} onSave={saveQuestionnaire} onFinish={finishPreQuestionnaire} />;
-  }
-  if (screen === "post-questionnaire") {
-    return <QuestionnaireFlow phase="post" state={questionnaire} onSave={saveQuestionnaire} onFinish={finishPostQuestionnaire} />;
-  }
   if (screen === "ai") {
     return (
       <StaticAiPreview
