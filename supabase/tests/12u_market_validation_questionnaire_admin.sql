@@ -412,7 +412,8 @@ begin
       and v_dati#>>'{questionnaire,q02_other}' = 'Sommelier amatoriale'
       and v_dati#>'{questionnaire,q07}' = '["authenticity", "shipping"]'::jsonb
       and v_dati#>>'{questionnaire,q17}' = 'Spedizione'
-      and jsonb_array_length(v_dati->'events') = 13
+      -- 14 eventi dalla 20261008230000 (cellar_viewed).
+      and jsonb_array_length(v_dati->'events') = 14
       and (select (x->>'count')::int from jsonb_array_elements(v_dati->'events') x where x->>'event' = 'marketplace_viewed') = 2
       and v_dati#>>'{completion,preCompletedAt}' is not null
       and v_dati#>>'{completion,coreCompletedAt}' is not null

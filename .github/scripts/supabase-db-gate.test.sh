@@ -88,6 +88,7 @@ check "scope: griglia 12s analytics MV pertinente" true "$(scope_for supabase/te
 check "scope: griglia 12t QV2 pertinente" true "$(scope_for supabase/tests/12t_market_validation_questionnaire_qv2.sql)"
 check "scope: griglia 12u QV2 admin pertinente" true "$(scope_for supabase/tests/12u_market_validation_questionnaire_admin.sql)"
 check "scope: griglia 12v QV2 Altro Q7/Q19 pertinente" true "$(scope_for supabase/tests/12v_market_validation_qv2_other_options.sql)"
+check "scope: griglia 12w QV2 cinque aree pertinente" true "$(scope_for supabase/tests/12w_market_validation_qv2_five_areas.sql)"
 check "scope: griglia 7c consegna e imballaggio pertinente" true "$(scope_for supabase/tests/7c_consegna_imballaggio.sql)"
 check "scope: config Supabase pertinente" true "$(scope_for supabase/config.toml)"
 check "scope: README saltato" false "$(scope_for README.md)"
