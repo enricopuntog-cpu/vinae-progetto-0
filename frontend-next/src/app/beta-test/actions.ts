@@ -1,6 +1,6 @@
 "use server";
 
-import { marketValidationAbilitataServer } from "@/config/features";
+import { marketValidationAbilitataServer, marketValidationQuestionnaireV2AbilitatoServer } from "@/config/features";
 import { parseMarketValidationParticipantCode } from "@/lib/market-validation/contract";
 import { marketValidationShippingFeeCents } from "@/lib/market-validation/config";
 import {
@@ -10,11 +10,51 @@ import {
 } from "@/lib/market-validation/event-validation";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createMarketValidationService } from "@/services/market-validation-service";
+import { createMarketValidationQuestionnaireService } from "@/services/market-validation-questionnaire-service";
+import type { MarketValidationQuestionnaireState } from "@/services/types";
 import type { MarketValidationSession, Result } from "@/services/types";
 
 const NON_DISPONIBILE = "Il test non è disponibile in questo momento.";
 const CODICE_NON_VALIDO = "Inserisci un codice da V001 a V999.";
 const EVENTO_NON_VALIDO = "Non è stato possibile registrare questo passaggio.";
+const RISPOSTA_NON_VALIDA = "La risposta non è valida. Riprova.";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function validQuestionInput(sessionId: unknown, capability: unknown): sessionId is string {
+  return typeof sessionId === "string" && UUID.test(sessionId) &&
+    typeof capability === "string" && UUID.test(capability);
+}
+
+export async function startQuestionnaire(capability: string): Promise<Result<{ session: MarketValidationSession; state: MarketValidationQuestionnaireState }>> {
+  if (!marketValidationAbilitataServer() || !marketValidationQuestionnaireV2AbilitatoServer()) return { ok: false, error: NON_DISPONIBILE };
+  if (!UUID.test(capability)) return { ok: false, error: RISPOSTA_NON_VALIDA };
+  return createMarketValidationQuestionnaireService(await getSupabaseServerClient()).startOrResume(capability);
+}
+
+export async function readQuestionnaire(sessionId: string, capability: string): Promise<Result<{ state: MarketValidationQuestionnaireState }>> {
+  if (!marketValidationAbilitataServer() || !marketValidationQuestionnaireV2AbilitatoServer()) return { ok: false, error: NON_DISPONIBILE };
+  if (!validQuestionInput(sessionId, capability)) return { ok: false, error: RISPOSTA_NON_VALIDA };
+  return createMarketValidationQuestionnaireService(await getSupabaseServerClient()).read(sessionId, capability);
+}
+
+export async function saveQuestionnaireAnswer(sessionId: string, capability: string, question: string, answer: unknown): Promise<Result<{ answer_key: string }>> {
+  if (!marketValidationAbilitataServer() || !marketValidationQuestionnaireV2AbilitatoServer()) return { ok: false, error: NON_DISPONIBILE };
+  if (!validQuestionInput(sessionId, capability) || !/^(q(0[1-9]|1[0-9]|20)|final_feedback)$/.test(question) ||
+      JSON.stringify(answer)?.length > 4096) return { ok: false, error: RISPOSTA_NON_VALIDA };
+  return createMarketValidationQuestionnaireService(await getSupabaseServerClient()).answer(sessionId, capability, question, answer);
+}
+
+export async function finishQuestionnairePre(sessionId: string, capability: string): Promise<Result<unknown>> {
+  if (!marketValidationAbilitataServer() || !marketValidationQuestionnaireV2AbilitatoServer()) return { ok: false, error: NON_DISPONIBILE };
+  if (!validQuestionInput(sessionId, capability)) return { ok: false, error: RISPOSTA_NON_VALIDA };
+  return createMarketValidationQuestionnaireService(await getSupabaseServerClient()).finishPre(sessionId, capability);
+}
+
+export async function finishQuestionnairePost(sessionId: string, capability: string): Promise<Result<unknown>> {
+  if (!marketValidationAbilitataServer() || !marketValidationQuestionnaireV2AbilitatoServer()) return { ok: false, error: NON_DISPONIBILE };
+  if (!validQuestionInput(sessionId, capability)) return { ok: false, error: RISPOSTA_NON_VALIDA };
+  return createMarketValidationQuestionnaireService(await getSupabaseServerClient()).finishPost(sessionId, capability);
+}
 
 /**
  * Porta server MV1. La flag pubblica non viene letta: non autorizza scritture.

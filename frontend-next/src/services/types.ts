@@ -27,6 +27,7 @@ import type {
 import type { Wine } from "@/data/wines";
 import type { CodiceErroreAuth } from "@/lib/auth/errori-auth";
 import type { ContestoRitornoAuth } from "@/lib/auth/ritorno-auth";
+import type { QuestionnaireState } from "@/lib/market-validation/questionnaire";
 import type { MetodiRiautenticazione } from "@/lib/auth/riautenticazione";
 import type {
   ConfezioneOriginaleTipo,
@@ -83,6 +84,42 @@ export interface MarketValidationService {
     eventName: Exclude<MarketValidationEventName, "beta_started">,
     metadata?: MarketValidationEventMetadata,
   ): Promise<Result<{ eventId: string }>>;
+}
+
+export type MarketValidationQuestionnaireState = QuestionnaireState;
+
+/** Contratto QV2: sessioni chiuse e post completion restano leggibili/compilabili
+ * per un periodo limitato; nessun grant tabella, nessun participant_code
+ * scelto dal client. Nessuna porta commerciale entra in questa interfaccia. */
+export interface MarketValidationQuestionnaireService {
+  startOrResume(capability: string): Promise<
+    Result<{
+      session: MarketValidationSession;
+      state: MarketValidationQuestionnaireState;
+    }>
+  >;
+  read(
+    sessionId: string,
+    capability: string,
+  ): Promise<
+    Result<{
+      state: MarketValidationQuestionnaireState;
+    }>
+  >;
+  answer(
+    sessionId: string,
+    capability: string,
+    question: string,
+    answer: unknown,
+  ): Promise<Result<{ answer_key: string }>>;
+  finishPre(
+    sessionId: string,
+    capability: string,
+  ): Promise<Result<unknown>>;
+  finishPost(
+    sessionId: string,
+    capability: string,
+  ): Promise<Result<unknown>>;
 }
 
 // ---- Auth --------------------------------------------------------------

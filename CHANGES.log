@@ -1,23 +1,21 @@
 ## CURRENT STATE
-- Market Validation MV1, MV2 e MV3 sono CLOSED: la PR #185 porta su `main` due RPC analytics admin read-only, la rotta `/admin/beta-validation` protetta server-side, la griglia `12s` nel gate DB effimero e gli asset QR deterministici.
-- Le tabelle `private.beta_validation_sessions` e `private.beta_validation_events` restano private, senza grant browser né policy pubbliche; `beta_validation_admin_summary` e `beta_validation_admin_participants` sono `security definer`, `stable`, `search_path=''`, con ricontrollo del ruolo admin reale e `grant execute` al solo `authenticated`.
-- Market Validation è online su `https://vineawineclub.com/beta-test` con le flag di produzione già ON; con questa PR la guida diventa autocontenuta e supera la versione delle PR #186/#187 (Vendi su `/vendi` e Club su `/community`). WP6A, WP6B e WP6C restano CLOSED e la Fase 11 AI foto/sfondi non è iniziata.
+- Market Validation MV1, MV2, MV3 e la guida autocontenuta (PR #188) sono CLOSED e online su `https://vineawineclub.com/beta-test` con le flag MV di produzione ON.
+- QV1 (PR #189, branch `feature/market-validation-questionnaire-v2`) porta il questionario digitale dietro il rollout server-only `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED`, default OFF: solo il valore esatto `true` abilita la nuova pagina e le cinque server action QV2.
+- Con il flag OFF `/beta-test` serve invariata la guida approvata della PR #188 (`page-client-legacy.tsx`): nessun questionario si avvia e nessun codice QV2 viene allocato.
+- Con il flag ON il ciclo è LANDING → PRE (Q1–Q13) → guida Prova Vinea (CORE: Acquista + Vendi, `beta_completed`) → POST (Q14–Q20) → feedback finale facoltativo → GRAZIE con «Nuovo tester» esplicito. La fase aperta si deriva dallo stato server, quindi il resume riprende dal punto giusto.
+- Migrazione additiva `20261008120000_market_validation_questionnaire_qv2.sql`: tabella `private.beta_validation_qv2` tipizzata (RLS on, nessun grant client), porte `security definer` `beta_validation_qv2_start/read/answer/finish_pre/finish_post`, `participant_code` automatico V001–V999 senza wrap, CHECK eventi esteso con `validation_completed`. Nessuna porta commerciale, di pagamento, ordine, logistica o AI.
+- `next` ed `eslint-config-next` sono a 16.3.8; l'audit ammette soltanto l'eccezione canonica GHSA-vfj7-8cjw-p6xm (`braces`). `MIN_TESTS` = 2294.
 
 ## ACTIVE TASK
-- Market Validation self-contained guide = CLOSED (branch `fix/beta-test-guided-demo`, PR «Make market validation self-contained»).
-- Hub: «Step del test», badge «Step 1»/«Step 2» per Acquista/Vendi e «Approfondimento» per AI/Club (Cantina resta «Scopri»), pulsante «Raggiungi il traguardo» con «Prossimo passo», testi mobile più grandi. Completion invariata: acquisto + vendita.
-- Vendi = demo interna `SellDemo` (foto d'esempio, assistente AI con suggerimenti statici, tre destinazioni con le parole di `/vendi`, riepilogo; completa solo sulla conferma finale dopo `sell_completed`). Club = demo interna `ClubDemo` (`club_viewed` all'apertura, solo funzioni reali, Club segnati «Esempio», nessuna iscrizione/post/follow). Anteprima AI con quattro aree e «A cosa serve», senza link. Cantina rifatta: schede visive con filtri e dettaglio, valore nel tempo, finestre di bevuta, sezione 3D come immagine d'esempio, senza link a `/cantina`. «← Indietro» unico in tutte le schermate.
-- Focus mode su `/beta-test`: marchio non cliccabile, nessuna azione dell'header (registrazione, ricerca, inbox, account, switcher demo), nessun Sommelier, footer legale in nuova scheda. Fuori da `/beta-test` la shell è invariata. Eventi, DB, RPC e migrazioni invariati; `MIN_TESTS` = 2280.
+- QV1 VERIFY & SHIP: merge della PR #189 a CI verde sull'HEAD esatto, applicazione in produzione (`pijnmcllmfgjmgsvtcej`) della sola migrazione `20261008120000`, verifica Netlify con Questionnaire V2 OFF.
 
 ## NEXT STEPS
-1. Smartphone acceptance QR
-2. Pilot 5 tester
-3. Eventuale micro-fix / questionario definitivo
+1. QV2 BUILD — dashboard amministrativa e analytics questionario.
+2. QV2 VERIFY & SHIP.
+3. Attivazione V2 e acceptance end-to-end.
 
 ## BLOCKERS / NOTES
-- La scansione QR con smartphone, la resa di stampa reale e il pilot con 5 tester restano NON VERIFICATI: sono acceptance, non ship.
-- Smoke visivo pre-merge eseguito in locale (390 px e 1366 px) su un finto Supabase loopback con il codice tecnico V998: nessun evento è stato scritto in produzione. Il codice V998 va escluso dai tester finali.
-- Prima di `beta_completed` le uniche ancore della guida sono i link legali del footer in nuova scheda; dopo `beta_completed` resta «Continua a esplorare Vinea» → `/` in nuova scheda.
-- La demo Vendi vive in memoria: riaprire la card dopo il completamento mostra l'esito. Il tracker deduplica `sell_started` e `club_viewed` per caricamento di pagina: dopo un ricaricamento riaprire Vendi o Club registra un nuovo evento. «Solo in Cantina» è copy della demo per lo stato `privata`. La Cantina non ha un evento dedicato.
-- Nel marketplace demo il contatore dice «1 annunci demo» con un solo risultato: copy preesistente di Acquista, lasciato invariato per scope.
-- Nessuna capability, UUID di sessione, metadata, IP, user-agent o PII attraversa le porte admin; nessun dominio ordini, pagamenti, shipment, annunci, stock, AI reale, Storage o scrittura Club è stato riaperto.
+- Non attivare `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED` su Netlify prima della chiusura della dashboard QV2; nessun pilot o test reale è stato avviato.
+- La griglia `12t` (start/resume, isolamento capability, PRE completo, risposte condizionali, BUY+SELL+core tramite la porta MV1, POST, `final_feedback` facoltativo, `validation_completed` idempotente, blocco dopo la chiusura, ROLLBACK) gira nel gate DB effimero; non va mai eseguita in produzione.
+- Le sessioni QV2 condividono `private.beta_validation_sessions`/`events` con MV1: dopo `beta_completed` la sessione è chiusa per le porte MV1, mentre il POST usa solo le porte QV2.
+- La scansione QR con smartphone e il pilot restano acceptance NON VERIFICATE.

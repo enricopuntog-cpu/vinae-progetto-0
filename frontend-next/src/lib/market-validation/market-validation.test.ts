@@ -124,6 +124,7 @@ describe("Market Validation MV1", () => {
       "frontend-next/src/lib/market-validation/config.ts",
       "frontend-next/src/app/beta-test/page.tsx",
       "frontend-next/src/app/beta-test/page-client.tsx",
+      "frontend-next/src/app/beta-test/page-client-legacy.tsx",
       "frontend-next/src/services/market-validation-service.ts",
       "supabase/migrations/20261003170000_market_validation_foundation.sql",
     ];
@@ -148,14 +149,56 @@ describe("Market Validation MV1", () => {
   it("separa il gate pubblico dalla vera autorizzazione server", () => {
     const features = read("frontend-next/src/config/features.ts");
     const action = read("frontend-next/src/app/beta-test/actions.ts");
-    const client = read("frontend-next/src/app/beta-test/page-client.tsx");
+    const legacy = read("frontend-next/src/app/beta-test/page-client-legacy.tsx");
+    const qv2 = read("frontend-next/src/app/beta-test/page-client.tsx");
     expect(features).toInclude("NEXT_PUBLIC_MARKET_VALIDATION_ENABLED");
     expect(features).toInclude("process.env.MARKET_VALIDATION_ENABLED");
     expect(action).toInclude("marketValidationAbilitataServer()");
     expect(action).not.toInclude("NEXT_PUBLIC_MARKET_VALIDATION_ENABLED");
-    expect(client).toInclude("startMarketValidationSession(");
-    expect(client).toInclude("stored.capability");
-    expect(client).not.toInclude("setSession(stored)");
+    expect(legacy).toInclude("startMarketValidationSession(");
+    expect(legacy).toInclude("stored.capability");
+    expect(legacy).not.toInclude("setSession(stored)");
+    // QV2: il resume riparte dalla capability e il server riassegna sessione e codice.
+    expect(qv2).toInclude("startQuestionnaire(stored.capability)");
+    expect(qv2).not.toInclude("setSession(stored)");
+  });
+
+  it("il rollout QV2 è un flag solo server, fail-closed e separato dalla guida", () => {
+    const features = read("frontend-next/src/config/features.ts");
+    const page = read("frontend-next/src/app/beta-test/page.tsx");
+    const action = read("frontend-next/src/app/beta-test/actions.ts");
+    const example = read("frontend-next/.env.example");
+    const environment = read("docs/ENVIRONMENT.md");
+    expect(features).toInclude(
+      "valoreFlagEsattamenteTrue(process.env.MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED)",
+    );
+    expect(features).not.toInclude("NEXT_PUBLIC_MARKET_VALIDATION_QUESTIONNAIRE_V2");
+    expect(example).toInclude("MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=false");
+    expect(environment).toInclude("`MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED`");
+    // Flag OFF: /beta-test serve la guida approvata, nessun questionario.
+    expect(page).toInclude(
+      "marketValidationQuestionnaireV2AbilitatoServer()\n    ? <BetaTestPageClient shippingFeeCents={shippingFeeCents} />\n    : <LegacyBetaTestPageClient shippingFeeCents={shippingFeeCents} />",
+    );
+    // Ogni porta QV2 richiede entrambi i gate: nessun codice QV2 nasce con flag OFF.
+    const gate = "if (!marketValidationAbilitataServer() || !marketValidationQuestionnaireV2AbilitatoServer()) return { ok: false, error: NON_DISPONIBILE };";
+    for (const name of [
+      "startQuestionnaire",
+      "readQuestionnaire",
+      "saveQuestionnaireAnswer",
+      "finishQuestionnairePre",
+      "finishQuestionnairePost",
+    ]) {
+      const start = action.indexOf(`export async function ${name}(`);
+      expect(start).toBeGreaterThan(0);
+      const body = action.slice(start, action.indexOf("\n}\n", start));
+      expect(body).toInclude(gate);
+      expect(body.indexOf(gate)).toBeLessThan(body.indexOf("createMarketValidationQuestionnaireService("));
+    }
+    // La guida legacy non conosce il questionario.
+    const legacy = read("frontend-next/src/app/beta-test/page-client-legacy.tsx");
+    for (const forbidden of ["startQuestionnaire", "QuestionnaireFlow", "saveQuestionnaireAnswer"]) {
+      expect(legacy).not.toInclude(forbidden);
+    }
   });
 
   it("non importa domini commerciali, provider o AI dal namespace MV", () => {
@@ -168,6 +211,7 @@ describe("Market Validation MV1", () => {
       "frontend-next/src/app/beta-test/actions.ts",
       "frontend-next/src/app/beta-test/page.tsx",
       "frontend-next/src/app/beta-test/page-client.tsx",
+      "frontend-next/src/app/beta-test/page-client-legacy.tsx",
     ];
     const source = files.map(read).join("\n");
     for (const forbidden of [
@@ -212,11 +256,30 @@ describe("Market Validation MV1", () => {
   });
 
   it("la landing chiede soltanto il codice pseudonimo", () => {
-    const client = read("frontend-next/src/app/beta-test/page-client.tsx");
+    const client = read("frontend-next/src/app/beta-test/page-client-legacy.tsx");
     expect(client).toInclude("Codice partecipante");
     expect(client).toInclude("Inizia il test");
     expect(client).toInclude("participantCode={session.participantCode}");
     for (const forbidden of [
+      "Nome",
+      "Cognome",
+      'type="email"',
+      'type="tel"',
+      'type="password"',
+      "account",
+    ]) {
+      expect(client).not.toInclude(forbidden);
+    }
+  });
+
+  it("la landing QV2 non chiede nulla: il codice partecipante lo assegna il server", () => {
+    const client = read("frontend-next/src/app/beta-test/page-client.tsx");
+    expect(client).toInclude("Inizia il test");
+    expect(client).toInclude("participantCode={session.participantCode}");
+    expect(client).toInclude("newMarketValidationCapability()");
+    for (const forbidden of [
+      "Codice partecipante",
+      "<input",
       "Nome",
       "Cognome",
       'type="email"',

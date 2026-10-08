@@ -28,6 +28,7 @@ const productionSources = () =>
     ...sourceFiles(betaRoot),
     ...sourceFiles(marketValidationRoot),
     resolve(root, "frontend-next/src/services/market-validation-service.ts"),
+    resolve(root, "frontend-next/src/services/market-validation-questionnaire-service.ts"),
   ].filter((file) => !file.endsWith(".test.ts"));
 
 const betaSource = () =>
@@ -35,6 +36,13 @@ const betaSource = () =>
     .filter((file) => !file.endsWith(".test.ts"))
     .map((file) => readFileSync(file, "utf8"))
     .join("\n");
+
+// Con MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED spento /beta-test serve la guida
+// approvata in page-client-legacy.tsx; acceso, il client QV2 la incorpora tra PRE e
+// POST. Le regole della guida valgono quindi per entrambi i client.
+const LEGACY_CLIENT = "frontend-next/src/app/beta-test/page-client-legacy.tsx";
+const QV2_CLIENT = "frontend-next/src/app/beta-test/page-client.tsx";
+const GUIDE_CLIENTS = [LEGACY_CLIENT, QV2_CLIENT];
 
 const component = (name: string) => read(`frontend-next/src/app/beta-test/_components/${name}.tsx`);
 
@@ -50,11 +58,15 @@ const SCREENS_WITH_BACK = [
 ];
 
 describe("Market Validation MV2 UI contract", () => {
-  it("resta single-route con Vendi e Club come schermate interne della guida", () => {
-    const client = read("frontend-next/src/app/beta-test/page-client.tsx");
+  it.each(GUIDE_CLIENTS)("resta single-route con Vendi e Club come schermate interne della guida (%s)", (clientPath) => {
+    const client = read(clientPath);
     const hub = component("ValidationHub");
     expect(client).toInclude("MarketValidationScreen");
-    expect(client).toInclude('useState<MarketValidationScreen>("hub")');
+    expect(client).toInclude(
+      clientPath === LEGACY_CLIENT
+        ? 'useState<MarketValidationScreen>("hub")'
+        : "useState<MarketValidationScreen>(() => questionnaireStage(questionnaire))",
+    );
     expect(client).not.toInclude("useRouter");
     expect(client).not.toInclude("router.push");
     expect(client).not.toInclude("<Link");
@@ -75,17 +87,23 @@ describe("Market Validation MV2 UI contract", () => {
 
   it("risolve lo shipping sul server e completa solo dopo gli eventi hard-gated", () => {
     const page = read("frontend-next/src/app/beta-test/page.tsx");
-    const client = read("frontend-next/src/app/beta-test/page-client.tsx");
+    const legacy = read(LEGACY_CLIENT);
+    const qv2 = read(QV2_CLIENT);
     const checkout = component("DemoCheckout");
     expect(page).toInclude("marketValidationShippingFeeCents()");
     expect(page).toInclude("shippingFeeCents=");
-    expect(client.indexOf('track("beta_completed"')).toBeLessThan(client.indexOf('setScreen("complete")'));
+    expect(legacy.indexOf('track("beta_completed"')).toBeGreaterThan(0);
+    expect(legacy.indexOf('track("beta_completed"')).toBeLessThan(legacy.indexOf('setScreen("complete")'));
+    // QV2: beta_completed registrato apre il POST; GRAZIE solo dopo finish_post.
+    expect(qv2.indexOf('track("beta_completed"')).toBeGreaterThan(0);
+    expect(qv2.indexOf('track("beta_completed"')).toBeLessThan(qv2.indexOf('setScreen("post-questionnaire")'));
+    expect(qv2.indexOf("finishQuestionnairePost(session.sessionId")).toBeLessThan(qv2.indexOf('setScreen("complete")'));
     expect(checkout.indexOf('track(\n      "checkout_beta_completed"')).toBeLessThan(checkout.indexOf("onCompleted();"));
     expect(checkout).toInclude("Non è stato creato alcun ordine, pagamento");
   });
 
-  it("mantiene il percorso Acquista demo: marketplace, dettaglio, preferiti e checkout", () => {
-    const client = read("frontend-next/src/app/beta-test/page-client.tsx");
+  it.each(GUIDE_CLIENTS)("mantiene il percorso Acquista demo: marketplace, dettaglio, preferiti e checkout (%s)", (clientPath) => {
+    const client = read(clientPath);
     for (const name of ["DemoMarketplace", "DemoListingDetail", "DemoCheckout", "ValidationComplete"]) {
       expect(existsSync(resolve(betaRoot, `_components/${name}.tsx`))).toBeTrue();
       expect(client).toInclude(`<${name}`);
@@ -148,13 +166,13 @@ describe("Market Validation MV2 UI contract", () => {
     expect(hub).not.toInclude("ExternalLink");
   });
 
-  it("aumenta la leggibilità mobile dell'hub senza testi sotto il corpo base", () => {
+  it.each(GUIDE_CLIENTS)("aumenta la leggibilità mobile dell'hub senza testi sotto il corpo base (%s)", (clientPath) => {
     const hub = component("ValidationHub");
     const body = hub.slice(hub.indexOf("function CardBody"));
     expect(body).toInclude('className="mt-1 text-base leading-6 text-muted-foreground">{area.text}</p>');
     expect(body).not.toInclude("text-xs");
     expect(hub).toInclude("text-base leading-7 text-muted-foreground");
-    const client = read("frontend-next/src/app/beta-test/page-client.tsx");
+    const client = read(clientPath);
     expect(client).toInclude("whitespace-pre-line text-base leading-7 text-muted-foreground md:text-lg");
   });
 
@@ -172,9 +190,9 @@ describe("Market Validation MV2 UI contract", () => {
     expect(betaSource()).not.toInclude("← Torna");
   });
 
-  it("Vendi è una demo interna che si completa solo sulla conferma finale", () => {
+  it.each(GUIDE_CLIENTS)("Vendi è una demo interna che si completa solo sulla conferma finale (%s)", (clientPath) => {
     const hub = component("ValidationHub");
-    const client = read("frontend-next/src/app/beta-test/page-client.tsx");
+    const client = read(clientPath);
     const sell = component("SellDemo");
     const seller = hub.slice(hub.indexOf('key: "seller"'), hub.indexOf('key: "ai"'));
     expect(seller).toInclude('screen: "seller"');
@@ -235,9 +253,9 @@ describe("Market Validation MV2 UI contract", () => {
     }
   });
 
-  it("Club è una demo interna con club_viewed e soltanto funzioni reali dei Club", () => {
+  it.each(GUIDE_CLIENTS)("Club è una demo interna con club_viewed e soltanto funzioni reali dei Club (%s)", (clientPath) => {
     const hub = component("ValidationHub");
-    const client = read("frontend-next/src/app/beta-test/page-client.tsx");
+    const client = read(clientPath);
     const club = component("ClubDemo");
     const data = read("frontend-next/src/lib/market-validation/club-demo.ts");
     const card = hub.slice(hub.indexOf('key: "club"'), hub.indexOf("];", hub.indexOf('key: "club"')));
@@ -339,7 +357,8 @@ describe("Market Validation MV2 UI contract", () => {
 
   it("offre «Continua a esplorare Vinea» solo dopo beta_completed, senza condizionarlo", () => {
     const complete = component("ValidationComplete");
-    const client = read("frontend-next/src/app/beta-test/page-client.tsx");
+    const legacy = read(LEGACY_CLIENT);
+    const qv2 = read(QV2_CLIENT);
     const link = complete.match(/<Link\b[^>]*>/g) ?? [];
     expect(link).toHaveLength(1);
     expect(link[0]).toInclude('href="/"');
@@ -349,13 +368,17 @@ describe("Market Validation MV2 UI contract", () => {
     expect(complete).not.toInclude("MarketValidationTrack");
     expect(complete).not.toInclude("onClick");
     // La schermata finale si monta solo dopo l'evento registrato.
-    expect(client.indexOf('track("beta_completed"')).toBeLessThan(client.indexOf('setScreen("complete")'));
-    expect(client).toInclude('if (screen === "complete") return <ValidationComplete />;');
+    expect(legacy.indexOf('track("beta_completed"')).toBeLessThan(legacy.indexOf('setScreen("complete")'));
+    expect(legacy).toInclude('if (screen === "complete") return <ValidationComplete />;');
+    // QV2: GRAZIE con il solo comando esplicito «Nuovo tester», fornito dal client.
+    expect(qv2).toMatch(/<ValidationComplete\s+qv2\s+action=\{/);
+    expect(qv2).toInclude("<Button onClick={onNewTester}");
+    expect(qv2).toInclude("Nuovo tester");
   });
 
-  it("dichiara che tutto il test si svolge nella guida ed è simulato", () => {
+  it.each(GUIDE_CLIENTS)("dichiara che tutto il test si svolge nella guida ed è simulato (%s)", (clientPath) => {
     const hub = component("ValidationHub");
-    const client = read("frontend-next/src/app/beta-test/page-client.tsx");
+    const client = read(clientPath);
     expect(hub).toInclude("Tutto il test si svolge qui ed è una simulazione: non crea ordini,");
     expect(hub).toInclude("pagamenti, annunci o spedizioni reali.");
     expect(hub).not.toInclude("aprono le vere funzioni di Vinea");
@@ -466,6 +489,7 @@ describe("Market Validation MV2 UI contract", () => {
       /^@\/lib\/phase10\/etichette-ia$/,
       /^@\/lib\/supabase\/server$/,
       /^@\/services\/market-validation-service$/,
+      /^@\/services\/market-validation-questionnaire-service$/,
       /^@\/services\/types$/,
       /^@supabase\/supabase-js$/,
       /^lucide-react$/,
@@ -533,6 +557,7 @@ describe("Market Validation MV2 UI contract", () => {
     expect(inventario).toEqual([
       "20261003170000_market_validation_foundation.sql",
       "20261006160000_market_validation_admin_analytics.sql",
+      "20261008120000_market_validation_questionnaire_qv2.sql",
     ]);
   });
 });
