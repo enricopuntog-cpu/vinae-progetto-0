@@ -4,10 +4,9 @@ const originalServerFlag = process.env.MARKET_VALIDATION_ENABLED;
 const originalShippingFee = process.env.MARKET_VALIDATION_SHIPPING_FEE_CENTS;
 const calls: Array<{ eventName: string; metadata: unknown }> = [];
 
-mock.module("@/lib/supabase/server", () => ({
-  getSupabaseServerClient: async () => ({ fake: true }),
-}));
-
+// Il client anonimo delle porte MV non legge cookie né richieste: qui il
+// servizio è finto, quindi non serve sostituirlo (e un mock di modulo
+// resterebbe attivo per gli altri file del processo di test).
 mock.module("@/services/market-validation-service", () => ({
   createMarketValidationService: () => ({
     startOrResume: async () => ({
