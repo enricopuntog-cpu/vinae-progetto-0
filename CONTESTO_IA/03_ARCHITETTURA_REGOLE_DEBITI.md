@@ -1278,6 +1278,22 @@ fondazione.
   effimero. Finché una nuova griglia non viene eseguita lì, il suo runtime resta
   **NON VERIFICATO**: una revisione statica locale non è evidenza
   PostgreSQL/PostgREST.
+- Questionario digitale QV1 (8 ottobre 2026, PR #189, migrazione
+  `20261008120000`): il rollout è il flag solo server
+  `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED` (valore esatto `true`), che si
+  somma a `MARKET_VALIDATION_ENABLED` su route e su tutte le cinque server
+  action QV2. Spento, `/beta-test` serve la guida approvata dalla PR #188 da
+  `page-client-legacy.tsx` e nessun codice QV2 viene allocato; acceso, la guida
+  sta tra PRE (Q1–Q13) e POST (Q14–Q20) e la fase aperta si deriva solo dallo
+  stato server. Il `participant_code` QV2 lo assegna il database (V001–V999,
+  lock advisory, esaurimento esplicito senza wrap), non il tester. Le risposte
+  sono colonne tipizzate di `private.beta_validation_qv2`, senza JSON libero né
+  grant client; le porte `beta_validation_qv2_*` riusano la capability hash
+  delle sessioni MV1. `finish_post` richiede PRE chiuso, Q14–Q20, acquisto,
+  vendita e `beta_completed`, e scrive una sola volta `validation_completed`;
+  `final_feedback` è l'unica risposta facoltativa. Dopo `beta_completed` le
+  porte MV1 rifiutano la sessione, perciò il POST passa soltanto dalle porte
+  QV2. La griglia `12t` è nel gate DB effimero.
 
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 

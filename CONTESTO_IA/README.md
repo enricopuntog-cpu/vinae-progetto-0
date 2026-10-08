@@ -72,7 +72,8 @@ Aprire soltanto ciò che serve al task:
   single-route con buyer+seller obbligatori, foto seller solo locale e preview
   statiche AI/Club facoltative; MV3 admin read-only sui ruoli esistenti, CSV a
   una riga per codice senza capability/PII, URL e QR deterministici, doppia flag
-  di attivazione e kill switch server — è in
+  di attivazione e kill switch server; questionario QV1 dietro il flag server
+  `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED` con guida legacy a flag spento — è in
   `03_ARCHITETTURA_REGOLE_DEBITI.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
