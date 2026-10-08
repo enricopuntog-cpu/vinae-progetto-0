@@ -1354,6 +1354,18 @@ fondazione.
   `frontend-next/public/images/market-validation/vinea-market-validation-cover.webp`.
   La griglia `12w` è cablata nel gate DB effimero; le griglie `12t`, `12u` e
   `12v` registrano ora anche AI, Club e Cantina prima di `beta_completed`.
+- Superficie anonima (8 ottobre 2026, nessuna migrazione): `/beta-test` non
+  dipende da alcuno stato Supabase Auth del browser. Le guardie globali
+  sull'account (AgeGate: overlay «Verifica dell'accesso…», rimando a
+  `/completa-profilo`, errore di lettura profilo) la saltano tramite
+  `superficieMarketValidationAnonima()`; prima un qualunque cookie di sessione,
+  anche scaduto o di un account senza data di nascita, portava il tester nel
+  flusso account. Tutte le porte server MV usano
+  `getSupabaseAnonServerClient()` (sola chiave anon, nessun cookie, nessun
+  refresh): un JWT utente non raggiunge mai le RPC MV, che restano autorizzate
+  solo da sessione + codice + capability. Nuove guardie o provider globali
+  devono rispettare questa esenzione; `/admin/beta-validation` non ne fa parte
+  e resta login + ruolo admin.
 
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
