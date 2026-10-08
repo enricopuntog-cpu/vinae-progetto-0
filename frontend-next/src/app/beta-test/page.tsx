@@ -6,13 +6,18 @@ import {
   marketValidationAbilitataServer,
   marketValidationQuestionnaireV2AbilitatoServer,
 } from "@/config/features";
+import { anteprimaSocialVinea } from "@/lib/brand/metadata";
 import { marketValidationShippingFeeCents } from "@/lib/market-validation/config";
 import BetaTestPageClient from "./page-client";
 import LegacyBetaTestPageClient from "./page-client-legacy";
 
+const TITOLO = "Prova Vinea";
+const DESCRIZIONE = "Porta di ingresso al programma Market Validation di Vinea Wine Club.";
+
 export const metadata: Metadata = {
-  title: "Prova Vinea",
-  description: "Porta di ingresso al programma Market Validation di Vinea Wine Club.",
+  title: TITOLO,
+  description: DESCRIZIONE,
+  ...anteprimaSocialVinea({ title: TITOLO, description: DESCRIZIONE, path: "/beta-test" }),
   robots: { index: false, follow: false },
 };
 

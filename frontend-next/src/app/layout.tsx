@@ -3,13 +3,19 @@ import { connection } from "next/server";
 import "./globals.css";
 import { Providers } from "./providers";
 import { VineaLayout } from "@/components/vinea/Layout";
+import { anteprimaSocialVinea, VINEA_ICONS, VINEA_SITE_NAME } from "@/lib/brand/metadata";
 import { readIncidentNotice } from "@/lib/incidents/notice";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
+const DESCRIZIONE = "Vinea è una web app italiana per catalogare una cantina personale.";
+
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.URL ?? "http://localhost:3000"),
-  title: "Vinea Wine Club",
-  description: "Vinea è una web app italiana per catalogare una cantina personale.",
+  title: VINEA_SITE_NAME,
+  description: DESCRIZIONE,
+  applicationName: VINEA_SITE_NAME,
+  icons: VINEA_ICONS,
+  ...anteprimaSocialVinea({ title: VINEA_SITE_NAME, description: DESCRIZIONE, path: "/" }),
   robots: {
     index: false,
     follow: false,

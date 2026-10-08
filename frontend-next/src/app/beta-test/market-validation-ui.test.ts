@@ -487,6 +487,8 @@ describe("Market Validation MV2 UI contract", () => {
       /^@\/components\/ui\//,
       /^@\/components\/vinea\/WineThumbnail$/,
       /^@\/config\/features$/,
+      // Costanti di icone e anteprima social, senza side effect.
+      /^@\/lib\/brand\/metadata$/,
       // Solo etichette e tipi della Cantina per l'anteprima statica.
       /^@\/data\/cellar$/,
       /^@\/lib\/market-validation\//,
