@@ -2,9 +2,18 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { CheckCircle2, ClipboardList, ExternalLink } from "lucide-react";
 
-// `action` è il comando esplicito «Nuovo tester» del QV2, fornito dal client:
-// la schermata finale resta priva di handler e tracciamento propri.
-export function ValidationComplete({ qv2 = false, action }: { qv2?: boolean; action?: ReactNode }) {
+// `action` è il comando esplicito «Fai provare Vinea a un'altra persona» del
+// QV2, fornito dal client: la schermata finale resta priva di handler e
+// tracciamento propri. Il codice ricorda al tester quale test ha concluso.
+export function ValidationComplete({
+  qv2 = false,
+  participantCode,
+  action,
+}: {
+  qv2?: boolean;
+  participantCode?: string;
+  action?: ReactNode;
+}) {
   return (
     <section className="mx-auto max-w-xl rounded-3xl border border-salvia/40 bg-card p-6 text-center md:p-10" aria-labelledby="validation-complete-title">
       <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-salvia/15 text-salvia"><CheckCircle2 className="h-8 w-8" aria-hidden /></span>
@@ -13,6 +22,11 @@ export function ValidationComplete({ qv2 = false, action }: { qv2?: boolean; act
       <p className="mt-4 text-sm leading-6 text-muted-foreground">Le simulazioni sono concluse. Non è stato creato alcun annuncio, ordine, pagamento o invio.</p>
       {qv2 ? (
         <>
+          {participantCode && (
+            <p className="mt-4 text-sm">
+              Codice partecipante <span className="font-mono font-semibold text-bordeaux">{participantCode}</span>
+            </p>
+          )}
           <p className="mt-4 text-sm leading-6 text-muted-foreground">Il questionario online è stato completato. Grazie per il feedback.</p>
           {action}
         </>

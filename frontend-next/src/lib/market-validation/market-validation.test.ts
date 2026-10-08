@@ -274,7 +274,7 @@ describe("Market Validation MV1", () => {
 
   it("la landing QV2 non chiede nulla: il codice partecipante lo assegna il server", () => {
     const client = read("frontend-next/src/app/beta-test/page-client.tsx");
-    expect(client).toInclude("Inizia il test");
+    expect(client).toInclude("INIZIA IL TEST");
     expect(client).toInclude("participantCode={session.participantCode}");
     expect(client).toInclude("newMarketValidationCapability()");
     for (const forbidden of [

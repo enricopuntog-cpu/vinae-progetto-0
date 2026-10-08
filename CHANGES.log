@@ -1,20 +1,18 @@
 ## CURRENT STATE
 - Market Validation MV1, MV2, MV3 e la guida autocontenuta (PR #188) sono CLOSED e online su `https://vineawineclub.com/beta-test` con le flag MV di produzione ON.
-- QV1 = CLOSED. PR #189 squash-merged in `5bc7e06`, chiusura documentale PR #190 in `a9d66e5`.
-- QV2 (dashboard admin del questionario) = CLOSED. PR #191 squash-merged in `3cb23c9` (head verificata `d6cd090`): sei check obbligatori verdi sulla head esatta, `12u` 42/42 nel gate DB effimero insieme a `12e`–`12t` e `7c`, `frontend-next` 2364 test (`MIN_TESTS` = 2364), build verde.
-- Produzione Supabase `pijnmcllmfgjmgsvtcej`: l'integrazione ha applicato `20261008180000_market_validation_qv2_admin` al merge; ledger di 79 migrazioni allineato a `main`. Le quattro porte `public.beta_validation_qv2_admin_{summary,participants,participant_detail,distributions}` sono `security definer`, `stable`, `search_path` vuoto, EXECUTE solo `postgres` e `authenticated`; l'helper `private.beta_validation_qv2_admin_rows()` è eseguibile solo da `postgres`; i corpi coincidono (md5) con quelli generati dal file su `main`. `anon` e un autenticato non-admin ricevono 42501 su porte, helper e tabella privata; il ruolo admin reale legge QV2 a zero e 2 codici legacy. `private.beta_validation_qv2`: RLS on, 0 policy, nessun grant client, 0 righe.
-- Netlify produzione: deploy `6ac799f65b716200081c45d4` READY, `main`, `commit_ref` `3cb23c9`. `/admin/beta-validation` con account admin reale mostra lo stato vuoto QV2, le statistiche legacy, la tabella e il dettaglio legacy («Questionario non disponibile»); l'ospite è rediretto ad `/accedi`.
-- Questionnaire V2 OFF: `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED` non attivato; `/beta-test` serve la guida approvata della PR #188 senza domande del questionario.
+- QV1 (questionario, PR #189/#190) e QV2 (dashboard admin, PR #191/#192) sono CLOSED; produzione Supabase `pijnmcllmfgjmgsvtcej` con 79 migrazioni fino a `20261008180000`.
+- Allineamento finale QV2 su questo branch: migrazione additiva `20261008220000_market_validation_qv2_other_options` (Q7/Q19 «Altro» con `q07_other`/`q19_other`, specifica obbligatoria solo con «Altro», conteggiata nel massimo), copy Q12/Q13 e micro-copy Q1–Q20 senza cambiare codici, landing approvata, GRAZIE persistente sullo stesso codice dopo ricarica/riapertura e nuovo tester solo con «Fai provare Vinea a un'altra persona»; capability QV2 in una chiave locale propria. Admin dettaglio/CSV (54 colonne) con le due specifiche.
+- Verifiche locali: `frontend-next` 2381 test (`MIN_TESTS` = 2381), lint 0 errori, typecheck e build verdi; griglie `12t` 16/16, `12u` 42/42 e nuova `12v` 24/24 su PGlite con le migrazioni reali; smoke E2E locale su Supabase simulato (landing → V001 → PRE con resume → acquisto e vendita simulati → POST → GRAZIE → ricarica e nuova scheda su V001 → nuovo tester V002; dashboard e CSV con le specifiche).
 
 ## ACTIVE TASK
-- Nessun task attivo: QV2 VERIFY & SHIP chiuso; il prossimo mandato è l'attivazione controllata di Questionnaire V2.
+- QV2 FINAL FIX + ACTIVATE: dopo il merge verificare in produzione la migrazione `20261008220000` (ledger, colonne, CHECK, corpi, ACL, dinieghi anon/non-admin), attivare `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=true` sul solo contesto production di Netlify `timely-lokum-43a12e`, ridistribuire e verificare `/beta-test`.
 
 ## NEXT STEPS
-1. Attivazione controllata Questionnaire V2
-2. Acceptance E2E su smartphone e admin
+1. Test manuale di Enrico su iPhone
+2. Acceptance admin con dati QV2 reali
 3. Pilot 5 tester
 
 ## BLOCKERS / NOTES
-- Non attivare `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED` senza un mandato esplicito; in produzione non esiste alcuna riga QV2.
-- La dashboard con dati QV2 (KPI, funnel, distribuzioni, dettaglio PRE/POST, CSV) è stata provata su fixture isolate locali (Supabase simulato sopra PostgreSQL PGlite con le migrazioni reali, 390px e 1366px), non con dati QV2 reali: va riverificata durante l'acceptance E2E.
-- La scansione QR con smartphone e il pilot restano acceptance NON VERIFICATE.
+- In produzione non va completato alcun test QV2 al posto di Enrico: il primo percorso reale è il suo test manuale.
+- Q5 conserva la semantica QV1: la specifica di «Altro» è obbligatoria nel client ma facoltativa per il database.
+- La scansione QR con smartphone resta NON VERIFICATA e non è richiesta dal flusso.

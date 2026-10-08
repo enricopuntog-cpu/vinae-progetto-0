@@ -6,7 +6,7 @@ name: Supabase DB regression
 #
 # Il gate ha smesso da tempo di essere solo Club: l'elenco effettivo delle
 # griglie eseguite e quello di `supabase/tests/12g_ci_run.sh`, che oggi arriva
-# fino alla 12u (dashboard admin QV2 Market Validation). Il nome del job resta
+# fino alla 12v (opzione «Altro» Q7/Q19 del questionario QV2). Il nome del job resta
 # `club-dispute-12g` perche e un check richiesto dal ruleset `main-protection`:
 # rinominarlo sbloccherebbe le PR invece di proteggerle.
 #

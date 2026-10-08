@@ -42,6 +42,24 @@ La variabile pubblica viene incorporata nel bundle: dopo una modifica di configu
 
 Questa procedura non abilita e non deve abilitare `AI_ENABLED`, `PAYMENTS_ENABLED`, shipping operativo, scritture Club, il selettore demo dei ruoli o qualsiasi altra feature flag. Market Validation è indipendente da quei domini.
 
+### Questionario digitale QV2
+
+Il questionario (PRE Q1–Q13 → guida Prova Vinea → POST Q14–Q20 → feedback facoltativo → GRAZIE) si aggiunge alle due variabili sopra con il flag **solo server**:
+
+```text
+MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=true
+```
+
+Il valore si legge a runtime nelle funzioni Netlify: dopo averlo cambiato serve un nuovo deploy di produzione. Va attivato solo dopo aver verificato in produzione la migrazione `20261008220000_market_validation_qv2_other_options.sql` (colonne `q07_other`/`q19_other`, CHECK, porte e ACL). Spento, `/beta-test` torna alla guida senza questionario.
+
+Comportamento per il tester, senza codici manuali, QR obbligatori, account, email o pagamenti:
+
+- la landing («Aiutaci a creare il futuro di Vinea», CTA **INIZIA IL TEST**) non ha campi: il `participant_code` lo assegna il database;
+- il browser conserva la sola capability QV2 nella chiave `vinea:market-validation:qv2-session:v1`, separata da quella della guida legacy: una capability MV1 rimasta nel browser non blocca il questionario;
+- ricarica e riapertura riprendono la fase aperta sul server; a test concluso restano sulla schermata GRAZIE dello **stesso** codice;
+- solo il comando esplicito **Fai provare Vinea a un'altra persona** libera la sessione locale e torna alla landing; il nuovo codice nasce al successivo **INIZIA IL TEST**;
+- Q7 (massimo 3) e Q19 (massimo 2) includono «Altro», che conta nel massimo e richiede il campo **Specifica** (1–500 caratteri); una specifica senza «Altro» viene rifiutata dal database.
+
 ## Disattivazione immediata
 
 Impostare `MARKET_VALIDATION_ENABLED=false` oppure rimuoverla, quindi assicurare la propagazione della configurazione/deploy: il gate server disabilita route e azioni anche se il bundle conserva temporaneamente la variabile pubblica. Quando il test è chiuso, mantenere preferibilmente entrambe le variabili false o assenti:
@@ -60,7 +78,7 @@ Accesso: sessione autenticata e ruolo `admin` reale in `public.user_roles`, cont
 Porte (migrazione `20261008180000_market_validation_qv2_admin.sql`, tutte `stable`, `security definer`, `search_path` vuoto, EXECUTE solo ad `authenticated`):
 
 - `beta_validation_qv2_admin_summary()` — KPI della coorte QV2 (test iniziati, PRE, acquisto, vendita, Core Beta, POST, Market Validation completa, completion rate) e metriche legacy separate;
-- `beta_validation_qv2_admin_participants(codice, coorte, limit, offset)` — una riga per `participant_code` con stato, conteggi eventi e risposte Q01–Q20; limit 1–200, offset 0–999, `total_count` per la paginazione;
+- `beta_validation_qv2_admin_participants(codice, coorte, limit, offset)` — una riga per `participant_code` con stato, conteggi eventi e risposte Q01–Q20 (con le specifiche `q07_other` e `q19_other`); limit 1–200, offset 0–999, `total_count` per la paginazione;
 - `beta_validation_qv2_admin_participant_detail(codice)` — risposte, eventi e timestamp di completion di un solo codice; `null` se il codice non esiste;
 - `beta_validation_qv2_admin_distributions()` — conteggi per opzione e base rispondenti delle domande chiuse.
 
@@ -77,7 +95,7 @@ Regole di lettura:
 
 Export:
 
-- **Esporta CSV completo** — una riga per `participant_code`; con un codice o una coorte attivi il bottone diventa **Esporta CSV filtrato** ed esporta solo quel perimetro (come il CSV MV3). Formato: UTF-8 con BOM, separatore `;`, CRLF, intestazioni stabili (identità, PRE Q01–Q13, comportamento, POST Q14–Q20, completamento). Le scelte multiple sono codici stabili nell'ordine registrato separati da ` | `. Le celle che iniziano con `=`, `+`, `-`, `@`, tab o ritorno a capo sono prefissate con `'`. L'export pagina fino al `total_count` e fallisce se le righe non coincidono: nessuna troncatura silenziosa.
+- **Esporta CSV completo** — una riga per `participant_code`; con un codice o una coorte attivi il bottone diventa **Esporta CSV filtrato** ed esporta solo quel perimetro (come il CSV MV3). Formato: UTF-8 con BOM, separatore `;`, CRLF, intestazioni stabili (identità, PRE Q01–Q13, comportamento, POST Q14–Q20, completamento; 54 colonne, con `q07_other` dopo `q07_private_purchase_concerns` e `q19_other` dopo `q19_important_services`). Le scelte multiple sono codici stabili nell'ordine registrato separati da ` | `. Le celle che iniziano con `=`, `+`, `-`, `@`, tab o ritorno a capo sono prefissate con `'`. L'export pagina fino al `total_count` e fallisce se le righe non coincidono: nessuna troncatura silenziosa.
 - **CSV MV3** — l'export originale per codice, invariato.
 
-Né la dashboard né i CSV contengono capability, hash, UUID di sessione, metadata, IP, user-agent o dati di account. La griglia `supabase/tests/12u_market_validation_questionnaire_admin.sql` prova queste regole nel gate DB effimero.
+Né la dashboard né i CSV contengono capability, hash, UUID di sessione, metadata, IP, user-agent o dati di account. Le griglie `supabase/tests/12u_market_validation_questionnaire_admin.sql` e `supabase/tests/12v_market_validation_qv2_other_options.sql` (opzione «Altro» di Q7/Q19, percorso completo e resume dopo la chiusura) provano queste regole nel gate DB effimero.

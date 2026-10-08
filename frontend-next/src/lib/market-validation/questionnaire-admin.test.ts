@@ -241,10 +241,10 @@ describe("QV2 admin: decodifica Q1–Q20", () => {
   });
 
   it("mantiene l'ordine registrato delle scelte multiple", () => {
-    expect(decodeAnswer(5, answers).values).toEqual(["Enoteca", "Produttore", "Altro"]);
+    expect(decodeAnswer(5, answers).values).toEqual(["Enoteca", "Direttamente dal produttore", "Altro"]);
     expect(decodeAnswer(19, answers).values).toEqual(["Pagamento protetto", "Garanzia autenticità"]);
     const reversed = parseQv2Answers({ q07: ["shipping", "authenticity"] });
-    expect(decodeAnswer(7, reversed).values).toEqual(["Spedizione", "Autenticità"]);
+    expect(decodeAnswer(7, reversed).values).toEqual(["Spedizione", "Autenticità della bottiglia"]);
   });
 
   it("mostra i campi condizionali con le label della UI pubblica", () => {

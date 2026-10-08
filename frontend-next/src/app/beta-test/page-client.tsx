@@ -10,9 +10,10 @@ import {
 import { Button } from "@/components/ui/button";
 import type { MarketValidationSession, MarketValidationQuestionnaireState } from "@/services/types";
 import type { MarketValidationDemoListing } from "@/lib/market-validation/demo-data";
-import { questionKey, questionnaireStage, type QuestionnaireAnswer } from "@/lib/market-validation/questionnaire";
+import { NEW_TESTER_LABEL, questionKey, questionnaireStage, type QuestionnaireAnswer } from "@/lib/market-validation/questionnaire";
 import {
   clearMarketValidationSession,
+  QV2_SESSION_STORAGE_KEY,
   readMarketValidationSession,
   writeMarketValidationSession,
   newMarketValidationCapability,
@@ -62,12 +63,12 @@ export default function BetaTestPageClient({
   useEffect(() => {
     let active = true;
     const resume = async () => {
-      const stored = readMarketValidationSession(window.localStorage);
+      const stored = readMarketValidationSession(window.localStorage, QV2_SESSION_STORAGE_KEY);
       if (stored) {
         const result = await startQuestionnaire(stored.capability);
         if (!active) return;
         if (result.ok) {
-          writeMarketValidationSession(window.localStorage, result.data.session);
+          writeMarketValidationSession(window.localStorage, result.data.session, QV2_SESSION_STORAGE_KEY);
           setProgress(restoreMarketValidationProgress(window.localStorage, true));
           setQuestionnaire(result.data.state);
           setSession(result.data.session);
@@ -85,20 +86,21 @@ export default function BetaTestPageClient({
     if (pending) return;
     setPending(true);
     setError(null);
-    const stored = fresh ? null : readMarketValidationSession(window.localStorage);
+    const stored = fresh ? null : readMarketValidationSession(window.localStorage, QV2_SESSION_STORAGE_KEY);
     const capability = stored?.capability ?? newMarketValidationCapability();
     const result = await startQuestionnaire(capability);
     setPending(false);
     if (!result.ok) { setError(result.error); return; }
-    if (fresh) clearMarketValidationProgress(window.localStorage);
-    writeMarketValidationSession(window.localStorage, result.data.session);
-    setProgress(restoreMarketValidationProgress(window.localStorage, !fresh));
+    writeMarketValidationSession(window.localStorage, result.data.session, QV2_SESSION_STORAGE_KEY);
+    // Un codice appena allocato parte da zero: progressi locali residui (per
+    // esempio della guida legacy) non valgono per il nuovo partecipante.
+    setProgress(restoreMarketValidationProgress(window.localStorage, !fresh && result.data.session.resumed));
     setQuestionnaire(result.data.state);
     setSession(result.data.session);
   };
 
   const newTester = () => {
-    clearMarketValidationSession(window.localStorage);
+    clearMarketValidationSession(window.localStorage, QV2_SESSION_STORAGE_KEY);
     clearMarketValidationProgress(window.localStorage);
     setSession(null);
     setQuestionnaire(null);
@@ -125,17 +127,17 @@ export default function BetaTestPageClient({
     <div className="mx-auto max-w-2xl space-y-6">
       <section className="rounded-3xl border border-border bg-card p-5 md:p-8">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-bordeaux">Market Validation</p>
-        <h1 className="mt-2 font-serif text-3xl font-semibold md:text-4xl">Prova Vinea</h1>
-        <p className="mt-5 max-w-xl whitespace-pre-line text-base leading-7 text-muted-foreground md:text-lg">
-          {`Stai partecipando alla fase di Beta Testing di Vinea Wine Club.
-In due step proverai ad acquistare una bottiglia e ad aggiungerne
-una tua, poi potrai scoprire AI, Club e Cantina.
-Tutto si svolge qui ed è una simulazione: nessun pagamento,
-ordine, annuncio o spedizione reale.`}
+        <h1 className="mt-2 font-serif text-3xl font-semibold uppercase leading-tight md:text-4xl">Aiutaci a creare il futuro di Vinea</h1>
+        <p className="mt-4 font-serif text-xl text-bordeaux md:text-2xl">La tua opinione conta.</p>
+        <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground md:text-lg">
+          Prova Vinea Wine Club e raccontaci cosa ne pensi. Bastano pochi minuti per aiutarci a costruire una piattaforma migliore.
+        </p>
+        <p className="mt-5 rounded-2xl border border-border bg-crema p-4 text-sm leading-6">
+          Questa è una Beta di ricerca. Nessun pagamento, vendita o spedizione reale verrà effettuato.
         </p>
         {error && <p role="alert" className="mt-4 text-bordeaux">{error}</p>}
         <Button className="mt-6 min-h-12 w-full bg-bordeaux text-base hover:bg-bordeaux/90" disabled={!ready || pending} onClick={() => void begin()}>
-          {pending ? "Avvio in corso…" : "Inizia il test"}
+          {pending ? "Avvio in corso…" : "INIZIA IL TEST"}
         </Button>
       </section>
     </div>
@@ -190,14 +192,12 @@ function MarketValidationExperience({
     [onProgress],
   );
 
+  // Il test concluso resta legato a questo browser: ricarica o riapertura
+  // riprendono la schermata GRAZIE dello stesso codice. Solo il comando
+  // esplicito «Fai provare Vinea a un'altra persona» libera la sessione locale.
   useEffect(() => {
-    if (screen === "complete") {
-      clearMarketValidationSession(window.localStorage);
-      clearMarketValidationProgress(window.localStorage);
-      return;
-    }
     writeMarketValidationProgress(window.localStorage, progress);
-  }, [progress, screen]);
+  }, [progress]);
 
   // Ogni schermata della guida si apre dall'alto: su smartphone le card stanno
   // a metà pagina e il «← Indietro» deve essere subito visibile.
@@ -290,9 +290,10 @@ function MarketValidationExperience({
     return (
       <ValidationComplete
         qv2
+        participantCode={session.participantCode}
         action={
           <Button onClick={onNewTester} className="mt-6 min-h-12 w-full bg-bordeaux text-base hover:bg-bordeaux/90">
-            Nuovo tester
+            {NEW_TESTER_LABEL}
           </Button>
         }
       />
