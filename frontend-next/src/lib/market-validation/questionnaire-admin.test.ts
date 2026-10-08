@@ -21,6 +21,7 @@ import {
   parseQv2CohortFilter,
   parseQv2Distributions,
   parseQv2ParticipantDetail,
+  qv2CsvExportScope,
   qv2TesterStatus,
   type Qv2AdminParticipant,
 } from "@/lib/market-validation/questionnaire-admin";
@@ -448,5 +449,22 @@ describe("QV2 admin: CSV completo", () => {
 
   it("senza tester produce soltanto le intestazioni", () => {
     expect(buildQv2ParticipantsCsv([])).toBe(`﻿${QV2_CSV_HEADERS.join(";")}\r\n`);
+  });
+});
+
+describe("QV2 admin: perimetro dell'export", () => {
+  it("senza filtri è completo, con codice o coorte è dichiarato filtrato", () => {
+    expect(qv2CsvExportScope(null, null)).toEqual({
+      label: "Esporta CSV completo",
+      filename: "market-validation-qv2-completo.csv",
+    });
+    expect(qv2CsvExportScope("V001", "qv2")).toEqual({
+      label: "Esporta CSV filtrato",
+      filename: "market-validation-qv2-V001.csv",
+    });
+    expect(qv2CsvExportScope(null, "legacy")).toEqual({
+      label: "Esporta CSV filtrato",
+      filename: "market-validation-qv2-legacy.csv",
+    });
   });
 });

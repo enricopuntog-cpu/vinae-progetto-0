@@ -619,3 +619,16 @@ export function buildQv2ParticipantsCsv(participants: readonly Qv2AdminParticipa
   ];
   return `﻿${rows.join("\r\n")}\r\n`;
 }
+
+// L'export segue i filtri attivi (come il CSV MV3): l'etichetta e il nome file
+// dichiarano il perimetro, così un export filtrato non passa per completo.
+export function qv2CsvExportScope(
+  participantCode: string | null,
+  cohort: Qv2CohortFilter,
+): { label: string; filename: string } {
+  const filtered = participantCode !== null || cohort !== null;
+  return {
+    label: filtered ? "Esporta CSV filtrato" : "Esporta CSV completo",
+    filename: `market-validation-qv2-${participantCode ?? cohort ?? "completo"}.csv`,
+  };
+}

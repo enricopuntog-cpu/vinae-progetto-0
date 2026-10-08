@@ -29,6 +29,7 @@ import {
   EMPTY_QV2_DISTRIBUTIONS,
   QV2_ADMIN_PAGE_SIZE,
   buildQv2ParticipantsCsv,
+  qv2CsvExportScope,
   type Qv2AdminParticipant,
   type Qv2AdminSummary,
   type Qv2CohortFilter,
@@ -217,8 +218,7 @@ export function MarketValidationAdminClient() {
         participantCode: activeFilter,
         cohort,
       });
-      const scope = activeFilter ?? (cohort ? `${cohort}` : "completo");
-      downloadCsv(buildQv2ParticipantsCsv(rows), `market-validation-qv2-${scope}.csv`);
+      downloadCsv(buildQv2ParticipantsCsv(rows), qv2CsvExportScope(activeFilter, cohort).filename);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Esportazione non riuscita.");
     } finally {
@@ -279,7 +279,7 @@ export function MarketValidationAdminClient() {
             <RefreshCw className={loading ? "animate-spin" : ""} /> Aggiorna
           </Button>
           <Button onClick={() => void exportCsv()} disabled={!loaded || loading || exporting}>
-            <Download /> {exporting ? "Esportazione…" : "Esporta CSV completo"}
+            <Download /> {exporting ? "Esportazione…" : qv2CsvExportScope(activeFilter, cohort).label}
           </Button>
           <Button variant="ghost" onClick={() => void exportLegacyCsv()} disabled={!loaded || loading || exporting}>
             <Download /> CSV MV3
