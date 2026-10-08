@@ -491,7 +491,7 @@ describe("Market Validation MV2 UI contract", () => {
       /^@\/data\/cellar$/,
       /^@\/lib\/market-validation\//,
       /^@\/lib\/phase10\/etichette-ia$/,
-      /^@\/lib\/supabase\/server$/,
+      /^@\/lib\/supabase\/anon-server$/,
       /^@\/services\/market-validation-service$/,
       /^@\/services\/market-validation-questionnaire-service$/,
       /^@\/services\/types$/,

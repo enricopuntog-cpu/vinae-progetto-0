@@ -8,7 +8,7 @@ import {
   parseMarketValidationRecordableEvent,
   parseMarketValidationSession,
 } from "@/lib/market-validation/event-validation";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabaseAnonServerClient } from "@/lib/supabase/anon-server";
 import { createMarketValidationService } from "@/services/market-validation-service";
 import { createMarketValidationQuestionnaireService } from "@/services/market-validation-questionnaire-service";
 import type { MarketValidationQuestionnaireState } from "@/services/types";
@@ -28,32 +28,32 @@ function validQuestionInput(sessionId: unknown, capability: unknown): sessionId 
 export async function startQuestionnaire(capability: string): Promise<Result<{ session: MarketValidationSession; state: MarketValidationQuestionnaireState }>> {
   if (!marketValidationAbilitataServer() || !marketValidationQuestionnaireV2AbilitatoServer()) return { ok: false, error: NON_DISPONIBILE };
   if (!UUID.test(capability)) return { ok: false, error: RISPOSTA_NON_VALIDA };
-  return createMarketValidationQuestionnaireService(await getSupabaseServerClient()).startOrResume(capability);
+  return createMarketValidationQuestionnaireService(getSupabaseAnonServerClient()).startOrResume(capability);
 }
 
 export async function readQuestionnaire(sessionId: string, capability: string): Promise<Result<{ state: MarketValidationQuestionnaireState }>> {
   if (!marketValidationAbilitataServer() || !marketValidationQuestionnaireV2AbilitatoServer()) return { ok: false, error: NON_DISPONIBILE };
   if (!validQuestionInput(sessionId, capability)) return { ok: false, error: RISPOSTA_NON_VALIDA };
-  return createMarketValidationQuestionnaireService(await getSupabaseServerClient()).read(sessionId, capability);
+  return createMarketValidationQuestionnaireService(getSupabaseAnonServerClient()).read(sessionId, capability);
 }
 
 export async function saveQuestionnaireAnswer(sessionId: string, capability: string, question: string, answer: unknown): Promise<Result<{ answer_key: string }>> {
   if (!marketValidationAbilitataServer() || !marketValidationQuestionnaireV2AbilitatoServer()) return { ok: false, error: NON_DISPONIBILE };
   if (!validQuestionInput(sessionId, capability) || !/^(q(0[1-9]|1[0-9]|20)|final_feedback)$/.test(question) ||
       JSON.stringify(answer)?.length > 4096) return { ok: false, error: RISPOSTA_NON_VALIDA };
-  return createMarketValidationQuestionnaireService(await getSupabaseServerClient()).answer(sessionId, capability, question, answer);
+  return createMarketValidationQuestionnaireService(getSupabaseAnonServerClient()).answer(sessionId, capability, question, answer);
 }
 
 export async function finishQuestionnairePre(sessionId: string, capability: string): Promise<Result<unknown>> {
   if (!marketValidationAbilitataServer() || !marketValidationQuestionnaireV2AbilitatoServer()) return { ok: false, error: NON_DISPONIBILE };
   if (!validQuestionInput(sessionId, capability)) return { ok: false, error: RISPOSTA_NON_VALIDA };
-  return createMarketValidationQuestionnaireService(await getSupabaseServerClient()).finishPre(sessionId, capability);
+  return createMarketValidationQuestionnaireService(getSupabaseAnonServerClient()).finishPre(sessionId, capability);
 }
 
 export async function finishQuestionnairePost(sessionId: string, capability: string): Promise<Result<unknown>> {
   if (!marketValidationAbilitataServer() || !marketValidationQuestionnaireV2AbilitatoServer()) return { ok: false, error: NON_DISPONIBILE };
   if (!validQuestionInput(sessionId, capability)) return { ok: false, error: RISPOSTA_NON_VALIDA };
-  return createMarketValidationQuestionnaireService(await getSupabaseServerClient()).finishPost(sessionId, capability);
+  return createMarketValidationQuestionnaireService(getSupabaseAnonServerClient()).finishPost(sessionId, capability);
 }
 
 /**
@@ -71,7 +71,7 @@ export async function startMarketValidationSession(
   const canonical = parseMarketValidationParticipantCode(participantCode);
   if (!canonical) return { ok: false, error: CODICE_NON_VALIDO };
 
-  const client = await getSupabaseServerClient();
+  const client = getSupabaseAnonServerClient();
   return createMarketValidationService(client).startOrResume(canonical, capability);
 }
 
@@ -106,7 +106,7 @@ export async function recordMarketValidationEvent(
     return { ok: false, error: EVENTO_NON_VALIDO };
   }
 
-  const client = await getSupabaseServerClient();
+  const client = getSupabaseAnonServerClient();
   return createMarketValidationService(client).recordEvent(
     session,
     eventName,

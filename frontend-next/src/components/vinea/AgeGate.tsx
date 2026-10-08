@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { percorsoRelativoSicuro } from "@/lib/auth/origine-redirect";
 import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
+import { superficieMarketValidationAnonima } from "@/lib/market-validation/superficie-anonima";
 import { useVinea } from "@/lib/vinea-store";
 
 /**
@@ -35,7 +36,10 @@ export function AgeGate() {
     authRicaricaProfilo,
     authLogout,
   } = useVinea();
-  const consentito = percorsoConsentito(pathname);
+  // Il Beta Test è anonimo: nessuna attesa della sessione, nessun rimando a
+  // /completa-profilo anche se il browser ha una sessione Vinea, valida o no.
+  const consentito =
+    percorsoConsentito(pathname) || superficieMarketValidationAnonima(pathname);
 
   useEffect(() => {
     if (authLoading || !authUser || consentito || authStatoEta !== "da_completare") return;
