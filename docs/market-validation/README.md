@@ -50,7 +50,7 @@ Il questionario (PRE Q1–Q13 → guida Prova Vinea → POST Q14–Q20 → feedb
 MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=true
 ```
 
-Il valore si legge a runtime nelle funzioni Netlify: dopo averlo cambiato serve un nuovo deploy di produzione. Va attivato solo dopo aver verificato in produzione la migrazione `20261008220000_market_validation_qv2_other_options.sql` (colonne `q07_other`/`q19_other`, CHECK, porte e ACL). Spento, `/beta-test` torna alla guida senza questionario.
+Il valore si legge a runtime nelle funzioni Netlify: dopo averlo cambiato serve un nuovo deploy di produzione. Con `base = "frontend-next"` Netlify salta la build di un commit su `main` che non tocca `frontend-next/` (per esempio una PR solo docs): il deploy che applica il flag deve venire da un commit che cambia quella directory. Va attivato solo dopo aver verificato in produzione la migrazione `20261008220000_market_validation_qv2_other_options.sql` (colonne `q07_other`/`q19_other`, CHECK, porte e ACL). Spento, `/beta-test` torna alla guida senza questionario.
 
 Comportamento per il tester, senza codici manuali, QR obbligatori, account, email o pagamenti:
 
