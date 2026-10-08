@@ -192,6 +192,10 @@ begin
 
   perform public.beta_validation_event_record(v_session, v_code, '10000000-0000-4000-8000-000000000011', 'checkout_beta_completed');
   perform public.beta_validation_event_record(v_session, v_code, '10000000-0000-4000-8000-000000000011', 'sell_completed');
+  -- Dalla 20261008230000 beta_completed QV2 richiede anche AI, Club e Cantina.
+  perform public.beta_validation_event_record(v_session, v_code, '10000000-0000-4000-8000-000000000011', 'ai_preview_viewed');
+  perform public.beta_validation_event_record(v_session, v_code, '10000000-0000-4000-8000-000000000011', 'club_viewed');
+  perform public.beta_validation_event_record(v_session, v_code, '10000000-0000-4000-8000-000000000011', 'cellar_viewed');
   perform public.beta_validation_event_record(v_session, v_code, '10000000-0000-4000-8000-000000000011', 'beta_completed');
   v_read := pg_temp.read_qv2(v_session, '10000000-0000-4000-8000-000000000011');
   perform pg_temp.registra(10, 'QV2 read deriva completamento buyer seller e core',

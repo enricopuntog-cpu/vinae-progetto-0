@@ -46,6 +46,7 @@ export type Qv2EventCounts = {
   aiPreviewViewed: number;
   aiInterestClicked: number;
   clubViewed: number;
+  cellarViewed: number;
   betaCompleted: number;
 };
 
@@ -59,6 +60,8 @@ export type Qv2AdminParticipant = {
   coreCompletedAt: string | null;
   postCompletedAt: string | null;
   validationCompletedAt: string | null;
+  // Cinque aree della Prova Vinea registrate, derivato dal database.
+  experienceCompleted: boolean;
   events: Qv2EventCounts;
   answers: Qv2Answers | null;
 };
@@ -74,11 +77,13 @@ export type Qv2AdminSummary = {
     preCompleted: number;
     buyCompleted: number;
     sellCompleted: number;
+    experienceCompleted: number;
     coreCompleted: number;
     postCompleted: number;
     validationCompleted: number;
     aiViewed: number;
     clubViewed: number;
+    cellarViewed: number;
     favoriteAdded: number;
     completionRate: number;
   };
@@ -97,11 +102,13 @@ export const EMPTY_QV2_ADMIN_SUMMARY: Qv2AdminSummary = {
     preCompleted: 0,
     buyCompleted: 0,
     sellCompleted: 0,
+    experienceCompleted: 0,
     coreCompleted: 0,
     postCompleted: 0,
     validationCompleted: 0,
     aiViewed: 0,
     clubViewed: 0,
+    cellarViewed: 0,
     favoriteAdded: 0,
     completionRate: 0,
   },
@@ -138,7 +145,8 @@ export const QV2_DETAIL_EVENTS = [
   ["ai_preview_viewed", "Anteprima AI visualizzata"],
   ["ai_interest_clicked", "Interesse AI dichiarato"],
   ["club_viewed", "Club visualizzati"],
-  ["beta_completed", "Core Beta completata"],
+  ["cellar_viewed", "Cantina visualizzata"],
+  ["beta_completed", "Prova Vinea conclusa (beta_completed)"],
 ] as const;
 
 export type Qv2DetailEventName = (typeof QV2_DETAIL_EVENTS)[number][0];
@@ -160,6 +168,7 @@ export type Qv2ParticipantDetail = {
   events: Qv2EventDetail[];
   completion: {
     preCompletedAt: string | null;
+    experienceCompleted: boolean;
     coreCompletedAt: string | null;
     postCompletedAt: string | null;
     validationCompletedAt: string | null;
@@ -211,11 +220,13 @@ export function parseQv2AdminSummary(value: unknown): Qv2AdminSummary {
       preCompleted: asCount(qv2.preCompleted),
       buyCompleted: asCount(qv2.buyCompleted),
       sellCompleted: asCount(qv2.sellCompleted),
+      experienceCompleted: asCount(qv2.experienceCompleted),
       coreCompleted: asCount(qv2.coreCompleted),
       postCompleted: asCount(qv2.postCompleted),
       validationCompleted: asCount(qv2.validationCompleted),
       aiViewed: asCount(qv2.aiViewed),
       clubViewed: asCount(qv2.clubViewed),
+      cellarViewed: asCount(qv2.cellarViewed),
       favoriteAdded: asCount(qv2.favoriteAdded),
       completionRate: asRate(qv2.completionRate),
     },
@@ -247,6 +258,7 @@ export function parseQv2AdminParticipant(value: unknown): Qv2AdminParticipant | 
     coreCompletedAt: asNullableIso(source.core_completed_at),
     postCompletedAt: asNullableIso(source.post_completed_at),
     validationCompletedAt: asNullableIso(source.validation_completed_at),
+    experienceCompleted: source.experience_completed === true,
     events: {
       marketplaceViewed: asCount(source.marketplace_viewed),
       demoListingViewed: asCount(source.demo_listing_viewed),
@@ -260,6 +272,7 @@ export function parseQv2AdminParticipant(value: unknown): Qv2AdminParticipant | 
       aiPreviewViewed: asCount(source.ai_preview_viewed),
       aiInterestClicked: asCount(source.ai_interest_clicked),
       clubViewed: asCount(source.club_viewed),
+      cellarViewed: asCount(source.cellar_viewed),
       betaCompleted: asCount(source.beta_completed),
     },
     // Un legacy non ha questionario: nessuna risposta viene inventata.
@@ -306,6 +319,7 @@ export function parseQv2ParticipantDetail(value: unknown): Qv2ParticipantDetail 
     }),
     completion: {
       preCompletedAt: asNullableIso(completion.preCompletedAt),
+      experienceCompleted: completion.experienceCompleted === true,
       coreCompletedAt: asNullableIso(completion.coreCompletedAt),
       postCompletedAt: asNullableIso(completion.postCompletedAt),
       validationCompletedAt: asNullableIso(completion.validationCompletedAt),
@@ -347,22 +361,27 @@ export type Qv2TesterStatus = {
   pre: boolean;
   buy: boolean;
   sell: boolean;
-  core: boolean;
   ai: boolean;
   club: boolean;
+  cellar: boolean;
+  experience: boolean;
   post: boolean;
   complete: boolean;
 };
 
+// Le cinque aree obbligatorie della Prova Vinea, nell'ordine dell'hub tester.
+export const QV2_EXPERIENCE_AREAS = ["buy", "sell", "ai", "club", "cellar"] as const;
+
 export const QV2_STATUS_COLUMNS: ReadonlyArray<{ key: keyof Qv2TesterStatus; label: string; title: string }> = [
   { key: "pre", label: "PRE", title: "Questionario PRE completato" },
-  { key: "buy", label: "BUY", title: "Acquisto beta completato" },
-  { key: "sell", label: "SELL", title: "Vendita completata" },
-  { key: "core", label: "CORE", title: "Core Beta completata (beta_completed)" },
-  { key: "ai", label: "AI", title: "Anteprima AI visualizzata" },
-  { key: "club", label: "CLUB", title: "Club visualizzati" },
+  { key: "buy", label: "BUY", title: "Acquisto beta completato (checkout_beta_completed)" },
+  { key: "sell", label: "SELL", title: "Vendita completata (sell_completed)" },
+  { key: "ai", label: "AI", title: "Anteprima AI visualizzata (ai_preview_viewed)" },
+  { key: "club", label: "CLUB", title: "Club visualizzati (club_viewed)" },
+  { key: "cellar", label: "CELLAR", title: "Cantina visualizzata (cellar_viewed)" },
+  { key: "experience", label: "5/5", title: "Prova Vinea completa: tutte e cinque le aree" },
   { key: "post", label: "POST", title: "Questionario POST completato" },
-  { key: "complete", label: "COMPLETE", title: "Market Validation completa (validation_completed)" },
+  { key: "complete", label: "FULL", title: "Market Validation completa (validation_completed)" },
 ];
 
 export function qv2TesterStatus(participant: Qv2AdminParticipant): Qv2TesterStatus {
@@ -370,12 +389,24 @@ export function qv2TesterStatus(participant: Qv2AdminParticipant): Qv2TesterStat
     pre: participant.preCompletedAt !== null,
     buy: participant.events.checkoutBetaCompleted > 0,
     sell: participant.events.sellCompleted > 0,
-    core: participant.events.betaCompleted > 0,
     ai: participant.events.aiPreviewViewed > 0,
     club: participant.events.clubViewed > 0,
+    cellar: participant.events.cellarViewed > 0,
+    experience: participant.experienceCompleted,
     post: participant.postCompletedAt !== null,
     complete: participant.validationCompletedAt !== null,
   };
+}
+
+export function qv2ExperienceAreasDone(status: Pick<Qv2TesterStatus, (typeof QV2_EXPERIENCE_AREAS)[number]>): number {
+  return QV2_EXPERIENCE_AREAS.filter((area) => status[area]).length;
+}
+
+// Test chiuso con la regola precedente (Acquisto + Vendita): la Prova Vinea
+// risulta conclusa ma le cinque aree non sono tutte registrate. Lo stato resta
+// quello storico, senza attribuire visite mai avvenute.
+export function qv2ClosedWithPreviousRule(participant: Qv2AdminParticipant): boolean {
+  return participant.cohort === "qv2" && participant.events.betaCompleted > 0 && !participant.experienceCompleted;
 }
 
 export type Qv2FunnelStep = {
@@ -388,8 +419,8 @@ export type Qv2FunnelStep = {
 };
 
 // Ogni passaggio conta i codici QV2 che hanno raggiunto quel traguardo, con
-// base fissa sui test iniziati della coorte QV2. Acquisto e vendita sono
-// percorsi indipendenti: nessun ordine fra i due è richiesto.
+// base fissa sui test iniziati della coorte QV2. Le cinque aree sono percorsi
+// indipendenti, senza un ordine fra loro; il POST richiede tutte e cinque.
 export function buildQv2Funnel(summary: Qv2AdminSummary): Qv2FunnelStep[] {
   const base = summary.qv2.started;
   const step = (key: string, label: string, value: number, parallel = false): Qv2FunnelStep => ({
@@ -405,7 +436,10 @@ export function buildQv2Funnel(summary: Qv2AdminSummary): Qv2FunnelStep[] {
     step("pre", "PRE completato", summary.qv2.preCompleted),
     step("buy", "Acquisto completato", summary.qv2.buyCompleted, true),
     step("sell", "Vendita completata", summary.qv2.sellCompleted, true),
-    step("core", "Core Beta completata", summary.qv2.coreCompleted),
+    step("ai", "Vinea AI visitata", summary.qv2.aiViewed, true),
+    step("club", "Club visitato", summary.qv2.clubViewed, true),
+    step("cellar", "Cantina visitata", summary.qv2.cellarViewed, true),
+    step("experience", "Prova Vinea 5/5", summary.qv2.experienceCompleted),
     step("post", "POST completato", summary.qv2.postCompleted),
     step("full", "Market Validation completa", summary.qv2.validationCompleted),
   ];
@@ -594,6 +628,8 @@ const QV2_CSV_COLUMNS: ReadonlyArray<readonly [string, (participant: Qv2AdminPar
   ["ai_preview_viewed", (p) => p.events.aiPreviewViewed],
   ["ai_interest_clicked", (p) => p.events.aiInterestClicked],
   ["club_viewed", (p) => p.events.clubViewed],
+  ["cellar_viewed", (p) => p.events.cellarViewed],
+  ["experience_completed", (p) => p.experienceCompleted],
   ["core_beta_completed", (p) => p.events.betaCompleted],
   ["marketplace_viewed", (p) => p.events.marketplaceViewed],
   ["sell_photo_selected", (p) => p.events.sellPhotoSelected],

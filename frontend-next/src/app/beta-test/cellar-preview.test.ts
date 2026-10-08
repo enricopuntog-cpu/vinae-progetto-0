@@ -25,6 +25,7 @@ const read = (path: string) => readFileSync(resolve(root, path), "utf8");
 const preview = () => read("frontend-next/src/app/beta-test/_components/CellarPreview.tsx");
 const hub = () => read("frontend-next/src/app/beta-test/_components/ValidationHub.tsx");
 const client = () => read("frontend-next/src/app/beta-test/page-client.tsx");
+const legacyClient = () => read("frontend-next/src/app/beta-test/page-client-legacy.tsx");
 const data = () => read("frontend-next/src/lib/market-validation/cellar-preview.ts");
 
 describe("card Cantina nell'hub", () => {
@@ -74,18 +75,31 @@ describe("card Cantina nell'hub", () => {
     expect(read("frontend-next/src/lib/market-validation/mv2-flow.ts")).not.toMatch(/cellar|cantina/i);
   });
 
-  it("apre una schermata interna senza eventi né progressi", () => {
-    const source = client();
+  it("nella guida legacy apre una schermata interna senza eventi né progressi", () => {
+    const source = legacyClient();
     const branch = source.slice(
       source.indexOf('if (screen === "cellar")'),
       source.indexOf('if (screen === "ai")'),
     );
     expect(branch).toInclude('<CellarPreview onBack={() => open("hub")} />');
-    expect(branch).not.toInclude("track(");
+    expect(branch).not.toInclude("track");
     expect(branch).not.toInclude("updateProgress");
-    expect(preview()).not.toInclude("track(");
-    expect(preview()).not.toInclude("MarketValidationTrack");
     expect(preview()).not.toInclude("onProgress");
+  });
+
+  it("nel questionario QV2 è la quinta prova: registra cellar_viewed solo all'apertura", () => {
+    const source = client();
+    const branch = source.slice(
+      source.indexOf('if (screen === "cellar")'),
+      source.indexOf('if (screen === "pre-questionnaire")'),
+    );
+    expect(branch).toInclude("<CellarPreview track={track} onViewed={markCellarViewed} onBack={() => open(\"hub\")} />");
+    // L'evento parte dall'effetto di montaggio della schermata Cantina, non
+    // dall'hub: la card renderizzata non registra nulla.
+    const effect = preview().slice(preview().indexOf("useEffect(() => {\n    if (!track) return;"));
+    expect(effect).toInclude('track("cellar_viewed", {}, "cellar_viewed")');
+    expect(effect).toInclude("if (result.ok) onViewed?.();");
+    expect(read("frontend-next/src/app/beta-test/_components/ExperienceHub.tsx")).not.toInclude("track(");
   });
 });
 
@@ -276,7 +290,6 @@ describe("anteprima Cantina", () => {
         "useVinea",
         "vinea-store",
         "fetch(",
-        "track(",
         "recordEvent",
         "functions.invoke",
         ".insert(",
@@ -301,9 +314,10 @@ describe("anteprima Cantina", () => {
     ]);
   });
 
-  it("non aggiunge eventi alla tassonomia", () => {
+  it("aggiunge alla tassonomia il solo evento cellar_viewed", () => {
     const contract = read("frontend-next/src/lib/market-validation/contract.ts");
-    expect(contract).not.toInclude("cellar");
+    expect(contract.match(/cellar/g)).toHaveLength(1);
+    expect(contract).toInclude('"cellar_viewed",');
     expect(contract).not.toInclude("cantina");
   });
 });

@@ -53,6 +53,7 @@ export type MarketValidationEventName =
   | "ai_preview_viewed"
   | "ai_interest_clicked"
   | "club_viewed"
+  | "cellar_viewed"
   | "beta_completed";
 
 export type MarketValidationPriceBand = "15–30" | "30–60" | "60–100" | "100–200" | "200+";

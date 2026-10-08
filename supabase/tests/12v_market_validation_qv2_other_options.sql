@@ -275,6 +275,10 @@ begin
   perform pg_temp.rispondi(v_session, c_cap, 'q20', '"both"');
   perform public.beta_validation_event_record(v_session, v_code, c_cap, 'checkout_beta_completed');
   perform public.beta_validation_event_record(v_session, v_code, c_cap, 'sell_completed');
+  -- Dalla 20261008230000 beta_completed QV2 richiede anche AI, Club e Cantina.
+  perform public.beta_validation_event_record(v_session, v_code, c_cap, 'ai_preview_viewed');
+  perform public.beta_validation_event_record(v_session, v_code, c_cap, 'club_viewed');
+  perform public.beta_validation_event_record(v_session, v_code, c_cap, 'cellar_viewed');
   perform public.beta_validation_event_record(v_session, v_code, c_cap, 'beta_completed');
   v_esito := pg_temp.porta(format('select to_jsonb(public.beta_validation_qv2_finish_post(%L::uuid, %L))', v_session, c_cap), c_cap);
   perform pg_temp.porta(format('select to_jsonb(public.beta_validation_qv2_finish_post(%L::uuid, %L))', v_session, c_cap), c_cap);

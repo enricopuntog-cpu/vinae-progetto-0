@@ -8,6 +8,7 @@ import {
   QV2_CSV_HEADERS,
   QV2_DETAIL_EVENTS,
   QV2_DISTRIBUTION_QUESTIONS,
+  QV2_STATUS_COLUMNS,
   UNKNOWN_VALUE,
   buildQuestionDistribution,
   buildQv2Funnel,
@@ -22,6 +23,8 @@ import {
   parseQv2Distributions,
   parseQv2ParticipantDetail,
   qv2CsvExportScope,
+  qv2ClosedWithPreviousRule,
+  qv2ExperienceAreasDone,
   qv2TesterStatus,
   type Qv2AdminParticipant,
 } from "@/lib/market-validation/questionnaire-admin";
@@ -50,7 +53,9 @@ const qv2Row = (overrides: Record<string, unknown> = {}) => ({
   ai_preview_viewed: 1,
   ai_interest_clicked: 0,
   club_viewed: 1,
+  cellar_viewed: 1,
   beta_completed: 1,
+  experience_completed: true,
   q01: "25_34",
   q02: "other",
   q02_other: "Sommelier amatoriale",
@@ -143,21 +148,25 @@ describe("QV2 admin: summary e funnel", () => {
     expect(summary.legacy.coreCompletionRate).toBe(0);
   });
 
-  it("funnel con base fissa sui test iniziati e CORE distinto da FULL", () => {
+  it("funnel con base fissa sui test iniziati, cinque aree ed esperienza 5/5 distinta da FULL", () => {
     const steps = buildQv2Funnel(parseQv2AdminSummary({
-      qv2: { started: 4, preCompleted: 3, buyCompleted: 2, sellCompleted: 1, coreCompleted: 1, postCompleted: 1, validationCompleted: 0 },
+      qv2: {
+        started: 4, preCompleted: 3, buyCompleted: 2, sellCompleted: 2, aiViewed: 2, clubViewed: 2, cellarViewed: 1,
+        experienceCompleted: 1, coreCompleted: 1, postCompleted: 1, validationCompleted: 0,
+      },
     }));
-    expect(steps.map((step) => step.key)).toEqual(["started", "pre", "buy", "sell", "core", "post", "full"]);
+    expect(steps.map((step) => step.key)).toEqual(["started", "pre", "buy", "sell", "ai", "club", "cellar", "experience", "post", "full"]);
     expect(steps.every((step) => step.denominator === 4)).toBeTrue();
-    expect(steps.map((step) => step.value)).toEqual([4, 3, 2, 1, 1, 1, 0]);
-    expect(steps.map((step) => step.rate)).toEqual([100, 75, 50, 25, 25, 25, 0]);
-    expect(steps.find((step) => step.key === "core")?.label).toBe("Core Beta completata");
+    expect(steps.map((step) => step.value)).toEqual([4, 3, 2, 2, 2, 2, 1, 1, 1, 0]);
+    expect(steps.map((step) => step.rate)).toEqual([100, 75, 50, 50, 50, 50, 25, 25, 25, 0]);
+    expect(steps.find((step) => step.key === "experience")?.label).toBe("Prova Vinea 5/5");
+    expect(steps.find((step) => step.key === "cellar")?.label).toBe("Cantina visitata");
     expect(steps.find((step) => step.key === "full")?.label).toBe("Market Validation completa");
   });
 
-  it("acquisto e vendita sono passi paralleli, non ordinati", () => {
+  it("le cinque aree sono passi paralleli, non ordinati", () => {
     const steps = buildQv2Funnel(parseQv2AdminSummary({ qv2: { started: 2, buyCompleted: 0, sellCompleted: 2 } }));
-    expect(steps.filter((step) => step.parallel).map((step) => step.key)).toEqual(["buy", "sell"]);
+    expect(steps.filter((step) => step.parallel).map((step) => step.key)).toEqual(["buy", "sell", "ai", "club", "cellar"]);
     // La vendita può superare l'acquisto: nessun vincolo di ordine o di monotonia.
     expect(steps.find((step) => step.key === "sell")?.rate).toBe(100);
   });
@@ -199,18 +208,43 @@ describe("QV2 admin: elenco tester", () => {
     expect(parseQv2AdminParticipantsPage({ not: "array" })).toEqual({ participants: [], total: 0 });
   });
 
-  it("distingue CORE (beta_completed) da COMPLETE (validation_completed)", () => {
-    const coreOnly = qv2TesterStatus(parsed(qv2Row({ post_completed_at: null, validation_completed_at: null })));
-    expect(coreOnly.core).toBeTrue();
-    expect(coreOnly.post).toBeFalse();
-    expect(coreOnly.complete).toBeFalse();
+  it("mostra le cinque aree, l'esperienza 5/5 dal server e distingue POST da FULL", () => {
+    const experienceOnly = qv2TesterStatus(parsed(qv2Row({ post_completed_at: null, validation_completed_at: null })));
+    expect(experienceOnly.experience).toBeTrue();
+    expect(experienceOnly.post).toBeFalse();
+    expect(experienceOnly.complete).toBeFalse();
     const full = qv2TesterStatus(parsed(qv2Row()));
-    expect(full).toEqual({ pre: true, buy: true, sell: true, core: true, ai: true, club: true, post: true, complete: true });
+    expect(full).toEqual({
+      pre: true, buy: true, sell: true, ai: true, club: true, cellar: true, experience: true, post: true, complete: true,
+    });
+    expect(qv2ExperienceAreasDone(full)).toBe(5);
+    expect(QV2_STATUS_COLUMNS.map((column) => column.label)).toEqual(["PRE", "BUY", "SELL", "AI", "CLUB", "CELLAR", "5/5", "POST", "FULL"]);
     const fresh = qv2TesterStatus(parsed(qv2Row({
       pre_completed_at: null, post_completed_at: null, validation_completed_at: null,
       checkout_beta_completed: 0, sell_completed: 0, beta_completed: 0, ai_preview_viewed: 0, club_viewed: 0,
+      cellar_viewed: 0, experience_completed: false,
     })));
     expect(Object.values(fresh).every((value) => value === false)).toBeTrue();
+  });
+
+  it("l'esperienza 5/5 viene solo dal server: quattro aree non bastano", () => {
+    const noCellar = parsed(qv2Row({ cellar_viewed: 0, experience_completed: false, post_completed_at: null, validation_completed_at: null }));
+    const status = qv2TesterStatus(noCellar);
+    expect(qv2ExperienceAreasDone(status)).toBe(4);
+    expect(status.experience).toBeFalse();
+    // Un valore non booleano non promuove l'esperienza.
+    expect(parsed(qv2Row({ experience_completed: "true" })).experienceCompleted).toBeFalse();
+  });
+
+  it("riconosce un test chiuso con la regola precedente senza inventare visite", () => {
+    const previous = parsed(qv2Row({
+      club_viewed: 0, cellar_viewed: 0, experience_completed: false, post_completed_at: null, validation_completed_at: null,
+    }));
+    expect(qv2ClosedWithPreviousRule(previous)).toBeTrue();
+    const status = qv2TesterStatus(previous);
+    expect([status.buy, status.sell, status.ai, status.club, status.cellar]).toEqual([true, true, true, false, false]);
+    expect(qv2ClosedWithPreviousRule(parsed(qv2Row()))).toBeFalse();
+    expect(qv2ClosedWithPreviousRule(parsed(legacyRow()))).toBeFalse();
   });
 
   it("accetta soltanto le coorti chiuse come filtro", () => {

@@ -29,11 +29,11 @@ const productionSources = () =>
     ...sourceFiles(marketValidationRoot),
     resolve(root, "frontend-next/src/services/market-validation-service.ts"),
     resolve(root, "frontend-next/src/services/market-validation-questionnaire-service.ts"),
-  ].filter((file) => !file.endsWith(".test.ts"));
+  ].filter((file) => !/\.test\.tsx?$/.test(file));
 
 const betaSource = () =>
   sourceFiles(betaRoot)
-    .filter((file) => !file.endsWith(".test.ts"))
+    .filter((file) => !/\.test\.tsx?$/.test(file))
     .map((file) => readFileSync(file, "utf8"))
     .join("\n");
 
@@ -65,7 +65,7 @@ describe("Market Validation MV2 UI contract", () => {
     expect(client).toInclude(
       clientPath === LEGACY_CLIENT
         ? 'useState<MarketValidationScreen>("hub")'
-        : "useState<MarketValidationScreen>(() => questionnaireStage(questionnaire))",
+        : "useState<MarketValidationScreen | \"previous-rule\">(() => questionnaireStage(questionnaire))",
     );
     expect(client).not.toInclude("useRouter");
     expect(client).not.toInclude("router.push");
@@ -564,6 +564,7 @@ describe("Market Validation MV2 UI contract", () => {
       "20261008120000_market_validation_questionnaire_qv2.sql",
       "20261008180000_market_validation_qv2_admin.sql",
       "20261008220000_market_validation_qv2_other_options.sql",
+      "20261008230000_market_validation_qv2_five_areas.sql",
     ]);
   });
 });

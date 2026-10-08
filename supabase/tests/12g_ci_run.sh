@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12v) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12w) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
@@ -268,6 +268,11 @@ run_grid "12u QV2 admin questionario" 12u_market_validation_questionnaire_admin.
 # percorso completo fino a validation_completed, resume dopo la chiusura e
 # lettura admin delle specifiche. Fixture private, ROLLBACK, prima delle 12g.
 run_grid "12v QV2 Altro Q7/Q19" 12v_market_validation_qv2_other_options.sql 3
+# Market Validation QV2: cinque aree obbligatorie (migrazione 20261008230000).
+# cellar_viewed, experience_completed derivato dal server, beta_completed e
+# finish_post rifiutati sotto 5/5, MV1 invariata, admin con Cantina ed
+# esperienza 5/5. Fixture private, ROLLBACK, prima delle 12g.
+run_grid "12w QV2 cinque aree" 12w_market_validation_qv2_five_areas.sql 3
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal

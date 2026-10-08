@@ -35,9 +35,11 @@ import {
 } from "@/lib/market-validation/cellar-preview";
 import { formatMarketValidationEuroCents } from "@/lib/market-validation/mv2-flow";
 import { DemoBackButton } from "./DemoBackButton";
+import type { MarketValidationTrack } from "./types";
 
-// Anteprima solo visiva: niente eventi, niente servizi, niente salvataggi.
-// Filtri e dettaglio bottiglia cambiano soltanto ciò che si vede qui.
+// Anteprima visiva: niente servizi né salvataggi. Nel questionario QV2 l'apertura
+// registra soltanto `cellar_viewed` (una volta per pagina); la guida legacy non
+// passa `track` e resta senza eventi. Filtri e dettaglio cambiano ciò che si vede.
 
 const STATUS_CLASS: Record<MarketValidationCellarStatus, string> = {
   in_vendita: "bg-bordeaux text-crema",
@@ -60,8 +62,25 @@ const PHASE_CLASS: Record<MarketValidationCellarBottle["phase"], string> = {
 
 type Filter = MarketValidationCellarStatus | "tutte";
 
-export function CellarPreview({ onBack }: { onBack: () => void }) {
+export function CellarPreview({
+  onBack,
+  track,
+  onViewed,
+}: {
+  onBack: () => void;
+  track?: MarketValidationTrack;
+  onViewed?: () => void;
+}) {
   const [filter, setFilter] = useState<Filter>("tutte");
+
+  // `onViewed` aggiorna lo stato del genitore, che resta montato: la conferma
+  // arriva anche se il tester torna all'hub prima della risposta.
+  useEffect(() => {
+    if (!track) return;
+    void track("cellar_viewed", {}, "cellar_viewed").then((result) => {
+      if (result.ok) onViewed?.();
+    });
+  }, [onViewed, track]);
   const [selected, setSelected] = useState<MarketValidationCellarBottle | null>(null);
   const kpis = marketValidationCellarKpis();
   const drinkWindow = marketValidationCellarDrinkWindow();

@@ -208,6 +208,10 @@ describe("QV2 finale: GRAZIE persistente e nuovo tester esplicito", () => {
       validation_completed_at: "2026-10-08T10:30:00Z",
       buyer_completed: true,
       seller_completed: true,
+      ai_viewed: true,
+      club_viewed: true,
+      cellar_viewed: true,
+      experience_completed: true,
       core_completed: true,
       answers: {},
     };
@@ -263,7 +267,7 @@ describe("QV2 finale: admin e CSV con le specifiche", () => {
     const q19 = QV2_CSV_HEADERS.indexOf("q19_important_services");
     expect(QV2_CSV_HEADERS[q07 + 1]).toBe("q07_other");
     expect(QV2_CSV_HEADERS[q19 + 1]).toBe("q19_other");
-    expect(QV2_CSV_HEADERS).toHaveLength(54);
+    expect(QV2_CSV_HEADERS).toHaveLength(56);
     expect(QV2_CSV_HEADERS.filter((header) =>
       /capability|session_id|hash|(^|_)ip(_|$)|user_agent|email/.test(header))).toEqual([]);
     const participant = parseQv2AdminParticipant({
@@ -275,7 +279,7 @@ describe("QV2 finale: admin e CSV con le specifiche", () => {
     const csv = buildQv2ParticipantsCsv([participant!]);
     const [header, row] = csv.replace(/^﻿/, "").trim().split("\r\n");
     const cells = row.split(";");
-    expect(header.split(";")).toHaveLength(54);
+    expect(header.split(";")).toHaveLength(56);
     expect(cells[q07 + 1]).toBe("'=Annata");
     expect(cells[q19]).toBe("other");
     expect(cells[q19 + 1]).toBe("Ritiro");

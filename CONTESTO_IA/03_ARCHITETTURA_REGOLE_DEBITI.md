@@ -1334,6 +1334,26 @@ fondazione.
   dall'integrazione e verificata (colonne, CHECK, corpi md5, ACL, dinieghi);
   `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=true` è attiva nel solo contesto
   production di Netlify dall'8 ottobre 2026.
+- Cinque prove obbligatorie QV2 (8 ottobre 2026, dopo il primo test reale su
+  iPhone, migrazione `20261008230000`): Acquisto (`checkout_beta_completed`),
+  Vendita (`sell_completed`), Vinea AI (`ai_preview_viewed`), Club
+  (`club_viewed`) e Cantina (`cellar_viewed`, evento nuovo aggiunto
+  all'allowlist con un CHECK ricreato, registrato solo all'apertura della
+  schermata Cantina). `experience_completed` è uno stato derivato dal database
+  (`private.beta_validation_qv2_experience_completed`, nessun grant client),
+  non un evento: per le sessioni QV2 la porta `beta_validation_event_record`
+  rifiuta `beta_completed` sotto 5/5 e `beta_validation_qv2_finish_post` esige
+  PRE + 5/5 + `beta_completed` + POST, quindi un client manipolato non produce
+  `validation_completed`. MV1/legacy invariata. Le sessioni chiuse con la regola
+  precedente non vengono reinterpretate né completate a posteriori: il client
+  propone un nuovo codice, la dashboard le segnala. Le porte admin espongono
+  `cellar_viewed` ed `experience_completed` (aggregato privato ricreato perché
+  cambia il tipo di ritorno; stesse ACL). Il codice test assegnato dal server è
+  visibile come badge su ogni schermata e come «Codice test» nel GRAZIE; la
+  landing usa l'immagine approvata versionata in
+  `frontend-next/public/images/market-validation/vinea-market-validation-cover.webp`.
+  La griglia `12w` è cablata nel gate DB effimero; le griglie `12t`, `12u` e
+  `12v` registrano ora anche AI, Club e Cantina prima di `beta_completed`.
 
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 

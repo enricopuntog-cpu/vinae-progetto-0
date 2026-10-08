@@ -8,6 +8,11 @@ export type QuestionnaireState = {
   validation_completed_at: string | null;
   buyer_completed: boolean;
   seller_completed: boolean;
+  ai_viewed: boolean;
+  club_viewed: boolean;
+  cellar_viewed: boolean;
+  // Cinque aree registrate: stato derivato dal database, unica base del POST.
+  experience_completed: boolean;
   core_completed: boolean;
   answers: Record<string, QuestionnaireAnswer | null>;
 };
@@ -38,7 +43,7 @@ export const QUESTIONS: readonly Question[] = [
   { number: 12, title: "Per una bottiglia del valore di circa 50 €, quale costo massimo di spedizione considereresti accettabile?", kind: "single", options: [["five_or_less", "5 € o meno"], ["six_nine", "6-9 €"], ["ten_twelve", "10-12 €"], ["thirteen_fifteen", "13-15 €"], ["over_fifteen", "Oltre 15 €"], ["would_not_buy", "A quel prezzo preferirei non acquistare"]] },
   { number: 13, title: "Se invece la bottiglia valesse circa 150 €, quale costo massimo di spedizione considereresti accettabile?", kind: "single", options: [["five_or_less", "5 € o meno"], ["six_nine", "6-9 €"], ["ten_twelve", "10-12 €"], ["thirteen_fifteen", "13-15 €"], ["sixteen_twenty", "16-20 €"], ["over_twenty", "Oltre 20 €"], ["would_not_buy", "Non acquisterei comunque da un privato"]] },
   { number: 14, title: "Qual è stata la prima cosa che hai avuto voglia di fare?", kind: "single", options: [["search_bottle", "Cercare una bottiglia"], ["buy", "Comprare"], ["sell", "Mettere in vendita una bottiglia"], ["clubs", "Guardare i Club / community"], ["explore", "Esplorare senza fare altro"], ["none", "Nulla in particolare"]] },
-  { number: 15, title: "Hai trovato almeno una bottiglia che avresti seriamente considerato di acquistare?", kind: "single", options: [["yes", "Sì"], ["no", "No"]], condition: { code: "no", label: "Perché?", field: "why_not" } },
+  { number: 15, title: "Se Vinea fosse già operativa e le bottiglie mostrate fossero realmente disponibili, avresti preso seriamente in considerazione un acquisto?", kind: "single", options: [["yes", "Sì"], ["no", "No"]], condition: { code: "no", label: "Perché?", field: "why_not" } },
   { number: 16, title: "Se Vinea fosse già operativa oggi, avresti una bottiglia che potresti realmente mettere in vendita?", kind: "single", options: [["yes", "Sì"], ["maybe", "Forse"], ["no", "No"]] },
   { number: 17, title: "Qual è la cosa che ti frenerebbe maggiormente dall'utilizzare Vinea?", kind: "text" },
   { number: 18, title: "Qual è la cosa più importante che secondo te manca o dovrebbe essere migliorata?", kind: "text" },
@@ -47,20 +52,63 @@ export const QUESTIONS: readonly Question[] = [
 ];
 
 export const Q10_ACTIONS: readonly Option[] = [["drank", "Bevute comunque"], ["gifted", "Regalate"], ["sold", "Vendute"], ["traded", "Scambiate"], ["still_in_cellar", "Sono ancora in cantina"], ["other", "Altro"]];
+
+// Regola dichiarata sotto ogni scelta multipla: con un massimo lo indica, senza
+// massimo invita a sceglierne più d'una. Vale per ogni multi-select, anche futura.
+export function multiSelectHint(maximum?: number): string {
+  return maximum ? `Scegline massimo ${maximum}` : "Puoi selezionare più risposte";
+}
 // Unico comando che libera la sessione locale dopo il GRAZIE: senza di esso il
 // browser resta sul test concluso dello stesso codice partecipante.
 export const NEW_TESTER_LABEL = "Fai provare Vinea a un'altra persona";
 export const questionKey = (number: number) => `q${String(number).padStart(2, "0")}`;
 
-export type QuestionnaireStage = "pre-questionnaire" | "hub" | "post-questionnaire" | "complete";
+export type QuestionnaireStage = "pre-questionnaire" | "hub" | "post-questionnaire" | "complete" | "previous-rule";
 
-// Lifecycle LANDING → PRE → CORE → POST → GRAZIE, derivato soltanto dallo
-// stato server: un resume riprende sempre dalla fase ancora aperta.
+// Lifecycle LANDING → PRE → PROVA VINEA (5/5) → POST → GRAZIE, derivato
+// soltanto dallo stato server: un resume riprende sempre dalla fase aperta.
+// Una Prova Vinea chiusa con la regola precedente (senza le cinque aree) non
+// può più registrare aree né aprire il POST: resta ferma su «previous-rule».
 export function questionnaireStage(state: QuestionnaireState): QuestionnaireStage {
   if (!state.pre_finished_at) return "pre-questionnaire";
+  if (state.post_finished_at) return "complete";
   if (!state.core_completed) return "hub";
-  if (!state.post_finished_at) return "post-questionnaire";
-  return "complete";
+  if (!state.experience_completed) return "previous-rule";
+  return "post-questionnaire";
+}
+
+export type ExperienceAreaKey = "buyer" | "seller" | "ai" | "club" | "cellar";
+
+// Le cinque prove obbligatorie della Prova Vinea e l'evento server che le
+// completa. Aprire la card non basta: conta solo l'evento registrato.
+export const EXPERIENCE_AREAS: ReadonlyArray<{ key: ExperienceAreaKey; title: string; event: string }> = [
+  { key: "buyer", title: "Acquisto", event: "checkout_beta_completed" },
+  { key: "seller", title: "Vendita", event: "sell_completed" },
+  { key: "ai", title: "Vinea AI", event: "ai_preview_viewed" },
+  { key: "club", title: "Club", event: "club_viewed" },
+  { key: "cellar", title: "Cantina", event: "cellar_viewed" },
+];
+
+export type ExperienceAreasDone = Readonly<Record<ExperienceAreaKey, boolean>>;
+
+// Stato delle aree letto dal server. `confirmed` aggiunge solo le aree il cui
+// evento la porta server ha appena accettato in questa pagina, in attesa della
+// prossima lettura: nessuna card si completa al semplice click.
+export function experienceAreasDone(
+  state: Pick<QuestionnaireState, "buyer_completed" | "seller_completed" | "ai_viewed" | "club_viewed" | "cellar_viewed">,
+  confirmed: Partial<ExperienceAreasDone> = {},
+): ExperienceAreasDone {
+  return {
+    buyer: state.buyer_completed || confirmed.buyer === true,
+    seller: state.seller_completed || confirmed.seller === true,
+    ai: state.ai_viewed || confirmed.ai === true,
+    club: state.club_viewed || confirmed.club === true,
+    cellar: state.cellar_viewed || confirmed.cellar === true,
+  };
+}
+
+export function experienceAreasCount(done: ExperienceAreasDone): number {
+  return EXPERIENCE_AREAS.filter((area) => done[area.key]).length;
 }
 
 export function firstIncomplete(answers: QuestionnaireState["answers"], from: number, to: number): number | null {

@@ -60,6 +60,10 @@ function stateFrom(value: unknown): MarketValidationQuestionnaireState | null {
     validation_completed_at: timestamp(data.validation_completed_at) ? data.validation_completed_at : null,
     buyer_completed: data.buyer_completed === true,
     seller_completed: data.seller_completed === true,
+    ai_viewed: data.ai_viewed === true,
+    club_viewed: data.club_viewed === true,
+    cellar_viewed: data.cellar_viewed === true,
+    experience_completed: data.experience_completed === true,
     core_completed: data.core_completed === true,
     answers,
   };
