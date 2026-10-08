@@ -1,18 +1,18 @@
 ## CURRENT STATE
-- Market Validation MV1, MV2, MV3 e la guida autocontenuta (PR #188) sono CLOSED; QV1 (PR #189/#190), QV2 admin (PR #191/#192) e l'allineamento finale QV2 (PR #193/#194/#195, merge `f62c82f`) sono CLOSED.
-- Primo test reale su iPhone di Enrico in produzione (8 ottobre 2026): codice V002 (PRE completato, acquisto, vendita, anteprima AI e `beta_completed` registrati con la regola Acquisto + Vendita, POST non chiuso). I dati restano intatti e non vengono reinterpretati.
-- Fix dopo il test reale (branch `feature/qv2-five-areas`, migrazione `20261008230000_market_validation_qv2_five_areas.sql`): cinque prove obbligatorie (Acquisto, Vendita, Vinea AI, Club, Cantina con il nuovo evento `cellar_viewed`), `experience_completed` derivato dal database e imposto su `beta_completed` e `finish_post`, codice test visibile su ogni schermata e nel GRAZIE, istruzioni «Scegline massimo N» / «Puoi selezionare più risposte», nuova Q15, immagine approvata nella landing, admin (BUY/SELL/AI/CLUB/CELLAR/5/5/POST/FULL) e CSV a 56 colonne. Griglia `12w` 18/18 su PGlite; `frontend-next` 2412 test con `MIN_TESTS` = 2412.
-- Netlify `timely-lokum-43a12e`: `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=true` nel solo contesto production, `PAYMENTS_ENABLED=false`.
+- Market Validation MV1, MV2, MV3 e la guida autocontenuta (PR #188) sono CLOSED; QV1 (PR #189/#190), QV2 admin (PR #191/#192) e l'allineamento finale QV2 (PR #193/#194/#195) sono CLOSED.
+- Primo test reale su iPhone di Enrico in produzione (8 ottobre 2026): codice V002 (PRE completato, acquisto, vendita, anteprima AI e `beta_completed` registrati con la regola Acquisto + Vendita, POST non chiuso). I dati restano intatti e non vengono reinterpretati: in admin V002 risulta `experience_completed` = false (Club e Cantina mai visitati).
+- Cinque prove obbligatorie QV2 (PR #196, merge `e5b97bf`) in produzione: migrazione `20261008230000_market_validation_qv2_five_areas.sql` applicata su `pijnmcllmfgjmgsvtcej` (ledger 81 = file su `origin/main`); CHECK con `cellar_viewed`, helper `experience_completed` e RPC admin verificati per corpo e ACL. Prova in produzione dentro una transazione annullata (nessun residuo, impronte delle 6 sessioni esistenti invariate): `beta_completed` e `finish_post` rifiutati a 0/5, 2/5 (Acquisto + Vendita) e 4/5, accettati a 5/5; admin negato ad anon e non-admin.
+- Netlify `timely-lokum-43a12e`: deploy production `6ac7df9375ca410008842dcc` READY su `e5b97bf`; `/beta-test` serve la landing con l'immagine approvata (hash identico al file del repo) e la CTA «INIZIA IL TEST», senza campi di input; `/admin/beta-validation` reindirizza a `/accedi` senza sessione. `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=true` nel solo contesto production, `PAYMENTS_ENABLED=false`.
 
 ## ACTIVE TASK
-- Merge e verifica in produzione delle cinque prove obbligatorie QV2 (migrazione `20261008230000`, deploy Netlify del merge).
+- Nessuno: in attesa del nuovo test manuale di Enrico su iPhone.
 
 ## NEXT STEPS
-1. Verifica produzione della migrazione 20261008230000
-2. Nuovo test manuale di Enrico su iPhone
+1. Nuovo test manuale di Enrico su iPhone (cinque prove, POST, GRAZIE con codice)
+2. Verifica in admin del test di Enrico (5/5, POST, FULL, CSV)
 3. Pilot 5 tester
 
 ## BLOCKERS / NOTES
-- La sessione V002 di Enrico è chiusa con la regola precedente: dopo il deploy il suo iPhone mostra «Il test è stato aggiornato» e propone «Fai provare Vinea a un'altra persona»; il nuovo test riceverà il primo codice libero (V003).
-- Il percorso completo a cinque prove è verificato solo in locale su Supabase simulato con le migrazioni reali; in produzione resta da verificare con il test manuale di Enrico.
+- La sessione V002 di Enrico è chiusa con la regola precedente: il suo iPhone mostra «Il test è stato aggiornato» e propone «Fai provare Vinea a un'altra persona»; il nuovo test riceverà il primo codice libero (V003). La schermata «Il test è stato aggiornato» è coperta da test unitari, non ancora vista su dispositivo reale.
+- Il percorso completo a cinque prove nell'interfaccia è verificato in locale su Supabase simulato con le migrazioni reali; in produzione è verificata la logica del database, non ancora un test reale completato dall'interfaccia.
 - Disattivazione immediata: `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=false` (o rimossa) e nuovo deploy da un commit che tocca `frontend-next/`; `/beta-test` torna alla guida senza questionario.
