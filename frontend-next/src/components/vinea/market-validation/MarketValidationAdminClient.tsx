@@ -1,48 +1,60 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { EmptyState, ErrorState, LoadingBlock } from "@/components/vinea/States";
 import {
+  Qv2DistributionsSection,
+  Qv2FunnelCard,
+  Qv2KpiSection,
+  Qv2ParticipantDetailSheet,
+  Qv2TesterTable,
+} from "@/components/vinea/market-validation/Qv2AdminPanels";
+import {
   EMPTY_MARKET_VALIDATION_ADMIN_SUMMARY,
-  MARKET_VALIDATION_ADMIN_PAGE_SIZE,
   buildMarketValidationParticipantsCsv,
   formatPercentage,
   parseMarketValidationParticipantFilter,
   percentage,
-  type MarketValidationAdminParticipant,
   type MarketValidationAdminSummary,
   type MarketValidationParticipantFilter,
 } from "@/lib/market-validation/admin-analytics";
+import {
+  EMPTY_QV2_ADMIN_SUMMARY,
+  EMPTY_QV2_DISTRIBUTIONS,
+  QV2_ADMIN_PAGE_SIZE,
+  buildQv2ParticipantsCsv,
+  qv2CsvExportScope,
+  type Qv2AdminParticipant,
+  type Qv2AdminSummary,
+  type Qv2CohortFilter,
+  type Qv2Distributions,
+} from "@/lib/market-validation/questionnaire-admin";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
   loadAllMarketValidationAdminParticipants,
-  loadMarketValidationAdminParticipants,
   loadMarketValidationAdminSummary,
 } from "@/services/market-validation-admin-service";
+import {
+  loadAllQv2AdminParticipants,
+  loadQv2AdminDistributions,
+  loadQv2AdminParticipants,
+  loadQv2AdminSummary,
+} from "@/services/market-validation-questionnaire-admin-service";
+import type { MarketValidationParticipantCode } from "@/services/types";
 
 type FunnelStep = { label: string; value: number };
 
-const dateTime = (value: string | null): string =>
-  value
-    ? new Date(value).toLocaleString("it-IT", {
-        dateStyle: "medium",
-        timeStyle: "short",
-      })
-    : "—";
+const COHORT_OPTIONS: ReadonlyArray<{ value: Qv2CohortFilter; label: string }> = [
+  { value: null, label: "Tutti" },
+  { value: "qv2", label: "QV2" },
+  { value: "legacy", label: "Legacy" },
+];
 
 function KpiCard({ value, label, detail }: { value: string | number; label: string; detail?: string }) {
   return (
@@ -84,66 +96,29 @@ function Funnel({ title, description, steps }: { title: string; description: str
   );
 }
 
-function ParticipantsTable({ participants }: { participants: MarketValidationAdminParticipant[] }) {
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Codice</TableHead>
-          <TableHead>Sessioni</TableHead>
-          <TableHead>Primo avvio</TableHead>
-          <TableHead>Ultimo avvio</TableHead>
-          <TableHead>Ultimo completamento</TableHead>
-          <TableHead>Completato</TableHead>
-          <TableHead>Marketplace</TableHead>
-          <TableHead>Annuncio</TableHead>
-          <TableHead>Preferito</TableHead>
-          <TableHead>Checkout</TableHead>
-          <TableHead>Shipping</TableHead>
-          <TableHead>Buyer completato</TableHead>
-          <TableHead>Vendita avviata</TableHead>
-          <TableHead>Foto provata</TableHead>
-          <TableHead>Vendita completata</TableHead>
-          <TableHead>AI preview</TableHead>
-          <TableHead>AI interesse</TableHead>
-          <TableHead>Club</TableHead>
-          <TableHead>Test completato</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {participants.map((participant) => (
-          <TableRow key={participant.participantCode}>
-            <TableCell className="font-semibold">{participant.participantCode}</TableCell>
-            <TableCell>{participant.sessionsCount}</TableCell>
-            <TableCell className="whitespace-nowrap">{dateTime(participant.firstStartedAt)}</TableCell>
-            <TableCell className="whitespace-nowrap">{dateTime(participant.lastStartedAt)}</TableCell>
-            <TableCell className="whitespace-nowrap">{dateTime(participant.lastCompletedAt)}</TableCell>
-            <TableCell>{participant.completed ? "Sì" : "No"}</TableCell>
-            <TableCell>{participant.marketplaceViewed}</TableCell>
-            <TableCell>{participant.demoListingViewed}</TableCell>
-            <TableCell>{participant.favoriteAdded}</TableCell>
-            <TableCell>{participant.checkoutStarted}</TableCell>
-            <TableCell>{participant.shippingCostViewed}</TableCell>
-            <TableCell>{participant.checkoutBetaCompleted}</TableCell>
-            <TableCell>{participant.sellStarted}</TableCell>
-            <TableCell>{participant.sellPhotoSelected}</TableCell>
-            <TableCell>{participant.sellCompleted}</TableCell>
-            <TableCell>{participant.aiPreviewViewed}</TableCell>
-            <TableCell>{participant.aiInterestClicked}</TableCell>
-            <TableCell>{participant.clubViewed}</TableCell>
-            <TableCell>{participant.betaCompleted}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-}
+const downloadCsv = (content: string, filename: string) => {
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+};
 
 export function MarketValidationAdminClient() {
   const [summary, setSummary] = useState<MarketValidationAdminSummary>(
     EMPTY_MARKET_VALIDATION_ADMIN_SUMMARY,
   );
-  const [participants, setParticipants] = useState<MarketValidationAdminParticipant[]>([]);
+  const [qv2Summary, setQv2Summary] = useState<Qv2AdminSummary>(EMPTY_QV2_ADMIN_SUMMARY);
+  const [distributions, setDistributions] = useState<Qv2Distributions>(EMPTY_QV2_DISTRIBUTIONS);
+  const [participants, setParticipants] = useState<Qv2AdminParticipant[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [cohort, setCohort] = useState<Qv2CohortFilter>(null);
+  const cohortRef = useRef<Qv2CohortFilter>(null);
   const [filterInput, setFilterInput] = useState("");
   const [activeFilter, setActiveFilter] = useState<MarketValidationParticipantFilter>(null);
   const [filterError, setFilterError] = useState<string | null>(null);
@@ -151,22 +126,30 @@ export function MarketValidationAdminClient() {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [detailCode, setDetailCode] = useState<MarketValidationParticipantCode | null>(null);
 
   const load = useCallback(async (filter: MarketValidationParticipantFilter) => {
     setLoading(true);
     setError(null);
     try {
       const client = getSupabaseClient();
-      const [nextSummary, nextParticipants] = await Promise.all([
+      const [nextSummary, nextQv2Summary, nextDistributions, page] = await Promise.all([
         loadMarketValidationAdminSummary(client),
-        loadMarketValidationAdminParticipants(client, {
+        loadQv2AdminSummary(client),
+        loadQv2AdminDistributions(client),
+        loadQv2AdminParticipants(client, {
           participantCode: filter,
-          limit: MARKET_VALIDATION_ADMIN_PAGE_SIZE,
+          cohort: cohortRef.current,
+          limit: QV2_ADMIN_PAGE_SIZE,
           offset: 0,
         }),
       ]);
       setSummary(nextSummary);
-      setParticipants(nextParticipants);
+      setQv2Summary(nextQv2Summary);
+      setDistributions(nextDistributions);
+      setParticipants(page.participants);
+      setTotal(page.total);
+      setOffset(0);
       setLoaded(true);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Non è stato possibile caricare le analytics.");
@@ -174,6 +157,27 @@ export function MarketValidationAdminClient() {
       setLoading(false);
     }
   }, []);
+
+  // Cambio pagina o coorte: ricarica soltanto l'elenco, con gli stessi filtri.
+  const loadPage = async (nextCohort: Qv2CohortFilter, nextOffset: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const page = await loadQv2AdminParticipants(getSupabaseClient(), {
+        participantCode: activeFilter,
+        cohort: nextCohort,
+        limit: QV2_ADMIN_PAGE_SIZE,
+        offset: nextOffset,
+      });
+      setParticipants(page.participants);
+      setTotal(page.total);
+      setOffset(nextOffset);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Non è stato possibile caricare i tester.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     void load(null);
@@ -199,28 +203,40 @@ export function MarketValidationAdminClient() {
     void load(null);
   };
 
+  const changeCohort = (nextCohort: Qv2CohortFilter) => {
+    cohortRef.current = nextCohort;
+    setCohort(nextCohort);
+    void loadPage(nextCohort, 0);
+  };
+
   const exportCsv = async () => {
     if (exporting) return;
     setExporting(true);
     setError(null);
     try {
-      const rows = await loadAllMarketValidationAdminParticipants(
-        getSupabaseClient(),
-        activeFilter,
-      );
-      const blob = new Blob([buildMarketValidationParticipantsCsv(rows)], {
-        type: "text/csv;charset=utf-8",
+      const rows = await loadAllQv2AdminParticipants(getSupabaseClient(), {
+        participantCode: activeFilter,
+        cohort,
       });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = activeFilter
-        ? `market-validation-${activeFilter}.csv`
-        : "market-validation-participants.csv";
-      document.body.append(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
+      downloadCsv(buildQv2ParticipantsCsv(rows), qv2CsvExportScope(activeFilter, cohort).filename);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Esportazione non riuscita.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Export MV3 originale, conservato per continuità con le analisi già fatte.
+  const exportLegacyCsv = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setError(null);
+    try {
+      const rows = await loadAllMarketValidationAdminParticipants(getSupabaseClient(), activeFilter);
+      downloadCsv(
+        buildMarketValidationParticipantsCsv(rows),
+        activeFilter ? `market-validation-${activeFilter}.csv` : "market-validation-participants.csv",
+      );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Esportazione non riuscita.");
     } finally {
@@ -242,8 +258,11 @@ export function MarketValidationAdminClient() {
     { label: "Vendita completata", value: summary.seller.sellCompleted },
   ];
 
+  const favoriteCodes = qv2Summary.qv2.favoriteAdded + qv2Summary.legacy.favoriteAdded;
+  const pageEnd = offset + participants.length;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <Button asChild variant="ghost" size="sm" className="mb-2 -ml-3">
@@ -251,7 +270,7 @@ export function MarketValidationAdminClient() {
           </Button>
           <h1 className="font-serif text-3xl md:text-4xl">Market Validation</h1>
           <p className="max-w-3xl text-muted-foreground">
-            Conteggi aggregati per codice partecipante. Nessuna capability, UUID di sessione,
+            Dati pseudonimi per codice partecipante, in sola lettura. Nessuna capability, UUID di sessione,
             metadata o informazione personale è esposta.
           </p>
         </div>
@@ -260,7 +279,10 @@ export function MarketValidationAdminClient() {
             <RefreshCw className={loading ? "animate-spin" : ""} /> Aggiorna
           </Button>
           <Button onClick={() => void exportCsv()} disabled={!loaded || loading || exporting}>
-            <Download /> {exporting ? "Esportazione…" : "Esporta CSV"}
+            <Download /> {exporting ? "Esportazione…" : qv2CsvExportScope(activeFilter, cohort).label}
+          </Button>
+          <Button variant="ghost" onClick={() => void exportLegacyCsv()} disabled={!loaded || loading || exporting}>
+            <Download /> CSV MV3
           </Button>
         </div>
       </header>
@@ -281,14 +303,54 @@ export function MarketValidationAdminClient() {
             <EmptyState title="Nessun test registrato." message="Le analytics compariranno dopo il primo avvio valido." />
           ) : (
             <>
+              {qv2Summary.qv2.started === 0 ? (
+                <EmptyState
+                  title="Nessun questionario QV2 avviato."
+                  message="KPI e funnel del questionario compariranno dopo il primo test QV2 reale. I test legacy restano nelle statistiche del percorso."
+                />
+              ) : (
+                <div className="space-y-4">
+                  <Qv2KpiSection summary={qv2Summary} />
+                  <Qv2FunnelCard summary={qv2Summary} />
+                </div>
+              )}
+
               <section aria-labelledby="mv-kpi-title" className="space-y-3">
-                <h2 id="mv-kpi-title" className="font-serif text-2xl">KPI</h2>
+                <div>
+                  <h2 id="mv-kpi-title" className="font-serif text-2xl">Statistiche del percorso</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Tutti i codici, legacy e QV2. Il completamento qui è la Core Beta (beta_completed), non la Market
+                    Validation completa.
+                  </p>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                   <KpiCard value={summary.testersStarted} label="Tester avviati" />
-                  <KpiCard value={summary.testersCompleted} label="Tester completati" />
-                  <KpiCard value={formatPercentage(summary.completionRate)} label="Tasso di completamento" />
+                  <KpiCard value={summary.testersCompleted} label="Core Beta completata" />
+                  <KpiCard value={formatPercentage(summary.completionRate)} label="Tasso di completamento core" />
                   <KpiCard value={summary.totalSessions} label="Sessioni totali" />
                   <KpiCard value={summary.uniqueCodes} label="Codici unici" />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <KpiCard
+                    value={qv2Summary.legacy.codes}
+                    label="Tester legacy"
+                    detail="Guida senza questionario: fuori dai denominatori QV2"
+                  />
+                  <KpiCard
+                    value={qv2Summary.legacy.coreCompleted}
+                    label="Core completata (legacy)"
+                    detail={`${formatPercentage(qv2Summary.legacy.coreCompletionRate)} dei tester legacy`}
+                  />
+                  <KpiCard
+                    value={favoriteCodes}
+                    label="Preferito aggiunto"
+                    detail={`${formatPercentage(percentage(favoriteCodes, qv2Summary.allCodes))} dei codici`}
+                  />
+                  <KpiCard
+                    value={summary.buyer.shippingCostViewed}
+                    label="Costo spedizione visualizzato"
+                    detail={`${formatPercentage(percentage(summary.buyer.shippingCostViewed, summary.testersStarted))} dei tester avviati`}
+                  />
                 </div>
               </section>
 
@@ -323,49 +385,97 @@ export function MarketValidationAdminClient() {
                   detail={`${formatPercentage(summary.club.viewedRate)} dei tester avviati`}
                 />
               </section>
+
+              <Qv2DistributionsSection distributions={distributions} />
             </>
           )}
 
           <section aria-labelledby="mv-participants-title" className="space-y-4">
             <div>
-              <h2 id="mv-participants-title" className="font-serif text-2xl">Partecipanti</h2>
+              <h2 id="mv-participants-title" className="font-serif text-2xl">Tester</h2>
               <p className="text-sm text-muted-foreground">
-                Una riga per codice; i conteggi sommano tutti i tentativi e i rientri del codice.
+                Una riga per codice. Per un codice QV2 contano solo la sessione del questionario e le sue risposte; un
+                codice legacy somma tutti i tentativi e i rientri, come nelle analytics MV3. Apri un codice per
+                confrontare risposte e comportamento.
               </p>
             </div>
-            <form onSubmit={applyFilter} className="flex max-w-xl flex-col gap-2 sm:flex-row sm:items-start">
-              <div className="flex-1">
-                <label htmlFor="participant-code" className="sr-only">Codice partecipante</label>
-                <Input
-                  id="participant-code"
-                  value={filterInput}
-                  onChange={(event) => setFilterInput(event.target.value)}
-                  placeholder="V001"
-                  autoComplete="off"
-                  aria-invalid={filterError !== null}
-                  aria-describedby={filterError ? "participant-code-error" : undefined}
-                />
-                {filterError ? <p id="participant-code-error" className="mt-1 text-sm text-bordeaux">{filterError}</p> : null}
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <form onSubmit={applyFilter} className="flex max-w-xl flex-col gap-2 sm:flex-row sm:items-start">
+                <div className="flex-1">
+                  <label htmlFor="participant-code" className="sr-only">Codice partecipante</label>
+                  <Input
+                    id="participant-code"
+                    value={filterInput}
+                    onChange={(event) => setFilterInput(event.target.value)}
+                    placeholder="V001"
+                    autoComplete="off"
+                    aria-invalid={filterError !== null}
+                    aria-describedby={filterError ? "participant-code-error" : undefined}
+                  />
+                  {filterError ? <p id="participant-code-error" className="mt-1 text-sm text-bordeaux">{filterError}</p> : null}
+                </div>
+                <Button type="submit" variant="outline">Cerca</Button>
+                <Button type="button" variant="ghost" onClick={resetFilter} disabled={activeFilter === null && filterInput === ""}>
+                  Reimposta
+                </Button>
+              </form>
+              <div role="group" aria-label="Coorte" className="flex gap-1">
+                {COHORT_OPTIONS.map((option) => (
+                  <Button
+                    key={option.label}
+                    type="button"
+                    size="sm"
+                    variant={cohort === option.value ? "default" : "outline"}
+                    aria-pressed={cohort === option.value}
+                    disabled={loading}
+                    onClick={() => changeCohort(option.value)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
               </div>
-              <Button type="submit" variant="outline">Filtra</Button>
-              <Button type="button" variant="ghost" onClick={resetFilter} disabled={activeFilter === null && filterInput === ""}>
-                Reimposta
-              </Button>
-            </form>
+            </div>
 
             {participants.length === 0 ? (
               <EmptyState
-                title={activeFilter ? `Nessun dato per ${activeFilter}.` : "Nessun test registrato."}
-                message={activeFilter ? "Reimposta il filtro per vedere tutti i codici." : undefined}
+                title={activeFilter ? `Nessun dato per ${activeFilter}.` : "Nessun tester per questo filtro."}
+                message={activeFilter || cohort ? "Reimposta i filtri per vedere tutti i codici." : undefined}
               />
             ) : (
-              <Card>
-                <CardContent className="p-0">
-                  <ParticipantsTable participants={participants} />
-                </CardContent>
-              </Card>
+              <>
+                <Card>
+                  <CardContent className="p-0">
+                    <Qv2TesterTable participants={participants} onOpen={setDetailCode} />
+                  </CardContent>
+                </Card>
+                <nav aria-label="Paginazione tester" className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span className="text-muted-foreground">
+                    Righe {offset + 1}–{pageEnd} di {total}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={loading || offset === 0}
+                      onClick={() => void loadPage(cohort, Math.max(0, offset - QV2_ADMIN_PAGE_SIZE))}
+                    >
+                      Precedente
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={loading || pageEnd >= total}
+                      onClick={() => void loadPage(cohort, offset + QV2_ADMIN_PAGE_SIZE)}
+                    >
+                      Successiva
+                    </Button>
+                  </div>
+                </nav>
+              </>
             )}
           </section>
+
+          <Qv2ParticipantDetailSheet participantCode={detailCode} onClose={() => setDetailCode(null)} />
         </>
       ) : null}
     </div>

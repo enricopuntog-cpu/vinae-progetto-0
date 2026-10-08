@@ -1,20 +1,23 @@
 ## CURRENT STATE
 - Market Validation MV1, MV2, MV3 e la guida autocontenuta (PR #188) sono CLOSED e online su `https://vineawineclub.com/beta-test` con le flag MV di produzione ON.
-- QV1 = CLOSED. PR #189 squash-merged in `5bc7e06` (HEAD verificato `c154b15`): sei check obbligatori verdi sull'HEAD esatto, audit con la sola eccezione canonica GHSA-vfj7-8cjw-p6xm, 2294 test (`MIN_TESTS` = 2294), build verde, griglia `12t` 16/16 nel gate DB effimero.
-- Produzione Supabase `pijnmcllmfgjmgsvtcej`: l'integrazione ha applicato `20261008120000_market_validation_questionnaire_qv2` (versione allineata al file). Verificati `private.beta_validation_qv2` con RLS on, 0 policy, nessun grant client, 32 CHECK e 0 righe; cinque porte `public.beta_validation_qv2_*` `security definer` con `search_path` vuoto ed execute ad anon/authenticated; helper privati senza execute client; CHECK eventi con `validation_completed`. Nessun oggetto commerciale toccato.
-- Netlify produzione READY su `main` con `commit_ref` `5bc7e06`; `/beta-test` serve la guida approvata della PR #188 con «Codice partecipante»: Questionnaire V2 OFF (`MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED` non attivato, solo `true` esatto abilita).
-- Con il flag ON il ciclo è LANDING → PRE (Q1–Q13) → guida Prova Vinea (Acquista + Vendi, `beta_completed`) → POST (Q14–Q20) → feedback finale facoltativo → GRAZIE con «Nuovo tester». QV2 READY.
+- QV1 = CLOSED. PR #189 squash-merged in `5bc7e06`, chiusura documentale PR #190 in `a9d66e5`. Produzione Supabase `pijnmcllmfgjmgsvtcej`: `20261008120000_market_validation_questionnaire_qv2` applicata, `private.beta_validation_qv2` con RLS on, 0 policy, nessun grant client.
+- Questionnaire V2 OFF in produzione: `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED` non attivato (solo `true` esatto abilita); `/beta-test` serve la guida approvata della PR #188.
+- QV2 (dashboard admin) = PR #191 su `main`:
+  - migrazione additiva `20261008180000_market_validation_qv2_admin.sql`: helper privato `private.beta_validation_qv2_admin_rows()` e quattro porte read-only `public.beta_validation_qv2_admin_{summary,participants,participant_detail,distributions}` (`stable`, `security definer`, `search_path` vuoto, EXECUTE solo `authenticated`, ricontrollo admin in `public.user_roles`); porte MV3 e QV1 invariate;
+  - `/admin/beta-validation`: KPI e funnel della coorte QV2 (legacy fuori dai denominatori), statistiche MV3 conservate, distribuzioni PRE/POST, tabella tester con ricerca/coorte/paginazione, dettaglio per codice (dichiarato vs provato, PRE, comportamento, POST, completamento), CSV QV2 (completo o filtrato, dichiarato sul bottone) e CSV MV3;
+  - griglia `12u` nel gate DB effimero: 42/42 alla PR #191, con `12e`–`12t` e `7c` verdi;
+  - `frontend-next` 2364 test, `MIN_TESTS` = 2364.
 
 ## ACTIVE TASK
-- Nessuno: QV1 VERIFY & SHIP chiuso; QV2 BUILD non iniziato.
+- QV2 VERIFY & SHIP: dopo il merge della PR #191, applicazione e verifica in produzione della migrazione `20261008180000` e verifica del deploy Netlify di `main`; chiusura documentale a verifica conclusa.
 
 ## NEXT STEPS
-1. QV2 BUILD — dashboard amministrativa e analytics questionario.
-2. QV2 VERIFY & SHIP.
-3. Attivazione V2 e acceptance end-to-end.
+1. Attivazione controllata Questionnaire V2
+2. Acceptance E2E su smartphone e admin
+3. Pilot 5 tester
 
 ## BLOCKERS / NOTES
-- Non attivare `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED` su Netlify prima della chiusura della dashboard QV2; nessun pilot o test reale è stato avviato e in produzione non esiste alcuna riga QV2.
-- La griglia `12t` (start/resume, isolamento capability, PRE completo, risposte condizionali, BUY+SELL+core tramite la porta MV1, POST, `final_feedback` facoltativo, `validation_completed` idempotente, blocco dopo la chiusura, ROLLBACK) gira solo nel gate DB effimero; mai in produzione.
-- Il flusso QV2 a flag ON non ha ancora uno smoke browser su un database con la migrazione: è parte dell'acceptance end-to-end del punto 3.
+- La migrazione `20261008180000` va applicata in produzione dopo il merge: rileggere il ledger e verificare corpo, grant e ACL delle quattro porte e dell'helper privato. Un merge non prova l'applicazione.
+- Non attivare `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED` senza un mandato esplicito; in produzione non esiste alcuna riga QV2.
+- Lo smoke admin con dati è stato eseguito su fixture isolate locali (Supabase simulato sopra PostgreSQL PGlite con le migrazioni reali), non su PostgREST/GoTrue reali; in produzione resta da verificare accesso admin, route ed empty state con un account admin reale.
 - La scansione QR con smartphone e il pilot restano acceptance NON VERIFICATE.

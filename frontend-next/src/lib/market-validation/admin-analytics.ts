@@ -209,7 +209,9 @@ export const MARKET_VALIDATION_CSV_HEADERS = [
   "beta_completed",
 ] as const;
 
-const csvFormulaPrefix = /^[=+\-@]/;
+// Prefissi che Excel/LibreOffice possono interpretare come formula, compresi
+// tab e ritorno a capo iniziali (OWASP CSV injection).
+const csvFormulaPrefix = /^[=+\-@\t\r]/;
 
 export function escapeMarketValidationCsvCell(value: string | number | boolean | null): string {
   let cell = value === null ? "" : String(value);

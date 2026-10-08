@@ -86,6 +86,7 @@ check "scope: griglia 12q configurazione commerciale pertinente" true "$(scope_f
 check "scope: griglia 12r Market Validation pertinente" true "$(scope_for supabase/tests/12r_market_validation_foundation.sql)"
 check "scope: griglia 12s analytics MV pertinente" true "$(scope_for supabase/tests/12s_market_validation_admin_analytics.sql)"
 check "scope: griglia 12t QV2 pertinente" true "$(scope_for supabase/tests/12t_market_validation_questionnaire_qv2.sql)"
+check "scope: griglia 12u QV2 admin pertinente" true "$(scope_for supabase/tests/12u_market_validation_questionnaire_admin.sql)"
 check "scope: griglia 7c consegna e imballaggio pertinente" true "$(scope_for supabase/tests/7c_consegna_imballaggio.sql)"
 check "scope: config Supabase pertinente" true "$(scope_for supabase/config.toml)"
 check "scope: README saltato" false "$(scope_for README.md)"

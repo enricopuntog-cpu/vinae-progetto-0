@@ -1294,6 +1294,28 @@ fondazione.
   `final_feedback` è l'unica risposta facoltativa. Dopo `beta_completed` le
   porte MV1 rifiutano la sessione, perciò il POST passa soltanto dalle porte
   QV2. La griglia `12t` è nel gate DB effimero.
+- Dashboard admin QV2 (8 ottobre 2026, PR #191, migrazione
+  `20261008180000`): quattro
+  porte read-only `public.beta_validation_qv2_admin_{summary,participants,participant_detail,distributions}`,
+  `stable`, `security definer`, `search_path` vuoto, EXECUTE solo ad
+  `authenticated`, ognuna con il ricontrollo di `auth.uid()` e del ruolo admin
+  in `public.user_roles`. Un solo helper privato,
+  `private.beta_validation_qv2_admin_rows()`, fissa la regola di aggregazione
+  per tutte: una riga per `participant_code`; un codice con riga in
+  `private.beta_validation_qv2` è coorte QV2 e conta **solo** quella sessione
+  (prima per `started_at, id`), così una sessione legacy con lo stesso codice
+  non contamina risposte, eventi o KPI; un codice senza questionario è legacy e
+  somma tutte le sessioni come MV3. I denominatori QV2 escludono i legacy; Core
+  Beta (`beta_completed`) e Market Validation completa
+  (`validation_completed`) restano metriche distinte. Il dettaglio si chiede
+  per `participant_code` canonico, mai per UUID di sessione; nessuna porta
+  proietta capability, hash, metadata o dati di account. Le porte MV3 restano
+  invariate e il client admin non legge tabelle. La decodifica delle risposte
+  usa soltanto le label di `frontend-next/src/lib/market-validation/questionnaire.ts`.
+  La griglia `12u` è cablata nel gate DB effimero (42/42 alla PR #191).
+  L'export QV2 segue i filtri attivi: senza filtri è completo, con codice o
+  coorte il bottone dichiara «filtrato»; pagina fino a `total_count` e fallisce
+  invece di troncare.
 
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
