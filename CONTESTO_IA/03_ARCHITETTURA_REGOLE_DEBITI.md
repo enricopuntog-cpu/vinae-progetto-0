@@ -1294,8 +1294,8 @@ fondazione.
   `final_feedback` è l'unica risposta facoltativa. Dopo `beta_completed` le
   porte MV1 rifiutano la sessione, perciò il POST passa soltanto dalle porte
   QV2. La griglia `12t` è nel gate DB effimero.
-- Dashboard admin QV2 (8 ottobre 2026, BUILD su
-  `feature/market-validation-qv2-admin`, migrazione `20261008180000`): quattro
+- Dashboard admin QV2 (8 ottobre 2026, PR #191, migrazione
+  `20261008180000`): quattro
   porte read-only `public.beta_validation_qv2_admin_{summary,participants,participant_detail,distributions}`,
   `stable`, `security definer`, `search_path` vuoto, EXECUTE solo ad
   `authenticated`, ognuna con il ricontrollo di `auth.uid()` e del ruolo admin
@@ -1312,7 +1312,10 @@ fondazione.
   proietta capability, hash, metadata o dati di account. Le porte MV3 restano
   invariate e il client admin non legge tabelle. La decodifica delle risposte
   usa soltanto le label di `frontend-next/src/lib/market-validation/questionnaire.ts`.
-  La griglia `12u` è cablata nel gate DB effimero.
+  La griglia `12u` è cablata nel gate DB effimero (42/42 alla PR #191).
+  L'export QV2 segue i filtri attivi: senza filtri è completo, con codice o
+  coorte il bottone dichiara «filtrato»; pagina fino a `total_count` e fallisce
+  invece di troncare.
 
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 

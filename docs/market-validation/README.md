@@ -77,7 +77,7 @@ Regole di lettura:
 
 Export:
 
-- **Esporta CSV completo** — una riga per `participant_code`, UTF-8 con BOM, separatore `;`, CRLF, intestazioni stabili (identità, PRE Q01–Q13, comportamento, POST Q14–Q20, completamento). Le scelte multiple sono codici stabili nell'ordine registrato separati da ` | `. Le celle che iniziano con `=`, `+`, `-`, `@`, tab o ritorno a capo sono prefissate con `'`. L'export pagina fino al `total_count` e fallisce se le righe non coincidono: nessuna troncatura silenziosa.
+- **Esporta CSV completo** — una riga per `participant_code`; con un codice o una coorte attivi il bottone diventa **Esporta CSV filtrato** ed esporta solo quel perimetro (come il CSV MV3). Formato: UTF-8 con BOM, separatore `;`, CRLF, intestazioni stabili (identità, PRE Q01–Q13, comportamento, POST Q14–Q20, completamento). Le scelte multiple sono codici stabili nell'ordine registrato separati da ` | `. Le celle che iniziano con `=`, `+`, `-`, `@`, tab o ritorno a capo sono prefissate con `'`. L'export pagina fino al `total_count` e fallisce se le righe non coincidono: nessuna troncatura silenziosa.
 - **CSV MV3** — l'export originale per codice, invariato.
 
 Né la dashboard né i CSV contengono capability, hash, UUID di sessione, metadata, IP, user-agent o dati di account. La griglia `supabase/tests/12u_market_validation_questionnaire_admin.sql` prova queste regole nel gate DB effimero.
