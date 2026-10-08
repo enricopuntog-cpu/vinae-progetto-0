@@ -1329,7 +1329,11 @@ fondazione.
   capability QV2 in una chiave propria (`vinea:market-validation:qv2-session:v1`)
   e non la cancella più al GRAZIE: ricarica e riapertura restano sul test
   concluso dello stesso codice, e solo «Fai provare Vinea a un'altra persona»
-  la libera. La griglia `12v` è cablata nel gate DB effimero.
+  la libera. La griglia `12v` è cablata nel gate DB effimero (24/24 alla PR
+  #193, merge `f4e3fc2`). In produzione la migrazione è applicata
+  dall'integrazione e verificata (colonne, CHECK, corpi md5, ACL, dinieghi);
+  `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=true` è attiva nel solo contesto
+  production di Netlify dall'8 ottobre 2026.
 
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
