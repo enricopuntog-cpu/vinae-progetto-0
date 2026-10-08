@@ -44,7 +44,7 @@ Questa procedura non abilita e non deve abilitare `AI_ENABLED`, `PAYMENTS_ENABLE
 
 ### Questionario digitale QV2
 
-Il questionario (PRE Q1–Q13 → guida Prova Vinea → POST Q14–Q20 → feedback facoltativo → GRAZIE) si aggiunge alle due variabili sopra con il flag **solo server**:
+Il questionario (PRE Q1–Q13 → Prova Vinea con cinque prove obbligatorie → POST Q14–Q20 → feedback facoltativo → GRAZIE) si aggiunge alle due variabili sopra con il flag **solo server**:
 
 ```text
 MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=true
@@ -54,11 +54,17 @@ Il valore si legge a runtime nelle funzioni Netlify: dopo averlo cambiato serve 
 
 Comportamento per il tester, senza codici manuali, QR obbligatori, account, email o pagamenti:
 
-- la landing («Aiutaci a creare il futuro di Vinea», CTA **INIZIA IL TEST**) non ha campi: il `participant_code` lo assegna il database;
+- la landing mostra l'immagine approvata `frontend-next/public/images/market-validation/vinea-market-validation-cover.webp` (WebP 1024 × 1536, convertita senza ritocchi dal file approvato; su smartphone card 4:5 ritagliata dall'alto, su desktop intera accanto al testo), poi il copy («Aiutaci a creare il futuro di Vinea», CTA **INIZIA IL TEST**). Non ha campi: il `participant_code` lo assegna il database e, se l'avvio non restituisce un codice valido, il questionario non parte e la landing mostra l'errore;
+- il codice reale restituito dal server compare come badge **Test Vxxx** in alto su PRE, hub, moduli e POST, e come **Codice test: Vxxx** sotto «Test completato» nella schermata GRAZIE;
+- ogni scelta multipla dichiara la regola sotto il titolo: «Scegline massimo N» quando la domanda ha un massimo (Q7: 3, Q19: 2, applicati anche dal database), altrimenti «Puoi selezionare più risposte» (Q5, azioni di Q10);
+- la Prova Vinea ha cinque prove obbligatorie, ciascuna completata solo da un evento accettato dal server: **Acquisto** = `checkout_beta_completed`, **Vendita** = `sell_completed`, **Vinea AI** = `ai_preview_viewed` (`ai_interest_clicked` resta facoltativo), **Club** = `club_viewed`, **Cantina** = `cellar_viewed`, registrato all'apertura della schermata Cantina e mai dalla card dell'hub. L'hub mostra «N di 5 completate» e ogni card «Da provare» o «Completato»; il pulsante resta «Completa le 5 prove per continuare» fino a 5/5, poi «CONTINUA CON LE ULTIME DOMANDE». Tornando all'hub lo stato si rilegge dal server;
 - il browser conserva la sola capability QV2 nella chiave `vinea:market-validation:qv2-session:v1`, separata da quella della guida legacy: una capability MV1 rimasta nel browser non blocca il questionario;
 - ricarica e riapertura riprendono la fase aperta sul server; a test concluso restano sulla schermata GRAZIE dello **stesso** codice;
 - solo il comando esplicito **Fai provare Vinea a un'altra persona** libera la sessione locale e torna alla landing; il nuovo codice nasce al successivo **INIZIA IL TEST**;
-- Q7 (massimo 3) e Q19 (massimo 2) includono «Altro», che conta nel massimo e richiede il campo **Specifica** (1–500 caratteri); una specifica senza «Altro» viene rifiutata dal database.
+- Q7 (massimo 3) e Q19 (massimo 2) includono «Altro», che conta nel massimo e richiede il campo **Specifica** (1–500 caratteri); una specifica senza «Altro» viene rifiutata dal database;
+- Q15 chiede: «Se Vinea fosse già operativa e le bottiglie mostrate fossero realmente disponibili, avresti preso seriamente in considerazione un acquisto?» (Sì/No, «Perché?» sul No; codici `yes`/`no` invariati).
+
+Regola autoritativa delle cinque prove (migrazione `20261008230000_market_validation_qv2_five_areas.sql`): `experience_completed` è uno stato **derivato** dal database, vero solo se la sessione QV2 ha registrato tutti e cinque gli eventi (`private.beta_validation_qv2_experience_completed`). Non è un evento e non esiste un booleano client. Per una sessione QV2 la porta eventi rifiuta `beta_completed` sotto 5/5 e `beta_validation_qv2_finish_post` rifiuta `validation_completed` senza PRE + 5/5 + `beta_completed` + POST; un client manipolato riceve 22023. Le sessioni MV1/legacy mantengono la semantica originale. Una sessione QV2 chiusa con la regola precedente (Acquisto + Vendita) non viene reinterpretata: il tester vede una schermata che propone di ricominciare con un nuovo codice e la dashboard la segnala come «chiusa con la regola precedente», senza attribuire visite mai registrate.
 
 ## Disattivazione immediata
 
@@ -75,11 +81,11 @@ Dopo la disattivazione verificare che `/beta-test` risponda con 404 e che non si
 
 Accesso: sessione autenticata e ruolo `admin` reale in `public.user_roles`, controllati dalla pagina e di nuovo da ogni RPC. La dashboard è in sola lettura e non dipende da `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED`: può essere distribuita prima che il questionario pubblico venga attivato, e senza dati QV2 mostra gli stati vuoti.
 
-Porte (migrazione `20261008180000_market_validation_qv2_admin.sql`, tutte `stable`, `security definer`, `search_path` vuoto, EXECUTE solo ad `authenticated`):
+Porte (migrazione `20261008180000_market_validation_qv2_admin.sql`, aggiornate da `20261008220000` e `20261008230000`; tutte `stable`, `security definer`, `search_path` vuoto, EXECUTE solo ad `authenticated`):
 
-- `beta_validation_qv2_admin_summary()` — KPI della coorte QV2 (test iniziati, PRE, acquisto, vendita, Core Beta, POST, Market Validation completa, completion rate) e metriche legacy separate;
-- `beta_validation_qv2_admin_participants(codice, coorte, limit, offset)` — una riga per `participant_code` con stato, conteggi eventi e risposte Q01–Q20 (con le specifiche `q07_other` e `q19_other`); limit 1–200, offset 0–999, `total_count` per la paginazione;
-- `beta_validation_qv2_admin_participant_detail(codice)` — risposte, eventi e timestamp di completion di un solo codice; `null` se il codice non esiste;
+- `beta_validation_qv2_admin_summary()` — KPI della coorte QV2 (test iniziati, PRE, acquisto, vendita, Vinea AI, Club, Cantina, Prova Vinea 5/5, Core Beta, POST, Market Validation completa, completion rate) e metriche legacy separate;
+- `beta_validation_qv2_admin_participants(codice, coorte, limit, offset)` — una riga per `participant_code` con stato, conteggi eventi (`cellar_viewed` compreso), `experience_completed` e risposte Q01–Q20 (con le specifiche `q07_other` e `q19_other`); limit 1–200, offset 0–999, `total_count` per la paginazione;
+- `beta_validation_qv2_admin_participant_detail(codice)` — risposte, eventi (14, Cantina compresa), `experienceCompleted` e timestamp di completion di un solo codice; `null` se il codice non esiste. Il dettaglio mostra PRE, ACQUISTO, VENDITA, AI, CLUB, CANTINA, EXPERIENCE n/5, POST e COMPLETE;
 - `beta_validation_qv2_admin_distributions()` — conteggi per opzione e base rispondenti delle domande chiuse.
 
 Le porte MV3 `beta_validation_admin_summary` e `beta_validation_admin_participants` restano invariate.
@@ -88,14 +94,15 @@ Regole di lettura:
 
 - **Coorte QV2**: codici con una sessione in `private.beta_validation_qv2`. Per loro contano solo quella sessione, le sue risposte e i suoi eventi; un'eventuale sessione legacy con lo stesso codice non si mescola. I denominatori QV2 non includono mai i tester legacy.
 - **Legacy**: codici senza questionario; come in MV3 i conteggi sommano tutte le sessioni del codice. Le colonne del questionario restano vuote.
-- **Core Beta** = `beta_completed` (guida conclusa). **Market Validation completa** = `validation_completed` (POST chiuso). Non sono la stessa metrica.
-- Funnel: ogni passaggio conta i codici QV2 che hanno raggiunto il traguardo, con base fissa sui test iniziati; acquisto e vendita sono percorsi indipendenti.
+- **Prova Vinea 5/5** = `experience_completed` (cinque aree registrate). **Core Beta** = `beta_completed` (Prova Vinea chiusa; per i nuovi test QV2 possibile solo a 5/5). **Market Validation completa** = `validation_completed` (POST chiuso). Non sono la stessa metrica.
+- Tabella tester: PRE, BUY, SELL, AI, CLUB, CELLAR, 5/5, POST, FULL.
+- Funnel: ogni passaggio conta i codici QV2 che hanno raggiunto il traguardo, con base fissa sui test iniziati; le cinque aree sono percorsi indipendenti, poi Prova Vinea 5/5, POST e Market Validation completa.
 - Distribuzioni: solo risposte registrate; base = rispondenti della domanda. Per Q5, Q7 e Q19 (scelte multiple) la somma delle percentuali può superare il 100%.
 - Le risposte aperte (Q8, Q17, Q18), i campi condizionali e il feedback finale si leggono nel dettaglio del tester e nel CSV; nessuna classificazione automatica.
 
 Export:
 
-- **Esporta CSV completo** — una riga per `participant_code`; con un codice o una coorte attivi il bottone diventa **Esporta CSV filtrato** ed esporta solo quel perimetro (come il CSV MV3). Formato: UTF-8 con BOM, separatore `;`, CRLF, intestazioni stabili (identità, PRE Q01–Q13, comportamento, POST Q14–Q20, completamento; 54 colonne, con `q07_other` dopo `q07_private_purchase_concerns` e `q19_other` dopo `q19_important_services`). Le scelte multiple sono codici stabili nell'ordine registrato separati da ` | `. Le celle che iniziano con `=`, `+`, `-`, `@`, tab o ritorno a capo sono prefissate con `'`. L'export pagina fino al `total_count` e fallisce se le righe non coincidono: nessuna troncatura silenziosa.
+- **Esporta CSV completo** — una riga per `participant_code`; con un codice o una coorte attivi il bottone diventa **Esporta CSV filtrato** ed esporta solo quel perimetro (come il CSV MV3). Formato: UTF-8 con BOM, separatore `;`, CRLF, intestazioni stabili (identità, PRE Q01–Q13, comportamento, POST Q14–Q20, completamento; 56 colonne, con `q07_other` dopo `q07_private_purchase_concerns`, `q19_other` dopo `q19_important_services` e, nel blocco comportamento, `ai_preview_viewed`, `ai_interest_clicked`, `club_viewed`, `cellar_viewed` ed `experience_completed`). Le scelte multiple sono codici stabili nell'ordine registrato separati da ` | `. Le celle che iniziano con `=`, `+`, `-`, `@`, tab o ritorno a capo sono prefissate con `'`. L'export pagina fino al `total_count` e fallisce se le righe non coincidono: nessuna troncatura silenziosa.
 - **CSV MV3** — l'export originale per codice, invariato.
 
-Né la dashboard né i CSV contengono capability, hash, UUID di sessione, metadata, IP, user-agent o dati di account. Le griglie `supabase/tests/12u_market_validation_questionnaire_admin.sql` e `supabase/tests/12v_market_validation_qv2_other_options.sql` (opzione «Altro» di Q7/Q19, percorso completo e resume dopo la chiusura) provano queste regole nel gate DB effimero.
+Né la dashboard né i CSV contengono capability, hash, UUID di sessione, metadata, IP, user-agent o dati di account. Le griglie `supabase/tests/12u_market_validation_questionnaire_admin.sql` , `supabase/tests/12v_market_validation_qv2_other_options.sql` (opzione «Altro» di Q7/Q19, percorso completo e resume dopo la chiusura) e `supabase/tests/12w_market_validation_qv2_five_areas.sql` (cinque aree, rifiuti sotto 5/5, regola precedente non reinterpretata, MV1 invariata) provano queste regole nel gate DB effimero.
