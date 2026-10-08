@@ -4,16 +4,18 @@
 - Beta Test anonimo (PR #198, merge `ea81597`, nessuna migrazione): causa del login riprodotta in produzione con un browser pulito più un cookie di sessione Supabase non valido. L'AgeGate globale copriva `/beta-test` con «Verifica dell'accesso…» e, con un qualunque cookie di sessione, rimandava a `/completa-profilo` (flusso account con email, password e Google); le porte server MV inoltravano inoltre quel JWT a PostgREST e l'assegnazione del codice falliva (PGRST301). Ora `/beta-test` è esente dall'AgeGate e ogni porta MV usa un client anon senza cookie; RPC, ACL e `/admin/beta-validation` invariati; ledger produzione invariato a 81 migrazioni.
 - Verifica locale (stack Supabase CLI 2.117.0 con tutte le migrazioni, browser senza cookie né storage): landing → INIZIA IL TEST → PRE 13/13 → Acquisto, Vendita, Vinea AI, Club, Cantina (5/5) → POST → GRAZIE con codice, URL sempre `/beta-test`, zero testi di accesso, zero utenti `auth.users`. Capability errata rifiutata (42501) su lettura, risposta ed evento; schema `private` non esposto; RPC admin negate ad `anon`.
 - Netlify `timely-lokum-43a12e`: deploy production `6ac7f9bddb28130008644682` READY su `ea81597`. In produzione: `/beta-test` senza overlay nell'HTML servito; con un cookie di sessione non valido resta su `/beta-test` (prima del fix andava a `/completa-profilo`); da browser vergine INIZIA IL TEST assegna V004 e apre la Domanda 1 senza cookie né login; `/admin/beta-validation` anonimo → `/accedi`. `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=true` nel solo contesto production, `PAYMENTS_ENABLED=false`.
+- Icone del marchio (PR #200, nessuna migrazione): il cuore in Safari/iPhone e nelle anteprime WhatsApp era `frontend-next/public/favicon.ico`, icona estranea al marchio servita da Netlify a `/favicon.ico`; `src/app/favicon.ico` (triangolo di scaffold) è rimosso. Favicon 16/32/48, icona 192, apple-touch-icon 180 e card social 1200×630 sono ritagli di `public/images/vinea-logo-scelto.png` (intatto), generati da `frontend-next/scripts/generate-brand-icons.mjs` in `public/brand/*-v1.*`; `src/lib/brand/metadata.ts` li dichiara nel layout radice, in `/` e in `/beta-test` (titolo «Prova Vinea» invariato) con Open Graph e Twitter `summary_large_image`.
 
 ## ACTIVE TASK
-- Nessuno: Beta Test anonimo in produzione, pronto per il pilot.
+- PR #200 icone del marchio: merge e verifica in produzione di `/favicon.ico`, apple-touch-icon e meta Open Graph/Twitter di `/beta-test`.
 
 ## NEXT STEPS
-1. Nuovo test di Enrico su iPhone in navigazione privata (nessuna sessione Vinea), fino al GRAZIE
-2. Verifica in admin del nuovo test (5/5, POST, FULL, CSV)
-3. Pilot 5 tester
+1. Verifica in produzione di favicon, apple-touch-icon e og:image (HTTP 200) dopo il merge della PR #200
+2. Nuovo test di Enrico su iPhone in navigazione privata (nessuna sessione Vinea), fino al GRAZIE
+3. Verifica in admin del nuovo test (5/5, POST, FULL, CSV), poi pilot 5 tester
 
 ## BLOCKERS / NOTES
+- Safari e WhatsApp tengono in cache icone e anteprime già viste: se il server serve già il sigillo Vinea, un cuore residuo sul dispositivo è cache del client, non un deploy fallito. Per cambiare il logo: rieseguire lo script e alzare il suffisso `-vN` in `public/brand/` e in `src/lib/brand/metadata.ts`.
 - V004 è la sessione di smoke anonimo in produzione (8 ottobre 2026, 20:16 UTC): solo `beta_started`, PRE non iniziato; conservata, non cancellata. Il prossimo tester riceverà V005. Le 7 sessioni precedenti (V001 ×3, V002, V003, V999 ×2) hanno impronte identiche a prima del merge.
 - Il caricamento di sfondo dei provider globali (Cantina, notifiche, messaggi) resta attivo anche su `/beta-test` quando il browser ha una sessione Vinea: è invisibile al tester e non condiziona il test, ma non è isolato.
 - Disattivazione immediata: `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=false` (o rimossa) e nuovo deploy da un commit che tocca `frontend-next/`; `/beta-test` torna alla guida senza questionario.
