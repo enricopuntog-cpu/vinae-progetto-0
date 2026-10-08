@@ -1,11 +1,11 @@
 ## CURRENT STATE
-- Market Validation MV1, MV2, MV3 e la guida autocontenuta (PR #188) sono CLOSED e online su `https://vineawineclub.com/beta-test` con le flag MV di produzione ON.
-- QV1 (questionario, PR #189/#190) e QV2 (dashboard admin, PR #191/#192) sono CLOSED; produzione Supabase `pijnmcllmfgjmgsvtcej` con 79 migrazioni fino a `20261008180000`.
-- Allineamento finale QV2 su questo branch: migrazione additiva `20261008220000_market_validation_qv2_other_options` (Q7/Q19 «Altro» con `q07_other`/`q19_other`, specifica obbligatoria solo con «Altro», conteggiata nel massimo), copy Q12/Q13 e micro-copy Q1–Q20 senza cambiare codici, landing approvata, GRAZIE persistente sullo stesso codice dopo ricarica/riapertura e nuovo tester solo con «Fai provare Vinea a un'altra persona»; capability QV2 in una chiave locale propria. Admin dettaglio/CSV (54 colonne) con le due specifiche.
-- Verifiche locali: `frontend-next` 2381 test (`MIN_TESTS` = 2381), lint 0 errori, typecheck e build verdi; griglie `12t` 16/16, `12u` 42/42 e nuova `12v` 24/24 su PGlite con le migrazioni reali; smoke E2E locale su Supabase simulato (landing → V001 → PRE con resume → acquisto e vendita simulati → POST → GRAZIE → ricarica e nuova scheda su V001 → nuovo tester V002; dashboard e CSV con le specifiche).
+- Market Validation MV1, MV2, MV3 e la guida autocontenuta (PR #188) sono CLOSED; QV1 (PR #189/#190) e QV2 admin (PR #191/#192) sono CLOSED.
+- Allineamento finale QV2 = MERGED: PR #193 squash in `f4e3fc2` (head `b1225fd`, sei check obbligatori verdi; gate DB effimero con ledger a 80 migrazioni, `12t` 16/16, `12u` 42/42, `12v` 24/24 e le altre griglie verdi; `frontend-next` 2381 test con `MIN_TESTS` = 2381). Q7/Q19 «Altro» con specifica, copy Q12/Q13, landing approvata, GRAZIE persistente sullo stesso codice, nuovo tester solo con «Fai provare Vinea a un'altra persona», capability QV2 in chiave locale propria, admin/CSV (54 colonne) con `q07_other`/`q19_other`.
+- Produzione Supabase `pijnmcllmfgjmgsvtcej`: l'integrazione ha applicato `20261008220000_market_validation_qv2_other_options` (ledger 80, versione identica al file). Colonne, CHECK, RLS on con 0 policy e nessun grant client verificati; md5 dei dieci corpi QV2 identici a quelli generati da `main`; `anon` e non-admin ricevono 42501 su porte admin, helper e tabella; admin reale legge le nuove colonne senza capability/UUID; 0 righe QV2.
+- Netlify `timely-lokum-43a12e`: `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=true` impostata l'8 ottobre 2026 solo nel contesto production, altre variabili invariate (`PAYMENTS_ENABLED=false`). Il flag è letto a runtime: si attiva con il deploy di produzione del merge di questa PR.
 
 ## ACTIVE TASK
-- QV2 FINAL FIX + ACTIVATE: dopo il merge verificare in produzione la migrazione `20261008220000` (ledger, colonne, CHECK, corpi, ACL, dinieghi anon/non-admin), attivare `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=true` sul solo contesto production di Netlify `timely-lokum-43a12e`, ridistribuire e verificare `/beta-test`.
+- Nessun task tecnico attivo: Questionnaire V2 è pronto per il test manuale di Enrico su `https://vineawineclub.com/beta-test`.
 
 ## NEXT STEPS
 1. Test manuale di Enrico su iPhone
@@ -13,6 +13,6 @@
 3. Pilot 5 tester
 
 ## BLOCKERS / NOTES
-- In produzione non va completato alcun test QV2 al posto di Enrico: il primo percorso reale è il suo test manuale.
-- Q5 conserva la semantica QV1: la specifica di «Altro» è obbligatoria nel client ma facoltativa per il database.
-- La scansione QR con smartphone resta NON VERIFICATA e non è richiesta dal flusso.
+- In produzione nessun test QV2 è stato completato al posto di Enrico: il primo percorso reale è il suo. I codici V001 e V999 sono già usati da sessioni legacy, quindi il primo codice QV2 sarà V002.
+- Il percorso completo (PRE, acquisto, vendita, POST, GRAZIE, ricarica, nuovo tester, dashboard e CSV) è verificato solo in locale su Supabase simulato con le migrazioni reali; con dati QV2 reali resta da verificare nel test manuale.
+- Disattivazione immediata: `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED=false` (o rimossa) e nuovo deploy; `/beta-test` torna alla guida senza questionario.
