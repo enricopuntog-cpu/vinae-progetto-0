@@ -482,13 +482,6 @@ describe("/auth/confirm — eseguito", () => {
     const risposta = await confermaCon(`?token_hash=${HASH}&type=email`);
     expect(destinazioneDi(risposta).parametri.get("errore")).toBe("configurazione-assente");
   });
-
-  it("HEAD (anteprime e scanner di posta) non consuma il token", async () => {
-    const risposta = conferma.HEAD();
-    expect(risposta.status).toBe(204);
-    expect(risposta.headers.get("location")).toBeNull();
-    expect(soloNome("verifyOtp")).toEqual([]);
-  });
 });
 
 // ---------------------------------------------------------------------------

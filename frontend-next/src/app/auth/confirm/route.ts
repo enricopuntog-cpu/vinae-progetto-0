@@ -37,7 +37,6 @@ export async function GET(request: NextRequest) {
     const risposta = NextResponse.redirect(`${origine}${percorso}`, 303);
     risposta.headers.set("X-Vinea-Origine-Sorgente", sorgente);
     risposta.headers.set("Cache-Control", "private, no-store");
-    risposta.headers.set("Referrer-Policy", "no-referrer");
     return risposta;
   };
 
@@ -68,15 +67,12 @@ export async function GET(request: NextRequest) {
   return vaiA(lettura.destinazione);
 }
 
-/**
- * Le anteprime dei client di posta e alcuni scanner provano i link con `HEAD`.
- * Senza questa funzione Next risponderebbe a `HEAD` eseguendo `GET`, cioè
- * consumando il token monouso prima che l'utente tocchi il link. Qui non si
- * verifica nulla e non si scrive alcun cookie.
+/*
+ * Nessun gestore `HEAD` dedicato, ed è una misura: sulla Deploy Preview della
+ * PR #202 una `HEAD` è arrivata a Supabase come `POST /verify` esattamente come
+ * la `GET`. Su Netlify raggiunge comunque il gestore `GET`, e un `HEAD` che
+ * risponde 204 proteggeva soltanto sotto `next start`. Uno scanner di posta che
+ * apre il link consuma quindi il token come con il link standard di Supabase:
+ * l'indirizzo risulta confermato e chi tocca il link dopo atterra su /accedi
+ * con il messaggio che lo invita ad accedere (`conferma-link-non-valido`).
  */
-export function HEAD() {
-  return new NextResponse(null, {
-    status: 204,
-    headers: { "Cache-Control": "private, no-store" },
-  });
-}

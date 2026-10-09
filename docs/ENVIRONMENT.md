@@ -403,11 +403,12 @@ Ammessi solo i tipi `email` e `signup`; da `redirect_to` si legge solo `next`
 (validato come percorso relativo), mai l'origine; gli errori tornano su
 `/accedi` come `conferma-link-non-valido` (scaduto o già usato — GoTrue non li
 distingue) o `conferma-non-riuscita`; il `token_hash` non entra in nessun
-`Location` né log; `HEAD` risponde 204 senza verificare, perché altrimenti Next
-eseguirebbe `GET` e consumerebbe il token alle anteprime dei client di posta.
-Uno scanner che apre il link con `GET` lo consuma comunque: in quel caso
-l'indirizzo risulta già confermato e l'utente atterra sul messaggio che lo
-manda ad accedere. Magic link, recupero password e OAuth restano su
+`Location` né log. Nessuna protezione `HEAD`, ed è una misura: sulla Deploy
+Preview della PR #202 una `HEAD` ha raggiunto il gestore `GET` ed è arrivata a
+Supabase come `POST /verify`, come la `GET`. Uno scanner di posta che apre il
+link consuma quindi il token, esattamente come con il link standard di
+Supabase: l'indirizzo risulta già confermato e l'utente atterra sul messaggio
+che lo manda ad accedere. Magic link, recupero password e OAuth restano su
 `/auth/callback`, invariati.
 
 **Template.** Copia versionata in `supabase/templates/confirm-signup.html`,
@@ -420,7 +421,7 @@ rimossi (il pulsante resta un link) e `{{ .RedirectTo }}` arriva
 percent-encoded. Resend resta il provider SMTP.
 
 **Ordine di attivazione in produzione.** Prima il deploy di `/auth/confirm` e
-del logo e la loro verifica (`HEAD` 204, `GET` con token non valido → 303 su
+del logo e la loro verifica (`GET` con token non valido → 303 su
 `/accedi?errore=conferma-link-non-valido`, logo 200), **poi** il template nel
 progetto Supabase: mai email che puntano a una route assente. Le email già
 inviate con il link vecchio continuano a funzionare nello stesso browser.
