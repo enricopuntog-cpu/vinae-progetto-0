@@ -138,6 +138,11 @@ va riscritto come se la decisione precedente non fosse mai esistita.
   Il mailer di prova incorporato in Supabase e il suo `over_email_send_rate_limit`
   non sono più la strada in uso. La chiave vive nel progetto Supabase, non nel
   repository.
+- Conferma email di registrazione: dal 9 ottobre 2026 il link è un
+  `token_hash` verificato dal server su `/auth/confirm`, non il `code` PKCE di
+  `/auth/callback`, che dipendeva dal browser della registrazione. Causa,
+  template versionato (`supabase/templates/confirm-signup.html`), ordine di
+  attivazione e rollback in `../docs/ENVIRONMENT.md`.
 - Ledger di produzione: **60 migrazioni verificate** al 22 settembre 2026.
   Il restore isolato del 22 settembre dal backup B2 ha confermato le 60
   migrazioni correnti, le policy, le funzioni e i dati delle 91 tabelle del dump.

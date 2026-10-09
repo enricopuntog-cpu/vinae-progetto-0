@@ -90,6 +90,8 @@ mock.module("@/lib/supabase/client", () => ({
 
 /** Esito dello scambio del code, deciso dal singolo caso. */
 let scambioFallisce: { message: string } | null = null;
+/** Esito di verifyOtp per /auth/confirm, deciso dal singolo caso. */
+let verificaFallisce: { message: string; code?: string; status?: number } | null = null;
 let clientServerAttivo = true;
 
 mock.module("@/lib/supabase/server", () => ({
@@ -101,6 +103,10 @@ mock.module("@/lib/supabase/server", () => ({
               chiamate.push({ nome: "exchangeCodeForSession", argomenti: [code] });
               return { error: scambioFallisce };
             },
+            verifyOtp: async (parametri: { token_hash: string; type: string }) => {
+              chiamate.push({ nome: "verifyOtp", argomenti: [parametri] });
+              return { data: {}, error: verificaFallisce };
+            },
           },
         }
       : null,
@@ -108,6 +114,7 @@ mock.module("@/lib/supabase/server", () => ({
 
 const { supabaseAuthService } = await import("@/services/auth-service");
 const { GET } = await import("@/app/auth/callback/route");
+const conferma = await import("@/app/auth/confirm/route");
 
 /**
  * Il servizio è un modulo client e compone la destinazione di rientro
@@ -139,6 +146,7 @@ beforeEach(() => {
   navigazioni.length = 0;
   erroreProvider = null;
   scambioFallisce = null;
+  verificaFallisce = null;
   clientBrowserAttivo = true;
   clientServerAttivo = true;
   utenteSessione = null;
@@ -377,6 +385,102 @@ describe("/auth/callback — gli altri flussi non sono cambiati", () => {
     const { percorso, parametri } = destinazioneDi(risposta);
     expect(percorso).toBe("/accedi");
     expect(parametri.get("next")).toBe("/cantina");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// /auth/confirm: conferma della registrazione con token_hash
+// ---------------------------------------------------------------------------
+
+/** Forma di un token_hash GoTrue, non un token reale. */
+const HASH = "c".repeat(56);
+
+const confermaCon = (query: string) =>
+  conferma.GET(new NextRequest(`https://vinea.test/auth/confirm${query}`));
+
+describe("/auth/confirm — eseguito", () => {
+  it("un link valido verifica dal server e apre la sessione senza code_verifier", async () => {
+    const risposta = await confermaCon(`?token_hash=${HASH}&type=email`);
+
+    // La prova di possesso è il token_hash: nessuno scambio PKCE, quindi nessun
+    // bisogno del browser in cui è avvenuta la registrazione.
+    expect(soloNome("verifyOtp")).toEqual([
+      { nome: "verifyOtp", argomenti: [{ token_hash: HASH, type: "email" }] },
+    ]);
+    expect(soloNome("exchangeCodeForSession")).toEqual([]);
+    expect(risposta.status).toBe(303);
+    const { percorso, href } = destinazioneDi(risposta);
+    expect(percorso).toBe("/home");
+    // Il token non sopravvive nell'URL finale.
+    expect(href).not.toInclude(HASH);
+    expect(href).not.toInclude("token_hash");
+    expect(risposta.headers.get("cache-control")).toInclude("no-store");
+  });
+
+  it("la destinazione arriva da redirect_to del template, l'origine no", async () => {
+    const redirectTo = encodeURIComponent(
+      "https://evil.example/auth/callback?superficie=registrati&next=%2Faccount",
+    );
+    const risposta = await confermaCon(`?token_hash=${HASH}&type=email&redirect_to=${redirectTo}`);
+    const { percorso, href } = destinazioneDi(risposta);
+    expect(percorso).toBe("/account");
+    expect(href.startsWith("https://vinea.test/")).toBe(true);
+    expect(href).not.toInclude("evil.example");
+  });
+
+  it("un redirect non attendibile ricade su /home", async () => {
+    const risposta = await confermaCon(
+      `?token_hash=${HASH}&type=email&next=%2F%2Fevil.example`,
+    );
+    const { percorso, href } = destinazioneDi(risposta);
+    expect(percorso).toBe("/home");
+    expect(href).not.toInclude("evil.example");
+  });
+
+  it("link scaduto o già usato: /accedi con un messaggio mediato", async () => {
+    verificaFallisce = {
+      code: "otp_expired",
+      status: 403,
+      message: "Email link is invalid or has expired",
+    };
+    const risposta = await confermaCon(`?token_hash=${HASH}&type=email&next=%2Faccount`);
+    const { percorso, parametri, href } = destinazioneDi(risposta);
+    expect(percorso).toBe("/accedi");
+    expect(parametri.get("errore")).toBe("conferma-link-non-valido");
+    expect(parametri.get("next")).toBe("/account");
+    expect(href).not.toInclude("expired");
+    expect(href).not.toInclude(HASH);
+  });
+
+  it("riaprire lo stesso link non apre una seconda sessione", async () => {
+    await confermaCon(`?token_hash=${HASH}&type=email`);
+    verificaFallisce = { code: "otp_expired", status: 403, message: "One-time token not found" };
+    const seconda = await confermaCon(`?token_hash=${HASH}&type=email`);
+    expect(soloNome("verifyOtp").length).toBe(2);
+    expect(destinazioneDi(seconda).parametri.get("errore")).toBe("conferma-link-non-valido");
+  });
+
+  it("un tipo OTP diverso dalla conferma non raggiunge il provider", async () => {
+    for (const tipo of ["recovery", "magiclink", "invite", "email_change"]) {
+      const risposta = await confermaCon(`?token_hash=${HASH}&type=${tipo}`);
+      expect(destinazioneDi(risposta).parametri.get("errore")).toBe("conferma-link-non-valido");
+    }
+    expect(soloNome("verifyOtp")).toEqual([]);
+  });
+
+  it("un errore sconosciuto del provider non arriva all'utente", async () => {
+    verificaFallisce = { status: 500, message: "Database error finding user: dettaglio interno" };
+    const risposta = await confermaCon(`?token_hash=${HASH}&type=email`);
+    const { parametri, href } = destinazioneDi(risposta);
+    expect(eCodiceDelVocabolario(parametri.get("errore"))).toBe(true);
+    expect(parametri.get("errore")).toBe("conferma-non-riuscita");
+    expect(href).not.toInclude("Database");
+  });
+
+  it("senza configurazione Supabase non verifica e lo dice senza dettagli", async () => {
+    clientServerAttivo = false;
+    const risposta = await confermaCon(`?token_hash=${HASH}&type=email`);
+    expect(destinazioneDi(risposta).parametri.get("errore")).toBe("configurazione-assente");
   });
 });
 

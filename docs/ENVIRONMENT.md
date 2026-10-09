@@ -380,6 +380,54 @@ riguarda le email transazionali del backend legacy, che restano non
 configurate. Il mailer di prova incorporato, con il suo
 `over_email_send_rate_limit`, non è più la strada in uso.
 
+### Conferma email di registrazione — `token_hash` su `/auth/confirm` (9 ottobre 2026)
+
+**Causa misurata.** Il template «Confirm signup» standard usa
+`{{ .ConfirmationURL }}`: `/auth/v1/verify` conferma l'indirizzo e rimanda a
+`/auth/callback?code=…`, il cui scambio PKCE richiede il `code_verifier` che
+`signUp` ha scritto nei cookie del **browser che ha registrato**. Il 9 ottobre
+2026 (progetto `pijnmcllmfgjmgsvtcej`) una registrazione da Chrome iOS è stata
+confermata da Safari iOS: nei log Auth `/signup` 17:42:26, `/verify` riuscito
+17:42:56 (`user_signedup`), seconda apertura 17:43:11 «One-time token not
+found», login con password 17:44:08, e **nessuna** `POST /token?grant_type=pkce`
+dopo la conferma — auth-js fallisce prima della rete. Lo stesso esito è stato
+riprodotto sullo stack locale (CLI 2.117.0, tutte le migrazioni) con il link
+vecchio aperto senza i cookie del verifier: `/registrati?errore=scambio-non-riuscito`
+e nel log del server `PKCE code verifier not found in storage`.
+
+**Correzione.** Flusso Supabase SSR documentato: il template punta a
+`{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&redirect_to={{ .RedirectTo }}`
+e la route `frontend-next/src/app/auth/confirm/route.ts` esegue `verifyOtp`
+dal server, scrivendo la sessione nei cookie del browser che apre il link.
+Ammessi solo i tipi `email` e `signup`; da `redirect_to` si legge solo `next`
+(validato come percorso relativo), mai l'origine; gli errori tornano su
+`/accedi` come `conferma-link-non-valido` (scaduto o già usato — GoTrue non li
+distingue) o `conferma-non-riuscita`; il `token_hash` non entra in nessun
+`Location` né log. Nessuna protezione `HEAD`, ed è una misura: sulla Deploy
+Preview della PR #202 una `HEAD` ha raggiunto il gestore `GET` ed è arrivata a
+Supabase come `POST /verify`, come la `GET`. Uno scanner di posta che apre il
+link consuma quindi il token, esattamente come con il link standard di
+Supabase: l'indirizzo risulta già confermato e l'utente atterra sul messaggio
+che lo manda ad accedere. Magic link, recupero password e OAuth restano su
+`/auth/callback`, invariati.
+
+**Template.** Copia versionata in `supabase/templates/confirm-signup.html`,
+collegata a `[auth.email.template.confirmation]` di `supabase/config.toml` per
+gli stack locali e CI. Oggetto «Conferma la tua email | Vinea Wine Club», logo
+`https://vineawineclub.com/brand/vinea-email-logo-240-v1.png` (ritaglio del
+logo approvato generato da `scripts/generate-brand-icons.mjs`). GoTrue rende il
+template con `html/template`: i commenti condizionali per Outlook vengono
+rimossi (il pulsante resta un link) e `{{ .RedirectTo }}` arriva
+percent-encoded. Resend resta il provider SMTP.
+
+**Ordine di attivazione in produzione.** Prima il deploy di `/auth/confirm` e
+del logo e la loro verifica (`GET` con token non valido → 303 su
+`/accedi?errore=conferma-link-non-valido`, logo 200), **poi** il template nel
+progetto Supabase: mai email che puntano a una route assente. Le email già
+inviate con il link vecchio continuano a funzionare nello stesso browser.
+Rollback: ripristinare nel progetto il template precedente
+(`{{ .ConfirmationURL }}`); la route può restare distribuita senza effetti.
+
 ### Matrice della beta Netlify
 
 I default versionati in `.env.example` restano tutti `false`. Il Deploy Preview

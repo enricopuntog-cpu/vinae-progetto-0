@@ -243,6 +243,13 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
+# Conferma della registrazione: link token_hash verso /auth/confirm, verificato
+# dal server (frontend-next/src/app/auth/confirm/route.ts). È la copia
+# versionata del template attivo in produzione; vedi docs/ENVIRONMENT.md.
+[auth.email.template.confirmation]
+subject = "Conferma la tua email | Vinea Wine Club"
+content_path = "./supabase/templates/confirm-signup.html"
+
 # Uncomment to customize email template
 # [auth.email.template.invite]
 # subject = "You have been invited"

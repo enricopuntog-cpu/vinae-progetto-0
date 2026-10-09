@@ -27,6 +27,7 @@ export const outputs = Object.freeze({
   appleTouchIcon: new URL("brand/vinea-apple-touch-icon-180-v1.png", publicDirectory),
   appleTouchIconRoot: new URL("apple-touch-icon.png", publicDirectory),
   openGraph: new URL("brand/vinea-og-1200x630-v1.jpg", publicDirectory),
+  emailLogo: new URL("brand/vinea-email-logo-240-v1.png", publicDirectory),
 });
 
 /** Il disco del sigillo su fondo trasparente, quadrato `size`×`size`. */
@@ -119,7 +120,15 @@ export async function renderBrandIcons() {
     .resize(1200, 630, { kernel: "lanczos3" })
     .jpeg({ quality: 88, mozjpeg: true })
     .toBuffer();
-  return { favicon, icon192, appleTouchIcon, appleTouchIconRoot: appleTouchIcon, openGraph };
+  // Email di Auth (supabase/templates/): sigillo sul fondo crema, 240 px per
+  // una resa nitida a 120 px sugli schermi ad alta densità e un peso adatto
+  // ai client di posta, che il logo sorgente da 600 KB non ha.
+  const emailLogo = await logoCrop({ width: 596, height: 596 })
+    .resize(240, 240, { kernel: "lanczos3" })
+    .flatten({ background: CREAM })
+    .png({ compressionLevel: 9, palette: true, quality: 90 })
+    .toBuffer();
+  return { favicon, icon192, appleTouchIcon, appleTouchIconRoot: appleTouchIcon, openGraph, emailLogo };
 }
 
 async function main() {
