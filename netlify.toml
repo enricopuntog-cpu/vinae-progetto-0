@@ -27,3 +27,14 @@
     Content-Security-Policy = "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
     Content-Security-Policy-Report-Only = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://pijnmcllmfgjmgsvtcej.supabase.co; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://pijnmcllmfgjmgsvtcej.supabase.co wss://pijnmcllmfgjmgsvtcej.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; report-uri /api/security/csp-report; report-to csp"
     Reporting-Endpoints = "csp=\"/api/security/csp-report\""
+
+# Asset pubblici del marchio (logo delle email, icone, card social): devono
+# caricarsi anche fuori dal sito. Con CORP same-origin i client che aprono le
+# email in una WebView (Outlook iOS, Apple Mail senza proxy) rifiutano il logo
+# (net::ERR_BLOCKED_BY_RESPONSE.NotSameOrigin), misurato il 9 ottobre 2026. I
+# file hanno un suffisso di versione `-vN`, quindi la cache pubblica è sicura.
+[[headers]]
+  for = "/brand/*"
+  [headers.values]
+    Cross-Origin-Resource-Policy = "cross-origin"
+    Cache-Control = "public, max-age=86400"

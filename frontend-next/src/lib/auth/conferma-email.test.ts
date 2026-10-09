@@ -156,4 +156,19 @@ describe("vocabolario e template", () => {
     expect(template).toInclude('lang="it"');
     expect(template).toInclude("Conferma la mia email");
   });
+
+  it("il nome del club resta testo HTML anche se il client blocca il logo", () => {
+    const template = readFileSync(
+      join(process.cwd(), "..", "supabase", "templates", "confirm-signup.html"),
+      "utf8",
+    );
+    const logo = /<img [^>]*vinea-email-logo-[^>]*>/.exec(template)![0];
+    // Un logo bloccato lascia un riquadro piccolo, non il nome del club.
+    expect(logo).toInclude('width="80"');
+    expect(logo).toInclude('height="80"');
+    // Il nome segue il logo come testo, fuori da ogni immagine.
+    expect(template.slice(template.indexOf(logo) + logo.length)).toMatch(/^\s*<p [^>]*>\s*VINEA WINE CLUB\s*<\/p>/);
+    // Nessuna immagine incorporata: Supabase Auth non gestisce allegati o CID.
+    expect(template).not.toMatch(/src="(data|cid):/);
+  });
 });

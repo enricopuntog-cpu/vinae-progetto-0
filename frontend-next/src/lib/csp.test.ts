@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { NextRequest } from "next/server";
 import { buildPageCsp } from "./csp";
-import { proxy } from "../proxy";
+import { config, proxy } from "../proxy";
 
 const nonce = Buffer.from("a-test-nonce-with-enough-entropy").toString("base64");
 describe("CSP enforcing delle pagine", () => {
@@ -43,5 +43,13 @@ describe("CSP enforcing delle pagine", () => {
     expect(policy).toContain(first.headers.get("x-middleware-request-x-nonce")!);
     expect(first.headers.get("Cache-Control")).toBe("private, no-store");
     expect(first.headers.get("Netlify-CDN-Cache-Control")).toBe("no-store");
+  });
+  it("lascia gli asset del marchio alla CDN, senza no-store", () => {
+    const coperto = (percorso: string) => config.matcher.some((m) => new RegExp(`^${m}$`).test(percorso));
+    expect(coperto("/brand/vinea-email-logo-240-v1.png")).toBe(false);
+    expect(coperto("/images/vinea-logo-scelto.png")).toBe(false);
+    expect(coperto("/accedi")).toBe(true);
+    expect(coperto("/auth/confirm")).toBe(true);
+    expect(coperto("/brandizzato")).toBe(true);
   });
 });

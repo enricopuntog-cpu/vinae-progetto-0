@@ -23,6 +23,7 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // Include RSC/prefetch requests as well: never let a forged prefetch header
-  // bypass the policy on a document navigation. Static assets don't need nonce.
-  matcher: ["/((?!api/|_next/static/|_next/image|images/|favicon.ico|robots.txt|sitemap.xml).*)"],
+  // bypass the policy on a document navigation. Static assets don't need nonce;
+  // brand/ also carries the email logo, which must not get `private, no-store`.
+  matcher: ["/((?!api/|_next/static/|_next/image|images/|brand/|favicon.ico|robots.txt|sitemap.xml).*)"],
 };
