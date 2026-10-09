@@ -420,6 +420,32 @@ template con `html/template`: i commenti condizionali per Outlook vengono
 rimossi (il pulsante resta un link) e `{{ .RedirectTo }}` arriva
 percent-encoded. Resend resta il provider SMTP.
 
+**Logo nei client di posta (PR #203).** Il primo invio reale (Outlook iOS)
+mostrava il segnaposto di immagine non caricata. Il file era pubblicato e
+integro (200, `image/png`, impronta del repository); la causa era l'header
+`Cross-Origin-Resource-Policy: same-origin` che `netlify.toml` applica a ogni
+file statico: un client che apre l'email in una WebView e carica l'immagine
+direttamente (Outlook iOS, Apple Mail senza proxy) la rifiuta
+(`net::ERR_BLOCKED_BY_RESPONSE.NotSameOrigin`, riprodotto in Chromium da
+un'altra origine). Gmail non è colpito perché scarica dal proprio proxy. Ora
+`/brand/*` ha una regola propria (`cross-origin`, `public, max-age=86400`) ed è
+escluso dal Proxy Next.js, che gli dava `private, no-store`; il resto del sito
+resta `same-origin` (Deploy Preview della PR #203: su `/brand/*` Netlify serve
+il solo valore `cross-origin`, non una combinazione delle due regole). Il
+template mostra il logo a 80px con `alt=""` e, subito
+sotto, «VINEA WINE CLUB» come testo HTML: con le immagini bloccate per privacy
+resta un riquadro piccolo e il nome del club. Niente immagini base64, CID o
+allegati: GoTrue invia un solo corpo HTML.
+
+**Avatar del mittente.** Il cerchio con le iniziali «VW» è l'avatar generato
+dal client per un mittente senza logo. DNS misurato il 9 ottobre 2026: DKIM
+Resend (`resend._domainkey`) e SPF del dominio di ritorno `send.` presenti;
+DMARC `p=none`; nessun record BIMI. BIMI richiede DMARC in applicazione
+(`p=quarantine` o `p=reject`), un logo SVG Tiny PS e, per Gmail e Apple Mail,
+un certificato VMC (marchio registrato) o, solo per Gmail, CMC; Outlook (iOS,
+Outlook.com, Microsoft 365) non mostra BIMI. Nessun record DNS è stato
+modificato e nessun certificato acquistato: sono decisioni del titolare.
+
 **Ordine di attivazione in produzione.** Prima il deploy di `/auth/confirm` e
 del logo e la loro verifica (`GET` con token non valido → 303 su
 `/accedi?errore=conferma-link-non-valido`, logo 200), **poi** il template nel

@@ -142,7 +142,10 @@ va riscritto come se la decisione precedente non fosse mai esistita.
   `token_hash` verificato dal server su `/auth/confirm`, non il `code` PKCE di
   `/auth/callback`, che dipendeva dal browser della registrazione. Causa,
   template versionato (`supabase/templates/confirm-signup.html`), ordine di
-  attivazione e rollback in `../docs/ENVIRONMENT.md`.
+  attivazione e rollback in `../docs/ENVIRONMENT.md`. Gli asset di `/brand/*`
+  sono serviti con `Cross-Origin-Resource-Policy: cross-origin` perché il logo
+  si carica dentro i client di posta; stato DMARC/BIMI del mittente nello
+  stesso documento.
 - Ledger di produzione: **60 migrazioni verificate** al 22 settembre 2026.
   Il restore isolato del 22 settembre dal backup B2 ha confermato le 60
   migrazioni correnti, le policy, le funzioni e i dati delle 91 tabelle del dump.
