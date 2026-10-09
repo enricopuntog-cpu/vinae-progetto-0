@@ -55,6 +55,12 @@ export const supabaseAuthService: AuthService = {
         // ricadeva in silenzio sul Site URL, cioè http://localhost:3000, dove
         // l'utente vedeva una pagina irraggiungibile e credeva che la
         // registrazione fosse fallita — mentre la conferma era già avvenuta.
+        //
+        // Dal 9 ottobre 2026 il template «Confirm signup» non usa più questo
+        // URL come link: punta a /auth/confirm con `token_hash`, verificato dal
+        // server, e da qui legge soltanto `next` (`{{ .RedirectTo }}`). Vedi
+        // lib/auth/conferma-email.ts: il vecchio link richiedeva il
+        // `code_verifier` del browser che ha registrato.
         emailRedirectTo: urlRitornoAuthDalBrowser(contesto),
       },
     });

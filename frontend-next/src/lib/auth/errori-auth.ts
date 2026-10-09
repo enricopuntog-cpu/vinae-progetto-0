@@ -32,6 +32,8 @@ export const CODICI_ERRORE_AUTH = [
   "oauth-avvio-non-riuscito",
   "callback-senza-codice",
   "scambio-non-riuscito",
+  "conferma-link-non-valido",
+  "conferma-non-riuscita",
   "configurazione-assente",
   "recupero-non-inviato",
   "sessione-recupero-assente",
@@ -55,6 +57,7 @@ export type OperazioneAuth =
   | "magic-link"
   | "oauth-avvio"
   | "scambio-codice"
+  | "conferma-email"
   | "recupero-password"
   | "aggiornamento-password";
 
@@ -64,6 +67,7 @@ const FALLBACK_OPERAZIONE: Record<OperazioneAuth, CodiceErroreAuth> = {
   "magic-link": "magic-link-non-inviato",
   "oauth-avvio": "oauth-avvio-non-riuscito",
   "scambio-codice": "scambio-non-riuscito",
+  "conferma-email": "conferma-non-riuscita",
   "recupero-password": "recupero-non-inviato",
   "aggiornamento-password": "password-non-aggiornata",
 };
@@ -91,6 +95,13 @@ export const MESSAGGI_ERRORE_AUTH: Record<CodiceErroreAuth, string> = {
     "Non è stato possibile avviare l'accesso social. Riprova fra qualche istante.",
   "callback-senza-codice": "Il link di accesso non è più valido. Richiedine uno nuovo.",
   "scambio-non-riuscito": "Non è stato possibile completare l'accesso. Riprova dall'inizio.",
+  // Un link di conferma scaduto e uno già usato sono lo stesso errore per
+  // GoTrue; nel secondo caso l'indirizzo è già confermato, quindi la prima
+  // azione proposta è accedere, la seconda ottenere un nuovo link.
+  "conferma-link-non-valido":
+    "Questo link di conferma non è più valido: è scaduto oppure è già stato usato. Se hai già confermato l'email, accedi con email e password. Altrimenti ripeti la registrazione con lo stesso indirizzo per ricevere un nuovo link.",
+  "conferma-non-riuscita":
+    "Non è stato possibile confermare l'email. Apri di nuovo il link dall'ultima email ricevuta oppure accedi con email e password.",
   "configurazione-assente": "L'accesso non è disponibile in questo momento. Riprova più tardi.",
   // Il messaggio del recupero non nomina mai l'esito lato provider: chi lo
   // legge non deve poter dedurre se quell'indirizzo esiste. La superficie
