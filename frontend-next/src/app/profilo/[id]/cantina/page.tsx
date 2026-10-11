@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, MapPin, Settings } from "lucide-react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { AvatarPersona } from "@/components/vinea/AvatarPersona";
 import { CollezionePubblica } from "@/components/vinea/profilo/CollezionePubblica";
 import { SeguiCantinaButton } from "@/components/vinea/profilo/SeguiCantinaButton";
@@ -14,6 +14,7 @@ import {
   vistaCollezione,
 } from "@/lib/profilo/cantina-pubblica-vista";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { creaVetrinaPartnerPubblicaService } from "@/services/partner-vetrina-service";
 import { creaPublicProfileService } from "@/services/public-profile-service";
 
 export const metadata = { title: "Cantina pubblica — Vinea" };
@@ -46,10 +47,18 @@ export default async function Page({
   const pagina = paginaCollezione(query.pagina);
   const client = await getSupabaseServerClient();
   const service = creaPublicProfileService(client);
-  const esitoProfilo = await service.profilo(id);
+  const [esitoProfilo, esitoVetrina] = await Promise.all([
+    service.profilo(id),
+    creaVetrinaPartnerPubblicaService(client).perProfilo(id),
+  ]);
 
   if (!esitoProfilo.ok) return <ProfiloNonDisponibile />;
   if (!esitoProfilo.data) notFound();
+  // Per il titolare di un Partner attivo la Cantina è il catalogo commerciale
+  // della vetrina, non una collezione personale da sfogliare: chi arriva qui
+  // da un vecchio link trova la vetrina. Una vetrina che non si legge non
+  // toglie la pagina.
+  if (esitoVetrina.ok && esitoVetrina.data) redirect(routes.profiloPubblico(id));
 
   const profilo = esitoProfilo.data;
   const localita = [profilo.citta, profilo.provincia].filter(Boolean).join(", ");

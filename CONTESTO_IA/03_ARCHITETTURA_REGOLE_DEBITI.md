@@ -1459,6 +1459,71 @@ silenzioso sugli stati terminali), 10 (registrazione nella roadmap), 11
 (generale). La porta di creazione della bozza rifiutava inoltre proprio il
 chiamante senza identità che dichiarava di servire.
 
+## Vinea Partner — vetrina VP-B (11-12 ottobre 2026)
+
+Migrazione `20261011200000_partner_program_blocco_b_vetrina.sql`, griglia
+`supabase/tests/12y_partner_program_blocco_b_vetrina.sql` nel gate `Supabase
+DB regression` (PR #209); interfacce nella PR #210. Regole durevoli:
+
+- **La vetrina è il profilo.** Nessun secondo sito, sottodominio o page
+  builder: `/profilo/[id]` rende `VetrinaPartner` quando
+  `vetrina_partner_pubblica(uuid)` risponde, altrimenti il profilo di sempre
+  (anche se quella lettura fallisce). La porta risponde solo per un Partner
+  `attivo` il cui profilo è in `private.profili_pubblici`; sospeso e revocato
+  spariscono subito e conservano i dati.
+- **Proiezione chiusa.** `private.partner_vetrina_json` emette 14 chiavi
+  elencate; partita IVA, ragione sociale, indirizzo, CAP, email commerciale,
+  stato e motivi non ci sono. Una nuova colonna di `private.partners` o
+  `private.partner_vetrine` resta privata finché non viene aggiunta lì. Nessuna
+  nuova vista: il lint 0010 non cambia e `public_partners` resta a 7 colonne.
+- **Contenuti e media.** `private.partner_vetrine` non ha grant client; scrive
+  solo `vetrina_partner_salva` sotto il marcatore `titolare:vetrina:<partner>`
+  (stesso guardiano/stesso audit di VP-A, solo nomi dei campi). Il bucket
+  `partner-vetrine` è pubblico, solo `image/webp` ≤2 MB; si carica solo in
+  `<titolare>/<partner>/<uuid>.webp` del proprio Partner (invitato, in verifica
+  o attivo, account attivo), non esiste una policy UPDATE (niente
+  sovrascritture) e si cancella solo un file proprio non più referenziato. La
+  porta di salvataggio verifica che ogni percorso esista in `storage.objects`
+  come WebP. Gli URL pubblici di file già caricati restano raggiungibili da chi
+  li conosce anche dopo una sospensione, come negli altri bucket pubblici, ma
+  non sono più collegati da nessuna pagina.
+- **Nessuna vendita professionale prematura.** `proposals_partner_gate`
+  (BEFORE INSERT su `proposals`) affianca `orders_partner_checkout_gate`: stesso
+  predicato (venditore Partner attivo o sospeso), stesso hint
+  `partner_checkout_non_disponibile`. `acquisto_da_venditore_disponibile(uuid)`
+  è lo specchio per l'interfaccia, non l'autorità. Vanno sostituiti solo dal
+  blocco che implementa il checkout professionale (VP-D).
+- **Classe dell'interfaccia a tre esiti.** `classeDelChiamante()`
+  (`frontend-next/src/lib/partner/classe-server.ts`) risponde `privato`,
+  `commerciale` (Partner attivo o sospeso, da `partner_me` sul server) o
+  `errore` (lettura di `partner_me` fallita o illeggibile, guasto di rete verso
+  Auth). Un errore non è mai «privato»: `/cantina`, `/vendi` e la degustazione
+  mostrano «riprova» invece della Cantina da collezionista o del wizard
+  privato, e la scheda annuncio nasconde le azioni da collezionista. Allo
+  stesso modo `statoAcquistoDa()` distingue `disponibile`, `partner` e
+  `non_verificato`: un errore della porta specchio non offre acquisto,
+  proposta né checkout. Anonimi e modalità senza Supabase restano `privato`.
+- **Catalogo vuoto fino a VP-C, di proposito.** Nel database non c'è ancora
+  una distinzione autorevole fra prodotti dell'attività e annunci personali del
+  titolare: la vetrina e la Cantina commerciale non leggono gli annunci
+  personali e non li presentano come merce dell'attività. Bottiglie e annunci
+  personali restano intatti (niente conversioni, niente cancellazioni) e si
+  gestiscono da `/account`; gli annunci personali di un Partner attivo restano
+  pubblici con «Acquisti da Partner non ancora disponibili» perché i gate
+  guardano il venditore. La Cantina dei privati non cambia.
+- **Contatto diretto differito.** `conversations.listing_id` è `not null` e
+  unico per coppia: una conversazione senza annuncio richiederebbe di cambiare
+  il modello della messaggistica (Fase 8). La vetrina lo dichiara e non mostra
+  un pulsante; il contatto arriverà con i prodotti dell'attività.
+- **Recensioni del titolare, non dell'attività.** La vetrina mostra le
+  recensioni ricevute dall'account e lo dice; le qualifiche sono etichettate
+  «del titolare» e il badge «Partner Vinea · Venditore professionale» è
+  distinto da esse.
+- **Decisioni aperte del titolare.** Un Partner `revocato` oggi torna ai
+  comportamenti dei privati (i gate coprono solo attivo e sospeso); manca una
+  leva admin per svuotare i contenuti di una vetrina (oggi solo la
+  sospensione); `aal2` sulle porte admin resta una raccomandazione separata.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):

@@ -12,7 +12,8 @@ describe("/profilo/[id]", () => {
     expect(pagina).toInclude("await getSupabaseServerClient()");
     expect(pagina).toInclude("creaPublicProfileService(client)");
     expect(pagina.match(/creaPublicProfileService\(/g)).toHaveLength(1);
-    expect(pagina).toInclude("await service.profilo(id)");
+    // Una sola lettura del profilo, in parallelo alla vetrina Partner.
+    expect(pagina.match(/service\.profilo\(id\)/g)).toHaveLength(1);
     expect(codice).not.toMatch(/fetch\(|useEffect|createClient|@\/lib\/supabase\/client/);
   });
 
@@ -56,9 +57,9 @@ describe("/profilo/[id]", () => {
     // Una sola lettura del profilo: annunci e recensioni sono le altre due, e
     // partono insieme nel `Promise.all` — nessuna delle due rilegge il profilo
     // per avere spunta, badge o riepilogo reputazione.
-    expect(pagina.match(/await service\.profilo\(/g)).toHaveLength(1);
+    expect(pagina.match(/service\.profilo\(/g)).toHaveLength(1);
     expect(pagina).toInclude("await Promise.all([");
-    expect(pagina).toInclude("service.annunciAttivi(id),");
+    expect(pagina).toInclude("vetrina ? NESSUNA_LETTURA : service.annunciAttivi(id),");
     expect(pagina).toInclude("service.recensioni(id),");
     expect(codice).not.toMatch(/qualific\w*\(|professional_qualification|\.rpc\(/i);
   });
@@ -148,5 +149,43 @@ describe("/profilo/[id]", () => {
     // utenti, follow e messaggistica.
     expect(codice).not.toMatch(/listaUtenti|cercaUtenti|people|directory|follow|messagg|CTA/i);
     expect(codice).not.toMatch(/href=["'{`]\/profilo/);
+  });
+});
+
+describe("/profilo/[id] — vetrina Partner (VP-B)", () => {
+  it("la classe la decide il database: una porta pubblica, in parallelo al profilo", () => {
+    expect(pagina).toInclude("creaVetrinaPartnerPubblicaService(client)");
+    expect(pagina).toInclude("servizioVetrina.perProfilo(id)");
+    const parallelo = pagina.indexOf("await Promise.all([");
+    expect(parallelo).toBeGreaterThan(-1);
+    expect(parallelo).toBeLessThan(pagina.indexOf("servizioVetrina.perProfilo(id)"));
+    // Nessuna classe dedotta dal client, da un parametro o dalle qualifiche.
+    expect(codice).not.toMatch(/searchParams|partner_me/);
+  });
+
+  it("una vetrina che non si legge lascia il profilo di sempre", () => {
+    expect(pagina).toInclude("const vetrina = esitoVetrina.ok ? esitoVetrina.data : null;");
+    expect(pagina).not.toInclude("esitoVetrina.error");
+    expect(pagina).toInclude("if (vetrina) {");
+    // Il profilo resta l'unica lettura che può mandare in notFound().
+    expect(pagina.indexOf("if (!esitoProfilo.data) notFound()")).toBeLessThan(
+      pagina.indexOf("if (vetrina) {"),
+    );
+  });
+
+  it("la vetrina riusa recensioni e Club reali, senza Cantina né annunci personali", () => {
+    // Stessa tornata di letture del profilo privato: per la vetrina la Cantina
+    // e gli annunci personali non si chiedono — non sono prodotti
+    // dell'attività — e al loro posto arrivano i Club del titolare.
+    expect(pagina).toInclude(
+      "vetrina ? NESSUNA_LETTURA : service.cantinaPubblica(id, { limite: ANTEPRIMA_CANTINA_PUBBLICA }),",
+    );
+    expect(pagina).toInclude("vetrina ? NESSUNA_LETTURA : service.annunciAttivi(id),");
+    expect(pagina).toInclude("vetrina ? servizioVetrina.clubDelTitolare(id) : NESSUNA_LETTURA,");
+    // Il solo ramo della vetrina: dal suo `if` al profilo privato che segue.
+    const ramo = pagina.slice(pagina.indexOf("if (vetrina) {"), pagina.indexOf("mx-auto max-w-3xl space-y-8"));
+    expect(ramo).toInclude("<VetrinaPartner");
+    expect(ramo).toInclude("recensioni={recensioni}");
+    expect(ramo).not.toMatch(/cantina|annunci|prodotti/);
   });
 });
