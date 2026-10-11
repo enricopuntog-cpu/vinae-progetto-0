@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12x) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12y) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
@@ -280,6 +280,13 @@ run_grid "12w QV2 cinque aree" 12w_market_validation_qv2_five_areas.sql 3
 # audit append-only, gate sul checkout dei Partner e invarianza di ruoli e
 # margine privato. Fixture `.test`, ROLLBACK, prima delle 12g.
 run_grid "12x Partner Blocco A" 12x_partner_program_blocco_a.sql 3
+
+# Vinea Partner Blocco B (migrazione 20261011200000): vetrina pubblica solo per
+# Partner attivi e a colonne chiuse, salvataggio solo dal titolare negli stati
+# ammessi, media WebP nella propria cartella con policy di Storage provate a
+# privilegi del chiamante, audit senza valori, specchio del gate e gate sulle
+# proposte. Fixture `.test`, ROLLBACK.
+run_grid "12y Partner Blocco B vetrina" 12y_partner_program_blocco_b_vetrina.sql 3
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
