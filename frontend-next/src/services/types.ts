@@ -3028,3 +3028,110 @@ export interface ShipmentProvider {
   }): Promise<Result<ProviderTrackingState>>;
   getProofOfDelivery(input: { shipmentId: string }): Promise<Result<ProofOfDelivery>>;
 }
+
+// ---- Vinea Partner — Blocco A ------------------------------------------
+//
+// Contratto delle porte `partner_*` (migrazione 20261011150000). Il client
+// non decide nulla: identità, ruolo admin, transizioni e destinatario
+// dell'invito li risolve il database. Nessuna condizione economica Partner
+// passa da qui.
+
+export type PartnerStato = "invitato" | "in_verifica" | "attivo" | "sospeso" | "revocato";
+
+export type PartnerTipologia =
+  | "enoteca"
+  | "ristorazione"
+  | "cantina_produttore"
+  | "distribuzione"
+  | "altro";
+
+export type PartnerAzioneAdmin = "approva" | "restituisci" | "sospendi" | "riattiva" | "revoca";
+
+export type PartnerInvitoStato = "valido" | "usato" | "revocato" | "scaduto";
+
+/** Il Partner come lo vede il titolare (e l'amministrazione). */
+export interface Partner {
+  id: string;
+  stato: PartnerStato;
+  ragioneSociale: string | null;
+  nomeCommerciale: string | null;
+  partitaIva: string | null;
+  paese: string;
+  sedeIndirizzo: string | null;
+  sedeCap: string | null;
+  sedeCitta: string | null;
+  sedeProvincia: string | null;
+  emailCommerciale: string | null;
+  tipologia: PartnerTipologia | null;
+  inviatoVerificaAt: string | null;
+  attivoDal: string | null;
+  sospesoAt: string | null;
+  revocatoAt: string | null;
+  ultimoMotivo: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PartnerAdmin extends Partner {
+  titolareId: string;
+  titolareEmail: string | null;
+  titolareUsername: string | null;
+  invitoEmail: string;
+}
+
+export interface PartnerDatiInput {
+  ragioneSociale: string;
+  nomeCommerciale: string;
+  partitaIva: string;
+  emailCommerciale: string;
+  tipologia: PartnerTipologia | null;
+  sedeIndirizzo: string;
+  sedeCap: string;
+  sedeCitta: string;
+  sedeProvincia: string;
+}
+
+/** Un invito nell'elenco admin. Il token non c'è: esce una sola volta. */
+export interface PartnerInvito {
+  id: string;
+  email: string;
+  stato: PartnerInvitoStato;
+  scadeAt: string;
+  createdAt: string;
+  usatoAt: string | null;
+  revocatoAt: string | null;
+  motivoRevoca: string | null;
+  notaAdmin: string | null;
+  partnerId: string | null;
+}
+
+export interface PartnerInvitoCreato {
+  invitoId: string;
+  email: string;
+  token: string;
+  scadeAt: string;
+}
+
+export interface PartnerService {
+  /** `null` = nessun Partner per chi è collegato. */
+  mio(): Promise<Result<Partner | null>>;
+  accettaInvito(token: string): Promise<Result<string>>;
+  aggiornaDati(dati: PartnerDatiInput): Promise<Result<Partner>>;
+  inviaVerifica(): Promise<Result<PartnerStato>>;
+}
+
+export interface PartnerAdminService {
+  creaInvito(input: {
+    email: string;
+    validitaGiorni: number;
+    nota: string | null;
+  }): Promise<Result<PartnerInvitoCreato>>;
+  revocaInvito(invitoId: string, motivo: string | null): Promise<Result<void>>;
+  inviti(): Promise<Result<PartnerInvito[]>>;
+  partner(stato: PartnerStato | null): Promise<Result<PartnerAdmin[]>>;
+  decidi(
+    partnerId: string,
+    azione: PartnerAzioneAdmin,
+    motivo: string | null,
+  ): Promise<Result<PartnerStato>>;
+}
