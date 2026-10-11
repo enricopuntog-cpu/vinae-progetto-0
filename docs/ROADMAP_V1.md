@@ -76,12 +76,26 @@ una decisione separata.
 | Contenuti e moderazione del Club (12b + 12c) | 17 agosto 2026 | [`superpowers/specs/2026-08-17-phase-12bc-club-content-design.md`](superpowers/specs/2026-08-17-phase-12bc-club-content-design.md) |
 | **Vetrina a successo** | 14 settembre 2026 | [`VETRINA_A_SUCCESSO_SPEC.md`](VETRINA_A_SUCCESSO_SPEC.md) |
 | **Aliquota differenziata per classe di venditore** | 14 settembre 2026 | [`ALIQUOTA_PER_CLASSE_VENDITORE_SPEC.md`](ALIQUOTA_PER_CLASSE_VENDITORE_SPEC.md) |
+| **Vinea Partner + Quantità multiple** (blocchi A–F, implementazione) | 11 ottobre 2026 | Specifica «Avvio sviluppo Vinea Partner + Quantità multiple» (approvata dal titolare, non versionata nel repository); [Filone VP](#filone-vp--vinea-partner--quantità-multiple) |
 
 Le ultime due sono progettate e **non implementate**: nessuna migrazione,
 nessun SQL applicato. L'SQL che contengono è mostrato per essere discusso. La
 seconda ha inoltre un prerequisito esterno — gli obblighi di tracciabilità degli
 operatori commerciali previsti dagli articoli 30-32 del Digital Services Act —
 che precede l'implementazione e che nessuna quantità di codice chiude.
+
+**Ammissione all'implementazione dell'11 ottobre 2026.** Il titolare ha
+autorizzato per nome lo sviluppo tecnico di **Vinea Partner + Quantità
+multiple**, blocchi A–F, come filone a sé: vedi
+[Filone VP](#filone-vp--vinea-partner--quantità-multiple). È la prima
+ammissione che vale per l'implementazione e non solo per la progettazione, e si
+applica un blocco alla volta. Decisioni commerciali vincolanti registrate con
+essa: margine obiettivo 8% (800 bps) per i privati e **15% (1500 bps)** per i
+Partner professionali — non il 16% della specifica sull'aliquota del 14
+settembre, che resta storia —; Partner solo su invito e approvazione manuale;
+nessuna registrazione Partner pubblica; nessun pagamento reale; nessuna
+apertura verso l'estero; nessun checkout professionale prima dei blocchi che lo
+implementano.
 
 ## Sequenza delle fasi
 
@@ -664,6 +678,32 @@ applicate da una corsa successiva, poi verificate nel ledger e negli oggetti
 effettivi. Il fixture dei sette club è rimasto una proposta non eseguita. La PR
 fu valutata con il gate allora vigente della PR #47, oggi sostituito dalla
 policy autonoma corrente in `CLAUDE.md`.
+
+## Filone VP — Vinea Partner + Quantità multiple
+
+Ammesso all'implementazione l'11 ottobre 2026 (vedi sopra). Non è una fase
+della sequenza di migrazione e **non ne prende un numero**: i blocchi si
+chiamano VP-A … VP-F, così nessun identificativo di fase o di griglia già
+occupato viene riusato e la Fase 13 resta l'unico cutover, separato e non
+automatico. Il filone vive sullo stack di destinazione (`frontend-next/` +
+Supabase), che non è ancora l'autorità servita per gli altri domini.
+
+| Blocco | Contenuto | Stato |
+| --- | --- | --- |
+| VP-A | Fondazione: inviti monouso legati all'email, identità aziendale, stati `invitato → in_verifica → attivo ⇄ sospeso → revocato`, porte admin, audit, gate sul checkout, interfacce minime | Database implementato (migrazione `20261011150000`, griglia 12x); interfacce minime in una PR separata, non ancora integrate |
+| VP-B … VP-F | Vetrina commerciale e blocchi successivi della specifica | Non iniziati |
+
+**VP-A in sintesi.** Tabelle in `private` senza grant client; nove porte
+`partner_*` concesse al solo `authenticated` (le admin ricontrollano
+`user_roles`); un marcatore di transazione dedicato `vinea.partner_porta`,
+legato alla riga e al tipo di porta, che i trigger pretendono anche da
+`service_role`; nessun amministratore decide sul proprio Partner; la classe
+Partner si deriva dallo stato e non è un ruolo in `user_roles`. Il margine
+Partner (1500 bps) è registrato come decisione e **non** è applicato:
+`marketplace_config` e `order_checkout_reserve` sono invariati, e un trigger su
+`orders` rifiuta ogni nuovo ordine con venditore Partner attivo o sospeso
+finché il checkout professionale non esiste. Dettagli in
+`CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md`.
 
 ## Fase 13 — cutover finale
 
