@@ -690,7 +690,7 @@ Supabase), che non è ancora l'autorità servita per gli altri domini.
 
 | Blocco | Contenuto | Stato |
 | --- | --- | --- |
-| VP-A | Fondazione: inviti monouso legati all'email, identità aziendale, stati `invitato → in_verifica → attivo ⇄ sospeso → revocato`, porte admin, audit, gate sul checkout, interfacce minime | Database implementato (migrazione `20261011150000`, griglia 12x); interfacce minime in una PR separata, non ancora integrate |
+| VP-A | Fondazione: inviti monouso legati all'email, identità aziendale, stati `invitato → in_verifica → attivo ⇄ sospeso → revocato`, porte admin, audit, gate sul checkout, interfacce minime | Implementato: database (migrazione `20261011150000`, griglia 12x, PR #206) e interfacce minime `/admin/partner`, `/partner`, `/partner/invito` (PR #207) |
 | VP-B … VP-F | Vetrina commerciale e blocchi successivi della specifica | Non iniziati |
 
 **VP-A in sintesi.** Tabelle in `private` senza grant client; nove porte

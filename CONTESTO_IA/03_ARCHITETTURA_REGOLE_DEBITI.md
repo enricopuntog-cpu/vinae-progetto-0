@@ -1403,7 +1403,7 @@ regression`. Filone ammesso all'implementazione l'11 ottobre 2026
 - **Inviti monouso.** Nessun contatore di utilizzi: il token (64 esadecimali,
   due `gen_random_uuid()`) è restituito una volta, è salvato solo come sha256 e
   viaggia nel frammento `#t=` del link (mai in query, quindi mai nei log del
-  server); la pagina d'invito deve toglierlo dall'indirizzo appena letto. L'accettazione
+  server); `/partner/invito` lo toglie dall'indirizzo appena letto e lo tiene solo in `sessionStorage` della scheda per il giro accedi → ritorno. L'accettazione
   pretende l'email **confermata** dell'account uguale a quella dell'invito,
   blocca l'invito `for update` (due accettazioni parallele producono un solo
   Partner, misurato su due sessioni reali) e risponde con lo stesso Partner al
@@ -1434,6 +1434,14 @@ regression`. Filone ammesso all'implementazione l'11 ottobre 2026
 - **Superficie pubblica.** `public.public_partners` (elenco chiuso del lint
   0010) espone solo i Partner attivi e sette colonne; ogni nuova colonna di
   `private.partners` resta privata finché non viene esposta lì di proposito.
+- **Interfacce minime (PR #207).** `/admin/partner` ha la stessa guardia server
+  di `/admin` (ruolo reale da `user_roles`, `notFound()` altrimenti) e mostra il
+  link d'invito una sola volta; `/partner` è privata (redirect ad `/accedi`);
+  `/partner/invito` non ha guardia server perché il token vive solo nel client.
+  `/account` mostra il collegamento solo a chi ha un Partner ed è fail-silent:
+  per i privati `partner_me` risponde `null` e la pagina non cambia. Le azioni
+  mostrate per stato in `lib/partner` sono uno specchio del guardiano SQL, non
+  un'autorità; un test di contratto confronta enum e RPC con la migrazione.
 
 Bozza Codex sostituita: `supabase/migrations/20261011120000_partner_program_blocco_a.sql`
 era un file non tracciato nel worktree principale, mai spinto né applicato, e
