@@ -691,7 +691,8 @@ Supabase), che non è ancora l'autorità servita per gli altri domini.
 | Blocco | Contenuto | Stato |
 | --- | --- | --- |
 | VP-A | Fondazione: inviti monouso legati all'email, identità aziendale, stati `invitato → in_verifica → attivo ⇄ sospeso → revocato`, porte admin, audit, gate sul checkout, interfacce minime | Implementato: database (migrazione `20261011150000`, griglia 12x, PR #206) e interfacce minime `/admin/partner`, `/partner`, `/partner/invito` (PR #207) |
-| VP-B … VP-F | Vetrina commerciale e blocchi successivi della specifica | Non iniziati |
+| VP-B | Vetrina Partner nel profilo pubblico, editor del titolare, media in Storage, Cantina commerciale, acquisti da Partner non raggiungibili | Implementato: database (migrazione `20261011200000`, griglia 12y, PR #209) e interfacce (PR #210). Catalogo vuoto e contatto diretto differiti, vedi sotto |
+| VP-C … VP-F | Quantità multiple e blocchi successivi della specifica | Non iniziati |
 
 **VP-A in sintesi.** Tabelle in `private` senza grant client; nove porte
 `partner_*` concesse al solo `authenticated` (le admin ricontrollano
@@ -704,6 +705,22 @@ Partner (1500 bps) è registrato come decisione e **non** è applicato:
 `orders` rifiuta ogni nuovo ordine con venditore Partner attivo o sospeso
 finché il checkout professionale non esiste. Dettagli in
 `CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md`.
+
+**VP-B in sintesi.** La vetrina è `/profilo/[id]` quando
+`vetrina_partner_pubblica` risponde (solo Partner attivo, 14 chiavi chiuse,
+nessun dato amministrativo); i contenuti stanno in `private.partner_vetrine`,
+i media nel bucket `partner-vetrine` (solo WebP, cartella del titolare), e un
+trigger su `proposals` gemello di quello sugli ordini impedisce anche le
+proposte verso un Partner attivo o sospeso. La classe dell'interfaccia viene
+da `partner_me` sul server con tre esiti — privato, commerciale, errore — e
+un errore non apre né la Cantina da collezionista né il wizard privato.
+Due requisiti della specifica sono **differiti e dichiarati**, non completati:
+il catalogo dei prodotti dell'attività (vuoto fino a VP-C, perché nel
+database non esiste ancora una distinzione autorevole fra prodotti
+dell'attività e annunci personali del titolare, che non vengono presentati né
+convertiti) e il contatto diretto dalla vetrina (la messaggistica richiede
+`conversations.listing_id`; arriverà con i prodotti). Nessun checkout
+professionale, nessuna modifica a `marketplace_config` o `PAYMENTS_ENABLED`.
 
 ## Fase 13 — cutover finale
 

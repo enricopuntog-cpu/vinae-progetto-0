@@ -82,6 +82,12 @@ Aprire soltanto ciò che serve al task:
   audit append-only, gate che blocca gli ordini con venditore Partner finché il
   checkout professionale non esiste, e verifica dei 13 rilievi della bozza
   Codex — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`.
+- Vinea Partner VP-B (11-12 ottobre 2026) — vetrina come profilo pubblico con
+  proiezione chiusa a 14 chiavi, contenuti in `private.partner_vetrine`, bucket
+  `partner-vetrine` solo WebP nella cartella del titolare, gate anche sulle
+  proposte, classe dell'interfaccia a tre esiti (privato/commerciale/errore),
+  catalogo vuoto e contatto diretto differiti fino ai prodotti di VP-C — è in
+  `03_ARCHITETTURA_REGOLE_DEBITI.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono
