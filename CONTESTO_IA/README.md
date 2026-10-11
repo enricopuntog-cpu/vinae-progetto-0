@@ -1,6 +1,6 @@
 # Router del contesto durevole Vinea
 
-Ultimo aggiornamento del router: **25 settembre 2026**.
+Ultimo aggiornamento del router: **11 ottobre 2026**.
 
 Questa cartella conserva memoria strutturale e storia datata. Non è il bootstrap
 obbligatorio e non sostituisce le fonti vive.
@@ -75,6 +75,13 @@ Aprire soltanto ciò che serve al task:
   di attivazione e kill switch server; questionario QV1 dietro il flag server
   `MARKET_VALIDATION_QUESTIONNAIRE_V2_ENABLED` con guida legacy a flag spento — è in
   `03_ARCHITETTURA_REGOLE_DEBITI.md`.
+- Vinea Partner VP-A (11 ottobre 2026) — classe commerciale separata dalle
+  qualifiche personali e mai ruolo in `user_roles`, marcatore dedicato
+  `vinea.partner_porta` legato alla riga, inviti monouso legati all'email
+  confermata con token solo nel frammento, porte admin con anti-autoapprovazione,
+  audit append-only, gate che blocca gli ordini con venditore Partner finché il
+  checkout professionale non esiste, e verifica dei 13 rilievi della bozza
+  Codex — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono

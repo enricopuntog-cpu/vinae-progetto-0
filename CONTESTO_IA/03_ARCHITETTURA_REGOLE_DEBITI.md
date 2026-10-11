@@ -134,12 +134,14 @@ colonne: per esempio `moderation_report_queue` filtra su
 `user_roles.role = 'admin'`, `my_reports` su `reporter_id = auth.uid()`,
 `public_listings` su `stato = 'attivo'` senza colonne PII.
 
-Elenco chiuso delle diciotto viste accettate al 29 settembre 2026, tutte di
+Elenco chiuso delle diciannove viste accettate all'11 ottobre 2026, tutte di
 proprietà di `postgres`:
 
 - pubbliche: `public_listings`, `public_clubs`, `public_club_posts`,
   `public_club_post_risposte`, `public_marketplace_config`,
-  `public_packaging_options`, `wine_price_history`;
+  `public_packaging_options`, `wine_price_history`, `public_partners`
+  (VP-A, 11 ottobre 2026: `WHERE stato = 'attivo'`, sette colonne, nessun
+  titolare, partita IVA, indirizzo o email);
 - del proprietario: `my_reports`, `my_report_events`, `my_certifications`,
   `my_listing_moderation`, `my_sommelier_messages`;
 - di moderazione: `moderation_report_queue`, `moderation_report_events`,
@@ -1366,6 +1368,88 @@ fondazione.
   solo da sessione + codice + capability. Nuove guardie o provider globali
   devono rispettare questa esenzione; `/admin/beta-validation` non ne fa parte
   e resta login + ruolo admin.
+
+## Vinea Partner — fondazione VP-A (11 ottobre 2026)
+
+Migrazione `20261011150000_partner_program_blocco_a_fondazione.sql`, griglia
+`supabase/tests/12x_partner_program_blocco_a.sql` nel gate `Supabase DB
+regression`. Filone ammesso all'implementazione l'11 ottobre 2026
+(`docs/ROADMAP_V1.md`, «Filone VP»). Regole durevoli:
+
+- **Classe commerciale ≠ qualifica personale.** Il Partner è un operatore
+  commerciale (`private.partners`, partita IVA italiana, sede in Italia); le
+  `professional_qualifications` restano titoli della persona. La migrazione non
+  legge né scrive il dominio delle qualifiche e non usa `vinea.pq_review`.
+- **Nessun ruolo in `user_roles`.** La classe Partner si deriva dallo stato
+  (`attivo`/`sospeso`); non esiste un ruolo da autoassegnarsi o da
+  sincronizzare. Un blocco successivo che ne avesse bisogno deve derivarlo da
+  `private.partners`, non introdurre una seconda fonte.
+- **Marcatore dedicato e legato alla riga.** `vinea.partner_porta` vale
+  `<admin|titolare>:<partner|invito>:<uuid>`; la porta lo imposta con
+  `set_config(..., true)` subito prima della scrittura e lo azzera subito dopo.
+  I trigger `private.partners_guard` e `private.partner_inviti_guard` lo
+  confrontano con la riga e con il tipo di porta: un marcatore per un'altra
+  riga, un marcatore da titolare su un esito admin, `vinea.pq_review` o nessun
+  marcatore danno 42501 anche a `service_role`/`postgres`. Cancellazione e
+  truncate di inviti, Partner ed eventi sono vietati.
+- **Porte admin per sessione, non `service_role`.** A differenza della porta
+  D1 (riservata a un worker fidato senza `auth.uid()`), le decisioni Partner le
+  prende una persona dall'interfaccia: le porte `partner_admin_*` sono concesse
+  ad `authenticated` e ricontrollano `user_roles.role = 'admin'` dal database
+  (forma MV3). La severità D1 resta nel trigger. Nessun admin decide sul
+  proprio Partner né invita il proprio indirizzo. Non è richiesto `aal2`:
+  coerente con le altre porte admin attuali, da riconsiderare se il blocco che
+  attiva condizioni economiche lo richiede.
+- **Inviti monouso.** Nessun contatore di utilizzi: il token (64 esadecimali,
+  due `gen_random_uuid()`) è restituito una volta, è salvato solo come sha256 e
+  viaggia nel frammento `#t=` del link (mai in query, quindi mai nei log del
+  server); la pagina d'invito deve toglierlo dall'indirizzo appena letto. L'accettazione
+  pretende l'email **confermata** dell'account uguale a quella dell'invito,
+  blocca l'invito `for update` (due accettazioni parallele producono un solo
+  Partner, misurato su due sessioni reali) e risponde con lo stesso Partner al
+  replay del destinatario. La creazione è serializzata per email con un
+  advisory lock. Nessuna email parte dalla piattaforma: il link lo consegna
+  l'amministratore.
+- **Stati.** `invitato → in_verifica` (titolare, dati completi: vincolo
+  `partners_dati_completi`); `in_verifica → attivo | invitato` (admin,
+  «restituisci» con motivo); `attivo ⇄ sospeso` (admin, sospensione con
+  motivo); ogni stato `→ revocato` (admin, motivo), terminale senza uscite.
+  La ripetizione verso lo stato già raggiunto risponde senza scrivere; ogni
+  altra combinazione è rifiutata con hint `transizione_non_ammessa`, mai
+  ignorata. I dati dichiarati si congelano alla consegna e l'amministrazione
+  non li riscrive; le marcature (`inviato_verifica_at`, `attivo_dal`, …) le
+  scrive solo il trigger.
+- **Audit append-only.** `private.partner_eventi` è scritto da trigger `AFTER`
+  (quindi anche un writer privilegiato lascia traccia) con attore, tipo di
+  porta e motivo; per i dati registra solo i nomi dei campi cambiati, mai i
+  valori.
+- **Gate sul checkout.** `private.partner_checkout_gate` (trigger `BEFORE
+  INSERT` su `orders`, stessa forma di `commercio_rimosso_guard`) rifiuta con
+  hint `partner_checkout_non_disponibile` ogni nuovo ordine il cui venditore è
+  un Partner attivo o sospeso: venderebbe all'8% dei privati. Non tocca ordini
+  esistenti, compratori Partner, Partner invitati o in verifica, privati.
+  `marketplace_config` e `order_checkout_reserve` sono invariati; 1500 bps è
+  una decisione registrata, non un parametro. Va rimosso o sostituito solo dal
+  blocco che implementa il checkout professionale.
+- **Superficie pubblica.** `public.public_partners` (elenco chiuso del lint
+  0010) espone solo i Partner attivi e sette colonne; ogni nuova colonna di
+  `private.partners` resta privata finché non viene esposta lì di proposito.
+
+Bozza Codex sostituita: `supabase/migrations/20261011120000_partner_program_blocco_a.sql`
+era un file non tracciato nel worktree principale, mai spinto né applicato, e
+non applicabile (`comment on` dentro `create table`, apostrofi non raddoppiati,
+`;` mancanti). Dei 13 rilievi dell'audit Codex: confermati e risolti per
+costruzione 1 (`max_usi` assente: inviti monouso), 2 (`email = p_code`: ora
+hash del token più confronto con l'email confermata), 3 (policy su `user_id`
+inesistente: nessuna policy client, tabelle in `private`), 4 (guardia che
+rifiutava ogni cambio di stato, compresa la sua porta), 5-6 (`vinea.pq_review`
+riusato e mai legato alla riga), 7 (`least(..., 0)` dava sempre ≤ 0), 8
+(`vinea_partners` senza RLS e con un guardiano mai collegato a un trigger; colonne
+inesistenti nell'insert), 9 (`case` senza `else` sul verdetto e ritorno
+silenzioso sugli stati terminali), 10 (registrazione nella roadmap), 11
+(griglia assente), 12 (12l è la griglia logistica: la nuova è 12x), 13
+(generale). La porta di creazione della bozza rifiutava inoltre proprio il
+chiamante senza identità che dichiarava di servire.
 
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
