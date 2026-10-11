@@ -9,13 +9,25 @@ import { WineCard } from "@/components/vinea/WineCard";
 import { esperienzaLabels } from "@/data/onboarding";
 import { ANTEPRIMA_CANTINA_PUBBLICA } from "@/lib/profilo/cantina-pubblica-vista";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { VetrinaPartner } from "@/components/vinea/partner/VetrinaPartner";
+import { creaVetrinaPartnerPubblicaService } from "@/services/partner-vetrina-service";
 import { creaPublicProfileService } from "@/services/public-profile-service";
+
+/** La lettura che un ramo non fa: un esito vuoto, già risolto. */
+const NESSUNA_LETTURA = { ok: true as const, data: [] as never[] };
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const client = await getSupabaseServerClient();
   const service = creaPublicProfileService(client);
-  const esitoProfilo = await service.profilo(id);
+  const servizioVetrina = creaVetrinaPartnerPubblicaService(client);
+  // La classe la decide il database: `vetrina_partner_pubblica` risponde solo
+  // per il titolare di un Partner ATTIVO con profilo visibile. In parallelo al
+  // profilo, perché non dipende da lui.
+  const [esitoProfilo, esitoVetrina] = await Promise.all([
+    service.profilo(id),
+    servizioVetrina.perProfilo(id),
+  ]);
 
   if (!esitoProfilo.ok) {
     return (
@@ -40,15 +52,25 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const utente = client ? (await client.auth.getUser()).data.user : null;
   const profiloProprio = utente?.id === profilo.userId;
 
+  // Una vetrina che non si legge NON toglie il profilo: la pagina torna quella
+  // di sempre. È anche la strada sicura se il frontend arriva in produzione
+  // prima della migrazione che crea la porta.
+  const vetrina = esitoVetrina.ok ? esitoVetrina.data : null;
+
   // Tre letture indipendenti, insieme: la Cantina pubblica, gli annunci e la
   // prima pagina di recensioni non si aspettano a vicenda. Il riepilogo —
   // conteggio e medie — non è nessuna delle tre: viaggia già dentro
   // `profilo_pubblico`, quindi la reputazione non costa una quarta andata al
   // database.
-  const [esitoCantina, esitoAnnunci, esitoRecensioni] = await Promise.all([
-    service.cantinaPubblica(id, { limite: ANTEPRIMA_CANTINA_PUBBLICA }),
+  //
+  // Per la vetrina di un Partner la Cantina personale non si legge — la Cantina
+  // di un Partner è il suo catalogo commerciale, non una collezione — e al suo
+  // posto arrivano i Club del titolare. Le letture restano tre.
+  const [esitoCantina, esitoAnnunci, esitoRecensioni, esitoClub] = await Promise.all([
+    vetrina ? NESSUNA_LETTURA : service.cantinaPubblica(id, { limite: ANTEPRIMA_CANTINA_PUBBLICA }),
     service.annunciAttivi(id),
     service.recensioni(id),
+    vetrina ? servizioVetrina.clubDelTitolare(id) : NESSUNA_LETTURA,
   ]);
   // Ogni sezione degrada per conto proprio: una Cantina che non si legge
   // toglie la Cantina, non il profilo. È la stessa scelta già fatta per annunci
@@ -57,6 +79,19 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const cantina = esitoCantina.ok ? esitoCantina.data : [];
   const annunci = esitoAnnunci.ok ? esitoAnnunci.data : [];
   const recensioni = esitoRecensioni.ok ? esitoRecensioni.data : [];
+
+  if (vetrina) {
+    return (
+      <VetrinaPartner
+        vetrina={vetrina}
+        titolare={profilo}
+        prodotti={annunci}
+        recensioni={recensioni}
+        club={esitoClub.ok ? esitoClub.data : []}
+        profiloProprio={profiloProprio}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">

@@ -3120,6 +3120,73 @@ export interface PartnerService {
   inviaVerifica(): Promise<Result<PartnerStato>>;
 }
 
+// ---- Vinea Partner — Blocco B: vetrina --------------------------------
+//
+// Contratto delle porte `vetrina_partner_*` e `acquisto_da_venditore_disponibile`
+// (migrazione 20261011200000). La vetrina pubblica è un elenco chiuso di
+// campi: nessuna partita IVA, ragione sociale, indirizzo, email o stato
+// amministrativo arriva fin qui, perché il database non li restituisce.
+
+/** I contenuti curati dal titolare: testi e percorsi nel bucket `partner-vetrine`. */
+export interface VetrinaPartnerContenuti {
+  presentazione: string | null;
+  descrizione: string | null;
+  logoPath: string | null;
+  copertinaPath: string | null;
+  fotoPaths: string[];
+}
+
+/** La vetrina pubblica di un Partner attivo. */
+export interface VetrinaPartnerPubblica extends VetrinaPartnerContenuti {
+  partnerId: string;
+  titolareId: string;
+  nomeCommerciale: string;
+  tipologia: PartnerTipologia | null;
+  sedeCitta: string | null;
+  sedeProvincia: string | null;
+  paese: string;
+  attivoDal: string | null;
+  aggiornataAt: string | null;
+}
+
+/** La vetrina come la vede il titolare, in ogni stato del suo Partner. */
+export interface VetrinaPartnerMia extends Omit<VetrinaPartnerPubblica, "nomeCommerciale"> {
+  nomeCommerciale: string | null;
+  stato: PartnerStato;
+  /** Il server dice se può salvare: stato del Partner e dell'account. */
+  modificabile: boolean;
+  /** `<titolare>/<partner>`: l'unica cartella in cui la policy lascia caricare. */
+  cartella: string;
+}
+
+export interface VetrinaPartnerService {
+  /** `null` = nessun Partner per chi è collegato. */
+  mia(): Promise<Result<VetrinaPartnerMia | null>>;
+  salva(contenuti: VetrinaPartnerContenuti): Promise<Result<VetrinaPartnerMia>>;
+  /** Carica un WebP già preparato nella cartella indicata; restituisce il percorso. */
+  caricaMedia(cartella: string, file: Blob): Promise<Result<string>>;
+  /**
+   * Cancella file non più usati. Best effort: la policy rifiuta da sé un file
+   * ancora in uso o di qualcun altro, e un residuo non è un errore per l'utente.
+   */
+  cancellaMedia(percorsi: string[]): Promise<void>;
+}
+
+export interface VetrinaPartnerPubblicaService {
+  /** `null` = il profilo non è la vetrina di un Partner attivo. */
+  perProfilo(userId: string): Promise<Result<VetrinaPartnerPubblica | null>>;
+  /** Specchio del gate: `false` se il venditore è un Partner attivo o sospeso. */
+  acquistoDisponibile(sellerId: string): Promise<Result<boolean>>;
+  /** I Club approvati creati dal titolare, dalla vista pubblica dei Club. */
+  clubDelTitolare(userId: string): Promise<Result<ClubDelTitolare[]>>;
+}
+
+export interface ClubDelTitolare {
+  slug: string;
+  nome: string;
+  territorio: string | null;
+}
+
 export interface PartnerAdminService {
   creaInvito(input: {
     email: string;

@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { partnerCommercialeDelChiamante } from "@/lib/partner/classe-server";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 import DegustazionePageClient from "./page-client";
 
 /**
@@ -19,5 +22,9 @@ export const metadata: Metadata = {
 
 export default async function Page({ params }: { params: Promise<{ bottleId: string }> }) {
   const { bottleId } = await params;
+  // Per un Partner attivo o sospeso la Cantina è il catalogo commerciale: la
+  // degustazione personale non è fra i suoi strumenti (Blocco B). Le bottiglie
+  // e le note restano nel database, intatte.
+  if (await partnerCommercialeDelChiamante(await getSupabaseServerClient())) redirect("/cantina");
   return <DegustazionePageClient bottleId={bottleId} />;
 }

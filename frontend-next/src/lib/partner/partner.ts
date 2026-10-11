@@ -50,7 +50,7 @@ export const SPIEGAZIONE_STATO_PARTNER: Record<PartnerStato, string> = {
   in_verifica:
     "I dati sono stati inviati e non sono più modificabili. L'amministrazione Vinea li sta verificando.",
   attivo:
-    "La tua attività è un Partner Vinea approvato. Le funzioni commerciali per i Partner (vetrina, condizioni e vendita professionale) non sono ancora aperte: ti avviseremo noi.",
+    "La tua attività è un Partner Vinea approvato e la tua vetrina è pubblica sul tuo profilo. Condizioni commerciali e vendita professionale non sono ancora aperte: ti avviseremo noi.",
   sospeso:
     "Il Partner è temporaneamente sospeso dall'amministrazione Vinea. Leggi il motivo qui sotto o contatta Vinea.",
   revocato:
@@ -280,6 +280,16 @@ const MESSAGGI_HINT: Record<string, string> = {
   partita_iva_gia_registrata: "Questa partita IVA è già registrata per un altro Partner.",
   transizione_non_ammessa: "Questa azione non è ammessa nello stato attuale. Ricarica la pagina.",
   titolare_rimosso: "Il titolare di questo Partner non è più attivo su Vinea.",
+  // Vetrina (Blocco B).
+  vetrina_non_modificabile: "La vetrina non è modificabile nello stato attuale del Partner.",
+  utente_non_attivo: "Il tuo account non può pubblicare contenuti in questo momento.",
+  presentazione_lunga: "La presentazione può avere al massimo 160 caratteri.",
+  descrizione_lunga: "La descrizione può avere al massimo 2000 caratteri.",
+  troppe_foto: "Puoi pubblicare al massimo quattro fotografie.",
+  media_duplicato: "La stessa immagine è stata usata due volte.",
+  media_non_valido: "Una delle immagini non appartiene alla tua vetrina. Caricala di nuovo.",
+  media_non_trovato: "Una delle immagini non è stata trovata. Caricala di nuovo.",
+  partner_checkout_non_disponibile: "Gli acquisti da Partner Vinea non sono ancora disponibili.",
 };
 
 export type ErroreRpc = { code?: string; message?: string; hint?: string | null } | null;

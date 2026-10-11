@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { PartnerAreaClient } from "@/components/vinea/partner/PartnerAreaClient";
+import { VetrinaEditorClient } from "@/components/vinea/partner/VetrinaEditorClient";
 import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "Area Partner — Vinea",
-  description: "Dati dell'attività e stato della richiesta Vinea Partner.",
+  description: "Dati dell'attività, stato della richiesta e vetrina Vinea Partner.",
   robots: { index: false, follow: false },
 };
 
@@ -28,6 +29,7 @@ export default async function Page() {
         <p className="text-muted-foreground">La tua attività su Vinea.</p>
       </header>
       <PartnerAreaClient />
+      <VetrinaEditorClient />
     </div>
   );
 }

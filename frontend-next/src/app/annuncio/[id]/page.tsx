@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createListingService } from "@/services/listing-service";
+import { creaVetrinaPartnerPubblicaService } from "@/services/partner-vetrina-service";
+import { partnerCommercialeDelChiamante } from "@/lib/partner/classe-server";
 import { createSupabasePriceIntelligenceService } from "@/services/price-intelligence/supabase-price-intelligence-service";
 import { caricaMetaPerVino } from "@/services/wine-meta";
 import { WineMetaProvider } from "@/lib/wine-meta-context";
@@ -91,7 +93,12 @@ export default async function Page({
   //
   // Va in parallelo ai metadati del vino, che non dipendono da lui.
   const wineKey = chiaveVino(daMostrare);
-  const [metaPerVino, storico] = await Promise.all([
+  // Specchio dei gate su ordini e proposte: un venditore Partner attivo o
+  // sospeso non vende ancora, quindi la scheda non offre né acquisto né
+  // proposta. Un errore di lettura lascia la scheda com'era: l'autorità
+  // restano i trigger del database, che rifiuterebbero comunque.
+  const venditoreId = daMostrare.venditore.userId;
+  const [metaPerVino, storico, esitoAcquisto, visitatoreCommerciale] = await Promise.all([
     // Il vino della scheda più quelli dei correlati: "Quando berlo", gli
     // abbinamenti e i distintivi delle schede correlate leggono tutti da qui.
     caricaMetaPerVino(client, [wineKey, ...correlati.map((c) => c.wineSlug ?? c.id)]),
@@ -101,7 +108,12 @@ export default async function Page({
       wineSlug: wineKey,
       formato: daMostrare.formato,
     }),
+    venditoreId
+      ? creaVetrinaPartnerPubblicaService(client).acquistoDisponibile(venditoreId)
+      : null,
+    partnerCommercialeDelChiamante(client),
   ]);
+  const acquistoDisponibile = esitoAcquisto?.ok ? esitoAcquisto.data : true;
 
   // Un guasto dello storico non toglie la pagina a nessuno: il pannello lo dice
   // in un rigo e il riferimento sui comparabili, che non dipende da questa
@@ -128,6 +140,8 @@ export default async function Page({
         correlati={correlati}
         proprio={proprio}
         vistaPrezzi={vistaPrezzi}
+        acquistoDisponibile={acquistoDisponibile}
+        visitatoreCommerciale={visitatoreCommerciale !== null}
       />
     </WineMetaProvider>
   );

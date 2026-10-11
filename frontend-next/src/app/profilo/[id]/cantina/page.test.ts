@@ -11,7 +11,8 @@ const codice = pagina.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/
 
 describe("/profilo/[id]/cantina", () => {
   it("valida il profilo con la stessa porta pubblica prima di leggere la Cantina", () => {
-    const profilo = pagina.indexOf("await service.profilo(id)");
+    // In parallelo alla vetrina Partner (VP-B), sempre prima del controllo.
+    const profilo = pagina.indexOf("service.profilo(id),");
     const controllo = pagina.indexOf("if (!esitoProfilo.data) notFound()");
     const cantina = pagina.indexOf("await service.cantinaPubblica(id, finestraCollezione(pagina))");
 
@@ -20,6 +21,17 @@ describe("/profilo/[id]/cantina", () => {
     expect(cantina).toBeGreaterThan(controllo);
     expect(pagina).toInclude("creaPublicProfileService(client)");
     expect(pagina.match(/creaPublicProfileService\(/g)).toHaveLength(1);
+  });
+
+  it("per il titolare di un Partner attivo porta alla vetrina, mai a una collezione", () => {
+    const controllo = pagina.indexOf("if (!esitoProfilo.data) notFound()");
+    const rinvio = pagina.indexOf(
+      "if (esitoVetrina.ok && esitoVetrina.data) redirect(routes.profiloPubblico(id));",
+    );
+    const cantina = pagina.indexOf("await service.cantinaPubblica(id, finestraCollezione(pagina))");
+    expect(rinvio).toBeGreaterThan(controllo);
+    expect(cantina).toBeGreaterThan(rinvio);
+    expect(pagina).toInclude("creaVetrinaPartnerPubblicaService(client).perProfilo(id)");
   });
 
   it("resta fail-closed per un profilo assente o non raggiungibile", () => {

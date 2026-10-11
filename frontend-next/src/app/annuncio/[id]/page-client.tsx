@@ -40,6 +40,7 @@ import { ReportDialog } from "@/components/vinea/ReportDialog";
 import { ListingContactActions } from "@/components/vinea/ListingContactActions";
 import { ProposalAction } from "@/components/vinea/ProposalAction";
 import { ListingOwnerActions } from "@/components/vinea/ListingOwnerActions";
+import { AcquistiPartnerNonDisponibili } from "@/components/vinea/partner/AcquistiPartnerNonDisponibili";
 import { GalleriaVino } from "@/components/vinea/GalleriaVino";
 import { AperturaBottiglia } from "@/components/vinea/AperturaBottiglia";
 import {
@@ -59,6 +60,8 @@ export default function AnnuncioDetailPageClient({
   correlati,
   proprio,
   vistaPrezzi,
+  acquistoDisponibile = true,
+  visitatoreCommerciale = false,
 }: {
   wine: Wine;
   correlati: Wine[];
@@ -69,6 +72,16 @@ export default function AnnuncioDetailPageClient({
   proprio?: AnnuncioProprietario | null;
   /** Price Intelligence 1B, già calcolata sul server. */
   vistaPrezzi: VistaPriceIntelligence;
+  /**
+   * `false` quando il venditore è un Partner attivo o sospeso: lo dice il
+   * server (`acquisto_da_venditore_disponibile`), specchio dei gate.
+   */
+  acquistoDisponibile?: boolean;
+  /**
+   * Chi guarda è un Partner attivo o sospeso: per lui la Cantina è catalogo
+   * commerciale, quindi niente azioni da collezionista (apertura, degustazione).
+   */
+  visitatoreCommerciale?: boolean;
 }) {
   const router = useRouter();
   const listingId = wine.listingId ?? wine.id;
@@ -146,19 +159,23 @@ export default function AnnuncioDetailPageClient({
             </div>
           ) : (
             <>
-              <div
-                className={`mt-6 grid gap-2 ${PAGAMENTI_UI_ABILITATI ? "grid-cols-3" : "grid-cols-1"}`}
-              >
-                {PAGAMENTI_UI_ABILITATI ? (
-                  <Button
-                    className="col-span-2 bg-bordeaux hover:bg-bordeaux/90"
-                    onClick={() => router.push(`/checkout/${wine.id}`)}
-                  >
-                    Compra ora
-                  </Button>
-                ) : null}
-                <ProposalAction listingId={listingId} listingSlug={wine.id} prezzo={wine.prezzo} />
-              </div>
+              {acquistoDisponibile ? (
+                <div
+                  className={`mt-6 grid gap-2 ${PAGAMENTI_UI_ABILITATI ? "grid-cols-3" : "grid-cols-1"}`}
+                >
+                  {PAGAMENTI_UI_ABILITATI ? (
+                    <Button
+                      className="col-span-2 bg-bordeaux hover:bg-bordeaux/90"
+                      onClick={() => router.push(`/checkout/${wine.id}`)}
+                    >
+                      Compra ora
+                    </Button>
+                  ) : null}
+                  <ProposalAction listingId={listingId} listingSlug={wine.id} prezzo={wine.prezzo} />
+                </div>
+              ) : (
+                <AcquistiPartnerNonDisponibili className="mt-6" />
+              )}
 
               <ListingContactActions listingId={listingId} />
               <div className="mt-2">
@@ -238,7 +255,9 @@ export default function AnnuncioDetailPageClient({
             <TrustLegend />
           </div>
 
-          <MyBottleActions wineId={wine.wineSlug ?? wine.id} nomeVino={wine.nome} />
+          {visitatoreCommerciale ? null : (
+            <MyBottleActions wineId={wine.wineSlug ?? wine.id} nomeVino={wine.nome} />
+          )}
         </div>
       </div>
 
