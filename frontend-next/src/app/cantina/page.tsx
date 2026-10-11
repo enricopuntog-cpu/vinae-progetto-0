@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { CantinaCommerciale } from "@/components/vinea/partner/CantinaCommerciale";
-import { partnerCommercialeDelChiamante } from "@/lib/partner/classe-server";
+import { ClasseNonVerificata } from "@/components/vinea/partner/ClasseNonVerificata";
+import { classeDelChiamante } from "@/lib/partner/classe-server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { createListingService } from "@/services/listing-service";
 import CantinaPageClient from "./page-client";
 
 export const metadata: Metadata = {
@@ -26,24 +26,18 @@ export const metadata: Metadata = {
  * L'unica domanda che si fa al server è la classe (Blocco B Partner): per il
  * titolare di un Partner attivo o sospeso la Cantina è il catalogo
  * commerciale, non la collezione. La decide `partner_me()`; per tutti gli altri
- * — anonimi compresi — la pagina resta quella di sempre.
+ * — anonimi compresi — la pagina resta quella di sempre. Se la classe non si
+ * legge, la pagina non indovina.
  */
 export default async function Page() {
-  const client = await getSupabaseServerClient();
-  const commerciale = await partnerCommercialeDelChiamante(client);
-  if (!commerciale) return <CantinaPageClient />;
+  const classe = await classeDelChiamante(await getSupabaseServerClient());
+  if (classe.tipo === "privato") return <CantinaPageClient />;
+  if (classe.tipo === "errore") return <ClasseNonVerificata titolo="La mia cantina" riprova="/cantina" />;
 
-  const { partner, titolareId } = commerciale;
-  const esito = await createListingService(client).mieiAnnunciConEsito();
+  const { partner, titolareId } = classe;
   return (
     <div className="mx-auto max-w-5xl">
-      <CantinaCommerciale
-        nomeCommerciale={partner.nomeCommerciale}
-        stato={partner.stato}
-        titolareId={titolareId}
-        annunci={esito.ok ? esito.data : []}
-        letturaRiuscita={esito.ok}
-      />
+      <CantinaCommerciale nomeCommerciale={partner.nomeCommerciale} stato={partner.stato} titolareId={titolareId} />
     </div>
   );
 }

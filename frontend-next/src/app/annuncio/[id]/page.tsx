@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createListingService } from "@/services/listing-service";
 import { creaVetrinaPartnerPubblicaService } from "@/services/partner-vetrina-service";
-import { partnerCommercialeDelChiamante } from "@/lib/partner/classe-server";
+import { classeDelChiamante } from "@/lib/partner/classe-server";
+import { statoAcquistoDa } from "@/lib/partner/vetrina";
 import { createSupabasePriceIntelligenceService } from "@/services/price-intelligence/supabase-price-intelligence-service";
 import { caricaMetaPerVino } from "@/services/wine-meta";
 import { WineMetaProvider } from "@/lib/wine-meta-context";
@@ -95,10 +96,11 @@ export default async function Page({
   const wineKey = chiaveVino(daMostrare);
   // Specchio dei gate su ordini e proposte: un venditore Partner attivo o
   // sospeso non vende ancora, quindi la scheda non offre né acquisto né
-  // proposta. Un errore di lettura lascia la scheda com'era: l'autorità
-  // restano i trigger del database, che rifiuterebbero comunque.
+  // proposta. Un errore di lettura non è una disponibilità confermata: la
+  // scheda lo dice e non offre nulla. L'autorità restano i trigger del
+  // database, che rifiuterebbero comunque.
   const venditoreId = daMostrare.venditore.userId;
-  const [metaPerVino, storico, esitoAcquisto, visitatoreCommerciale] = await Promise.all([
+  const [metaPerVino, storico, esitoAcquisto, classeVisitatore] = await Promise.all([
     // Il vino della scheda più quelli dei correlati: "Quando berlo", gli
     // abbinamenti e i distintivi delle schede correlate leggono tutti da qui.
     caricaMetaPerVino(client, [wineKey, ...correlati.map((c) => c.wineSlug ?? c.id)]),
@@ -111,9 +113,12 @@ export default async function Page({
     venditoreId
       ? creaVetrinaPartnerPubblicaService(client).acquistoDisponibile(venditoreId)
       : null,
-    partnerCommercialeDelChiamante(client),
+    classeDelChiamante(client),
   ]);
-  const acquistoDisponibile = esitoAcquisto?.ok ? esitoAcquisto.data : true;
+  const statoAcquisto = statoAcquistoDa(esitoAcquisto);
+  // Anche una classe che non si legge toglie le azioni da collezionista: non
+  // si sa se chi guarda è un privato.
+  const visitatoreCommerciale = classeVisitatore.tipo !== "privato";
 
   // Un guasto dello storico non toglie la pagina a nessuno: il pannello lo dice
   // in un rigo e il riferimento sui comparabili, che non dipende da questa
@@ -140,8 +145,8 @@ export default async function Page({
         correlati={correlati}
         proprio={proprio}
         vistaPrezzi={vistaPrezzi}
-        acquistoDisponibile={acquistoDisponibile}
-        visitatoreCommerciale={visitatoreCommerciale !== null}
+        statoAcquisto={statoAcquisto}
+        visitatoreCommerciale={visitatoreCommerciale}
       />
     </WineMetaProvider>
   );

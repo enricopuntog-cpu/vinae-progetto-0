@@ -1,10 +1,7 @@
 import Link from "next/link";
 import { ExternalLink, PackageOpen, Store } from "lucide-react";
-import { WineThumbnail } from "@/components/vinea/WineThumbnail";
 import { AcquistiPartnerNonDisponibili } from "@/components/vinea/partner/AcquistiPartnerNonDisponibili";
 import { routes } from "@/config/routes";
-import { ETICHETTA_STATO_PRODOTTO, catalogoCommerciale } from "@/lib/partner/catalogo";
-import type { AnnuncioProprietario } from "@/services/listing-service";
 import type { PartnerStato } from "@/services/types";
 
 /**
@@ -13,59 +10,26 @@ import type { PartnerStato } from "@/services/types";
  *
  * Qui non ci sono apertura bottiglie, degustazioni, valore patrimoniale o
  * vista 3D: sono strumenti del collezionista privato e restano intatti nella
- * Cantina dei privati. Le bottiglie personali del titolare NON vengono
- * convertite in prodotti né cancellate: restano nel database come sono e
- * tornano visibili se la classe commerciale cessa.
+ * Cantina dei privati.
  *
- * I prodotti sono gli annunci che il titolare ha già. Nessuna quantità o
- * disponibilità commerciale è mostrata: il modello di giacenze arriva con il
- * Blocco C, e un numero inventato oggi sarebbe da smentire domani.
+ * Il catalogo è vuoto fino al Blocco C, ed è vuoto di proposito. Nel database
+ * non esiste ancora una distinzione autorevole fra un prodotto dell'attività e
+ * un annuncio personale del titolare: mostrare qui i suoi annunci — o le sue
+ * bottiglie — vorrebbe dire presentare beni personali come merce
+ * dell'attività. Bottiglie e annunci personali restano nel database come sono:
+ * niente conversioni, niente cancellazioni, e gli annunci si gestiscono da
+ * «Il mio account». Nessuna quantità o disponibilità inventata: il modello di
+ * giacenze è il Blocco C.
  */
-
-function RigaProdotto({ annuncio }: { annuncio: AnnuncioProprietario }) {
-  const { wine, stato } = annuncio;
-  return (
-    <li>
-      <Link
-        href={`/annuncio/${wine.id}`}
-        className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 transition-colors hover:border-bordeaux focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        data-testid="prodotto-commerciale"
-      >
-        <WineThumbnail
-          src={wine.immagini[0]}
-          alt={`${wine.nome} ${wine.annata}`}
-          className="h-20 w-16 shrink-0 rounded-lg object-cover"
-          sizes="64px"
-        />
-        <span className="min-w-0 flex-1">
-          <span className="block text-xs uppercase tracking-wide text-salvia">{wine.produttore}</span>
-          <span className="block truncate font-serif text-base font-semibold">
-            {wine.nome} {wine.annata}
-          </span>
-          <span className="block text-xs text-muted-foreground">Formato {wine.formato}</span>
-        </span>
-        <span className="shrink-0 rounded-full border border-border px-2.5 py-1 text-xs font-medium">
-          {ETICHETTA_STATO_PRODOTTO[stato]}
-        </span>
-      </Link>
-    </li>
-  );
-}
-
 export function CantinaCommerciale({
   nomeCommerciale,
   stato,
   titolareId,
-  annunci,
-  letturaRiuscita,
 }: {
   nomeCommerciale: string | null;
   stato: PartnerStato;
   titolareId: string;
-  annunci: AnnuncioProprietario[];
-  letturaRiuscita: boolean;
 }) {
-  const { inVetrina, altri } = catalogoCommerciale(annunci);
   const sospeso = stato === "sospeso";
 
   return (
@@ -77,8 +41,7 @@ export function CantinaCommerciale({
         <h1 className="font-serif text-3xl font-semibold md:text-4xl">Catalogo commerciale</h1>
         <p className="max-w-2xl text-muted-foreground">
           {nomeCommerciale ? `I prodotti di ${nomeCommerciale}. ` : ""}
-          Come Partner, la tua Cantina è la gestione commerciale dei prodotti. La collezione
-          personale non viene convertita in catalogo: le tue bottiglie restano conservate.
+          Come Partner, la tua Cantina è la gestione commerciale dei prodotti dell&apos;attività.
         </p>
         <div className="flex flex-wrap gap-4 pt-1 text-sm">
           {!sospeso ? (
@@ -97,55 +60,38 @@ export function CantinaCommerciale({
 
       {sospeso ? (
         <p role="note" className="rounded-2xl border border-border bg-muted p-4 text-sm">
-          Il Partner è sospeso: la vetrina non è pubblica. Il catalogo resta consultabile e i dati
-          sono conservati.
+          Il Partner è sospeso: la vetrina non è pubblica. I dati sono conservati.
         </p>
       ) : null}
 
       <AcquistiPartnerNonDisponibili />
 
-      <section aria-labelledby="catalogo-in-vetrina">
-        <h2 id="catalogo-in-vetrina" className="font-serif text-2xl font-semibold">
-          In vetrina
+      <section aria-labelledby="catalogo-prodotti">
+        <h2 id="catalogo-prodotti" className="font-serif text-2xl font-semibold">
+          Prodotti dell&apos;attività
         </h2>
-        {!letturaRiuscita ? (
-          <p role="alert" className="mt-3 text-sm text-destructive">
-            Non è stato possibile leggere il catalogo. Riprova fra poco.
+        <div
+          className="mt-4 rounded-3xl border border-border bg-card p-6 text-center md:p-8"
+          data-testid="catalogo-commerciale-vuoto"
+        >
+          <PackageOpen className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden />
+          <p className="mt-3 font-serif text-xl">Il catalogo è in preparazione</p>
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+            La pubblicazione di prodotti come Partner — con quantità multiple e disponibilità —
+            non è ancora aperta. Quando lo sarà, i prodotti dell&apos;attività compariranno qui e
+            nella vetrina.
           </p>
-        ) : inVetrina.length > 0 ? (
-          <ul className="mt-4 grid gap-3 sm:grid-cols-2">
-            {inVetrina.map((a) => (
-              <RigaProdotto key={a.wine.id} annuncio={a} />
-            ))}
-          </ul>
-        ) : (
-          <div
-            className="mt-4 rounded-3xl border border-border bg-card p-6 text-center md:p-8"
-            data-testid="catalogo-commerciale-vuoto"
-          >
-            <PackageOpen className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden />
-            <p className="mt-3 font-serif text-xl">Il catalogo è vuoto</p>
-            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-              La pubblicazione di prodotti come Partner — con quantità multiple e disponibilità —
-              non è ancora aperta. Quando lo sarà, i tuoi prodotti compariranno qui e nella
-              vetrina.
-            </p>
-          </div>
-        )}
+        </div>
       </section>
 
-      {letturaRiuscita && altri.length > 0 ? (
-        <section aria-labelledby="catalogo-altri">
-          <h2 id="catalogo-altri" className="font-serif text-2xl font-semibold">
-            Non in vetrina
-          </h2>
-          <ul className="mt-4 grid gap-3 sm:grid-cols-2">
-            {altri.map((a) => (
-              <RigaProdotto key={a.wine.id} annuncio={a} />
-            ))}
-          </ul>
-        </section>
-      ) : null}
+      <p role="note" className="text-sm text-muted-foreground" data-testid="beni-personali-intatti">
+        Le tue bottiglie e i tuoi annunci personali non diventano prodotti dell&apos;attività:
+        restano tuoi, così come sono. Gli annunci li trovi in{" "}
+        <Link href="/account" className="font-medium text-bordeaux underline">
+          Il mio account
+        </Link>
+        .
+      </p>
     </div>
   );
 }

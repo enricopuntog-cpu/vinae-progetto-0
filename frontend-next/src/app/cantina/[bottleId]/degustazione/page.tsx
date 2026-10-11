@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { partnerCommercialeDelChiamante } from "@/lib/partner/classe-server";
+import { ClasseNonVerificata } from "@/components/vinea/partner/ClasseNonVerificata";
+import { classeDelChiamante } from "@/lib/partner/classe-server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import DegustazionePageClient from "./page-client";
 
@@ -24,7 +25,12 @@ export default async function Page({ params }: { params: Promise<{ bottleId: str
   const { bottleId } = await params;
   // Per un Partner attivo o sospeso la Cantina è il catalogo commerciale: la
   // degustazione personale non è fra i suoi strumenti (Blocco B). Le bottiglie
-  // e le note restano nel database, intatte.
-  if (await partnerCommercialeDelChiamante(await getSupabaseServerClient())) redirect("/cantina");
+  // e le note restano nel database, intatte. Se la classe non si legge, la
+  // degustazione non si apre.
+  const classe = await classeDelChiamante(await getSupabaseServerClient());
+  if (classe.tipo === "commerciale") redirect("/cantina");
+  if (classe.tipo === "errore") {
+    return <ClasseNonVerificata titolo="Degustazione" riprova={`/cantina/${bottleId}/degustazione`} />;
+  }
   return <DegustazionePageClient bottleId={bottleId} />;
 }

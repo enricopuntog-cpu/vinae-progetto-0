@@ -2,7 +2,8 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AcquistiPartnerNonDisponibili } from "@/components/vinea/partner/AcquistiPartnerNonDisponibili";
-import { partnerCommercialeDelChiamante } from "@/lib/partner/classe-server";
+import { ClasseNonVerificata } from "@/components/vinea/partner/ClasseNonVerificata";
+import { classeDelChiamante } from "@/lib/partner/classe-server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import VendiPageClient from "./page-client";
 
@@ -26,7 +27,12 @@ export default async function Page() {
   // pubblicazione dei prodotti Partner — quantità multiple e disponibilità —
   // dipende dal Blocco C, e il prezzo professionale dal Blocco D. Qui si dice
   // onestamente che non è ancora aperta, invece di offrire un flusso sbagliato.
-  if (await partnerCommercialeDelChiamante(await getSupabaseServerClient())) {
+  // Se la classe non si legge, il wizard privato non si apre a scatola chiusa.
+  const classe = await classeDelChiamante(await getSupabaseServerClient());
+  if (classe.tipo === "errore") {
+    return <ClasseNonVerificata titolo="Aggiungi o vendi una bottiglia" riprova="/vendi" />;
+  }
+  if (classe.tipo === "commerciale") {
     return (
       <div className="mx-auto max-w-2xl space-y-5 py-6" data-testid="vendi-partner-non-disponibile">
         <h1 className="font-serif text-3xl font-semibold">Pubblicazione prodotti Partner</h1>

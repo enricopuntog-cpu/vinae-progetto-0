@@ -198,3 +198,22 @@ export function parseVetrinaMia(raw: unknown): VetrinaPartnerMia | null {
 export function classeCommerciale(stato: PartnerStato | null | undefined): boolean {
   return stato === "attivo" || stato === "sospeso";
 }
+
+/**
+ * Che cosa la scheda annuncio e il checkout possono offrire verso un
+ * venditore, dall'esito di `acquisto_da_venditore_disponibile`.
+ *
+ * Un errore della lettura NON è una disponibilità confermata: diventa
+ * `non_verificato`, e l'interfaccia non offre acquisto né proposta finché non
+ * si rilegge. Senza venditore reale (dati dimostrativi, `esito` null) non c'è
+ * nessun Partner da proteggere e la scheda resta quella di sempre.
+ */
+export type StatoAcquisto = "disponibile" | "partner" | "non_verificato";
+
+export function statoAcquistoDa(
+  esito: { ok: true; data: boolean } | { ok: false; error: string } | null,
+): StatoAcquisto {
+  if (esito === null) return "disponibile";
+  if (!esito.ok) return "non_verificato";
+  return esito.data ? "disponibile" : "partner";
+}

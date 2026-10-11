@@ -3,11 +3,9 @@ import { BadgeCheck, Building2, MapPin, MessageCircle, Store, Users } from "luci
 import type { ReactNode } from "react";
 import { AvatarPersona } from "@/components/vinea/AvatarPersona";
 import { ReportDialog } from "@/components/vinea/ReportDialog";
-import { WineCard } from "@/components/vinea/WineCard";
 import { ReputazionePubblica } from "@/components/vinea/profilo/ReputazionePubblica";
 import { AcquistiPartnerNonDisponibili } from "@/components/vinea/partner/AcquistiPartnerNonDisponibili";
 import { routes } from "@/config/routes";
-import type { Wine } from "@/data/wines";
 import { etichettaTipologia, localitaVetrina, urlMediaVetrina } from "@/lib/partner/vetrina";
 import type {
   ClubDelTitolare,
@@ -28,6 +26,9 @@ import type {
  * qualifiche professionali, recensioni ricevute) viene da `profilo_pubblico`,
  * e la pagina dice chiaramente che le recensioni sono state ricevute
  * dall'account come venditore privato: non diventano reputazione dell'attività.
+ *
+ * Il catalogo è vuoto fino al Blocco C: gli annunci personali del titolare
+ * non sono prodotti dell'attività e la vetrina non li riceve.
  *
  * Nessun dato amministrativo qui: partita IVA, ragione sociale, indirizzo ed
  * email non arrivano dal database, quindi non c'è nulla da nascondere.
@@ -68,14 +69,12 @@ function Sezione({
 export function VetrinaPartner({
   vetrina,
   titolare,
-  prodotti,
   club,
   recensioni,
   profiloProprio,
 }: {
   vetrina: VetrinaPartnerPubblica;
   titolare: ProfiloPubblico;
-  prodotti: Wine[];
   club: ClubDelTitolare[];
   recensioni: RecensionePubblica[];
   profiloProprio: boolean;
@@ -229,28 +228,32 @@ export function VetrinaPartner({
 
       <Sezione id="vetrina-catalogo" occhiello="Prodotti" titolo="Catalogo">
         <AcquistiPartnerNonDisponibili className="mb-4" />
-        {prodotti.length > 0 ? (
-          <div className="grid gap-3 sm:grid-cols-2" data-testid="vetrina-catalogo">
-            {prodotti.map((prodotto) => (
-              <WineCard key={prodotto.id} wine={prodotto} variant="list" />
-            ))}
-          </div>
-        ) : (
-          <div
-            className="rounded-3xl border border-border bg-card p-6 text-center md:p-8"
-            data-testid="vetrina-catalogo-vuoto"
-          >
-            <p className="font-serif text-xl">Nessun prodotto presentato</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Il catalogo di questa attività è ancora vuoto.
-            </p>
-          </div>
-        )}
+        {/*
+          Vuoto fino al Blocco C, di proposito: non esiste ancora una
+          distinzione autorevole fra prodotti dell'attività e annunci personali
+          del titolare, e questi ultimi non si presentano come merce
+          dell'attività.
+        */}
+        <div
+          className="rounded-3xl border border-border bg-card p-6 text-center md:p-8"
+          data-testid="vetrina-catalogo-vuoto"
+        >
+          <p className="font-serif text-xl">Catalogo in preparazione</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            I prodotti di questa attività compariranno qui quando la pubblicazione dei prodotti
+            Partner sarà aperta.
+          </p>
+        </div>
+        {/*
+          La messaggistica Vinea oggi apre una conversazione solo a partire da
+          un annuncio (`conversations.listing_id` è obbligatorio): il contatto
+          diretto dalla vetrina è un requisito differito, dichiarato qui invece
+          di un pulsante che non porterebbe da nessuna parte.
+        */}
         <p className="mt-4 flex gap-2 text-sm text-muted-foreground" data-testid="vetrina-contatto">
           <MessageCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          {prodotti.length > 0
-            ? "Per scrivere all'attività apri un prodotto e usa «Contatta il venditore»: la conversazione passa dalla messaggistica Vinea."
-            : "La messaggistica Vinea si apre da un prodotto: quando il catalogo avrà prodotti potrai scrivere all'attività da lì."}
+          Il contatto diretto con l&apos;attività tramite i messaggi Vinea arriverà insieme al
+          catalogo dei prodotti.
         </p>
       </Sezione>
 

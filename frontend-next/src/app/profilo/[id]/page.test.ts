@@ -59,7 +59,7 @@ describe("/profilo/[id]", () => {
     // per avere spunta, badge o riepilogo reputazione.
     expect(pagina.match(/service\.profilo\(/g)).toHaveLength(1);
     expect(pagina).toInclude("await Promise.all([");
-    expect(pagina).toInclude("service.annunciAttivi(id),");
+    expect(pagina).toInclude("vetrina ? NESSUNA_LETTURA : service.annunciAttivi(id),");
     expect(pagina).toInclude("service.recensioni(id),");
     expect(codice).not.toMatch(/qualific\w*\(|professional_qualification|\.rpc\(/i);
   });
@@ -173,17 +173,19 @@ describe("/profilo/[id] — vetrina Partner (VP-B)", () => {
     );
   });
 
-  it("la vetrina riusa annunci, recensioni e Club reali, senza la Cantina personale", () => {
+  it("la vetrina riusa recensioni e Club reali, senza Cantina né annunci personali", () => {
     // Stessa tornata di letture del profilo privato: per la vetrina la Cantina
-    // personale non si chiede e al suo posto arrivano i Club del titolare.
+    // e gli annunci personali non si chiedono — non sono prodotti
+    // dell'attività — e al loro posto arrivano i Club del titolare.
     expect(pagina).toInclude(
       "vetrina ? NESSUNA_LETTURA : service.cantinaPubblica(id, { limite: ANTEPRIMA_CANTINA_PUBBLICA }),",
     );
+    expect(pagina).toInclude("vetrina ? NESSUNA_LETTURA : service.annunciAttivi(id),");
     expect(pagina).toInclude("vetrina ? servizioVetrina.clubDelTitolare(id) : NESSUNA_LETTURA,");
-    const ramo = pagina.slice(pagina.indexOf("if (vetrina) {"), pagina.indexOf("<CantinaPubblica"));
+    // Il solo ramo della vetrina: dal suo `if` al profilo privato che segue.
+    const ramo = pagina.slice(pagina.indexOf("if (vetrina) {"), pagina.indexOf("mx-auto max-w-3xl space-y-8"));
     expect(ramo).toInclude("<VetrinaPartner");
-    expect(ramo).toInclude("prodotti={annunci}");
     expect(ramo).toInclude("recensioni={recensioni}");
-    expect(ramo).not.toInclude("cantina");
+    expect(ramo).not.toMatch(/cantina|annunci|prodotti/);
   });
 });

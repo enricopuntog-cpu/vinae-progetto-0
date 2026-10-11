@@ -63,12 +63,14 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   // `profilo_pubblico`, quindi la reputazione non costa una quarta andata al
   // database.
   //
-  // Per la vetrina di un Partner la Cantina personale non si legge — la Cantina
-  // di un Partner è il suo catalogo commerciale, non una collezione — e al suo
-  // posto arrivano i Club del titolare. Le letture restano tre.
+  // Per la vetrina di un Partner né la Cantina personale né gli annunci
+  // personali si leggono: la Cantina di un Partner è il suo catalogo
+  // commerciale, non una collezione, e gli annunci personali del titolare non
+  // sono prodotti dell'attività (il catalogo arriva con il Blocco C). Al loro
+  // posto arrivano i Club del titolare.
   const [esitoCantina, esitoAnnunci, esitoRecensioni, esitoClub] = await Promise.all([
     vetrina ? NESSUNA_LETTURA : service.cantinaPubblica(id, { limite: ANTEPRIMA_CANTINA_PUBBLICA }),
-    service.annunciAttivi(id),
+    vetrina ? NESSUNA_LETTURA : service.annunciAttivi(id),
     service.recensioni(id),
     vetrina ? servizioVetrina.clubDelTitolare(id) : NESSUNA_LETTURA,
   ]);
@@ -85,7 +87,6 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       <VetrinaPartner
         vetrina={vetrina}
         titolare={profilo}
-        prodotti={annunci}
         recensioni={recensioni}
         club={esitoClub.ok ? esitoClub.data : []}
         profiloProprio={profiloProprio}

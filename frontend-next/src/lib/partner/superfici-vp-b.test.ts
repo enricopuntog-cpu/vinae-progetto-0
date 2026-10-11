@@ -1,16 +1,19 @@
 /**
  * Vinea Partner — Blocco B: le superfici in cui un Partner cambia
  * l'interfaccia, verificate leggendo i file (stessa forma dei test delle
- * pagine profilo). Ciò che si prova qui è la relazione fra pagine e porte:
- * chi decide la classe, dove l'acquisto sparisce, che cosa non cambia per i
- * privati. I gate veri sono nel database e li prova la griglia 12y.
+ * pagine profilo) e, per la classe e lo stato d'acquisto, eseguendo la logica
+ * con un client finto. Ciò che si prova qui è la relazione fra pagine e porte:
+ * chi decide la classe, che cosa succede quando la lettura fallisce, dove
+ * l'acquisto sparisce, che cosa non cambia per i privati. I gate veri sono nel
+ * database e li prova la griglia 12y.
  */
 
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AnnuncioProprietario, ListingStato } from "@/services/listing-service";
-import { ETICHETTA_STATO_PRODOTTO, catalogoCommerciale, presentabile } from "@/lib/partner/catalogo";
+import { AuthRetryableFetchError, AuthSessionMissingError, type SupabaseClient } from "@supabase/supabase-js";
+import { classeDelChiamante } from "@/lib/partner/classe-server";
+import { statoAcquistoDa } from "@/lib/partner/vetrina";
 
 const progetto = join(import.meta.dir, "../../..");
 const leggi = (p: string) => readFileSync(join(progetto, p), "utf8");
@@ -20,36 +23,122 @@ const senzaCommenti = (s: string) =>
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/(^|[^:])\/\/.*$/gm, "$1");
 
+const UTENTE = "11111111-1111-4111-8111-111111111111";
+const rigaPartner = (stato: string) => ({
+  id: "22222222-2222-4222-8222-222222222222",
+  stato,
+  nome_commerciale: "Enoteca",
+  created_at: "2026-10-01T00:00:00Z",
+  updated_at: "2026-10-01T00:00:00Z",
+});
+
+function clientFinto(
+  utente: { user: { id: string } | null; error: Error | null },
+  partnerMe?: { data: unknown; error: { code?: string; message?: string } | null },
+) {
+  const chiamate: string[] = [];
+  const c = {
+    auth: { getUser: async () => ({ data: { user: utente.user }, error: utente.error }) },
+    rpc: async (nome: string) => {
+      chiamate.push(nome);
+      if (!partnerMe) throw new Error("rpc inattesa");
+      return partnerMe;
+    },
+  } as unknown as SupabaseClient;
+  return { c, chiamate };
+}
+
+describe("classeDelChiamante: privato, commerciale o errore — mai confusi", () => {
+  it("senza Supabase configurato è la modalità dimostrativa: privato", async () => {
+    expect(await classeDelChiamante(null)).toEqual({ tipo: "privato" });
+  });
+
+  it("un anonimo è privato e non interroga partner_me", async () => {
+    const { c, chiamate } = clientFinto({ user: null, error: new AuthSessionMissingError() });
+    expect(await classeDelChiamante(c)).toEqual({ tipo: "privato" });
+    expect(chiamate).toEqual([]);
+  });
+
+  it("un guasto di rete verso Auth è un errore, non un anonimo", async () => {
+    const { c } = clientFinto({ user: null, error: new AuthRetryableFetchError("rete", 0) });
+    expect(await classeDelChiamante(c)).toEqual({ tipo: "errore" });
+  });
+
+  it("un utente senza Partner è privato", async () => {
+    const { c, chiamate } = clientFinto({ user: { id: UTENTE }, error: null }, { data: null, error: null });
+    expect(await classeDelChiamante(c)).toEqual({ tipo: "privato" });
+    expect(chiamate).toEqual(["partner_me"]);
+  });
+
+  it("invitato, in verifica e revocato restano all'interfaccia di oggi", async () => {
+    for (const stato of ["invitato", "in_verifica", "revocato"]) {
+      const { c } = clientFinto({ user: { id: UTENTE }, error: null }, { data: rigaPartner(stato), error: null });
+      expect(await classeDelChiamante(c)).toEqual({ tipo: "privato" });
+    }
+  });
+
+  it("attivo e sospeso sono la classe commerciale, con il titolare dalla sessione", async () => {
+    for (const stato of ["attivo", "sospeso"] as const) {
+      const { c } = clientFinto({ user: { id: UTENTE }, error: null }, { data: rigaPartner(stato), error: null });
+      const classe = await classeDelChiamante(c);
+      expect(classe.tipo).toBe("commerciale");
+      if (classe.tipo === "commerciale") {
+        expect(classe.titolareId).toBe(UTENTE);
+        expect(classe.partner.stato).toBe(stato);
+      }
+    }
+  });
+
+  it("una lettura di partner_me fallita o illeggibile è un errore, non un privato", async () => {
+    const rotto = clientFinto({ user: { id: UTENTE }, error: null }, { data: null, error: { code: "PGRST000" } });
+    expect(await classeDelChiamante(rotto.c)).toEqual({ tipo: "errore" });
+    const illeggibile = clientFinto({ user: { id: UTENTE }, error: null }, { data: { stato: "attivo" }, error: null });
+    expect(await classeDelChiamante(illeggibile.c)).toEqual({ tipo: "errore" });
+  });
+});
+
+describe("statoAcquistoDa: un errore non è una disponibilità confermata", () => {
+  it("traduce l'esito della porta in tre stati", () => {
+    expect(statoAcquistoDa(null)).toBe("disponibile");
+    expect(statoAcquistoDa({ ok: true, data: true })).toBe("disponibile");
+    expect(statoAcquistoDa({ ok: true, data: false })).toBe("partner");
+    expect(statoAcquistoDa({ ok: false, error: "x" })).toBe("non_verificato");
+  });
+});
+
 describe("acquisti da Partner non raggiungibili dall'interfaccia", () => {
   const paginaAnnuncio = leggi("src/app/annuncio/[id]/page.tsx");
   const clientAnnuncio = leggi("src/app/annuncio/[id]/page-client.tsx");
   const checkout = leggi("src/app/checkout/[id]/page.tsx");
 
-  it("la scheda annuncio chiede al server se l'acquisto è disponibile", () => {
+  it("la scheda annuncio chiede al server se l'acquisto è disponibile, e l'errore resta errore", () => {
     expect(paginaAnnuncio).toInclude("acquistoDisponibile(venditoreId)");
-    expect(paginaAnnuncio).toInclude("const acquistoDisponibile = esitoAcquisto?.ok ? esitoAcquisto.data : true;");
-    expect(paginaAnnuncio).toInclude("acquistoDisponibile={acquistoDisponibile}");
+    expect(paginaAnnuncio).toInclude("const statoAcquisto = statoAcquistoDa(esitoAcquisto);");
+    expect(paginaAnnuncio).toInclude("statoAcquisto={statoAcquisto}");
+    expect(senzaCommenti(paginaAnnuncio)).not.toMatch(/esitoAcquisto\?\.ok \? esitoAcquisto\.data : true/);
   });
 
-  it("senza acquisto: né «Compra ora» né proposta, ma lo stato spiegato; il contatto resta", () => {
+  it("senza acquisto confermato: né «Compra ora» né proposta; il contatto resta", () => {
     const ramo = clientAnnuncio.slice(
-      clientAnnuncio.indexOf("{acquistoDisponibile ? ("),
+      clientAnnuncio.indexOf('{statoAcquisto === "disponibile" ? ('),
       clientAnnuncio.indexOf("<ListingContactActions"),
     );
     expect(ramo).toInclude("Compra ora");
     expect(ramo).toInclude("<ProposalAction");
-    expect(ramo).toInclude("<AcquistiPartnerNonDisponibili");
-    expect(ramo.indexOf("<ProposalAction")).toBeLessThan(ramo.indexOf(") : ("));
-    expect(ramo.indexOf("<AcquistiPartnerNonDisponibili")).toBeGreaterThan(ramo.indexOf(") : ("));
+    const altrimenti = ramo.indexOf(') : statoAcquisto === "partner" ? (');
+    expect(altrimenti).toBeGreaterThan(ramo.indexOf("<ProposalAction"));
+    expect(ramo.indexOf("<AcquistiPartnerNonDisponibili")).toBeGreaterThan(altrimenti);
+    expect(ramo.indexOf("<AcquistoNonVerificato")).toBeGreaterThan(ramo.indexOf("<AcquistiPartnerNonDisponibili"));
     // Il default resta «acquistabile»: i privati non cambiano.
-    expect(clientAnnuncio).toInclude("acquistoDisponibile = true,");
+    expect(clientAnnuncio).toInclude('statoAcquisto = "disponibile",');
   });
 
-  it("il checkout diretto non si apre verso un Partner", () => {
+  it("il checkout si apre solo con disponibilità confermata", () => {
     const controllo = checkout.indexOf("acquistoDisponibile(wine.venditore.userId)");
     expect(controllo).toBeGreaterThan(-1);
-    expect(checkout).toInclude("if (esito.ok && !esito.data) {");
+    expect(checkout).toInclude('if (statoAcquisto !== "disponibile") {');
     expect(checkout).toInclude("<AcquistiPartnerNonDisponibili />");
+    expect(checkout).toInclude("<AcquistoNonVerificato />");
     expect(controllo).toBeLessThan(checkout.indexOf("<CheckoutPageClient"));
   });
 
@@ -66,6 +155,7 @@ describe("Cantina del Partner = catalogo commerciale", () => {
   const commerciale = senzaCommenti(leggi("src/components/vinea/partner/CantinaCommerciale.tsx"));
   const degustazione = leggi("src/app/cantina/[bottleId]/degustazione/page.tsx");
   const vendi = leggi("src/app/vendi/page.tsx");
+  const paginaAnnuncio = leggi("src/app/annuncio/[id]/page.tsx");
   const clientAnnuncio = leggi("src/app/annuncio/[id]/page-client.tsx");
 
   it("la classe la decide il server da partner_me, mai il client o le qualifiche", () => {
@@ -75,8 +165,9 @@ describe("Cantina del Partner = catalogo commerciale", () => {
     expect(cantina).not.toInclude('"use client"');
   });
 
-  it("per i privati la Cantina resta quella di sempre", () => {
-    expect(cantina).toInclude("if (!commerciale) return <CantinaPageClient />;");
+  it("per i privati la Cantina resta quella di sempre; un errore non la apre", () => {
+    expect(cantina).toInclude('if (classe.tipo === "privato") return <CantinaPageClient />;');
+    expect(cantina).toInclude('if (classe.tipo === "errore") return <ClasseNonVerificata');
   });
 
   it("la vista commerciale non ha strumenti da collezionista né quantità inventate", () => {
@@ -87,45 +178,29 @@ describe("Cantina del Partner = catalogo commerciale", () => {
     expect(commerciale).toInclude('data-testid="catalogo-commerciale-vuoto"');
   });
 
-  it("nessuna conversione: la vista legge gli annunci, non scrive bottiglie", () => {
-    expect(cantina).toInclude("mieiAnnunciConEsito()");
-    expect(senzaCommenti(cantina)).not.toMatch(/crea\(|aggiorna\(|bottle_units|insert|update/);
+  it("annunci e bottiglie personali non diventano catalogo: nessuna lettura, nessuna scrittura", () => {
+    for (const s of [senzaCommenti(cantina), commerciale]) {
+      expect(s).not.toMatch(/mieiAnnunci|annunci=|AnnuncioProprietario|WineCard|WineThumbnail|bottle_units/);
+      expect(s).not.toMatch(/crea\(|aggiorna\(|insert|update/);
+    }
+    expect(commerciale).toInclude('data-testid="beni-personali-intatti"');
   });
 
-  it("degustazione e wizard privato non sono strade del Partner", () => {
-    expect(degustazione).toInclude('redirect("/cantina")');
-    expect(vendi).toInclude("partnerCommercialeDelChiamante(await getSupabaseServerClient())");
+  it("degustazione e wizard privato non sono strade del Partner, né di chi non si classifica", () => {
+    expect(degustazione).toInclude('if (classe.tipo === "commerciale") redirect("/cantina");');
+    expect(degustazione).toInclude('if (classe.tipo === "errore") {');
+    expect(vendi).toInclude("classeDelChiamante(await getSupabaseServerClient())");
+    expect(vendi).toInclude('if (classe.tipo === "errore") {');
     expect(vendi).toInclude('data-testid="vendi-partner-non-disponibile"');
+    expect(vendi.indexOf('classe.tipo === "errore"')).toBeLessThan(vendi.indexOf("<VendiPageClient"));
+    expect(paginaAnnuncio).toInclude('const visitatoreCommerciale = classeVisitatore.tipo !== "privato";');
     expect(clientAnnuncio).toInclude("{visitatoreCommerciale ? null : (");
   });
-});
 
-describe("catalogo commerciale", () => {
-  const annuncio = (stato: ListingStato, id: string) =>
-    ({ stato, wine: { id } }) as unknown as AnnuncioProprietario;
-
-  it("ogni stato dell'annuncio ha un'etichetta", () => {
-    const stati: ListingStato[] = [
-      "bozza", "in_revisione", "modifiche_richieste", "attivo", "riservato",
-      "sospeso", "scaduto", "venduto", "rifiutato",
-    ];
-    for (const s of stati) expect(ETICHETTA_STATO_PRODOTTO[s]).toBeTruthy();
-  });
-
-  it("in vetrina solo ciò che la vetrina pubblica mostra (annunci attivi)", () => {
-    expect(presentabile("attivo")).toBe(true);
-    expect(presentabile("riservato")).toBe(false);
-    const { inVetrina, altri } = catalogoCommerciale([
-      annuncio("attivo", "a"),
-      annuncio("bozza", "b"),
-      annuncio("venduto", "c"),
-    ]);
-    expect(inVetrina.map((a) => a.wine.id)).toEqual(["a"]);
-    expect(altri.map((a) => a.wine.id)).toEqual(["b", "c"]);
-  });
-
-  it("catalogo vuoto: due elenchi vuoti, nessun errore", () => {
-    expect(catalogoCommerciale([])).toEqual({ inVetrina: [], altri: [] });
+  it("nessuna superficie usa più il vecchio predicato a due esiti", () => {
+    for (const p of [cantina, degustazione, vendi, paginaAnnuncio, classe]) {
+      expect(p).not.toInclude("partnerCommercialeDelChiamante");
+    }
   });
 });
 
@@ -154,9 +229,14 @@ describe("vetrina pubblica", () => {
     }
   });
 
-  it("catalogo vuoto e contatto tramite la messaggistica esistente", () => {
+  it("catalogo in preparazione: gli annunci personali del titolare non entrano", () => {
     expect(vetrina).toInclude('data-testid="vetrina-catalogo-vuoto"');
-    expect(vetrina).toInclude("Contatta il venditore");
-    expect(vetrina).not.toMatch(/conversation_open|message_send/);
+    expect(vetrina).not.toMatch(/prodotti=|prodotti:|WineCard|annunci|\bWine\b/);
+  });
+
+  it("il contatto diretto è dichiarato differito, senza un pulsante finto", () => {
+    expect(vetrina).toInclude('data-testid="vetrina-contatto"');
+    expect(vetrina).toInclude("arriverà insieme al");
+    expect(vetrina).not.toMatch(/conversation_open|message_send|Contatta l|<Button|href=\{?["'`]\/messaggi/);
   });
 });
