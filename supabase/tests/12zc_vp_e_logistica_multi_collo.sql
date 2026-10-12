@@ -300,12 +300,12 @@ begin
   select string_agg(formato_unita || '>' || packaging_format || ':' || capacita, ' '
                     order by formato_unita, capacita)
   into v_s from private.logistics_formato_imballaggio where effective_to is null;
-  perform pg_temp.registra(2, 'compatibilita: 0,75 L in 1/2/3/6/12, 1,5 L in Magnum; addebito = prezzo + commissione + imballaggio 7c + logistica',
+  perform pg_temp.registra(2, 'compatibilita: 0,75 L in 1/2/3/6/12, 1,5 L in Magnum; addebito = prezzo + commissione + imballaggio 7c + logistica + copertura fee (20261012234500)',
     v_s = '0,75 L>bottiglia_1:1 0,75 L>bottiglia_2:2 0,75 L>bottiglia_3:3 0,75 L>bottiglia_6:6 0,75 L>bottiglia_12:12 1,5 L>magnum_1_5l:1'
     and (select pg_get_expr(d.adbin, d.adrelid) from pg_attrdef d
          join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum
          where d.adrelid = 'public.orders'::regclass and a.attname = 'addebito_totale_cents')
-        = '(((prezzo_cents + commissione_cents) + imballaggio_cents) + logistica_cents)',
+        = '((((prezzo_cents + commissione_cents) + imballaggio_cents) + logistica_cents) + fee_pagamento_accessori_cents)',
     v_s);
 
   -- 03: stato della produzione: ogni formato dice che cosa manca.
@@ -366,7 +366,7 @@ begin
   -- 08: porta pubblica, 8 bottiglie, vista dell'acquirente.
   v_p := pg_temp.prev(v_l8, 8);
   v_q := pg_temp.opz(v_p, 'pudo');
-  perform pg_temp.registra(8, 'preventivo unico da anon per 8 bottiglie: due colli con formato, bottiglie, peso, misure, imballaggio; imballaggio 978 + trasporto 844 = 1822; totale ordine = mercato + logistica; nessun fornitore, nessuna economia del venditore',
+  perform pg_temp.registra(8, 'preventivo unico da anon per 8 bottiglie: due colli con formato, bottiglie, peso, misure, imballaggio; imballaggio 978 + trasporto 844 = 1822; totale ordine = mercato + logistica + copertura fee (39); nessun fornitore, nessuna economia del venditore',
     (v_q ->> 'disponibile')::boolean and (v_q ->> 'ordinabile')::boolean
     and pg_temp.comp(v_q) = 'bottiglia_6:6,bottiglia_2:2'
     and (v_q ->> 'imballaggioCents')::integer = 978 and (v_q ->> 'trasportoCents')::integer = 844
@@ -379,7 +379,8 @@ begin
     and not v_q ? 'venditore'
     and v_p::text not like '%vpe_prova%' and v_p::text not like '%providerCode%'
     and (v_p ->> 'totaleOrdineCents')::integer
-        = (v_p -> 'economico' ->> 'totaleCents')::integer + 1822
+        = (v_p -> 'economico' ->> 'totaleCents')::integer + 1822 + 39
+    and (v_q ->> 'feePagamentoCents')::integer = 39
     and (v_p -> 'economico' ->> 'subtotaleCents')::integer = 32000,
     v_q::text);
 
@@ -395,12 +396,14 @@ begin
   -- 10: vista del venditore.
   v_p := pg_temp.prev(v_l8, 8, c_s1);
   v_q := pg_temp.opz(v_p, 'pudo');
-  perform pg_temp.registra(10, 'il venditore vede trasporto per collo, costo reale 1822 (228 per bottiglia) e l''obiettivo configurato (1500, riferito e non bloccante)',
+  perform pg_temp.registra(10, 'il venditore vede trasporto per collo, costo reale 1822 (228 per bottiglia, informativo) e le metriche per transazione: obiettivo 10 euro e soglia storica 15 euro, entrambe superate (riferite, non bloccanti)',
     (v_q -> 'colli' -> 0 ->> 'trasportoCents')::integer = 422
     and (v_q -> 'venditore' ->> 'costoRealeCents')::integer = 1822
     and (v_q -> 'venditore' ->> 'costoRealePerBottigliaCents')::integer = 228
-    and (v_q -> 'venditore' ->> 'obiettivoCents')::integer = 1500
-    and (v_q -> 'venditore' ->> 'entroObiettivo')::boolean
+    and (v_q -> 'venditore' ->> 'sogliaStoricaCents')::integer = 1500
+    and not (v_q -> 'venditore' ->> 'entroSogliaStorica')::boolean
+    and (v_q -> 'venditore' ->> 'obiettivoTransazioneCents')::integer = 1000
+    and not (v_q -> 'venditore' ->> 'entroObiettivoTransazione')::boolean
     and (v_q -> 'venditore' ->> 'deduzioneRitiroCents')::integer = 0,
     v_q -> 'venditore' #>> '{}');
 
@@ -535,12 +538,13 @@ begin
   -- 19: checkout di 8 bottiglie.
   select * into v_c from pg_temp.prenota(c_b1, v_l8, 'grid12zc-otto', 8);
   v_o8 := (v_c.dati ->> 'order_id')::uuid;
-  perform pg_temp.registra(19, 'checkout 8 bottiglie: logistica 1822 al punto di ritiro, addebito = 32000 + una sola commissione + 1822, pagamento allineato, 2 colli (6+2) e 8 prenotazioni, evento con logistica e colli',
+  perform pg_temp.registra(19, 'checkout 8 bottiglie: logistica 1822 al punto di ritiro, addebito = 32000 + una sola commissione + 1822 + copertura fee 39, pagamento allineato, 2 colli (6+2) e 8 prenotazioni, evento con logistica e colli',
     v_c.esito = 'NESSUN_ERRORE'
     and (select o.quantita = 8 and o.prezzo_cents = 32000 and o.logistica_cents = 1822
             and o.logistica_destinazione = 'pudo'
             and o.commissione_cents = private.marketplace_totale_cents(32000, 800, 209, 25) - 32000
-            and o.addebito_totale_cents = o.prezzo_cents + o.commissione_cents + o.imballaggio_cents + 1822
+            and o.fee_pagamento_accessori_cents = 39
+            and o.addebito_totale_cents = o.prezzo_cents + o.commissione_cents + o.imballaggio_cents + 1822 + 39
             and o.totale_cents = o.prezzo_cents + o.commissione_cents
          from public.orders o where o.id = v_o8)
     and (select p.amount_cents from public.payments p where p.order_id = v_o8)

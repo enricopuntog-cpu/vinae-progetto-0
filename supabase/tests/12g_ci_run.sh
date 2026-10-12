@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12zd) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12ze) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
@@ -358,6 +358,14 @@ summary "- $(printf '%s\n' "$conc_12zc" | tail -n 1)"
 # italiano invariato. Fixture `.test` e configurazione logistica di prova;
 # ROLLBACK.
 run_grid "12zd VP-F predisposizione internazionale" 12zd_vp_f_predisposizione_internazionale.sql 3
+
+# Fix economico (migrazione 20261012234500): copertura della fee di pagamento
+# di riferimento su logistica e imballaggio 7c (formula unica estesa, un solo
+# ceil, una sola quota fissa), congelata e coerente per ogni writer,
+# preventivo uguale al checkout, metrica logistica per transazione separata
+# dalla soglia storica, riconciliazione sull'intero addebito. Fixture `.test`
+# e configurazione logistica di prova; ROLLBACK.
+run_grid "12ze Fee di pagamento sulla logistica" 12ze_logistica_fee_pagamento.sql 3
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal

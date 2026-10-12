@@ -322,9 +322,9 @@ begin
   );
 
   perform pg_temp.registra_7c(
-    3, 'E — addebito_totale_cents somma l''imballaggio',
-    'addebito_totale_cents = 11507',
-    v_conteggio = 11507,
+    3, 'E — addebito_totale_cents somma l''imballaggio e la copertura della fee di pagamento su di esso (20261012234500)',
+    'addebito_totale_cents = 11516 (11057 + 450 + 9)',
+    v_conteggio = 11516,
     'addebito=' || coalesce(v_conteggio::text, 'NULL'),
     v_guasto
   );
@@ -337,8 +337,8 @@ begin
   end;
   perform pg_temp.registra_7c(
     4, 'E — il pagamento addebita il totale comprensivo di imballaggio',
-    'payments.amount_cents = 11507',
-    v_intero = 11507,
+    'payments.amount_cents = 11516',
+    v_intero = 11516,
     'amount_cents=' || coalesce(v_intero::text, 'NULL'),
     v_guasto
   );
@@ -365,8 +365,8 @@ begin
   end;
   perform pg_temp.registra_7c(
     5, 'E — cambiare il listino non muove un ordine già nato',
-    'imballaggio_cents ancora 450, addebito ancora 11507',
-    v_intero = v_imb and v_conteggio = 11507,
+    'imballaggio_cents ancora 450, addebito ancora 11516',
+    v_intero = v_imb and v_conteggio = 11516,
     format('cents=%s addebito=%s', v_intero, v_conteggio),
     v_guasto
   );
