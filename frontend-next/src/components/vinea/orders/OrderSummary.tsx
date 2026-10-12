@@ -1,5 +1,9 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+import { getSupabaseClient } from "@/lib/supabase/client";
+import { etichettaImballaggio, riassuntoColli } from "@/lib/logistica/etichette";
+import { creaLogisticaService, type LogisticaOrdine } from "@/services/logistica-service";
 import { scomposizioneAddebito } from "@/lib/orders/seller-status";
 import { etichettaClasse, euro } from "@/lib/prezzi/classe";
 import type { OrderRecord } from "@/services/types";
@@ -51,6 +55,9 @@ export function OrderSummary({ ordine }: { ordine: OrderRecord }) {
             value={centesimi(s.imballaggioCents)}
           />
         )}
+        {s.logisticaCents > 0 && (
+          <Riga label="Spedizione e imballaggio" value={centesimi(s.logisticaCents)} />
+        )}
         <div className="my-2 h-px bg-border" />
         <Riga label="Totale" value={centesimi(s.addebitoTotaleCents)} bold />
       </div>
@@ -61,6 +68,8 @@ export function OrderSummary({ ordine }: { ordine: OrderRecord }) {
         </p>
       ) : null}
 
+      {s.logisticaCents > 0 ? <ColliOrdine orderId={ordine.id} /> : null}
+
       {ordine.imballaggio_codice && (
         <p className="mt-3 text-xs text-muted-foreground">
           Consegna alla rete logistica: {ordine.imballaggio_etichetta}
@@ -68,5 +77,40 @@ export function OrderSummary({ ordine }: { ordine: OrderRecord }) {
         </p>
       )}
     </section>
+  );
+}
+
+/**
+ * VP-E: i colli congelati dell'ordine (formato e bottiglie). Una lettura
+ * fallita non mostra nulla: l'importo resta quello della riga sopra.
+ */
+function ColliOrdine({ orderId }: { orderId: string }) {
+  const service = useMemo(() => creaLogisticaService(getSupabaseClient()), []);
+  const [logistica, setLogistica] = useState<LogisticaOrdine | null>(null);
+  useEffect(() => {
+    let attivo = true;
+    void service.ordine(orderId).then((r) => {
+      if (attivo && r.ok) setLogistica(r.data);
+    });
+    return () => {
+      attivo = false;
+    };
+  }, [service, orderId]);
+  if (!logistica || logistica.colli.length === 0) return null;
+  return (
+    <div className="mt-3 text-xs text-muted-foreground" data-testid="ordine-colli">
+      <p>
+        {riassuntoColli(logistica.colli)}
+        {logistica.destinazione === "pudo" ? " · consegna al punto di ritiro" : ""}
+      </p>
+      <ul className="mt-1 space-y-0.5">
+        {logistica.colli.map((c) => (
+          <li key={c.numero}>
+            Collo {c.numero}: {etichettaImballaggio(c.packagingFormat)}, {c.bottiglie}{" "}
+            {c.bottiglie === 1 ? "bottiglia" : "bottiglie"}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

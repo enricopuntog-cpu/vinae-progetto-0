@@ -88,6 +88,7 @@ describe("checkout beta deterministico", () => {
       prezzoCents: 10000,
       commissioneCents: 1772,
       imballaggioCents: 0,
+      logisticaCents: 0,
       totaleCents: 11772,
     });
   });

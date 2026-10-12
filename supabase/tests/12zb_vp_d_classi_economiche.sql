@@ -17,6 +17,11 @@
 
 begin;
 
+-- VP-E: da 20261012230000 un ordine di piu bottiglie spedite esige il
+-- preventivo logistico. La fixture di prova (solo nella transazione) apre la
+-- configurazione che in produzione e chiusa; si accende insieme all'interruttore.
+\ir 12zc_vp_e_fixture_logistica.sql
+
 \set ON_ERROR_STOP on
 
 do $$
@@ -540,6 +545,7 @@ begin
   -- -------------------------------------------------------------------------
 
   update private.inventario_impostazioni set vendita_partner = true, ordini_multi_unita = true where id;
+  perform pg_temp.vpe_logistica_fixture();
 
   -- 14: pubblicazione del prodotto Partner, vetrina ed Esplora.
   v_s := pg_temp.pubblica(c_p1, v_lc1);

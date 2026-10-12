@@ -64,6 +64,7 @@ import {
 } from "@/lib/vendi/logistica-annuncio";
 import { PAGAMENTI_UI_ABILITATI } from "@/config/features";
 import { PrezzoPerAcquirente } from "@/components/vinea/PrezzoPerAcquirente";
+import { PreventivoLogisticaAnnuncio } from "@/components/vinea/logistica/PreventivoLogistica";
 import { PubblicazioneProdottoPartner } from "@/components/vinea/partner/PubblicazioneProdottoPartner";
 import { eProdottoCommerciale } from "@/lib/prezzi/classe";
 import type { PreventivoAnnuncio } from "@/services/preventivo-service";
@@ -219,11 +220,18 @@ export default function AnnuncioDetailPageClient({
                 </div>
               ) : null}
               {statoAcquisto === "disponibile" ? (
-                <SceltaQuantitaAcquisto
-                  disponibili={wine.disponibili}
-                  valore={quantitaAcquisto}
-                  onChange={setQuantitaAcquisto}
-                />
+                <>
+                  <SceltaQuantitaAcquisto
+                    disponibili={wine.disponibili}
+                    valore={quantitaAcquisto}
+                    onChange={setQuantitaAcquisto}
+                  />
+                  {/* VP-E: con più bottiglie la spedizione entra nel totale; il
+                      preventivo (colli, imballaggio, trasporto) è del database. */}
+                  {quantitaAcquisto > 1 ? (
+                    <PreventivoLogisticaAnnuncio listingId={listingId} quantita={quantitaAcquisto} />
+                  ) : null}
+                </>
               ) : statoAcquisto === "partner" ? (
                 <AcquistiPartnerNonDisponibili className="mt-6" />
               ) : (

@@ -1663,6 +1663,41 @@ Partner 1500 bps). Regole durevoli:
   (`partner_vendita_non_disponibile` in `listings_bottiglia_idonea`):
   sospenderli prima di spegnere, se servono modifiche.
 
+## Logistica multi-collo VP-E (12 ottobre 2026)
+
+Contratto completo in [`../docs/VP_E_LOGISTICA_MULTI_COLLO.md`](../docs/VP_E_LOGISTICA_MULTI_COLLO.md).
+Migrazione `20261012230000_vp_e_logistica_multi_collo.sql`, griglia
+`supabase/tests/12zc_vp_e_logistica_multi_collo.sql` e prova su sessioni reali
+`supabase/tests/12zc_vp_e_concorrenza.sh`, entrambe nel gate `Supabase DB
+regression`. Regole durevoli:
+
+- **Un ordine di più bottiglie spedite esige il preventivo logistico** dentro
+  la transazione del checkout (`logistica_non_configurata` con i motivi nel
+  `detail`); il vincolo differito `orders_logistica_coerente` lega anche gli
+  scrittori privilegiati. Le griglie che creano ordini di più bottiglie
+  spedite includono la fixture `12zc_vp_e_fixture_logistica.sql` (provider
+  fittizi, solo nella transazione): senza, falliscono per costruzione.
+- **La logistica è `orders.logistica_cents`**, dentro
+  `addebito_totale_cents` (colonna generata, espressione cambiata con `SET
+  EXPRESSION`) e fuori da `totale_cents` e dalla commissione. Ordini da una
+  bottiglia, consegna a mano e ordini storici: zero, nessun collo, piano di
+  sempre. Il frontend ricava la logistica dello storico come addebito −
+  totale − imballaggio, per non dipendere dall'ordine di rilascio.
+- **Colli pieni, un servizio per ordine, costo minimo deterministico**, solo
+  con configurazione esistente (contributo, SKU operativo, motore WP6B di
+  compatibilità, tariffa attiva, reti PUDO). Nessun peso volumetrico: nessun
+  divisore è configurato. Ogni assenza produce un codice preciso per formato
+  (`private.logistica_formato_mancanti`), mai un importo plausibile.
+- **Congelamento e immutabilità.** `private.ordine_logistica` e
+  `private.ordine_colli` non si aggiornano mai e si cancellano solo con
+  l'ordine; `orders_economia_immutabile` comprende la logistica.
+- **Il piano WP6B conosce i colli**: un servizio vale solo se regge tutti i
+  colli (`private.logistica_servizio_regge_ordine`, vero per costruzione
+  senza colli congelati).
+- **Domicilio preventivabile, non ordinabile**: l'ordine non ha un indirizzo
+  di consegna; la decisione WP6B n. 4 resta valida finché quel dominio non
+  esiste.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):

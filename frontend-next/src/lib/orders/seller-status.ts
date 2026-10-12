@@ -139,6 +139,12 @@ export const puoContestare = (ordine: Pick<OrderRecord, "stato" | "contestato_at
  * congelati sull'ordine e non si ricalcolano: `imballaggio` è una riga
  * separata, fuori dal calcolo della commissione, e `totaleMercato` resta la
  * base della 7b.
+ *
+ * VP-E: la logistica di più bottiglie spedite è la parte dell'addebito che non
+ * è né mercato né imballaggio 7c (`addebito = totale + imballaggio +
+ * logistica`, colonna generata). Si ricava da tre numeri congelati invece di
+ * leggere una colonna in più, così la pagina non dipende dall'ordine in cui
+ * frontend e database vengono rilasciati; per ogni altro ordine vale zero.
  */
 export const scomposizioneAddebito = (
   ordine: Pick<
@@ -150,5 +156,9 @@ export const scomposizioneAddebito = (
   commissioneCents: ordine.commissione_cents,
   totaleMercatoCents: ordine.totale_cents,
   imballaggioCents: ordine.imballaggio_cents,
+  logisticaCents: Math.max(
+    0,
+    ordine.addebito_totale_cents - ordine.totale_cents - ordine.imballaggio_cents,
+  ),
   addebitoTotaleCents: ordine.addebito_totale_cents,
 });
