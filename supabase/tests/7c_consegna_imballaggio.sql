@@ -849,6 +849,10 @@ begin
   delete from storage.objects
   where bucket_id = 'dispute-evidence' and owner in (v_seller, v_buyer);
   perform set_config('storage.allow_delete_query', 'false', true);
+  -- VP-C (20261012150000): le allocazioni puntano a ordini e bottiglie con
+  -- FK restrict, quindi escono prima di loro.
+  delete from private.listing_allocazioni where listing_id in (
+    select id from public.listings where seller_id in (v_seller, v_buyer));
   delete from public.orders where buyer_id = v_buyer;
   -- WP6B: il piano di spedizione se ne va in cascata con l'ordine, ma la
   -- configurazione del provider fittizio no, e i punti sono protetti da una FK
@@ -859,6 +863,8 @@ begin
   delete from private.logistics_pickup_points where provider_code = 'provider_7c';
   delete from private.logistics_service_definitions where provider_code = 'provider_7c';
   delete from private.logistics_pudo_networks where provider_code = 'provider_7c';
+  delete from private.listing_unita where listing_id in (
+    select id from public.listings where seller_id in (v_seller, v_buyer));
   delete from public.listings where seller_id in (v_seller, v_buyer);
   -- Price Intelligence registra osservazioni append-only sui listing dei
   -- fixture. La griglia usa e getta rimuove soltanto quelle dei vini Test7c.
@@ -977,6 +983,10 @@ exception when others then
   delete from storage.objects
   where bucket_id = 'dispute-evidence' and owner in (v_seller, v_buyer);
   perform set_config('storage.allow_delete_query', 'false', true);
+  -- VP-C (20261012150000): le allocazioni puntano a ordini e bottiglie con
+  -- FK restrict, quindi escono prima di loro.
+  delete from private.listing_allocazioni where listing_id in (
+    select id from public.listings where seller_id in (v_seller, v_buyer));
   delete from public.orders where buyer_id = v_buyer;
   -- WP6B: il piano di spedizione se ne va in cascata con l'ordine, ma la
   -- configurazione del provider fittizio no, e i punti sono protetti da una FK
@@ -987,6 +997,8 @@ exception when others then
   delete from private.logistics_pickup_points where provider_code = 'provider_7c';
   delete from private.logistics_service_definitions where provider_code = 'provider_7c';
   delete from private.logistics_pudo_networks where provider_code = 'provider_7c';
+  delete from private.listing_unita where listing_id in (
+    select id from public.listings where seller_id in (v_seller, v_buyer));
   delete from public.listings where seller_id in (v_seller, v_buyer);
   -- Price Intelligence registra osservazioni append-only sui listing dei
   -- fixture. La griglia usa e getta rimuove soltanto quelle dei vini Test7c.
