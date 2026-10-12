@@ -612,11 +612,11 @@ begin
     v_s = 'NESSUN_ERRORE:null' and v_c.esito = '42501', v_s || '/' || v_c.esito);
 
   -- 38: invarianza: nessun ruolo scritto, margine privato 800 bps intatto,
-  -- nessuna riga professionale in marketplace_config.
-  perform pg_temp.registra(38, 'user_roles invariato; marketplace_config: una riga corrente a 800 bps',
+  -- una sola riga corrente privata (dopo VP-D esiste anche la riga Partner).
+  perform pg_temp.registra(38, 'user_roles invariato; marketplace_config: una riga corrente privata a 800 bps',
     (select count(*) from public.user_roles) = v_ruoli_prima
-      and (select count(*) from public.marketplace_config where valida_fino is null) = 1
-      and (select margine_obiettivo_bps from public.marketplace_config where valida_fino is null) = 800);
+      and (select count(*) from public.marketplace_config where valida_fino is null and classe_venditore = 'privato') = 1
+      and (select margine_obiettivo_bps from public.marketplace_config where valida_fino is null and classe_venditore = 'privato') = 800);
 end $$;
 
 select id, descrizione, passed, detail

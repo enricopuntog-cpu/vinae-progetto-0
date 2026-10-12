@@ -843,9 +843,9 @@ do $$
 declare v_n integer; v_bps integer;
 begin
   select count(*) into v_n
-  from public.marketplace_config where valida_fino is null;
+  from public.marketplace_config where valida_fino is null and classe_venditore = 'privato';
   select margine_obiettivo_bps into v_bps
-  from public.marketplace_config where valida_fino is null;
+  from public.marketplace_config where valida_fino is null and classe_venditore = 'privato';
   perform pg_temp.registra(31,
     'La commissione di marketplace resta 800 bps, intatta e fuori dal conto di unit economics',
     v_n = 1 and v_bps = 800,

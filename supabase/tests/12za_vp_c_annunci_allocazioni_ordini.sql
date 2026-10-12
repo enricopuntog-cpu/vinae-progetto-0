@@ -356,9 +356,9 @@ begin
   select * into v_c from pg_temp.prenota(c_b1, v_l5, 'grid12za-o-due', 2);
   v_o2 := (v_c.dati ->> 'order_id')::uuid;
   v_totale := private.marketplace_totale_cents(
-    10000, (select margine_obiettivo_bps from public.marketplace_config where valida_fino is null),
-    (select riferimento_stripe_percentuale_bps from public.marketplace_config where valida_fino is null),
-    (select riferimento_stripe_fisso_cents from public.marketplace_config where valida_fino is null));
+    10000, (select margine_obiettivo_bps from public.marketplace_config where valida_fino is null and classe_venditore = 'privato'),
+    (select riferimento_stripe_percentuale_bps from public.marketplace_config where valida_fino is null and classe_venditore = 'privato'),
+    (select riferimento_stripe_fisso_cents from public.marketplace_config where valida_fino is null and classe_venditore = 'privato'));
   perform pg_temp.registra(7, 'acquisto di 2 su 5: un ordine da 2, prezzo unitario 5000, subtotale 10000, una sola commissione sull''aggregato; 2 allocazioni; annuncio attivo con 3 disponibili',
     v_c.esito = 'NESSUN_ERRORE'
       and (select quantita = 2 and prezzo_unitario_cents = 5000 and prezzo_cents = 10000
@@ -729,7 +729,7 @@ begin
   perform pg_temp.registra(33, 'marketplace_config invariato (800 bps); interruttori come prima della griglia salvo il cambio locale; gate Partner presenti',
     (select string_agg(concat_ws(':', id, margine_obiettivo_bps, valida_fino), ',' order by id)
      from public.marketplace_config) = v_config_prima
-      and (select margine_obiettivo_bps from public.marketplace_config where valida_fino is null) = 800
+      and (select margine_obiettivo_bps from public.marketplace_config where valida_fino is null and classe_venditore = 'privato') = 800
       and (select vendita_partner from private.inventario_impostazioni) = false
       and exists (select 1 from pg_trigger t where t.tgrelid = 'public.orders'::regclass
                     and t.tgname = 'orders_partner_checkout_gate' and not t.tgisinternal)
