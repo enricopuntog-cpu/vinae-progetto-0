@@ -84,17 +84,18 @@ describe("checkout beta deterministico", () => {
       riferimentoPercentualeBps: 209,
       riferimentoFissoCents: 25,
     };
-    expect(riepilogoCheckout(preventivo, "kit_domicilio")).toEqual({
+    expect(riepilogoCheckout(preventivo, 0)).toEqual({
       prezzoCents: 10000,
       commissioneCents: 1772,
       imballaggioCents: 0,
       logisticaCents: 0,
+      feePagamentoCents: 0,
       totaleCents: 11772,
     });
   });
 
   it("senza preventivo non inventa un totale", () => {
-    expect(riepilogoCheckout(null, "kit_domicilio")).toBeNull();
+    expect(riepilogoCheckout(null)).toBeNull();
   });
 });
 

@@ -107,10 +107,21 @@ function Opzione({
         <Riga label="Gestione spedizione" value={euro(opzione.bufferCents ?? 0)} />
       ) : null}
       <Riga label="Spedizione e imballaggio" value={euro(opzione.totaleCents ?? 0)} forte />
+      {(opzione.feePagamentoCents ?? 0) > 0 ? (
+        <Riga
+          label="Costi di pagamento sulla spedizione"
+          value={euro(opzione.feePagamentoCents ?? 0)}
+          testId={`logistica-fee-${opzione.destinazione}`}
+        />
+      ) : null}
       {opzione.venditore ? (
         <p className="text-xs text-muted-foreground" data-testid="logistica-venditore">
-          Costo reale {euro(opzione.venditore.costoRealeCents)} (
-          {euro(opzione.venditore.costoRealePerBottigliaCents)} a bottiglia)
+          Costo reale per questa spedizione {euro(opzione.venditore.costoRealeCents)}
+          {opzione.venditore.obiettivoApplicabile && opzione.venditore.obiettivoTransazioneCents !== null
+            ? ` · obiettivo sotto ${euro(opzione.venditore.obiettivoTransazioneCents)}: ${
+                opzione.venditore.entroObiettivoTransazione ? "raggiunto" : "non raggiunto"
+              }`
+            : ""}
           {opzione.venditore.deduzioneRitiroCents > 0
             ? ` · ritiro a domicilio a tuo carico: ${euro(opzione.venditore.deduzioneRitiroCents)}`
             : ""}
@@ -120,8 +131,21 @@ function Opzione({
   );
 }
 
-const Riga = ({ label, value, forte = false }: { label: string; value: string; forte?: boolean }) => (
-  <div className={`flex items-baseline justify-between gap-3 text-xs ${forte ? "font-semibold" : ""}`}>
+const Riga = ({
+  label,
+  value,
+  forte = false,
+  testId,
+}: {
+  label: string;
+  value: string;
+  forte?: boolean;
+  testId?: string;
+}) => (
+  <div
+    className={`flex items-baseline justify-between gap-3 text-xs ${forte ? "font-semibold" : ""}`}
+    data-testid={testId}
+  >
     <span>{label}</span>
     <span className="shrink-0">{value}</span>
   </div>

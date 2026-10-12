@@ -247,8 +247,12 @@ describe("VP-E — lettura del preventivo logistico", () => {
           deduzioneRitiroCents: 610,
           costoRealeCents: 2432,
           costoRealePerBottigliaCents: 304,
-          obiettivoCents: 1500,
-          entroObiettivo: true,
+          obiettivoTransazioneCents: 1000,
+          obiettivoPrezzoBottigliaMaxCents: 5000,
+          obiettivoApplicabile: true,
+          entroObiettivoTransazione: false,
+          sogliaStoricaCents: 1500,
+          entroSogliaStorica: false,
         },
       },
       8,
@@ -361,7 +365,7 @@ describe("VP-E — checkout e ordini", () => {
         riferimentoPercentualeBps: 209,
         riferimentoFissoCents: 25,
       },
-      "nessuno",
+      0,
       1822,
     );
     expect(r).toEqual({
@@ -369,6 +373,7 @@ describe("VP-E — checkout e ordini", () => {
       commissioneCents: 3324,
       imballaggioCents: 0,
       logisticaCents: 1822,
+      feePagamentoCents: 0,
       totaleCents: 37146,
     });
   });

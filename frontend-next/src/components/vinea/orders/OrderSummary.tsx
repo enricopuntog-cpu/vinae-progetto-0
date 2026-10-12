@@ -56,7 +56,7 @@ export function OrderSummary({ ordine }: { ordine: OrderRecord }) {
           />
         )}
         {s.logisticaCents > 0 && (
-          <Riga label="Spedizione e imballaggio" value={centesimi(s.logisticaCents)} />
+          <Riga label="Spedizione e servizi accessori" value={centesimi(s.logisticaCents)} />
         )}
         <div className="my-2 h-px bg-border" />
         <Riga label="Totale" value={centesimi(s.addebitoTotaleCents)} bold />
@@ -111,6 +111,11 @@ function ColliOrdine({ orderId }: { orderId: string }) {
           </li>
         ))}
       </ul>
+      {logistica.feePagamentoCents > 0 ? (
+        <p className="mt-1" data-testid="ordine-fee-pagamento">
+          Di cui costi di pagamento sulla spedizione: {euro(logistica.feePagamentoCents)}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -66,16 +66,15 @@ const Page = async ({
   });
   // VP-E: con più bottiglie la spedizione (colli, imballaggio, trasporto) entra
   // nel totale. Il preventivo è del database; se non si legge, il checkout la
-  // tratta come non configurata e non si conferma con la spedizione.
-  let logistica: PreventivoLogistica | null = null;
-  if (bottiglie > 1) {
-    const esito = await creaLogisticaService(client).preventivo(
-      wine.listingId ?? wine.id,
-      bottiglie,
-      prezzoProposta,
-    );
-    logistica = esito.ok ? esito.data : null;
-  }
+  // tratta come non configurata e non si conferma con la spedizione. Si legge
+  // anche per una bottiglia: imballaggio dell'annuncio e copertura della fee
+  // di pagamento vengono da qui (senza lettura il riepilogo non stima importi).
+  const esitoLogistica = await creaLogisticaService(client).preventivo(
+    wine.listingId ?? wine.id,
+    bottiglie,
+    prezzoProposta,
+  );
+  const logistica: PreventivoLogistica | null = esitoLogistica.ok ? esitoLogistica.data : null;
   const statoAcquisto = statoAcquistoDaPreventivo(preventivo);
   if (statoAcquisto !== "disponibile") {
     return (

@@ -140,7 +140,8 @@ export const puoContestare = (ordine: Pick<OrderRecord, "stato" | "contestato_at
  * separata, fuori dal calcolo della commissione, e `totaleMercato` resta la
  * base della 7b.
  *
- * VP-E: la logistica di più bottiglie spedite è la parte dell'addebito che non
+ * VP-E: la logistica di più bottiglie spedite (con la copertura della fee di
+ * pagamento che genera, migrazione 20261012234500) è la parte dell'addebito che non
  * è né mercato né imballaggio 7c (`addebito = totale + imballaggio +
  * logistica`, colonna generata). Si ricava da tre numeri congelati invece di
  * leggere una colonna in più, così la pagina non dipende dall'ordine in cui

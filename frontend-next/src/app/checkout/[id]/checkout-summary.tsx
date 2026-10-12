@@ -1,5 +1,5 @@
 import type { Wine } from "@/data/wines";
-import { riepilogoCheckout, type DatiCheckoutBeta } from "@/lib/beta/checkout";
+import { accessoriCheckout, riepilogoCheckout, type DatiCheckoutBeta } from "@/lib/beta/checkout";
 import { etichettaClasse, euro } from "@/lib/prezzi/classe";
 import type { PreventivoAnnuncio } from "@/services/preventivo-service";
 import type { PreventivoLogistica } from "@/services/logistica-service";
@@ -40,11 +40,16 @@ export const CheckoutSummary = ({
   const bottiglie = economico?.quantita ?? 1;
   const pudo = logistica?.opzioni.find((o) => o.destinazione === "pudo") ?? null;
   const conLogistica = bottiglie > 1 && dati.deliveryMode === "spedizione";
-  // Con la spedizione non configurata non si stima un totale: il checkout non
-  // si conferma (VP-E, fail-closed).
-  const stima = conLogistica && logisticaCents === null
+  // Imballaggio dell'annuncio, logistica e copertura della fee dal preventivo
+  // del database, gli stessi che il checkout congela. Con la spedizione non
+  // configurata o un importo non determinabile non si stima un totale (VP-E,
+  // fail-closed).
+  const accessori = conLogistica && logisticaCents === null
     ? null
-    : riepilogoCheckout(economico, dati.imballaggioCodice, logisticaCents ?? 0);
+    : accessoriCheckout(bottiglie, dati.deliveryMode, logistica);
+  const stima = accessori
+    ? riepilogoCheckout(economico, accessori.imballaggioCents, accessori.logisticaCents, accessori.feePagamentoCents)
+    : null;
 
   return (
     <aside className="space-y-4 rounded-2xl border border-border bg-card p-4 lg:sticky lg:top-24" data-testid="checkout-summary">
@@ -67,7 +72,7 @@ export const CheckoutSummary = ({
         <div className="space-y-2 text-sm">
           <Riga label={bottiglie > 1 ? "Subtotale venditore" : "Prezzo venditore"} value={euroCents(stima.prezzoCents)} />
           <Riga label="Servizio Vinea" value={euroCents(stima.commissioneCents)} />
-          <Riga label="Imballaggio beta" value={euroCents(stima.imballaggioCents)} />
+          <Riga label="Imballaggio" value={euroCents(stima.imballaggioCents)} testId="checkout-imballaggio" />
           {conLogistica && pudo ? (
             <>
               <Riga
@@ -87,6 +92,13 @@ export const CheckoutSummary = ({
           ) : (
             <Riga label="Spedizione" value="Da confermare" />
           )}
+          {stima.feePagamentoCents > 0 ? (
+            <Riga
+              label={conLogistica ? "Costi di pagamento sulla spedizione" : "Costi di pagamento sull'imballaggio"}
+              value={euroCents(stima.feePagamentoCents)}
+              testId="checkout-fee-pagamento"
+            />
+          ) : null}
           <div className="border-t border-border pt-2">
             <Riga label="Totale stimato" value={euroCents(stima.totaleCents)} forte />
           </div>
@@ -111,15 +123,28 @@ export const CheckoutSummary = ({
       <p className="text-xs leading-relaxed text-muted-foreground">
         Il totale vincolante sarà calcolato dal server e mostrato dal provider prima del pagamento.
         {conLogistica
-          ? " Spedizione e imballaggio di più bottiglie vengono dal preventivo del server, separati dal servizio Vinea."
-          : " Nessun costo di spedizione o imballaggio viene promesso da questa stima beta."}
+          ? " Spedizione, imballaggio di più bottiglie e i costi di pagamento che generano vengono dal preventivo del server, separati dal servizio Vinea."
+          : " L'imballaggio dichiarato sull'annuncio e i costi di pagamento che genera vengono dal preventivo del server; nessun costo di spedizione viene promesso da questa stima beta."}
       </p>
     </aside>
   );
 };
 
-const Riga = ({ label, value, forte = false }: { label: string; value: string; forte?: boolean }) => (
-  <div className={`flex items-baseline justify-between gap-3 ${forte ? "font-semibold text-bordeaux" : ""}`}>
+const Riga = ({
+  label,
+  value,
+  forte = false,
+  testId,
+}: {
+  label: string;
+  value: string;
+  forte?: boolean;
+  testId?: string;
+}) => (
+  <div
+    className={`flex items-baseline justify-between gap-3 ${forte ? "font-semibold text-bordeaux" : ""}`}
+    data-testid={testId}
+  >
     <span>{label}</span><span className="shrink-0">{value}</span>
   </div>
 );
