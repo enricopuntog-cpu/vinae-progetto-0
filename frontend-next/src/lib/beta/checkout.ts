@@ -122,6 +122,7 @@ export const OPZIONI_IMBALLAGGIO_BETA: ReadonlyArray<PackagingOption> = Object.f
 export const riepilogoCheckout = (
   preventivo: PreventivoEconomico | null,
   imballaggioCodice: string,
+  logisticaCents = 0,
 ) => {
   if (!preventivo) return null;
   const imballaggioCents =
@@ -132,6 +133,26 @@ export const riepilogoCheckout = (
     prezzoCents: preventivo.subtotaleCents,
     commissioneCents: preventivo.commissioneCents,
     imballaggioCents,
-    totaleCents: preventivo.totaleCents + imballaggioCents,
+    // VP-E: la logistica di più bottiglie spedite (colli, imballaggio,
+    // trasporto) è una riga a sé, fuori dalla commissione, dal preventivo
+    // logistico del database.
+    logisticaCents,
+    totaleCents: preventivo.totaleCents + imballaggioCents + logisticaCents,
   };
+};
+
+/**
+ * VP-E: quanto della logistica entra nel totale. Solo per più bottiglie
+ * spedite e solo se il punto di ritiro è ordinabile; altrimenti zero (una
+ * bottiglia, consegna a mano) o `null` (spedizione non configurata: il
+ * checkout non si conferma).
+ */
+export const logisticaAddebitata = (
+  quantita: number,
+  deliveryMode: OrderDeliveryMode,
+  opzionePudo: { ordinabile: boolean; totaleCents: number | null } | null,
+): number | null => {
+  if (quantita <= 1 || deliveryMode !== "spedizione") return 0;
+  if (!opzionePudo || !opzionePudo.ordinabile || opzionePudo.totaleCents === null) return null;
+  return opzionePudo.totaleCents;
 };

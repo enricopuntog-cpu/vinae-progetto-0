@@ -11,6 +11,7 @@ import { statoAcquistoDaPreventivo } from "@/lib/prezzi/classe";
 import { MAX_BOTTIGLIE_PER_ORDINE, quantitaDaTesto } from "@/lib/cantina/gruppo";
 import { createListingService } from "@/services/listing-service";
 import { creaPreventivoService } from "@/services/preventivo-service";
+import { creaLogisticaService, type PreventivoLogistica } from "@/services/logistica-service";
 import CheckoutPageClient from "./page-client";
 
 export const generateMetadata = async ({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> => {
@@ -54,13 +55,27 @@ const Page = async ({
   // importi. Un indirizzo diretto, un vecchio link, un prodotto Partner con la
   // vendita chiusa o una lettura fallita non aprono un checkout che i gate
   // rifiuterebbero all'ultimo passo.
+  const bottiglie = proposta?.quantita ?? quantita ?? 1;
+  const prezzoProposta =
+    proposta?.stato === "accettata"
+      ? (proposta.controproposta_cents ?? proposta.prezzo_proposto_cents)
+      : undefined;
   const preventivo = await creaPreventivoService(client).annuncio(wine.listingId ?? wine.id, {
-    quantita: proposta?.quantita ?? quantita ?? 1,
-    prezzoUnitarioCents:
-      proposta?.stato === "accettata"
-        ? (proposta.controproposta_cents ?? proposta.prezzo_proposto_cents)
-        : undefined,
+    quantita: bottiglie,
+    prezzoUnitarioCents: prezzoProposta,
   });
+  // VP-E: con più bottiglie la spedizione (colli, imballaggio, trasporto) entra
+  // nel totale. Il preventivo è del database; se non si legge, il checkout la
+  // tratta come non configurata e non si conferma con la spedizione.
+  let logistica: PreventivoLogistica | null = null;
+  if (bottiglie > 1) {
+    const esito = await creaLogisticaService(client).preventivo(
+      wine.listingId ?? wine.id,
+      bottiglie,
+      prezzoProposta,
+    );
+    logistica = esito.ok ? esito.data : null;
+  }
   const statoAcquisto = statoAcquistoDaPreventivo(preventivo);
   if (statoAcquisto !== "disponibile") {
     return (
@@ -87,6 +102,8 @@ const Page = async ({
       proposalId={ricerca.prop}
       quantita={quantita}
       preventivo={preventivo.ok ? preventivo.data : null}
+      bottiglie={bottiglie}
+      logistica={logistica}
     />
   );
 };

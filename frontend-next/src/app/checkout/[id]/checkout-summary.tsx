@@ -2,6 +2,8 @@ import type { Wine } from "@/data/wines";
 import { riepilogoCheckout, type DatiCheckoutBeta } from "@/lib/beta/checkout";
 import { etichettaClasse, euro } from "@/lib/prezzi/classe";
 import type { PreventivoAnnuncio } from "@/services/preventivo-service";
+import type { PreventivoLogistica } from "@/services/logistica-service";
+import { riassuntoColli } from "@/lib/logistica/etichette";
 
 const euroCents = euro;
 
@@ -9,6 +11,8 @@ export const CheckoutSummary = ({
   wine,
   dati,
   preventivo,
+  logistica = null,
+  logisticaCents = 0,
   saldoApplicatoCents,
   importoProviderCents,
   saldoOnly,
@@ -21,13 +25,26 @@ export const CheckoutSummary = ({
    * servizio Vinea e totale. `null` se non determinabile.
    */
   preventivo: PreventivoAnnuncio | null;
+  /** VP-E: preventivo logistico del database per più bottiglie. */
+  logistica?: PreventivoLogistica | null;
+  /**
+   * VP-E: logistica che entra nel totale (0 per una bottiglia o la consegna a
+   * mano, `null` se la spedizione non è configurata).
+   */
+  logisticaCents?: number | null;
   saldoApplicatoCents?: number;
   importoProviderCents?: number;
   saldoOnly?: boolean;
 }) => {
   const economico = preventivo?.preventivo ?? null;
-  const stima = riepilogoCheckout(economico, dati.imballaggioCodice);
   const bottiglie = economico?.quantita ?? 1;
+  const pudo = logistica?.opzioni.find((o) => o.destinazione === "pudo") ?? null;
+  const conLogistica = bottiglie > 1 && dati.deliveryMode === "spedizione";
+  // Con la spedizione non configurata non si stima un totale: il checkout non
+  // si conferma (VP-E, fail-closed).
+  const stima = conLogistica && logisticaCents === null
+    ? null
+    : riepilogoCheckout(economico, dati.imballaggioCodice, logisticaCents ?? 0);
 
   return (
     <aside className="space-y-4 rounded-2xl border border-border bg-card p-4 lg:sticky lg:top-24" data-testid="checkout-summary">
@@ -51,7 +68,25 @@ export const CheckoutSummary = ({
           <Riga label={bottiglie > 1 ? "Subtotale venditore" : "Prezzo venditore"} value={euroCents(stima.prezzoCents)} />
           <Riga label="Servizio Vinea" value={euroCents(stima.commissioneCents)} />
           <Riga label="Imballaggio beta" value={euroCents(stima.imballaggioCents)} />
-          <Riga label="Spedizione" value="Da confermare" />
+          {conLogistica && pudo ? (
+            <>
+              <Riga
+                label={`Imballaggio spedizione (${riassuntoColli(pudo.colli)})`}
+                value={euroCents(pudo.imballaggioCents ?? 0)}
+              />
+              <Riga label="Trasporto al punto di ritiro" value={euroCents(pudo.trasportoCents ?? 0)} />
+              {(pudo.altriCostiCents ?? 0) + (pudo.bufferCents ?? 0) > 0 ? (
+                <Riga
+                  label="Altri costi logistici"
+                  value={euroCents((pudo.altriCostiCents ?? 0) + (pudo.bufferCents ?? 0))}
+                />
+              ) : null}
+            </>
+          ) : bottiglie > 1 ? (
+            <Riga label="Spedizione" value="Non prevista (ritiro concordato)" />
+          ) : (
+            <Riga label="Spedizione" value="Da confermare" />
+          )}
           <div className="border-t border-border pt-2">
             <Riga label="Totale stimato" value={euroCents(stima.totaleCents)} forte />
           </div>
@@ -75,7 +110,9 @@ export const CheckoutSummary = ({
       )}
       <p className="text-xs leading-relaxed text-muted-foreground">
         Il totale vincolante sarà calcolato dal server e mostrato dal provider prima del pagamento.
-        Nessun costo di spedizione o imballaggio viene promesso da questa stima beta.
+        {conLogistica
+          ? " Spedizione e imballaggio di più bottiglie vengono dal preventivo del server, separati dal servizio Vinea."
+          : " Nessun costo di spedizione o imballaggio viene promesso da questa stima beta."}
       </p>
     </aside>
   );
