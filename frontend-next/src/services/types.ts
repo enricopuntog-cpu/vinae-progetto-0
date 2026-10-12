@@ -1253,6 +1253,11 @@ export type OrderRecord = {
   /** Il rincaro risultante. La percentuale effettiva si deriva, non si legge. */
   commissione_cents: number;
   /**
+   * VP-D: classe economica del venditore decisa dal database alla creazione e
+   * congelata: spiega il margine (privati 800 bps, Partner 1500 bps).
+   */
+  venditore_classe?: ClasseVenditore;
+  /**
    * Base di mercato: `prezzo + commissione`. Colonna generata. L'imballaggio
    * **non** entra qui, mai — è ciò che tiene intatta la formula del rincaro e
    * la riconciliazione della 7b.

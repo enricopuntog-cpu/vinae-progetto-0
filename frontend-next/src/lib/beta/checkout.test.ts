@@ -4,7 +4,7 @@ import {
   destinazioneSaldoOnly,
   OPZIONI_IMBALLAGGIO_BETA,
   passiCheckout,
-  stimaCheckout,
+  riepilogoCheckout,
   validaPassoCheckout,
 } from "@/lib/beta/checkout";
 
@@ -72,14 +72,28 @@ describe("checkout beta deterministico", () => {
     expect(OPZIONI_IMBALLAGGIO_BETA.every((opzione) => opzione.prezzoCents === 0)).toBeTrue();
   });
 
-  it("calcola un riepilogo stabile senza mutare il prezzo dell'imballaggio", () => {
-    const stima = stimaCheckout(100, "kit_domicilio");
-    expect(stima).toEqual({
+  it("riepiloga il preventivo del database senza ricalcolarlo, imballaggio a parte", () => {
+    const preventivo = {
+      classe: "partner" as const,
+      quantita: 1,
+      prezzoUnitarioCents: 10000,
+      subtotaleCents: 10000,
+      commissioneCents: 1772,
+      totaleCents: 11772,
+      margineObiettivoBps: 1500,
+      riferimentoPercentualeBps: 209,
+      riferimentoFissoCents: 25,
+    };
+    expect(riepilogoCheckout(preventivo, "kit_domicilio")).toEqual({
       prezzoCents: 10000,
-      commissioneCents: 686,
+      commissioneCents: 1772,
       imballaggioCents: 0,
-      totaleCents: 10686,
+      totaleCents: 11772,
     });
+  });
+
+  it("senza preventivo non inventa un totale", () => {
+    expect(riepilogoCheckout(null, "kit_domicilio")).toBeNull();
   });
 });
 

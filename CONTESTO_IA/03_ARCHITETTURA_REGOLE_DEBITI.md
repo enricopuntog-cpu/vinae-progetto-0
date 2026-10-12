@@ -1615,6 +1615,54 @@ Parte 3 (interfacce, nessuna migrazione). Regole durevoli:
   `commerciale` (`creaScortePartnerService`), senza strumenti da collezionista;
   la vetrina legge solo `vetrina_partner_catalogo`.
 
+## Classi economiche VP-D (12 ottobre 2026)
+
+Contratto completo in [`../docs/VP_D_CLASSI_ECONOMICHE.md`](../docs/VP_D_CLASSI_ECONOMICHE.md).
+Parte 1: migrazione `20261012200000_vp_d_classi_economiche.sql`, griglia
+`supabase/tests/12zb_vp_d_classi_economiche.sql` e prova su sessioni reali
+`supabase/tests/12zb_vp_d_concorrenza.sh`, entrambe nel gate `Supabase DB
+regression`. Supera, per l'aliquota, il 16% di
+`docs/ALIQUOTA_PER_CLASSE_VENDITORE_SPEC.md` (strada A adottata, margine
+Partner 1500 bps). Regole durevoli:
+
+- **Una riga corrente PER CLASSE** in `public.marketplace_config`
+  (`classe_venditore` = `privato` | `partner`, indice
+  `marketplace_config_una_corrente_per_classe`, colonna senza default). Il
+  lettore è `private.marketplace_config_corrente(classe)`: la versione a zero
+  argomenti non esiste più, e una classe senza riga corrente blocca il
+  checkout invece di ricadere sull'8%. Le griglie che asserivano «una riga
+  corrente a 800 bps» filtrano `classe_venditore = 'privato'`.
+- **Una sola formula** `private.marketplace_totale_cents`, invariata: il
+  venditore riceve il suo prezzo, la classe sceglie solo il margine. Mai
+  sottrazioni dal prezzo del venditore, mai «prezzo × 1,15».
+- **La classe la decide il database.** Nucleo `stable`
+  `private.venditore_classe_di(annuncio)`; nei punti autorevoli (checkout,
+  proposte, pubblicazione) l'involucro `private.venditore_classe_risolvi`
+  prende FOR SHARE sulle righe Partner del venditore, così una sospensione
+  concorrente attende o vede l'ordine. Annuncio personale di un Partner
+  attivo o sospeso → `partner` non vendibile; prodotto commerciale vendibile
+  solo con Partner attivo, titolare con account attivo e `vendita_partner`
+  acceso. Nessuna porta accetta la classe come parametro.
+- **Congelamento.** `orders.venditore_classe` e i parametri economici
+  dell'ordine sono immutabili (`orders_economia_immutabile`); il gate
+  `orders_partner_checkout_gate` ricontrolla classe, parametri e commissione
+  anche per writer privilegiati (hint `classe_incoerente`,
+  `economia_incoerente`, `partner_checkout_non_disponibile`). La consegna
+  rilegge la configurazione con la classe dell'ordine.
+- **Preventivi autorevoli** `listing_preventivo` (anon/auth),
+  `preventivo_vendita` e `prodotti_partner_miei` (auth): stessa riga e stessa
+  formula del checkout. Le superfici del browser (scheda, proposta, checkout,
+  vendita, catalogo Partner, riepilogo ordine) leggono solo questi preventivi
+  con parser che verificano le identità subtotale/totale, mostrano importi al
+  centesimo e non offrono azioni che il database rifiuterebbe.
+- **Partner revocato: decisione aperta** (§4.1 del contratto). Il codice
+  preserva il comportamento precedente: prodotti commerciali mai vendibili,
+  annunci personali di nuovo privati.
+- **Spegnere `vendita_partner` dopo un'accensione** lascia i prodotti
+  commerciali già `attivo` nascosti agli acquirenti e non modificabili
+  (`partner_vendita_non_disponibile` in `listings_bottiglia_idonea`):
+  sospenderli prima di spegnere, se servono modifiche.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):

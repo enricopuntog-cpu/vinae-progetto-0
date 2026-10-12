@@ -94,6 +94,11 @@ Aprire soltanto ciò che serve al task:
   convertiti, interruttori `ordini_multi_unita`/`vendita_partner` spenti — è
   in `03_ARCHITETTURA_REGOLE_DEBITI.md`; contratto completo in
   `../docs/VP_C_QUANTITA_MULTIPLE.md`.
+- Classi economiche VP-D (12 ottobre 2026) — una riga di `marketplace_config`
+  per classe (privati 800 bps, Partner 1500 bps), stessa formula, classe
+  decisa e congelata dal database, preventivi autorevoli per le superfici,
+  nessun ripiego all'8% — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`; contratto
+  completo in `../docs/VP_D_CLASSI_ECONOMICHE.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono
@@ -138,10 +143,11 @@ va riscritto come se la decisione precedente non fosse mai esistita.
 - Fase 11: estensioni AI ammesse per eccezione; implementazione non aperta finché
   non sono soddisfatti i prerequisiti della specifica.
 - Vetrina a successo e aliquota per classe di venditore: ammesse per eccezione e
-  per nome il 14 settembre 2026, **progettate e non implementate**. I documenti
-  sono `docs/VETRINA_A_SUCCESSO_SPEC.md` e
-  `docs/ALIQUOTA_PER_CLASSE_VENDITORE_SPEC.md`; l'elenco completo delle
-  eccezioni è in `docs/ROADMAP_V1.md`.
+  per nome il 14 settembre 2026. La vetrina è progettata e non implementata
+  (`docs/VETRINA_A_SUCCESSO_SPEC.md`); l'aliquota per classe è implementata da
+  VP-D con la strada A e il margine Partner a 1500 bps: il 16% di
+  `docs/ALIQUOTA_PER_CLASSE_VENDITORE_SPEC.md` è superato e quel documento
+  resta storico. L'elenco completo delle eccezioni è in `docs/ROADMAP_V1.md`.
 - Fase 12: Club/Community; checkpoint 12a/12b/12c mersi e in produzione.
 - `public.clubs` contiene `circolo-vinea` dal 19 agosto 2026; il seed dei sette
   club non è stato eseguito.

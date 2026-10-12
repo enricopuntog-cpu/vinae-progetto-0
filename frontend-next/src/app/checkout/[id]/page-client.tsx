@@ -10,17 +10,20 @@ import { useVinea } from "@/lib/vinea-store";
 import { CheckoutSummary } from "./checkout-summary";
 import { ContattiStep, ConsegnaStep, ImballaggioStep, PagamentoStep } from "./checkout-steps";
 import { useBetaCheckout } from "./use-beta-checkout";
+import type { PreventivoAnnuncio } from "@/services/preventivo-service";
 
 const CheckoutFlow = ({
   wine,
   email,
   proposalId,
   quantita,
+  preventivo,
 }: {
   wine: Wine;
   email: string;
   proposalId?: string;
   quantita?: number;
+  preventivo: PreventivoAnnuncio | null;
 }) => {
   const checkout = useBetaCheckout(wine, email, proposalId, quantita);
   const ultimo = checkout.indice === checkout.passi.length - 1;
@@ -55,7 +58,7 @@ const CheckoutFlow = ({
             )}
           </div>
         </div>
-        <CheckoutSummary wine={wine} dati={checkout.dati} quantita={quantita} />
+        <CheckoutSummary wine={wine} dati={checkout.dati} preventivo={preventivo} />
       </div>
     </div>
   );
@@ -65,10 +68,12 @@ const CheckoutPageClient = ({
   wine,
   proposalId,
   quantita,
+  preventivo,
 }: {
   wine: Wine;
   proposalId?: string;
   quantita?: number;
+  preventivo: PreventivoAnnuncio | null;
 }) => {
   const { authUser, authLoading } = useVinea();
   if (authLoading) return <LoadingBlock label="Verifica della sessione" />;
@@ -87,6 +92,7 @@ const CheckoutPageClient = ({
       email={authUser.email ?? ""}
       proposalId={proposalId}
       quantita={quantita}
+      preventivo={preventivo}
     />
   );
 };

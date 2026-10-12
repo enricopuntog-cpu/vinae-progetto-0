@@ -25,6 +25,8 @@ export type GruppoScorte = {
   tipo: string;
   formato: string;
   quantita: number;
+  /** VP-D: le unità del gruppo, una per bottiglia, in ordine d'ingresso. */
+  unitaIds: string[];
 };
 
 export type DatiNuoveScorte = {
@@ -63,6 +65,7 @@ export function raggruppaScorte(righe: readonly RigaScorta[]): GruppoScorte[] {
     const gruppo = gruppi.get(chiave);
     if (gruppo) {
       gruppo.quantita += 1;
+      gruppo.unitaIds.push(riga.id);
     } else {
       gruppi.set(chiave, {
         chiave,
@@ -73,6 +76,7 @@ export function raggruppaScorte(righe: readonly RigaScorta[]): GruppoScorte[] {
         tipo: vino.tipo,
         formato,
         quantita: 1,
+        unitaIds: [riga.id],
       });
     }
   }
@@ -101,6 +105,28 @@ export function creaScortePartnerService(client: SupabaseClient | null) {
         return { ok: false, error: ERRORE_LETTURA };
       }
       return { ok: true, data: raggruppaScorte((data as unknown as RigaScorta[] | null) ?? []) };
+    },
+
+    /**
+     * VP-D: le unità già offerte da un prodotto in corso (non ritirate), che
+     * quindi non entrano in un prodotto nuovo. Una lettura fallita è un
+     * errore: chi la usa non propone unità di cui non sa lo stato.
+     */
+    async occupate(): Promise<Result<Set<string>>> {
+      if (!client) return { ok: false, error: ERRORE_LETTURA };
+      const { data, error } = await client.rpc("cantina_unita_annunci");
+      if (error || !Array.isArray(data)) {
+        console.error("[ScortePartner] unità in vendita non lette:", error?.code ?? "forma");
+        return { ok: false, error: ERRORE_LETTURA };
+      }
+      return {
+        ok: true,
+        data: new Set(
+          (data as Array<{ bottle_unit_id?: unknown }>)
+            .map((r) => r.bottle_unit_id)
+            .filter((id): id is string => typeof id === "string"),
+        ),
+      };
     },
 
     async aggiungi(dati: DatiNuoveScorte): Promise<Result<EsitoLotto>> {

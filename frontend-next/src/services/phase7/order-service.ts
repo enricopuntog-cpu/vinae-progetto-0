@@ -56,6 +56,8 @@ const COLONNE_ORDINE = [
   "riferimento_stripe_fisso_cents",
   "commissione_cents",
   "totale_cents",
+  // VP-D: classe economica del venditore congelata alla creazione.
+  "venditore_classe",
   "payout_stato",
   "consegnato_at",
   "auto_rilascio_scadenza",

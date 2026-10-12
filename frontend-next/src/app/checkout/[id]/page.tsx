@@ -7,10 +7,10 @@ import {
   AcquistoNonVerificato,
 } from "@/components/vinea/partner/AcquistiPartnerNonDisponibili";
 import { routes } from "@/config/routes";
-import { statoAcquistoDa } from "@/lib/partner/vetrina";
+import { statoAcquistoDaPreventivo } from "@/lib/prezzi/classe";
 import { MAX_BOTTIGLIE_PER_ORDINE, quantitaDaTesto } from "@/lib/cantina/gruppo";
 import { createListingService } from "@/services/listing-service";
-import { creaVetrinaPartnerPubblicaService } from "@/services/partner-vetrina-service";
+import { creaPreventivoService } from "@/services/preventivo-service";
 import CheckoutPageClient from "./page-client";
 
 export const generateMetadata = async ({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> => {
@@ -30,15 +30,38 @@ const Page = async ({
   const client = await getSupabaseServerClient();
   const wine = await createListingService(client).dettaglio(id);
   if (!wine) notFound();
-  // Un indirizzo diretto, un vecchio link o una proposta accettata prima
-  // dell'attivazione non devono aprire un checkout che i gate del database
-  // rifiuterebbero all'ultimo passo. Una verifica fallita non apre il
-  // checkout: non è una disponibilità confermata.
-  const statoAcquisto = statoAcquistoDa(
-    wine.venditore.userId
-      ? await creaVetrinaPartnerPubblicaService(client).acquistoDisponibile(wine.venditore.userId)
-      : null,
-  );
+  // VP-C: una quantità dall'indirizzo vale solo se è un intero fra 1 e le
+  // bottiglie disponibili (e il massimo per ordine); altrimenti 1. Il database
+  // la riverifica e oggi ne accetta una sola per ordine.
+  const quantita =
+    quantitaDaTesto(
+      ricerca.quantita ?? "",
+      Math.max(1, Math.min(wine.disponibili, MAX_BOTTIGLIE_PER_ORDINE)),
+    ) ?? undefined;
+  // VP-D: una proposta accettata si paga al suo prezzo per bottiglia e per la
+  // sua quantità; li legge il server dalla riga che il partecipante può
+  // vedere, non dall'indirizzo.
+  const proposta = ricerca.prop && client
+    ? (
+        await client
+          .from("proposals")
+          .select("prezzo_proposto_cents,controproposta_cents,quantita,stato")
+          .eq("id", ricerca.prop)
+          .maybeSingle()
+      ).data
+    : null;
+  // Il preventivo autorevole del database decide classe, acquistabilità e
+  // importi. Un indirizzo diretto, un vecchio link, un prodotto Partner con la
+  // vendita chiusa o una lettura fallita non aprono un checkout che i gate
+  // rifiuterebbero all'ultimo passo.
+  const preventivo = await creaPreventivoService(client).annuncio(wine.listingId ?? wine.id, {
+    quantita: proposta?.quantita ?? quantita ?? 1,
+    prezzoUnitarioCents:
+      proposta?.stato === "accettata"
+        ? (proposta.controproposta_cents ?? proposta.prezzo_proposto_cents)
+        : undefined,
+  });
+  const statoAcquisto = statoAcquistoDaPreventivo(preventivo);
   if (statoAcquisto !== "disponibile") {
     return (
       <div className="mx-auto max-w-xl space-y-4 py-8">
@@ -58,15 +81,14 @@ const Page = async ({
       </div>
     );
   }
-  // VP-C: una quantità dall'indirizzo vale solo se è un intero fra 1 e le
-  // bottiglie disponibili (e il massimo per ordine); altrimenti 1. Il database
-  // la riverifica e oggi ne accetta una sola per ordine.
-  const quantita =
-    quantitaDaTesto(
-      ricerca.quantita ?? "",
-      Math.max(1, Math.min(wine.disponibili, MAX_BOTTIGLIE_PER_ORDINE)),
-    ) ?? undefined;
-  return <CheckoutPageClient wine={wine} proposalId={ricerca.prop} quantita={quantita} />;
+  return (
+    <CheckoutPageClient
+      wine={wine}
+      proposalId={ricerca.prop}
+      quantita={quantita}
+      preventivo={preventivo.ok ? preventivo.data : null}
+    />
+  );
 };
 
 export default Page;

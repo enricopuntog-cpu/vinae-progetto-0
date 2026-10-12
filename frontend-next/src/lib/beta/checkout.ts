@@ -1,4 +1,4 @@
-import { calcolaCommissione } from "@/lib/payments/marketplace-fee";
+import type { PreventivoEconomico } from "@/services/preventivo-service";
 import type { OrderDeliveryMode, PackagingOption } from "@/services/types";
 
 export type CheckoutPasso = "contatti" | "consegna" | "imballaggio" | "pagamento";
@@ -111,22 +111,27 @@ export const OPZIONI_IMBALLAGGIO_BETA: ReadonlyArray<PackagingOption> = Object.f
   },
 ]);
 
-const PARAMETRI_REPO = {
-  margineObiettivoBps: 500,
-  riferimentoStripePercentualeBps: 150,
-  riferimentoStripeFissoCents: 25,
-} as const;
-
-export const stimaCheckout = (prezzoEuro: number, imballaggioCodice: string) => {
-  const mercato = calcolaCommissione(Math.round(prezzoEuro * 100), PARAMETRI_REPO);
+/**
+ * Riepilogo del checkout sopra il preventivo autorevole del database (VP-D):
+ * prezzo, servizio Vinea e totale vengono dalla stessa classe, riga e formula
+ * che il checkout userà; qui si aggiunge solo l'imballaggio scelto, che resta
+ * fuori dalla commissione. Senza preventivo non c'è riepilogo: nessun numero
+ * ricavato da parametri fissi nel codice (prima di VP-D qui stavano i 500/150
+ * bps della configurazione iniziale, superati dal 15 settembre 2026).
+ */
+export const riepilogoCheckout = (
+  preventivo: PreventivoEconomico | null,
+  imballaggioCodice: string,
+) => {
+  if (!preventivo) return null;
   const imballaggioCents =
     OPZIONI_IMBALLAGGIO_BETA.find((opzione) => opzione.codice === imballaggioCodice)
       ?.prezzoCents ?? 0;
 
   return {
-    prezzoCents: mercato.prezzoVenditoreCents,
-    commissioneCents: mercato.commissioneCents,
+    prezzoCents: preventivo.subtotaleCents,
+    commissioneCents: preventivo.commissioneCents,
     imballaggioCents,
-    totaleCents: mercato.totaleCents + imballaggioCents,
+    totaleCents: preventivo.totaleCents + imballaggioCents,
   };
 };

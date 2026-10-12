@@ -2,8 +2,11 @@ import Link from "next/link";
 import { ExternalLink, PackageOpen, Store } from "lucide-react";
 import { AcquistiPartnerNonDisponibili } from "@/components/vinea/partner/AcquistiPartnerNonDisponibili";
 import { AggiungiScortePartner } from "@/components/vinea/partner/AggiungiScortePartner";
+import { CreaProdottoPartner } from "@/components/vinea/partner/CreaProdottoPartner";
+import { ProdottiPartner } from "@/components/vinea/partner/ProdottiPartner";
 import { routes } from "@/config/routes";
 import type { GruppoScorte } from "@/services/partner-scorte-service";
+import type { ProdottoPartner } from "@/services/preventivo-service";
 import type { PartnerStato, Result } from "@/services/types";
 
 /**
@@ -18,18 +21,28 @@ import type { PartnerStato, Result } from "@/services/types";
  * Cantina, ma commerciali e legate al Partner; si leggono solo quelle
  * (`creaScortePartnerService`), raggruppate per vino e formato. Le bottiglie e
  * gli annunci personali del titolare non compaiono qui e non si convertono.
- * Pubblicare i prodotti è la vendita professionale (VP-D): resta chiusa.
+ * VP-D: dalle scorte libere nascono i prodotti (bozze commerciali) e il
+ * catalogo li elenca con il prezzo per l'acquirente calcolato dal database;
+ * la pubblicazione resta chiusa finché `vendita_partner` è spento.
  */
 export function CantinaCommerciale({
   nomeCommerciale,
   stato,
   titolareId,
   scorte,
+  libere,
+  prodotti,
+  venditaPartner,
 }: {
   nomeCommerciale: string | null;
   stato: PartnerStato;
   titolareId: string;
   scorte: Result<GruppoScorte[]>;
+  /** VP-D: unità libere per gruppo (chiave del gruppo); `null` se non verificate. */
+  libere: Record<string, string[]> | null;
+  prodotti: Result<ProdottoPartner[]>;
+  /** Specchio dell'interruttore `vendita_partner`; `null` se non letto. */
+  venditaPartner: boolean | null;
 }) {
   const sospeso = stato === "sospeso";
 
@@ -66,7 +79,7 @@ export function CantinaCommerciale({
         </p>
       ) : null}
 
-      <AcquistiPartnerNonDisponibili />
+      {venditaPartner !== true ? <AcquistiPartnerNonDisponibili /> : null}
 
       <section aria-labelledby="scorte-attivita" className="space-y-4">
         <h2 id="scorte-attivita" className="font-serif text-2xl font-semibold">
@@ -101,9 +114,14 @@ export function CantinaCommerciale({
                     {g.tipo} · {g.regione} · {g.formato}
                   </p>
                 </div>
-                <p className="text-sm font-medium">
-                  {g.quantita} {g.quantita === 1 ? "unità" : "unità"} in scorta
-                </p>
+                <div className="flex flex-col items-end gap-2">
+                  <p className="text-sm font-medium">
+                    {g.quantita} {g.quantita === 1 ? "unità" : "unità"} in scorta
+                  </p>
+                  {!sospeso ? (
+                    <CreaProdottoPartner gruppo={g} libere={libere ? (libere[g.chiave] ?? []) : null} />
+                  ) : null}
+                </div>
               </li>
             ))}
           </ul>
@@ -111,23 +129,7 @@ export function CantinaCommerciale({
         {!sospeso ? <AggiungiScortePartner /> : null}
       </section>
 
-      <section aria-labelledby="catalogo-prodotti">
-        <h2 id="catalogo-prodotti" className="font-serif text-2xl font-semibold">
-          Prodotti in vetrina
-        </h2>
-        <div
-          className="mt-4 rounded-3xl border border-border bg-card p-6 text-center md:p-8"
-          data-testid="catalogo-commerciale-vuoto"
-        >
-          <PackageOpen className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden />
-          <p className="mt-3 font-serif text-xl">La pubblicazione non è ancora aperta</p>
-          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-            Le scorte sono pronte per il catalogo. La pubblicazione dei prodotti come Partner, con
-            le condizioni della vendita professionale, arriverà con il prossimo blocco: fino ad
-            allora nulla è acquistabile e la vetrina mostra il catalogo in preparazione.
-          </p>
-        </div>
-      </section>
+      <ProdottiPartner prodotti={prodotti} venditaPartner={venditaPartner} />
 
       <p role="note" className="text-sm text-muted-foreground" data-testid="beni-personali-intatti">
         Le tue bottiglie e i tuoi annunci personali non diventano prodotti dell&apos;attività:

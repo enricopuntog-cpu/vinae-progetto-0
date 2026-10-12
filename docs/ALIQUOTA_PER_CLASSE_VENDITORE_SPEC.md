@@ -1,5 +1,22 @@
 # Aliquota differenziata per classe di venditore — documento di progettazione
 
+> **Superato per l'aliquota — 12 ottobre 2026.** Il margine obiettivo del
+> **16% (1600 bps) non è più la decisione**: il titolare ha fissato l'11
+> ottobre 2026 il **15% (1500 bps)** per i Partner Vinea, e VP-D lo ha
+> implementato con la **strada A** di questo documento (una riga corrente per
+> classe, classe congelata sull'ordine, stessa formula). La classe si chiama
+> `partner`, non `professionale`, e si ricava dallo stato Partner e
+> dall'inventario commerciale, non dalle qualifiche professionali (§6.2).
+> L'implementazione vincolante è in [`VP_D_CLASSI_ECONOMICHE.md`](VP_D_CLASSI_ECONOMICHE.md)
+> e nella migrazione `20261012200000_vp_d_classi_economiche.sql`.
+>
+> Tutto ciò che segue è **storico**: l'analisi delle due strade, l'SQL della
+> §9 (mai applicato), la griglia della §10 con i valori a 1600 bps e le
+> domande della §11 restano come documentazione della progettazione del 14-15
+> settembre 2026 e non vanno applicati. Gli obblighi della §12 (Digital
+> Services Act) non sono stati valutati da VP-D: la vendita Partner resta
+> spenta (`vendita_partner=false`).
+
 > **Documento di sola progettazione. Nessuna riga di codice, nessuna migrazione,
 > nessun SQL applicato.** L'SQL della §9 è mostrato perché sia discutibile, non
 > perché sia pronto: non esiste come file sotto `supabase/migrations/`, non è
