@@ -295,9 +295,19 @@ run_grid "12y Partner Blocco B vetrina" 12y_partner_program_blocco_b_vetrina.sql
 # del filone spenti. Fixture `.test`, ROLLBACK.
 run_grid "12z VP-C inventario e lotti" 12z_vp_c_inventario_lotti.sql 3
 
-# Stessa famiglia, su sessioni PostgreSQL realmente separate: la stessa chiave
-# d'idempotenza da due connessioni concorrenti produce un solo lotto. Fixture
-# committate `@conc-12z.test`, rimosse in trap anche in errore, residui 0.
+# Parte 2 (migrazione 20261012150000): annunci da piu bottiglie, vendite
+# parziali, prenotazione, rilascio, scadenza, pagamento fallito, idempotenza,
+# overselling, quantita con prenotazioni attive, proposte con quantita,
+# cessione per unita, analitica senza duplicati, prodotti Partner che non si
+# vendono. Fixture `.test`, ROLLBACK; l'interruttore multi-unita si accende
+# solo dentro la transazione.
+run_grid "12za VP-C annunci, prenotazioni e ordini" 12za_vp_c_annunci_allocazioni_ordini.sql 3
+
+# Stessa famiglia, su sessioni PostgreSQL realmente separate: stessa chiave
+# d'idempotenza da due connessioni (un solo lotto, un solo ordine), ultima
+# bottiglia contesa da due compratori, due bottiglie contese da tre, riduzione
+# della quantita durante un acquisto. Fixture committate `@conc-12z.test`,
+# rimosse in trap anche in errore, residui 0.
 conc_12z="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12z_vp_c_concorrenza.sh")" \
   || { printf '%s\n' "$conc_12z"; die "12z concorrenza: fallita."; }
 printf '%s\n' "$conc_12z"

@@ -1559,6 +1559,41 @@ regression`. Regole durevoli:
   `public.partner_*` (identità Partner del Blocco A): le porte nuove del
   filone usano nomi come `scorte_partner_*` e `vetrina_partner_*`.
 
+Parte 2: migrazione `20261012150000_vp_c_annunci_allocazioni_ordini.sql`,
+griglia `supabase/tests/12za_vp_c_annunci_allocazioni_ordini.sql` e le
+prove di acquisto nello script di concorrenza. Regole durevoli:
+
+- **Due tabelle di righe, nessun numero.** `private.listing_unita` dice quali
+  bottiglie un annuncio offre (una sola appartenenza aperta per bottiglia),
+  `private.listing_allocazioni` quali sono prenotate o cedute (una sola
+  allocazione non rilasciata per bottiglia: è l'unicità che impedisce
+  l'overselling anche fra sessioni). Offerte, disponibili, riservate, vendute
+  e ritirate sono conteggi (`private.listing_conteggi`); `listings.stato` fra
+  attivo, riservato e venduto ne è una conseguenza.
+- **Rappresentativa sempre viva.** `listings.bottle_unit_id` è sempre una
+  bottiglia offerta e non ceduta mentre l'annuncio è in corso: i trigger
+  storici su `listings` la leggono ancora.
+- **Un ordine, N bottiglie, una determinazione economica.**
+  `orders.prezzo_cents` è il subtotale (`prezzo_unitario_cents × quantita`) e
+  la commissione si calcola una volta sull'aggregato. La liquidazione cede
+  ogni bottiglia allocata creando l'unità nuova del compratore e non legge lo
+  stato dell'annuncio. Un ordine `annullato` rilascia le sue bottiglie da
+  trigger, qualunque porta lo annulli.
+- **Prezzi per bottiglia** su annunci e proposte; `proposals.quantita`.
+- **In una vista, niente funzioni private.** Il privilegio EXECUTE di una
+  funzione chiamata da una vista `security_invoker = off` si verifica sul
+  lettore (anche `anon`), mentre le tabelle si leggono con i privilegi del
+  proprietario: `public_listings` calcola le disponibili inline.
+- **Pulizie delle fixture.** Le FK delle due tabelle verso annunci, ordini e
+  proposte sono in cascata (nessuna porta li cancella), verso le bottiglie
+  `restrict`.
+- **Gate.** `ordini_multi_unita` spento: una bottiglia per ordine e per
+  proposta (`multi_bottiglia_non_disponibile`). `vendita_partner` spento: un
+  prodotto commerciale resta in bozza e non riceve proposte né ordini, qualunque
+  sia lo stato del Partner (`partner_vendita_non_disponibile`,
+  `partner_checkout_non_disponibile`). Li accende solo la migrazione di VP-E e
+  VP-D rispettivamente.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):

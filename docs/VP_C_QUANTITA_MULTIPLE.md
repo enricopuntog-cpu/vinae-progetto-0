@@ -114,49 +114,176 @@ non entra in nessun annuncio (`partner_vendita_non_disponibile`).
 Si cambiano solo con una migrazione dei blocchi che soddisfano le dipendenze.
 `PAYMENTS_ENABLED=false` resta invariato.
 
-## 6. Annunci, prenotazioni e ordini multi-unità (parte 2 — progettata)
+## 6. Annunci, prenotazioni e ordini multi-unità (parte 2)
 
-Progetto approvato per la migrazione successiva; **non ancora implementato**
-alla data della parte 1.
+Migrazione `20261012150000_vp_c_annunci_allocazioni_ordini.sql`.
 
-- **Annuncio ↔ unità**: tabella `private.listing_unita (listing_id,
-  bottle_unit_id, aggiunta_at, ritirata_at)`; un'unità è in al più un annuncio
-  non terminale (indice unico parziale). `listings.bottle_unit_id` resta come
-  unità rappresentativa (compatibilità con annunci, ordini e letture storiche)
-  ed è sempre membro dell'annuncio. La vista di servizio
-  `public.listing_bottle_units`, creata nel 2026 proprio per questo passaggio,
-  diventa il riflesso della tabella. Ogni annuncio storico riceve la sua
-  riga di appartenenza (uno a uno), senza cambiare comportamento.
-- **Prezzo unitario**: `listings.prezzo_cents` è il prezzo **per bottiglia**;
-  le proposte portano una `quantita` e un prezzo per bottiglia.
-- **Allocazioni**: `private.listing_allocazioni (listing, unità, acquirente,
-  proposta | ordine, scadenza, rilasciata_at, ceduta_at,
-  buyer_bottle_unit_id)`; un'unità ha al più un'allocazione aperta (indice
-  unico parziale). Una proposta accettata o un checkout prenotano **unità
-  specifiche** sotto il lock dell'annuncio; l'annullamento, la scadenza o il
-  pagamento fallito le rilasciano; il pagamento le cede una per una, ognuna
-  con la sua unità dell'acquirente.
-- **Quantità derivate** per annuncio: offerte, disponibili (membro, non
-  ritirato, chiusa, non ceduta, nessuna allocazione aperta e non scaduta),
-  riservate, vendute, ritirate. Lo stato dell'annuncio fra
-  `attivo`/`riservato`/`venduto` si ricalcola da questi conteggi: una vendita
-  parziale lascia l'annuncio `attivo`, l'ultima unità lo porta a `venduto`
-  senza cancellarne la storia.
-- **Ordini**: `orders.quantita` e `orders.prezzo_unitario_cents`;
-  `orders.prezzo_cents` resta il **subtotale** del venditore
-  (`prezzo_unitario × quantita`) e la commissione si calcola **una volta**
-  sull'aggregato, con la formula e i parametri congelati di sempre (un solo
-  costo fisso di pagamento). `orders_unico_non_annullato_per_listing` è
-  sostituito dall'unicità delle allocazioni aperte per unità.
-- **Gate**: ordini e proposte con quantità > 1 rifiutati finché
-  `ordini_multi_unita` è spento; prodotti commerciali mai pubblicabili né
-  acquistabili finché `vendita_partner` è spento (nessuna tariffa dell'8%
-  applicabile a un Partner).
+### 6.1 Due tabelle, nessuna quantità scritta
+
+- **`private.listing_unita`** — quali bottiglie fisiche un annuncio offre.
+  Un'unità è in al più un annuncio non terminale (indice unico parziale su
+  `listing_aperto`, specchio di `listings.stato` tenuto da un trigger). Il
+  ritiro (`ritirata_at`) conserva la storia; la stessa bottiglia può rientrare
+  con una riga nuova. Ogni annuncio storico ha ricevuto la sua riga (uno a
+  uno) e ogni annuncio nuovo, da qualunque porta nasca, riceve quella della
+  sua unità rappresentativa da un trigger.
+- **`private.listing_allocazioni`** — quali bottiglie sono prenotate da una
+  proposta accettata o da un ordine, e la loro cessione. Un'unità ha al più
+  un'allocazione non rilasciata (indice unico parziale): è il vincolo che
+  impedisce di vendere due volte la stessa bottiglia, anche fra sessioni
+  concorrenti. Ordini e proposte accettate storici hanno ricevuto la loro
+  allocazione (zero righe in produzione al 12 ottobre 2026).
+
+Entrambe in `private`, senza grant client, con RLS; le FK verso annunci,
+ordini e proposte sono in cascata (nessuna porta li cancella: scatta solo
+nelle pulizie delle fixture), quelle verso le bottiglie `restrict`.
+
+`listings.bottle_unit_id` resta come **unità rappresentativa**: sempre una
+bottiglia offerta e non ceduta mentre l'annuncio è in corso
+(`private.listing_rappresentante_aggiorna`), così i trigger e le letture
+storiche continuano a funzionare. `listings.inventario` dice se l'annuncio è
+personale o un prodotto commerciale, coincide con la classe di ogni unità ed
+è immutabile.
+
+### 6.2 Quantità derivate
+
+`private.listing_conteggi(annuncio)` conta, fra le appartenenze:
+
+| Quantità | Definizione |
+| --- | --- |
+| offerte | non ritirate e non cedute |
+| disponibili | offerte, chiuse, non eliminate, del venditore, senza allocazione aperta e non scaduta |
+| riservate | offerte con un'allocazione aperta e non scaduta |
+| vendute | non ritirate, con un'allocazione ceduta in questo annuncio |
+| ritirate | appartenenze ritirate |
+
+Invarianti: disponibili + riservate = offerte; nessuna quantità negativa (sono
+conteggi); nessuna supera le unità reali (ogni conteggio è di righe di
+`bottle_units`). Un'allocazione scaduta e non ancora ripulita conta già come
+disponibile; la ripulisce (`private.listing_scadute_rilascia`) la prima porta
+che prende il lock dell'annuncio: checkout, proposta, accettazione, modifica
+della quantità.
+
+Lo stato fra `attivo`, `riservato` e `venduto` è una conseguenza
+(`private.listing_stato_ricalcola`, solo per annunci attivi o riservati):
+disponibili > 0 → `attivo`; 0 disponibili e prenotazioni → `riservato`
+(`reserved_by` = il compratore se è uno solo, come per gli annunci storici);
+0 disponibili, 0 prenotazioni e vendite → `venduto`, senza cancellare nulla.
+`public_listings.quantita` è ora il numero di bottiglie **disponibili** e un
+annuncio senza disponibili non è in vetrina.
+
+### 6.3 Annunci da più bottiglie
+
+- `listing_crea_lotto(unita[], prezzo_per_bottiglia, …)` — bozza da 1 a 120
+  bottiglie scelte esplicitamente: tutte proprie, chiuse, identiche (vino,
+  annata, formato, classe, Partner) e in nessun altro annuncio in corso o
+  prenotazione. Il prezzo è **per bottiglia**. Pubblicazione, dichiarazioni
+  logistiche e moderazione restano quelle di sempre; `listing_pubblica`
+  verifica sotto lock **ogni** bottiglia offerta.
+- `listing_quantita_imposta(annuncio, quantita, unita[]?)` — da 1 a 120,
+  mai sotto le bottiglie prenotate (`quantita_sotto_prenotate`). Riduce
+  ritirando bottiglie disponibili (ultime entrate, la rappresentativa per
+  ultima); aumenta con le bottiglie indicate o, senza elenco, con le prime
+  compatibili libere della propria Cantina (`unita_compatibili_insufficienti`
+  se non bastano). Ammessa in bozza, modifiche richieste, attivo e riservato.
+- Una bottiglia offerta — rappresentativa o no — non si apre, non si toglie
+  dalla Cantina e non entra in un altro annuncio; una ritirata torna libera.
+- Le dichiarazioni logistiche non cambiano mentre l'annuncio ha ordini aperti
+  (`ordini_in_corso`): un annuncio da più bottiglie resta attivo durante le
+  vendite e il piano di spedizione di un ordine pagato le legge.
+
+### 6.4 Prenotazione, proposte e ordini
+
+- **Checkout** (`order_checkout_reserve[_saldo]`, solo `service_role`, nuovo
+  parametro facoltativo `p_quantita`): sotto il lock dell'annuncio sceglie le
+  prime N bottiglie disponibili in ordine d'ingresso, crea **un** ordine con
+  `quantita = N`, `prezzo_unitario_cents`, `prezzo_cents = N × prezzo` e
+  N allocazioni con la scadenza della prenotazione. Una richiesta oltre la
+  disponibilità è rifiutata (`quantita_non_disponibile`); la stessa chiave
+  d'idempotenza restituisce lo stesso ordine.
+- **Una sola determinazione economica**: la commissione si calcola una volta
+  sul subtotale con la formula e i parametri congelati di sempre
+  (`marketplace_totale_cents`), quindi un solo costo fisso di pagamento per
+  ordine; l'imballaggio resta per ordine. `marketplace_config` (800 bps) non
+  cambia e gli ordini esistenti non si muovono.
+- **Rilascio**: un ordine che diventa `annullato` — scadenza, pagamento fallito
+  o scaduto dal fornitore, `order_checkout_release` — rilascia le sue
+  bottiglie da trigger, qualunque porta lo abbia annullato.
+- **Liquidazione** (`order_settle_paid`): richiede tante allocazioni aperte
+  quanta è la quantità, poi per ognuna crea l'unità nuova dell'acquirente
+  (stesso vino e formato), segna `ceduta_at` su quella del venditore, toglie
+  la sua posizione 3D e registra la cessione; ripeterla non trasferisce di
+  nuovo. Non legge lo stato dell'annuncio: un pagamento avvenuto non si
+  congela per una moderazione.
+- **Proposte**: `proposals.quantita` e prezzi sempre **per bottiglia**.
+  L'accettazione prenota subito le N bottiglie fino alla scadenza della
+  proposta e rifiuta solo le proposte concorrenti che la disponibilità residua
+  non può più soddisfare (per un annuncio da una bottiglia: tutte, come
+  prima). Il checkout di una proposta riusa le sue allocazioni e la sua
+  quantità. Un annuncio che esce dalla vendita (sospensione, scadenza)
+  scioglie le prenotazioni delle sole proposte (`annuncio_chiuso`), mai quelle
+  degli ordini.
+- `orders_unico_non_annullato_per_listing` è sostituito dall'unicità delle
+  allocazioni per bottiglia: più acquisti successivi dello stesso annuncio
+  sono possibili, la stessa bottiglia mai due volte.
+
+### 6.5 Gate ancora chiusi
+
+- `ordini_multi_unita = false`: ordini e proposte per più di una bottiglia sono
+  rifiutati (`multi_bottiglia_non_disponibile`). Il motore è provato a
+  interruttore acceso solo dentro le transazioni di prova; il piano di
+  spedizione conosce solo `bottiglia_1` e la tariffazione per colli multipli
+  è VP-E. Oggi si vende **una bottiglia per ordine**, anche da un annuncio che
+  ne offre molte.
+- `vendita_partner = false`: un prodotto commerciale può esistere solo in
+  bozza (`listing_crea_lotto` per un Partner attivo); pubblicazione,
+  attivazione diretta, proposte e checkout sono rifiutati
+  (`partner_vendita_non_disponibile`, `partner_checkout_non_disponibile`),
+  qualunque sia lo stato del Partner, quindi nessuna tariffa dei privati può
+  essere applicata a un Partner. `vetrina_partner_catalogo(partner)` legge
+  solo prodotti commerciali pubblicati del Partner attivo, mai annunci
+  personali del titolare: oggi restituisce `[]`.
+- Partner revocato: nessuna politica nuova. I gate di VP-A/VP-B restano su
+  attivo e sospeso; le sue scorte commerciali restano non vendibili per il
+  gate di classe. La decisione resta del titolare.
+
+### 6.6 Analitica e osservazioni di prezzo
+
+`cellar_portfolio_analitica` collega acquisti e vendite **per bottiglia**
+attraverso le allocazioni; gli importi di un ordine da N bottiglie si
+ripartiscono (`private.quota_cents`: divisione intera, resto alla prima) e la
+somma delle quote è sempre l'importo, quindi nulla è contato due volte. Le
+osservazioni di prezzo usano il prezzo per bottiglia e il formato dell'unità.
+
+### 6.7 Porte di lettura
+
+| Porta | Chi | Che cosa |
+| --- | --- | --- |
+| `listing_quantita_mie()` | venditore | conteggi di ogni proprio annuncio |
+| `cantina_unita_annunci()` | proprietario | le proprie bottiglie in vendita, prenotate o vendute, una per una |
+| `ordine_unita(ordine)` | parti dell'ordine | al compratore le unità ricevute, al venditore le cedute |
+| `vetrina_partner_catalogo(partner)` | chiunque | prodotti commerciali pubblicati del Partner attivo |
+| `inventario_capacita()` | chiunque | specchio degli interruttori e dei limiti per l'interfaccia, che non ne è l'autorità |
+
+### 6.8 Correzione della parte 1
+
+Il formato di un'unità creata senza formato esplicito veniva copiato dal vino;
+`wines.formato` è testo libero del catalogo («Magnum 1,5 L») e l'elenco chiuso
+lo avrebbe rifiutato. La parte 2 lo normalizza (`private.formato_da_testo`:
+litri o centilitri riconosciuti, altrimenti 0,75 L). In produzione tutti i vini
+erano `0,75 L`: nessuna unità è cambiata e nessun inserimento è fallito.
+
+### 6.9 Griglie manuali storiche
+
+Le griglie manuali `7_ordini_pagamenti`, `7b_connect_marketplace` e
+`price_intelligence_1a` falliscono già su `main` prima di VP-C (11 casi della
+PI e il passo di pubblicazione della 7/7b: precedono il cancello logistico del
+28 settembre 2026), con gli stessi esiti dopo VP-C. Non sono nel gate CI.
 
 ## 7. Stato
 
 | Parte | Contenuto | Stato |
 | --- | --- | --- |
-| 1 | Formato per unità, lotti idempotenti, aggiunta multipla privata, scorte commerciali del Partner, confini fra le classi, interruttori | Implementata: migrazione `20261012090000`, griglia `12z` e concorrenza `12z_vp_c_concorrenza.sh` |
-| 2 | Appartenenza annuncio-unità, allocazioni, annunci multi-unità, proposte e ordini con quantità | Progettata (§6), non implementata |
+| 1 | Formato per unità, lotti idempotenti, aggiunta multipla privata, scorte commerciali del Partner, confini fra le classi, interruttori | In produzione: PR #212 (merge `f3cd788`), migrazione `20261012090000`, griglia `12z` |
+| 2 | Appartenenza annuncio-unità, allocazioni, annunci multi-unità, proposte e ordini con quantità, gate | Implementata: migrazione `20261012150000`, griglia `12za`, concorrenza `12z_vp_c_concorrenza.sh` (6 prove) |
 | 3 | Interfacce: Cantina raggruppata, aggiunta multipla, quantità in vendita, scheda e selettore, catalogo commerciale | Non iniziata |
