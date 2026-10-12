@@ -695,7 +695,7 @@ Supabase), che non è ancora l'autorità servita per gli altri domini.
 | VP-C | Quantità multiple per privati e Partner con un solo motore d'inventario: aggiunta multipla, annunci, prenotazioni e ordini multi-unità, inventario commerciale separato; contratto in [`VP_C_QUANTITA_MULTIPLE.md`](VP_C_QUANTITA_MULTIPLE.md) | Database in produzione: parte 1 (inventario per unità, lotti idempotenti, scorte Partner; migrazione `20261012090000`, griglia 12z, PR #212) e parte 2 (annunci, prenotazioni e ordini multi-unità; migrazione `20261012150000`, griglia 12za, PR #213); interfacce in produzione (PR #214). CLOSED. Gate chiusi: ordini di più bottiglie (VP-E) e vendita Partner (VP-D) |
 | VP-D | Classi economiche e vendita professionale Partner: una riga di configurazione per classe (privati 800 bps, Partner 1500 bps), stessa formula, classe decisa e congelata dal database, preventivi autorevoli, catalogo dei prodotti Partner; contratto in [`VP_D_CLASSI_ECONOMICHE.md`](VP_D_CLASSI_ECONOMICHE.md) | Database in produzione (migrazione `20261012200000`, griglia 12zb, PR #216); interfacce in produzione (PR #217). CLOSED sul piano tecnico. `vendita_partner` spento: nessuna vendita Partner operativa. Decisione aperta: Partner revocato |
 | VP-E | Logistica multi-bottiglia e multi-collo: compatibilità formato-imballaggio, colli pieni di costo minimo, preventivo unico per le quattro modalità (PUDO-first), logistica congelata e addebitata fuori dalla commissione, piano di spedizione che conosce i colli; contratto in [`VP_E_LOGISTICA_MULTI_COLLO.md`](VP_E_LOGISTICA_MULTI_COLLO.md) | Database e interfacce in produzione (migrazione `20261012230000`, griglia 12zc, interfacce `frontend-next`, PR #219; ledger riallineato). CLOSED sul piano tecnico. `ordini_multi_unita` spento: in produzione la configurazione operativa logistica (SKU, servizi, limiti, tariffe attive, reti PUDO) manca e il percorso è fail-closed |
-| VP-F | Blocco successivo della specifica | Non iniziato |
+| VP-F | Predisposizione internazionale: codici ISO di Paesi e valute, importi in unità minime, configurazione server-side dei Paesi abilitati per uso, Paese dell'utente separato da sede del venditore e da origine/destinazione della spedizione, gate autorevoli, struttura di locale it/en | Database (migrazione `20261012233000`, griglia 12zd) e fondazione `frontend-next`. Solo Italia ed EUR abilitati; nessun mercato estero aperto |
 
 **VP-A in sintesi.** Tabelle in `private` senza grant client; nove porte
 `partner_*` concesse al solo `authenticated` (le admin ricontrollano
@@ -724,6 +724,19 @@ dell'attività e annunci personali del titolare, che non vengono presentati né
 convertiti) e il contatto diretto dalla vetrina (la messaggistica richiede
 `conversations.listing_id`; arriverà con i prodotti). Nessun checkout
 professionale, nessuna modifica a `marketplace_config` o `PAYMENTS_ENABLED`.
+
+**VP-F in sintesi.** Predisposizione internazionale senza aprire mercati:
+registri `private.mercato_paesi` (ISO 3166-1 alpha-2, cinque usi) e
+`private.mercato_valute` (ISO 4217, unità minime) con serrature che rendono
+IT ed `eur` gli unici valori abilitabili senza una nuova migrazione; Paese
+dell'utente separato dalla sede del venditore; origine e destinazione
+dell'ordine decise dal database e immutabili; gate autorevoli su ordini,
+proposte, annunci, Partner e punti PUDO; lettura pubblica
+`mercato_configurazione`; lato client locale `it` predefinita con `en` solo
+dichiarata e importi in unità minime (`src/lib/mercato.ts`). Differiti e
+dichiarati: scelta del Paese dell'utente, indirizzi di consegna, fiscalità,
+fatturazione, valute e corrieri esteri, traduzione inglese. Dettagli in
+`CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md`.
 
 ## Fase 13 — cutover finale
 
