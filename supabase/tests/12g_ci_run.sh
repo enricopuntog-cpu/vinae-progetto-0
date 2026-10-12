@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12zc) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12zd) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
@@ -350,6 +350,14 @@ conc_12zc="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zc_vp_e_concorrenza.sh")" \
   || { printf '%s\n' "$conc_12zc"; die "12zc concorrenza: fallita."; }
 printf '%s\n' "$conc_12zc"
 summary "- $(printf '%s\n' "$conc_12zc" | tail -n 1)"
+
+# Blocco F (migrazione 20261012233000): registri di Paesi e valute con la
+# serratura IT/EUR, Paese dell'utente separato dalla sede del venditore,
+# origine e destinazione decise dal database e immutabili, gate su ordini,
+# proposte, annunci, Partner e punti PUDO per qualunque scrittore, flusso
+# italiano invariato. Fixture `.test` e configurazione logistica di prova;
+# ROLLBACK.
+run_grid "12zd VP-F predisposizione internazionale" 12zd_vp_f_predisposizione_internazionale.sql 3
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
