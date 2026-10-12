@@ -364,4 +364,4 @@ con 24 unità in scorta in formato 1,5 L, vetrina con catalogo in preparazione;
 | --- | --- | --- |
 | 1 | Formato per unità, lotti idempotenti, aggiunta multipla privata, scorte commerciali del Partner, confini fra le classi, interruttori | In produzione: PR #212 (merge `f3cd788`), migrazione `20261012090000`, griglia `12z` |
 | 2 | Appartenenza annuncio-unità, allocazioni, annunci multi-unità, proposte e ordini con quantità, gate | In produzione: PR #213 (merge `c75f4d3`), migrazione `20261012150000`, griglia `12za`, concorrenza `12z_vp_c_concorrenza.sh` (6 prove) |
-| 3 | Interfacce (§7) | Implementata, provata in locale nel browser; PR delle interfacce |
+| 3 | Interfacce (§7) | In produzione: PR #214 (merge `dcc01b0`), provata in locale nel browser e verificata in produzione con controlli anonimi |
