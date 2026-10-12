@@ -896,6 +896,13 @@ export interface CellarService {
   aggiungiBottiglia(
     dati: DatiNuovaBottiglia,
   ): Promise<Result<{ bottleUnitId: string; wineId: string }>>;
+  /**
+   * VP-C. Da 1 a 120 bottiglie identiche in una sola operazione: N righe di
+   * `bottle_units` con lo stesso lotto. La chiave d'idempotenza la sceglie il
+   * chiamante una volta per gesto: un nuovo tentativo con la stessa chiave
+   * restituisce le stesse bottiglie (`replay`), non ne crea altre.
+   */
+  aggiungiBottiglie(dati: DatiNuoveBottiglie): Promise<Result<EsitoLotto>>;
   apri(bottleUnitId: string, nota?: string): Promise<Result<void>>;
   pianificaApertura(bottleUnitId: string, data: string): Promise<Result<void>>;
   colloca(
@@ -1018,6 +1025,37 @@ export interface DatiNuovaBottiglia extends DatiVinoUtente {
   acquiredAt?: string | null;
 }
 
+/** VP-C: aggiunta di N bottiglie identiche (stesso vino, annata e formato). */
+export interface DatiNuoveBottiglie extends DatiNuovaBottiglia {
+  formato: string;
+  quantita: number;
+  idempotencyKey: string;
+}
+
+/** Esito di un'aggiunta multipla: le righe nate, o quelle già nate (replay). */
+export type EsitoLotto = {
+  lottoId: string;
+  wineId: string;
+  formato: string;
+  quantita: number;
+  bottleUnitIds: string[];
+  replay: boolean;
+};
+
+/** VP-C: annuncio che offre più bottiglie identiche, al prezzo PER BOTTIGLIA. */
+export interface DatiVenditaLotto extends DatiModificaAnnuncio {
+  bottleUnitIds: string[];
+}
+
+/** VP-C: conteggi di un annuncio, ognuno un numero di bottiglie reali. */
+export type QuantitaAnnuncio = {
+  offerte: number;
+  disponibili: number;
+  riservate: number;
+  vendute: number;
+  ritirate: number;
+};
+
 /** Campi di contenuto di una vendita, sempre riferita a una bottle_unit. */
 export interface DatiModificaAnnuncio {
   condizione: Wine["condizione"];
@@ -1065,6 +1103,20 @@ export interface ListingService extends ListingReadService {
    * in Cantina. La catalogazione privata/pubblica appartiene a CellarService.
    */
   crea(dati: DatiVenditaDaCantina): Promise<Result<{ id: string; slug: string }>>;
+  /**
+   * VP-C. Bozza che offre le bottiglie indicate (1-120, identiche, proprie,
+   * chiuse, in nessun altro annuncio in corso): `listing_crea_lotto`. Il prezzo
+   * è per bottiglia. Con una bottiglia sola equivale a `crea`.
+   */
+  creaLotto(dati: DatiVenditaLotto): Promise<Result<{ id: string; slug: string }>>;
+  /**
+   * VP-C. Bottiglie in vendita di un proprio annuncio: mai sotto quelle
+   * prenotate. Aumentando, il database aggiunge bottiglie identiche libere
+   * della propria Cantina. Restituisce i conteggi aggiornati.
+   */
+  impostaQuantita(id: string, quantita: number): Promise<Result<QuantitaAnnuncio>>;
+  /** VP-C. Conteggi di ogni proprio annuncio, per id di annuncio. */
+  quantitaMie(): Promise<Result<Record<string, QuantitaAnnuncio>>>;
   /**
    * L'annuncio letto dal suo proprietario, in **qualunque** stato, incluso uno
    * che la vista pubblica non restituisce più. Non prende un identificativo di
@@ -1181,8 +1233,15 @@ export type OrderRecord = {
   buyer_bottle_unit_id: string | null;
   stato: OrderStatus;
   delivery_mode: OrderDeliveryMode;
-  /** Quanto incassa il venditore. La commissione sta sopra, non dentro. */
+  /**
+   * Quanto incassa il venditore. La commissione sta sopra, non dentro. Da VP-C
+   * è il subtotale dell'ordine: `prezzo_unitario_cents × quantita`.
+   */
   prezzo_cents: number;
+  /** VP-C: bottiglie dell'ordine (1 per ogni ordine anteriore). */
+  quantita?: number;
+  /** VP-C: prezzo per bottiglia congelato alla prenotazione. */
+  prezzo_unitario_cents?: number;
   /**
    * I tre parametri congelati alla creazione. Non si rileggono dalla
    * configurazione corrente, e ci sono tutti e tre perché il risultato da solo
@@ -1400,6 +1459,8 @@ export interface PaymentService {
      * prenotazione. Il browser non ha un campo importo da poter sbagliare.
      */
     usaSaldo?: boolean;
+    /** VP-C: bottiglie dello stesso annuncio; assente = 1. */
+    quantita?: number;
   }): Promise<Result<CheckoutAperto>>;
   perOrdine(orderId: string): Promise<Result<PaymentRecord | null>>;
 }
@@ -3179,6 +3240,24 @@ export interface VetrinaPartnerPubblicaService {
   acquistoDisponibile(sellerId: string): Promise<Result<boolean>>;
   /** I Club approvati creati dal titolare, dalla vista pubblica dei Club. */
   clubDelTitolare(userId: string): Promise<Result<ClubDelTitolare[]>>;
+  /**
+   * VP-C. Prodotti commerciali pubblicati del Partner attivo
+   * (`vetrina_partner_catalogo`), mai annunci personali del titolare. Vuoto
+   * finché la vendita Partner (VP-D) non permette di pubblicarli.
+   */
+  catalogo(partnerId: string): Promise<Result<ProdottoVetrina[]>>;
+}
+
+/** Un prodotto del catalogo commerciale, al prezzo per bottiglia. */
+export interface ProdottoVetrina {
+  listingId: string;
+  slug: string;
+  produttore: string;
+  nome: string;
+  annata: number;
+  formato: string;
+  prezzoCents: number;
+  disponibili: number;
 }
 
 export interface ClubDelTitolare {

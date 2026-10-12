@@ -26,6 +26,13 @@ import {
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
+import {
+  FORMATI,
+  MAX_BOTTIGLIE_PER_AGGIUNTA,
+  chiaveCantina,
+  etichettaBottiglie,
+  unitaVendibiliDelGruppo,
+} from "@/lib/cantina/gruppo";
 import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
 import { wineImages } from "@/lib/wine-images";
 import { useSellWizard, type Modalita } from "@/hooks/useSellWizard";
@@ -61,8 +68,9 @@ import { AI_UI } from "@/config/features";
  *   FastAPI, e manda il solo `hint` come faceva il legacy;
  * - il passo Foto carica davvero su Supabase Storage invece di mostrare un
  *   toast di demo;
- * - il campo "Bottiglie disponibili" è visibile ma disabilitato: un annuncio
- *   vende una singola bottle_unit identificata.
+ * - "Bottiglie in vendita" (VP-C): un annuncio offre una o più bottiglie
+ *   identiche dello stesso gruppo, scelte fra quelle libere; aggiungendo in
+ *   Cantina si indicano formato e quantità, e nascono N bottiglie distinte.
  *
  * L'accesso non è più deciso dal demo-switcher `ruolo` ma dalla sessione reale
  * Supabase: da questa fase il wizard scrive, e scrivere richiede un utente
@@ -81,8 +89,14 @@ export default function VendiPageClient() {
     ? bottiglieCantina.find((b) => b.bottleId === bottleUnitId)
     : undefined;
   const vinoBottiglia = bottiglia
-    ? viniCantina.find((w) => (w.wineSlug ?? w.id) === bottiglia.wineVintageId)
+    ? viniCantina.find((w) => chiaveCantina(w) === bottiglia.wineVintageId)
     : undefined;
+  // Le bottiglie libere dello stesso vino e formato, quella scelta per prima.
+  const unitaVendibili = bottiglia
+    ? unitaVendibiliDelGruppo(bottiglieCantina, bottiglia.wineVintageId, bottiglia.bottleId).map(
+        (b) => b.bottleId,
+      )
+    : [];
 
   const {
     modalita,
@@ -99,6 +113,7 @@ export default function VendiPageClient() {
     isVendita,
     d,
     set,
+    maxInVendita,
     regioni,
     regioneValida,
     suIdentificazione,
@@ -143,6 +158,7 @@ export default function VendiPageClient() {
       ? { wineKey: chiaveVino(vinoBottiglia), formato: vinoBottiglia.formato }
       : null,
     onCantinaCambiata: ricaricaCantina,
+    unitaVendibili,
   });
 
   if (authLoading) {
@@ -569,6 +585,41 @@ export default function VendiPageClient() {
                   </SelectContent>
                 </Select>
               </Field>
+              {!isVendita ? (
+                <>
+                  <Field label="Formato">
+                    <Select value={d.formato} onValueChange={set("formato")}>
+                      <SelectTrigger aria-label="Formato della bottiglia">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FORMATI.map((f) => (
+                          <SelectItem key={f} value={f}>
+                            {f}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Quante bottiglie">
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={MAX_BOTTIGLIE_PER_AGGIUNTA}
+                      step={1}
+                      value={d.quantita}
+                      onChange={(e) => set("quantita")(e.target.value)}
+                      aria-describedby="quantita-aiuto"
+                    />
+                    <p id="quantita-aiuto" className="text-[11px] text-muted-foreground">
+                      Bottiglie identiche: stesso vino, annata e formato. Restano bottiglie
+                      distinte, ognuna con la sua posizione e le sue note. Da 1 a{" "}
+                      {MAX_BOTTIGLIE_PER_AGGIUNTA} per volta.
+                    </p>
+                  </Field>
+                </>
+              ) : null}
             </div>
           </div>
         )}
@@ -609,7 +660,7 @@ export default function VendiPageClient() {
             </Field>
             {!isVendita ? (
               <div className="grid gap-3 md:grid-cols-2">
-                <Field label="Prezzo di acquisto (€, opzionale)">
+                <Field label="Prezzo di acquisto per bottiglia (€, opzionale)">
                   <Input
                     type="number"
                     min="0"
@@ -667,7 +718,7 @@ export default function VendiPageClient() {
             ) : null}
 
             <div className="grid gap-3 md:grid-cols-2">
-              <Field label="Prezzo (€)">
+              <Field label="Prezzo per bottiglia (€)">
                 <Input
                   type="number"
                   value={d.prezzo}
@@ -675,11 +726,23 @@ export default function VendiPageClient() {
                   placeholder="Inserisci il prezzo"
                 />
               </Field>
-              <Field label="Bottiglie disponibili">
-                <Input type="number" value={d.disponibili} disabled readOnly />
-                <p className="text-[11px] text-muted-foreground">
-                  Un annuncio vende una bottiglia identificata. Più unità sullo stesso annuncio
-                  arriveranno con la cantina.
+              <Field label="Bottiglie in vendita">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={maxInVendita}
+                  step={1}
+                  value={d.disponibili}
+                  onChange={(e) => set("disponibili")(e.target.value)}
+                  disabled={maxInVendita <= 1}
+                  aria-describedby="in-vendita-aiuto"
+                />
+                <p id="in-vendita-aiuto" className="text-[11px] text-muted-foreground">
+                  {maxInVendita > 1
+                    ? `Puoi offrire fino a ${maxInVendita} bottiglie identiche di questo gruppo nello stesso annuncio. Le altre restano in Cantina.`
+                    : "In Cantina c'è una sola bottiglia libera di questo vino e formato."}{" "}
+                  Per ora ogni acquisto è di una bottiglia alla volta.
                 </p>
               </Field>
             </div>
@@ -781,13 +844,21 @@ export default function VendiPageClient() {
                   <p className="font-serif text-2xl text-bordeaux">
                     {d.prezzo ? formatEUR(Number(d.prezzo)) : "—"}
                   </p>
-                  <p className="text-xs text-muted-foreground">1 bottiglia</p>
+                  <p className="text-xs text-muted-foreground" data-testid="anteprima-quantita">
+                    {etichettaBottiglie(Number(d.disponibili) || 1)} ·{" "}
+                    {vinoBottiglia?.formato ?? d.formato} · prezzo per bottiglia
+                  </p>
                 </>
               ) : (
-                <p className="text-xs text-muted-foreground">
-                  Modalità: {modalita === "privata" ? "cantina privata" : "cantina pubblica"} —
-                  nessun prezzo pubblicato.
-                </p>
+                <>
+                  <p className="text-xs text-muted-foreground" data-testid="anteprima-quantita">
+                    {etichettaBottiglie(Number(d.quantita) || 1)} · {d.formato}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Modalità: {modalita === "privata" ? "cantina privata" : "cantina pubblica"} —
+                    nessun prezzo pubblicato.
+                  </p>
+                </>
               )}
             </div>
 

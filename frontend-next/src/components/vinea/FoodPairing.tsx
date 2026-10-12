@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useVinea } from "@/lib/vinea-store";
+import { chiaveCantina } from "@/lib/cantina/gruppo";
 
 const LEVEL: Record<PairingLevel, string> = {
   ideale: "bg-bordeaux text-crema",
@@ -158,7 +159,7 @@ export function FindWineFromCellar() {
       .map((b) => {
         // I vini della cantina arrivano dal database insieme alle bottiglie
         // (Fase 6c-2), non più dal catalogo mock: l'indice è lo slug del vino.
-        const wine = viniCantina.find((w) => (w.wineSlug ?? w.id) === b.wineVintageId);
+        const wine = viniCantina.find((w) => chiaveCantina(w) === b.wineVintageId);
         if (!wine) return null;
         const meta = cercaMeta(b.wineVintageId);
         const phase = computeDrinkPhase(meta);

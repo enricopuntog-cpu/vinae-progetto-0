@@ -35,11 +35,14 @@ import {
 import { rigaAMeta, type RigaMetaVino } from "@/services/wine-meta";
 import { urlImmagine } from "@/services/listing-service";
 import { STATI_BLOCCANTI_APERTURA } from "@/lib/cantina/apertura";
+import { FORMATO_STANDARD, chiaveGruppo } from "@/lib/cantina/gruppo";
 import type {
   CellarService,
   DatiCantina,
   DatiNuovaBottiglia,
+  DatiNuoveBottiglie,
   DatiNuovoAmbiente,
+  EsitoLotto,
   OverrideFinestra,
   Result,
 } from "@/services/types";
@@ -129,6 +132,9 @@ type RigaBottiglia = {
   ceduta_at: string | null;
   immagini: string[] | null;
   created_at: string;
+  formato: string | null;
+  lotto_id: string | null;
+  acquisition_cost_cents: number | null;
   wines: RigaVinoCantina | RigaVinoCantina[] | null;
   cellar_slots: RigaSlot | RigaSlot[] | null;
   listings: RigaAnnuncio[] | null;
@@ -150,6 +156,7 @@ const COLONNE_BOTTIGLIE = `
   override_finestra_inizio, override_finestra_fine,
   override_apice_inizio, override_apice_fine,
   override_preferenza, override_nota, ceduta_at, immagini, created_at,
+  formato, lotto_id, acquisition_cost_cents,
   wines!inner (
     slug, produttore, nome, annata, regione, denominazione, tipo, formato,
     provenienza,
@@ -230,9 +237,30 @@ export function leggiPosizione(
   return { moduleId: m[1], riga: Number(m[2]), colonna: Number(m[3]) };
 }
 
-function rigaABottiglia(riga: RigaBottiglia, slugVino: string): CellarBottle {
+/** Riga di `cantina_unita_annunci()`: una bottiglia in un annuncio. */
+type RigaUnitaAnnuncio = {
+  bottle_unit_id: string;
+  listing_id: string;
+  listing_slug: string;
+  listing_stato: string;
+  stato: "in_vendita" | "riservata" | "venduta";
+};
+
+function rigaABottiglia(
+  riga: RigaBottiglia,
+  slugVino: string,
+  chiave: string,
+  unitaAnnuncio?: RigaUnitaAnnuncio,
+): CellarBottle {
   const slot = primo(riga.cellar_slots);
   const annunci = riga.listings ?? [];
+  const bloccante =
+    annuncioCheBlocca(annunci) ??
+    (unitaAnnuncio &&
+    unitaAnnuncio.stato !== "venduta" &&
+    (STATI_BLOCCANTI_APERTURA as readonly string[]).includes(unitaAnnuncio.listing_stato)
+      ? { id: unitaAnnuncio.listing_id, stato: unitaAnnuncio.listing_stato }
+      : null);
 
   const override: CellarBottle["override"] = {
     drinkWindowStart: riga.override_finestra_inizio ?? undefined,
@@ -244,9 +272,14 @@ function rigaABottiglia(riga: RigaBottiglia, slugVino: string): CellarBottle {
   };
   const haOverride = Object.values(override).some((v) => v !== undefined);
 
-  return {
+  const bottiglia: CellarBottle = {
     bottleId: riga.id,
-    wineVintageId: slugVino,
+    wineVintageId: chiave,
+    wineSlug: slugVino,
+    formato: riga.formato ?? FORMATO_STANDARD,
+    lottoId: riga.lotto_id ?? undefined,
+    statoAnnuncio: unitaAnnuncio?.stato,
+    acquisitionCostCents: riga.acquisition_cost_cents,
     // Chiusa = 1, aperta o consumata = 0. Vedi l'intestazione del file.
     quantita: riga.stato === "chiusa" ? 1 : 0,
     // Lo stato per esteso, accanto alla sua compressione e non al posto suo:
@@ -271,8 +304,15 @@ function rigaABottiglia(riga: RigaBottiglia, slugVino: string): CellarBottle {
     // difetto, non il commento.
     degustazioneNota: riga.degustazione_nota || undefined,
     degustazioneAt: riga.degustazione_at ?? undefined,
-    annuncioBloccante: annuncioCheBlocca(annunci) ?? undefined,
+    annuncioBloccante: bloccante ?? undefined,
   };
+  // VP-C: una bottiglia offerta da un annuncio di più bottiglie non è sempre
+  // la sua rappresentativa, quindi l'innesto `listings` non la vede. La porta
+  // `cantina_unita_annunci` sì, e vale sulla derivazione per riga.
+  if (unitaAnnuncio && bottiglia.saleStatus !== "venduta") {
+    bottiglia.saleStatus = unitaAnnuncio.stato === "venduta" ? "venduta" : "in_vendita";
+  }
+  return bottiglia;
 }
 
 /**
@@ -299,6 +339,8 @@ function rigaAVino(
   venditore: Venditore,
   disponibili: number,
   immaginiCantina: string[],
+  formato: string,
+  chiave: string,
 ): Wine {
   const immagini =
     annuncio?.immagini && annuncio.immagini.length > 0
@@ -310,9 +352,10 @@ function rigaAVino(
   return {
     // Senza annuncio l'id resta quello del vino, ma detailHref è null: una
     // bottiglia privata non deve produrre un collegamento /annuncio inesistente.
-    id: annuncio?.slug ?? vino.slug,
+    id: annuncio?.slug ?? chiave,
     detailHref: annuncio ? `/annuncio/${annuncio.slug}` : null,
     wineSlug: vino.slug,
+    gruppoCantina: chiave,
     catalogSource: vino.provenienza,
     produttore: vino.produttore,
     nome: vino.nome,
@@ -320,7 +363,7 @@ function rigaAVino(
     regione: vino.regione,
     denominazione: vino.denominazione,
     tipo: vino.tipo as Wine["tipo"],
-    formato: vino.formato,
+    formato,
     prezzo: annuncio ? annuncio.prezzo_cents / 100 : 0,
     prezzoMercato:
       annuncio?.prezzo_mercato_cents == null ? undefined : annuncio.prezzo_mercato_cents / 100,
@@ -526,18 +569,50 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
     };
   }
 
+  /**
+   * Le proprie bottiglie offerte, prenotate o vendute da un annuncio (VP-C).
+   * Se la lettura non riesce la Cantina si mostra lo stesso, con lo stato
+   * derivato dall'annuncio rappresentativo: l'apertura di una bottiglia in
+   * vendita la rifiuta comunque il database.
+   */
+  async function leggiUnitaAnnunci(): Promise<Map<string, RigaUnitaAnnuncio>> {
+    const mappa = new Map<string, RigaUnitaAnnuncio>();
+    if (!client) return mappa;
+    try {
+      const { data, error } = await client.rpc("cantina_unita_annunci");
+      if (error) {
+        segnalaErrore("unità in vendita", error);
+        return mappa;
+      }
+      for (const r of (data as RigaUnitaAnnuncio[] | null) ?? []) {
+        const gia = mappa.get(r.bottle_unit_id);
+        // Una vendita conclusa vince su tutto; una in corso su nulla.
+        if (!gia || r.stato === "venduta" || gia.stato === "in_vendita") {
+          mappa.set(r.bottle_unit_id, r);
+        }
+      }
+    } catch (errore) {
+      segnalaErrore("unità in vendita", errore);
+    }
+    return mappa;
+  }
+
   return {
     async carica(): Promise<DatiCantina> {
       if (!client) return CANTINA_VUOTA;
 
-      const [ambientiRes, bottiglieRes, venditore] = await Promise.all([
+      const [ambientiRes, bottiglieRes, venditore, unitaAnnunci] = await Promise.all([
         client.from("cellar_environments").select(COLONNE_AMBIENTI).order("created_at"),
         client
           .from("bottle_units")
           .select(COLONNE_BOTTIGLIE)
           .is("deleted_at", null)
+          // VP-C: la Cantina è il patrimonio personale. Le scorte commerciali
+          // di un Partner sono dello stesso titolare ma non sono sue bottiglie.
+          .eq("inventario", "personale")
           .order("created_at"),
         venditoreCorrente(),
+        leggiUnitaAnnunci(),
       ]);
 
       if (ambientiRes.error) segnalaErrore("ambienti", ambientiRes.error);
@@ -570,43 +645,54 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
       // Un vino per scheda, come in frontend/: le viste a griglia ed elenco
       // mostrano vini, non unità. La prima bottiglia incontrata (ordine di
       // creazione) è quella che presta annuncio, prezzo e foto alla scheda.
-      const primoAnnuncioPerVino = new Map<string, RigaAnnuncio | null>();
-      const primeImmaginiPerVino = new Map<string, string[]>();
-      const vinoPerSlug = new Map<string, RigaVinoCantina>();
-      const chiusePerVino = new Map<string, number>();
+      // Un gruppo per vino e formato (VP-C): la chiave del formato standard è
+      // lo slug, quindi per ogni bottiglia esistente nulla cambia.
+      const primoAnnuncioPerGruppo = new Map<string, RigaAnnuncio | null>();
+      const primeImmaginiPerGruppo = new Map<string, string[]>();
+      const gruppi = new Map<string, { vino: RigaVinoCantina; formato: string }>();
+      const chiusePerGruppo = new Map<string, number>();
 
       for (const riga of righeBottiglie) {
         const vino = primo(riga.wines);
         if (!vino) continue;
+        const formato = riga.formato ?? FORMATO_STANDARD;
+        const chiave = chiaveGruppo(vino.slug, formato);
 
-        bottiglie.push(rigaABottiglia(riga, vino.slug));
+        bottiglie.push(rigaABottiglia(riga, vino.slug, chiave, unitaAnnunci.get(riga.id)));
 
-        if (!vinoPerSlug.has(vino.slug)) {
-          vinoPerSlug.set(vino.slug, vino);
-          metaPerVino[vino.slug] = rigaAMeta(vino);
-          primoAnnuncioPerVino.set(vino.slug, annuncioRappresentativo(riga.listings ?? []));
+        if (!gruppi.has(chiave)) {
+          gruppi.set(chiave, { vino, formato });
+          metaPerVino[chiave] = rigaAMeta(vino);
+          metaPerVino[vino.slug] ??= metaPerVino[chiave];
         }
-        if ((primeImmaginiPerVino.get(vino.slug)?.length ?? 0) === 0) {
-          primeImmaginiPerVino.set(
-            vino.slug,
+        // L'annuncio che presta prezzo e foto alla scheda: il primo trovato fra
+        // le bottiglie del gruppo, non solo nella prima.
+        if (!primoAnnuncioPerGruppo.get(chiave)) {
+          primoAnnuncioPerGruppo.set(chiave, annuncioRappresentativo(riga.listings ?? []));
+        }
+        if ((primeImmaginiPerGruppo.get(chiave)?.length ?? 0) === 0) {
+          primeImmaginiPerGruppo.set(
+            chiave,
             (riga.immagini ?? [])
               .map((percorso) => urlCantina.get(percorso))
               .filter((url): url is string => Boolean(url)),
           );
         }
-        chiusePerVino.set(
-          vino.slug,
-          (chiusePerVino.get(vino.slug) ?? 0) + (riga.stato === "chiusa" ? 1 : 0),
+        chiusePerGruppo.set(
+          chiave,
+          (chiusePerGruppo.get(chiave) ?? 0) + (riga.stato === "chiusa" ? 1 : 0),
         );
       }
 
-      const vini = Array.from(vinoPerSlug.values()).map((vino) =>
+      const vini = Array.from(gruppi.entries()).map(([chiave, { vino, formato }]) =>
         rigaAVino(
           vino,
-          primoAnnuncioPerVino.get(vino.slug) ?? null,
+          primoAnnuncioPerGruppo.get(chiave) ?? null,
           venditore,
-          chiusePerVino.get(vino.slug) ?? 0,
-          primeImmaginiPerVino.get(vino.slug) ?? [],
+          chiusePerGruppo.get(chiave) ?? 0,
+          primeImmaginiPerGruppo.get(chiave) ?? [],
+          formato,
+          chiave,
         ),
       );
 
@@ -644,6 +730,50 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
       return {
         ok: true,
         data: { bottleUnitId: riga.bottle_unit_id, wineId: riga.wine_id },
+      };
+    },
+
+    async aggiungiBottiglie(dati: DatiNuoveBottiglie): Promise<Result<EsitoLotto>> {
+      if (!client) return NESSUN_CLIENT;
+
+      const { data, error } = await client.rpc("cellar_bottiglie_aggiungi", {
+        p_produttore: dati.produttore,
+        p_nome: dati.nome,
+        p_annata: dati.annata,
+        p_regione: dati.regione,
+        p_tipo: dati.tipo,
+        p_formato: dati.formato,
+        p_quantita: dati.quantita,
+        p_idempotency_key: dati.idempotencyKey,
+        p_visibilita: dati.visibilita,
+        p_immagini: dati.immagini,
+        p_acquisition_cost_cents: dati.acquisitionCostCents ?? null,
+        p_acquired_at: dati.acquiredAt ?? null,
+      });
+      if (error) return { ok: false, error: messaggioPerUtente("aggiungiBottiglie", error) };
+
+      const esito = data as Partial<EsitoLotto> | null;
+      if (
+        !esito ||
+        typeof esito.lottoId !== "string" ||
+        typeof esito.wineId !== "string" ||
+        typeof esito.quantita !== "number" ||
+        !Array.isArray(esito.bottleUnitIds) ||
+        esito.bottleUnitIds.length !== esito.quantita
+      ) {
+        segnalaErrore("aggiungiBottiglie", "Payload RPC malformato");
+        return { ok: false, error: ERRORE_GENERICO };
+      }
+      return {
+        ok: true,
+        data: {
+          lottoId: esito.lottoId,
+          wineId: esito.wineId,
+          formato: String(esito.formato ?? dati.formato),
+          quantita: esito.quantita,
+          bottleUnitIds: esito.bottleUnitIds.map(String),
+          replay: esito.replay === true,
+        },
       };
     },
 

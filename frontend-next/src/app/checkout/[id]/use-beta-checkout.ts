@@ -16,7 +16,12 @@ import {
 import { AZIONI_PAGAMENTO_ABILITATE, IMBALLAGGIO_UI_ABILITATO } from "@/config/features";
 import { createPaymentService } from "@/services/phase7/payment-service";
 
-export const useBetaCheckout = (wine: Wine, email: string, proposalId?: string) => {
+export const useBetaCheckout = (
+  wine: Wine,
+  email: string,
+  proposalId?: string,
+  quantita?: number,
+) => {
   const router = useRouter();
   const [usaSaldo, setUsaSaldo] = useState(false);
   const [dati, setDati] = useState(() => creaDatiCheckout(email));
@@ -59,6 +64,7 @@ export const useBetaCheckout = (wine: Wine, email: string, proposalId?: string) 
         deliveryMode: dati.deliveryMode,
         idempotencyKey: idempotencyKey.current,
         usaSaldo,
+        quantita,
       });
     });
     setInCorso(false);

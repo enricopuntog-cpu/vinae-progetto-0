@@ -34,9 +34,21 @@ import type { Wine } from "@/data/wines";
 import type {
   DatiModificaAnnuncio,
   DatiVenditaDaCantina,
+  DatiVenditaLotto,
   ListingService,
+  QuantitaAnnuncio,
   Result,
 } from "@/services/types";
+
+/** Riga di `listing_quantita_mie()`. */
+type RigaQuantitaMie = {
+  listing_id: string;
+  offerte: number;
+  disponibili: number;
+  riservate: number;
+  vendute: number;
+  ritirate: number;
+};
 
 /** Riga della vista public_listings, così come arriva da PostgREST. */
 export type PublicListingRow = {
@@ -418,10 +430,56 @@ export function createListingService(client: SupabaseClient | null): ListingServ
 
     return {
       ok: true,
-      data: righe
-        .map(annuncioProprietarioDaRiga)
-        .filter((annuncio): annuncio is AnnuncioProprietario => annuncio !== null),
+      data: await conQuantita(
+        righe
+          .map(annuncioProprietarioDaRiga)
+          .filter((annuncio): annuncio is AnnuncioProprietario => annuncio !== null),
+      ),
     };
+  };
+
+  /**
+   * VP-C: i conteggi del venditore (`listing_quantita_mie`), una lettura sola
+   * per tutti i propri annunci.
+   */
+  const leggiQuantitaMie = async (): Promise<Result<Record<string, QuantitaAnnuncio>>> => {
+    if (!client) return NESSUN_CLIENT;
+    try {
+      const { data, error } = await client.rpc("listing_quantita_mie");
+      if (error) {
+        segnalaErrore("quantitaMie", error);
+        return { ok: false, error: "Quantità non disponibili." };
+      }
+      const mappa: Record<string, QuantitaAnnuncio> = {};
+      for (const r of (data as RigaQuantitaMie[] | null) ?? []) {
+        mappa[r.listing_id] = {
+          offerte: r.offerte,
+          disponibili: r.disponibili,
+          riservate: r.riservate,
+          vendute: r.vendute,
+          ritirate: r.ritirate,
+        };
+      }
+      return { ok: true, data: mappa };
+    } catch (errore) {
+      segnalaErrore("quantitaMie", errore);
+      return { ok: false, error: "Quantità non disponibili." };
+    }
+  };
+
+  /**
+   * Un annuncio proprio porta i suoi conteggi reali. Se la lettura non riesce
+   * l'annuncio resta com'era — una bottiglia, come prima di VP-C — e la
+   * quantità resta `undefined`: «non so», mai uno zero inventato.
+   */
+  const conQuantita = async (annunci: AnnuncioProprietario[]): Promise<AnnuncioProprietario[]> => {
+    if (annunci.length === 0) return annunci;
+    const esito = await leggiQuantitaMie();
+    if (!esito.ok) return annunci;
+    return annunci.map((a) => {
+      const q = a.wine.listingId ? esito.data[a.wine.listingId] : undefined;
+      return q ? { ...a, quantita: q, wine: { ...a.wine, disponibili: q.disponibili } } : a;
+    });
   };
 
   return {
@@ -483,6 +541,60 @@ export function createListingService(client: SupabaseClient | null): ListingServ
 
       return { ok: true, data: { id: riga.annuncio_id, slug: riga.annuncio_slug } };
     },
+
+    async creaLotto(dati: DatiVenditaLotto): Promise<Result<{ id: string; slug: string }>> {
+      if (!client) return NESSUN_CLIENT;
+
+      const { data, error } = await client.rpc("listing_crea_lotto", {
+        p_bottle_unit_ids: dati.bottleUnitIds,
+        p_prezzo_cents: dati.prezzoCents,
+        p_condizione: dati.condizione,
+        p_conservazione: dati.conservazione,
+        p_storia: dati.storia,
+        p_immagini: dati.immagini,
+      });
+      if (error) return { ok: false, error: messaggioPerUtente("creaLotto", error) };
+
+      const riga = (data as { annuncio_id: string; annuncio_slug: string }[] | null)?.[0];
+      if (!riga) {
+        segnalaErrore("creaLotto", "listing_crea_lotto non ha restituito nessuna riga");
+        return { ok: false, error: ERRORE_GENERICO };
+      }
+      return { ok: true, data: { id: riga.annuncio_id, slug: riga.annuncio_slug } };
+    },
+
+    async impostaQuantita(id: string, quantita: number): Promise<Result<QuantitaAnnuncio>> {
+      if (!client) return NESSUN_CLIENT;
+      const { data, error } = await client.rpc("listing_quantita_imposta", {
+        p_listing_id: id,
+        p_quantita: quantita,
+      });
+      if (error) return { ok: false, error: messaggioPerUtente("impostaQuantita", error) };
+      const q = data as Partial<QuantitaAnnuncio> | null;
+      if (
+        !q ||
+        typeof q.offerte !== "number" ||
+        typeof q.disponibili !== "number" ||
+        typeof q.riservate !== "number" ||
+        typeof q.vendute !== "number" ||
+        typeof q.ritirate !== "number"
+      ) {
+        segnalaErrore("impostaQuantita", "Payload RPC malformato");
+        return { ok: false, error: ERRORE_GENERICO };
+      }
+      return {
+        ok: true,
+        data: {
+          offerte: q.offerte,
+          disponibili: q.disponibili,
+          riservate: q.riservate,
+          vendute: q.vendute,
+          ritirate: q.ritirate,
+        },
+      };
+    },
+
+    quantitaMie: leggiQuantitaMie,
 
     /**
      * Modifica dei campi di contenuto. È un UPDATE diretto e non una funzione:
@@ -547,7 +659,10 @@ export function createListingService(client: SupabaseClient | null): ListingServ
       }
       if (!data) return null;
 
-      return annuncioProprietarioDaRiga(data as unknown as RigaAnnuncioProprietario);
+      const annuncio = annuncioProprietarioDaRiga(data as unknown as RigaAnnuncioProprietario);
+      if (!annuncio) return null;
+      const [conConteggi] = await conQuantita([annuncio]);
+      return conConteggi;
     },
 
     /**
@@ -707,6 +822,11 @@ export const ETICHETTA_STATO: Record<ListingStato, string> = {
 export type AnnuncioProprietario = {
   wine: Wine;
   stato: ListingStato;
+  /**
+   * VP-C: bottiglie offerte, disponibili, prenotate, vendute e ritirate.
+   * `undefined` se la lettura dei conteggi non è riuscita.
+   */
+  quantita?: QuantitaAnnuncio;
   /**
    * I percorsi grezzi dentro il bucket `annunci`, non gli URL: sono ciò che
    * `aggiorna()` riscrive in `listings.immagini`. `wine.immagini` porta gli

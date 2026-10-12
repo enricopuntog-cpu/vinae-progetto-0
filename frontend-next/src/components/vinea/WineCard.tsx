@@ -9,6 +9,7 @@ import { useVinea, formatEUR } from "@/lib/vinea-store";
 import { DrinkBadge } from "@/components/vinea/DrinkWindow";
 import { WineThumbnail } from "@/components/vinea/WineThumbnail";
 import { badgeStatoBottiglia } from "@/lib/cantina/badge-stato";
+import { chiaveCantina } from "@/lib/cantina/gruppo";
 
 const DetailLink = ({
   href,
@@ -53,7 +54,8 @@ export function WineCard({
   statoBottiglia?: StatoBottiglia;
 }) {
   const { inVendita, prezzoNascosto } = useVinea();
-  const cellarKey = wine.wineSlug ?? wine.id;
+  // Vino + formato (VP-C): coincide con lo slug per il formato standard.
+  const cellarKey = chiaveCantina(wine);
   const sale = showSaleBadge && inVendita.has(cellarKey);
   const priceHidden = hidePriceIfPrivate && prezzoNascosto.has(cellarKey);
   const priceUnavailable = wine.detailHref === null && wine.prezzo === 0;

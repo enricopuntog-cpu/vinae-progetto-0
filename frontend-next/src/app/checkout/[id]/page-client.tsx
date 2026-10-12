@@ -11,8 +11,18 @@ import { CheckoutSummary } from "./checkout-summary";
 import { ContattiStep, ConsegnaStep, ImballaggioStep, PagamentoStep } from "./checkout-steps";
 import { useBetaCheckout } from "./use-beta-checkout";
 
-const CheckoutFlow = ({ wine, email, proposalId }: { wine: Wine; email: string; proposalId?: string }) => {
-  const checkout = useBetaCheckout(wine, email, proposalId);
+const CheckoutFlow = ({
+  wine,
+  email,
+  proposalId,
+  quantita,
+}: {
+  wine: Wine;
+  email: string;
+  proposalId?: string;
+  quantita?: number;
+}) => {
+  const checkout = useBetaCheckout(wine, email, proposalId, quantita);
   const ultimo = checkout.indice === checkout.passi.length - 1;
 
   return (
@@ -45,13 +55,21 @@ const CheckoutFlow = ({ wine, email, proposalId }: { wine: Wine; email: string; 
             )}
           </div>
         </div>
-        <CheckoutSummary wine={wine} dati={checkout.dati} />
+        <CheckoutSummary wine={wine} dati={checkout.dati} quantita={quantita} />
       </div>
     </div>
   );
 };
 
-const CheckoutPageClient = ({ wine, proposalId }: { wine: Wine; proposalId?: string }) => {
+const CheckoutPageClient = ({
+  wine,
+  proposalId,
+  quantita,
+}: {
+  wine: Wine;
+  proposalId?: string;
+  quantita?: number;
+}) => {
   const { authUser, authLoading } = useVinea();
   if (authLoading) return <LoadingBlock label="Verifica della sessione" />;
   if (!authUser) {
@@ -63,7 +81,14 @@ const CheckoutPageClient = ({ wine, proposalId }: { wine: Wine; proposalId?: str
       </div>
     );
   }
-  return <CheckoutFlow wine={wine} email={authUser.email ?? ""} proposalId={proposalId} />;
+  return (
+    <CheckoutFlow
+      wine={wine}
+      email={authUser.email ?? ""}
+      proposalId={proposalId}
+      quantita={quantita}
+    />
+  );
 };
 
 export default CheckoutPageClient;

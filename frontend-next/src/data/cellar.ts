@@ -130,6 +130,23 @@ export type CellarBottle = {
    * stato un annuncio: uno `sospeso` o `venduto` non blocca più niente.
    */
   annuncioBloccante?: { id: string; stato: string };
+  /**
+   * VP-C. Il formato fisico di questa bottiglia (`bottle_units.formato`), lo
+   * slug del suo vino e il lotto dell'aggiunta da cui è nata. `wineVintageId`
+   * è la chiave del gruppo (vino + formato), che per il formato standard
+   * coincide con lo slug: chi cerca il vino di catalogo legge `wineSlug`.
+   * Facoltativi per i dati dimostrativi.
+   */
+  formato?: string;
+  wineSlug?: string;
+  lottoId?: string;
+  /**
+   * In vendita, prenotata o venduta da un annuncio di più bottiglie anche
+   * quando non è la sua unità rappresentativa (`cantina_unita_annunci`).
+   */
+  statoAnnuncio?: "in_vendita" | "riservata" | "venduta";
+  /** Costo per bottiglia, se noto: provenienza privata del proprietario. */
+  acquisitionCostCents?: number | null;
 };
 
 export type EnvShape =

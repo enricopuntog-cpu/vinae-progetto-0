@@ -9,6 +9,7 @@ import { routes } from "@/config/routes";
 import { etichettaTipologia, localitaVetrina, urlMediaVetrina } from "@/lib/partner/vetrina";
 import type {
   ClubDelTitolare,
+  ProdottoVetrina,
   ProfiloPubblico,
   RecensionePubblica,
   VetrinaPartnerPubblica,
@@ -72,12 +73,15 @@ export function VetrinaPartner({
   club,
   recensioni,
   profiloProprio,
+  catalogo = [],
 }: {
   vetrina: VetrinaPartnerPubblica;
   titolare: ProfiloPubblico;
   club: ClubDelTitolare[];
   recensioni: RecensionePubblica[];
   profiloProprio: boolean;
+  /** VP-C: prodotti commerciali pubblicati, mai annunci personali. */
+  catalogo?: ProdottoVetrina[];
 }) {
   const media = (p: string | null) => urlMediaVetrina(p, vetrina.titolareId, vetrina.partnerId);
   const copertina = media(vetrina.copertinaPath);
@@ -229,11 +233,31 @@ export function VetrinaPartner({
       <Sezione id="vetrina-catalogo" occhiello="Prodotti" titolo="Catalogo">
         <AcquistiPartnerNonDisponibili className="mb-4" />
         {/*
-          Vuoto fino al Blocco C, di proposito: non esiste ancora una
-          distinzione autorevole fra prodotti dell'attività e annunci personali
-          del titolare, e questi ultimi non si presentano come merce
-          dell'attività.
+          VP-C: il catalogo legge solo prodotti commerciali pubblicati del
+          Partner (`vetrina_partner_catalogo`); gli annunci personali del
+          titolare non si presentano come merce dell'attività. Finché la
+          vendita Partner non apre la pubblicazione, è vuoto.
         */}
+        {catalogo.length > 0 ? (
+          <ul className="grid gap-3 sm:grid-cols-2" data-testid="vetrina-catalogo">
+            {catalogo.map((p) => (
+              <li key={p.listingId}>
+                <Link
+                  href={`/annuncio/${p.slug}`}
+                  className="block rounded-2xl border border-border bg-card p-4 transition hover:border-bordeaux/40"
+                >
+                  <p className="text-xs uppercase tracking-wide text-salvia">{p.produttore}</p>
+                  <p className="font-serif font-semibold">
+                    {p.nome} {p.annata}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {p.formato} · {p.disponibili} {p.disponibili === 1 ? "bottiglia" : "bottiglie"}
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
         <div
           className="rounded-3xl border border-border bg-card p-6 text-center md:p-8"
           data-testid="vetrina-catalogo-vuoto"
@@ -244,6 +268,7 @@ export function VetrinaPartner({
             Partner sarà aperta.
           </p>
         </div>
+        )}
         {/*
           La messaggistica Vinea oggi apre una conversazione solo a partire da
           un annuncio (`conversations.listing_id` è obbligatorio): il contatto

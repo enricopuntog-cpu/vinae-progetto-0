@@ -13,6 +13,9 @@ export const createPaymentService = (client: SupabaseClient | null): PaymentServ
         // Un'intenzione, non un importo: la quantità di saldo la decide il
         // server dentro la transazione di prenotazione.
         usaSaldo: input.usaSaldo === true,
+        // VP-C: un numero di bottiglie, mai un importo; il database decide se è
+        // ammesso e quali bottiglie prenotare.
+        quantita: input.quantita ?? null,
       },
       headers: { "x-idempotency-key": input.idempotencyKey },
     });

@@ -36,6 +36,12 @@ type CheckoutInput = {
    * qui passa soltanto il sì o il no.
    */
   usaSaldo?: boolean;
+  /**
+   * VP-C: bottiglie dello stesso annuncio in un solo ordine. Facoltativa, 1 se
+   * assente. Il database decide se la quantità è ammessa (oggi solo 1, finché
+   * la logistica per colli multipli non esiste) e quali bottiglie allocare.
+   */
+  quantita?: number | null;
 };
 
 type Reservation = {
@@ -154,6 +160,10 @@ Deno.serve(async (request) => {
   if (!input.listingId || !["consegna_mano", "spedizione"].includes(input.deliveryMode ?? "")) {
     return json({ error: "Dati checkout non validi." }, 400, corsHeaders);
   }
+  const quantita = input.quantita ?? null;
+  if (quantita !== null && (!Number.isInteger(quantita) || quantita < 1 || quantita > 24)) {
+    return json({ error: "Quantità non valida." }, 400, corsHeaders);
+  }
 
   // Una sola chiamata: la prenotazione dell'ordine e l'impegno del saldo sono
   // la stessa decisione e vivono nella stessa transazione. Leggere il saldo qui
@@ -166,6 +176,7 @@ Deno.serve(async (request) => {
     p_delivery_mode: input.deliveryMode,
     p_idempotency_key: idempotencyKey,
     p_usa_saldo: input.usaSaldo === true,
+    p_quantita: quantita,
   });
   if (error) {
     const readable = new Set(["P0001", "42501", "23505", "22023", "PGRST"]);

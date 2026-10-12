@@ -3,6 +3,7 @@ import { CantinaCommerciale } from "@/components/vinea/partner/CantinaCommercial
 import { ClasseNonVerificata } from "@/components/vinea/partner/ClasseNonVerificata";
 import { classeDelChiamante } from "@/lib/partner/classe-server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { creaScortePartnerService } from "@/services/partner-scorte-service";
 import CantinaPageClient from "./page-client";
 
 export const metadata: Metadata = {
@@ -30,14 +31,23 @@ export const metadata: Metadata = {
  * legge, la pagina non indovina.
  */
 export default async function Page() {
-  const classe = await classeDelChiamante(await getSupabaseServerClient());
+  const client = await getSupabaseServerClient();
+  const classe = await classeDelChiamante(client);
   if (classe.tipo === "privato") return <CantinaPageClient />;
   if (classe.tipo === "errore") return <ClasseNonVerificata titolo="La mia cantina" riprova="/cantina" />;
 
   const { partner, titolareId } = classe;
+  // VP-C: solo le scorte commerciali del titolare, mai le sue bottiglie
+  // personali; la lettura è sul server con la sua sessione.
+  const scorte = await creaScortePartnerService(client).elenco();
   return (
     <div className="mx-auto max-w-5xl">
-      <CantinaCommerciale nomeCommerciale={partner.nomeCommerciale} stato={partner.stato} titolareId={titolareId} />
+      <CantinaCommerciale
+        nomeCommerciale={partner.nomeCommerciale}
+        stato={partner.stato}
+        titolareId={titolareId}
+        scorte={scorte}
+      />
     </div>
   );
 }

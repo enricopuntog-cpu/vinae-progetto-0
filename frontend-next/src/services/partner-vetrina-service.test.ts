@@ -200,9 +200,20 @@ describe("contratto con la migrazione 20261011200000", () => {
         "vetrina_partner_salva",
         "vetrina_partner_pubblica",
         "acquisto_da_venditore_disponibile",
+        // VP-C: il catalogo commerciale vive nella migrazione delle quantità.
+        "vetrina_partner_catalogo",
       ]),
     );
-    for (const nome of rpc) expect(sql).toContain(`create function public.${nome}(`);
+    const sqlVpC = readFileSync(
+      resolve(import.meta.dir, "../../../supabase/migrations/20261012150000_vp_c_annunci_allocazioni_ordini.sql"),
+      "utf8",
+    );
+    for (const nome of rpc) {
+      expect(nome === "vetrina_partner_catalogo" ? sqlVpC : sql).toContain(`create function public.${nome}(`);
+    }
+    expect(sqlVpC).toMatch(
+      /grant execute on function public\.vetrina_partner_catalogo\(uuid\) to anon, authenticated;/,
+    );
     expect(sql).toMatch(/grant execute on function public\.vetrina_partner_mia\(\) to authenticated;/);
     expect(sql).toMatch(/grant execute on function public\.vetrina_partner_salva\([^)]*\) to authenticated;/);
     expect(sql).toMatch(/grant execute on function public\.vetrina_partner_pubblica\(uuid\) to anon, authenticated;/);
