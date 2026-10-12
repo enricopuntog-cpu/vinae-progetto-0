@@ -227,7 +227,7 @@ describe("VP-D — superfici", () => {
     expect(riepilogo).not.toMatch(/PARAMETRI_REPO|calcolaCommissione|margineObiettivoBps:\s*\d/);
     const summary = senzaCommenti(leggi("src/app/checkout/[id]/checkout-summary.tsx"));
     expect(summary).toInclude(
-      "riepilogoCheckout(economico, dati.imballaggioCodice, logisticaCents ?? 0, feePagamentoCents ?? 0)",
+      "riepilogoCheckout(economico, accessori.imballaggioCents, accessori.logisticaCents, accessori.feePagamentoCents)",
     );
     expect(summary).toInclude('data-testid="checkout-totale-non-disponibile"');
   });

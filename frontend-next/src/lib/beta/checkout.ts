@@ -1,4 +1,5 @@
 import type { PreventivoEconomico } from "@/services/preventivo-service";
+import type { OpzioneLogistica } from "@/services/logistica-service";
 import type { OrderDeliveryMode, PackagingOption } from "@/services/types";
 
 export type CheckoutPasso = "contatti" | "consegna" | "imballaggio" | "pagamento";
@@ -114,31 +115,31 @@ export const OPZIONI_IMBALLAGGIO_BETA: ReadonlyArray<PackagingOption> = Object.f
 /**
  * Riepilogo del checkout sopra il preventivo autorevole del database (VP-D):
  * prezzo, servizio Vinea e totale vengono dalla stessa classe, riga e formula
- * che il checkout userà; qui si aggiunge solo l'imballaggio scelto, che resta
- * fuori dalla commissione. Senza preventivo non c'è riepilogo: nessun numero
+ * che il checkout userà; qui si aggiungono gli accessori, fuori dalla
+ * commissione, letti dal preventivo logistico del database
+ * (`accessoriCheckout`). Senza preventivo non c'è riepilogo: nessun numero
  * ricavato da parametri fissi nel codice (prima di VP-D qui stavano i 500/150
  * bps della configurazione iniziale, superati dal 15 settembre 2026).
  */
 export const riepilogoCheckout = (
   preventivo: PreventivoEconomico | null,
-  imballaggioCodice: string,
+  imballaggioCents = 0,
   logisticaCents = 0,
   feePagamentoCents = 0,
 ) => {
   if (!preventivo) return null;
-  const imballaggioCents =
-    OPZIONI_IMBALLAGGIO_BETA.find((opzione) => opzione.codice === imballaggioCodice)
-      ?.prezzoCents ?? 0;
 
   return {
     prezzoCents: preventivo.subtotaleCents,
     commissioneCents: preventivo.commissioneCents,
+    // Imballaggio 7c dichiarato sull'annuncio, come lo addebita il checkout
+    // (non la preferenza beta scelta nel passo "imballaggio").
     imballaggioCents,
     // VP-E: la logistica di più bottiglie spedite (colli, imballaggio,
     // trasporto) è una riga a sé, fuori dalla commissione, dal preventivo
     // logistico del database.
     logisticaCents,
-    // Copertura della fee di pagamento generata dalla logistica: calcolata dal
+    // Copertura della fee di pagamento generata dagli accessori: calcolata dal
     // database con la formula unica, separata dal servizio Vinea.
     feePagamentoCents,
     totaleCents: preventivo.totaleCents + imballaggioCents + logisticaCents + feePagamentoCents,
@@ -162,17 +163,34 @@ export const logisticaAddebitata = (
 };
 
 /**
- * Copertura della fee di pagamento che entra nel totale insieme alla
- * logistica: la stessa condizione di `logisticaAddebitata`, numero del
- * preventivo del database (nessuna formula nel client). Zero se la logistica
- * non è addebitata, `null` se la spedizione non è configurata.
+ * Accessori che entrano nel totale, tutti dal preventivo logistico del
+ * database (nessuna formula nel client): imballaggio 7c dell'annuncio,
+ * logistica addebitata e la copertura della fee di pagamento che generano,
+ * la stessa che `order_checkout_reserve` congela sull'ordine. Con più
+ * bottiglie spedite vale la copertura del punto di ritiro; altrimenti (una
+ * bottiglia, consegna a mano) quella senza logistica. `null` quando un importo
+ * non è determinabile: preventivo non letto, spedizione non configurata o
+ * copertura assente con accessori a pagamento.
  */
-export const feePagamentoAddebitata = (
+export const accessoriCheckout = (
   quantita: number,
   deliveryMode: OrderDeliveryMode,
-  opzionePudo: { ordinabile: boolean; totaleCents: number | null; feePagamentoCents: number | null } | null,
-): number | null => {
-  if (logisticaAddebitata(quantita, deliveryMode, opzionePudo) === null) return null;
-  if (quantita <= 1 || deliveryMode !== "spedizione") return 0;
-  return opzionePudo?.feePagamentoCents ?? 0;
+  logistica: {
+    opzioni: ReadonlyArray<
+      Pick<OpzioneLogistica, "destinazione" | "ordinabile" | "totaleCents" | "feePagamentoCents">
+    >;
+    imballaggioAnnuncioCents: number;
+    feePagamentoSenzaLogisticaCents: number | null;
+  } | null,
+): { imballaggioCents: number; logisticaCents: number; feePagamentoCents: number } | null => {
+  if (!logistica) return null;
+  const pudo = logistica.opzioni.find((o) => o.destinazione === "pudo") ?? null;
+  const logisticaCents = logisticaAddebitata(quantita, deliveryMode, pudo);
+  if (logisticaCents === null) return null;
+  const imballaggioCents = logistica.imballaggioAnnuncioCents;
+  const conLogistica = quantita > 1 && deliveryMode === "spedizione";
+  const fee = conLogistica ? pudo?.feePagamentoCents : logistica.feePagamentoSenzaLogisticaCents;
+  const feePagamentoCents = fee ?? (imballaggioCents + logisticaCents === 0 ? 0 : null);
+  if (feePagamentoCents === null) return null;
+  return { imballaggioCents, logisticaCents, feePagamentoCents };
 };

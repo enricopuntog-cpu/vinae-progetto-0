@@ -108,6 +108,13 @@ export type PreventivoLogistica = {
   imballaggioAnnuncioCents: number;
   /** Copertura della fee di pagamento al punto di ritiro (`null` se non addebitata). */
   feePagamentoCents: number | null;
+  /**
+   * Copertura della fee quando la logistica non è addebitata (una bottiglia o
+   * consegna a mano): l'unico accessorio è l'imballaggio dell'annuncio.
+   * `null` se il database non la dà (preventivo economico assente o versione
+   * precedente).
+   */
+  feePagamentoSenzaLogisticaCents: number | null;
   /** Mercato + imballaggio dell'annuncio + logistica al punto di ritiro + copertura, solo quando è addebitata. */
   totaleOrdineCents: number | null;
 };
@@ -321,7 +328,14 @@ export function leggiPreventivoLogistica(v: unknown): PreventivoLogistica | unde
   const totaleOrdine = interoOpz(r.totaleOrdineCents);
   const imballaggioAnnuncio = interoOpz(r.imballaggioAnnuncioCents);
   const feeTesta = interoOpz(r.feePagamentoCents);
-  if (economico === undefined || totaleOrdine === undefined || imballaggioAnnuncio === undefined || feeTesta === undefined) {
+  const feeSenzaLogistica = interoOpz(r.feePagamentoSenzaLogisticaCents);
+  if (
+    economico === undefined ||
+    totaleOrdine === undefined ||
+    imballaggioAnnuncio === undefined ||
+    feeTesta === undefined ||
+    feeSenzaLogistica === undefined
+  ) {
     return undefined;
   }
   const pudo = (opzioni as OpzioneLogistica[]).find((o) => o.destinazione === "pudo");
@@ -349,6 +363,7 @@ export function leggiPreventivoLogistica(v: unknown): PreventivoLogistica | unde
     economico,
     imballaggioAnnuncioCents: imballaggioAnnuncio ?? 0,
     feePagamentoCents: feeTesta,
+    feePagamentoSenzaLogisticaCents: feeSenzaLogistica,
     totaleOrdineCents: totaleOrdine,
   };
 }

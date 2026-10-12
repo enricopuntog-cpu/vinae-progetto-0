@@ -365,7 +365,7 @@ describe("VP-E — checkout e ordini", () => {
         riferimentoPercentualeBps: 209,
         riferimentoFissoCents: 25,
       },
-      "nessuno",
+      0,
       1822,
     );
     expect(r).toEqual({
