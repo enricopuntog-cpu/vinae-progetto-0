@@ -559,7 +559,7 @@ begin
     (select count(*) from public.user_roles) = v_ruoli_prima
       and (select string_agg(concat_ws(':', id, margine_obiettivo_bps, valida_fino), ',' order by id)
            from public.marketplace_config) = v_config_prima
-      and (select margine_obiettivo_bps from public.marketplace_config where valida_fino is null) = 800
+      and (select margine_obiettivo_bps from public.marketplace_config where valida_fino is null and classe_venditore = 'privato') = 800
       and exists (select 1 from pg_trigger t where t.tgrelid = 'public.orders'::regclass
                     and t.tgname = 'orders_partner_checkout_gate' and not t.tgisinternal)
       and exists (select 1 from pg_trigger t where t.tgrelid = 'public.proposals'::regclass

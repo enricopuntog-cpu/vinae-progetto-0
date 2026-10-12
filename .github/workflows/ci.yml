@@ -111,7 +111,7 @@ jobs:
       # che si svuota in silenzio.
       - name: Test
         env:
-          MIN_TESTS: "2592"
+          MIN_TESTS: "2599"
         run: |
           set -o pipefail
           bun run test 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
@@ -187,6 +187,7 @@ jobs:
           bash .github/scripts/protected-paths-guard.test.sh
           bash -n supabase/tests/12g_ci_run.sh
           bash -n supabase/tests/12z_vp_c_concorrenza.sh
+          bash -n supabase/tests/12zb_vp_d_concorrenza.sh
           node --check supabase/tests/12g_club_dispute_e2e.mjs
           bash .github/scripts/supabase-db-gate.test.sh
           python3 .github/scripts/offsite-archive-validate.test.py

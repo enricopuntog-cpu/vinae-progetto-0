@@ -1590,16 +1590,29 @@ export interface SellerPayoutService {
 
 // ---- Configurazione di mercato ---------------------------------------------
 
-/** Solo la configurazione corrente, dalla vista pubblica a colonne chiuse. */
+/**
+ * VP-D: classe economica del venditore, decisa dal database (stato Partner e
+ * classe d'inventario dell'annuncio), mai dal client. Privati 800 bps, Partner
+ * 1500 bps, stessa formula.
+ */
+export type ClasseVenditore = "privato" | "partner";
+
+/** La configurazione corrente di una classe, dalla vista pubblica a colonne chiuse. */
 export type MarketplaceConfigPubblica = {
   margine_obiettivo_bps: number;
   riferimento_stripe_percentuale_bps: number;
   riferimento_stripe_fisso_cents: number;
   auto_rilascio_giorni: number;
+  classe_venditore: ClasseVenditore;
 };
 
 export interface MarketplaceConfigService {
-  corrente(): Promise<Result<MarketplaceConfigPubblica | null>>;
+  /**
+   * La riga corrente della classe indicata, o `null` se la classe non ne ha
+   * una: nessun ripiego su un'altra classe. Il preventivo di un annuncio non
+   * passa da qui ma da `listing_preventivo`, che sceglie la classe da sé.
+   */
+  corrente(classe: ClasseVenditore): Promise<Result<MarketplaceConfigPubblica | null>>;
 }
 
 // ---- Provider di incasso ---------------------------------------------------

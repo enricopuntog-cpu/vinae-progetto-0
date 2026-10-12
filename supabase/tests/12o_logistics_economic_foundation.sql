@@ -478,9 +478,9 @@ select pg_temp.registra(18, 'Colonne di public_packaging_options invariate',
 
 select pg_temp.registra(19, 'La configurazione marketplace corrente resta a 800 bps',
   (select margine_obiettivo_bps = 800 from public.marketplace_config
-   where valida_fino is null),
+   where valida_fino is null and classe_venditore = 'privato'),
   (select margine_obiettivo_bps::text from public.marketplace_config
-   where valida_fino is null));
+   where valida_fino is null and classe_venditore = 'privato'));
 
 select pg_temp.registra(20, 'Le colonne economiche legacy di orders esistono ancora',
   (select count(*) = 5 from information_schema.columns
@@ -821,7 +821,7 @@ select pg_temp.registra(54, 'La commissione viene dall''autorita marketplace, no
       5000, m.margine_obiettivo_bps, m.riferimento_stripe_percentuale_bps,
       m.riferimento_stripe_fisso_cents
     ) - 5000
-    from public.marketplace_config m where m.valida_fino is null
+    from public.marketplace_config m where m.valida_fino is null and m.classe_venditore = 'privato'
   ),
   'ottenuto ' || pg_temp.c('pp', 'marketplaceCommissionCents')
     || ', con la configurazione corrente vale 541');
@@ -1121,9 +1121,9 @@ select pg_temp.registra(72, 'Nessuna nuova versione nel listino 7c',
   'righe=' || (select count(*) from public.packaging_options)::text);
 
 select pg_temp.registra(73, 'Nessuna nuova versione nella configurazione marketplace',
-  (select count(*) from public.marketplace_config where valida_fino is null) = 1,
+  (select count(*) from public.marketplace_config where valida_fino is null and classe_venditore = 'privato') = 1,
   'correnti=' || (select count(*) from public.marketplace_config
-                  where valida_fino is null)::text);
+                  where valida_fino is null and classe_venditore = 'privato')::text);
 
 -- ---------------------------------------------------------------------------
 -- 74-78 — porte admin e neutralita dei fornitori

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12z) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12zb) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
@@ -312,6 +312,23 @@ conc_12z="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12z_vp_c_concorrenza.sh")" \
   || { printf '%s\n' "$conc_12z"; die "12z concorrenza: fallita."; }
 printf '%s\n' "$conc_12z"
 summary "- $(printf '%s\n' "$conc_12z" | tail -n 1)"
+
+# Blocco D (migrazione 20261012200000): configurazione per classe (privati 800
+# bps, Partner 1500 bps), una formula, classe decisa dal database, preventivi
+# autorevoli, fail-closed senza configurazione, gate di checkout, proposte e
+# pubblicazione, congelamento e immutabilita delle condizioni economiche,
+# sospensione, riattivazione e revoca. Fixture `.test`, ROLLBACK; gli
+# interruttori si accendono solo dentro la transazione.
+run_grid "12zb VP-D classi economiche" 12zb_vp_d_classi_economiche.sql 3
+
+# Stessa famiglia su sessioni separate: sospensione e approvazione del Partner
+# durante un acquisto, ultima bottiglia commerciale contesa. Fixture
+# `@conc-12zb.test` committate e rimosse in trap, residui 0; vendita_partner
+# acceso per la durata dello script, ripristinato e verificato in trap.
+conc_12zb="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zb_vp_d_concorrenza.sh")" \
+  || { printf '%s\n' "$conc_12zb"; die "12zb concorrenza: fallita."; }
+printf '%s\n' "$conc_12zb"
+summary "- $(printf '%s\n' "$conc_12zb" | tail -n 1)"
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
