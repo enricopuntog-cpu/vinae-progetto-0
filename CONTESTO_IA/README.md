@@ -1,6 +1,6 @@
 # Router del contesto durevole Vinea
 
-Ultimo aggiornamento del router: **11 ottobre 2026**.
+Ultimo aggiornamento del router: **12 ottobre 2026**.
 
 Questa cartella conserva memoria strutturale e storia datata. Non è il bootstrap
 obbligatorio e non sostituisce le fonti vive.
@@ -88,6 +88,12 @@ Aprire soltanto ciò che serve al task:
   proposte, classe dell'interfaccia a tre esiti (privato/commerciale/errore),
   catalogo vuoto e contatto diretto differiti fino ai prodotti di VP-C — è in
   `03_ARCHITETTURA_REGOLE_DEBITI.md`.
+- Quantità multiple VP-C (12 ottobre 2026) — una quantità è un conteggio di
+  righe di `bottle_units`, formato per unità, lotti idempotenti, un solo
+  motore per patrimonio personale e inventario commerciale del Partner mai
+  convertiti, interruttori `ordini_multi_unita`/`vendita_partner` spenti — è
+  in `03_ARCHITETTURA_REGOLE_DEBITI.md`; contratto completo in
+  `../docs/VP_C_QUANTITA_MULTIPLE.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono
