@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12zb) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12zc) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
@@ -329,6 +329,27 @@ conc_12zb="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zb_vp_d_concorrenza.sh")" \
   || { printf '%s\n' "$conc_12zb"; die "12zb concorrenza: fallita."; }
 printf '%s\n' "$conc_12zb"
 summary "- $(printf '%s\n' "$conc_12zb" | tail -n 1)"
+
+# Blocco E (migrazione 20261012230000): compatibilita formato-imballaggio,
+# colli pieni di costo minimo, diagnosi delle configurazioni mancanti
+# (fail-closed nello stato della produzione), preventivo unico per le quattro
+# modalita, checkout con logistica congelata e addebitata fuori dalla
+# commissione, vincolo differito, immutabilita, piano WP6B che conosce i
+# colli, ordini da una bottiglia invariati. Configurazione logistica di prova
+# (`12zc_vp_e_fixture_logistica.sql`, provider fittizi) solo nella
+# transazione; ROLLBACK.
+run_grid "12zc VP-E logistica multi-collo" 12zc_vp_e_logistica_multi_collo.sql 3
+
+# Stessa famiglia su sessioni separate: ultime bottiglie contese con piu
+# colli, stessa chiave da due sessioni, due acquisti che esauriscono
+# l'annuncio, tariffa ritirata durante un acquisto. Configurazione di prova e
+# fixture `@conc-12zc.test` committate e rimosse in trap, residui 0;
+# ordini_multi_unita acceso per la durata dello script, ripristinato e
+# verificato in trap.
+conc_12zc="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zc_vp_e_concorrenza.sh")" \
+  || { printf '%s\n' "$conc_12zc"; die "12zc concorrenza: fallita."; }
+printf '%s\n' "$conc_12zc"
+summary "- $(printf '%s\n' "$conc_12zc" | tail -n 1)"
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal

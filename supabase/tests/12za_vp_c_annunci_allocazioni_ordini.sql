@@ -20,6 +20,11 @@
 
 begin;
 
+-- VP-E: da 20261012230000 un ordine di piu bottiglie spedite esige il
+-- preventivo logistico. La fixture di prova (solo nella transazione) apre la
+-- configurazione che in produzione e chiusa; si accende insieme all'interruttore.
+\ir 12zc_vp_e_fixture_logistica.sql
+
 \set ON_ERROR_STOP on
 
 do $$
@@ -351,6 +356,7 @@ begin
 
   -- Da qui il motore che VP-E attivera, provato dentro la transazione.
   update private.inventario_impostazioni set ordini_multi_unita = true where id;
+  perform pg_temp.vpe_logistica_fixture();
 
   -- 07: acquisto di 2 su 5.
   select * into v_c from pg_temp.prenota(c_b1, v_l5, 'grid12za-o-due', 2);
