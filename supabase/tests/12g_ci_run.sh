@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12y) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12z) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
@@ -287,6 +287,21 @@ run_grid "12x Partner Blocco A" 12x_partner_program_blocco_a.sql 3
 # privilegi del chiamante, audit senza valori, specchio del gate e gate sulle
 # proposte. Fixture `.test`, ROLLBACK.
 run_grid "12y Partner Blocco B vetrina" 12y_partner_program_blocco_b_vetrina.sql 3
+
+# Vinea Partner Blocco C, parte 1 (migrazione 20261012090000): N bottiglie
+# identiche come N unita in una sola operazione atomica e idempotente, annate
+# e formati non confusi, apertura/posizione/visibilita/analitica per unita,
+# inventario commerciale del Partner separato e mai convertito, interruttori
+# del filone spenti. Fixture `.test`, ROLLBACK.
+run_grid "12z VP-C inventario e lotti" 12z_vp_c_inventario_lotti.sql 3
+
+# Stessa famiglia, su sessioni PostgreSQL realmente separate: la stessa chiave
+# d'idempotenza da due connessioni concorrenti produce un solo lotto. Fixture
+# committate `@conc-12z.test`, rimosse in trap anche in errore, residui 0.
+conc_12z="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12z_vp_c_concorrenza.sh")" \
+  || { printf '%s\n' "$conc_12z"; die "12z concorrenza: fallita."; }
+printf '%s\n' "$conc_12z"
+summary "- $(printf '%s\n' "$conc_12z" | tail -n 1)"
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal

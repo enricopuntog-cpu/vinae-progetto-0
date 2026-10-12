@@ -1524,6 +1524,41 @@ DB regression` (PR #209); interfacce nella PR #210. Regole durevoli:
   leva admin per svuotare i contenuti di una vetrina (oggi solo la
   sospensione); `aal2` sulle porte admin resta una raccomandazione separata.
 
+## Quantità multiple VP-C (12 ottobre 2026)
+
+Contratto completo in [`../docs/VP_C_QUANTITA_MULTIPLE.md`](../docs/VP_C_QUANTITA_MULTIPLE.md).
+Parte 1: migrazione `20261012090000_vp_c_inventario_unita_lotti.sql`, griglia
+`supabase/tests/12z_vp_c_inventario_lotti.sql` e prova su sessioni reali
+`supabase/tests/12z_vp_c_concorrenza.sh`, entrambe nel gate `Supabase DB
+regression`. Regole durevoli:
+
+- **Una quantità è un conteggio di righe di `bottle_units`.** Nessuna colonna
+  `quantita` su bottiglie, vini o annunci; nessuna tabella di giacenze
+  parallela. Un gruppo nella Cantina è una lettura, non un oggetto.
+- **Omogeneità = vino + formato + classe + Partner + proprietario.** Il
+  formato è dell'unità (`bottle_units.formato`, elenco chiuso), ereditato dal
+  vino alla nascita quando non è indicato. Formato, lotto, classe, Partner,
+  vino e proprietario non cambiano mai dopo l'INSERT, nemmeno per `postgres`
+  (`bottle_units_inventario_guard`, hint `unita_immutabile`).
+- **Aggiunta multipla idempotente.** `private.cellar_lotti` registra ogni
+  aggiunta con `(owner_id, idempotency_key)` unici e un'impronta dei dati;
+  il replay restituisce le stesse unità, la stessa chiave con dati diversi è
+  `chiave_idempotenza_riusata`. 1-120 unità per operazione, costo per
+  bottiglia. Il nucleo `private.inventario_lotto_crea` è condiviso dalla porta
+  privata e da quella commerciale: un solo motore.
+- **Patrimonio personale ≠ inventario commerciale.** Classe
+  `public.inventario_classe`; le unità commerciali sono del titolare ma legate
+  al Partner, mai convertite, sempre `privata`, escluse da apertura,
+  posizione 3D, Cantina pubblica e analitica. Solo un Partner `attivo`
+  aggiunge scorte; uno sospeso le conserva.
+- **Interruttori fail-closed** in `private.inventario_impostazioni`
+  (`ordini_multi_unita`, `vendita_partner`, entrambi `false`), senza grant
+  client: li accende solo la migrazione del blocco che ne soddisfa le
+  dipendenze (VP-E, VP-D).
+- **Nomi delle porte.** Le griglie 12x/12y contano esattamente nove porte
+  `public.partner_*` (identità Partner del Blocco A): le porte nuove del
+  filone usano nomi come `scorte_partner_*` e `vetrina_partner_*`.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):
@@ -1857,7 +1892,8 @@ sul diff `HEAD^1..HEAD`. Sono pertinenti:
 
 - `supabase/migrations/**`, `supabase/config.toml` e `supabase/seed.sql`;
 - `supabase/tests/7c_*`, `12e_*`, `12f_*`, `12g_*`, `12h_*`, `12i_*`, `12j_*`,
-  `12k_*`, `12l_*`, `12m_*`, `12n_*`, `12o_*`, `12p_*` e `12q_*`;
+  `12k_*`, `12l_*`, `12m_*`, `12n_*`, `12o_*`, `12p_*`, `12q_*`, `12r_*` …
+  `12y_*` e `12z*` (che copre anche `12z_vp_c_concorrenza.sh`);
 - il workflow e lo script di scope stessi.
 
 Per il resto il gate produce uno skip dichiarato (notice e job summary), non un
