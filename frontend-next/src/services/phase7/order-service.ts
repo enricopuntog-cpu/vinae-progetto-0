@@ -79,6 +79,9 @@ const COLONNE_ORDINE = [
   "addebito_totale_cents",
   // WP3: `grant select (preparazione_confermata_at) on public.orders`
   "preparazione_confermata_at",
+  // VP-C (20261012150000): `grant select (quantita, prezzo_unitario_cents)`
+  "quantita",
+  "prezzo_unitario_cents",
 ].join(",");
 
 export { COLONNE_ORDINE };

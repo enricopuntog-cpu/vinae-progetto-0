@@ -10,6 +10,7 @@ import {
   type StorageModule,
 } from "@/data/cellar";
 import type { Wine } from "@/data/wines";
+import { chiaveCantina } from "@/lib/cantina/gruppo";
 import { mergeMeta } from "@/components/vinea/DrinkWindow";
 import { useCercaMeta } from "@/lib/wine-meta-context";
 import type { DrinkOverride } from "@/lib/store/cellar-domain";
@@ -39,7 +40,7 @@ export function useCellarOverview({
 
   const withPhase = useMemo(() => {
     return mie.map((w) => {
-      const slug = w.wineSlug ?? w.id;
+      const slug = chiaveCantina(w);
       const meta = mergeMeta(cercaMeta(slug), drinkWindowOverrides[slug]);
       return { wine: w, phase: computeDrinkPhase(meta), meta };
     });

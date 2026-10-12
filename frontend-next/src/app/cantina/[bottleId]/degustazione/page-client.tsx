@@ -11,6 +11,7 @@ import { GalleriaVino } from "@/components/vinea/GalleriaVino";
 import { TrustBadge } from "@/components/vinea/TrustBadge";
 import { useVinea } from "@/lib/vinea-store";
 import { dataDegustazione } from "@/lib/cantina/apertura";
+import { chiaveCantina } from "@/lib/cantina/gruppo";
 
 /**
  * La schermata di degustazione di una bottiglia, nei suoi due momenti.
@@ -37,7 +38,7 @@ export default function DegustazionePageClient({ bottleId }: { bottleId: string 
   const vino = useMemo(
     () =>
       bottiglia
-        ? viniCantina.find((w) => (w.wineSlug ?? w.id) === bottiglia.wineVintageId)
+        ? viniCantina.find((w) => chiaveCantina(w) === bottiglia.wineVintageId)
         : undefined,
     [viniCantina, bottiglia],
   );

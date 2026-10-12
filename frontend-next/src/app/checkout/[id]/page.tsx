@@ -8,6 +8,7 @@ import {
 } from "@/components/vinea/partner/AcquistiPartnerNonDisponibili";
 import { routes } from "@/config/routes";
 import { statoAcquistoDa } from "@/lib/partner/vetrina";
+import { MAX_BOTTIGLIE_PER_ORDINE, quantitaDaTesto } from "@/lib/cantina/gruppo";
 import { createListingService } from "@/services/listing-service";
 import { creaVetrinaPartnerPubblicaService } from "@/services/partner-vetrina-service";
 import CheckoutPageClient from "./page-client";
@@ -23,7 +24,7 @@ const Page = async ({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ prop?: string }>;
+  searchParams: Promise<{ prop?: string; quantita?: string }>;
 }) => {
   const [{ id }, ricerca] = await Promise.all([params, searchParams]);
   const client = await getSupabaseServerClient();
@@ -57,7 +58,15 @@ const Page = async ({
       </div>
     );
   }
-  return <CheckoutPageClient wine={wine} proposalId={ricerca.prop} />;
+  // VP-C: una quantità dall'indirizzo vale solo se è un intero fra 1 e le
+  // bottiglie disponibili (e il massimo per ordine); altrimenti 1. Il database
+  // la riverifica e oggi ne accetta una sola per ordine.
+  const quantita =
+    quantitaDaTesto(
+      ricerca.quantita ?? "",
+      Math.max(1, Math.min(wine.disponibili, MAX_BOTTIGLIE_PER_ORDINE)),
+    ) ?? undefined;
+  return <CheckoutPageClient wine={wine} proposalId={ricerca.prop} quantita={quantita} />;
 };
 
 export default Page;

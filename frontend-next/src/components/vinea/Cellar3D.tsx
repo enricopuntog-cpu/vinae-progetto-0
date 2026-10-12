@@ -6,6 +6,7 @@ import { OrbitControls, Text, Html } from "@react-three/drei";
 import type * as THREE from "three";
 import type { CellarBottle, StorageEnvironment, StorageModule, StorageSlot } from "@/data/cellar";
 import type { Wine } from "@/data/wines";
+import { chiaveCantina } from "@/lib/cantina/gruppo";
 
 type Props = {
   environments: StorageEnvironment[];
@@ -60,7 +61,9 @@ export default function Cellar3D({
 }: Props) {
   const envModules = modules.filter((m) => m.environmentId === activeEnvId);
   const bottleById = useMemo(() => new Map(bottiglie.map((b) => [b.bottleId, b])), [bottiglie]);
-  const wineById = useMemo(() => new Map(wines.map((w) => [w.id, w])), [wines]);
+  // Le bottiglie puntano al loro gruppo (vino + formato), non all'id della
+  // scheda, che per un vino in vendita è lo slug dell'annuncio.
+  const wineById = useMemo(() => new Map(wines.map((w) => [chiaveCantina(w), w])), [wines]);
   const [wrapperRef, onScreen] = useOnScreen<HTMLDivElement>("160px");
 
   const shouldAutoRotate = !reduceMotion && onScreen;

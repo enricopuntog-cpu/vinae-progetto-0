@@ -222,6 +222,11 @@ export function OrderListView({
                     <p className="text-xs text-bordeaux">
                       {formatEUR((venditore ? o.prezzo_cents : o.addebito_totale_cents) / 100)}
                     </p>
+                    {o.quantita && o.quantita > 1 && o.prezzo_unitario_cents ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        {o.quantita} bottiglie × {formatEUR(o.prezzo_unitario_cents / 100)}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <span className="whitespace-nowrap rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold">

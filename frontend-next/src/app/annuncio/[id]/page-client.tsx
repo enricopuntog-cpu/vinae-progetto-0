@@ -21,6 +21,7 @@ import {
 import type { Wine } from "@/data/wines";
 import { AvatarPersona } from "@/components/vinea/AvatarPersona";
 import { useVinea, formatEUR } from "@/lib/vinea-store";
+import { chiaveGruppo } from "@/lib/cantina/gruppo";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -40,6 +41,10 @@ import { ReportDialog } from "@/components/vinea/ReportDialog";
 import { ListingContactActions } from "@/components/vinea/ListingContactActions";
 import { ProposalAction } from "@/components/vinea/ProposalAction";
 import { ListingOwnerActions } from "@/components/vinea/ListingOwnerActions";
+import {
+  GestioneQuantitaAnnuncio,
+  SceltaQuantitaAcquisto,
+} from "@/components/vinea/QuantitaAnnuncio";
 import {
   AcquistiPartnerNonDisponibili,
   AcquistoNonVerificato,
@@ -92,6 +97,9 @@ export default function AnnuncioDetailPageClient({
   const router = useRouter();
   const listingId = wine.listingId ?? wine.id;
   const sonoIlVenditore = Boolean(proprio);
+  // VP-C: bottiglie da acquistare da questo annuncio. Resta 1 finché il
+  // database non ammette ordini di più bottiglie.
+  const [quantitaAcquisto, setQuantitaAcquisto] = useState(1);
 
   // Calcolati una volta sola perché la scheda venditore li usa due volte, e
   // perché la condizione dev'essere una: o esiste il profilo e allora sono
@@ -141,7 +149,9 @@ export default function AnnuncioDetailPageClient({
           </div>
 
           <div className="mt-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Prezzo richiesto</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              {wine.disponibili > 1 ? "Prezzo per bottiglia" : "Prezzo richiesto"}
+            </p>
             <p className="mt-1 font-serif text-4xl font-semibold text-bordeaux">
               {formatEUR(wine.prezzo)}
             </p>
@@ -162,6 +172,7 @@ export default function AnnuncioDetailPageClient({
           {sonoIlVenditore && proprio ? (
             <div className="mt-6">
               <ListingOwnerActions annuncio={proprio} />
+              <GestioneQuantitaAnnuncio annuncio={proprio} />
             </div>
           ) : (
             <>
@@ -172,13 +183,24 @@ export default function AnnuncioDetailPageClient({
                   {PAGAMENTI_UI_ABILITATI ? (
                     <Button
                       className="col-span-2 bg-bordeaux hover:bg-bordeaux/90"
-                      onClick={() => router.push(`/checkout/${wine.id}`)}
+                      onClick={() =>
+                        quantitaAcquisto > 1
+                          ? router.push(`/checkout/${wine.id}?quantita=${quantitaAcquisto}`)
+                          : router.push(`/checkout/${wine.id}`)
+                      }
                     >
                       Compra ora
                     </Button>
                   ) : null}
                   <ProposalAction listingId={listingId} listingSlug={wine.id} prezzo={wine.prezzo} />
                 </div>
+              ) : null}
+              {statoAcquisto === "disponibile" ? (
+                <SceltaQuantitaAcquisto
+                  disponibili={wine.disponibili}
+                  valore={quantitaAcquisto}
+                  onChange={setQuantitaAcquisto}
+                />
               ) : statoAcquisto === "partner" ? (
                 <AcquistiPartnerNonDisponibili className="mt-6" />
               ) : (
@@ -264,7 +286,10 @@ export default function AnnuncioDetailPageClient({
           </div>
 
           {visitatoreCommerciale ? null : (
-            <MyBottleActions wineId={wine.wineSlug ?? wine.id} nomeVino={wine.nome} />
+            <MyBottleActions
+              wineId={chiaveGruppo(wine.wineSlug ?? wine.id, wine.formato)}
+              nomeVino={wine.nome}
+            />
           )}
         </div>
       </div>
@@ -409,7 +434,12 @@ function MyBottleActions({ wineId, nomeVino }: { wineId: string; nomeVino: strin
   const [when, setWhen] = useState("");
   if (mie.length === 0) return null;
 
-  const chiuse = mie.filter((b) => b.quantita > 0);
+  // Fra le chiuse, prima quelle non impegnate in un annuncio: aprire una
+  // bottiglia in vendita lo rifiuterebbe comunque il database.
+  const chiuse = [
+    ...mie.filter((b) => b.quantita > 0 && !b.annuncioBloccante),
+    ...mie.filter((b) => b.quantita > 0 && b.annuncioBloccante),
+  ];
   // Quella su cui agiscono i comandi: la prima ancora chiusa, o comunque una.
   const bottle = chiuse[0] ?? mie[0];
   const disponibili = chiuse.length;
@@ -419,7 +449,7 @@ function MyBottleActions({ wineId, nomeVino }: { wineId: string; nomeVino: strin
     <div className="mt-4 rounded-2xl border border-oro/40 bg-oro/10 p-4">
       <p className="text-xs uppercase tracking-wide text-oro">Nella tua cantina</p>
       <p className="mt-1 text-sm">
-        {disponibili} {disponibili === 1 ? "bottiglia" : "bottiglie"} disponibili
+        {disponibili} {disponibili === 1 ? "bottiglia disponibile" : "bottiglie disponibili"}
         {pianificata ? ` · apertura pianificata ${pianificata}` : ""}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">

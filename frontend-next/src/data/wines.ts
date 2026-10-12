@@ -17,6 +17,13 @@ export type Wine = {
    * usare `wineSlug ?? id`.
    */
   wineSlug?: string;
+  /**
+   * Chiave del gruppo della propria Cantina: vino + formato (VP-C). Per il
+   * formato standard coincide con `wineSlug`; per una Magnum dello stesso vino
+   * no, perché sono bottiglie diverse. Solo la Cantina la valorizza: chi lega
+   * una scheda della Cantina alle sue bottiglie usa `chiaveCantina()`.
+   */
+  gruppoCantina?: string;
   /** Provenienza autoritativa della scheda catalogo (Fase 6d-2a). */
   catalogSource?: "staff" | "utente";
   /**

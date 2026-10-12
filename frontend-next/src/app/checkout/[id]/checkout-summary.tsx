@@ -10,14 +10,20 @@ export const CheckoutSummary = ({
   saldoApplicatoCents,
   importoProviderCents,
   saldoOnly,
+  quantita,
 }: {
   wine: Wine;
+  /** VP-C: bottiglie dello stesso annuncio; assente = 1. */
+  quantita?: number;
   dati: DatiCheckoutBeta;
   saldoApplicatoCents?: number;
   importoProviderCents?: number;
   saldoOnly?: boolean;
 }) => {
-  const stima = stimaCheckout(wine.prezzo, dati.imballaggioCodice);
+  // Una stima sul subtotale delle bottiglie, come il server: la commissione
+  // si calcola una volta sull'aggregato, non bottiglia per bottiglia.
+  const bottiglie = quantita && quantita > 1 ? quantita : 1;
+  const stima = stimaCheckout(wine.prezzo * bottiglie, dati.imballaggioCodice);
 
   return (
     <aside className="space-y-4 rounded-2xl border border-border bg-card p-4 lg:sticky lg:top-24" data-testid="checkout-summary">
@@ -26,6 +32,11 @@ export const CheckoutSummary = ({
         <div className="min-w-0">
           <p className="truncate font-serif text-lg font-semibold">{wine.nome} {wine.annata}</p>
           <p className="truncate text-xs text-muted-foreground">{wine.produttore} · {wine.formato}</p>
+          {bottiglie > 1 ? (
+            <p className="text-xs text-muted-foreground">
+              {bottiglie} bottiglie × {formatEUR(wine.prezzo)}
+            </p>
+          ) : null}
         </div>
       </div>
       <div className="space-y-2 text-sm">

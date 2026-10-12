@@ -28,6 +28,15 @@ import {
   type StatoLogisticaWizard,
 } from "@/lib/vendi/logistica-annuncio";
 import { AI_UI, AZIONI_IA_ABILITATE } from "@/config/features";
+import {
+  FORMATO_STANDARD,
+  MAX_BOTTIGLIE_PER_AGGIUNTA,
+  MAX_BOTTIGLIE_PER_ANNUNCIO,
+  etichettaBottiglie,
+  formatoValido,
+  nuovaChiaveIdempotenza,
+  quantitaDaTesto,
+} from "@/lib/cantina/gruppo";
 import type {
   CatalogazioneSuggerimento,
   DatiNuovaBottiglia,
@@ -76,6 +85,13 @@ type SellWizardOptions = {
    * nulla e la cantina non cambia mai.
    */
   onCantinaCambiata?: () => void | Promise<void>;
+  /**
+   * VP-C. Le bottiglie libere dello stesso gruppo (vino + formato) di
+   * `bottleUnitId`, con quella per prima: sono le sole che il venditore può
+   * mettere nello stesso annuncio. Il database riverifica che siano identiche,
+   * proprie, chiuse e non impegnate.
+   */
+  unitaVendibili?: string[];
 };
 
 const VENDITA_STEPS = [
@@ -133,6 +149,7 @@ export function useSellWizard({
   bottleUnitId,
   identitaVino,
   onCantinaCambiata,
+  unitaVendibili,
 }: SellWizardOptions) {
   const daCantina = Boolean(bottleUnitId);
   // Una bottiglia già in cantina è per definizione da vendere: "cantina
@@ -155,7 +172,11 @@ export function useSellWizard({
     conservazione: "",
     storia: "",
     prezzo: "",
+    // VP-C: bottiglie in vendita in questo annuncio (dal gruppo scelto) e,
+    // aggiungendo in Cantina, quante bottiglie identiche e in quale formato.
     disponibili: "1",
+    quantita: "1",
+    formato: FORMATO_STANDARD as string,
     // I due fatti di acquisizione restano testo finché non si cataloga: la
     // conversione è nel modulo dedicato, perché lo sbaglio possibile qui è
     // invisibile — trasformare «non lo so» in un costo noto di zero.
@@ -163,6 +184,17 @@ export function useSellWizard({
     dataAcquisto: "",
   });
   const set = (k: keyof typeof d) => (v: string) => setD((s) => ({ ...s, [k]: v }));
+
+  // Una chiave per gesto: un nuovo tentativo dopo una risposta persa riusa la
+  // stessa e il database restituisce le stesse bottiglie invece di crearne
+  // altre. Si rinnova solo dopo un'aggiunta riuscita.
+  const chiaveAggiunta = useRef(nuovaChiaveIdempotenza("cantina"));
+  const vendibili = useMemo(() => {
+    if (!bottleUnitId) return [];
+    const elenco = unitaVendibili && unitaVendibili.length > 0 ? unitaVendibili : [bottleUnitId];
+    return elenco[0] === bottleUnitId ? elenco : [bottleUnitId, ...elenco.filter((id) => id !== bottleUnitId)];
+  }, [bottleUnitId, unitaVendibili]);
+  const maxInVendita = Math.max(1, Math.min(vendibili.length, MAX_BOTTIGLIE_PER_ANNUNCIO));
 
   const [foto, setFoto] = useState<FotoCaricata[]>([]);
   const [fotoInCorso, setFotoInCorso] = useState(false);
@@ -498,6 +530,20 @@ export function useSellWizard({
       toast.error("Scegli una Regione dall'elenco prima di continuare.");
       return;
     }
+    if (suIdentificazione && !daCantina) {
+      if (!formatoValido(d.formato)) {
+        toast.error("Scegli il formato della bottiglia.");
+        return;
+      }
+      if (quantitaDaTesto(d.quantita, MAX_BOTTIGLIE_PER_AGGIUNTA) === null) {
+        toast.error(`Indica quante bottiglie aggiungi: da 1 a ${MAX_BOTTIGLIE_PER_AGGIUNTA}.`);
+        return;
+      }
+    }
+    if (steps[step] === "Prezzo" && quantitaDaTesto(d.disponibili, maxInVendita) === null) {
+      toast.error(`Puoi mettere in vendita da 1 a ${maxInVendita} bottiglie di questo gruppo.`);
+      return;
+    }
     // Le due domande del passo Consegna si rispondono prima dell'Anteprima
     // perché senza dichiarazione la pubblicazione verrebbe rifiutata dal
     // database: bloccare qui mostra che cosa manca mentre è ancora a schermo,
@@ -511,7 +557,19 @@ export function useSellWizard({
       }
     }
     setStep((corrente) => Math.min(steps.length - 1, corrente + 1));
-  }, [regioneValida, statoLogistica, suConsegna, suIdentificazione, steps.length]);
+  }, [
+    regioneValida,
+    statoLogistica,
+    suConsegna,
+    suIdentificazione,
+    steps,
+    step,
+    daCantina,
+    d.formato,
+    d.quantita,
+    d.disponibili,
+    maxInVendita,
+  ]);
   const prev = useCallback(() => setStep((s) => Math.max(primoPasso, s - 1)), [primoPasso]);
 
   const caricaFoto = useCallback(async (file: File) => {
@@ -692,7 +750,13 @@ export function useSellWizard({
       return null;
     }
 
-    const esito = await listingService.crea(dati);
+    // VP-C: più bottiglie dello stesso gruppo vanno nello stesso annuncio, al
+    // prezzo per bottiglia; con una sola resta la porta di sempre.
+    const quante = quantitaDaTesto(d.disponibili, maxInVendita) ?? 1;
+    const esito =
+      quante > 1
+        ? await listingService.creaLotto({ ...dati, bottleUnitIds: vendibili.slice(0, quante) })
+        : await listingService.crea(dati);
     if (!esito.ok) {
       toast.error(esito.error);
       return null;
@@ -702,23 +766,37 @@ export function useSellWizard({
     // ora un annuncio.
     await onCantinaCambiata?.();
     return { id: esito.data.id, slug: esito.data.slug as string | null };
-  }, [bozzaId, datiVendita, listingService, onCantinaCambiata]);
+  }, [bozzaId, datiVendita, listingService, onCantinaCambiata, d.disponibili, maxInVendita, vendibili]);
 
   const aggiungiInCantina = useCallback(async () => {
-    const esito = await cellarService.aggiungiBottiglia(datiBottiglia());
+    const quantita = quantitaDaTesto(d.quantita, MAX_BOTTIGLIE_PER_AGGIUNTA);
+    if (quantita === null || !formatoValido(d.formato)) {
+      toast.error("Controlla quantità e formato prima di aggiungere.");
+      return false;
+    }
+    // VP-C: N bottiglie identiche in una sola operazione atomica. Restano N
+    // righe, ognuna con la sua posizione, le sue note e la sua degustazione.
+    const esito = await cellarService.aggiungiBottiglie({
+      ...datiBottiglia(),
+      formato: d.formato,
+      quantita,
+      idempotencyKey: chiaveAggiunta.current,
+    });
     if (!esito.ok) {
       toast.error(esito.error);
       return false;
     }
+    chiaveAggiunta.current = nuovaChiaveIdempotenza("cantina");
     await onCantinaCambiata?.();
+    const quante = etichettaBottiglie(esito.data.quantita);
     toast.success(
       modalita === "pubblica"
-        ? "Bottiglia aggiunta alla cantina pubblica"
-        : "Bottiglia aggiunta alla tua cantina privata",
+        ? `${quante} nella cantina pubblica`
+        : `${quante} nella tua cantina privata`,
     );
     onNavigate("/cantina");
     return true;
-  }, [cellarService, datiBottiglia, modalita, onCantinaCambiata, onNavigate]);
+  }, [cellarService, datiBottiglia, modalita, onCantinaCambiata, onNavigate, d.quantita, d.formato]);
 
   const pubblica = useCallback(async () => {
     if (!isVendita) {
@@ -857,6 +935,7 @@ export function useSellWizard({
     isVendita,
     d,
     set,
+    maxInVendita,
     regioni,
     regioneValida,
     suIdentificazione,

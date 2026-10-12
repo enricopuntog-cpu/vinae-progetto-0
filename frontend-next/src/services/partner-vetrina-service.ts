@@ -123,6 +123,37 @@ export function creaVetrinaPartnerPubblicaService(
         : fallita("acquisto_da_venditore_disponibile", null);
     },
 
+    async catalogo(partnerId) {
+      if (!client) return senzaClient();
+      if (!UUID.test(partnerId)) return { ok: true, data: [] };
+      const { data, error } = await client.rpc("vetrina_partner_catalogo", {
+        p_partner_id: partnerId,
+      });
+      if (error) return fallita("vetrina_partner_catalogo", error);
+      if (!Array.isArray(data)) return fallita("vetrina_partner_catalogo", null);
+      const prodotti = data.flatMap((v: unknown) => {
+        const r = v as Record<string, unknown>;
+        return typeof r.listingId === "string" &&
+          typeof r.slug === "string" &&
+          typeof r.prezzoCents === "number" &&
+          typeof r.disponibili === "number"
+          ? [
+              {
+                listingId: r.listingId,
+                slug: r.slug,
+                produttore: String(r.produttore ?? ""),
+                nome: String(r.nome ?? ""),
+                annata: Number(r.annata),
+                formato: String(r.formato ?? ""),
+                prezzoCents: r.prezzoCents,
+                disponibili: r.disponibili,
+              },
+            ]
+          : [];
+      });
+      return { ok: true, data: prodotti };
+    },
+
     async clubDelTitolare(userId) {
       if (!client) return senzaClient();
       if (!UUID.test(userId)) return { ok: true, data: [] };

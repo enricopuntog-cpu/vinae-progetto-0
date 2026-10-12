@@ -68,11 +68,13 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   // commerciale, non una collezione, e gli annunci personali del titolare non
   // sono prodotti dell'attività (il catalogo arriva con il Blocco C). Al loro
   // posto arrivano i Club del titolare.
-  const [esitoCantina, esitoAnnunci, esitoRecensioni, esitoClub] = await Promise.all([
+  const [esitoCantina, esitoAnnunci, esitoRecensioni, esitoClub, esitoCatalogo] = await Promise.all([
     vetrina ? NESSUNA_LETTURA : service.cantinaPubblica(id, { limite: ANTEPRIMA_CANTINA_PUBBLICA }),
     vetrina ? NESSUNA_LETTURA : service.annunciAttivi(id),
     service.recensioni(id),
     vetrina ? servizioVetrina.clubDelTitolare(id) : NESSUNA_LETTURA,
+    // VP-C: solo prodotti commerciali del Partner, mai annunci personali.
+    vetrina ? servizioVetrina.catalogo(vetrina.partnerId) : NESSUNA_LETTURA,
   ]);
   // Ogni sezione degrada per conto proprio: una Cantina che non si legge
   // toglie la Cantina, non il profilo. È la stessa scelta già fatta per annunci
@@ -89,6 +91,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         titolare={profilo}
         recensioni={recensioni}
         club={esitoClub.ok ? esitoClub.data : []}
+        catalogo={esitoCatalogo.ok ? esitoCatalogo.data : []}
         profiloProprio={profiloProprio}
       />
     );

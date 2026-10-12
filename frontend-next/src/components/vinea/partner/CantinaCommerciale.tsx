@@ -1,34 +1,35 @@
 import Link from "next/link";
 import { ExternalLink, PackageOpen, Store } from "lucide-react";
 import { AcquistiPartnerNonDisponibili } from "@/components/vinea/partner/AcquistiPartnerNonDisponibili";
+import { AggiungiScortePartner } from "@/components/vinea/partner/AggiungiScortePartner";
 import { routes } from "@/config/routes";
-import type { PartnerStato } from "@/services/types";
+import type { GruppoScorte } from "@/services/partner-scorte-service";
+import type { PartnerStato, Result } from "@/services/types";
 
 /**
  * La Cantina di un Partner attivo o sospeso: gestione commerciale, non
  * collezione (decisione di prodotto del Blocco B).
  *
- * Qui non ci sono apertura bottiglie, degustazioni, valore patrimoniale o
- * vista 3D: sono strumenti del collezionista privato e restano intatti nella
- * Cantina dei privati.
+ * Qui non ci sono apertura bottiglie, degustazioni, stime economiche o vista
+ * 3D: sono strumenti del collezionista privato e restano intatti nella Cantina
+ * dei privati.
  *
- * Il catalogo è vuoto fino al Blocco C, ed è vuoto di proposito. Nel database
- * non esiste ancora una distinzione autorevole fra un prodotto dell'attività e
- * un annuncio personale del titolare: mostrare qui i suoi annunci — o le sue
- * bottiglie — vorrebbe dire presentare beni personali come merce
- * dell'attività. Bottiglie e annunci personali restano nel database come sono:
- * niente conversioni, niente cancellazioni, e gli annunci si gestiscono da
- * «Il mio account». Nessuna quantità o disponibilità inventata: il modello di
- * giacenze è il Blocco C.
+ * VP-C: le scorte dell'attività sono righe dello stesso inventario della
+ * Cantina, ma commerciali e legate al Partner; si leggono solo quelle
+ * (`creaScortePartnerService`), raggruppate per vino e formato. Le bottiglie e
+ * gli annunci personali del titolare non compaiono qui e non si convertono.
+ * Pubblicare i prodotti è la vendita professionale (VP-D): resta chiusa.
  */
 export function CantinaCommerciale({
   nomeCommerciale,
   stato,
   titolareId,
+  scorte,
 }: {
   nomeCommerciale: string | null;
   stato: PartnerStato;
   titolareId: string;
+  scorte: Result<GruppoScorte[]>;
 }) {
   const sospeso = stato === "sospeso";
 
@@ -60,26 +61,70 @@ export function CantinaCommerciale({
 
       {sospeso ? (
         <p role="note" className="rounded-2xl border border-border bg-muted p-4 text-sm">
-          Il Partner è sospeso: la vetrina non è pubblica. I dati sono conservati.
+          Il Partner è sospeso: la vetrina non è pubblica e non si aggiungono scorte. Dati e scorte
+          sono conservati.
         </p>
       ) : null}
 
       <AcquistiPartnerNonDisponibili />
 
+      <section aria-labelledby="scorte-attivita" className="space-y-4">
+        <h2 id="scorte-attivita" className="font-serif text-2xl font-semibold">
+          Scorte dell&apos;attività
+        </h2>
+        {!scorte.ok ? (
+          <p role="status" className="rounded-2xl border border-dashed border-border bg-card p-4 text-sm">
+            {scorte.error}
+          </p>
+        ) : scorte.data.length === 0 ? (
+          <div
+            className="rounded-3xl border border-border bg-card p-6 text-center md:p-8"
+            data-testid="scorte-vuote"
+          >
+            <PackageOpen className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden />
+            <p className="mt-3 font-serif text-xl">Nessuna scorta registrata</p>
+            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+              Registra i vini dell&apos;attività con formato e numero di unità. Restano separati dalle
+              tue bottiglie personali.
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-border rounded-3xl border border-border bg-card" data-testid="elenco-scorte">
+            {scorte.data.map((g) => (
+              <li key={g.chiave} className="flex flex-wrap items-baseline justify-between gap-2 p-4">
+                <div className="min-w-0">
+                  <p className="text-xs uppercase tracking-wide text-salvia">{g.produttore}</p>
+                  <p className="font-serif font-semibold">
+                    {g.nome} {g.annata}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {g.tipo} · {g.regione} · {g.formato}
+                  </p>
+                </div>
+                <p className="text-sm font-medium">
+                  {g.quantita} {g.quantita === 1 ? "unità" : "unità"} in scorta
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+        {!sospeso ? <AggiungiScortePartner /> : null}
+      </section>
+
       <section aria-labelledby="catalogo-prodotti">
         <h2 id="catalogo-prodotti" className="font-serif text-2xl font-semibold">
-          Prodotti dell&apos;attività
+          Prodotti in vetrina
         </h2>
         <div
           className="mt-4 rounded-3xl border border-border bg-card p-6 text-center md:p-8"
           data-testid="catalogo-commerciale-vuoto"
         >
           <PackageOpen className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden />
-          <p className="mt-3 font-serif text-xl">Il catalogo è in preparazione</p>
+          <p className="mt-3 font-serif text-xl">La pubblicazione non è ancora aperta</p>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-            La pubblicazione di prodotti come Partner — con quantità multiple e disponibilità —
-            non è ancora aperta. Quando lo sarà, i prodotti dell&apos;attività compariranno qui e
-            nella vetrina.
+            Le scorte sono pronte per il catalogo. La pubblicazione dei prodotti come Partner, con
+            le condizioni della vendita professionale, arriverà con il prossimo blocco: fino ad
+            allora nulla è acquistabile e la vetrina mostra il catalogo in preparazione.
           </p>
         </div>
       </section>

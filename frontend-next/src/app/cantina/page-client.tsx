@@ -25,9 +25,15 @@ import {
 import type { Wine } from "@/data/wines";
 import { WineCard } from "@/components/vinea/WineCard";
 import { AperturaBottiglia } from "@/components/vinea/AperturaBottiglia";
+import { DettaglioGruppo, RiepilogoGruppoCantina } from "@/components/vinea/GruppoCantina";
 import { Kpi } from "@/components/vinea/Layout";
 import { ValoreNelTempo } from "@/components/vinea/ValoreNelTempo";
 import type { AnaliticaPortafoglio } from "@/lib/cantina/portfolio";
+import {
+  chiaveCantina,
+  riepilogoGruppo,
+  unitaVendibiliDelGruppo,
+} from "@/lib/cantina/gruppo";
 import {
   voceCapitaleNoto,
   voceIncassiTrasferiti,
@@ -166,9 +172,20 @@ function Cantina() {
   };
 
 
-  /** La prima bottiglia di un vino: è quella che i comandi per vino prendono. */
-  const bottigliaDelVino = (wine: Wine) =>
-    bottiglieCantina.find((b) => b.wineVintageId === (wine.wineSlug ?? wine.id));
+  /**
+   * La bottiglia su cui agiscono i comandi della scheda. Con più bottiglie
+   * dello stesso vino e formato (VP-C) è una chiusa e libera, se c'è: aprire o
+   * vendere quella impegnata in un annuncio verrebbe comunque rifiutato.
+   */
+  const bottigliaDelVino = (wine: Wine) => {
+    const chiave = chiaveCantina(wine);
+    const delGruppo = bottiglieCantina.filter((b) => b.wineVintageId === chiave);
+    return (
+      unitaVendibiliDelGruppo(delGruppo, chiave)[0] ??
+      delGruppo.find((b) => b.quantita > 0) ??
+      delGruppo[0]
+    );
+  };
 
   if (authLoading || cantinaLoading) {
     return (
@@ -315,7 +332,7 @@ function Cantina() {
         </TabsContent>
         <TabsContent value="vendita" className="mt-4">
           <BottiglieView
-            wines={mie.filter((w) => inVendita.has(w.wineSlug ?? w.id))}
+            wines={mie.filter((w) => inVendita.has(chiaveCantina(w)))}
             view={view === "3d" ? "grid" : view}
             inVendita={inVendita}
             prezzoNascosto={prezzoNascosto}
@@ -745,7 +762,7 @@ function View3D() {
 
   const vinoDi = useMemo(() => {
     const m = new Map<string, Wine>();
-    for (const w of viniCantina) m.set(w.wineSlug ?? w.id, w);
+    for (const w of viniCantina) m.set(chiaveCantina(w), w);
     return m;
   }, [viniCantina]);
 
@@ -1056,6 +1073,7 @@ function BottiglieView({
   // che la blocca — e restringere qui significava solo nasconderli.
   bottigliaDelVino: (w: Wine) => CellarBottle | undefined;
 }) {
+  const { bottiglieCantina } = useVinea();
   if (list.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center text-sm text-muted-foreground">
@@ -1072,8 +1090,11 @@ function BottiglieView({
       }
     >
       {list.map((w) => {
-        const slug = w.wineSlug ?? w.id;
+        const slug = chiaveCantina(w);
         const venduta = inVendita.has(slug);
+        const delGruppo = bottiglieCantina.filter((b) => b.wineVintageId === slug);
+        const riepilogo = riepilogoGruppo(delGruppo, slug);
+        const libere = unitaVendibiliDelGruppo(delGruppo, slug).length;
         const esposta = esposizioneCantina[slug] ?? "nessuna";
         const bottiglia = bottigliaDelVino(w);
         return (
@@ -1090,6 +1111,13 @@ function BottiglieView({
               hidePriceIfPrivate
               statoBottiglia={bottiglia?.stato}
             />
+            {/* VP-C: la scheda è un gruppo (vino + formato), le bottiglie restano
+                righe. Il conteggio è di righe reali, mai un numero scritto. */}
+            <RiepilogoGruppoCantina
+              riepilogo={riepilogo}
+              formato={w.formato}
+              libere={libere}
+            />
             <div className="flex flex-wrap gap-2">
               {/* Nel mock questo era un interruttore su un insieme in memoria.
                   Mettere in vendita significa creare un annuncio: è il lavoro
@@ -1097,7 +1125,7 @@ function BottiglieView({
                   già in vendita ha un annuncio da aprire. */}
               <Link
                 href={
-                  venduta
+                  venduta && libere === 0
                     ? `/annuncio/${w.id}`
                     : `/vendi?mode=sell${bottiglia ? `&bottiglia=${bottiglia.bottleId}` : ""}`
                 }
@@ -1105,7 +1133,12 @@ function BottiglieView({
                   venduta ? "border-bordeaux bg-bordeaux text-crema" : "border-border bg-card"
                 }`}
               >
-                <Tag className="h-3 w-3" /> {venduta ? "In vendita" : "Metti in vendita"}
+                <Tag className="h-3 w-3" />{" "}
+                {venduta && libere === 0
+                  ? "In vendita"
+                  : venduta
+                    ? "Vendine altre"
+                    : "Metti in vendita"}
               </Link>
               <button
                 onClick={() => void togglePrezzo(slug)}
@@ -1166,6 +1199,9 @@ function BottiglieView({
                 <AperturaBottiglia bottiglia={bottiglia} nomeVino={w.nome} variante="compatto" />
               ) : null}
             </div>
+            {delGruppo.length > 1 ? (
+              <DettaglioGruppo bottiglie={delGruppo} nomeVino={w.nome} />
+            ) : null}
           </div>
         );
       })}

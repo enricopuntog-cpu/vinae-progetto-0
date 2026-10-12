@@ -229,9 +229,18 @@ describe("vetrina pubblica", () => {
     }
   });
 
-  it("catalogo in preparazione: gli annunci personali del titolare non entrano", () => {
+  it("catalogo: solo prodotti commerciali, mai gli annunci personali del titolare (VP-C)", () => {
+    // Vuoto finché la vendita Partner non apre la pubblicazione (VP-D): lo
+    // stato vuoto resta.
     expect(vetrina).toInclude('data-testid="vetrina-catalogo-vuoto"');
-    expect(vetrina).not.toMatch(/prodotti=|prodotti:|WineCard|annunci|\bWine\b/);
+    // Il catalogo arriva solo dalla porta commerciale, come `ProdottoVetrina`:
+    // niente annunci personali, niente schede vino del marketplace.
+    expect(vetrina).toInclude("catalogo?: ProdottoVetrina[]");
+    expect(vetrina).not.toMatch(/prodotti=|WineCard|annunciAttivi|annunci=|\bWine\b/);
+    const pagina = senzaCommenti(leggi("src/app/profilo/[id]/page.tsx"));
+    expect(pagina).toInclude("vetrina ? servizioVetrina.catalogo(vetrina.partnerId) : NESSUNA_LETTURA");
+    expect(pagina).toInclude("vetrina ? NESSUNA_LETTURA : service.annunciAttivi(id)");
+    expect(leggi("src/services/partner-vetrina-service.ts")).toInclude('rpc("vetrina_partner_catalogo"');
   });
 
   it("il contatto diretto è dichiarato differito, senza un pulsante finto", () => {
