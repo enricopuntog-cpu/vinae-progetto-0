@@ -190,8 +190,8 @@ declare
   c_b3 constant uuid := '12ff1000-0000-4000-8000-0000000000e4';
   c_b4 constant uuid := '12ff1000-0000-4000-8000-0000000000e5';
   v_flag_prima text;
-  v_u40 uuid[]; v_u10 uuid[]; v_u45 uuid[]; v_u45s uuid[]; v_u100 uuid[];
-  v_l40 uuid; v_l10 uuid; v_l45 uuid; v_l45s uuid; v_l100 uuid;
+  v_u40 uuid[]; v_u10 uuid[]; v_u45 uuid[]; v_u45s uuid[]; v_u100 uuid[]; v_u45p uuid[];
+  v_l40 uuid; v_l10 uuid; v_l45 uuid; v_l45s uuid; v_l100 uuid; v_l45p uuid; v_o1p uuid; v_om2 uuid;
   v_c record;
   v_p jsonb; v_q jsonb;
   v_s text; v_t text;
@@ -270,11 +270,13 @@ begin
   v_u45  := pg_temp.lotto(c_s1, 'Nebbiolo Ze', 4, 'grid12ze-45');
   v_u45s := pg_temp.lotto(c_s1, 'Nebbiolo Ze Singola', 1, 'grid12ze-45s');
   v_u100 := pg_temp.lotto(c_s1, 'Barolo Ze', 3, 'grid12ze-100');
+  v_u45p := pg_temp.lotto(c_s1, 'Nebbiolo Ze Imballata', 1, 'grid12ze-45p');
   v_l40  := pg_temp.annuncio(c_s1, v_u40, 4000);
   v_l10  := pg_temp.annuncio(c_s1, v_u10, 1000);
   v_l45  := pg_temp.annuncio(c_s1, v_u45, 4500);
   v_l45s := pg_temp.annuncio(c_s1, v_u45s, 4500);
   v_l100 := pg_temp.annuncio(c_s1, v_u100, 10000);
+  v_l45p := pg_temp.annuncio(c_s1, v_u45p, 4500);
   update private.inventario_impostazioni set ordini_multi_unita = true where id;
   perform pg_temp.vpe_logistica_fixture();
 
@@ -287,6 +289,7 @@ begin
     and (v_q ->> 'feePagamentoCents')::integer = 39
     and (v_p ->> 'feePagamentoCents')::integer = 39
     and (v_p ->> 'imballaggioAnnuncioCents')::integer = 0
+    and (v_p ->> 'feePagamentoSenzaLogisticaCents')::integer = 0
     and (v_p -> 'economico' ->> 'totaleCents')::integer = 35324
     and (v_p -> 'economico' ->> 'commissioneCents')::integer = 3324
     and v_prev_totale = 37185,
@@ -466,6 +469,41 @@ begin
      from public.orders o join public.profiles p on p.id = o.buyer_id
      where p.username like '%-12ze'),
     v_flag_prima);
+
+  -- 17 (migrazione 20261013090000): una bottiglia con imballaggio 7c a
+  -- pagamento. Il preventivo da la copertura senza logistica e il checkout
+  -- congela la stessa: 4990 + 450 + 9 = 5449.
+  select * into v_c from pg_temp.chiama(format(
+    'select to_jsonb(public.listing_imballaggio_dichiara(%L, ''centro_partner''))', v_l45p), c_s1);
+  v_s := v_c.esito;
+  v_p := pg_temp.prev(v_l45p, 1);
+  select * into v_c from pg_temp.prenota(c_b2, v_l45p, 'grid12ze-singola-7c');
+  v_o1p := (v_c.dati ->> 'order_id')::uuid;
+  perform pg_temp.registra(17, 'una bottiglia da 45 euro con imballaggio 7c 450: preventivo con copertura senza logistica 9, checkout 0/9/5449 = mercato 4990 + 450 + 9',
+    v_s = 'NESSUN_ERRORE' and v_c.esito = 'NESSUN_ERRORE'
+    and (v_p ->> 'imballaggioAnnuncioCents')::integer = 450
+    and (v_p ->> 'feePagamentoSenzaLogisticaCents')::integer = 9
+    and (v_p ->> 'feePagamentoCents') is null
+    and pg_temp.importi(v_o1p) = '0/9/5449/5449'
+    and (select imballaggio_cents from public.orders where id = v_o1p) = 450
+    and (v_p -> 'economico' ->> 'totaleCents')::integer
+        + (v_p ->> 'imballaggioAnnuncioCents')::integer
+        + (v_p ->> 'feePagamentoSenzaLogisticaCents')::integer = 5449,
+    v_s || ' ' || v_c.esito || ':' || v_c.hint || ' ' || coalesce(pg_temp.importi(v_o1p), '') || ' ' || v_p::text);
+
+  -- 18: consegna a mano di 2 x 45 euro con lo stesso imballaggio 7c: niente
+  -- logistica, resta la copertura dell'imballaggio, uguale al preventivo.
+  v_p := pg_temp.prev(v_l45, 2);
+  select * into v_c from pg_temp.prenota(c_b1, v_l45, 'grid12ze-mano-7c', 2, 'consegna_mano');
+  v_om2 := (v_c.dati ->> 'order_id')::uuid;
+  perform pg_temp.registra(18, 'consegna a mano di 2 x 45 euro con imballaggio 7c 450: copertura 9, addebito 9954 + 450 + 9 = 10413 uguale al preventivo senza logistica',
+    v_c.esito = 'NESSUN_ERRORE'
+    and pg_temp.importi(v_om2) = '0/9/10413/10413'
+    and (v_p ->> 'feePagamentoSenzaLogisticaCents')::integer = 9
+    and (v_p -> 'economico' ->> 'totaleCents')::integer
+        + (v_p ->> 'imballaggioAnnuncioCents')::integer
+        + (v_p ->> 'feePagamentoSenzaLogisticaCents')::integer = 10413,
+    v_c.esito || ':' || v_c.hint || ' ' || coalesce(pg_temp.importi(v_om2), '') || ' ' || v_p::text);
 end $$;
 
 select id, descrizione, passed, detail
