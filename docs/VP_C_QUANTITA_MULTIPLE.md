@@ -280,10 +280,88 @@ Le griglie manuali `7_ordini_pagamenti`, `7b_connect_marketplace` e
 PI e il passo di pubblicazione della 7/7b: precedono il cancello logistico del
 28 settembre 2026), con gli stessi esiti dopo VP-C. Non sono nel gate CI.
 
-## 7. Stato
+## 7. Interfacce (parte 3)
+
+Nessuna migrazione. Tutti i numeri mostrati sono conteggi fatti dal database;
+l'interfaccia non ne è l'autorità e le porte riverificano ogni gesto.
+
+- **Cantina privata** (`/cantina`): una scheda per gruppo **vino + formato**
+  (`lib/cantina/gruppo.ts`, `chiaveGruppo`: per il formato standard la chiave
+  resta lo slug del vino, quindi nessuna preferenza esistente cambia). Sotto la
+  scheda un riepilogo per righe («11 bottiglie · 0,75 L · 5 in vendita · 1
+  aperta · 6 libere») e il **dettaglio bottiglie**: una riga per unità con
+  stato, posizione, eventuale annuncio, costo e «Apri» su quella sola
+  bottiglia. I comandi della scheda agiscono su una bottiglia chiusa e libera.
+  Lo stato di vendita di ogni unità viene da `cantina_unita_annunci`, quindi
+  anche una bottiglia non rappresentativa di un annuncio multiplo risulta in
+  vendita e non apribile; se quella lettura fallisce la Cantina si mostra lo
+  stesso e il database continua a rifiutare l'apertura. Si leggono solo unità
+  `personale`. La vista 3D e gli altri strumenti restano per unità.
+- **Aggiunta** (`/vendi`, modalità Cantina): campi Formato e «Quante
+  bottiglie» (1-120), costo per bottiglia, una chiave d'idempotenza per gesto
+  rinnovata solo dopo il successo; anteprima con quantità e formato.
+- **Vendita** (`/vendi` da una bottiglia): «Bottiglie in vendita» fra 1 e le
+  bottiglie libere dello stesso gruppo (`unitaVendibiliDelGruppo`); più di una
+  passa da `listing_crea_lotto`, una sola dalla porta di sempre. Prezzo per
+  bottiglia. Il selettore «Scegli dalla tua Cantina» mostra un gruppo con il
+  numero di bottiglie libere invece di una scheda per bottiglia.
+- **Scheda annuncio**: «Prezzo per bottiglia» e bottiglie disponibili; al
+  venditore i conteggi (in vendita, disponibili, prenotate, vendute) e la
+  modifica della quantità in vendita; all'acquirente, finché
+  `ordini_multi_unita` è spento, la frase «Per ora si acquista una bottiglia
+  per ordine» e nessun selettore. Il selettore compare solo se
+  `inventario_capacita()` lo permette e porta `?quantita=` al checkout.
+- **Checkout**: la quantità dall'indirizzo vale solo se intera fra 1 e le
+  disponibili (e 24); la stima è sul subtotale; servizio pagamenti ed Edge
+  Function `payments-checkout` passano un numero di bottiglie, mai un importo,
+  e la Edge Function rifiuta valori fuori 1-24. `PAYMENTS_ENABLED=false`
+  invariato.
+- **Storico ordini**: «N bottiglie × prezzo» quando la quantità è maggiore di 1
+  (colonne `quantita`, `prezzo_unitario_cents`).
+- **Cantina commerciale del Partner**: scorte reali raggruppate per vino e
+  formato da `creaScortePartnerService` (solo righe `commerciale`), modulo
+  «Aggiungi scorte» per il Partner attivo (assente se sospeso), nessuna
+  apertura, degustazione, stima economica o 3D; i prodotti in vetrina restano
+  «pubblicazione non ancora aperta».
+- **Vetrina**: il catalogo legge solo `vetrina_partner_catalogo` (prodotti
+  commerciali pubblicati), mai gli annunci personali; oggi è vuoto e mostra
+  «Catalogo in preparazione».
+
+Prova locale nel browser (stack CLI 2.117.0 con le 85 migrazioni, fixture
+`@vpc-e2e.test` solo locali): aggiunta di 12 Barolo 2019 dal wizard → una
+scheda «12 bottiglie · 0,75 L», capitale noto 624 € = 12 × 52 €; 3 Magnum dello
+stesso vino → scheda separata; apertura della bottiglia 3 dal dettaglio → una
+sola unità aperta con la sua nota, 11 chiuse; vendita di 5 su 11 libere al
+prezzo di 80 € per bottiglia → annuncio attivo 5/5/0/0/0; acquisto simulato di
+una bottiglia (checkout di servizio e liquidazione) → 4 disponibili, una
+bottiglia nella Cantina del compratore; riduzione a 3 dalla scheda; vista
+dell'acquirente con 3 disponibili e «una bottiglia per ordine»; Partner attivo
+con 24 unità in scorta in formato 1,5 L, vetrina con catalogo in preparazione;
+375 px senza scroll orizzontale su Cantina, scheda e Cantina commerciale.
+
+## 8. Requisiti differiti e prerequisiti
+
+- **VP-E** (logistica per quantità e colli multipli): il piano di spedizione
+  conosce solo `bottiglia_1`; servono SKU e tariffe per più bottiglie, poi una
+  migrazione che accenda `ordini_multi_unita`. Il motore (allocazione di N
+  bottiglie, una commissione sull'aggregato, liquidazione per unità) è già
+  provato dalla griglia 12za a interruttore acceso in transazione.
+- **VP-D** (vendita professionale): margine 1500 bps, checkout professionale,
+  pubblicazione dei prodotti commerciali e porta per creare i prodotti
+  dall'interfaccia del Partner (il database ha già `listing_crea_lotto` per le
+  bozze commerciali); poi una migrazione che accenda `vendita_partner` e
+  sostituisca i gate.
+- **Decisione aperta del titolare**: politica del Partner revocato (scorte
+  commerciali oggi conservate e non vendibili; annunci personali come i
+  privati).
+- **Non incluso**: correzione del formato di un'unità già creata (formato
+  immutabile; per un errore si toglie l'unità e la si aggiunge di nuovo);
+  fotografie per prodotto commerciale.
+
+## 9. Stato
 
 | Parte | Contenuto | Stato |
 | --- | --- | --- |
 | 1 | Formato per unità, lotti idempotenti, aggiunta multipla privata, scorte commerciali del Partner, confini fra le classi, interruttori | In produzione: PR #212 (merge `f3cd788`), migrazione `20261012090000`, griglia `12z` |
-| 2 | Appartenenza annuncio-unità, allocazioni, annunci multi-unità, proposte e ordini con quantità, gate | Implementata: migrazione `20261012150000`, griglia `12za`, concorrenza `12z_vp_c_concorrenza.sh` (6 prove) |
-| 3 | Interfacce: Cantina raggruppata, aggiunta multipla, quantità in vendita, scheda e selettore, catalogo commerciale | Non iniziata |
+| 2 | Appartenenza annuncio-unità, allocazioni, annunci multi-unità, proposte e ordini con quantità, gate | In produzione: PR #213 (merge `c75f4d3`), migrazione `20261012150000`, griglia `12za`, concorrenza `12z_vp_c_concorrenza.sh` (6 prove) |
+| 3 | Interfacce (§7) | Implementata, provata in locale nel browser; PR delle interfacce |

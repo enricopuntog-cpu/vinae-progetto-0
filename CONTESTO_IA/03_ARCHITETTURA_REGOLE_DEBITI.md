@@ -1594,6 +1594,27 @@ prove di acquisto nello script di concorrenza. Regole durevoli:
   `partner_checkout_non_disponibile`). Li accende solo la migrazione di VP-E e
   VP-D rispettivamente.
 
+Parte 3 (interfacce, nessuna migrazione). Regole durevoli:
+
+- **Chiave del gruppo = vino + formato** (`chiaveGruppo` in
+  `frontend-next/src/lib/cantina/gruppo.ts`): per il formato standard resta lo
+  slug, quindi preferenze e metadati per vino già salvati non cambiano. Ogni
+  punto della Cantina che lega una scheda alle sue bottiglie usa
+  `chiaveCantina(w)`, mai `w.wineSlug ?? w.id`; `CellarBottle.wineSlug` resta
+  lo slug del vino di catalogo per Price Intelligence e metadati.
+- **Azioni per bottiglia**: il dettaglio del gruppo elenca le righe e le
+  azioni ricevono la singola unità; i comandi della scheda scelgono una
+  bottiglia chiusa e libera.
+- **Stato di vendita per unità** da `cantina_unita_annunci`, non solo
+  dall'innesto `listings` sulla rappresentativa; una lettura fallita degrada
+  allo stato per riga e non apre nulla che il database rifiuterebbe.
+- **Nessun selettore che il database rifiuterebbe**: la quantità d'acquisto
+  compare solo se `inventario_capacita()` dice `ordiniMultiUnita`; il browser
+  manda un numero di bottiglie, mai un importo.
+- **Cantina commerciale = scorte commerciali**: legge solo righe
+  `commerciale` (`creaScortePartnerService`), senza strumenti da collezionista;
+  la vetrina legge solo `vetrina_partner_catalogo`.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):
