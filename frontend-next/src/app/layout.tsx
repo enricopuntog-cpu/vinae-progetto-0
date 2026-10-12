@@ -5,6 +5,7 @@ import { Providers } from "./providers";
 import { VineaLayout } from "@/components/vinea/Layout";
 import { anteprimaSocialVinea, VINEA_ICONS, VINEA_SITE_NAME } from "@/lib/brand/metadata";
 import { readIncidentNotice } from "@/lib/incidents/notice";
+import { LOCALE_PREDEFINITO } from "@/lib/mercato";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 const DESCRIZIONE = "Vinea è una web app italiana per catalogare una cantina personale.";
@@ -32,7 +33,7 @@ export default async function RootLayout({
   await connection();
   const incidentNotice = await readIncidentNotice(await getSupabaseServerClient());
   return (
-    <html lang="it" className="h-full antialiased">
+    <html lang={LOCALE_PREDEFINITO} className="h-full antialiased">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
