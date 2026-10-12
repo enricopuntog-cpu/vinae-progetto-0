@@ -186,6 +186,7 @@ jobs:
           bash -n .github/scripts/protected-paths-guard.test.sh
           bash .github/scripts/protected-paths-guard.test.sh
           bash -n supabase/tests/12g_ci_run.sh
+          bash -n supabase/tests/12z_vp_c_concorrenza.sh
           node --check supabase/tests/12g_club_dispute_e2e.mjs
           bash .github/scripts/supabase-db-gate.test.sh
           python3 .github/scripts/offsite-archive-validate.test.py

@@ -2,7 +2,7 @@
 # Decide se il gate DB 12g deve girare per questo commit.
 #
 # Pertinenti: migrazioni, configurazione dello stack locale, seed, griglie
-# 7c e 12e/12f/12g/12h/12i/12j/12k/12l/12m/12n/12o/12p/12q/12r/12s/12t/12u-12x e
+# 7c e 12e/12f/12g/12h/12i/12j/12k/12l/12m/12n/12o/12p/12q/12r/12s/12t/12u-12z e
 # l'automazione stessa. Il resto produce uno skip dichiarato.
 # Fail-closed: se il diff non e calcolabile il gate gira.
 #
@@ -23,7 +23,7 @@ is_relevant_path() {
       | supabase/tests/12n_* | supabase/tests/12o_* | supabase/tests/12p_* \
       | supabase/tests/12q_* | supabase/tests/12r_* | supabase/tests/12s_* | supabase/tests/12t_* \
       | supabase/tests/12u_* | supabase/tests/12v_* | supabase/tests/12w_* \
-      | supabase/tests/12x_* \
+      | supabase/tests/12x_* | supabase/tests/12y_* | supabase/tests/12z* \
       | .github/workflows/supabase-db-regression.yml \
       | .github/scripts/supabase-db-gate-scope.sh)
       return 0 ;;
