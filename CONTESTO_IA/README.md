@@ -99,6 +99,12 @@ Aprire soltanto ciò che serve al task:
   decisa e congelata dal database, preventivi autorevoli per le superfici,
   nessun ripiego all'8% — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`; contratto
   completo in `../docs/VP_D_CLASSI_ECONOMICHE.md`.
+- Logistica multi-collo VP-E (12 ottobre 2026) — più bottiglie spedite esigono
+  il preventivo logistico (fail-closed con i motivi), colli pieni con un
+  servizio per ordine, `logistica_cents` congelata nell'addebito e fuori dalla
+  commissione, piano WP6B che conosce i colli, domicilio preventivabile ma non
+  ordinabile — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`; contratto completo in
+  `../docs/VP_E_LOGISTICA_MULTI_COLLO.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono
