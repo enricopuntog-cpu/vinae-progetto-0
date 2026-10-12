@@ -246,5 +246,5 @@ intendevano.
 | Parte | Contenuto | Stato |
 | --- | --- | --- |
 | 1 | Configurazione per classe, risolutore, checkout e gate, congelamento, preventivi, catalogo, griglie | In produzione: PR #216, merge `8349d46`; ledger 86 = 86 file su `origin/main`; righe correnti 800/1500 bps con fee 209 bps + 25 c, interruttori `false/false`, verifiche del 12 ottobre 2026 |
-| 2 | Interfacce: preventivo autorevole su scheda, checkout, proposte e vendita; catalogo e prodotti nell'area Partner; classe negli ordini | PR della parte 2; E2E locale nel browser (interruttore acceso solo in locale e ripristinato) |
-| 3 | Verifica finale, documentazione e handoff | Documentazione in questa PR; verifica del deploy dopo il merge |
+| 2 | Interfacce: preventivo autorevole su scheda, checkout, proposte e vendita; catalogo e prodotti nell'area Partner; classe negli ordini | In produzione: PR #217, merge `f1f4ca6`; E2E locale nel browser (interruttore acceso solo in locale e ripristinato); bundle di produzione verificato il 12 ottobre 2026 |
+| 3 | Verifica finale, documentazione e handoff | Fatto il 12 ottobre 2026. `vendita_partner` spento: nessuna vendita Partner operativa |
