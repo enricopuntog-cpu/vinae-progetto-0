@@ -252,6 +252,11 @@ reali.)
 - Metrica logistica: `obiettivoTransazioneCents`, `obiettivoApplicabile`,
   `entroObiettivoTransazione`, `sogliaStoricaCents`, `entroSogliaStorica`
   (solo al venditore); `costoRealePerBottigliaCents` resta informativo.
-- Limite: il preventivo di una bottiglia (`listing_preventivo`) non include
-  l'imballaggio 7c; oggi i tre metodi 7c sono a 0 € e il checkout resta
-  l'autorità.
+- Senza logistica addebitata (una bottiglia, consegna a mano) la migrazione
+  `20261013090000` aggiunge al preventivo `feePagamentoSenzaLogisticaCents`:
+  la copertura sul solo imballaggio 7c dell'annuncio, la stessa che il
+  checkout congela (1×45 € + 7c 4,50 € → 9, addebito 5449; consegna a mano
+  2×45 € + 7c → 9, 10413; griglia `12ze` casi 17-18). Il riepilogo del
+  checkout legge imballaggio, logistica e copertura solo da questo preventivo
+  (`accessoriCheckout`), non dal listino beta locale; se un importo non è
+  determinabile non mostra un totale.
