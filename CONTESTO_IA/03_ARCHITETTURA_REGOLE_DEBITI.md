@@ -1698,6 +1698,44 @@ regression`. Regole durevoli:
   di consegna; la decisione WP6B n. 4 resta valida finché quel dominio non
   esiste.
 
+## Predisposizione internazionale VP-F (12 ottobre 2026)
+
+Migrazione `20261012233000_vp_f_predisposizione_internazionale.sql`, griglia
+`supabase/tests/12zd_vp_f_predisposizione_internazionale.sql` nel gate
+`Supabase DB regression`; lato client `frontend-next/src/lib/mercato.ts`.
+Italia ed euro restano l'unico mercato operativo. Regole durevoli:
+
+- **Registri unici.** `private.mercato_paesi` (ISO 3166-1 alpha-2 maiuscolo,
+  cinque usi: registrazione commerciale, vendita, acquisto, origine e
+  destinazione di spedizione) e `private.mercato_valute` (ISO 4217 minuscolo
+  come `orders.currency`, cifre dell'unità minima). Paese assente = nessun
+  uso. Nessun grant client; le interfacce leggono
+  `public.mercato_configurazione()` (anon/auth), che non è un controllo.
+- **Serrature di migrazione.** `mercato_paesi_solo_italia` e
+  `mercato_valute_solo_eur` impediscono di abilitare un altro Paese o una
+  seconda valuta con un UPDATE: aprire un mercato è una decisione del
+  titolare che passa da una migrazione (insieme a fisco, fatturazione,
+  logistica, pagamenti e all'allargamento dei `check (currency = 'eur')`
+  esistenti, che restano la serratura delle colonne monetarie).
+- **Paese dell'utente ≠ sede del venditore ≠ origine/destinazione.**
+  `private.utenti_paese` (fuori da `profiles`, che `authenticated` legge per
+  intero; assenza di riga = `IT`); `private.paese_sede_venditore` = Paese del
+  Partner non revocato, altrimenti dell'utente;
+  `orders.paese_origine`/`paese_destinazione` decisi dal trigger
+  `orders_mercato_gate` (i valori passati dallo scrittore sono ignorati) e
+  immutabili con la valuta (`orders_mercato_immutabile`). La destinazione è
+  il Paese del compratore finché l'ordine non conserva un indirizzo.
+- **Gate per qualunque scrittore** (42501, hint `paese_non_consentito` /
+  `valuta_non_consentita`): ordini, proposte, annunci (`vendita`), Partner
+  (`registrazione_commerciale`; il vecchio `partners_paese_italia` è ora
+  `partners_paese_iso` più il gate) e punti PUDO. La Cantina personale non è
+  commercio e non è filtrata.
+- **Differiti dichiarati:** nessuna porta per scegliere il Paese dell'utente;
+  indirizzi di consegna; IVA/accise/dogane e fatturazione estere; valute e
+  conversioni; corrieri e Stripe esteri; traduzione inglese (solo la locale
+  `en` dichiarata e `formatImportoMinimo`; le ~37 chiamate `"it-IT"` e
+  `config/labels.ts` restano da migrare quando l'inglese sarà ammesso).
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):
