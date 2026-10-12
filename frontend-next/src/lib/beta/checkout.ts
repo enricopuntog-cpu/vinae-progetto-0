@@ -123,6 +123,7 @@ export const riepilogoCheckout = (
   preventivo: PreventivoEconomico | null,
   imballaggioCodice: string,
   logisticaCents = 0,
+  feePagamentoCents = 0,
 ) => {
   if (!preventivo) return null;
   const imballaggioCents =
@@ -137,7 +138,10 @@ export const riepilogoCheckout = (
     // trasporto) è una riga a sé, fuori dalla commissione, dal preventivo
     // logistico del database.
     logisticaCents,
-    totaleCents: preventivo.totaleCents + imballaggioCents + logisticaCents,
+    // Copertura della fee di pagamento generata dalla logistica: calcolata dal
+    // database con la formula unica, separata dal servizio Vinea.
+    feePagamentoCents,
+    totaleCents: preventivo.totaleCents + imballaggioCents + logisticaCents + feePagamentoCents,
   };
 };
 
@@ -155,4 +159,20 @@ export const logisticaAddebitata = (
   if (quantita <= 1 || deliveryMode !== "spedizione") return 0;
   if (!opzionePudo || !opzionePudo.ordinabile || opzionePudo.totaleCents === null) return null;
   return opzionePudo.totaleCents;
+};
+
+/**
+ * Copertura della fee di pagamento che entra nel totale insieme alla
+ * logistica: la stessa condizione di `logisticaAddebitata`, numero del
+ * preventivo del database (nessuna formula nel client). Zero se la logistica
+ * non è addebitata, `null` se la spedizione non è configurata.
+ */
+export const feePagamentoAddebitata = (
+  quantita: number,
+  deliveryMode: OrderDeliveryMode,
+  opzionePudo: { ordinabile: boolean; totaleCents: number | null; feePagamentoCents: number | null } | null,
+): number | null => {
+  if (logisticaAddebitata(quantita, deliveryMode, opzionePudo) === null) return null;
+  if (quantita <= 1 || deliveryMode !== "spedizione") return 0;
+  return opzionePudo?.feePagamentoCents ?? 0;
 };

@@ -1,5 +1,5 @@
 import type { Wine } from "@/data/wines";
-import { riepilogoCheckout, type DatiCheckoutBeta } from "@/lib/beta/checkout";
+import { feePagamentoAddebitata, riepilogoCheckout, type DatiCheckoutBeta } from "@/lib/beta/checkout";
 import { etichettaClasse, euro } from "@/lib/prezzi/classe";
 import type { PreventivoAnnuncio } from "@/services/preventivo-service";
 import type { PreventivoLogistica } from "@/services/logistica-service";
@@ -42,9 +42,10 @@ export const CheckoutSummary = ({
   const conLogistica = bottiglie > 1 && dati.deliveryMode === "spedizione";
   // Con la spedizione non configurata non si stima un totale: il checkout non
   // si conferma (VP-E, fail-closed).
+  const feePagamentoCents = feePagamentoAddebitata(bottiglie, dati.deliveryMode, pudo);
   const stima = conLogistica && logisticaCents === null
     ? null
-    : riepilogoCheckout(economico, dati.imballaggioCodice, logisticaCents ?? 0);
+    : riepilogoCheckout(economico, dati.imballaggioCodice, logisticaCents ?? 0, feePagamentoCents ?? 0);
 
   return (
     <aside className="space-y-4 rounded-2xl border border-border bg-card p-4 lg:sticky lg:top-24" data-testid="checkout-summary">
@@ -81,6 +82,13 @@ export const CheckoutSummary = ({
                   value={euroCents((pudo.altriCostiCents ?? 0) + (pudo.bufferCents ?? 0))}
                 />
               ) : null}
+              {stima.feePagamentoCents > 0 ? (
+                <Riga
+                  label="Costi di pagamento sulla spedizione"
+                  value={euroCents(stima.feePagamentoCents)}
+                  testId="checkout-fee-pagamento"
+                />
+              ) : null}
             </>
           ) : bottiglie > 1 ? (
             <Riga label="Spedizione" value="Non prevista (ritiro concordato)" />
@@ -111,15 +119,28 @@ export const CheckoutSummary = ({
       <p className="text-xs leading-relaxed text-muted-foreground">
         Il totale vincolante sarà calcolato dal server e mostrato dal provider prima del pagamento.
         {conLogistica
-          ? " Spedizione e imballaggio di più bottiglie vengono dal preventivo del server, separati dal servizio Vinea."
+          ? " Spedizione, imballaggio di più bottiglie e i costi di pagamento che generano vengono dal preventivo del server, separati dal servizio Vinea."
           : " Nessun costo di spedizione o imballaggio viene promesso da questa stima beta."}
       </p>
     </aside>
   );
 };
 
-const Riga = ({ label, value, forte = false }: { label: string; value: string; forte?: boolean }) => (
-  <div className={`flex items-baseline justify-between gap-3 ${forte ? "font-semibold text-bordeaux" : ""}`}>
+const Riga = ({
+  label,
+  value,
+  forte = false,
+  testId,
+}: {
+  label: string;
+  value: string;
+  forte?: boolean;
+  testId?: string;
+}) => (
+  <div
+    className={`flex items-baseline justify-between gap-3 ${forte ? "font-semibold text-bordeaux" : ""}`}
+    data-testid={testId}
+  >
     <span>{label}</span><span className="shrink-0">{value}</span>
   </div>
 );

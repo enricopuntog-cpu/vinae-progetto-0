@@ -52,8 +52,16 @@ export type EconomiaVenditore = {
   deduzioneRitiroCents: number;
   costoRealeCents: number;
   costoRealePerBottigliaCents: number;
-  obiettivoCents: number | null;
-  entroObiettivo: boolean | null;
+  /** Obiettivo per transazione (10 € IVA inclusa) e prezzo per bottiglia sotto cui vale. */
+  obiettivoTransazioneCents: number | null;
+  obiettivoPrezzoBottigliaMaxCents: number | null;
+  /** `null` se l'obiettivo non è configurato; falso con bottiglie sopra la soglia di prezzo. */
+  obiettivoApplicabile: boolean | null;
+  /** `null` quando l'obiettivo non si applica a questa transazione. */
+  entroObiettivoTransazione: boolean | null;
+  /** Soglia storica configurata (15 €), per transazione: mai l'obiettivo nuovo. */
+  sogliaStoricaCents: number | null;
+  entroSogliaStorica: boolean | null;
 };
 
 export type OpzioneLogistica = {
@@ -68,6 +76,12 @@ export type OpzioneLogistica = {
   altriCostiCents: number | null;
   bufferCents: number | null;
   totaleCents: number | null;
+  /**
+   * Copertura della fee di pagamento che questa logistica (più l'imballaggio
+   * dell'annuncio) genera sull'addebito, calcolata dal database con la formula
+   * unica. Separata dalla commissione; `null` se non addebitabile.
+   */
+  feePagamentoCents: number | null;
   mancanti: MancanzaLogistica[];
   venditore: EconomiaVenditore | null;
 };
@@ -90,7 +104,11 @@ export type PreventivoLogistica = {
   opzioni: OpzioneLogistica[];
   modalita: ModalitaLogistica[];
   economico: PreventivoEconomico | null;
-  /** Mercato + logistica al punto di ritiro, solo quando è addebitata. */
+  /** Imballaggio 7c dichiarato sull'annuncio, come lo addebita il checkout. */
+  imballaggioAnnuncioCents: number;
+  /** Copertura della fee di pagamento al punto di ritiro (`null` se non addebitata). */
+  feePagamentoCents: number | null;
+  /** Mercato + imballaggio dell'annuncio + logistica al punto di ritiro + copertura, solo quando è addebitata. */
   totaleOrdineCents: number | null;
 };
 
@@ -100,6 +118,8 @@ export type LogisticaOrdine = {
   orderId: string;
   quantita: number;
   logisticaCents: number;
+  /** Copertura della fee di pagamento congelata sull'ordine (0 senza accessori). */
+  feePagamentoCents: number;
   destinazione: Destinazione | null;
   imballaggioCents: number | null;
   trasportoCents: number | null;
@@ -173,9 +193,17 @@ function leggiVenditore(v: unknown): EconomiaVenditore | null | undefined {
   const e = oggetto(v);
   if (!e) return undefined;
   const numeri = [e.trasportoEffettivoCents, e.deduzioneRitiroCents, e.costoRealeCents, e.costoRealePerBottigliaCents];
-  const obiettivo = interoOpz(e.obiettivoCents);
-  if (!numeri.every(intero) || obiettivo === undefined) return undefined;
-  if (!(e.entroObiettivo === null || e.entroObiettivo === undefined || typeof e.entroObiettivo === "boolean")) {
+  const obiettivo = interoOpz(e.obiettivoTransazioneCents);
+  const prezzoMax = interoOpz(e.obiettivoPrezzoBottigliaMaxCents);
+  const soglia = interoOpz(e.sogliaStoricaCents);
+  const flag = (x: unknown) => (x === null || x === undefined ? null : typeof x === "boolean" ? x : undefined);
+  const applicabile = flag(e.obiettivoApplicabile);
+  const entro = flag(e.entroObiettivoTransazione);
+  const entroSoglia = flag(e.entroSogliaStorica);
+  if (
+    !numeri.every(intero) ||
+    [obiettivo, prezzoMax, soglia, applicabile, entro, entroSoglia].some((x) => x === undefined)
+  ) {
     return undefined;
   }
   return {
@@ -183,8 +211,13 @@ function leggiVenditore(v: unknown): EconomiaVenditore | null | undefined {
     deduzioneRitiroCents: e.deduzioneRitiroCents as number,
     costoRealeCents: e.costoRealeCents as number,
     costoRealePerBottigliaCents: e.costoRealePerBottigliaCents as number,
-    obiettivoCents: obiettivo,
-    entroObiettivo: typeof e.entroObiettivo === "boolean" ? e.entroObiettivo : null,
+    obiettivoTransazioneCents: obiettivo ?? null,
+    obiettivoPrezzoBottigliaMaxCents: prezzoMax ?? null,
+    obiettivoApplicabile: applicabile ?? null,
+    // Senza ambito non c'è esito: un «entro» fuori ambito non si mostra mai.
+    entroObiettivoTransazione: applicabile === true ? (entro ?? null) : null,
+    sogliaStoricaCents: soglia ?? null,
+    entroSogliaStorica: entroSoglia ?? null,
   };
 }
 
@@ -219,6 +252,7 @@ export function leggiOpzioneLogistica(v: unknown, quantita: number): OpzioneLogi
       altriCostiCents: null,
       bufferCents: null,
       totaleCents: null,
+      feePagamentoCents: null,
       mancanti,
       venditore: null,
     };
@@ -235,6 +269,8 @@ export function leggiOpzioneLogistica(v: unknown, quantita: number): OpzioneLogi
   const altri = o.altriCostiCents as number;
   const buffer = o.bufferCents as number;
   const totale = o.totaleCents as number;
+  const fee = interoOpz(o.feePagamentoCents);
+  if (fee === undefined) return undefined;
   // Le identità che il database garantisce: se non tornano, il numero non si
   // mostra.
   if (
@@ -256,6 +292,7 @@ export function leggiOpzioneLogistica(v: unknown, quantita: number): OpzioneLogi
     altriCostiCents: altri,
     bufferCents: buffer,
     totaleCents: totale,
+    feePagamentoCents: fee,
     mancanti,
     venditore,
   };
@@ -282,11 +319,21 @@ export function leggiPreventivoLogistica(v: unknown): PreventivoLogistica | unde
   }
   const economico = leggiPreventivoEconomico(r.economico);
   const totaleOrdine = interoOpz(r.totaleOrdineCents);
-  if (economico === undefined || totaleOrdine === undefined) return undefined;
+  const imballaggioAnnuncio = interoOpz(r.imballaggioAnnuncioCents);
+  const feeTesta = interoOpz(r.feePagamentoCents);
+  if (economico === undefined || totaleOrdine === undefined || imballaggioAnnuncio === undefined || feeTesta === undefined) {
+    return undefined;
+  }
   const pudo = (opzioni as OpzioneLogistica[]).find((o) => o.destinazione === "pudo");
+  // Identità del database: totale = mercato + imballaggio dell'annuncio +
+  // logistica + copertura, e la copertura in testa è quella del punto di ritiro.
   if (
     totaleOrdine !== null &&
-    (!economico || !pudo?.disponibile || totaleOrdine !== economico.totaleCents + (pudo.totaleCents ?? 0))
+    (!economico ||
+      !pudo?.disponibile ||
+      feeTesta !== pudo.feePagamentoCents ||
+      totaleOrdine !==
+        economico.totaleCents + (imballaggioAnnuncio ?? 0) + (pudo.totaleCents ?? 0) + (pudo.feePagamentoCents ?? 0))
   ) {
     return undefined;
   }
@@ -300,6 +347,8 @@ export function leggiPreventivoLogistica(v: unknown): PreventivoLogistica | unde
     opzioni: opzioni as OpzioneLogistica[],
     modalita,
     economico,
+    imballaggioAnnuncioCents: imballaggioAnnuncio ?? 0,
+    feePagamentoCents: feeTesta,
     totaleOrdineCents: totaleOrdine,
   };
 }
@@ -312,11 +361,13 @@ export function leggiLogisticaOrdine(v: unknown): LogisticaOrdine | undefined {
   if (colli.some((c) => c === undefined)) return undefined;
   const imballaggio = interoOpz(r.imballaggioCents);
   const trasporto = interoOpz(r.trasportoCents);
-  if (imballaggio === undefined || trasporto === undefined) return undefined;
+  const fee = interoOpz(r.feePagamentoCents);
+  if (imballaggio === undefined || trasporto === undefined || fee === undefined) return undefined;
   return {
     orderId: r.orderId,
     quantita: r.quantita,
     logisticaCents: r.logisticaCents,
+    feePagamentoCents: fee ?? 0,
     destinazione: destinazione(r.destinazione),
     imballaggioCents: imballaggio,
     trasportoCents: trasporto,
