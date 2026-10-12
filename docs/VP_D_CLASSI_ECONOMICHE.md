@@ -198,6 +198,40 @@ in bozza e non acquistabile, come in VP-C, con gli stessi codici d'errore.
   titolare (tutti gli stati) con conteggi per unità, vendibilità e preventivo
   per una bottiglia alla tariffa Partner.
 
+### 7.1 Interfacce (parte 2)
+
+Il browser non sceglie mai un'aliquota: `frontend-next/src/services/preventivo-service.ts`
+legge le tre porte con parser che rifiutano una risposta incoerente
+(subtotale ≠ prezzo × quantità, totale ≠ subtotale + commissione) e la
+trasformano in «prezzo non disponibile».
+
+- **Scheda annuncio**: scomposizione «prezzo per bottiglia · servizio Vinea ·
+  totale stimato» con l'etichetta della classe, solo quando il preventivo è
+  acquistabile o per il venditore (vista «Ricevi / l'acquirente paga»).
+  Nessun pulsante d'acquisto o di proposta dove il database rifiuterebbe.
+- **Proposta**: stima del totale per il prezzo proposto da
+  `listing_preventivo(…, prezzo_unitario)`.
+- **Checkout**: prezzo e quantità di una proposta accettata letti dal server
+  (`proposals`), riepilogo da `riepilogoCheckout`; rimossa la stima locale
+  con parametri fissi. Importi al centesimo.
+- **Ordini**: «N bottiglie × prezzo» e la classe congelata (`venditore_classe`).
+- **Area Partner (`/cantina` commerciale)**: «Crea prodotto» dalle unità
+  commerciali libere (quantità, «Vuoi ricevere, per bottiglia», condizione,
+  conservazione, descrizione) con anteprima `preventivo_vendita`; il prodotto
+  nasce in bozza (`listing_crea_lotto`). Fotografie e testi si curano dalla
+  scheda con «Modifica» (stesse policy Storage del titolare). Catalogo
+  `prodotti_partner_miei` con stato, conteggi e «Ricevi … · l'acquirente
+  paga …». Pubblicazione dalla scheda solo quando il preventivo lo permette;
+  con `vendita_partner` spento una nota spiega che la pubblicazione non è
+  aperta.
+
+### 7.2 Nota operativa sull'interruttore
+
+Spegnere `vendita_partner` dopo averlo acceso lascia i prodotti commerciali
+già `attivo` nascosti agli acquirenti e non modificabili dal titolare
+(`partner_vendita_non_disponibile` in `listings_bottiglia_idonea`). Prima di
+spegnerlo, se il titolare deve poter modificare i prodotti, vanno sospesi.
+
 ## 8. Prove
 
 Griglia `supabase/tests/12zb_vp_d_classi_economiche.sql` (33 casi, nel gate
@@ -211,6 +245,6 @@ intendevano.
 
 | Parte | Contenuto | Stato |
 | --- | --- | --- |
-| 1 | Configurazione per classe, risolutore, checkout e gate, congelamento, preventivi, catalogo, griglie | Locale: stack CLI 2.117.0 da zero (86 migrazioni), gate completo verde |
-| 2 | Interfacce: preventivo autorevole su scheda, checkout, proposte e vendita; catalogo e prodotti nell'area Partner; classe negli ordini | Da fare |
-| 3 | Verifica finale, documentazione e handoff | Da fare |
+| 1 | Configurazione per classe, risolutore, checkout e gate, congelamento, preventivi, catalogo, griglie | In produzione: PR #216, merge `8349d46`; ledger 86 = 86 file su `origin/main`; righe correnti 800/1500 bps con fee 209 bps + 25 c, interruttori `false/false`, verifiche del 12 ottobre 2026 |
+| 2 | Interfacce: preventivo autorevole su scheda, checkout, proposte e vendita; catalogo e prodotti nell'area Partner; classe negli ordini | PR della parte 2; E2E locale nel browser (interruttore acceso solo in locale e ripristinato) |
+| 3 | Verifica finale, documentazione e handoff | Documentazione in questa PR; verifica del deploy dopo il merge |
