@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createListingService } from "@/services/listing-service";
-import { creaVetrinaPartnerPubblicaService } from "@/services/partner-vetrina-service";
+import { creaPreventivoService } from "@/services/preventivo-service";
 import { classeDelChiamante } from "@/lib/partner/classe-server";
-import { statoAcquistoDa } from "@/lib/partner/vetrina";
+import { statoAcquistoDaPreventivo } from "@/lib/prezzi/classe";
 import { createSupabasePriceIntelligenceService } from "@/services/price-intelligence/supabase-price-intelligence-service";
 import { caricaMetaPerVino } from "@/services/wine-meta";
 import { WineMetaProvider } from "@/lib/wine-meta-context";
@@ -94,13 +94,13 @@ export default async function Page({
   //
   // Va in parallelo ai metadati del vino, che non dipendono da lui.
   const wineKey = chiaveVino(daMostrare);
-  // Specchio dei gate su ordini e proposte: un venditore Partner attivo o
-  // sospeso non vende ancora, quindi la scheda non offre né acquisto né
-  // proposta. Un errore di lettura non è una disponibilità confermata: la
-  // scheda lo dice e non offre nulla. L'autorità restano i trigger del
-  // database, che rifiuterebbero comunque.
-  const venditoreId = daMostrare.venditore.userId;
-  const [metaPerVino, storico, esitoAcquisto, classeVisitatore] = await Promise.all([
+  // VP-D: il preventivo autorevole dell'annuncio. Classe del venditore,
+  // acquistabilità e prezzo per l'acquirente li decide il database con la
+  // stessa riga e la stessa formula del checkout; un prodotto Partner con la
+  // vendita chiusa, l'annuncio personale di un Partner o una lettura fallita
+  // non offrono né acquisto né proposta. L'autorità restano le porte e i
+  // trigger, che rifiuterebbero comunque.
+  const [metaPerVino, storico, preventivo, classeVisitatore] = await Promise.all([
     // Il vino della scheda più quelli dei correlati: "Quando berlo", gli
     // abbinamenti e i distintivi delle schede correlate leggono tutti da qui.
     caricaMetaPerVino(client, [wineKey, ...correlati.map((c) => c.wineSlug ?? c.id)]),
@@ -110,12 +110,10 @@ export default async function Page({
       wineSlug: wineKey,
       formato: daMostrare.formato,
     }),
-    venditoreId
-      ? creaVetrinaPartnerPubblicaService(client).acquistoDisponibile(venditoreId)
-      : null,
+    creaPreventivoService(client).annuncio(daMostrare.listingId ?? daMostrare.id),
     classeDelChiamante(client),
   ]);
-  const statoAcquisto = statoAcquistoDa(esitoAcquisto);
+  const statoAcquisto = statoAcquistoDaPreventivo(preventivo);
   // Anche una classe che non si legge toglie le azioni da collezionista: non
   // si sa se chi guarda è un privato.
   const visitatoreCommerciale = classeVisitatore.tipo !== "privato";
@@ -146,6 +144,7 @@ export default async function Page({
         proprio={proprio}
         vistaPrezzi={vistaPrezzi}
         statoAcquisto={statoAcquisto}
+        preventivo={preventivo.ok ? preventivo.data : null}
         visitatoreCommerciale={visitatoreCommerciale}
       />
     </WineMetaProvider>

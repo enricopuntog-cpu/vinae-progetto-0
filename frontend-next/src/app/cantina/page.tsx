@@ -4,6 +4,7 @@ import { ClasseNonVerificata } from "@/components/vinea/partner/ClasseNonVerific
 import { classeDelChiamante } from "@/lib/partner/classe-server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { creaScortePartnerService } from "@/services/partner-scorte-service";
+import { creaPreventivoService } from "@/services/preventivo-service";
 import CantinaPageClient from "./page-client";
 
 export const metadata: Metadata = {
@@ -39,7 +40,22 @@ export default async function Page() {
   const { partner, titolareId } = classe;
   // VP-C: solo le scorte commerciali del titolare, mai le sue bottiglie
   // personali; la lettura è sul server con la sua sessione.
-  const scorte = await creaScortePartnerService(client).elenco();
+  const servizioScorte = creaScortePartnerService(client);
+  const servizioPrezzi = creaPreventivoService(client);
+  const [scorte, occupate, prodotti, vendita] = await Promise.all([
+    servizioScorte.elenco(),
+    servizioScorte.occupate(),
+    servizioPrezzi.prodottiPartner(),
+    servizioPrezzi.venditaPartnerAperta(),
+  ]);
+  // VP-D: unità libere per gruppo = unità in scorta non offerte da un prodotto
+  // in corso. Senza la lettura delle unità in vendita non si propone nulla.
+  const libere =
+    scorte.ok && occupate.ok
+      ? Object.fromEntries(
+          scorte.data.map((g) => [g.chiave, g.unitaIds.filter((id) => !occupate.data.has(id))]),
+        )
+      : null;
   return (
     <div className="mx-auto max-w-5xl">
       <CantinaCommerciale
@@ -47,6 +63,9 @@ export default async function Page() {
         stato={partner.stato}
         titolareId={titolareId}
         scorte={scorte}
+        libere={libere}
+        prodotti={prodotti}
+        venditaPartner={vendita.ok ? vendita.data : null}
       />
     </div>
   );

@@ -112,8 +112,10 @@ describe("acquisti da Partner non raggiungibili dall'interfaccia", () => {
   const checkout = leggi("src/app/checkout/[id]/page.tsx");
 
   it("la scheda annuncio chiede al server se l'acquisto è disponibile, e l'errore resta errore", () => {
-    expect(paginaAnnuncio).toInclude("acquistoDisponibile(venditoreId)");
-    expect(paginaAnnuncio).toInclude("const statoAcquisto = statoAcquistoDa(esitoAcquisto);");
+    // VP-D: la disponibilità non è più lo specchio per venditore ma il
+    // preventivo autorevole dell'annuncio (classe, vendibilità, prezzo).
+    expect(paginaAnnuncio).toInclude("creaPreventivoService(client).annuncio(daMostrare.listingId ?? daMostrare.id)");
+    expect(paginaAnnuncio).toInclude("const statoAcquisto = statoAcquistoDaPreventivo(preventivo);");
     expect(paginaAnnuncio).toInclude("statoAcquisto={statoAcquisto}");
     expect(senzaCommenti(paginaAnnuncio)).not.toMatch(/esitoAcquisto\?\.ok \? esitoAcquisto\.data : true/);
   });
@@ -134,7 +136,7 @@ describe("acquisti da Partner non raggiungibili dall'interfaccia", () => {
   });
 
   it("il checkout si apre solo con disponibilità confermata", () => {
-    const controllo = checkout.indexOf("acquistoDisponibile(wine.venditore.userId)");
+    const controllo = checkout.indexOf("creaPreventivoService(client).annuncio(");
     expect(controllo).toBeGreaterThan(-1);
     expect(checkout).toInclude('if (statoAcquisto !== "disponibile") {');
     expect(checkout).toInclude("<AcquistiPartnerNonDisponibili />");
@@ -175,7 +177,11 @@ describe("Cantina del Partner = catalogo commerciale", () => {
       /AperturaBottiglia|bottiglia_apri|degustazion|Cellar3D|patrimon|valore|portfolio|quantit[àa]\s*:|\bdisponibili\b/i,
     );
     expect(commerciale).toInclude("<AcquistiPartnerNonDisponibili />");
-    expect(commerciale).toInclude('data-testid="catalogo-commerciale-vuoto"');
+    // VP-D: il catalogo dei prodotti vive in un componente proprio.
+    expect(commerciale).toInclude("<ProdottiPartner prodotti={prodotti}");
+    expect(senzaCommenti(leggi("src/components/vinea/partner/ProdottiPartner.tsx"))).toInclude(
+      'data-testid="catalogo-commerciale-vuoto"',
+    );
   });
 
   it("annunci e bottiglie personali non diventano catalogo: nessuna lettura, nessuna scrittura", () => {

@@ -403,7 +403,8 @@ describe("Superfici", () => {
     expect(commerciale).toInclude("scorte: Result<GruppoScorte[]>");
     expect(commerciale).not.toMatch(/AperturaBottiglia|degustazion|Cellar3D|portfolio|WineCard|mieiAnnunci/i);
     const pagina = senzaCommenti(leggi("src/app/cantina/page.tsx"));
-    expect(pagina).toInclude("creaScortePartnerService(client).elenco()");
+    expect(pagina).toInclude("creaScortePartnerService(client)");
+    expect(pagina).toInclude("servizioScorte.elenco()");
   });
 
   it("l'acquirente non vede un selettore che il database rifiuterebbe", () => {

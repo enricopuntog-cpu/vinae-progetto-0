@@ -63,6 +63,10 @@ import {
   NOTA_CONFEZIONE_PUBBLICA,
 } from "@/lib/vendi/logistica-annuncio";
 import { PAGAMENTI_UI_ABILITATI } from "@/config/features";
+import { PrezzoPerAcquirente } from "@/components/vinea/PrezzoPerAcquirente";
+import { PubblicazioneProdottoPartner } from "@/components/vinea/partner/PubblicazioneProdottoPartner";
+import { eProdottoCommerciale } from "@/lib/prezzi/classe";
+import type { PreventivoAnnuncio } from "@/services/preventivo-service";
 
 export default function AnnuncioDetailPageClient({
   wine,
@@ -70,6 +74,7 @@ export default function AnnuncioDetailPageClient({
   proprio,
   vistaPrezzi,
   statoAcquisto = "disponibile",
+  preventivo = null,
   visitatoreCommerciale = false,
 }: {
   wine: Wine;
@@ -88,6 +93,11 @@ export default function AnnuncioDetailPageClient({
    * scheda non offre né acquisto né proposta.
    */
   statoAcquisto?: StatoAcquisto;
+  /**
+   * VP-D: preventivo autorevole del database (classe, acquistabilità, prezzo
+   * per l'acquirente di una bottiglia); `null` se non letto.
+   */
+  preventivo?: PreventivoAnnuncio | null;
   /**
    * Chi guarda è un Partner attivo o sospeso: per lui la Cantina è catalogo
    * commerciale, quindi niente azioni da collezionista (apertura, degustazione).
@@ -162,6 +172,15 @@ export default function AnnuncioDetailPageClient({
             Formato {wine.formato}
           </p>
           <PriceIntelligenceSummary vista={vistaPrezzi} />
+          {sonoIlVenditore || statoAcquisto === "disponibile" ? (
+            <PrezzoPerAcquirente
+              className="mt-4"
+              preventivo={preventivo?.preventivo ?? null}
+              classe={preventivo?.classe ?? null}
+              motivo={preventivo?.motivo ?? null}
+              vista={sonoIlVenditore ? "venditore" : "acquirente"}
+            />
+          ) : null}
 
           {/*
             Al venditore la propria scheda mostra i comandi di gestione al posto
@@ -173,6 +192,10 @@ export default function AnnuncioDetailPageClient({
             <div className="mt-6">
               <ListingOwnerActions annuncio={proprio} />
               <GestioneQuantitaAnnuncio annuncio={proprio} />
+              {eProdottoCommerciale(preventivo) &&
+              (proprio.stato === "bozza" || proprio.stato === "modifiche_richieste") ? (
+                <PubblicazioneProdottoPartner listingId={listingId} motivo={preventivo?.motivo ?? null} />
+              ) : null}
             </div>
           ) : (
             <>
