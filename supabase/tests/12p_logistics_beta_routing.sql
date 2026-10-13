@@ -975,8 +975,9 @@ begin
     and c.relname = 'logistics_shipment_plans'
     and not t.tgisinternal;
   perform pg_temp.registra(13,
-    'I piani hanno sia il trigger di updated_at sia quello di congelamento rotta',
-    v = 'logistics_shipment_plans_rotta_congelata, logistics_shipment_plans_set_updated_at', v);
+    -- Dal 20261013160000 anche la modalita congelata sull'ordine.
+    'I piani hanno il trigger di updated_at, quello di congelamento rotta e quello della modalita congelata',
+    v = 'logistics_shipment_plans_modalita_congelata, logistics_shipment_plans_rotta_congelata, logistics_shipment_plans_set_updated_at', v);
 end $$;
 
 -- Mezzo centesimo sale. E una regola aritmetica, non una preferenza: la stessa

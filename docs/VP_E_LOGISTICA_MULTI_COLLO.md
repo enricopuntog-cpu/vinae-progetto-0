@@ -179,9 +179,10 @@ venditore.
   collo pieno), servizi attivi e idonei con i cinque limiti operativi, tariffe
   commerciali `active`, reti PUDO e rubrica dei punti. Sono i cinque
   lucchetti WP6C, da aprire con le porte admin.
-- **Consegna a domicilio**: richiede un indirizzo di consegna sull'ordine
-  (dato personale, nuovo dominio) e un piano WP6B che non porti solo a un
-  punto; oggi nessun servizio dichiara `PUDO_TO_HOME`/`HOME_TO_HOME`.
+- **Consegna a domicilio**: **chiuso** dalla migrazione `20261013160000`
+  (§11: indirizzo congelato sull'ordine, piano WP6B verso il domicilio). In
+  produzione nessun servizio dichiara ancora `PUDO_TO_HOME`/`HOME_TO_HOME`,
+  quindi resta fail-closed.
 - Divisore volumetrico e peso reale per formato di bottiglia: non configurati;
   servono solo se un listino sarà a fasce di peso.
 - Cartone da 12 bottiglie: compatibile ma senza contributo né tariffa.
@@ -203,6 +204,7 @@ venditore.
 | Interfacce | Scheda, checkout, storico ordini | `frontend-next`, provate in locale nel browser |
 | Accensione | `ordini_multi_unita` | **Spento**: richiede la configurazione operativa (§8) e l'autorizzazione del titolare |
 | Fee sulla logistica | Copertura della fee di pagamento su logistica e imballaggio 7c, metrica per transazione | Migrazione `20261012234500`, griglia `12ze` (§10) |
+| Indirizzi e API | Rubrica, origine domicilio/sede, destinazione domicilio, congelamento, coda per gli adattatori | Migrazione `20261013160000`, griglia `12zg` (§11) |
 
 ## 10. Fee di pagamento sulla logistica (13 ottobre 2026)
 
@@ -260,3 +262,59 @@ reali.)
   checkout legge imballaggio, logistica e copertura solo da questo preventivo
   (`accessoriCheckout`), non dal listino beta locale; se un importo non è
   determinabile non mostra un totale.
+
+## 11. Indirizzi e logistica pronta per API (pre-lancio, 13 ottobre 2026)
+
+Migrazione `20261013160000_logistica_indirizzi_api.sql`, griglia `12zg`. Un
+solo motore per privati e Partner: estende questo blocco e il piano WP6B,
+nessun sistema parallelo. Nessun dato operativo è seminato; senza
+configurazione il percorso resta fail-closed.
+
+- **Rubrica** `private.indirizzi` (destinatario, via, CAP, città, provincia,
+  Paese, telefono, note; solo Paesi abilitati dai registri VP-F, oggi `IT`),
+  nessun grant client, porte `indirizzo_salva`, `indirizzi_miei`,
+  `indirizzo_archivia`; un domicilio di ritiro e un indirizzo di consegna
+  predefiniti; massimo 20 attivi.
+- **Origine**: punto di ritiro (drop-off, consigliato), domicilio del privato
+  (`ritiro_domicilio` + domicilio di ritiro predefinito) o **sede del
+  Partner** (prodotto commerciale con ritiro: origine `sede`, indirizzo dai
+  dati del Partner). La sede ha capability proprie `SEDE_TO_PUDO` e
+  `SEDE_TO_HOME` (servizi, tariffe, porta admin `admin_logistics_service_versiona`,
+  motore `logistics_service_compatibili`, piano `sede_pickup`): BRT o un altro
+  corriere si abilitano al ritiro in sede **come dati**, quando contratto e
+  capability lo permettono. Il ritiro a domicilio dei privati non vale per
+  una sede. Senza indirizzo d'origine: `indirizzo_ritiro_mancante`.
+- **Destinazione**: punto di ritiro (default, PUDO-first) o domicilio
+  dell'acquirente, scelta prima del checkout con `checkout_consegna_imposta`
+  (firma del checkout invariata). Il domicilio è ordinabile solo se un
+  servizio della rotta è configurato, ed è **sempre addebitato**, anche per
+  una bottiglia; il servizio lo sceglie il routing VP-E, mai il venditore.
+- **Congelamento**: il checkout scrive `private.ordine_indirizzi` (modalità e
+  istantanea di entrambi gli estremi, immutabile, si cancella solo con
+  l'ordine); il vincolo differito `orders_logistica_coerente` esige la
+  logistica per il domicilio e gli indirizzi coerenti con origine e
+  destinazione, per ogni writer; il piano WP6B legge la modalità congelata,
+  per il domicilio non chiede un punto e usa il servizio congelato, e il
+  trigger `logistics_shipment_plans_modalita_congelata` impedisce di cambiarla.
+  Modificare o archiviare un indirizzo non tocca gli ordini.
+- **Riservatezza**: `ordine_indirizzi_leggi` (solo le parti): ognuno vede per
+  intero solo il proprio indirizzo, della controparte tipo, città e
+  provincia. Il venditore non riceve il domicilio dell'acquirente.
+- **Pronta per API, nessuna chiamata**: `private.logistics_provider_operazioni`
+  (capacità per corriere, operazione `prenotazione_ritiro`/`etichetta`/`tracking`
+  e capability, tutte spente, versionate) e la coda idempotente
+  `private.spedizione_operazioni` (`in_attesa` → `inviata`/`confermata`/`fallita`/`annullata`,
+  chiave `vinea:<ordine>:<operazione>`), riempita solo da
+  `private.spedizione_operazione_prepara` quando la capacità è accesa. Gli
+  adattatori lato server leggeranno gli indirizzi da `ordine_indirizzi` al
+  momento dell'invio.
+- **Economia invariata**: commissioni 8%/15% netti, copertura della fee
+  (§10, formula unica sull'intero addebito) e imballaggio 7c come prima; il
+  domicilio entra nella logistica addebitata e nella copertura come ogni
+  logistica.
+
+Limiti dichiarati: l'interfaccia per gestire la rubrica e scegliere il
+domicilio nel checkout non è ancora nell'app (servizio `indirizzi-service`
+pronto, preventivo che espone il domicilio ordinabile); nessun adattatore
+reale né Edge Function per prenotazioni, etichette e tracking; nessun
+servizio, tariffa, punto o capacità di produzione configurati.

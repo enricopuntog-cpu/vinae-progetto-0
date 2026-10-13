@@ -43,6 +43,7 @@ const MANCANZE: Record<string, string> = {
   collo_oltre_limiti: "collo oltre i limiti del servizio",
   combinazione_colli: "le bottiglie non si dividono in colli pieni con gli imballaggi disponibili",
   configurazione_preventivo: "configurazione del preventivo logistico mancante",
+  indirizzo_ritiro_mancante: "manca l'indirizzo di ritiro del venditore",
 };
 
 export const etichettaMancanza = (codice: string): string =>
@@ -75,6 +76,8 @@ const MODALITA: Record<CapabilityRotta, string> = {
   PUDO_TO_HOME: "Da punto di ritiro a domicilio",
   HOME_TO_PUDO: "Ritiro dal venditore, consegna a punto di ritiro",
   HOME_TO_HOME: "Ritiro dal venditore, consegna a domicilio",
+  SEDE_TO_PUDO: "Ritiro presso la sede del Partner, consegna a punto di ritiro",
+  SEDE_TO_HOME: "Ritiro presso la sede del Partner, consegna a domicilio",
 };
 
 export const etichettaModalita = (c: CapabilityRotta): string => MODALITA[c];
