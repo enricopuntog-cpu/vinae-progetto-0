@@ -151,5 +151,41 @@ export function creaPartnerAdminService(client: SupabaseClient | null): PartnerA
       const nuovo = statoDa(data);
       return nuovo ? { ok: true, data: nuovo } : fallita("partner_admin_decidi", null);
     },
+
+    async riabilitaVendite(partnerId, motivo) {
+      if (!client) return senzaClient();
+      const { data, error } = await client.rpc("partner_admin_vendite_riabilita", {
+        p_partner_id: partnerId,
+        p_motivo: motivo,
+      });
+      if (error) return fallita("partner_admin_vendite_riabilita", error);
+      const r = (data ?? {}) as Record<string, unknown>;
+      return r.venditeBloccate === false
+        ? { ok: true, data: undefined }
+        : fallita("partner_admin_vendite_riabilita", null);
+    },
+
+    async sospendiAnnunci(partnerId, motivo) {
+      if (!client) return senzaClient();
+      const { data, error } = await client.rpc("partner_admin_annunci_sospendi", {
+        p_partner_id: partnerId,
+        p_motivo: motivo,
+      });
+      if (error) return fallita("partner_admin_annunci_sospendi", error);
+      return typeof data === "number" && Number.isSafeInteger(data) && data >= 0
+        ? { ok: true, data }
+        : fallita("partner_admin_annunci_sospendi", null);
+    },
+
+    async spegniVenditaPartner(motivo) {
+      if (!client) return senzaClient();
+      const { data, error } = await client.rpc("partner_admin_vendita_partner_spegni", {
+        p_motivo: motivo,
+      });
+      if (error) return fallita("partner_admin_vendita_partner_spegni", error);
+      return data === false
+        ? { ok: true, data: undefined }
+        : fallita("partner_admin_vendita_partner_spegni", null);
+    },
   };
 }

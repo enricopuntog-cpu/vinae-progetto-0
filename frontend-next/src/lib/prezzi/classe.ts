@@ -104,6 +104,8 @@ export function messaggioNonAcquistabile(motivo: MotivoNonAcquistabile | null): 
       return "Per ora si acquista una bottiglia per ordine.";
     case "annuncio_non_attivo":
       return "Questo annuncio non è in vendita.";
+    case "partner_revocato":
+      return "Questo account non può vendere finché Vinea non lo riabilita.";
     default:
       return "Il prezzo per l'acquirente non è disponibile in questo momento.";
   }

@@ -38,6 +38,7 @@ export type MotivoNonAcquistabile =
   | "partner_non_attivo"
   | "partner_incoerente"
   | "titolare_non_attivo"
+  | "partner_revocato"
   | "configurazione_mancante"
   | "annuncio_non_attivo"
   | "quantita_non_disponibile"

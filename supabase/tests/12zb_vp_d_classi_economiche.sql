@@ -831,7 +831,9 @@ begin
     and v_d.dati = '[]'::jsonb,
     coalesce(v_c.dati::text, v_c.esito));
 
-  -- 32: revoca (decisione del titolare ancora aperta: nessuna politica nuova).
+  -- 32: revoca. Decisione del titolare del 13 ottobre 2026 (migrazione
+  -- 20261013120000): anche gli annunci personali del revocato non si vendono
+  -- fino a una riabilitazione; dettagli nella griglia 12zf.
   select * into v_c from pg_temp.chiama(format(
     'select to_jsonb(public.partner_admin_decidi(%L, ''revoca'', ''prova''))', v_pa1), c_p1);
   v_s := v_c.esito;
@@ -842,9 +844,9 @@ begin
   into v_t
   from unnest(array[v_lc1, v_lpers1]) with ordinality x(l, n)
   cross join lateral private.venditore_classe_risolvi(x.l, false) r;
-  perform pg_temp.registra(32, 'revoca solo amministrativa (il titolare non si revoca: 42501); prodotti commerciali del revocato mai vendibili; suoi annunci personali di nuovo come i privati (comportamento corrente, decisione aperta)',
+  perform pg_temp.registra(32, 'revoca solo amministrativa (il titolare non si revoca: 42501); prodotti commerciali del revocato mai vendibili; suoi annunci personali non vendibili fino a riabilitazione (partner_revocato)',
     v_s = '42501/NESSUN_ERRORE:revocato/42501:partner_checkout_non_disponibile'
-    and v_t = 'partner:f:partner_non_attivo | privato:t:-'
+    and v_t = 'partner:f:partner_non_attivo | privato:f:partner_revocato'
     and not exists (select 1 from public.public_listings where id = v_lc1),
     v_s || ' ' || v_t);
 

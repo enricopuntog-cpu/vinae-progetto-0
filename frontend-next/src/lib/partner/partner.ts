@@ -54,7 +54,7 @@ export const SPIEGAZIONE_STATO_PARTNER: Record<PartnerStato, string> = {
   sospeso:
     "Il Partner è temporaneamente sospeso dall'amministrazione Vinea. Leggi il motivo qui sotto o contatta Vinea.",
   revocato:
-    "Il Partner è stato revocato e non è più attivo. Per tornare Partner serve un nuovo invito di Vinea.",
+    "Il Partner è stato revocato e non è più attivo. Finché Vinea non ti riabilita non puoi vendere, nemmeno da privato; gli ordini già pagati proseguono normalmente. Per tornare Partner serve un nuovo invito di Vinea.",
 };
 
 export const ETICHETTA_STATO_INVITO: Record<PartnerInvitoStato, string> = {
@@ -129,6 +129,7 @@ export function parsePartner(raw: unknown): Partner | null {
     ultimoMotivo: testo(r.ultimo_motivo),
     createdAt,
     updatedAt,
+    venditeBloccate: r.vendite_bloccate === true,
   };
 }
 
@@ -290,6 +291,8 @@ const MESSAGGI_HINT: Record<string, string> = {
   media_non_valido: "Una delle immagini non appartiene alla tua vetrina. Caricala di nuovo.",
   media_non_trovato: "Una delle immagini non è stata trovata. Caricala di nuovo.",
   partner_checkout_non_disponibile: "Gli acquisti da Partner Vinea non sono ancora disponibili.",
+  // Sicurezza Partner (revoca).
+  partner_revocato: "Questo account non può vendere finché Vinea non lo riabilita.",
 };
 
 export type ErroreRpc = { code?: string; message?: string; hint?: string | null } | null;

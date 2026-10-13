@@ -298,7 +298,7 @@ begin
              and p.proname in ('vetrina_partner_mia', 'vetrina_partner_salva',
                                'vetrina_partner_pubblica', 'acquisto_da_venditore_disponibile'))
       and (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-           where n.nspname = 'public' and p.proname like 'partner\_%') = 9);
+           where n.nspname = 'public' and p.proname like 'partner\_%') = 12);
 
   -- 02: tabella privata chiusa, RLS attiva, helper privati non ad anon.
   perform pg_temp.registra(2, 'private.partner_vetrine senza grant client e con RLS; helper di Storage non eseguibili da anon',
@@ -598,8 +598,9 @@ begin
       format('select to_jsonb(public.acquisto_da_venditore_disponibile(%L))', v_id), null, 'anon');
     v_s := v_s || (v_c.dati #>> '{}') || '/';
   end loop;
-  perform pg_temp.registra(27, 'acquisto non disponibile solo per Partner attivo e sospeso (come il gate degli ordini)',
-    v_s = 'false/false/true/true/true/true/', v_s);
+  -- Dal 20261013120000 anche il revocato non riabilitato (u6) non vende.
+  perform pg_temp.registra(27, 'acquisto non disponibile per Partner attivo, sospeso e revocato non riabilitato (come il gate degli ordini)',
+    v_s = 'false/false/true/false/true/true/', v_s);
 
   -- 28: lo specchio coincide con il gate reale sugli ordini.
   v_s := pg_temp.diretto(format(

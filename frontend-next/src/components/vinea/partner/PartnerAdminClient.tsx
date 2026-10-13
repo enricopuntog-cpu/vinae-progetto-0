@@ -118,6 +118,110 @@ function DecisionePartner({
   );
 }
 
+/**
+ * Azioni di sicurezza su un Partner, in qualunque stato: sospendere gli annunci
+ * aperti del titolare e, se revocato, riabilitarlo alle vendite private. Il
+ * motivo è obbligatorio per entrambe; il server ricontrolla ruolo e stato.
+ */
+function SicurezzaPartner({
+  partner,
+  inCorso,
+  onSospendiAnnunci,
+  onRiabilita,
+}: {
+  partner: PartnerAdmin;
+  inCorso: boolean;
+  onSospendiAnnunci: (motivo: string) => void;
+  onRiabilita: (motivo: string) => void;
+}) {
+  const [motivo, setMotivo] = useState("");
+  const pulito = motivo.trim();
+  return (
+    <div className="space-y-2 border-t border-border pt-3">
+      {partner.venditeBloccate ? (
+        <p className="text-sm">
+          Vendite bloccate: il titolare non può vendere, nemmeno da privato, finché non viene
+          riabilitato. Gli ordini già pagati proseguono.
+        </p>
+      ) : null}
+      <Label htmlFor={`sicurezza-${partner.id}`} className="text-xs">
+        Motivo per le azioni di sicurezza (obbligatorio)
+      </Label>
+      <Textarea
+        id={`sicurezza-${partner.id}`}
+        value={motivo}
+        maxLength={500}
+        rows={2}
+        onChange={(e) => setMotivo(e.target.value)}
+        disabled={inCorso}
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={inCorso || !pulito}
+          onClick={() => {
+            if (!window.confirm("Sospendere tutti gli annunci aperti di questo titolare?")) return;
+            onSospendiAnnunci(pulito);
+          }}
+        >
+          Sospendi annunci
+        </Button>
+        {partner.venditeBloccate ? (
+          <Button
+            size="sm"
+            disabled={inCorso || !pulito}
+            onClick={() => {
+              if (!window.confirm("Riabilitare il titolare alle vendite private?")) return;
+              onRiabilita(pulito);
+            }}
+          >
+            Riabilita vendite private
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function SpegnimentoEmergenza({ inCorso, onSpegni }: { inCorso: boolean; onSpegni: (motivo: string) => void }) {
+  const [motivo, setMotivo] = useState("");
+  const pulito = motivo.trim();
+  return (
+    <section className="space-y-3 rounded-2xl border border-border bg-card p-6">
+      <h2 className="font-serif text-2xl">Spegnimento di emergenza</h2>
+      <p className="text-sm text-muted-foreground">
+        Ferma subito le nuove vendite Partner (acquisti, proposte, pubblicazioni). Gli ordini già
+        creati proseguono: spedizioni, contestazioni, rimborsi e saldo non vengono toccati. La
+        riaccensione non avviene da qui.
+      </p>
+      <Label htmlFor="emergenza-motivo" className="text-xs">
+        Motivo (obbligatorio)
+      </Label>
+      <Textarea
+        id="emergenza-motivo"
+        value={motivo}
+        maxLength={500}
+        rows={2}
+        onChange={(e) => setMotivo(e.target.value)}
+        disabled={inCorso}
+      />
+      <Button
+        variant="destructive"
+        size="sm"
+        disabled={inCorso || !pulito}
+        onClick={() => {
+          if (!window.confirm("Spegnere le vendite Partner per tutti?")) return;
+          onSpegni(pulito);
+          setMotivo("");
+        }}
+      >
+        Spegni le vendite Partner
+      </Button>
+    </section>
+  );
+}
+
 export function PartnerAdminClient() {
   const servizio = useMemo(() => creaPartnerAdminService(getSupabaseClient()), []);
   const [inviti, setInviti] = useState<PartnerInvito[]>([]);
@@ -310,10 +414,30 @@ export function PartnerAdminClient() {
                       void esegui(() => servizio.decidi(p.id, azione, motivo), `${ETICHETTA_AZIONE[azione]}: fatto.`)
                     }
                   />
+                  <SicurezzaPartner
+                    partner={p}
+                    inCorso={inCorso}
+                    onSospendiAnnunci={(motivo) =>
+                      void esegui(async () => {
+                        const r = await servizio.sospendiAnnunci(p.id, motivo);
+                        return r.ok ? { ok: true } : r;
+                      }, "Annunci aperti sospesi.")
+                    }
+                    onRiabilita={(motivo) =>
+                      void esegui(() => servizio.riabilitaVendite(p.id, motivo), "Vendite private riabilitate.")
+                    }
+                  />
                 </li>
               ))}
             </ul>
           </section>
+
+          <SpegnimentoEmergenza
+            inCorso={inCorso}
+            onSpegni={(motivo) =>
+              void esegui(() => servizio.spegniVenditaPartner(motivo), "Vendite Partner spente.")
+            }
+          />
 
           <section className="space-y-3">
             <h2 className="font-serif text-2xl">Inviti</h2>
