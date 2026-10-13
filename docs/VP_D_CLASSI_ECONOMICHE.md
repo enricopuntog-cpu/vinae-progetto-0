@@ -96,6 +96,7 @@ dell'account, interruttore. Nessun argomento del chiamante.
 | Annuncio personale di un privato (anche con qualifiche, sommelier, certificazioni) | `privato` | sì |
 | Annuncio personale di un Partner **invitato** o **in verifica** | `privato` | sì |
 | Annuncio personale di un Partner **attivo** o **sospeso** | `partner` | **no** (`partner_annuncio_personale`) |
+| Annuncio personale del titolare di un Partner **revocato** non riabilitato (anche con un nuovo Partner invitato o in verifica), dal 13 ottobre 2026 | `privato` | **no** (`partner_revocato`) |
 | Prodotto commerciale, Partner attivo, titolare attivo, interruttore acceso | `partner` | sì |
 | Prodotto commerciale, interruttore spento | `partner` | no (`partner_vendita_non_disponibile`) |
 | Prodotto commerciale, Partner sospeso | `partner` | no (`partner_sospeso`) |
@@ -108,23 +109,39 @@ i suoi annunci personali non sono acquistabili finché il Partner è attivo o
 sospeso. La revoca è solo amministrativa (`partner_admin_decidi`): il titolare
 non può revocarsi per tornare all'8%.
 
-### 4.1 Decisione aperta: Partner revocato
+### 4.1 Partner revocato — decisione del 13 ottobre 2026
 
-**Nessuna politica nuova è stata introdotta.** Comportamento corrente,
-preservato: un Partner revocato conserva lo storico; i suoi prodotti
-commerciali restano `partner` e non vendibili per sempre (non esiste un
-percorso per declassarli); i suoi annunci personali tornano ai percorsi dei
-privati, come prima di VP-D. Alternative per il titolare, da decidere **prima
-dell'accensione di `vendita_partner`**:
+Fino al 12 ottobre 2026 la decisione era aperta: un revocato tornava ai
+percorsi dei privati per i suoi annunci personali. **Decisione definitiva del
+titolare (13 ottobre 2026):** un Partner revocato non può effettuare nuove
+vendite, nemmeno private, fino a una nuova approvazione esplicita di Vinea.
+Implementata dalla migrazione `20261013120000_partner_sicurezza_revoca.sql`
+(griglia `12zf`):
 
-1. mantenere il comportamento corrente;
-2. estendere il blocco degli annunci personali anche al revocato (per sempre o
-   per un periodo);
-3. applicare la tariffa Partner agli annunci personali di chi è o è stato
-   Partner.
+- regola unica `private.venditore_vendite_bloccate(venditore)`: esiste un
+  Partner revocato senza riga in `private.partner_riabilitazioni` e nessun
+  Partner attivo o sospeso. Un nuovo invito o un Partner in verifica non la
+  sciolgono;
+- il risolutore rende ogni annuncio personale del venditore bloccato
+  `privato`, non vendibile, motivo `partner_revocato`, anche se preesistente:
+  checkout, proposte e preventivi lo seguono; gate degli ordini e delle
+  proposte senza annuncio, specchio `acquisto_da_venditore_disponibile` e
+  `public_listings` applicano la stessa regola; nessun annuncio entra in
+  revisione o in vendita (trigger `listings_venditore_abilitato`, anche per la
+  moderazione `ripristina` e per i writer privilegiati);
+- prodotti commerciali del revocato: `partner_non_attivo` come prima; le unità
+  commerciali restano immutabili (nessun declassamento);
+- nuova abilitazione: `partner_admin_vendite_riabilita(partner, motivo)` (admin
+  ricontrollato, mai sul proprio Partner, motivo obbligatorio, idempotente, una
+  riga per Partner revocato: una revoca successiva riblocca) riapre le sole
+  vendite private; tornare Partner resta nuovo invito → verifica →
+  approvazione. Un nuovo Partner approvato applica le regole Partner;
+- gli ordini già esistenti non sono mai toccati: liquidazione, consegna,
+  contestazioni, rimborsi, saldo e i loro snapshot economici restano quelli
+  del checkout.
 
-Ognuna è una modifica locale a `private.venditore_classe_di` e alla vista
-`public_listings` (stessa regola, inline).
+Il titolare e l'admin leggono `vendite_bloccate` da `partner_me` e
+`partner_admin_elenco`.
 
 ## 5. Congelamento e coerenza degli ordini
 
@@ -227,10 +244,25 @@ trasformano in «prezzo non disponibile».
 
 ### 7.2 Nota operativa sull'interruttore
 
-Spegnere `vendita_partner` dopo averlo acceso lascia i prodotti commerciali
-già `attivo` nascosti agli acquirenti e non modificabili dal titolare
-(`partner_vendita_non_disponibile` in `listings_bottiglia_idonea`). Prima di
-spegnerlo, se il titolare deve poter modificare i prodotti, vanno sospesi.
+Fino alla migrazione `20261013120000`, spegnere `vendita_partner` dopo averlo
+acceso faceva fallire ogni scrittura di un prodotto commerciale in
+revisione/attivo/riservato/venduto (`listings_bottiglia_idonea`), compresi la
+liquidazione e il rilascio di un ordine già pagato. Ora l'interruttore blocca
+solo l'**apertura** alla vendita (`private.listing_si_apre`: ingresso in
+revisione o in vendita, non riservato → attivo/venduto), quindi:
+
+- `partner_admin_vendita_partner_spegni(motivo)` è lo spegnimento di
+  emergenza (solo admin, solo verso `false`, registro append-only
+  `private.vendita_partner_spegnimenti`; la riaccensione resta una decisione
+  del titolare fuori da questa porta): checkout, proposte, pubblicazione,
+  vetrina ed Esplora si fermano; gli ordini esistenti proseguono;
+- `partner_admin_annunci_sospendi(partner, motivo)` sospende con la transizione
+  e l'audit della moderazione tutti gli annunci aperti del titolare (prodotti e
+  annunci personali), a interruttore acceso o spento, senza toccare annunci
+  riservati o venduti. Il ripristino passa dalla moderazione e resta soggetto
+  agli stessi gate.
+
+Entrambe le porte sono nell'interfaccia `/admin/partner`.
 
 ## 8. Prove
 
