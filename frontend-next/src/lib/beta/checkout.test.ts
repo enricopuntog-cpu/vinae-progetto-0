@@ -13,12 +13,9 @@ describe("checkout beta deterministico", () => {
     expect(creaDatiCheckout("utente@example.test")).toEqual({
       email: "utente@example.test",
       telefono: "",
-      destinatario: "",
-      via: "",
-      cap: "",
-      citta: "",
-      provincia: "",
       deliveryMode: "spedizione",
+      destinazione: "pudo",
+      indirizzoId: null,
       imballaggioCodice: "nessuno",
       metodoPagamento: "carta",
     });
@@ -44,21 +41,16 @@ describe("checkout beta deterministico", () => {
     expect(validaPassoCheckout("contatti", dati)).toEqual({});
   });
 
-  it("valida tutti i campi della spedizione", () => {
-    const errori = validaPassoCheckout("consegna", creaDatiCheckout());
-    expect(Object.keys(errori).sort()).toEqual(["cap", "citta", "destinatario", "provincia", "via"]);
+  it("il punto di ritiro è la destinazione predefinita e non chiede indirizzi", () => {
+    expect(validaPassoCheckout("consegna", creaDatiCheckout())).toEqual({});
   });
 
-  it("accetta un indirizzo italiano completo", () => {
-    const dati = {
-      ...creaDatiCheckout(),
-      destinatario: "Ada Vigna",
-      via: "Via Roma 1",
-      cap: "10100",
-      citta: "Torino",
-      provincia: "TO",
-    };
-    expect(validaPassoCheckout("consegna", dati)).toEqual({});
+  it("il domicilio richiede un indirizzo della rubrica", () => {
+    const dati = { ...creaDatiCheckout(), destinazione: "home" as const };
+    expect(validaPassoCheckout("consegna", dati)).toEqual({
+      indirizzoId: "Scegli o aggiungi l'indirizzo di consegna.",
+    });
+    expect(validaPassoCheckout("consegna", { ...dati, indirizzoId: "ind-1" })).toEqual({});
   });
 
   it("non richiede un indirizzo per il ritiro concordato", () => {

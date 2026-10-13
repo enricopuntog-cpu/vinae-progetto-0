@@ -1,5 +1,12 @@
 import type { Wine } from "@/data/wines";
-import { accessoriCheckout, riepilogoCheckout, type DatiCheckoutBeta } from "@/lib/beta/checkout";
+import {
+  accessoriCheckout,
+  logisticaInTotale,
+  opzioneDestinazione,
+  riepilogoCheckout,
+  type DatiCheckoutBeta,
+  type DestinazioneCheckout,
+} from "@/lib/beta/checkout";
 import { etichettaClasse, euro } from "@/lib/prezzi/classe";
 import type { PreventivoAnnuncio } from "@/services/preventivo-service";
 import type { PreventivoLogistica } from "@/services/logistica-service";
@@ -16,8 +23,11 @@ export const CheckoutSummary = ({
   saldoApplicatoCents,
   importoProviderCents,
   saldoOnly,
+  destinazione = "pudo",
 }: {
   wine: Wine;
+  /** Punto di ritiro (predefinito) o domicilio: decide quale opzione entra nel totale. */
+  destinazione?: DestinazioneCheckout;
   dati: DatiCheckoutBeta;
   /**
    * VP-D: preventivo autorevole del database per questa quantità (e per il
@@ -38,15 +48,15 @@ export const CheckoutSummary = ({
 }) => {
   const economico = preventivo?.preventivo ?? null;
   const bottiglie = economico?.quantita ?? 1;
-  const pudo = logistica?.opzioni.find((o) => o.destinazione === "pudo") ?? null;
-  const conLogistica = bottiglie > 1 && dati.deliveryMode === "spedizione";
+  const opzione = opzioneDestinazione(logistica, destinazione);
+  const conLogistica = logisticaInTotale(bottiglie, dati.deliveryMode, destinazione);
   // Imballaggio dell'annuncio, logistica e copertura della fee dal preventivo
-  // del database, gli stessi che il checkout congela. Con la spedizione non
-  // configurata o un importo non determinabile non si stima un totale (VP-E,
-  // fail-closed).
+  // del database per la destinazione scelta, gli stessi che il checkout
+  // congela. Con la spedizione non configurata o un importo non determinabile
+  // non si stima un totale (VP-E, fail-closed).
   const accessori = conLogistica && logisticaCents === null
     ? null
-    : accessoriCheckout(bottiglie, dati.deliveryMode, logistica);
+    : accessoriCheckout(bottiglie, dati.deliveryMode, logistica, destinazione);
   const stima = accessori
     ? riepilogoCheckout(economico, accessori.imballaggioCents, accessori.logisticaCents, accessori.feePagamentoCents)
     : null;
@@ -73,17 +83,21 @@ export const CheckoutSummary = ({
           <Riga label={bottiglie > 1 ? "Subtotale venditore" : "Prezzo venditore"} value={euroCents(stima.prezzoCents)} />
           <Riga label="Servizio Vinea" value={euroCents(stima.commissioneCents)} />
           <Riga label="Imballaggio" value={euroCents(stima.imballaggioCents)} testId="checkout-imballaggio" />
-          {conLogistica && pudo ? (
+          {conLogistica && opzione ? (
             <>
               <Riga
-                label={`Imballaggio spedizione (${riassuntoColli(pudo.colli)})`}
-                value={euroCents(pudo.imballaggioCents ?? 0)}
+                label={`Imballaggio spedizione (${riassuntoColli(opzione.colli)})`}
+                value={euroCents(opzione.imballaggioCents ?? 0)}
               />
-              <Riga label="Trasporto al punto di ritiro" value={euroCents(pudo.trasportoCents ?? 0)} />
-              {(pudo.altriCostiCents ?? 0) + (pudo.bufferCents ?? 0) > 0 ? (
+              <Riga
+                label={destinazione === "home" ? "Trasporto a domicilio" : "Trasporto al punto di ritiro"}
+                value={euroCents(opzione.trasportoCents ?? 0)}
+                testId="checkout-trasporto"
+              />
+              {(opzione.altriCostiCents ?? 0) + (opzione.bufferCents ?? 0) > 0 ? (
                 <Riga
                   label="Altri costi logistici"
-                  value={euroCents((pudo.altriCostiCents ?? 0) + (pudo.bufferCents ?? 0))}
+                  value={euroCents((opzione.altriCostiCents ?? 0) + (opzione.bufferCents ?? 0))}
                 />
               ) : null}
             </>

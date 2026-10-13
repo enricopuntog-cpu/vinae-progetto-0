@@ -19,6 +19,7 @@ import {
   type HandoffVenditore,
 } from "@/lib/vendi/logistica-annuncio";
 import { createListingService } from "@/services/listing-service";
+import { SedePartnerRitiro } from "@/components/vinea/indirizzi/SedePartnerRitiro";
 import type { MotivoNonAcquistabile } from "@/services/preventivo-service";
 
 /** Motivi per cui una bozza commerciale si può pubblicare adesso. */
@@ -124,6 +125,7 @@ export function PubblicazioneProdottoPartner({
           ))}
         </select>
         {handoff ? <p className="text-xs text-muted-foreground">{DESCRIZIONE_HANDOFF[handoff]}</p> : null}
+        {handoff === "ritiro_domicilio" ? <SedePartnerRitiro variante="prodotto" /> : null}
       </div>
       <p className="text-xs text-muted-foreground">{DISCLAIMER_IMBALLAGGIO}</p>
       {errore ? (

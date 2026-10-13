@@ -34,6 +34,7 @@ import SaldoVineaPanel from "./saldo-vinea";
 import QualificheProfessionali from "./qualifiche-professionali";
 import PartnerCollegamento from "./partner-collegamento";
 import SicurezzaAccount from "./sicurezza-account";
+import RubricaIndirizzi from "@/components/vinea/indirizzi/RubricaIndirizzi";
 
 const ESPERIENZE = Object.keys(esperienzaLabels) as Esperienza[];
 
@@ -504,6 +505,7 @@ export default function AccountPageClient() {
       </Button>
       <AttivitaVendita />
       <SaldoVineaPanel />
+      <RubricaIndirizzi />
       <QualificheProfessionali />
       <PartnerCollegamento />
       <SicurezzaAccount />

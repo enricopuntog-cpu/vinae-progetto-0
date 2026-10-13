@@ -56,6 +56,7 @@ import {
   NOTA_CONFEZIONE_PRODOTTO,
 } from "@/lib/vendi/logistica-annuncio";
 import { AI_UI } from "@/config/features";
+import { IndirizzoRitiroVenditore } from "@/components/vinea/indirizzi/IndirizzoRitiroVenditore";
 
 /**
  * /vendi portata da frontend/src/routes/vendi.tsx.
@@ -815,6 +816,7 @@ export default function VendiPageClient() {
                   />
                 ))}
               </div>
+              {handoffVenditore === "ritiro_domicilio" ? <IndirizzoRitiroVenditore /> : null}
             </section>
 
             <p className="rounded-xl border border-border bg-secondary/50 p-3 text-xs text-muted-foreground">

@@ -2,18 +2,23 @@ import type { PreventivoEconomico } from "@/services/preventivo-service";
 import type { OpzioneLogistica } from "@/services/logistica-service";
 import type { OrderDeliveryMode, PackagingOption } from "@/services/types";
 
+/**
+ * Destinazione di una spedizione: punto di ritiro (predefinito, PUDO-first) o
+ * un indirizzo della rubrica dell'acquirente. La legge il checkout del
+ * database da `checkout_consegna_imposta`; qui è solo la scelta della pagina.
+ */
+export type DestinazioneCheckout = "pudo" | "home";
+
 export type CheckoutPasso = "contatti" | "consegna" | "imballaggio" | "pagamento";
 export type MetodoPagamentoBeta = "carta" | "wallet";
 
 export type DatiCheckoutBeta = {
   email: string;
   telefono: string;
-  destinatario: string;
-  via: string;
-  cap: string;
-  citta: string;
-  provincia: string;
   deliveryMode: OrderDeliveryMode;
+  destinazione: DestinazioneCheckout;
+  /** Indirizzo della rubrica per la consegna a domicilio (solo l'id). */
+  indirizzoId: string | null;
   imballaggioCodice: string;
   metodoPagamento: MetodoPagamentoBeta;
 };
@@ -23,12 +28,9 @@ export type ErroriCheckout = Partial<Record<keyof DatiCheckoutBeta, string>>;
 export const creaDatiCheckout = (email = ""): DatiCheckoutBeta => ({
   email,
   telefono: "",
-  destinatario: "",
-  via: "",
-  cap: "",
-  citta: "",
-  provincia: "",
   deliveryMode: "spedizione",
+  destinazione: "pudo",
+  indirizzoId: null,
   imballaggioCodice: "nessuno",
   metodoPagamento: "carta",
 });
@@ -51,8 +53,6 @@ export const passiCheckout = (imballaggioVisibile: boolean): CheckoutPasso[] =>
 export const destinazioneSaldoOnly = (orderId: string): string =>
   `/acquisti?checkout=saldo&orderId=${encodeURIComponent(orderId)}`;
 
-const obbligatorio = (valore: string): boolean => valore.trim().length > 0;
-
 export const validaPassoCheckout = (
   passo: CheckoutPasso,
   dati: DatiCheckoutBeta,
@@ -66,16 +66,16 @@ export const validaPassoCheckout = (
     };
   }
 
-  if (passo === "consegna" && dati.deliveryMode === "spedizione") {
-    return {
-      ...(!obbligatorio(dati.destinatario) ? { destinatario: "Campo obbligatorio." } : {}),
-      ...(!obbligatorio(dati.via) ? { via: "Campo obbligatorio." } : {}),
-      ...(!/^\d{5}$/.test(dati.cap) ? { cap: "Il CAP deve avere 5 cifre." } : {}),
-      ...(!obbligatorio(dati.citta) ? { citta: "Campo obbligatorio." } : {}),
-      ...(!/^[A-Za-z]{2}$/.test(dati.provincia)
-        ? { provincia: "Usa la sigla di 2 lettere." }
-        : {}),
-    };
+  // L'indirizzo non si scrive più qui: si sceglie dalla rubrica, che il
+  // database valida (`indirizzo_salva`) e congela sull'ordine. Il punto di
+  // ritiro non chiede indirizzi all'acquirente.
+  if (
+    passo === "consegna" &&
+    dati.deliveryMode === "spedizione" &&
+    dati.destinazione === "home" &&
+    !dati.indirizzoId
+  ) {
+    return { indirizzoId: "Scegli o aggiungi l'indirizzo di consegna." };
   }
 
   return {};
@@ -146,29 +146,85 @@ export const riepilogoCheckout = (
   };
 };
 
+/** Vero se la logistica entra nell'addebito per questa scelta. */
+export const logisticaInTotale = (
+  quantita: number,
+  deliveryMode: OrderDeliveryMode,
+  destinazione: DestinazioneCheckout = "pudo",
+): boolean => deliveryMode === "spedizione" && (destinazione === "home" || quantita > 1);
+
 /**
- * VP-E: quanto della logistica entra nel totale. Solo per più bottiglie
- * spedite e solo se il punto di ritiro è ordinabile; altrimenti zero (una
- * bottiglia, consegna a mano) o `null` (spedizione non configurata: il
- * checkout non si conferma).
+ * VP-E: quanto della logistica entra nel totale. Al punto di ritiro solo per
+ * più bottiglie spedite; a domicilio sempre, anche per una bottiglia (il
+ * domicilio ha sempre un costo logistico, come nel checkout del database).
+ * Zero senza logistica addebitata (una bottiglia al punto di ritiro, consegna
+ * a mano); `null` se l'opzione della destinazione scelta non è ordinabile: il
+ * checkout non si conferma e nessun prezzo viene inventato.
  */
 export const logisticaAddebitata = (
   quantita: number,
   deliveryMode: OrderDeliveryMode,
-  opzionePudo: { ordinabile: boolean; totaleCents: number | null } | null,
+  opzione: { ordinabile: boolean; totaleCents: number | null } | null,
+  destinazione: DestinazioneCheckout = "pudo",
 ): number | null => {
-  if (quantita <= 1 || deliveryMode !== "spedizione") return 0;
-  if (!opzionePudo || !opzionePudo.ordinabile || opzionePudo.totaleCents === null) return null;
-  return opzionePudo.totaleCents;
+  if (!logisticaInTotale(quantita, deliveryMode, destinazione)) return 0;
+  if (!opzione || !opzione.ordinabile || opzione.totaleCents === null) return null;
+  return opzione.totaleCents;
+};
+
+/** L'opzione del preventivo per la destinazione scelta, se il database la dà. */
+export const opzioneDestinazione = <O extends { destinazione: DestinazioneCheckout }>(
+  logistica: { opzioni: ReadonlyArray<O> } | null,
+  destinazione: DestinazioneCheckout,
+): O | null => logistica?.opzioni.find((o) => o.destinazione === destinazione) ?? null;
+
+/**
+ * Vero se il venditore consegna con ritiro (domicilio o sede) e l'indirizzo di
+ * ritiro manca: il checkout del database fallirebbe con
+ * `indirizzo_ritiro_mancante` anche per una bottiglia al punto di ritiro.
+ */
+export const ritiroVenditoreMancante = (
+  opzione: { mancanti: ReadonlyArray<{ motivi: ReadonlyArray<string> }> } | null,
+): boolean =>
+  opzione?.mancanti.some((m) => m.motivi.includes("indirizzo_ritiro_mancante")) ?? false;
+
+export type BloccoConsegna =
+  /** Il venditore ritira a domicilio o in sede e il suo indirizzo manca. */
+  | { motivo: "ritiro_venditore" }
+  /** Domicilio scelto senza un indirizzo della rubrica. */
+  | { motivo: "indirizzo_consegna" }
+  /** L'opzione della destinazione scelta non è ordinabile (o il preventivo non si legge). */
+  | { motivo: "logistica"; mancanti: OpzioneLogistica["mancanti"] };
+
+/**
+ * Perché la conferma non può partire con la consegna scelta, o `null`. Le
+ * stesse condizioni che il checkout del database verifica (origine,
+ * destinazione, logistica addebitata), dette prima del clic: mai un prezzo
+ * inventato, mai una prenotazione che il database rifiuterebbe.
+ */
+export const bloccoConsegna = (
+  quantita: number,
+  dati: Pick<DatiCheckoutBeta, "deliveryMode" | "destinazione" | "indirizzoId">,
+  logistica: { opzioni: ReadonlyArray<Pick<OpzioneLogistica, "destinazione" | "ordinabile" | "totaleCents" | "mancanti">> } | null,
+): BloccoConsegna | null => {
+  if (dati.deliveryMode !== "spedizione") return null;
+  const opzione = opzioneDestinazione(logistica, dati.destinazione);
+  if (ritiroVenditoreMancante(opzione)) return { motivo: "ritiro_venditore" };
+  if (dati.destinazione === "home" && !dati.indirizzoId) return { motivo: "indirizzo_consegna" };
+  if (logisticaAddebitata(quantita, dati.deliveryMode, opzione, dati.destinazione) === null) {
+    return { motivo: "logistica", mancanti: opzione?.mancanti ?? [] };
+  }
+  return null;
 };
 
 /**
  * Accessori che entrano nel totale, tutti dal preventivo logistico del
  * database (nessuna formula nel client): imballaggio 7c dell'annuncio,
  * logistica addebitata e la copertura della fee di pagamento che generano,
- * la stessa che `order_checkout_reserve` congela sull'ordine. Con più
- * bottiglie spedite vale la copertura del punto di ritiro; altrimenti (una
- * bottiglia, consegna a mano) quella senza logistica. `null` quando un importo
+ * la stessa che `order_checkout_reserve` congela sull'ordine. Con la
+ * logistica addebitata (più bottiglie al punto di ritiro, o il domicilio)
+ * vale la copertura dell'opzione della destinazione scelta; altrimenti (una
+ * bottiglia al punto di ritiro, consegna a mano) quella senza logistica. `null` quando un importo
  * non è determinabile: preventivo non letto, spedizione non configurata o
  * copertura assente con accessori a pagamento.
  */
@@ -182,14 +238,15 @@ export const accessoriCheckout = (
     imballaggioAnnuncioCents: number;
     feePagamentoSenzaLogisticaCents: number | null;
   } | null,
+  destinazione: DestinazioneCheckout = "pudo",
 ): { imballaggioCents: number; logisticaCents: number; feePagamentoCents: number } | null => {
   if (!logistica) return null;
-  const pudo = logistica.opzioni.find((o) => o.destinazione === "pudo") ?? null;
-  const logisticaCents = logisticaAddebitata(quantita, deliveryMode, pudo);
+  const opzione = opzioneDestinazione(logistica, destinazione);
+  const logisticaCents = logisticaAddebitata(quantita, deliveryMode, opzione, destinazione);
   if (logisticaCents === null) return null;
   const imballaggioCents = logistica.imballaggioAnnuncioCents;
-  const conLogistica = quantita > 1 && deliveryMode === "spedizione";
-  const fee = conLogistica ? pudo?.feePagamentoCents : logistica.feePagamentoSenzaLogisticaCents;
+  const conLogistica = logisticaInTotale(quantita, deliveryMode, destinazione);
+  const fee = conLogistica ? opzione?.feePagamentoCents : logistica.feePagamentoSenzaLogisticaCents;
   const feePagamentoCents = fee ?? (imballaggioCents + logisticaCents === 0 ? 0 : null);
   if (feePagamentoCents === null) return null;
   return { imballaggioCents, logisticaCents, feePagamentoCents };
