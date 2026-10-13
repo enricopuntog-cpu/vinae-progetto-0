@@ -454,6 +454,18 @@ inviate con il link vecchio continuano a funzionare nello stesso browser.
 Rollback: ripristinare nel progetto il template precedente
 (`{{ .ConfirmationURL }}`); la route può restare distribuita senza effetti.
 
+### Altri template Auth e notifiche di sicurezza (13 ottobre 2026)
+
+Invito, magic link, cambio email, recupero password e riautenticazione, più le
+sette notifiche di sicurezza, hanno template italiani versionati in
+`supabase/templates/` con lo scheletro di «Confirm signup». I flussi a link
+restano sul link standard `{{ .ConfirmationURL }}` (`/auth/confirm` accetta solo
+`email`/`signup`); la riautenticazione mostra solo `{{ .Token }}`. In
+`supabase/config.toml` valgono per gli stack locali e CI, notifiche spente.
+**Nel progetto di produzione vanno pubblicati a mano**: oggetti, file,
+variabili, procedura, rollback e limiti in `docs/EMAIL_AUTH_TEMPLATES.md`.
+Nessuna variabile d'ambiente nuova.
+
 ### Matrice della beta Netlify
 
 I default versionati in `.env.example` restano tutti `false`. Il Deploy Preview

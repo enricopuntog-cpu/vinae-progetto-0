@@ -250,16 +250,66 @@ otp_expiry = 3600
 subject = "Conferma la tua email | Vinea Wine Club"
 content_path = "./supabase/templates/confirm-signup.html"
 
-# Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "You have been invited"
-# content_path = "./supabase/templates/invite.html"
+# Gli altri template Auth riprendono lo stesso scheletro grafico e usano il
+# link standard `{{ .ConfirmationURL }}` (Reauthentication: `{{ .Token }}`):
+# /auth/confirm accetta solo i tipi `email` e `signup` e non va usato qui.
+# Oggetti, variabili e pubblicazione in produzione: docs/EMAIL_AUTH_TEMPLATES.md.
+[auth.email.template.invite]
+subject = "Il tuo invito a Vinea Wine Club"
+content_path = "./supabase/templates/invite.html"
 
-# Uncomment to customize notification email template
-# [auth.email.notification.password_changed]
-# enabled = true
-# subject = "Your password has been changed"
-# content_path = "./templates/password_changed_notification.html"
+[auth.email.template.magic_link]
+subject = "Accedi a Vinea Wine Club"
+content_path = "./supabase/templates/magic-link.html"
+
+[auth.email.template.email_change]
+subject = "Conferma il tuo nuovo indirizzo email | Vinea"
+content_path = "./supabase/templates/email-change.html"
+
+[auth.email.template.recovery]
+subject = "Reimposta la password | Vinea Wine Club"
+content_path = "./supabase/templates/reset-password.html"
+
+[auth.email.template.reauthentication]
+subject = "Verifica di sicurezza | Vinea Wine Club"
+content_path = "./supabase/templates/reauthentication.html"
+
+# Notifiche di sicurezza: contenuto versionato, invio spento. Accenderle è una
+# decisione del titolare nel progetto Supabase, non un effetto di questo file.
+[auth.email.notification.password_changed]
+enabled = false
+subject = "La tua password è stata modificata | Vinea Wine Club"
+content_path = "./supabase/templates/password-changed-notification.html"
+
+[auth.email.notification.email_changed]
+enabled = false
+subject = "Il tuo indirizzo email è stato modificato | Vinea Wine Club"
+content_path = "./supabase/templates/email-changed-notification.html"
+
+[auth.email.notification.phone_changed]
+enabled = false
+subject = "Il tuo numero di telefono è stato modificato | Vinea Wine Club"
+content_path = "./supabase/templates/phone-changed-notification.html"
+
+[auth.email.notification.identity_linked]
+enabled = false
+subject = "Nuovo metodo di accesso collegato | Vinea Wine Club"
+content_path = "./supabase/templates/identity-linked-notification.html"
+
+[auth.email.notification.identity_unlinked]
+enabled = false
+subject = "Metodo di accesso rimosso | Vinea Wine Club"
+content_path = "./supabase/templates/identity-unlinked-notification.html"
+
+[auth.email.notification.mfa_factor_enrolled]
+enabled = false
+subject = "Nuovo metodo di verifica aggiunto | Vinea Wine Club"
+content_path = "./supabase/templates/mfa-factor-enrolled-notification.html"
+
+[auth.email.notification.mfa_factor_unenrolled]
+enabled = false
+subject = "Metodo di verifica rimosso | Vinea Wine Club"
+content_path = "./supabase/templates/mfa-factor-unenrolled-notification.html"
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
