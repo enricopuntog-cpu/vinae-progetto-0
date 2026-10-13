@@ -25,7 +25,16 @@ export type FormatoImballaggio =
 
 export type Destinazione = "pudo" | "home";
 
-export type CapabilityRotta = "PUDO_TO_PUDO" | "PUDO_TO_HOME" | "HOME_TO_PUDO" | "HOME_TO_HOME";
+/** Da dove parte il pacco: punto di ritiro, domicilio del privato o sede del Partner. */
+export type OrigineLogistica = "pudo" | "home" | "sede";
+
+export type CapabilityRotta =
+  | "PUDO_TO_PUDO"
+  | "PUDO_TO_HOME"
+  | "HOME_TO_PUDO"
+  | "HOME_TO_HOME"
+  | "SEDE_TO_PUDO"
+  | "SEDE_TO_HOME";
 
 export type Collo = {
   numero: number;
@@ -87,7 +96,7 @@ export type OpzioneLogistica = {
 };
 
 export type ModalitaLogistica = {
-  origine: Destinazione;
+  origine: OrigineLogistica;
   destinazione: Destinazione;
   capability: CapabilityRotta;
   disponibile: boolean;
@@ -97,7 +106,7 @@ export type PreventivoLogistica = {
   listingId: string;
   quantita: number;
   formato: string | null;
-  origine: Destinazione | null;
+  origine: OrigineLogistica | null;
   /** Vero se il checkout addebiterà questa logistica (più di una bottiglia). */
   addebitata: boolean;
   consigliata: Destinazione;
@@ -117,6 +126,12 @@ export type PreventivoLogistica = {
   feePagamentoSenzaLogisticaCents: number | null;
   /** Mercato + imballaggio dell'annuncio + logistica al punto di ritiro + copertura, solo quando è addebitata. */
   totaleOrdineCents: number | null;
+  /**
+   * Mercato + imballaggio dell'annuncio + logistica a domicilio + copertura:
+   * il domicilio e sempre addebitato, anche per una bottiglia. `null` se non
+   * disponibile.
+   */
+  totaleOrdineDomicilioCents: number | null;
 };
 
 export type ColloOrdine = Omit<Collo, "trasportoCents"> & { trasportoCents?: number };
@@ -143,10 +158,19 @@ const FORMATI = new Set<FormatoImballaggio>([
   "magnum_1_5l",
   "bottiglia_12",
 ]);
-const CAPABILITY = new Set<CapabilityRotta>(["PUDO_TO_PUDO", "PUDO_TO_HOME", "HOME_TO_PUDO", "HOME_TO_HOME"]);
+const CAPABILITY = new Set<CapabilityRotta>([
+  "PUDO_TO_PUDO",
+  "PUDO_TO_HOME",
+  "HOME_TO_PUDO",
+  "HOME_TO_HOME",
+  "SEDE_TO_PUDO",
+  "SEDE_TO_HOME",
+]);
 
 const intero = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
 const destinazione = (v: unknown): Destinazione | null => (v === "pudo" || v === "home" ? v : null);
+const origine = (v: unknown): OrigineLogistica | null =>
+  v === "pudo" || v === "home" || v === "sede" ? v : null;
 const oggetto = (v: unknown): Record<string, unknown> | null =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 const interoOpz = (v: unknown): number | null | undefined =>
@@ -317,7 +341,7 @@ export function leggiPreventivoLogistica(v: unknown): PreventivoLogistica | unde
   const modalita: ModalitaLogistica[] = [];
   for (const m of r.modalita) {
     const x = oggetto(m);
-    const o = destinazione(x?.origine);
+    const o = origine(x?.origine);
     const d = destinazione(x?.destinazione);
     if (!x || !o || !d || !CAPABILITY.has(x.capability as CapabilityRotta) || typeof x.disponibile !== "boolean") {
       return undefined;
@@ -329,7 +353,9 @@ export function leggiPreventivoLogistica(v: unknown): PreventivoLogistica | unde
   const imballaggioAnnuncio = interoOpz(r.imballaggioAnnuncioCents);
   const feeTesta = interoOpz(r.feePagamentoCents);
   const feeSenzaLogistica = interoOpz(r.feePagamentoSenzaLogisticaCents);
+  const totaleDomicilio = interoOpz(r.totaleOrdineDomicilioCents);
   if (
+    totaleDomicilio === undefined ||
     economico === undefined ||
     totaleOrdine === undefined ||
     imballaggioAnnuncio === undefined ||
@@ -339,6 +365,17 @@ export function leggiPreventivoLogistica(v: unknown): PreventivoLogistica | unde
     return undefined;
   }
   const pudo = (opzioni as OpzioneLogistica[]).find((o) => o.destinazione === "pudo");
+  const home = (opzioni as OpzioneLogistica[]).find((o) => o.destinazione === "home");
+  // Stessa identita per il domicilio: mercato + imballaggio + logistica + copertura.
+  if (
+    totaleDomicilio !== null &&
+    (!economico ||
+      !home?.disponibile ||
+      totaleDomicilio !==
+        economico.totaleCents + (imballaggioAnnuncio ?? 0) + (home.totaleCents ?? 0) + (home.feePagamentoCents ?? 0))
+  ) {
+    return undefined;
+  }
   // Identità del database: totale = mercato + imballaggio dell'annuncio +
   // logistica + copertura, e la copertura in testa è quella del punto di ritiro.
   if (
@@ -355,7 +392,7 @@ export function leggiPreventivoLogistica(v: unknown): PreventivoLogistica | unde
     listingId: r.listingId,
     quantita,
     formato: typeof r.formato === "string" ? r.formato : null,
-    origine: destinazione(r.origine),
+    origine: origine(r.origine),
     addebitata: r.addebitata,
     consigliata: destinazione(r.consigliata) ?? "pudo",
     opzioni: opzioni as OpzioneLogistica[],
@@ -365,6 +402,7 @@ export function leggiPreventivoLogistica(v: unknown): PreventivoLogistica | unde
     feePagamentoCents: feeTesta,
     feePagamentoSenzaLogisticaCents: feeSenzaLogistica,
     totaleOrdineCents: totaleOrdine,
+    totaleOrdineDomicilioCents: totaleDomicilio,
   };
 }
 

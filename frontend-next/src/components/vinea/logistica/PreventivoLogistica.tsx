@@ -38,8 +38,10 @@ export function PreventivoLogisticaCard({ preventivo }: { preventivo: Preventivo
       {pudo ? <Opzione opzione={pudo} titolo="Al punto di ritiro" consigliata /> : null}
       {home && home.disponibile ? (
         <div className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground">
-          A domicilio: {euro(home.totaleCents ?? 0)} · non ancora ordinabile (l&apos;ordine non gestisce
-          ancora un indirizzo di consegna).
+          A domicilio: {euro(home.totaleCents ?? 0)}
+          {home.ordinabile
+            ? " · servizio disponibile: la scelta dell'indirizzo di consegna non è ancora nell'app."
+            : " · non ancora ordinabile."}
         </div>
       ) : null}
       {preventivo.addebitata && preventivo.totaleOrdineCents !== null ? (

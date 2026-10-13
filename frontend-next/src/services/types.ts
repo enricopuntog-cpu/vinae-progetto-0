@@ -3307,3 +3307,71 @@ export interface PartnerAdminService {
   /** Spegnimento di emergenza di `vendita_partner` (solo verso spento). */
   spegniVenditaPartner(motivo: string): Promise<Result<void>>;
 }
+
+// ---- Indirizzi e consegna (pre-lancio) -----------------------------------
+
+/** Un indirizzo della rubrica del chiamante (solo Italia, deciso dal database). */
+export interface Indirizzo {
+  id: string;
+  etichetta: string | null;
+  destinatario: string;
+  via: string;
+  cap: string;
+  citta: string;
+  provincia: string;
+  paese: string;
+  telefono: string | null;
+  note: string | null;
+  predefinitoRitiro: boolean;
+  predefinitoConsegna: boolean;
+}
+
+export interface IndirizzoInput {
+  etichetta: string;
+  destinatario: string;
+  via: string;
+  cap: string;
+  citta: string;
+  provincia: string;
+  telefono: string;
+  note: string;
+  predefinitoRitiro: boolean;
+  predefinitoConsegna: boolean;
+}
+
+/** Estremo di una spedizione come lo vede una parte dell'ordine. */
+export interface EstremoSpedizione {
+  tipo: "pudo" | "domicilio" | "sede";
+  citta: string | null;
+  provincia: string | null;
+  /** Presente solo per l'indirizzo della parte che legge. */
+  dettaglio: {
+    destinatario: string;
+    via: string;
+    cap: string;
+    paese: string;
+    telefono: string | null;
+    note: string | null;
+  } | null;
+}
+
+export interface IndirizziOrdine {
+  origine: EstremoSpedizione;
+  destinazione: EstremoSpedizione;
+  congelatoAt: string;
+}
+
+export interface IndirizziService {
+  miei(): Promise<Result<Indirizzo[]>>;
+  /** Crea (`id` nullo) o modifica un indirizzo proprio. */
+  salva(id: string | null, dati: IndirizzoInput): Promise<Result<Indirizzo>>;
+  archivia(id: string): Promise<Result<void>>;
+  /** Destinazione letta dal checkout: punto di ritiro o un indirizzo proprio. */
+  impostaConsegna(
+    listingId: string,
+    destinazione: "pudo" | "home",
+    indirizzoId: string | null,
+  ): Promise<Result<void>>;
+  /** Indirizzi congelati di un ordine, con riservatezza per parte (`null` se assenti). */
+  ordine(orderId: string): Promise<Result<IndirizziOrdine | null>>;
+}
