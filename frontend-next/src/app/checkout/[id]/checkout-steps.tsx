@@ -1,6 +1,6 @@
 "use client";
 
-import { CreditCard, Handshake, PackageCheck, Truck } from "lucide-react";
+import { CreditCard, PackageCheck, Truck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -42,32 +42,6 @@ export const ContattiStep = ({ dati, errori, set }: StepProps) => (
         <ErroreCampo testo={errori.telefono} />
       </div>
     </div>
-  </section>
-);
-
-export const ConsegnaStep = ({ dati, errori, set }: StepProps) => (
-  <section className="space-y-4" data-testid="checkout-step-consegna">
-    <div>
-      <h2 className="font-serif text-2xl">Consegna o ritiro</h2>
-      <p className="text-sm text-muted-foreground">Scegli il flusso che vuoi verificare.</p>
-    </div>
-    <RadioGroup
-      value={dati.deliveryMode}
-      onValueChange={(valore) => set("deliveryMode", valore as DatiCheckoutBeta["deliveryMode"])}
-      className="grid gap-3 sm:grid-cols-2"
-    >
-      <Scelta id="spedizione" icona={Truck} titolo="Spedizione" nota="Indirizzo richiesto" />
-      <Scelta id="consegna_mano" icona={Handshake} titolo="Ritiro concordato" nota="Nessun indirizzo" />
-    </RadioGroup>
-    {dati.deliveryMode === "spedizione" ? (
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Campo id="destinatario" label="Destinatario" valore={dati.destinatario} errore={errori.destinatario} set={set} />
-        <Campo id="via" label="Indirizzo" valore={dati.via} errore={errori.via} set={set} />
-        <Campo id="cap" label="CAP" valore={dati.cap} errore={errori.cap} set={set} />
-        <Campo id="citta" label="Città" valore={dati.citta} errore={errori.citta} set={set} />
-        <Campo id="provincia" label="Provincia" valore={dati.provincia} errore={errori.provincia} set={set} />
-      </div>
-    ) : null}
   </section>
 );
 
@@ -117,14 +91,6 @@ export const PagamentoStep = ({ dati, set, usaSaldo, setUsaSaldo }: StepProps & 
       </label>
     )}
   </section>
-);
-
-const Campo = ({ id, label, valore, errore, set }: { id: "destinatario" | "via" | "cap" | "citta" | "provincia"; label: string; valore: string; errore?: string; set: StepProps["set"] }) => (
-  <div>
-    <Label htmlFor={`checkout-${id}`}>{label}</Label>
-    <Input id={`checkout-${id}`} value={valore} onChange={(e) => set(id, e.target.value)} />
-    <ErroreCampo testo={errore} />
-  </div>
 );
 
 const Scelta = ({ id, icona: Icon, titolo, nota }: { id: string; icona: typeof Truck; titolo: string; nota: string }) => (

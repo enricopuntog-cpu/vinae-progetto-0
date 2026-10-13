@@ -421,7 +421,8 @@ describe("VP-E — guardrail sui sorgenti", () => {
 
   it("il checkout non conferma con la spedizione non configurata", () => {
     const s = leggi("src/app/checkout/[id]/page-client.tsx");
-    expect(s).toContain("disabled={checkout.inCorso || logisticaCents === null}");
+    expect(s).toContain("disabled={checkout.inCorso || blocco !== null}");
+    expect(s).toContain("bloccoConsegna(bottiglie, checkout.dati, logistica)");
     expect(s).toContain("checkout-logistica-bloccata");
   });
 

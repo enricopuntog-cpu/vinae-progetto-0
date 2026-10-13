@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Wine } from "@/data/wines";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -15,6 +15,7 @@ import {
 } from "@/lib/beta/checkout";
 import { AZIONI_PAGAMENTO_ABILITATE, IMBALLAGGIO_UI_ABILITATO } from "@/config/features";
 import { createPaymentService } from "@/services/phase7/payment-service";
+import { creaIndirizziService } from "@/services/indirizzi-service";
 
 export const useBetaCheckout = (
   wine: Wine,
@@ -34,12 +35,13 @@ export const useBetaCheckout = (
   const passi = useMemo(() => passiCheckout(IMBALLAGGIO_UI_ABILITATO), []);
   const passo = passi[indice];
 
-  const set = <K extends keyof DatiCheckoutBeta>(campo: K, valore: DatiCheckoutBeta[K]) => {
+  // Stabile: la scelta dell'indirizzo la usa in un effect.
+  const set = useCallback(<K extends keyof DatiCheckoutBeta>(campo: K, valore: DatiCheckoutBeta[K]) => {
     setDati((correnti) => ({ ...correnti, [campo]: valore }));
     setErrori((correnti) => ({ ...correnti, [campo]: undefined }));
     setBloccato(false);
     setErroreAzione(null);
-  };
+  }, []);
 
   const avanti = () => {
     const trovati = validaPassoCheckout(passo, dati);
@@ -57,9 +59,21 @@ export const useBetaCheckout = (
     setBloccato(false);
     setErroreAzione(null);
     const esito = await eseguiAzioneBeta("pagamento", AZIONI_PAGAMENTO_ABILITATE, async () => {
+      const listingId = wine.listingId ?? wine.id;
+      // La destinazione scelta va al database prima della prenotazione: il
+      // checkout (firma invariata) la legge, ne ricalcola costo e servizio e
+      // congela gli indirizzi sull'ordine. Se non si registra, nessun ordine.
+      if (dati.deliveryMode === "spedizione") {
+        const consegna = await creaIndirizziService(getSupabaseClient()).impostaConsegna(
+          listingId,
+          dati.destinazione,
+          dati.destinazione === "home" ? dati.indirizzoId : null,
+        );
+        if (!consegna.ok) return consegna;
+      }
       idempotencyKey.current ??= crypto.randomUUID();
       return createPaymentService(getSupabaseClient()).creaCheckout({
-        listingId: wine.listingId ?? wine.id,
+        listingId,
         proposalId,
         deliveryMode: dati.deliveryMode,
         idempotencyKey: idempotencyKey.current,
