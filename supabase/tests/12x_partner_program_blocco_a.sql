@@ -155,7 +155,7 @@ begin
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public' and p.proname like 'partner\_%')
     and (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-         where n.nspname = 'public' and p.proname like 'partner\_%') = 9
+         where n.nspname = 'public' and p.proname like 'partner\_%') = 12
     and not has_table_privilege('authenticated', 'private.partners', 'SELECT')
     and not has_table_privilege('authenticated', 'private.partner_inviti', 'SELECT')
     and not has_table_privilege('anon', 'private.partner_eventi', 'SELECT')
@@ -557,14 +557,15 @@ begin
       and v_c.dati ->> 'stato' = 'revocato' and v_c.dati ->> 'revocato_at' is not null,
     v_s);
 
-  -- 34: dopo la revoca il gate non blocca piu (errore = vincolo, non gate) e
-  -- un nuovo invito per u1 e ammesso.
+  -- 34: dopo la revoca il gate continua a bloccare (decisione del titolare
+  -- del 13 ottobre 2026, migrazione 20261013120000: nessuna vendita fino a
+  -- riabilitazione) e un nuovo invito per u1 e ammesso.
   v_s := pg_temp.diretto(format(
     'insert into public.orders (listing_id, buyer_id, seller_id, seller_bottle_unit_id, delivery_mode, prezzo_cents, idempotency_key, reservation_expires_at)
      values (gen_random_uuid(), %L, %L, gen_random_uuid(), ''spedizione'', 4500, ''grid-12x-7'', now())', c_u2, c_u1));
   select * into v_c from pg_temp.chiama('select public.partner_admin_invito_crea(''u1@grid-12x.test'')', c_a1);
-  perform pg_temp.registra(34, 'Partner revocato: gate non interviene; reinvito ammesso',
-    v_s <> '42501' and v_c.esito = 'NESSUN_ERRORE', v_s || '/' || v_c.esito);
+  perform pg_temp.registra(34, 'Partner revocato non riabilitato: il gate rifiuta (42501); reinvito ammesso',
+    v_s = '42501' and v_c.esito = 'NESSUN_ERRORE', v_s || '/' || v_c.esito);
 
   -- 35: audit completo, senza valori dei dati, append-only.
   v_s := pg_temp.diretto('update private.partner_eventi set motivo = ''x''');
