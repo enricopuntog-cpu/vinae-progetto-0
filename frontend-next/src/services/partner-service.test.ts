@@ -123,6 +123,66 @@ describe("PartnerAdminService", () => {
     expect((await servizio.decidi("p1", "approva", null)).ok).toBe(false);
   });
 
+  it("riabilita le vendite con id e motivo; accetta solo un esito senza blocco", async () => {
+    const { client, calls } = fakeClient([
+      { data: { partnerId: "p1", venditeBloccate: false, giaRiabilitato: false }, error: null },
+      { data: { partnerId: "p1", venditeBloccate: true }, error: null },
+      { data: null, error: { code: "42501", hint: "" } },
+    ]);
+    const servizio = creaPartnerAdminService(client);
+    expect(await servizio.riabilitaVendite("p1", "verifiche completate")).toEqual({ ok: true, data: undefined });
+    expect(calls[0]).toEqual({
+      name: "partner_admin_vendite_riabilita",
+      args: { p_partner_id: "p1", p_motivo: "verifiche completate" },
+    });
+    expect((await servizio.riabilitaVendite("p1", "x")).ok).toBe(false);
+    expect(await servizio.riabilitaVendite("p1", "x")).toEqual({ ok: false, error: "Operazione non consentita." });
+  });
+
+  it("sospende gli annunci e restituisce il conteggio; rifiuta risposte non numeriche", async () => {
+    const { client, calls } = fakeClient([
+      { data: 3, error: null },
+      { data: "3", error: null },
+      { data: -1, error: null },
+    ]);
+    const servizio = creaPartnerAdminService(client);
+    expect(await servizio.sospendiAnnunci("p1", "verifica")).toEqual({ ok: true, data: 3 });
+    expect(calls[0]).toEqual({
+      name: "partner_admin_annunci_sospendi",
+      args: { p_partner_id: "p1", p_motivo: "verifica" },
+    });
+    expect((await servizio.sospendiAnnunci("p1", "verifica")).ok).toBe(false);
+    expect((await servizio.sospendiAnnunci("p1", "verifica")).ok).toBe(false);
+  });
+
+  it("lo spegnimento di emergenza passa solo il motivo e accetta solo «spento»", async () => {
+    const { client, calls } = fakeClient([
+      { data: false, error: null },
+      { data: true, error: null },
+      { data: null, error: { code: "22023", message: "Lo spegnimento richiede un motivo." } },
+    ]);
+    const servizio = creaPartnerAdminService(client);
+    expect(await servizio.spegniVenditaPartner("incidente")).toEqual({ ok: true, data: undefined });
+    expect(calls[0]).toEqual({ name: "partner_admin_vendita_partner_spegni", args: { p_motivo: "incidente" } });
+    expect((await servizio.spegniVenditaPartner("incidente")).ok).toBe(false);
+    expect(await servizio.spegniVenditaPartner(" ")).toEqual({
+      ok: false,
+      error: "Lo spegnimento richiede un motivo.",
+    });
+  });
+
+  it("vendite_bloccate arriva al Partner solo se è esattamente true", async () => {
+    const { client } = fakeClient([
+      { data: { ...riga, stato: "revocato", vendite_bloccate: true }, error: null },
+      { data: { ...riga, stato: "revocato", vendite_bloccate: "true" }, error: null },
+    ]);
+    const servizio = creaPartnerService(client);
+    const a = await servizio.mio();
+    const b = await servizio.mio();
+    expect(a.ok && a.data?.venditeBloccate).toBe(true);
+    expect(b.ok && b.data?.venditeBloccate).toBe(false);
+  });
+
   it("scarta righe malformate negli elenchi", async () => {
     const { client } = fakeClient([
       { data: [{ id: "i1", email: "a@b.it", stato: "valido", scade_at: "x", created_at: "y" }, { id: 3 }], error: null },
@@ -151,14 +211,24 @@ describe("contratto con la migrazione 20261011150000", () => {
   });
 
   it("ogni RPC chiamata dal servizio esiste ed è concessa ad authenticated", () => {
+    const sicurezza = readFileSync(
+      resolve(root, "supabase/migrations/20261013120000_partner_sicurezza_revoca.sql"),
+      "utf8",
+    ).replace(/--.*$/gm, "");
     const chiamate = [...servizio.matchAll(/rpc\("([a-z_]+)"/g)].map((m) => m[1]);
-    expect(new Set(chiamate).size).toBe(9);
+    expect(new Set(chiamate).size).toBe(12);
     for (const nome of chiamate) {
-      expect(sql).toContain(`create function public.${nome}(`);
-      expect(sql).toMatch(new RegExp(`'public\\.${nome}\\(`));
+      if (sql.includes(`create function public.${nome}(`)) {
+        expect(sql).toMatch(new RegExp(`'public\\.${nome}\\(`));
+      } else {
+        expect(sicurezza).toContain(`create function public.${nome}(`);
+        expect(sicurezza).toMatch(new RegExp(`grant execute on function public\\.${nome}\\([^)]*\\) to authenticated;`));
+        expect(sicurezza).toMatch(new RegExp(`revoke execute on function public\\.${nome}\\([^)]*\\) from public, anon, service_role;`));
+      }
     }
     expect(sql).toContain("grant execute on function %s to authenticated");
     expect(sql).not.toMatch(/grant [^;]*to anon[^;]*function/);
+    expect(sicurezza).not.toMatch(/to anon/);
   });
 
   it("non scrive ruoli, configurazione economica o il marcatore delle qualifiche", () => {

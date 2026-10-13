@@ -3149,6 +3149,8 @@ export interface Partner {
   ultimoMotivo: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Revocato e non ancora riabilitato da Vinea: nessuna vendita, nemmeno privata. */
+  venditeBloccate: boolean;
 }
 
 export interface PartnerAdmin extends Partner {
@@ -3298,4 +3300,10 @@ export interface PartnerAdminService {
     azione: PartnerAzioneAdmin,
     motivo: string | null,
   ): Promise<Result<PartnerStato>>;
+  /** Nuova abilitazione alle vendite private del titolare di un Partner revocato. */
+  riabilitaVendite(partnerId: string, motivo: string): Promise<Result<void>>;
+  /** Sospende gli annunci aperti del titolare; restituisce quanti. */
+  sospendiAnnunci(partnerId: string, motivo: string): Promise<Result<number>>;
+  /** Spegnimento di emergenza di `vendita_partner` (solo verso spento). */
+  spegniVenditaPartner(motivo: string): Promise<Result<void>>;
 }
