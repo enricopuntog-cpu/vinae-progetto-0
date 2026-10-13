@@ -269,6 +269,11 @@ begin
   v_lh  := pg_temp.annuncio(c_s1, v_mezze, 2000);
   v_l1  := pg_temp.annuncio(c_s1, v_singola, 3000);
   v_ls2 := pg_temp.annuncio(c_s2, v_langhe, 3000, 'ritiro_domicilio');
+  -- Dal 20261013160000 il ritiro a domicilio esige il domicilio di ritiro
+  -- predefinito del venditore (indirizzo `.test` di prova).
+  perform pg_temp.chiama(
+    'select public.indirizzo_salva(null, null, ''Venditore 12zc'', ''Via Prova 2'', ''12051'', ''Alba'', ''CN'', null, null, true, false)',
+    c_s2);
 
   -- 01: privilegi e forma.
   perform pg_temp.registra(1, 'tabelle nuove private con RLS e senza grant; porta preventivo ad anon/auth, lettura ordine solo auth; motori privati non eseguibili dai client; colonne ordine leggibili; vincolo differito presente',
@@ -425,13 +430,16 @@ begin
   select string_agg((m ->> 'capability') || '=' || (m ->> 'disponibile'), ' ')
   into v_s from jsonb_array_elements(v_p -> 'modalita') m;
   v_q := pg_temp.opz(v_p, 'home');
-  perform pg_temp.registra(12, 'quattro modalita configurabili come dati; il domicilio si preventiva (6+2: 978 + 1710 = 2688) ma non si ordina (indirizzo_consegna_non_gestito)',
+  -- Dal 20261013160000 il domicilio e ordinabile quando un servizio e
+  -- configurato: richiede l'indirizzo dell'acquirente (prove nella 12zg).
+  perform pg_temp.registra(12, 'quattro modalita configurabili come dati; il domicilio si preventiva (6+2: 978 + 1710 = 2688) ed e ordinabile con un indirizzo dell''acquirente',
     v_s = 'PUDO_TO_PUDO=true PUDO_TO_HOME=true HOME_TO_PUDO=true HOME_TO_HOME=true'
     and (v_q ->> 'disponibile')::boolean
     and pg_temp.comp(v_q) = 'bottiglia_6:6,bottiglia_2:2'
     and (v_q ->> 'totaleCents')::integer = 2688
-    and (v_q ->> 'ordinabile')::boolean = false
-    and v_q ->> 'motivoNonOrdinabile' = 'indirizzo_consegna_non_gestito',
+    and (v_q ->> 'ordinabile')::boolean
+    and (v_q ->> 'richiedeIndirizzo')::boolean
+    and v_q ->> 'motivoNonOrdinabile' is null,
     v_s || ' | ' || v_q::text);
 
   -- 13: venditore con ritiro a domicilio.

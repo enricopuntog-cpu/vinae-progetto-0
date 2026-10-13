@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12zf) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12zg) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
@@ -373,6 +373,13 @@ run_grid "12ze Fee di pagamento sulla logistica" 12ze_logistica_fee_pagamento.sq
 # degli annunci e spegnimento di emergenza che non ferma gli ordini esistenti.
 # Fixture `.test`; ROLLBACK.
 run_grid "12zf Sicurezza Partner" 12zf_partner_sicurezza_revoca.sql 3
+
+# Indirizzi e logistica pronta per API (migrazione 20261013160000): rubrica
+# solo Italia e riservata, destinazione scelta prima del checkout, domicilio
+# ordinabile, ritiro a domicilio e in sede (SEDE_*), congelamento immutabile,
+# piano WP6B coerente, coda idempotente per gli adattatori senza chiamate.
+# Fixture `.test` e configurazione logistica di prova; ROLLBACK.
+run_grid "12zg Indirizzi e logistica API" 12zg_logistica_indirizzi_api.sql 3
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
