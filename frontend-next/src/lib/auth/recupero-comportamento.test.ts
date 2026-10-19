@@ -39,7 +39,12 @@ type Chiamata = { nome: string; argomenti: readonly unknown[] };
 const chiamate: Chiamata[] = [];
 
 /** Errore che il finto provider restituirà alla prossima chiamata. */
-let erroreProvider: { message?: string; status?: number } | null = null;
+let erroreProvider: {
+  message?: string;
+  status?: number;
+  code?: string;
+  reasons?: string[];
+} | null = null;
 
 /** `null` riproduce il progetto senza configurazione. */
 let clientBrowserAttivo = true;
@@ -115,6 +120,8 @@ mock.module("@/lib/supabase/server", () => ({
 const { supabaseAuthService } = await import("@/services/auth-service");
 const { GET } = await import("@/app/auth/callback/route");
 const conferma = await import("@/app/auth/confirm/route");
+const recupero = await import("@/app/auth/recupero/route");
+const accesso = await import("@/app/auth/accesso/route");
 
 /**
  * Il servizio è un modulo client e compone la destinazione di rientro
@@ -234,10 +241,23 @@ describe("aggiornaPasswordNuova — eseguito", () => {
     expect(esito).toEqual({ ok: false, error: "sessione-recupero-assente" });
   });
 
-  it("una password rifiutata perché debole lo dice", async () => {
+  it("una password rifiutata per i requisiti lo dice", async () => {
     erroreProvider = { message: "Password should be at least 6 characters" };
     const esito = await supabaseAuthService.aggiornaPasswordNuova("corta");
-    expect(esito).toEqual({ ok: false, error: "password-troppo-debole" });
+    expect(esito).toEqual({ ok: false, error: "password-requisiti-mancanti" });
+  });
+
+  it("una password compromessa arriva dal server con il suo motivo, distinto dai requisiti", async () => {
+    // Forma di `AuthWeakPasswordError` di supabase-js per un 422 `weak_password`
+    // con la protezione HIBP attiva in produzione.
+    erroreProvider = {
+      code: "weak_password",
+      status: 422,
+      message: "Password is known to be weak and easy to guess, please choose a different one.",
+      reasons: ["pwned"],
+    };
+    const esito = await supabaseAuthService.aggiornaPasswordNuova("Password1!");
+    expect(esito).toEqual({ ok: false, error: "password-compromessa" });
   });
 
   it("un guasto non riconosciuto resta un codice nostro", async () => {
@@ -480,6 +500,123 @@ describe("/auth/confirm — eseguito", () => {
   it("senza configurazione Supabase non verifica e lo dice senza dettagli", async () => {
     clientServerAttivo = false;
     const risposta = await confermaCon(`?token_hash=${HASH}&type=email`);
+    expect(destinazioneDi(risposta).parametri.get("errore")).toBe("configurazione-assente");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// /auth/recupero e /auth/accesso: recupero password e magic link con token_hash
+// ---------------------------------------------------------------------------
+
+const recuperoCon = (query: string) =>
+  recupero.GET(new NextRequest(`https://vinea.test/auth/recupero${query}`));
+const accessoCon = (query: string) =>
+  accesso.GET(new NextRequest(`https://vinea.test/auth/accesso${query}`));
+
+describe("/auth/recupero — eseguito", () => {
+  it("un link valido apre la sessione di recupero dal server, senza code_verifier", async () => {
+    const risposta = await recuperoCon(`?token_hash=pkce_${HASH}&type=recovery`);
+    expect(soloNome("verifyOtp")).toEqual([
+      { nome: "verifyOtp", argomenti: [{ token_hash: `pkce_${HASH}`, type: "recovery" }] },
+    ]);
+    expect(soloNome("exchangeCodeForSession")).toEqual([]);
+    expect(risposta.status).toBe(303);
+    const { percorso, href } = destinazioneDi(risposta);
+    expect(percorso).toBe("/reimposta-password");
+    expect(href).not.toInclude("token_hash");
+    expect(href).not.toInclude(HASH);
+    expect(risposta.headers.get("cache-control")).toInclude("no-store");
+  });
+
+  it("la destinazione è una costante: né next né redirect_to la cambiano", async () => {
+    const redirectTo = encodeURIComponent("https://evil.example/auth/callback?next=%2Fvendite");
+    const risposta = await recuperoCon(
+      `?token_hash=${HASH}&type=recovery&next=%2Fadmin&redirect_to=${redirectTo}`,
+    );
+    const { percorso, href } = destinazioneDi(risposta);
+    expect(percorso).toBe("/reimposta-password");
+    expect(href.startsWith("https://vinea.test/")).toBe(true);
+    expect(href).not.toInclude("evil.example");
+  });
+
+  it("link scaduto o già usato: la pagina di recupero con il motivo, mai /accedi", async () => {
+    verificaFallisce = { code: "otp_expired", status: 403, message: "Email link is invalid or has expired" };
+    const risposta = await recuperoCon(`?token_hash=${HASH}&type=recovery`);
+    const { percorso, parametri, href } = destinazioneDi(risposta);
+    expect(percorso).toBe("/reimposta-password");
+    expect(parametri.get("errore")).toBe("recupero-link-non-valido");
+    expect(href).not.toInclude("expired");
+    expect(href).not.toInclude(HASH);
+  });
+
+  it("un link malformato o di un altro tipo non raggiunge il provider", async () => {
+    for (const query of [
+      "",
+      "?type=recovery",
+      `?token_hash=${HASH}`,
+      "?token_hash=non-esadecimale&type=recovery",
+      `?token_hash=${HASH.slice(0, 10)}&type=recovery`,
+      `?token_hash=${HASH}&type=email`,
+      `?token_hash=${HASH}&type=signup`,
+      `?token_hash=${HASH}&type=magiclink`,
+    ]) {
+      const risposta = await recuperoCon(query);
+      expect(destinazioneDi(risposta).parametri.get("errore")).toBe("recupero-link-non-valido");
+    }
+    expect(soloNome("verifyOtp")).toEqual([]);
+  });
+
+  it("un errore sconosciuto del provider resta un codice nostro", async () => {
+    verificaFallisce = { status: 500, message: "Database error: dettaglio interno" };
+    const risposta = await recuperoCon(`?token_hash=${HASH}&type=recovery`);
+    const { parametri, href } = destinazioneDi(risposta);
+    expect(parametri.get("errore")).toBe("sessione-recupero-assente");
+    expect(href).not.toInclude("Database");
+  });
+});
+
+describe("/auth/accesso — eseguito", () => {
+  it("un magic link valido apre la sessione dal server e segue il next del template", async () => {
+    const redirectTo = encodeURIComponent(
+      "https://evil.example/auth/callback?superficie=accedi&next=%2Fcantina",
+    );
+    const risposta = await accessoCon(`?token_hash=${HASH}&type=magiclink&redirect_to=${redirectTo}`);
+    expect(soloNome("verifyOtp")).toEqual([
+      { nome: "verifyOtp", argomenti: [{ token_hash: HASH, type: "magiclink" }] },
+    ]);
+    expect(soloNome("exchangeCodeForSession")).toEqual([]);
+    const { percorso, href } = destinazioneDi(risposta);
+    expect(percorso).toBe("/cantina");
+    expect(href.startsWith("https://vinea.test/")).toBe(true);
+    expect(href).not.toInclude("evil.example");
+    expect(href).not.toInclude("token_hash");
+  });
+
+  it("senza destinazione valida porta a /home", async () => {
+    const risposta = await accessoCon(`?token_hash=${HASH}&type=magiclink&next=%2F%2Fevil.example`);
+    expect(destinazioneDi(risposta).percorso).toBe("/home");
+  });
+
+  it("link scaduto o già usato: /accedi con il motivo e la destinazione", async () => {
+    verificaFallisce = { code: "otp_expired", status: 403, message: "Email link is invalid or has expired" };
+    const risposta = await accessoCon(`?token_hash=${HASH}&type=magiclink&next=%2Fcantina`);
+    const { percorso, parametri } = destinazioneDi(risposta);
+    expect(percorso).toBe("/accedi");
+    expect(parametri.get("errore")).toBe("accesso-link-non-valido");
+    expect(parametri.get("next")).toBe("/cantina");
+  });
+
+  it("un tipo diverso dal magic link non raggiunge il provider", async () => {
+    for (const tipo of ["recovery", "email", "signup", "invite", "email_change"]) {
+      const risposta = await accessoCon(`?token_hash=${HASH}&type=${tipo}`);
+      expect(destinazioneDi(risposta).parametri.get("errore")).toBe("accesso-link-non-valido");
+    }
+    expect(soloNome("verifyOtp")).toEqual([]);
+  });
+
+  it("senza configurazione Supabase non verifica e lo dice senza dettagli", async () => {
+    clientServerAttivo = false;
+    const risposta = await accessoCon(`?token_hash=${HASH}&type=magiclink`);
     expect(destinazioneDi(risposta).parametri.get("errore")).toBe("configurazione-assente");
   });
 });

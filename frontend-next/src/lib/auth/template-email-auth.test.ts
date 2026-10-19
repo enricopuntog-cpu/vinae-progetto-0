@@ -9,9 +9,10 @@ import { join } from "node:path";
  * Il modello è `confirm-signup.html` (PR #202/#203, approvato e attivo in
  * produzione): gli altri ne riprendono lo scheletro e cambiano solo testi e
  * link. Le regole sui link sono quelle di docs/EMAIL_AUTH_TEMPLATES.md:
- * `/auth/confirm` accetta solo `email`/`signup`, quindi gli altri flussi
- * restano sul link standard `{{ .ConfirmationURL }}` e Reauthentication mostra
- * solo `{{ .Token }}`. Le variabili ammesse per ciascun template sono le chiavi
+ * `/auth/confirm` accetta solo `email`/`signup`; recupero password e magic link
+ * hanno route `token_hash` proprie (`/auth/recupero`, `/auth/accesso`, VPM-001);
+ * invito e cambio email restano sul link standard `{{ .ConfirmationURL }}` e
+ * Reauthentication mostra solo `{{ .Token }}`. Le variabili ammesse per ciascun template sono le chiavi
  * delle mappe che GoTrue passa a `html/template`
  * (supabase/auth, internal/mailer/templatemailer/templatemailer.go).
  */
@@ -105,6 +106,25 @@ const NOTIFICHE: readonly Template[] = [
 
 const TUTTI = [...AUTENTICAZIONE, ...NOTIFICHE];
 
+/**
+ * Template il cui link punta a una route `token_hash` dedicata invece che a
+ * `{{ .ConfirmationURL }}` (VPM-001): il link PKCE standard richiedeva il
+ * browser della richiesta. Le route sono `app/auth/recupero` e
+ * `app/auth/accesso`; `/auth/confirm` resta della sola registrazione.
+ */
+const LINK_TOKEN_HASH: Record<string, { href: string; testo: string; cta: string }> = {
+  "reset-password.html": {
+    href: "{{ .SiteURL }}/auth/recupero?token_hash={{ .TokenHash }}&type=recovery",
+    testo: "{{ .SiteURL }}/auth/recupero?token_hash={{ .TokenHash }}&amp;type=recovery",
+    cta: "Reimposta la password",
+  },
+  "magic-link.html": {
+    href: "{{ .SiteURL }}/auth/accesso?token_hash={{ .TokenHash }}&type=magiclink&redirect_to={{ .RedirectTo }}",
+    testo: "{{ .SiteURL }}/auth/accesso?token_hash={{ .TokenHash }}&amp;type=magiclink",
+    cta: "Accedi a Vinea",
+  },
+};
+
 const hrefs = (html: string) => [...html.matchAll(/href="([^"]*)"/g)].map((m) => m[1]);
 const variabiliUsate = (html: string) =>
   new Set([...html.matchAll(/\{\{-?\s*(?:if\s+|else\s*|end\s*)?\.?([A-Za-z]*)/g)].map((m) => m[1]).filter(Boolean));
@@ -157,17 +177,46 @@ describe("identità grafica condivisa", () => {
       for (const v of variabiliUsate(leggi(t.file))) expect(t.variabili).toContain(v);
     });
 
-    it(`${t.file}: non passa mai da /auth/confirm né costruisce link con token_hash`, () => {
-      const html = leggi(t.file);
-      expect(html).not.toInclude("/auth/confirm");
-      expect(html).not.toInclude("TokenHash");
-      expect(html).not.toInclude("token_hash");
+    it(`${t.file}: non passa mai da /auth/confirm`, () => {
+      expect(leggi(t.file)).not.toInclude("/auth/confirm");
     });
+
+    if (!LINK_TOKEN_HASH[t.file]) {
+      it(`${t.file}: non costruisce link con token_hash`, () => {
+        const html = leggi(t.file);
+        expect(html).not.toInclude("TokenHash");
+        expect(html).not.toInclude("token_hash");
+      });
+    }
   }
 });
 
+describe("recupero password e magic link: token_hash su route dedicate (VPM-001)", () => {
+  for (const [file, { href, testo, cta }] of Object.entries(LINK_TOKEN_HASH)) {
+    it(`${file}: pulsante VML, pulsante e link alternativo verificati dal server`, () => {
+      const html = leggi(file);
+      const azioni = hrefs(html).filter((h) => h !== SITO);
+      expect(azioni).toEqual([href, href, href]);
+      expect(html).toInclude(`>${testo}</a>`);
+      expect(html).toInclude(`>${cta}</a>`);
+      expect(html).not.toInclude("ConfirmationURL");
+      expect(html).not.toInclude(".Token }}");
+    });
+
+    it(`${file}: non chiede più di usare lo stesso browser`, () => {
+      const html = leggi(file);
+      expect(html).not.toInclude("stesso browser");
+      expect(html).toInclude("Puoi aprire il link anche da un altro dispositivo o browser.");
+    });
+  }
+
+  it("il recupero non porta redirect_to: la destinazione è una costante della route", () => {
+    expect(leggi("reset-password.html")).not.toInclude("RedirectTo");
+  });
+});
+
 describe("link e codici", () => {
-  for (const t of AUTENTICAZIONE.filter((x) => x.tipo === "link")) {
+  for (const t of AUTENTICAZIONE.filter((x) => x.tipo === "link" && !LINK_TOKEN_HASH[x.file])) {
     it(`${t.file}: pulsante e link alternativo puntano allo stesso {{ .ConfirmationURL }}`, () => {
       const html = leggi(t.file);
       const azioni = hrefs(html).filter((h) => h !== SITO);

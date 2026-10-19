@@ -58,7 +58,7 @@ const eTipoConferma = (valore: string | null): valore is TipoOtpConferma =>
  * difesa crittografica — la decide il server Auth — ma evita di mandargli
  * stringhe arbitrarie e di confondere un link troncato con un link scaduto.
  */
-const FORMA_TOKEN_HASH = /^(pkce_)?[0-9a-f]{20,128}$/i;
+export const FORMA_TOKEN_HASH = /^(pkce_)?[0-9a-f]{20,128}$/i;
 
 /**
  * Destinazione richiesta dal link, sempre relativa. Viene letta da `next` e, in

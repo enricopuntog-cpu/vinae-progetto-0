@@ -50,19 +50,19 @@
               Hai chiesto di accedere a Vinea Wine Club senza password. Usa il pulsante qui sotto per entrare nel tuo account.
             </p>
             <p style="margin:0 0 32px 0; font-family:Helvetica,Arial,sans-serif; font-size:16px; line-height:26px; color:#202020;">
-              Apri il link sullo stesso dispositivo e nello stesso browser da cui hai fatto la richiesta.
+              Puoi aprire il link anche da un altro dispositivo o browser.
             </p>
             <table role="presentation" class="pulsante" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 32px auto;">
               <tr>
                 <td align="center" bgcolor="#6b2138" style="border-radius:8px; background-color:#6b2138;">
                   <!--[if mso]>
-                  <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{{ .ConfirmationURL }}" style="height:52px; v-text-anchor:middle; width:300px;" arcsize="16%" stroke="f" fillcolor="#6b2138">
+                  <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{{ .SiteURL }}/auth/accesso?token_hash={{ .TokenHash }}&type=magiclink&redirect_to={{ .RedirectTo }}" style="height:52px; v-text-anchor:middle; width:300px;" arcsize="16%" stroke="f" fillcolor="#6b2138">
                     <w:anchorlock/>
                     <center style="color:#f7f3ec; font-family:Helvetica,Arial,sans-serif; font-size:16px; font-weight:bold;">Accedi a Vinea</center>
                   </v:roundrect>
                   <![endif]-->
                   <!--[if !mso]><!-->
-                  <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block; padding:16px 36px; font-family:Helvetica,Arial,sans-serif; font-size:16px; line-height:20px; font-weight:bold; color:#f7f3ec; text-decoration:none; border-radius:8px; background-color:#6b2138;">Accedi a Vinea</a>
+                  <a href="{{ .SiteURL }}/auth/accesso?token_hash={{ .TokenHash }}&type=magiclink&redirect_to={{ .RedirectTo }}" target="_blank" style="display:inline-block; padding:16px 36px; font-family:Helvetica,Arial,sans-serif; font-size:16px; line-height:20px; font-weight:bold; color:#f7f3ec; text-decoration:none; border-radius:8px; background-color:#6b2138;">Accedi a Vinea</a>
                   <!--<![endif]-->
                 </td>
               </tr>
@@ -74,7 +74,7 @@
               Se il pulsante non funziona, copia e incolla questo indirizzo nel browser:
             </p>
             <p style="margin:0 0 24px 0; font-family:Helvetica,Arial,sans-serif; font-size:12px; line-height:18px; word-break:break-all;">
-              <a href="{{ .ConfirmationURL }}" target="_blank" style="color:#6b2138; text-decoration:underline;">{{ .ConfirmationURL }}</a>
+              <a href="{{ .SiteURL }}/auth/accesso?token_hash={{ .TokenHash }}&type=magiclink&redirect_to={{ .RedirectTo }}" target="_blank" style="color:#6b2138; text-decoration:underline;">{{ .SiteURL }}/auth/accesso?token_hash={{ .TokenHash }}&amp;type=magiclink</a>
             </p>
             <p style="margin:0; font-family:Helvetica,Arial,sans-serif; font-size:13px; line-height:20px; color:#5a5a5a;">
               Il link &egrave; personale, vale una sola volta e ha una validit&agrave; limitata. Non inoltrarlo: chi lo apre agisce sul tuo account. Se &egrave; scaduto, richiedine uno nuovo dalla pagina di accesso.
