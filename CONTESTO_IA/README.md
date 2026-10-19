@@ -177,6 +177,13 @@ va riscritto come se la decisione precedente non fosse mai esistita.
   sono serviti con `Cross-Origin-Resource-Policy: cross-origin` perché il logo
   si carica dentro i client di posta; stato DMARC/BIMI del mittente nello
   stesso documento.
+- Recupero password e magic link: dal 19 ottobre 2026 (VPM-001, PR #231) usano
+  route `token_hash` proprie, `/auth/recupero` e `/auth/accesso`, valide in
+  qualunque browser; template «Reset password» e «Magic link» pubblicati a mano
+  nel dashboard e provati dal titolare (conferma in chat). Policy password
+  unica (6 caratteri, minuscola, maiuscola, numero, simbolo) in
+  `frontend-next/src/lib/auth/requisiti-password.ts`. Dettagli e limiti in
+  `../docs/EMAIL_AUTH_TEMPLATES.md`.
 - Ledger di produzione: **60 migrazioni verificate** al 22 settembre 2026.
   Il restore isolato del 22 settembre dal backup B2 ha confermato le 60
   migrazioni correnti, le policy, le funzioni e i dati delle 91 tabelle del dump.
