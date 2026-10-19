@@ -1,6 +1,7 @@
 # Template email di Supabase Auth — distribuzione
 
-Stato al 13 ottobre 2026. Fonte del contenuto: i file in `supabase/templates/`
+Stato al 13 ottobre 2026, aggiornato il 19 ottobre 2026 (VPM-001, PR #231: recupero
+password e magic link con `token_hash`). Fonte del contenuto: i file in `supabase/templates/`
 di questo repository. Il progetto di produzione è `pijnmcllmfgjmgsvtcej`; il
 mittente è `Vinea Wine Club <noreply@vineawineclub.com>` via SMTP Resend
 (`docs/ENVIRONMENT.md`).
@@ -26,18 +27,31 @@ signup» e la route `/auth/confirm` sono descritti in `docs/ENVIRONMENT.md`
 - `/auth/confirm` verifica `token_hash` lato server e accetta **solo** i tipi
   `email` e `signup` (`frontend-next/src/lib/auth/conferma-email.ts`). È usato
   solo da «Confirm signup».
-- Invito, magic link, cambio email e recupero password usano il link standard
+- Recupero password e magic link (VPM-001, 19 ottobre 2026) hanno route
+  `token_hash` proprie, verificate dal server con `verifyOtp` e quindi valide
+  in qualunque browser (`frontend-next/src/lib/auth/link-email-auth.ts`):
+  - `{{ .SiteURL }}/auth/recupero?token_hash={{ .TokenHash }}&type=recovery`:
+    solo `recovery`, destinazione fissa `/reimposta-password`, errore sulla
+    stessa pagina (`recupero-link-non-valido`); nessun `redirect_to`;
+  - `{{ .SiteURL }}/auth/accesso?token_hash={{ .TokenHash }}&type=magiclink&redirect_to={{ .RedirectTo }}`:
+    solo `magiclink`, destinazione dal solo `next` validato di `redirect_to`
+    (mai la sua origine), errore su `/accedi` (`accesso-link-non-valido`).
+  Il link standard richiedeva il `code_verifier` PKCE del browser che aveva
+  chiesto il link: aperto da un altro browser (Chrome → Safari) falliva.
+  `/auth/callback` resta in servizio per i link già inviati con il template
+  precedente e per OAuth.
+- Invito e cambio email usano ancora il link standard
   `{{ .ConfirmationURL }}`: `/auth/v1/verify` di Supabase, che poi rimanda al
-  `redirect_to` già validato contro l'elenco dei Redirect URLs. È lo stesso link
-  dei template predefiniti: la grafica cambia, il flusso no.
+  `redirect_to` già validato contro l'elenco dei Redirect URLs.
 - Pulsante (anche nella variante VML per Outlook) e link alternativo puntano
   alla stessa destinazione; il test
   `frontend-next/src/lib/auth/template-email-auth.test.ts` lo impone.
 - Reauthentication non ha link: mostra il codice `{{ .Token }}`.
 - Le notifiche non contengono token: solo `https://vineawineclub.com/accedi` e
   il link al sito.
-- Nessun testo dichiara una durata: la scadenza effettiva dipende dalla
-  configurazione del progetto (OTP expiry) e non è stata letta da qui.
+- Nessun testo dichiara una durata: la scadenza dipende dalla configurazione
+  del progetto (Email OTP expiry, 3600 secondi in produzione secondo il
+  dashboard verificato dal titolare il 19 ottobre 2026) e può cambiare.
 
 ## Template di autenticazione
 
@@ -50,9 +64,9 @@ della pagina può cambiare).
 | --- | --- | --- | --- | --- |
 | Confirm sign up | `Conferma la tua email \| Vinea Wine Club` | `supabase/templates/confirm-signup.html` | `SiteURL`, `TokenHash`, `RedirectTo` | `/auth/confirm` (già attivo, invariato) |
 | Invite user | `Il tuo invito a Vinea Wine Club` | `supabase/templates/invite.html` | `ConfirmationURL` | link standard |
-| Magic link or OTP | `Accedi a Vinea Wine Club` | `supabase/templates/magic-link.html` | `ConfirmationURL` | link standard → `/auth/callback?code=` |
+| Magic link or OTP | `Accedi a Vinea Wine Club` | `supabase/templates/magic-link.html` | `SiteURL`, `TokenHash`, `RedirectTo` | `/auth/accesso` (VPM-001) |
 | Change email address | `Conferma il tuo nuovo indirizzo email \| Vinea` | `supabase/templates/email-change.html` | `ConfirmationURL`, `Email`, `NewEmail` | link standard |
-| Reset password | `Reimposta la password \| Vinea Wine Club` | `supabase/templates/reset-password.html` | `ConfirmationURL` | link standard → `/auth/callback?code=…&next=/reimposta-password` |
+| Reset password | `Reimposta la password \| Vinea Wine Club` | `supabase/templates/reset-password.html` | `SiteURL`, `TokenHash` | `/auth/recupero` → `/reimposta-password` (VPM-001) |
 | Reauthentication | `Verifica di sicurezza \| Vinea Wine Club` | `supabase/templates/reauthentication.html` | `Token` | codice OTP, nessun link |
 
 Nel campo «Subject» va il testo senza le barre rovesciate della tabella
@@ -100,6 +114,16 @@ vengono rimossi (resta il pulsante HTML) e i valori sono sottoposti a escape.
 
 Ordine: un template alla volta, partendo da quelli a basso rischio.
 
+**Reset password e Magic link (VPM-001) vanno pubblicati solo dopo** che il
+deploy di produzione serve `/auth/recupero` e `/auth/accesso`: verificare prima
+che `https://vineawineclub.com/auth/recupero?token_hash=0&type=recovery`
+risponda `303` verso `/reimposta-password?errore=recupero-link-non-valido` e
+`https://vineawineclub.com/auth/accesso?token_hash=0&type=magiclink` risponda
+`303` verso `/accedi?errore=accesso-link-non-valido`. Pubblicati prima, i link
+porterebbero a una pagina inesistente. Finché il dashboard conserva i template
+precedenti, recupero e magic link continuano a funzionare **solo nello stesso
+browser** della richiesta, via `/auth/callback`.
+
 1. Aprire il dashboard del progetto `pijnmcllmfgjmgsvtcej` e controllare in alto
    che sia il progetto di produzione.
 2. **Prima di toccare un template, salvarne il contenuto attuale** (oggetto e
@@ -109,11 +133,13 @@ Ordine: un template alla volta, partendo da quelli a basso rischio.
    o dal repository locale aggiornato), dal `<!DOCTYPE html>` all'ultima riga.
 5. Salvare.
 6. Provare con un account di test autorizzato, mai con utenti reali:
-   - Reset password: da `https://vineawineclub.com/accedi`, «Password
-     dimenticata?» con l'indirizzo di test; aprire il link **nello stesso
-     browser** → `/reimposta-password` con il modulo della nuova password;
-   - Magic link: accesso via link dalla pagina di accesso, stesso browser →
-     area utente;
+   - Reset password: da `https://vineawineclub.com/accedi` in Chrome,
+     «Password dimenticata?» con l'indirizzo di test; aprire il link
+     dall'app Mail (Safari, cioè **un altro browser**) → `/reimposta-password`
+     con il modulo e i cinque requisiti; salvare una password conforme; riaprire
+     lo stesso link → «Link non più valido»;
+   - Magic link: richiesta da Chrome, link aperto in Safari → area utente;
+     riaprire il link → `/accedi` con «Questo link di accesso non è più valido»;
    - Invite user: dal dashboard (Authentication → Users → Invite) verso un
      indirizzo di test; vedere il limite noto qui sotto;
    - Change email address e Reauthentication: oggi nessuna pagina del sito li
@@ -131,9 +157,11 @@ procedura non è stata eseguita e non è necessaria.
 Per ogni template: incollare di nuovo oggetto e corpo salvati al passo 2 e
 salvare. In mancanza della copia, il template predefinito di Supabase con
 `{{ .ConfirmationURL }}` (o `{{ .Token }}` per Reauthentication) ripristina il
-comportamento originale: i template nuovi non cambiano i link, quindi tornare
-indietro non rompe email già inviate. Il repository non va modificato per un
-rollback del dashboard.
+comportamento originale. Per Reset password e Magic link il rollback riporta il
+vincolo dello stesso browser ma non rompe nulla: `/auth/callback` resta in
+servizio, e le email già inviate con il link `token_hash` continuano a valere
+finché il deploy serve `/auth/recupero` e `/auth/accesso`. Il repository non va
+modificato per un rollback del dashboard.
 
 ## Verifiche eseguite (13 ottobre 2026)
 
@@ -166,11 +194,14 @@ rollback del dashboard.
 
 Segnalati, non corretti: nessuno dipende dalla grafica.
 
-- **Magic link e recupero password richiedono lo stesso browser** della
-  richiesta: il link torna su `/auth/callback?code=` e lo scambio PKCE richiede
-  il `code_verifier` di quel browser (stessa causa misurata il 9 ottobre 2026
-  per la registrazione). I template lo dicono all'utente. Il rimedio, se
-  diventerà necessario, è una route `token_hash` dedicata, non `/auth/confirm`.
+- **Magic link e recupero password nello stesso browser — risolto nel codice
+  dalla VPM-001**, operativo in produzione solo dopo la pubblicazione dei due
+  template aggiornati (sopra). Con i template precedenti il link torna su
+  `/auth/callback?code=` e lo scambio PKCE richiede il `code_verifier` del
+  browser della richiesta.
+- **Scanner di posta**: come per `/auth/confirm`, un sistema che apre i link
+  consuma il token (anche una `HEAD` raggiunge il gestore `GET` su Netlify);
+  l'utente vede «link non più valido» e ne chiede uno nuovo.
 - **Inviti Supabase Auth**: nessuna parte del sito li usa. Un invito dal
   dashboard torna al Site URL con la sessione nel frammento
   (`#access_token=…`, flusso implicito), mentre il client del sito usa PKCE e
@@ -183,12 +214,18 @@ Segnalati, non corretti: nessuno dipende dalla grafica.
   risultato scaduto. Per questo il template chiede di confermare «solo se l'hai
   richiesta tu». Il comportamento del progetto di produzione non è stato
   misurato.
-- **Reauthentication**: il sito non chiama `reauthenticate()`;
-  `secure_password_change` è `false` in `config.toml` (produzione non letta).
-  La regola dei prelievi (`reauth_required`) misura la recenza della sessione e
-  non usa questa email.
+- **Reauthentication**: il sito non chiama `reauthenticate()`. In produzione
+  «Secure password change» è attivo (dashboard, 19 ottobre 2026; `config.toml`
+  allineato dalla VPM-001): cambiare password richiede una sessione recente,
+  che un link di recupero appena aperto o un primo accesso Google forniscono;
+  altrimenti `/reimposta-password` mostra «Conferma la tua identità». La regola
+  dei prelievi (`reauth_required`) misura la recenza della sessione e non usa
+  questa email.
 - **Phone number changed**: il sito non gestisce numeri di telefono; il
   template è pronto ma oggi non ha un flusso che lo invii.
-- La configurazione Auth di produzione (template attivi, notifiche, OTP expiry,
-  doppia conferma) **non è stata letta**: nessun token della Management API era
-  disponibile in questa sessione.
+- Configurazione Auth di produzione: password policy (6 caratteri, minuscola,
+  maiuscola, numero, simbolo, protezione password compromesse), Secure password
+  change ON, Secure email change ON, Require current password OFF, Email OTP
+  expiry 3600 s e lunghezza 6 sono noti dallo screenshot del dashboard del
+  titolare (19 ottobre 2026). Template attivi e notifiche **non sono stati
+  letti**: nessun token della Management API era disponibile.
