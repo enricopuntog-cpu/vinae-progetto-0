@@ -16,7 +16,7 @@ signup» e la route `/auth/confirm` sono descritti in `docs/ENVIRONMENT.md`
 | --- | --- |
 | File HTML in `supabase/templates/` | versionati su `main` |
 | `supabase/config.toml` | collega ogni file agli stack **locali e CI**; notifiche `enabled = false` |
-| Progetto Supabase di produzione | **nessuna modifica**: ogni template va incollato a mano dal titolare (sotto) |
+| Progetto Supabase di produzione | ogni template va incollato a mano dal titolare (sotto). **Pubblicati il 19 ottobre 2026, su conferma del titolare: «Reset password» e «Magic link»** (VPM-001). Gli altri (invito, cambio email, riautenticazione, notifiche) non risultano pubblicati |
 | Notifiche di sicurezza in produzione | **non attivate**; accenderle è una decisione del titolare |
 
 `config.toml` non raggiunge la produzione: non si usa `supabase config push`
@@ -152,6 +152,23 @@ Per automatizzare, la Management API accetta gli stessi campi
 `mailer_notifications_*_enabled`) con un token personale del titolare; questa
 procedura non è stata eseguita e non è necessaria.
 
+### Esito della pubblicazione di «Reset password» e «Magic link» (19 ottobre 2026)
+
+- **Conferma del titolare** (riferita in chat, non verificata dall'agente): i
+  due template di `main` sono stati incollati a mano nel dashboard del progetto
+  `pijnmcllmfgjmgsvtcej` dopo il deploy delle route, e le prove manuali della
+  procedura qui sopra hanno avuto esito positivo. Non sono stati registrati
+  account di test, dispositivi e browser, orari né l'esito di ogni passo.
+- **Verifiche automatiche** (distinte dalla conferma): E2E locale con Google
+  Chrome 154 per la richiesta e WebKit 18 per l'apertura del link, in contesti
+  nuovi, 43/43 (recupero, magic link, conferma registrazione, link usati,
+  scaduti e malformati); controllo con i template precedenti, che in WebKit
+  falliva con `scambio-non-riuscito`; sonde HTTP su produzione delle tre route
+  (303 `private, no-store` su token non valido). Non provano il dashboard né la
+  consegna reale della posta.
+- Il contenuto attuale dei template nel dashboard non è stato riletto
+  dall'agente (nessun token della Management API).
+
 ## Rollback
 
 Per ogni template: incollare di nuovo oggetto e corpo salvati al passo 2 e
@@ -195,8 +212,9 @@ modificato per un rollback del dashboard.
 Segnalati, non corretti: nessuno dipende dalla grafica.
 
 - **Magic link e recupero password nello stesso browser — risolto nel codice
-  dalla VPM-001**, operativo in produzione solo dopo la pubblicazione dei due
-  template aggiornati (sopra). Con i template precedenti il link torna su
+  dalla VPM-001**, operativo in produzione dalla pubblicazione dei due
+  template aggiornati (19 ottobre 2026, conferma del titolare; sopra). Con i
+  template precedenti il link torna su
   `/auth/callback?code=` e lo scambio PKCE richiede il `code_verifier` del
   browser della richiesta.
 - **Scanner di posta**: come per `/auth/confirm`, un sistema che apre i link
