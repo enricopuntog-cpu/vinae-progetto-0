@@ -21,6 +21,8 @@
  * meno significa un messaggio più vago, mai un dettaglio in più esposto.
  */
 
+import { LUNGHEZZA_MINIMA_PASSWORD } from "@/lib/auth/requisiti-password";
+
 /** Vocabolario chiuso. L'ordine non conta; l'appartenenza sì. */
 export const CODICI_ERRORE_AUTH = [
   "credenziali-non-valide",
@@ -40,6 +42,11 @@ export const CODICI_ERRORE_AUTH = [
   "password-non-aggiornata",
   "riautenticazione-richiesta",
   "password-troppo-debole",
+  "password-requisiti-mancanti",
+  "password-compromessa",
+  "password-uguale-precedente",
+  "recupero-link-non-valido",
+  "accesso-link-non-valido",
   "generico",
 ] as const;
 
@@ -115,6 +122,24 @@ export const MESSAGGI_ERRORE_AUTH: Record<CodiceErroreAuth, string> = {
   "riautenticazione-richiesta":
     "Per cambiare la password devi confermare di nuovo la tua identità. Effettua un nuovo accesso oppure richiedi un link di recupero password.",
   "password-troppo-debole": "La password è troppo debole. Scegline una più lunga e meno comune.",
+  // Il server ha applicato una policy che la pagina credeva soddisfatta: di
+  // solito perché la configurazione Auth è cambiata dopo il deploy. I
+  // requisiti elencati sono quelli che la pagina mostra.
+  "password-requisiti-mancanti":
+    `La password non rispetta i requisiti richiesti: almeno ${LUNGHEZZA_MINIMA_PASSWORD} caratteri, con una lettera minuscola, una maiuscola, un numero e un simbolo.`,
+  // Nessuna pagina può saperlo prima di chiedere: il controllo sugli archivi
+  // di violazioni lo fa Supabase Auth. Va detto che non riguarda l'account
+  // Vinea, altrimenti chi legge pensa di essere stato violato.
+  "password-compromessa":
+    "Questa password è troppo comune o compare in elenchi di password diffuse dopo violazioni di altri servizi. Scegline un'altra: non significa che il tuo account Vinea sia stato violato.",
+  "password-uguale-precedente":
+    "La nuova password deve essere diversa da quella che usi adesso. Scegline un'altra.",
+  // Link di recupero o di accesso scaduto, già usato o incompleto: GoTrue non
+  // distingue i primi due casi, e per l'utente l'azione è la stessa.
+  "recupero-link-non-valido":
+    "Questo link per reimpostare la password non è più valido: è scaduto, è già stato usato oppure è incompleto. Richiedine uno nuovo con «Password dimenticata?».",
+  "accesso-link-non-valido":
+    "Questo link di accesso non è più valido: è scaduto, è già stato usato oppure è incompleto. Richiedine uno nuovo oppure accedi con email e password.",
   generico: "Non è stato possibile completare l'operazione. Riprova.",
 };
 
@@ -138,6 +163,12 @@ export type ErroreGrezzo = {
   readonly message?: string | undefined;
   readonly code?: string | undefined;
   readonly status?: number | undefined;
+  /**
+   * `AuthWeakPasswordError.reasons` di supabase-js (422 `weak_password`):
+   * `length`, `characters` e/o `pwned`. È il solo campo strutturato che dice
+   * PERCHÉ GoTrue ha respinto la password.
+   */
+  readonly reasons?: readonly string[] | undefined;
 } | null;
 
 const testoGrezzo = (errore: ErroreGrezzo): string =>
@@ -170,8 +201,22 @@ export const classificaErroreAuth = (
   if (/invalid email|email_address_invalid|unable to validate email/.test(testo)) {
     return "email-non-valida";
   }
-  // Famiglie del solo percorso password: una password rifiutata perché debole
-  // è l'unico caso in cui l'utente può fare qualcosa di diverso dal riprovare.
+  // Famiglie del solo percorso password: una password rifiutata è l'unico caso
+  // in cui l'utente può fare qualcosa di diverso dal riprovare, e cosa fare
+  // dipende dal motivo. Prima i motivi strutturati di GoTrue, poi il testo.
+  const motivi = errore?.reasons ?? [];
+  if (motivi.includes("length") || motivi.includes("characters")) {
+    return "password-requisiti-mancanti";
+  }
+  if (motivi.includes("pwned") || /known to be weak|easy to guess|pwned/.test(testo)) {
+    return "password-compromessa";
+  }
+  if (/should contain at least one character|should be at least \d+ characters|cannot be longer than/.test(testo)) {
+    return "password-requisiti-mancanti";
+  }
+  if (errore?.code === "same_password" || /should be different from the old password/.test(testo)) {
+    return "password-uguale-precedente";
+  }
   if (/weak_password|password.*(too short|at least|weak)|short_password/.test(testo)) {
     return "password-troppo-debole";
   }
