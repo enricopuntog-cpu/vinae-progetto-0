@@ -8,15 +8,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConsentCheckbox } from "@/components/vinea/ConsentCheckbox";
+import { RequisitiPassword, attributiPasswordNuova } from "@/components/vinea/RequisitiPassword";
 import { useVinea } from "@/lib/vinea-store";
 import { percorsoRelativoSicuro } from "@/lib/auth/origine-redirect";
 import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
 import { isMaggiorenne } from "@/lib/age";
 import { messaggioErroreAuth } from "@/lib/auth/errori-auth";
 import {
-  LUNGHEZZA_MINIMA_PASSWORD,
   completaProfiloConPasswordFacoltativa,
+  problemaPasswordVinea,
+  richiedePasswordVinea,
 } from "@/lib/auth/password-facoltativa";
+import { passwordValida } from "@/lib/auth/requisiti-password";
 
 /**
  * Completamento profilo dopo il primo accesso social (Fase 5b, punto 4).
@@ -108,14 +111,22 @@ export default function CompletaProfiloPageClient() {
   // due volte, e la seconda risposta non arrivava da nessuna parte: nella
   // scrittura viaggia `dob`, e la barriera che conta è il CHECK su
   // `profiles.dob`, che vincola l'UPDATE come vincola l'INSERT.
-  const valid = username.trim().length >= 3 && dob !== "" && dobError === null && terms;
+  const profiloValido = username.trim().length >= 3 && dob !== "" && dobError === null && terms;
 
   /**
    * La password è chiesta solo se l'utente ha scritto in almeno uno dei due
    * campi. Nessuno dei due toccato significa «continuo con Google», e in quel
-   * caso non parte nessuna chiamata ad Auth.
+   * caso non parte nessuna chiamata ad Auth e il salvataggio resta possibile.
+   * Una password iniziata invece deve essere completa — requisiti di Supabase
+   * Production e conferma identica — prima che il pulsante si accenda: la
+   * stessa regola che `completaProfiloConPasswordFacoltativa` riapplica
+   * all'invio. Dopo un `updateUser` riuscito i campi sono svuotati e non c'è
+   * più nulla da validare.
    */
-  const passwordTroppoCorta = password.length > 0 && password.length < LUNGHEZZA_MINIMA_PASSWORD;
+  const passwordRichiesta = !passwordGiaImpostata && richiedePasswordVinea(password, conferma);
+  const problemaPassword = passwordRichiesta ? problemaPasswordVinea(password, conferma) : null;
+  const valid = profiloValido && problemaPassword === null;
+  const passwordIncompleta = password.length > 0 && !passwordValida(password);
   const mostraMismatch = conferma.length > 0 && password !== conferma;
 
   const salva = async () => {
@@ -313,9 +324,8 @@ export default function CompletaProfiloPageClient() {
                     setPassword(e.target.value);
                     setErroreSicurezza(null);
                   }}
-                  placeholder={`almeno ${LUNGHEZZA_MINIMA_PASSWORD} caratteri`}
-                  autoComplete="new-password"
-                  aria-invalid={passwordTroppoCorta}
+                  {...attributiPasswordNuova("requisiti-password-vinea")}
+                  aria-invalid={passwordIncompleta}
                   disabled={passwordGiaImpostata}
                   data-testid="password-vinea"
                 />
@@ -338,6 +348,22 @@ export default function CompletaProfiloPageClient() {
                 />
               </div>
             </div>
+            {!passwordGiaImpostata && (
+              <RequisitiPassword
+                password={password}
+                id="requisiti-password-vinea"
+                titolo="Se scegli una password, deve contenere:"
+              />
+            )}
+            {problemaPassword && (
+              <p
+                aria-live="polite"
+                data-testid="problema-password-vinea"
+                className="text-xs text-antracite/80"
+              >
+                {problemaPassword} Per continuare solo con Google, svuota entrambi i campi.
+              </p>
+            )}
             {erroreSicurezza && (
               <p
                 role="alert"

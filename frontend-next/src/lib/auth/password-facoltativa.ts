@@ -12,13 +12,19 @@
  * l'account viene toccato: si prova eseguendola, non leggendo il JSX che la
  * chiama.
  *
- * La soglia è la stessa di /registrati e /reimposta-password. Tre soglie
- * diverse per la stessa password vorrebbero dire che due delle tre pagine
- * mentono.
+ * I requisiti sono quelli di /registrati e /reimposta-password, dallo stesso
+ * validatore (`lib/auth/requisiti-password`). Tre policy diverse per la stessa
+ * password vorrebbero dire che due delle tre pagine mentono.
  */
 
-/** Stessa soglia del form di registrazione. Vedi /registrati. */
-export const LUNGHEZZA_MINIMA_PASSWORD = 6;
+import {
+  LUNGHEZZA_MINIMA_PASSWORD,
+  MESSAGGIO_PASSWORD_TROPPO_LUNGA,
+  MESSAGGIO_REQUISITI_MANCANTI,
+  valutaPassword,
+} from "@/lib/auth/requisiti-password";
+
+export { LUNGHEZZA_MINIMA_PASSWORD };
 
 /**
  * La password è in gioco solo se l'utente ha scritto in almeno uno dei due
@@ -41,8 +47,9 @@ export const richiedePasswordVinea = (password: string, conferma: string): boole
 export const problemaPasswordVinea = (password: string, conferma: string): string | null => {
   if (!richiedePasswordVinea(password, conferma)) return null;
   if (password.length === 0) return "Scrivi la password Vinea, oppure svuota il campo di conferma.";
-  if (password.length < LUNGHEZZA_MINIMA_PASSWORD)
-    return `La password deve avere almeno ${LUNGHEZZA_MINIMA_PASSWORD} caratteri.`;
+  const valutazione = valutaPassword(password);
+  if (valutazione.troppoLunga) return MESSAGGIO_PASSWORD_TROPPO_LUNGA;
+  if (!valutazione.valida) return MESSAGGIO_REQUISITI_MANCANTI;
   if (conferma.length === 0) return "Ripeti la password per confermarla.";
   if (password !== conferma) return "Le due password non coincidono.";
   return null;

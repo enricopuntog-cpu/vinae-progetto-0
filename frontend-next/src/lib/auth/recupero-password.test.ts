@@ -150,9 +150,11 @@ describe("recupero password: contratto del servizio", () => {
   });
 
   it("una password rifiutata perché debole lo dice, invece di un generico riprova", () => {
+    // I testi di GoTrue per lunghezza e classi di caratteri sono requisiti
+    // formali: la pagina li elenca già, il messaggio li ripete.
     expect(
-      classificaErroreAuth({ message: "Password should be at least 6 characters" }, "aggiornamento-password"),
-    ).toBe("password-troppo-debole");
+      classificaErroreAuth({ message: "Password should be at least 6 characters." }, "aggiornamento-password"),
+    ).toBe("password-requisiti-mancanti");
     expect(classificaErroreAuth({ message: "weak_password" }, "aggiornamento-password")).toBe(
       "password-troppo-debole",
     );
@@ -247,13 +249,16 @@ describe("/reimposta-password", () => {
     expect(PERCORSO_REIMPOSTA_PASSWORD).toBe("/reimposta-password");
   });
 
-  it("valida lunghezza e coincidenza prima di permettere il salvataggio", () => {
+  it("valida i requisiti di Supabase Production e la coincidenza prima di permettere il salvataggio", () => {
     const codice = senzaCommenti(REIMPOSTA);
-    expect(codice).toInclude("const LUNGHEZZA_MINIMA_PASSWORD = 6");
-    expect(codice).toInclude("password.length >= LUNGHEZZA_MINIMA_PASSWORD");
+    // Un solo validatore per le tre superfici: nessuna soglia locale.
+    expect(codice).not.toInclude("LUNGHEZZA_MINIMA_PASSWORD = ");
+    expect(codice).toInclude("const requisitiSoddisfatti = passwordValida(password)");
     expect(codice).toInclude("password === conferma");
-    expect(codice).toInclude("const valido = abbastanzaLunga && combaciano");
+    expect(codice).toInclude("const valido = requisitiSoddisfatti && combaciano");
     expect(codice).toInclude("disabled={!valido || inCorso}");
+    expect(codice).toInclude('<RequisitiPassword password={password} id="requisiti-password-reimposta" />');
+    expect(codice).toInclude('attributiPasswordNuova("requisiti-password-reimposta")');
   });
 
   it("il mismatch è un errore annunciato, non un pulsante che tace", () => {

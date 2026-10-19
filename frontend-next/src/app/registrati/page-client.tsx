@@ -9,10 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConsentCheckbox } from "@/components/vinea/ConsentCheckbox";
 import { SocialAuthButtons } from "@/components/vinea/SocialAuthButtons";
+import { RequisitiPassword, attributiPasswordNuova } from "@/components/vinea/RequisitiPassword";
 import { useVinea } from "@/lib/vinea-store";
 import { isMaggiorenne } from "@/lib/age";
 import { percorsoRelativoSicuro } from "@/lib/auth/origine-redirect";
 import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
+import { passwordValida } from "@/lib/auth/requisiti-password";
 import {
   codiceErroreAuth,
   messaggioErroreAuth,
@@ -76,10 +78,15 @@ export default function RegistratiPageClient() {
   // fatto e la seconda risposta non arrivava da nessuna parte: al provider
   // viaggia `dataNascita`, e la barriera che conta è il CHECK su
   // `profiles.dob`. Vedi `src/lib/age.ts`.
+  //
+  // La password segue la policy di Supabase Production con lo stesso
+  // validatore delle altre due superfici (`passwordValida`): finché manca un
+  // requisito formale il pulsante resta spento e la lista sotto il campo dice
+  // quale. Il rifiuto per password compromessa arriva solo dal server.
   const valid =
     username.trim().length >= 3 &&
     email.includes("@") &&
-    password.length >= 6 &&
+    passwordValida(password) &&
     dob !== "" &&
     dobError === null &&
     terms;
@@ -236,8 +243,8 @@ export default function RegistratiPageClient() {
                   setPassword(e.target.value);
                   setErroreRegistrazione(null);
                 }}
-                placeholder="almeno 6 caratteri"
-                autoComplete="new-password"
+                {...attributiPasswordNuova("requisiti-password-registrazione")}
+                data-testid="password-registrazione"
               />
             </div>
             <div>
@@ -251,6 +258,7 @@ export default function RegistratiPageClient() {
               {dobError && <p className="mt-1 text-xs text-bordeaux">{dobError}</p>}
             </div>
           </div>
+          <RequisitiPassword password={password} id="requisiti-password-registrazione" />
 
           {/*
             Una sola casella per entrambe le strade. Il consenso è la condizione

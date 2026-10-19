@@ -32,28 +32,46 @@ describe("password Vinea facoltativa", () => {
   });
 
   it("blocca password senza conferma", () => {
-    expect(richiedePasswordVinea("segreta", "")).toBe(true);
-    expect(problemaPasswordVinea("segreta", "")).toBe("Ripeti la password per confermarla.");
+    expect(richiedePasswordVinea("Segreta1!", "")).toBe(true);
+    expect(problemaPasswordVinea("Segreta1!", "")).toBe("Ripeti la password per confermarla.");
   });
 
   it("blocca conferma senza password", () => {
-    expect(richiedePasswordVinea("", "segreta")).toBe(true);
-    expect(problemaPasswordVinea("", "segreta")).toBe(
+    expect(richiedePasswordVinea("", "Segreta1!")).toBe(true);
+    expect(problemaPasswordVinea("", "Segreta1!")).toBe(
       "Scrivi la password Vinea, oppure svuota il campo di conferma.",
     );
   });
 
-  it("blocca mismatch e password troppo corta con la policy esistente", () => {
+  it("blocca mismatch e password fuori policy con la policy di Supabase Production", () => {
     expect(LUNGHEZZA_MINIMA_PASSWORD).toBe(6);
-    expect(problemaPasswordVinea("abcde", "abcde")).toBe(
-      "La password deve avere almeno 6 caratteri.",
+    expect(problemaPasswordVinea("Ab1!e", "Ab1!e")).toBe(
+      "La password non soddisfa ancora tutti i requisiti indicati.",
     );
-    expect(problemaPasswordVinea("segreta", "diversa")).toBe("Le due password non coincidono.");
+    // Lunga abbastanza ma senza simbolo: la vecchia regola (solo 6 caratteri)
+    // l'avrebbe lasciata passare, e Supabase l'avrebbe respinta.
+    expect(problemaPasswordVinea("Segreta1", "Segreta1")).toBe(
+      "La password non soddisfa ancora tutti i requisiti indicati.",
+    );
+    expect(problemaPasswordVinea("Segreta1!", "diversa")).toBe("Le due password non coincidono.");
+  });
+
+  it("i requisiti si controllano prima della conferma, che resta da scrivere", () => {
+    expect(problemaPasswordVinea("abc", "")).toBe(
+      "La password non soddisfa ancora tutti i requisiti indicati.",
+    );
   });
 
   it("accetta una password valida senza trasformare whitespace", () => {
-    expect(problemaPasswordVinea(" a b c", " a b c")).toBeNull();
-    expect(problemaPasswordVinea(" a b c", "a b c ")).toBe("Le due password non coincidono.");
+    expect(problemaPasswordVinea(" a B 1 !", " a B 1 !")).toBeNull();
+    expect(problemaPasswordVinea(" a B 1 !", "a B 1 ! ")).toBe("Le due password non coincidono.");
+  });
+
+  it("oltre il limite di GoTrue la password è respinta prima di Auth", () => {
+    const lunga = `Aa1!${"x".repeat(69)}`;
+    expect(problemaPasswordVinea(lunga, lunga)).toBe(
+      "La password è troppo lunga: usa al massimo 72 caratteri, meno se contiene lettere accentate o emoji.",
+    );
   });
 });
 
@@ -81,8 +99,8 @@ describe("ordine delle mutazioni", () => {
   it("con password valida la aggiorna una volta, poi completa una volta il profilo", async () => {
     const chiamate: Array<{ nome: string; argomento?: unknown }> = [];
     const esito = await completaProfiloConPasswordFacoltativa({
-      password: "segreta",
-      conferma: "segreta",
+      password: "Segreta1!",
+      conferma: "Segreta1!",
       passwordGiaImpostata: false,
       aggiornaPassword: async (password) => {
         chiamate.push({ nome: "password", argomento: password });
@@ -96,7 +114,7 @@ describe("ordine delle mutazioni", () => {
 
     expect(esito).toEqual({ tipo: "completato", passwordImpostata: true });
     expect(chiamate).toEqual([
-      { nome: "password", argomento: "segreta" },
+      { nome: "password", argomento: "Segreta1!" },
       { nome: "profilo" },
     ]);
   });
@@ -104,8 +122,8 @@ describe("ordine delle mutazioni", () => {
   it("un errore password impedisce la mutazione profilo", async () => {
     let completamentiProfilo = 0;
     const esito = await completaProfiloConPasswordFacoltativa({
-      password: "segreta",
-      conferma: "segreta",
+      password: "Segreta1!",
+      conferma: "Segreta1!",
       passwordGiaImpostata: false,
       aggiornaPassword: async () => ({ ok: false, error: "provider" as const }),
       completaProfilo: async () => {
@@ -126,8 +144,8 @@ describe("ordine delle mutazioni", () => {
     let aggiornamentiPassword = 0;
     let completamentiProfilo = 0;
     const primo = await completaProfiloConPasswordFacoltativa({
-      password: "segreta",
-      conferma: "segreta",
+      password: "Segreta1!",
+      conferma: "Segreta1!",
       passwordGiaImpostata: false,
       aggiornaPassword: async () => {
         aggiornamentiPassword += 1;
@@ -169,7 +187,7 @@ describe("ordine delle mutazioni", () => {
   it("gli errori locali non chiamano né Auth né profilo", async () => {
     let mutazioni = 0;
     const esito = await completaProfiloConPasswordFacoltativa({
-      password: "segreta",
+      password: "Segreta1!",
       conferma: "",
       passwordGiaImpostata: false,
       aggiornaPassword: async () => {
@@ -240,6 +258,27 @@ describe("integrazione /completa-profilo", () => {
     expect(servizio).toInclude("supabase.auth.updateUser({ password })");
     expect((servizio.match(/supabase\.auth\.updateUser\(\{ password \}\)/g) ?? []).length).toBe(1);
     expect(servizio).not.toInclude("userId, password");
+  });
+
+  it("mostra i cinque requisiti e disabilita il salvataggio solo per una password iniziata e incompleta", () => {
+    expect(paginaEseguibile).toInclude("<RequisitiPassword");
+    expect(paginaEseguibile).toInclude('id="requisiti-password-vinea"');
+    expect(paginaEseguibile).toInclude('attributiPasswordNuova("requisiti-password-vinea")');
+    // Entrambi i campi vuoti: nessun problema, il salvataggio resta possibile
+    // e l'utente continua con il solo Google.
+    expect(paginaEseguibile).toInclude(
+      "const passwordRichiesta = !passwordGiaImpostata && richiedePasswordVinea(password, conferma)",
+    );
+    expect(paginaEseguibile).toInclude(
+      "const problemaPassword = passwordRichiesta ? problemaPasswordVinea(password, conferma) : null",
+    );
+    expect(paginaEseguibile).toInclude("const valid = profiloValido && problemaPassword === null");
+    expect(paginaEseguibile).toInclude("disabled={!valid || inCorso}");
+    expect(pagina).toInclude("Per continuare solo con Google, svuota entrambi i campi.");
+  });
+
+  it("non ostacola incolla e password manager", () => {
+    expect(paginaEseguibile).not.toMatch(/onPaste|onCopy|onCut|autoComplete="off"/);
   });
 
   it("non persiste, logga o mette la password in URL", () => {

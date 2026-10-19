@@ -6,8 +6,10 @@ import { Check, KeyRound, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RequisitiPassword, attributiPasswordNuova } from "@/components/vinea/RequisitiPassword";
 import { useVinea } from "@/lib/vinea-store";
 import { messaggioErroreAuth, type CodiceErroreAuth } from "@/lib/auth/errori-auth";
+import { passwordValida } from "@/lib/auth/requisiti-password";
 
 /**
  * Reimpostazione della password.
@@ -19,15 +21,14 @@ import { messaggioErroreAuth, type CodiceErroreAuth } from "@/lib/auth/errori-au
  * chiederla avrebbe reso questa pagina inutilizzabile proprio per il caso che
  * l'ha resa necessaria. Quello che l'utente prova non è di ricordare un
  * segreto: è di controllare la casella di posta a cui è arrivato il link, e
- * quella prova è la sessione di recupero già aperta da /auth/callback.
+ * quella prova è la sessione di recupero già aperta da /auth/recupero (link
+ * con `token_hash`, valido in qualunque browser) o, per i link inviati prima
+ * della VPM-001, da /auth/callback.
  *
- * La lunghezza minima è la stessa della registrazione (6 caratteri): due
- * soglie diverse per la stessa password vorrebbero dire che una delle due
- * pagine mente.
+ * I requisiti sono quelli della registrazione, dallo stesso validatore
+ * (`lib/auth/requisiti-password`): due policy diverse per la stessa password
+ * vorrebbero dire che una delle due pagine mente.
  */
-
-/** Stessa soglia del form di registrazione. Vedi /registrati. */
-const LUNGHEZZA_MINIMA_PASSWORD = 6;
 
 export default function ReimpostaPasswordPageClient({
   erroreRientro = null,
@@ -47,9 +48,9 @@ export default function ReimpostaPasswordPageClient({
   const [errore, setErrore] = useState<CodiceErroreAuth | null>(null);
   const [fatto, setFatto] = useState(false);
 
-  const abbastanzaLunga = password.length >= LUNGHEZZA_MINIMA_PASSWORD;
+  const requisitiSoddisfatti = passwordValida(password);
   const combaciano = conferma.length > 0 && password === conferma;
-  const valido = abbastanzaLunga && combaciano;
+  const valido = requisitiSoddisfatti && combaciano;
   /**
    * Il mismatch si mostra solo quando l'utente ha scritto abbastanza da
    * renderlo un fatto e non un'osservazione su una frase a metà.
@@ -174,10 +175,10 @@ export default function ReimpostaPasswordPageClient({
                 setPassword(e.target.value);
                 setErrore(null);
               }}
-              placeholder={`almeno ${LUNGHEZZA_MINIMA_PASSWORD} caratteri`}
-              autoComplete="new-password"
+              {...attributiPasswordNuova("requisiti-password-reimposta")}
               data-testid="password-nuova"
             />
+            <RequisitiPassword password={password} id="requisiti-password-reimposta" />
           </div>
           <div>
             <Label htmlFor="password-conferma">Conferma nuova password</Label>
