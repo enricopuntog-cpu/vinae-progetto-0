@@ -4,8 +4,9 @@
 -- oggetti Storage di prova vivono nella transazione e spariscono con
 -- ROLLBACK. Dati SINTETICI: nessun prodotto, marchio o prezzo reale.
 --
--- Prova la migrazione 20261020120000 con quattro identita (anonimo, utente A,
--- utente B, admin):
+-- Prova le migrazioni 20261020120000 e 20261020170000 (rilascio riservato al titolare, foto
+-- private) con quattro identita (anonimo, utente A,
+-- utente B, admin) più un admin con il ruolo di rilascio e un utente con il solo ruolo:
 --   - tassonomia seminata, interruttore di visibilita spento di default;
 --   - nessun accesso diretto alle tabelle; letture pubbliche vuote con
 --     l'interruttore spento; anteprima e porte admin riservate all'admin reale;
@@ -103,18 +104,25 @@ $f$;
 \set adm '12ee0000-0000-4000-8000-0000000000e0'
 \set ua '12ee0000-0000-4000-8000-0000000000e1'
 \set ub '12ee0000-0000-4000-8000-0000000000e2'
+\set fnd '12ee0000-0000-4000-8000-0000000000e3'
+\set rel '12ee0000-0000-4000-8000-0000000000e4'
 
 set local session_replication_role = replica;
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values
   (:'adm', 'adm@grid-12zh.test', now(), '{}'::jsonb),
   (:'ua', 'ua@grid-12zh.test', now(), '{}'::jsonb),
-  (:'ub', 'ub@grid-12zh.test', now(), '{}'::jsonb);
+  (:'ub', 'ub@grid-12zh.test', now(), '{}'::jsonb),
+  (:'fnd', 'fnd@grid-12zh.test', now(), '{}'::jsonb),
+  (:'rel', 'rel@grid-12zh.test', now(), '{}'::jsonb);
 insert into public.profiles (id, username, dob) values
   (:'adm', 'adm-12zh', date '1980-01-01'),
   (:'ua', 'ua-12zh', date '1980-01-01'),
-  (:'ub', 'ub-12zh', date '1980-01-01');
+  (:'ub', 'ub-12zh', date '1980-01-01'),
+  (:'fnd', 'fnd-12zh', date '1980-01-01'),
+  (:'rel', 'rel-12zh', date '1980-01-01');
 insert into public.user_roles (user_id, role) values
-  (:'adm', 'admin'), (:'ua', 'user'), (:'ub', 'user');
+  (:'adm', 'admin'), (:'ua', 'user'), (:'ub', 'user'),
+  (:'fnd', 'admin'), (:'fnd', 'accessori_release'), (:'rel', 'accessori_release');
 set local session_replication_role = origin;
 
 do $$
@@ -122,6 +130,8 @@ declare
   c_adm constant uuid := '12ee0000-0000-4000-8000-0000000000e0';
   c_a constant uuid := '12ee0000-0000-4000-8000-0000000000e1';
   c_b constant uuid := '12ee0000-0000-4000-8000-0000000000e2';
+  c_fnd constant uuid := '12ee0000-0000-4000-8000-0000000000e3';
+  c_rel constant uuid := '12ee0000-0000-4000-8000-0000000000e4';
   v_snap_prima text;
   v_c record;
   v_s text;
@@ -134,6 +144,9 @@ declare
   v_acc2 uuid;
   v_path text;
   v_path_altro text;
+  v_path_bozza text;
+  v_media_cat text;
+  v_media_sql constant text := $q$select coalesce(jsonb_agg(name order by name), '[]'::jsonb) from storage.objects where bucket_id = 'accessori-media'$q$;
   v_slug_pub constant text := 'accessorio-prova-12zh';
   v_slug_bozza constant text := 'accessorio-bozza-12zh';
   v_item jsonb;
@@ -267,8 +280,8 @@ begin
   v_s := pg_temp.esito(v_sql, null, 'anon');
   v_t := pg_temp.esito(v_sql, c_a);
   select * into v_c from pg_temp.chiama(v_sql, c_adm);
-  perform pg_temp.registra(10, 'Storage accessori-media: bucket WebP 2 MB; caricamento negato ad anonimo e utente, ammesso all''admin; percorso fuori forma e scheda inesistente rifiutati',
-    (select public and file_size_limit = 2097152 and allowed_mime_types = array['image/webp']
+  perform pg_temp.registra(10, 'Storage accessori-media: bucket PRIVATO WebP 2 MB; caricamento negato ad anonimo e utente, ammesso all''admin; percorso fuori forma e scheda inesistente rifiutati',
+    (select not public and file_size_limit = 2097152 and allowed_mime_types = array['image/webp']
      from storage.buckets where id = 'accessori-media')
     and v_s like '42501:%' and v_t like '42501:%' and v_c.esito = 'NESSUN_ERRORE'
     and pg_temp.esito(format($q$with i as (insert into storage.objects (bucket_id, name) values ('accessori-media', %L) returning 1) select to_jsonb(count(*)) from i$q$, v_acc::text || '/foto.webp'), c_adm) like '42501:%'
@@ -326,13 +339,38 @@ begin
     and (select dati is null from pg_temp.chiama(format('select public.accessori_dettaglio(%L)', v_slug_pub), null, 'anon')),
     '');
 
-  -- 15: l'interruttore richiede motivo e admin; poi si accende.
-  v_s := pg_temp.esito('select public.accessori_admin_visibilita_imposta(true, '''')', c_adm);
-  v_t := pg_temp.esito('select public.accessori_admin_visibilita_imposta(true, ''Prova 12zh'')', c_adm);
-  perform pg_temp.registra(15, 'accensione senza motivo rifiutata (motivo_obbligatorio); con motivo riuscita e registrata',
+  -- 15: accendere la visibilita PUBBLICA e riservato al titolare: un admin
+  -- ordinario non puo, nemmeno con un motivo valido.
+  v_s := pg_temp.esito('select public.accessori_admin_visibilita_imposta(true, ''Prova 12zh'')', c_adm);
+  v_t := pg_temp.esito('select public.accessori_admin_visibilita_imposta(true, ''Prova 12zh'')', c_rel);
+  perform pg_temp.registra(15, 'admin ordinario: accensione rifiutata (rilascio_non_autorizzato) anche con motivo; il solo ruolo di rilascio senza essere admin e rifiutato; l''interruttore resta spento',
+    v_s = '42501:rilascio_non_autorizzato' and v_t like '42501:%'
+    and pg_temp.esito('select public.accessori_admin_visibilita_imposta(true, ''Prova 12zh'')', c_a) like '42501:%'
+    and pg_temp.esito('select public.accessori_admin_visibilita_imposta(true, ''Prova 12zh'')', null, 'anon') like '42501:%'
+    and not (select visibilita_pubblica from private.accessori_impostazioni)
+    and not exists (select 1 from private.accessori_registro where azione = 'visibilita_accendi'),
+    v_s || ' ' || v_t);
+
+  -- 30: il database vincola anche i writer privilegiati: UPDATE diretto
+  -- che accende, con o senza un autore, e rifiutato dal trigger.
+  v_s := (pg_temp.diretto('update private.accessori_impostazioni set visibilita_pubblica = true')).hint;
+  v_t := (pg_temp.diretto(format(
+    'update private.accessori_impostazioni set visibilita_pubblica = true, aggiornato_da = %L', c_fnd))).hint;
+  perform pg_temp.registra(30, 'UPDATE diretto che accende la visibilita (anche con un autore) rifiutato dal trigger: serve la porta di rilascio',
+    v_s = 'rilascio_non_autorizzato' and v_t = 'rilascio_non_autorizzato'
+    and not (select visibilita_pubblica from private.accessori_impostazioni),
+    coalesce(v_s, '') || ' ' || coalesce(v_t, ''));
+
+  -- 31: il titolare (admin con ruolo di rilascio) richiede il motivo, poi accende.
+  v_s := pg_temp.esito('select public.accessori_admin_visibilita_imposta(true, '''')', c_fnd);
+  v_t := pg_temp.esito('select public.accessori_admin_visibilita_imposta(true, ''Prova 12zh'')', c_fnd);
+  perform pg_temp.registra(31, 'titolare: accensione senza motivo rifiutata (motivo_obbligatorio); con motivo riuscita e registrata a suo nome; l''admin ordinario non e il titolare',
     v_s = '22023:motivo_obbligatorio' and v_t = 'NESSUN_ERRORE:'
     and (select visibilita_pubblica from private.accessori_impostazioni)
-    and exists (select 1 from private.accessori_registro where azione = 'visibilita_accendi' and motivo = 'Prova 12zh' and admin_id = c_adm),
+    and exists (select 1 from private.accessori_registro where azione = 'visibilita_accendi' and motivo = 'Prova 12zh' and admin_id = c_fnd)
+    and not exists (select 1 from private.accessori_registro where azione = 'visibilita_accendi' and admin_id = c_adm)
+    and (select (dati ->> 'puo_rilasciare')::boolean from pg_temp.chiama('select public.accessori_admin_stato()', c_fnd))
+    and not (select (dati ->> 'puo_rilasciare')::boolean from pg_temp.chiama('select public.accessori_admin_stato()', c_adm)),
     v_s || ' ' || v_t);
 
   -- 16: interruttore acceso: A, B e anonimo vedono solo la pubblicata; la bozza no.
@@ -347,6 +385,21 @@ begin
     and pg_temp.esito(format('select public.accessori_dettaglio(%L, true)', v_slug_bozza), null, 'anon') like '42501:%'
     and pg_temp.esito(format('select public.accessori_dettaglio(%L, true)', v_slug_bozza), c_a) like '42501:%',
     coalesce(v_item::text, ''));
+
+  -- 32: Storage con la visibilita accesa: le foto della sola scheda PUBBLICATA
+  -- sono leggibili (e quindi firmabili) da tutti; quelle di una bozza e quelle
+  -- non collegate a nessuna scheda restano dell'admin.
+  v_path_bozza := v_acc2::text || '/' || gen_random_uuid()::text || '.webp';
+  perform pg_temp.chiama(format($q$with i as (insert into storage.objects (bucket_id, name) values ('accessori-media', %L) returning 1) select to_jsonb(count(*)) from i$q$, v_path_bozza), c_adm);
+  perform pg_temp.chiama(format('select public.accessori_admin_immagini_imposta(%L, array[%L])', v_acc2, v_path_bozza), c_adm);
+  perform pg_temp.registra(32, 'visibilita accesa: anonimo, A e B leggono (firmano) solo la foto della scheda pubblicata; foto di bozza e foto non collegata no; l''admin le vede tutte',
+    (select dati from pg_temp.chiama(v_media_sql, null, 'anon')) = jsonb_build_array(v_path)
+    and (select dati from pg_temp.chiama(v_media_sql, c_a)) = jsonb_build_array(v_path)
+    and (select dati from pg_temp.chiama(v_media_sql, c_b)) = jsonb_build_array(v_path)
+    and (select jsonb_array_length(dati) from pg_temp.chiama(v_media_sql, c_adm)) = 3
+    and (select dati::text from pg_temp.chiama(format($q$select to_jsonb(count(*)) from storage.objects where bucket_id = 'accessori-media' and name = %L$q$, v_path_bozza), null, 'anon')) = '0'
+    and (select dati::text from pg_temp.chiama(format($q$select to_jsonb(count(*)) from storage.objects where bucket_id = 'accessori-media' and name = %L$q$, v_path_altro), c_a)) = '0',
+    '');
 
   -- 17: elenco chiuso dei campi pubblici.
   select array(select jsonb_object_keys(v_item -> 0) order by 1) into v_chiavi;
@@ -381,11 +434,14 @@ begin
   perform pg_temp.chiama(format('select public.accessori_admin_categoria_salva(%L, ''{"attiva":false}''::jsonb)', v_sub), c_adm);
   v_s := (select dati::text from pg_temp.chiama('select public.accessori_elenca(''prova-sotto-12zh'')', null, 'anon'));
   v_t := (select dati::text from pg_temp.chiama(format('select public.accessori_dettaglio(%L)', v_slug_pub), null, 'anon'));
+  v_media_cat := (select dati::text from pg_temp.chiama(v_media_sql, null, 'anon'));
   perform pg_temp.chiama(format('select public.accessori_admin_categoria_salva(%L, ''{"attiva":true}''::jsonb)', v_sub), c_adm);
   perform pg_temp.registra(20, 'categoria disattivata: schede nascoste in elenco e dettaglio; riattivata: tornano visibili',
     v_s = '[]' and v_t is null
     and (select jsonb_array_length(dati) from pg_temp.chiama('select public.accessori_elenca(''prova-sotto-12zh'')', null, 'anon')) = 1,
     coalesce(v_s, '') || ' ' || coalesce(v_t, ''));
+  perform pg_temp.registra(33, 'categoria disattivata: anche la foto della scheda diventa illeggibile all''anonimo',
+    v_media_cat = '[]', coalesce(v_media_cat, ''));
 
   -- 21: spegnimento: torna tutto vuoto.
   perform pg_temp.chiama('select public.accessori_admin_visibilita_imposta(false, ''Chiusura 12zh'')', c_adm);
@@ -394,6 +450,17 @@ begin
     and (select dati::text from pg_temp.chiama('select public.accessori_categorie_elenca()', c_a)) = '[]'
     and (select dati is null from pg_temp.chiama(format('select public.accessori_dettaglio(%L)', v_slug_pub), c_b))
     and not (select visibilita_pubblica from private.accessori_impostazioni),
+    '');
+
+  -- 34: spegnere e consentito a un admin ordinario (il verso sicuro non richiede
+  -- approvazione, ed e stato appena fatto da c_adm); da spenta nessuna foto e
+  -- leggibile ai ruoli client, nemmeno quella gia pubblicata. L'admin si'.
+  perform pg_temp.registra(34, 'visibilita spenta da un admin ordinario: nessuna foto leggibile da anonimo, A e B; l''admin le vede ancora',
+    exists (select 1 from private.accessori_registro where azione = 'visibilita_spegni' and admin_id = c_adm)
+    and (select dati::text from pg_temp.chiama(v_media_sql, null, 'anon')) = '[]'
+    and (select dati::text from pg_temp.chiama(v_media_sql, c_a)) = '[]'
+    and (select dati::text from pg_temp.chiama(v_media_sql, c_b)) = '[]'
+    and (select jsonb_array_length(dati) from pg_temp.chiama(v_media_sql, c_adm)) = 3,
     '');
 
   -- 22: scrittori privilegiati vincolati dal database (trigger).
@@ -478,6 +545,25 @@ begin
            'accessori_admin_salva', 'accessori_admin_categoria_salva',
            'accessori_admin_immagini_imposta', 'accessori_admin_stato_imposta',
            'accessori_admin_visibilita_imposta')) = 5,
+    '');
+
+  -- 35: bucket privato e superficie di Storage: per anon esiste una sola policy
+  -- sul bucket (SELECT delle foto pubblicate), nessuna di scrittura; gli helper
+  -- del rilascio non sono eseguibili dai ruoli client.
+  perform pg_temp.registra(35, 'bucket privato; per anon una sola policy sul bucket (SELECT delle foto pubblicate), nessuna di scrittura; helper di rilascio non eseguibili da anon e authenticated',
+    not (select public from storage.buckets where id = 'accessori-media')
+    and (select count(*) from pg_policies
+         where schemaname = 'storage' and tablename = 'objects'
+           and (qual like '%accessori-media%' or with_check like '%accessori-media%')
+           and 'anon' = any (roles)) = 1
+    and exists (select 1 from pg_policies
+                where schemaname = 'storage' and tablename = 'objects'
+                  and policyname = 'accessori_media_select_pubblicate'
+                  and cmd = 'SELECT' and 'anon' = any (roles))
+    and not has_function_privilege('anon', 'private.accessori_puo_rilasciare()', 'execute')
+    and not has_function_privilege('authenticated', 'private.accessori_puo_rilasciare()', 'execute')
+    and not has_function_privilege('authenticated', 'private.accessori_rilascio_richiesto()', 'execute')
+    and not has_function_privilege('authenticated', 'private.accessori_impostazioni_guard()', 'execute'),
     '');
 
   -- 29: nessun effetto sul resto del marketplace.
