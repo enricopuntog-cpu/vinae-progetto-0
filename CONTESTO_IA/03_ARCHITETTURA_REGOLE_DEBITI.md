@@ -1844,6 +1844,56 @@ alcuna vendita**. Regole durevoli:
   un account viene cancellato (serve un job di pulizia); ruolo di rilascio
   assegnato a mano.
 
+## Annunci Accessori — VPM-015B2 (21 ottobre 2026)
+
+Migrazione `20261021150000_vpm_015b2_annunci_accessori.sql`, griglia
+`supabase/tests/12zj_vpm_015b2_annunci_accessori.sql` e prova di concorrenza
+`12zj_vpm_015b2_concorrenza.sh` nel gate `Supabase DB regression`; contratto
+completo in `../docs/VPM_015B2_ANNUNCI_ACCESSORI.md`. Prepara la futura vendita di
+accessori posseduti **senza alcuna vendita**. Regole durevoli:
+
+- **Margini per dominio.** Accessori privato 10% (1000 bps), Partner 15% (1500 bps),
+  in `private.marketplace_margini_dominio` (versionata, una riga corrente per
+  dominio e classe, `check (dominio <> 'vino')`, immutabile). Il vino resta in
+  `marketplace_config` (800/1500). **Una formula sola** (`marketplace_totale_cents`)
+  e **nessun parametro Stripe duplicato**: fee di riferimento e finestra si leggono
+  da `marketplace_config` della classe. `private.preventivo_dominio` è il nucleo
+  dei preventivi; per il vino coincide con `preventivo_classe`. Gli «accessori» di
+  `pagamento_fee_accessori_cents` sono gli importi accessori dell'ordine (imballaggio,
+  trasporto), non i gadget: il dominio si chiama `accessori_enologici`.
+- **Annuncio = bozza.** `private.annunci_accessori`: stati `bozza | in_revisione |
+  ritirato` (**non esiste «attivo»**), nessuna FK verso listings, ordini, pagamenti,
+  proposte o vino, nessuna vista. `annunci_accessori_pubblica` risponde sempre
+  `pubblicazione_chiusa`; `pubblicazione_attiva` è vincolata a falso. Il blocco che
+  aprirà la vendita sostituisce quella porta e quel vincolo.
+- **Quantità senza doppia fonte.** Il posseduto è `cantina_accessori.quantita`;
+  l'impegnato è la somma degli annunci aperti, sempre derivata (nessuna colonna). Un
+  solo annuncio aperto per accessorio; `quantità ≤ posseduto` sotto `FOR UPDATE`
+  sull'accessorio per ogni writer; ordine dei lock *accessorio, poi annuncio*; la
+  Cantina non toglie la merce sotto un annuncio aperto. Con gli ordini la FK
+  annuncio → accessorio (oggi `cascade`, per la cancellazione dell'account) dovrà
+  diventare `restrict` e le vendite parziali ridurre posseduto e annuncio nella
+  stessa transazione.
+- **Percorso dei privati.** Partner attivo/sospeso e Partner revocato non
+  riabilitato non usano il percorso personale (`annuncio_accessorio_venditore`);
+  classe e ammissione sono del database. Categorie vendibili **fail-closed**
+  (`annunci_accessori_categorie`: nessuna riga = no) più dichiarazione di
+  conformità (niente alcolici né articoli regolamentati).
+- **Spedizione senza tariffa.** Nessuna tariffa inventata: preventivo
+  `disponibile: false` (`tariffa_accessori_non_configurata`), mostrato come
+  «non disponibile», mai 0 €; la commissione non tocca la spedizione; imballaggio a
+  cura del venditore.
+- **Interruttore** `preparazione_attiva` nel database, spento di default, accensione
+  col ruolo `accessori_release` (stesso marcatore), nessuna variabile d'ambiente.
+- **Frontend.** `accessori-vendita/` (provider, comando per scheda, finestra,
+  riepilogo economico, interruttore admin) separato dalle cartelle B1, il cui test di
+  contratto vieta parole economiche. Il browser sceglie solo accessorio, quantità e
+  prezzo; ogni importo mostrato è del database e un preventivo incoerente non si
+  mostra.
+- **Residui accettati.** «In revisione» non ha ancora un destinatario operativo
+  (moderazione = blocco successivo); le foto dell'annuncio sono quelle private
+  dell'accessorio.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):

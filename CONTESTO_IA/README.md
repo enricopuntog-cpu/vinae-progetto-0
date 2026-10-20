@@ -118,6 +118,14 @@ Aprire soltanto ciò che serve al task:
   pubblica a 10 chiavi, bucket Storage privato per proprietario, nessuna vendita —
   è in `03_ARCHITETTURA_REGOLE_DEBITI.md`; contratto completo in
   `../docs/VPM_015B1_CANTINA_ACCESSORI.md`.
+- Annunci Accessori VPM-015B2 (21 ottobre 2026) — margini per dominio e classe
+  (accessori privato 10%, Partner 15%, vino invariato 8%/15%) con una sola formula e
+  i parametri di pagamento letti da `marketplace_config`, annunci in sole bozze
+  (nessuno stato acquistabile, pubblicazione chiusa anche via RPC), quantità offerta
+  sempre sotto lock dell'accessorio, Partner esclusi dal percorso personale,
+  categorie fail-closed, spedizione indisponibile senza tariffa reale — è in
+  `03_ARCHITETTURA_REGOLE_DEBITI.md`; contratto completo in
+  `../docs/VPM_015B2_ANNUNCI_ACCESSORI.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono
