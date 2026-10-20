@@ -25,6 +25,7 @@ import {
 import type { Wine } from "@/data/wines";
 import { WineCard } from "@/components/vinea/WineCard";
 import { AperturaBottiglia } from "@/components/vinea/AperturaBottiglia";
+import { CantinaAccessori } from "@/components/vinea/cantina-accessori/CantinaAccessori";
 import { DettaglioGruppo, RiepilogoGruppoCantina } from "@/components/vinea/GruppoCantina";
 import { Kpi } from "@/components/vinea/Layout";
 import { ValoreNelTempo } from "@/components/vinea/ValoreNelTempo";
@@ -355,6 +356,11 @@ function Cantina() {
           />
         </TabsContent>
       </Tabs>
+
+      {/* Accessori (VPM-015B1): sezione a parte, sotto le bottiglie e non al
+          posto loro. Si mostra solo se la funzione è abilitata nel database;
+          altrimenti non rende nulla. */}
+      <CantinaAccessori />
 
       {/* Contabilità (D3-B): un blocco a parte perché può mancare da solo.
           Sta qui, dopo l'elenco, e non prima: chi apre la Cantina viene a

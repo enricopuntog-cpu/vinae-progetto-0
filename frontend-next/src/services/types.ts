@@ -35,6 +35,15 @@ import type {
   StatoAccessorio,
   StatoAmministrativo,
 } from "@/lib/accessori/accessori";
+import type {
+  AccessorioPersonale,
+  AccessorioPubblico,
+  CategoriaTassonomia,
+  DatiAccessorioPersonale,
+  StatoCantinaAccessori,
+  StatoInterruttoriCantina,
+  VisibilitaAccessorio,
+} from "@/lib/cantina-accessori/cantina-accessori";
 import type { CodiceErroreAuth } from "@/lib/auth/errori-auth";
 import type { ContestoRitornoAuth } from "@/lib/auth/ritorno-auth";
 import type { QuestionnaireState } from "@/lib/market-validation/questionnaire";
@@ -3419,4 +3428,47 @@ export interface AccessoriAdminService {
   impostaImmagini(id: string, percorsi: string[]): Promise<Result<SchedaAccessorioAdmin>>;
   caricaImmagine(accessorioId: string, file: Blob): Promise<Result<string>>;
   cancellaImmagini(percorsi: string[]): Promise<void>;
+}
+
+// ---- Cantina Accessori personale (VPM-015B1) ------------------------------
+// Gli accessori posseduti dall'utente. Il proprietario non e mai un parametro:
+// lo risolve `auth.uid()` nelle porte `cantina_accessori_*`. Nessun prezzo,
+// annuncio, ordine o pagamento: esporre non significa vendere.
+
+export interface CantinaAccessoriService {
+  /** Se la sezione e usabile dal chiamante e se gli esposti sono visibili al pubblico. */
+  stato(): Promise<Result<StatoCantinaAccessori>>;
+  /** Tassonomia Vinea attiva per l'inserimento; indipendente dal catalogo commerciale. */
+  categorie(): Promise<Result<CategoriaTassonomia[]>>;
+  elenco(archiviati: boolean): Promise<Result<AccessorioPersonale[]>>;
+  /** Crea (id nuovo scelto dal client: il tentativo e ripetibile) o aggiorna. Nasce privato. */
+  salva(id: string, dati: DatiAccessorioPersonale): Promise<Result<AccessorioPersonale>>;
+  impostaVisibilita(id: string, visibilita: VisibilitaAccessorio): Promise<Result<AccessorioPersonale>>;
+  archivia(id: string, archivia: boolean): Promise<Result<AccessorioPersonale>>;
+  /** Rimozione definitiva; ritenta la pulizia dei file ora non piu referenziati. */
+  rimuovi(id: string): Promise<Result<void>>;
+  impostaFoto(id: string, percorsi: string[]): Promise<Result<AccessorioPersonale>>;
+  caricaFoto(proprietarioId: string, accessorioId: string, file: Blob): Promise<Result<string>>;
+  cancellaFoto(percorsi: string[]): Promise<void>;
+  /** URL firmate (a tempo) delle foto; i percorsi non firmabili mancano dal risultato. */
+  urlFoto(percorsi: readonly string[]): Promise<Result<Record<string, string>>>;
+}
+
+export interface CantinaAccessoriPubblicaService {
+  /** Gli accessori ESPOSTI di UN profilo noto. Vuoto con gli interruttori spenti. */
+  perProfilo(
+    userId: string,
+    opzioni?: { limite?: number; offset?: number; anteprima?: boolean },
+  ): Promise<Result<AccessorioPubblico[]>>;
+  urlFoto(percorsi: readonly string[]): Promise<Result<Record<string, string>>>;
+}
+
+export interface CantinaAccessoriAdminService {
+  stato(): Promise<Result<StatoInterruttoriCantina>>;
+  /** Accendere richiede il ruolo di rilascio (deciso dal database); spegnere, ogni admin. */
+  imposta(
+    interruttore: "funzione" | "visibilita_pubblica",
+    attivo: boolean,
+    motivo: string,
+  ): Promise<Result<void>>;
 }
