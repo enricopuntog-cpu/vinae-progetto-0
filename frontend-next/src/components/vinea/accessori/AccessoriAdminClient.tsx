@@ -32,6 +32,7 @@ import {
 } from "@/lib/accessori/modulo";
 import { preparaImmagineVetrina } from "@/lib/partner/prepara-immagine-vetrina";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { AnnunciAccessoriAdmin } from "@/components/vinea/accessori-vendita/AnnunciAccessoriAdmin";
 import { CantinaAccessoriAdmin } from "@/components/vinea/cantina-accessori/CantinaAccessoriAdmin";
 import { creaAccessoriAdminService } from "@/services/accessori-service";
 
@@ -140,6 +141,8 @@ export function AccessoriAdminClient() {
       />
 
       <CantinaAccessoriAdmin />
+
+      <AnnunciAccessoriAdmin />
 
       <SezioneSchede
         servizio={servizio}

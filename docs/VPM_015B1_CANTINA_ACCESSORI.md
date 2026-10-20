@@ -178,7 +178,7 @@ commissione) sono decisioni del blocco commerciale (vedi sotto).
   lettura fail-closed) e di contratto
   (`src/lib/cantina-accessori/cantina-accessori-contratto.test.ts`): nessun
   percorso di transazione, nessuna tabella del vino, nessuna variabile d'ambiente,
-  foto sempre firmate, forma della migrazione. Soglia CI dei test: 2980.
+  foto sempre firmate, forma della migrazione. Soglia CI dei test: 2980 (alzata a 3040 da VPM-015B2).
 - Verifica in browser su stack locale a 375 px: inserimento, foto, esposizione,
   profilo e Cantina pubblica, nessuno scroll orizzontale, barra mobile intatta.
 
