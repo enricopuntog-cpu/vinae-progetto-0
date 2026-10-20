@@ -12,7 +12,14 @@
  * dell'header ci porta già. Da ospiti la barra resta quella che era.
  */
 
-export type IconaNavMobile = "home" | "ricerca" | "vendi" | "club" | "cantina" | "account";
+export type IconaNavMobile =
+  | "home"
+  | "ricerca"
+  | "vendi"
+  | "club"
+  | "cantina"
+  | "account"
+  | "accessori";
 
 export type VoceNavMobile = {
   readonly to: string;
@@ -38,8 +45,31 @@ export const NAV_MOBILE_AUTENTICATA: readonly VoceNavMobile[] = [
   { to: "/cantina", label: "Cantina", icona: "cantina", exact: false },
 ] as const;
 
-export const navMobile = (autenticato: boolean): readonly VoceNavMobile[] =>
-  autenticato ? NAV_MOBILE_AUTENTICATA : NAV_MOBILE_OSPITE;
+/**
+ * Accessori al posto di Home (VPM-015A, decisione del titolare: futura, da non
+ * attivare finche il catalogo non e autorizzato). Il numero di posizioni non
+ * cambia: la quinta voce resta quella che era e il marchio nell'header porta
+ * gia alla Home, quindi nessuna destinazione scompare. Con l'opzione spenta
+ * (il default) le due barre sono ESATTAMENTE quelle di prima.
+ */
+export const VOCE_ACCESSORI: VoceNavMobile = {
+  to: "/accessori",
+  label: "Accessori",
+  icona: "accessori",
+  exact: false,
+} as const;
+
+export type OpzioniNavMobile = { readonly accessoriAlPostoDiHome?: boolean };
+
+export const navMobile = (
+  autenticato: boolean,
+  opzioni: OpzioniNavMobile = {},
+): readonly VoceNavMobile[] => {
+  const base = autenticato ? NAV_MOBILE_AUTENTICATA : NAV_MOBILE_OSPITE;
+  return opzioni.accessoriAlPostoDiHome
+    ? base.map((voce) => (voce.icona === "home" ? VOCE_ACCESSORI : voce))
+    : base;
+};
 
 /**
  * `/` e `/home` sono la stessa casella della barra: la landing pubblica e la

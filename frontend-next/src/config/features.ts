@@ -124,3 +124,23 @@ export const marketValidationQuestionnaireV2AbilitatoServer = (): boolean =>
  */
 export const imballaggioAbilitatoServer = (): boolean =>
   valoreFlagEsattamenteTrue(process.env.PACKAGING_ENABLED);
+
+/**
+ * Accessori Vinea (VPM-015A). La variabile pubblica decide soltanto se la
+ * voce di navigazione compare; il gate autoritativo e `ACCESSORI_ENABLED`
+ * (`lib/accessori/gate.ts`), e sotto di esso l'interruttore nel database.
+ * Spenta di default: solo la stringa esatta `true` la accende.
+ */
+export const ACCESSORI_UI_ABILITATA = valoreFlagEsattamenteTrue(
+  process.env.NEXT_PUBLIC_ACCESSORI_ENABLED,
+);
+
+/**
+ * Accessori al posto di Home nella barra mobile. Flag a parte, spenta di
+ * default, e subordinata alla precedente: da sola non fa nulla. Cambia la barra
+ * di tutti gli utenti mobile, quindi si accende con una decisione propria e solo
+ * dopo l'autorizzazione del catalogo.
+ */
+export const ACCESSORI_NAV_MOBILE_ABILITATA =
+  ACCESSORI_UI_ABILITATA &&
+  valoreFlagEsattamenteTrue(process.env.NEXT_PUBLIC_ACCESSORI_NAV_MOBILE);
