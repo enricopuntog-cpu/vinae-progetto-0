@@ -160,6 +160,24 @@ categoria futura nasce chiusa. In più il venditore dichiara, per l'invio in
 revisione, che l'articolo non è alcolico né regolamentato (armi, sciabole).
 Alcolici, sciabole e articoli regolamentati non sono vendibili in nessun caso.
 
+**Gate di rilascio: ammessa alla preparazione ≠ autorizzata alla vendita.** Nella
+migrazione 015B2 la colonna `private.annunci_accessori_categorie.vendibile` significa
+soltanto «la categoria può avere una **bozza** di annuncio»: è un filtro di
+preparazione, non un'autorizzazione commerciale, e non apre nulla (la pubblicazione
+resta chiusa, `pubblicazione_chiusa`, e `pubblicazione_attiva` ha `CHECK false`). Il
+nome della colonna non si cambia (migrazione già distribuita, congelata). Per il
+rilascio successivo vale questo gate, da non aggirare:
+
+1. la pubblicazione commerciale non deve leggere `vendibile` come consenso: serve un
+   criterio proprio, introdotto da una migrazione nuova e deciso dal titolare
+   (decisione 2 del §10), con riesame esplicito categoria per categoria;
+2. nessuna categoria diventa pubblicabile per il solo fatto di avere `vendibile =
+   true` oggi; nessun backfill automatico dalle righe esistenti;
+3. l'apertura resta dietro il ruolo `accessori_release` e il marcatore
+   transazionale, come l'interruttore di preparazione;
+4. le decisioni di spedizione, IVA/condizioni e moderazione (§10, punti 1, 3 e 4)
+   devono essere chiuse prima che un solo annuncio possa passare a pubblicato.
+
 ## 6. Interruttore e percorso di pubblicazione
 
 - `preparazione_attiva` (database, **spenta di default**): bozze e revisione.
