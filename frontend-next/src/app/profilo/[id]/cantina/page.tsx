@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, MapPin, Settings } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { AvatarPersona } from "@/components/vinea/AvatarPersona";
+import { AccessoriCantinaPubblici } from "@/components/vinea/cantina-accessori/AccessoriCantinaPubblici";
 import { CollezionePubblica } from "@/components/vinea/profilo/CollezionePubblica";
 import { SeguiCantinaButton } from "@/components/vinea/profilo/SeguiCantinaButton";
 import { ValoreCantinaPubblica } from "@/components/vinea/profilo/ValoreCantinaPubblica";
@@ -13,6 +14,7 @@ import {
   paginaDiBottiglie,
   vistaCollezione,
 } from "@/lib/profilo/cantina-pubblica-vista";
+import { leggiAccessoriPubblici } from "@/lib/cantina-accessori/pubblici-server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { creaVetrinaPartnerPubblicaService } from "@/services/partner-vetrina-service";
 import { creaPublicProfileService } from "@/services/public-profile-service";
@@ -71,6 +73,9 @@ export default async function Page({
    * un guasto del valore non tocchi la collezione.
    */
   const promessaValore = service.valoreCantinaPubblica(id);
+  // Gli accessori ESPOSTI (VPM-015B1) viaggiano con la collezione ma non ne
+  // dipendono: la funzione non lancia mai, e vuota significa «nessun blocco».
+  const promessaAccessori = leggiAccessoriPubblici(client, id, { limite: 48 });
   const esitoCantina = await service.cantinaPubblica(id, finestraCollezione(pagina));
 
   if (!esitoCantina.ok) {
@@ -95,6 +100,7 @@ export default async function Page({
 
   const collezione = paginaDiBottiglie(esitoCantina.data);
   const esitoValore = await promessaValore;
+  const accessoriCantina = await promessaAccessori;
   /*
    * Fail closed, in una riga sola. Una lettura fallita e una preferenza
    * disattivata portano allo stesso posto — nessun blocco — e non a un avviso
@@ -121,6 +127,7 @@ export default async function Page({
         altraPagina={collezione.altraPagina}
         profiloProprio={profiloProprio}
       />
+      <AccessoriCantinaPubblici accessori={accessoriCantina.accessori} url={accessoriCantina.url} />
     </div>
   );
 }

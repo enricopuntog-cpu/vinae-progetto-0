@@ -2,16 +2,22 @@ import Link from "next/link";
 import { BadgeCheck, MapPin } from "lucide-react";
 import { notFound } from "next/navigation";
 import { AvatarPersona } from "@/components/vinea/AvatarPersona";
+import { AccessoriCantinaPubblici } from "@/components/vinea/cantina-accessori/AccessoriCantinaPubblici";
 import { CantinaPubblica } from "@/components/vinea/profilo/CantinaPubblica";
 import { ReportDialog } from "@/components/vinea/ReportDialog";
 import { ReputazionePubblica } from "@/components/vinea/profilo/ReputazionePubblica";
 import { WineCard } from "@/components/vinea/WineCard";
 import { esperienzaLabels } from "@/data/onboarding";
+import { routes } from "@/config/routes";
 import { ANTEPRIMA_CANTINA_PUBBLICA } from "@/lib/profilo/cantina-pubblica-vista";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { VetrinaPartner } from "@/components/vinea/partner/VetrinaPartner";
 import { creaVetrinaPartnerPubblicaService } from "@/services/partner-vetrina-service";
+import { leggiAccessoriPubblici } from "@/lib/cantina-accessori/pubblici-server";
 import { creaPublicProfileService } from "@/services/public-profile-service";
+
+/** Quanti accessori esposti mostra il profilo prima del rinvio alla Cantina pubblica. */
+const ANTEPRIMA_ACCESSORI_PROFILO = 6;
 
 /** La lettura che un ramo non fa: un esito vuoto, già risolto. */
 const NESSUNA_LETTURA = { ok: true as const, data: [] as never[] };
@@ -68,13 +74,16 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   // commerciale, non una collezione, e gli annunci personali del titolare non
   // sono prodotti dell'attività (il catalogo arriva con il Blocco C). Al loro
   // posto arrivano i Club del titolare.
-  const [esitoCantina, esitoAnnunci, esitoRecensioni, esitoClub, esitoCatalogo] = await Promise.all([
+  const [esitoCantina, esitoAnnunci, esitoRecensioni, esitoClub, esitoCatalogo, accessoriCantina] = await Promise.all([
     vetrina ? NESSUNA_LETTURA : service.cantinaPubblica(id, { limite: ANTEPRIMA_CANTINA_PUBBLICA }),
     vetrina ? NESSUNA_LETTURA : service.annunciAttivi(id),
     service.recensioni(id),
     vetrina ? servizioVetrina.clubDelTitolare(id) : NESSUNA_LETTURA,
     // VP-C: solo prodotti commerciali del Partner, mai annunci personali.
     vetrina ? servizioVetrina.catalogo(vetrina.partnerId) : NESSUNA_LETTURA,
+    // Accessori ESPOSTI dal proprietario (VPM-015B1): un elenco vuoto, per ogni
+    // guasto o interruttore spento, non toglie nulla alla pagina.
+    vetrina ? Promise.resolve({ accessori: [], url: {} }) : leggiAccessoriPubblici(client, id, { limite: ANTEPRIMA_ACCESSORI_PROFILO + 1 }),
   ]);
   // Ogni sezione degrada per conto proprio: una Cantina che non si legge
   // toglie la Cantina, non il profilo. È la stessa scelta già fatta per annunci
@@ -193,6 +202,16 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         due.
       */}
       <CantinaPubblica profiloId={profilo.userId} bottiglie={cantina} />
+
+      <AccessoriCantinaPubblici
+        accessori={accessoriCantina.accessori.slice(0, ANTEPRIMA_ACCESSORI_PROFILO)}
+        url={accessoriCantina.url}
+        collegamento={
+          accessoriCantina.accessori.length > ANTEPRIMA_ACCESSORI_PROFILO
+            ? { href: routes.cantinaPubblica(profilo.userId), etichetta: "Tutta la cantina" }
+            : undefined
+        }
+      />
 
       <section aria-labelledby="annunci-attivi">
         <div className="mb-4 flex items-end justify-between gap-4">
