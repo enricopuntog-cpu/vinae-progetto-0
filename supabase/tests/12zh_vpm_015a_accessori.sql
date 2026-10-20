@@ -494,7 +494,7 @@ begin
     v_n::text);
 
   -- 25: separazione dal vino e dal denaro: nessun legame, nessuna colonna economica.
-  perform pg_temp.registra(25, 'separazione: nessuna FK verso o da listings, orders, payments, wines, bottle_units; riferimenti solo a profiles e fra tabelle accessori (unica eccezione: la Cantina Accessori personale 015B1, che punta a tassonomia e schede)',
+  perform pg_temp.registra(25, 'separazione: nessuna FK verso o da listings, orders, payments, wines, bottle_units; riferimenti solo a profiles e fra tabelle accessori (uniche eccezioni: la Cantina Accessori personale 015B1, che punta a tassonomia e schede, e le regole di vendita per categoria 015B2, che puntano alla tassonomia)',
     not exists (
       select 1 from pg_constraint k
       join pg_class cr on cr.oid = k.conrelid join pg_namespace nr on nr.oid = cr.relnamespace
@@ -504,7 +504,7 @@ begin
               and not (nf.nspname = 'private' and cf.relname like 'accessori%')
               and not (nf.nspname = 'public' and cf.relname = 'profiles'))
           or (nf.nspname = 'private' and cf.relname like 'accessori%'
-              and not (nr.nspname = 'private' and cr.relname in ('cantina_accessori'))
+              and not (nr.nspname = 'private' and cr.relname in ('cantina_accessori', 'annunci_accessori_categorie'))
               and not (nr.nspname = 'private' and cr.relname like 'accessori%')))),
     '');
 

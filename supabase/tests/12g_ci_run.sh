@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12zi) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12zj) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
@@ -394,6 +394,25 @@ run_grid "12zh Accessori fondazione Beta" 12zh_vpm_015a_accessori.sql 3
 # esposizione solo per scelta esplicita, proiezione pubblica a campi chiusi,
 # bucket Storage privato per proprietario. Fixture `.test` sintetiche; ROLLBACK.
 run_grid "12zi Cantina Accessori personale" 12zi_vpm_015b1_cantina_accessori.sql 3
+
+# VPM-015B2 Annunci Accessori (migrazione 20261021150000): margini versionati
+# per dominio e classe (accessori privato 10%, Partner 15%, vino invariato 8%/15%),
+# formula e parametri di pagamento unici, nessuna vendita (stati bozza /
+# in_revisione / ritirato, pubblicazione chiusa anche via RPC), quantita offerta
+# <= posseduta per ogni writer, un annuncio aperto per accessorio, Partner
+# attivo/sospeso/revocato esclusi dal percorso personale, categorie fail-closed,
+# interruttore nel database spento di default. Fixture `.test` sintetiche; ROLLBACK.
+run_grid "12zj Annunci Accessori" 12zj_vpm_015b2_annunci_accessori.sql 3
+
+# Stessa famiglia su sessioni separate: annuncio vs riduzione della quantita,
+# riduzione vs annuncio, due annunci sullo stesso accessorio, retry con lo stesso
+# id, archiviazione vs annuncio (e viceversa). Fixture `@conc-12zj.test`
+# committate e rimosse in trap, residui 0; gli interruttori si accendono solo per
+# la durata dello script e il trap li ripristina e li verifica.
+conc_12zj="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zj_vpm_015b2_concorrenza.sh")" \
+  || { printf '%s\n' "$conc_12zj"; die "12zj concorrenza: fallita."; }
+printf '%s\n' "$conc_12zj"
+summary "- $(printf '%s\n' "$conc_12zj" | tail -n 1)"
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
