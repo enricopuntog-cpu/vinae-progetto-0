@@ -28,6 +28,8 @@ import {
   type ModuloCantinaAccessorio,
   type StatoCantinaAccessori,
 } from "@/lib/cantina-accessori/cantina-accessori";
+import { VenditaAccessorio } from "@/components/vinea/accessori-vendita/VenditaAccessorio";
+import { VenditaAccessoriProvider } from "@/components/vinea/accessori-vendita/VenditaAccessoriProvider";
 import { preparaImmagineVetrina } from "@/lib/partner/prepara-immagine-vetrina";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { creaAccessoriLetturaService } from "@/services/accessori-service";
@@ -170,6 +172,7 @@ export function CantinaAccessori() {
   };
 
   return (
+    <VenditaAccessoriProvider>
     <section aria-labelledby="cantina-accessori-titolo" className="space-y-4" data-testid="cantina-accessori">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -282,6 +285,7 @@ export function CantinaAccessori() {
                     <Trash2 aria-hidden /> Rimuovi
                   </Button>
                 </div>
+                <VenditaAccessorio accessorio={a} />
               </div>
             </li>
           ))}
@@ -342,6 +346,7 @@ export function CantinaAccessori() {
         </DialogContent>
       </Dialog>
     </section>
+    </VenditaAccessoriProvider>
   );
 }
 

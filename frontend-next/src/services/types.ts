@@ -36,6 +36,14 @@ import type {
   StatoAmministrativo,
 } from "@/lib/accessori/accessori";
 import type {
+  AnnuncioAccessorio,
+  DatiAnnuncioAccessorio,
+  PreventivoAnnuncioAccessori,
+  StatoAnnuncioAccessorio,
+  StatoInterruttoreAnnunci,
+  StatoVenditaAccessori,
+} from "@/lib/accessori-vendita/annunci-accessori";
+import type {
   AccessorioPersonale,
   AccessorioPubblico,
   CategoriaTassonomia,
@@ -3461,6 +3469,34 @@ export interface CantinaAccessoriPubblicaService {
     opzioni?: { limite?: number; offset?: number; anteprima?: boolean },
   ): Promise<Result<AccessorioPubblico[]>>;
   urlFoto(percorsi: readonly string[]): Promise<Result<Record<string, string>>>;
+}
+
+// ---- Annunci Accessori (VPM-015B2) ----------------------------------------
+// Preparazione della futura vendita di un accessorio posseduto. Il venditore non
+// e mai un parametro (lo risolve auth.uid()); classe, margine e parametri di
+// pagamento sono del database. Nessun metodo pubblica, acquista o ordina: lo
+// stato "attivo" non esiste e il contratto di test lo difende.
+
+export interface AnnunciAccessoriService {
+  stato(): Promise<Result<StatoVenditaAccessori>>;
+  /** Gli annunci del chiamante: aperti (bozza, in revisione) o ritirati. */
+  elenco(ritirati: boolean): Promise<Result<AnnuncioAccessorio[]>>;
+  /** Preventivo autorevole: prezzo e quantita sono le sole scelte del client. */
+  preventivo(
+    prezzoUnitarioCents: number,
+    quantita: number,
+    cantinaId?: string,
+  ): Promise<Result<PreventivoAnnuncioAccessori>>;
+  /** Crea (id scelto dal client: il tentativo e ripetibile) o aggiorna una bozza. */
+  salva(id: string, dati: DatiAnnuncioAccessorio): Promise<Result<AnnuncioAccessorio>>;
+  /** bozza <-> in_revisione, e ritiro. Mai uno stato acquistabile. */
+  transizione(id: string, a: StatoAnnuncioAccessorio): Promise<Result<AnnuncioAccessorio>>;
+}
+
+export interface AnnunciAccessoriAdminService {
+  stato(): Promise<Result<StatoInterruttoreAnnunci>>;
+  /** Accendere richiede il ruolo di rilascio (deciso dal database); spegnere, ogni admin. */
+  imposta(attiva: boolean, motivo: string): Promise<Result<void>>;
 }
 
 export interface CantinaAccessoriAdminService {
