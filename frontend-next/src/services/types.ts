@@ -33,6 +33,7 @@ import type {
   SchedaAccessorio,
   SchedaAccessorioAdmin,
   StatoAccessorio,
+  StatoAmministrativo,
 } from "@/lib/accessori/accessori";
 import type { CodiceErroreAuth } from "@/lib/auth/errori-auth";
 import type { ContestoRitornoAuth } from "@/lib/auth/ritorno-auth";
@@ -3394,11 +3395,22 @@ export interface AccessoriLetturaService {
   elenco(categoriaSlug: string | null, anteprima: boolean): Promise<Result<SchedaAccessorio[]>>;
   /** `null` = nessuna scheda visibile con quell'indirizzo. */
   dettaglio(slug: string, anteprima: boolean): Promise<Result<SchedaAccessorio | null>>;
+  /**
+   * URL firmate (a tempo) delle foto, indicizzate per percorso. Il bucket e
+   * privato: i percorsi non firmabili dal chiamante mancano dal risultato.
+   */
+  urlImmagini(percorsi: readonly string[]): Promise<Result<Record<string, string>>>;
 }
 
 export interface AccessoriAdminService {
-  /** Interruttore di visibilita pubblica nel database (sola lettura da UI). */
-  visibilitaPubblica(): Promise<Result<boolean>>;
+  /** Interruttore di visibilita pubblica e diritto di rilascio del chiamante. */
+  stato(): Promise<Result<StatoAmministrativo>>;
+  /**
+   * Accende (solo con il ruolo di rilascio, deciso dal database) o spegne (ogni
+   * admin) la visibilita pubblica. Il motivo e obbligatorio e registrato.
+   */
+  impostaVisibilita(attiva: boolean, motivo: string): Promise<Result<boolean>>;
+  urlImmagini(percorsi: readonly string[]): Promise<Result<Record<string, string>>>;
   categorie(): Promise<Result<CategoriaAdmin[]>>;
   salvaCategoria(id: string | null, dati: DatiCategoriaAccessorio): Promise<Result<CategoriaAdmin>>;
   elenco(): Promise<Result<SchedaAccessorioAdmin[]>>;

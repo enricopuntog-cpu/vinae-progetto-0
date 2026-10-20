@@ -3,7 +3,6 @@ import { ArrowLeft, ImageOff } from "lucide-react";
 import {
   ETICHETTE_CONDIZIONE,
   percorsiAccessori,
-  urlImmagineAccessorio,
   type SchedaAccessorio,
 } from "@/lib/accessori/accessori";
 import type { ModalitaAccessori } from "@/lib/accessori/gate";
@@ -23,15 +22,18 @@ export function DettaglioAccessorio({
   scheda,
   modalita,
   stato,
+  immagini: urlFirmate = {},
 }: {
   scheda: SchedaAccessorio;
   modalita: ModalitaAccessori;
   /** Solo in anteprima: «Bozza» ecc., per non scambiarla con una scheda pubblica. */
   stato?: string | null;
+  /** URL FIRMATE delle foto, per percorso: il bucket e privato. */
+  immagini?: Readonly<Record<string, string>>;
 }) {
   const immagini = scheda.immagini
-    .map((p) => urlImmagineAccessorio(p))
-    .filter((u): u is string => u !== null);
+    .map((p) => urlFirmate[p])
+    .filter((u): u is string => typeof u === "string");
   const attributi = Object.entries(scheda.attributi);
   const { categoria } = scheda;
 

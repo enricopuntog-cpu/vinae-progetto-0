@@ -8,7 +8,16 @@ const ID = "11111111-1111-4111-8111-111111111111";
 const IMG = "22222222-2222-4222-8222-222222222222";
 const PERCORSO = `${ID}/${IMG}.webp`;
 
-function client(risposte: Risposta[], storage?: { upload?: Risposta; remove?: Risposta }) {
+type RigaFirma = { path: string | null; signedUrl: string; error: string | null };
+
+function client(
+  risposte: Risposta[],
+  storage?: {
+    upload?: Risposta;
+    remove?: Risposta;
+    firma?: { data: RigaFirma[] | null; error: { message: string } | null };
+  },
+) {
   const chiamate: Array<{ tipo: string; args: unknown[] }> = [];
   const c = {
     rpc: (nome: string, args?: unknown) => {
@@ -30,6 +39,13 @@ function client(risposte: Risposta[], storage?: { upload?: Risposta; remove?: Ri
         remove: (...a: unknown[]) => {
           chiamate.push({ tipo: `storage:${bucket}.remove`, args: a });
           return Promise.resolve(storage?.remove ?? { data: [], error: null });
+        },
+        createSignedUrls: (...a: unknown[]) => {
+          chiamate.push({ tipo: `storage:${bucket}.createSignedUrls`, args: a });
+          return Promise.resolve(storage?.firma ?? { data: [], error: null });
+        },
+        getPublicUrl: () => {
+          throw new Error("il bucket e privato: nessun URL pubblico");
         },
       }),
     },
@@ -145,11 +161,43 @@ describe("porte admin", () => {
     if (!r.ok) expect(r.error).toContain("già usato");
   });
 
-  it("legge lo stato della visibilita pubblica, senza mai scriverlo", async () => {
-    const { c, chiamate } = client([{ data: { visibilita_pubblica: false }, error: null }]);
-    const r = await creaAccessoriAdminService(c).visibilitaPubblica();
-    expect(r).toEqual({ ok: true, data: false });
+  it("legge lo stato della visibilita e il diritto di rilascio", async () => {
+    const { c, chiamate } = client([
+      { data: { visibilita_pubblica: false, puo_rilasciare: true }, error: null },
+    ]);
+    const r = await creaAccessoriAdminService(c).stato();
+    expect(r).toEqual({ ok: true, data: { visibilitaPubblica: false, puoRilasciare: true } });
     expect(chiamate.map((x) => x.tipo)).toEqual(["rpc:accessori_admin_stato"]);
+  });
+
+  it("uno stato illeggibile e un guasto: nessun diritto di rilascio per default", async () => {
+    const { c } = client([{ data: { visibilita_pubblica: false }, error: null }]);
+    const r = await creaAccessoriAdminService(c).stato();
+    expect(r.ok).toBe(false);
+  });
+
+  it("accende e spegne solo dalla porta di rilascio, con il motivo", async () => {
+    const { c, chiamate } = client([
+      { data: { visibilita_pubblica: true }, error: null },
+      { data: { visibilita_pubblica: false }, error: null },
+    ]);
+    const s = creaAccessoriAdminService(c);
+    expect(await s.impostaVisibilita(true, "Approvato dal titolare")).toEqual({ ok: true, data: true });
+    expect(await s.impostaVisibilita(false, "Ritiro")).toEqual({ ok: true, data: false });
+    expect(chiamate.map((x) => x.tipo)).toEqual([
+      "rpc:accessori_admin_visibilita_imposta",
+      "rpc:accessori_admin_visibilita_imposta",
+    ]);
+    expect(chiamate[0].args[0]).toEqual({ p_attiva: true, p_motivo: "Approvato dal titolare" });
+  });
+
+  it("senza il ruolo di rilascio l'accensione torna un errore comprensibile", async () => {
+    const { c } = client([
+      { data: null, error: { code: "42501", hint: "rilascio_non_autorizzato", message: "x" } },
+    ]);
+    const r = await creaAccessoriAdminService(c).impostaVisibilita(true, "Prova");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain("titolare");
   });
 
   it("carica l'immagine come WebP nella cartella della scheda, senza sovrascrivere", async () => {
@@ -179,5 +227,62 @@ describe("porte admin", () => {
     const { c, chiamate } = client([]);
     await creaAccessoriAdminService(c).cancellaImmagini([]);
     expect(chiamate).toHaveLength(0);
+  });
+});
+
+describe("foto private: URL firmate", () => {
+  const ALTRO = `${ID}/33333333-3333-4333-8333-333333333333.webp`;
+
+  it("firma solo percorsi validi e unici, con una durata breve", async () => {
+    const { c, chiamate } = client([], {
+      firma: {
+        data: [{ path: PERCORSO, signedUrl: "https://s.test/firmata-1", error: null }],
+        error: null,
+      },
+    });
+    const r = await creaAccessoriLetturaService(c).urlImmagini([PERCORSO, PERCORSO, "../x.webp", "https://e.test/a.webp"]);
+    expect(r).toEqual({ ok: true, data: { [PERCORSO]: "https://s.test/firmata-1" } });
+    expect(chiamate).toHaveLength(1);
+    expect(chiamate[0].tipo).toBe("storage:accessori-media.createSignedUrls");
+    expect(chiamate[0].args[0]).toEqual([PERCORSO]);
+    const durata = chiamate[0].args[1] as number;
+    expect(durata).toBeGreaterThan(0);
+    expect(durata).toBeLessThanOrEqual(3600);
+  });
+
+  it("un percorso non firmabile (policy) manca dal risultato, senza errore", async () => {
+    const { c } = client([], {
+      firma: {
+        data: [
+          { path: PERCORSO, signedUrl: "https://s.test/ok", error: null },
+          { path: ALTRO, signedUrl: "", error: "Object not found" },
+        ],
+        error: null,
+      },
+    });
+    const r = await creaAccessoriLetturaService(c).urlImmagini([PERCORSO, ALTRO]);
+    expect(r).toEqual({ ok: true, data: { [PERCORSO]: "https://s.test/ok" } });
+  });
+
+  it("senza percorsi non chiama Storage", async () => {
+    const { c, chiamate } = client([]);
+    const r = await creaAccessoriLetturaService(c).urlImmagini([]);
+    expect(r).toEqual({ ok: true, data: {} });
+    expect(chiamate).toHaveLength(0);
+  });
+
+  it("un guasto di Storage e un errore generico, senza dettagli interni", async () => {
+    const { c } = client([], { firma: { data: null, error: { message: "bucket accessori-media interno" } } });
+    const r = await creaAccessoriLetturaService(c).urlImmagini([PERCORSO]);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).not.toContain("bucket");
+  });
+
+  it("anche il servizio admin firma, e senza client non lancia", async () => {
+    const { c } = client([], {
+      firma: { data: [{ path: PERCORSO, signedUrl: "https://s.test/a", error: null }], error: null },
+    });
+    expect((await creaAccessoriAdminService(c).urlImmagini([PERCORSO])).ok).toBe(true);
+    expect((await creaAccessoriAdminService(null).urlImmagini([PERCORSO])).ok).toBe(false);
   });
 });

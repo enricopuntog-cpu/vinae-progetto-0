@@ -7,9 +7,10 @@ import {
   parseElenco,
   parseScheda,
   parseSchedaAdmin,
+  parseStatoAmministrativo,
+  percorsoImmagineValido,
   slugDaNome,
   slugValido,
-  urlImmagineAccessorio,
 } from "./accessori";
 
 const ID = "11111111-1111-4111-8111-111111111111";
@@ -123,15 +124,31 @@ describe("categorie", () => {
 });
 
 describe("immagini e indirizzi", () => {
-  it("costruisce l'URL pubblico solo per percorsi della forma attesa", () => {
-    expect(urlImmagineAccessorio(PERCORSO, "https://abc.supabase.co")).toBe(
-      `https://abc.supabase.co/storage/v1/object/public/accessori-media/${PERCORSO}`,
-    );
-    expect(urlImmagineAccessorio("../x.webp", "https://abc.supabase.co")).toBeNull();
-    expect(urlImmagineAccessorio(`${ID}/foto.webp`, "https://abc.supabase.co")).toBeNull();
-    expect(urlImmagineAccessorio(PERCORSO, "javascript:alert(1)")).toBeNull();
-    expect(urlImmagineAccessorio(null, "https://abc.supabase.co")).toBeNull();
-    expect(urlImmagineAccessorio(PERCORSO, "")).toBeNull();
+  it("accetta come percorso di foto solo la forma <scheda>/<immagine>.webp", () => {
+    expect(percorsoImmagineValido(PERCORSO)).toBe(true);
+    expect(percorsoImmagineValido("../x.webp")).toBe(false);
+    expect(percorsoImmagineValido(`${ID}/foto.webp`)).toBe(false);
+    expect(percorsoImmagineValido(`${PERCORSO}/../x`)).toBe(false);
+    expect(percorsoImmagineValido("https://esempio.test/x.webp")).toBe(false);
+    expect(percorsoImmagineValido(null)).toBe(false);
+    expect(percorsoImmagineValido(undefined)).toBe(false);
+  });
+
+  it("legge lo stato amministrativo solo se completo e tipizzato", () => {
+    expect(parseStatoAmministrativo({ visibilita_pubblica: false, puo_rilasciare: true })).toEqual({
+      visibilitaPubblica: false,
+      puoRilasciare: true,
+    });
+    // Un solo campo, o un tipo diverso, non vale: nessun default permissivo.
+    expect(parseStatoAmministrativo({ visibilita_pubblica: false })).toBeNull();
+    expect(parseStatoAmministrativo({ visibilita_pubblica: "false", puo_rilasciare: true })).toBeNull();
+    expect(parseStatoAmministrativo({ visibilita_pubblica: true, puo_rilasciare: 1 })).toBeNull();
+    expect(parseStatoAmministrativo(null)).toBeNull();
+  });
+
+  it("il rilascio negato ha un messaggio chiaro", () => {
+    const m = messaggioErroreAccessori({ code: "42501", hint: "rilascio_non_autorizzato" }, "ricaduta");
+    expect(m).toContain("titolare");
   });
 
   it("il nome di un file nuovo sta nella cartella della scheda", () => {

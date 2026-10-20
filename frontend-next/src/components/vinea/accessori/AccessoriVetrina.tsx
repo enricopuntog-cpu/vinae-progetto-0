@@ -5,7 +5,6 @@ import {
   ETICHETTE_CONDIZIONE,
   ETICHETTE_STATO,
   percorsiAccessori,
-  urlImmagineAccessorio,
   type CategoriaAccessorio,
   type SchedaAccessorio,
 } from "@/lib/accessori/accessori";
@@ -84,12 +83,14 @@ function SegnapostoImmagine() {
 export function SchedaAccessorioCard({
   scheda,
   stato,
+  immagine = null,
 }: {
   scheda: SchedaAccessorio;
   /** Solo in anteprima: contrassegna le bozze. */
   stato?: string | null;
+  /** URL FIRMATA della prima foto (il bucket e privato); `null` = segnaposto. */
+  immagine?: string | null;
 }) {
-  const immagine = urlImmagineAccessorio(scheda.immagini[0]);
   return (
     <li>
       <Link
@@ -209,6 +210,7 @@ export function AccessoriVetrina({
   corrente,
   modalita,
   vuoto,
+  immagini = {},
 }: {
   titolo: string;
   introduzione: string;
@@ -217,6 +219,8 @@ export function AccessoriVetrina({
   corrente: string | null;
   modalita: ModalitaAccessori;
   vuoto: { titolo: string; messaggio: string };
+  /** URL firmate delle foto, per percorso (vedi `urlImmagini` del servizio). */
+  immagini?: Readonly<Record<string, string>>;
 }) {
   return (
     <main id="contenuto-principale" className="mx-auto max-w-6xl px-4 py-8 md:py-12">
@@ -262,6 +266,7 @@ export function AccessoriVetrina({
             <SchedaAccessorioCard
               key={s.slug}
               scheda={s}
+              immagine={immagini[s.immagini[0] ?? ""] ?? null}
               stato={s.stato && s.stato !== "pubblicato" ? ETICHETTE_STATO[s.stato] : null}
             />
           ))}

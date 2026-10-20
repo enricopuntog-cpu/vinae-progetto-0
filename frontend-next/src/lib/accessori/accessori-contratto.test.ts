@@ -45,6 +45,10 @@ const codiceAccessori = (): Array<{ file: string; codice: string }> =>
   });
 
 const MIGRAZIONE = "supabase/migrations/20261020120000_vpm_015a_accessori_fondazione.sql";
+// Correttiva: rilascio riservato al titolare e foto private. La precedente e
+// gia distribuita, quindi congelata.
+const MIGRAZIONE_RILASCIO =
+  "supabase/migrations/20261020170000_vpm_015a_accessori_rilascio_e_media_privati.sql";
 
 describe("Accessori: nessun percorso di transazione", () => {
   it("il codice degli Accessori non importa checkout, ordini, proposte, pagamenti o annunci", () => {
@@ -89,10 +93,29 @@ describe("Accessori: nessun percorso di transazione", () => {
     expect(servizio).not.toMatch(/service_role|SERVICE_ROLE/);
   });
 
-  it("il servizio non espone una scrittura della visibilita pubblica", () => {
+  it("la visibilita pubblica si scrive da un solo punto del servizio e da un solo componente, con conferma scritta", () => {
     const servizio = senzaCommenti(leggi("src/services/accessori-service.ts"));
-    expect(servizio).not.toContain("accessori_admin_visibilita_imposta");
+    expect(servizio.match(/rpc\(\s*"accessori_admin_visibilita_imposta"/g) ?? []).toHaveLength(1);
     expect(servizio).toContain("accessori_admin_stato");
+    // L'unico chiamante dell'accensione e il pannello di rilascio, e solo per
+    // chi il database dichiara abilitato, dopo una parola di conferma.
+    const chiamanti = codiceAccessori()
+      .filter((c) => c.codice.includes("impostaVisibilita("))
+      .map((c) => c.file.replace(/\\/g, "/").split("/").pop());
+    // La definizione sta nel servizio; l'unico chiamante e il pannello admin.
+    expect(chiamanti.sort()).toEqual(["AccessoriAdminClient.tsx", "accessori-service.ts"]);
+    const admin = senzaCommenti(leggi("src/components/vinea/accessori/AccessoriAdminClient.tsx"));
+    expect(admin).toContain("stato.puoRilasciare");
+    expect(admin).toContain("conferma !== PAROLA_DI_RILASCIO");
+  });
+
+  it("le foto sono sempre firmate: nessun URL pubblico dello Storage nel codice degli Accessori", () => {
+    for (const { file, codice } of codiceAccessori()) {
+      expect({ file, trovato: /getPublicUrl|\/object\/public\//.test(codice) }).toEqual({ file, trovato: false });
+    }
+    const servizio = senzaCommenti(leggi("src/services/accessori-service.ts"));
+    expect(servizio).toContain("createSignedUrls");
+    expect(servizio).toContain("DURATA_URL_FIRMATA_SECONDI");
   });
 });
 
@@ -132,24 +155,35 @@ describe("Accessori: gate e feature flag spenti di default", () => {
     );
   });
 
-  it("la voce di navigazione e filtrata dalla flag pubblica, solo sul desktop", () => {
+  it("la voce desktop e filtrata dalla flag pubblica; sul mobile Accessori sostituisce Home solo con la sua flag, subordinata", () => {
     const layout = leggi("src/components/vinea/Layout.tsx");
     expect(layout).toContain('ACCESSORI_UI_ABILITATA || voce.to !== "/accessori"');
-    expect(leggi("src/lib/shell/navigazione-mobile.ts")).not.toContain("/accessori");
+    const modello = senzaCommenti(leggi("src/lib/shell/navigazione-mobile.ts"));
+    // Le liste di base non nominano /accessori: compare solo nella voce di
+    // sostituzione, applicata soltanto se l'opzione e accesa.
+    const liste = modello.slice(modello.indexOf("NAV_MOBILE_OSPITE"), modello.indexOf("export const VOCE_ACCESSORI"));
+    expect(liste).not.toContain("/accessori");
+    expect(modello).toContain("opzioni.accessoriAlPostoDiHome");
+    expect(senzaCommenti(leggi("src/config/features.ts"))).toMatch(
+      /ACCESSORI_NAV_MOBILE_ABILITATA =\s*ACCESSORI_UI_ABILITATA &&\s*valoreFlagEsattamenteTrue\(process\.env\.NEXT_PUBLIC_ACCESSORI_NAV_MOBILE\)/,
+    );
   });
 
-  it(".env.example e docs/ENVIRONMENT.md documentano le due flag, spente", () => {
+  it(".env.example e docs/ENVIRONMENT.md documentano le tre flag, spente", () => {
     const esempio = leggi(".env.example");
     expect(esempio).toMatch(/^NEXT_PUBLIC_ACCESSORI_ENABLED=false$/m);
     expect(esempio).toMatch(/^ACCESSORI_ENABLED=false$/m);
+    expect(esempio).toMatch(/^NEXT_PUBLIC_ACCESSORI_NAV_MOBILE=false$/m);
     const ambiente = leggiRepo("docs/ENVIRONMENT.md");
     expect(ambiente).toContain("NEXT_PUBLIC_ACCESSORI_ENABLED");
     expect(ambiente).toContain("ACCESSORI_ENABLED");
+    expect(ambiente).toContain("NEXT_PUBLIC_ACCESSORI_NAV_MOBILE");
+    expect(ambiente).toContain("accessori_release");
   });
 
   it("netlify.toml non accende le flag", () => {
     const netlify = leggiRepo("netlify.toml");
-    expect(netlify).not.toMatch(/ACCESSORI_ENABLED\s*=\s*["']?true/);
+    expect(netlify).not.toMatch(/ACCESSORI_(ENABLED|NAV_MOBILE)\s*=\s*["']?true/);
   });
 });
 
@@ -239,5 +273,84 @@ describe("Accessori: contratto della migrazione", () => {
   it("la griglia 12zh e registrata nel gate CI", () => {
     expect(existsSync(join(radiceRepo, "supabase/tests/12zh_vpm_015a_accessori.sql"))).toBe(true);
     expect(leggiRepo("supabase/tests/12g_ci_run.sh")).toContain("12zh_vpm_015a_accessori.sql");
+  });
+});
+
+describe("Accessori: migrazione correttiva (rilascio del titolare, foto private)", () => {
+  const sql2 = () => senzaCommentiSql(leggiRepo(MIGRAZIONE_RILASCIO));
+
+  it("esiste, segue la precedente e non la rimpiazza: ridefinisce solo le due porte che cambiano contratto", () => {
+    expect(existsSync(join(radiceRepo, MIGRAZIONE_RILASCIO))).toBe(true);
+    expect(MIGRAZIONE_RILASCIO.localeCompare(MIGRAZIONE)).toBeGreaterThan(0);
+    const testo = sql2();
+    expect(testo).not.toMatch(/drop\s+(table|function|policy|view|trigger|schema)/i);
+    expect(testo).not.toMatch(/disable\s+row\s+level\s+security/i);
+    expect(testo).not.toMatch(/alter\s+table\s+(?!private\.accessori)/i);
+    const ridefinite = [...testo.matchAll(/create\s+or\s+replace\s+function\s+([\w.]+)/gi)]
+      .map((m) => m[1])
+      .sort();
+    expect(ridefinite).toEqual([
+      "public.accessori_admin_stato",
+      "public.accessori_admin_visibilita_imposta",
+    ]);
+  });
+
+  it("l'accensione richiede il ruolo di rilascio, lo spegnimento un admin; il trigger vincola i writer privilegiati", () => {
+    const testo = sql2();
+    expect(testo).toContain("ur.role = 'accessori_release'");
+    expect(testo).toMatch(
+      /if p_attiva then\s+v_admin := private\.accessori_rilascio_richiesto\(\);\s+else\s+v_admin := private\.accessori_admin_richiesto\(\);/,
+    );
+    expect(testo).toContain("create trigger accessori_impostazioni_guard");
+    expect(testo).toContain("rilascio_non_autorizzato");
+    for (const f of [
+      "accessori_puo_rilasciare()",
+      "accessori_rilascio_richiesto()",
+      "accessori_impostazioni_guard()",
+    ]) {
+      expect(testo).toContain(`revoke execute on function private.${f} from public, anon, authenticated`);
+    }
+  });
+
+  it("nessuna identita personale o segreto: il rilascio e un ruolo", () => {
+    const testo = sql2();
+    expect(testo).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    expect(testo).not.toMatch(/@[\w-]+\.\w+/);
+    expect(testo).not.toMatch(/insert\s+into\s+public\.user_roles/i);
+    expect(testo).not.toMatch(/(secret|password|api[_-]?key|service_role)/i);
+  });
+
+  it("il bucket diventa privato e non torna pubblico", () => {
+    const testo = sql2();
+    expect(testo).toMatch(/update storage\.buckets set public = false where id = 'accessori-media'/);
+    expect(testo).not.toMatch(/public\s*=\s*true/i);
+  });
+
+  it("per anon e authenticated l'unica nuova lettura e quella delle foto di schede pubblicate", () => {
+    const testo = sql2();
+    const policy = [
+      ...testo.matchAll(/create policy "([^"]+)"\s+on storage\.objects\s+for (\w+)\s+to ([^\n]+)/gi),
+    ];
+    expect(policy.map((m) => [m[1], m[2].toLowerCase(), m[3].trim()])).toEqual([
+      ["accessori_media_select_pubblicate", "select", "anon, authenticated"],
+    ]);
+    // Stesso gate delle letture pubbliche: scheda pubblicata, categoria attiva,
+    // interruttore acceso.
+    const helper = testo.slice(testo.indexOf("create function private.accessorio_media_pubblica"));
+    expect(helper).toContain("private.accessori_visibili_al_pubblico()");
+    expect(helper).toContain("a.stato = 'pubblicato'");
+    expect(helper).toContain("c.attiva");
+    expect(helper).toContain("security definer");
+    expect(helper).toContain("set search_path = ''");
+  });
+
+  it("resta senza parole economiche e senza legami con ordini, pagamenti o vino", () => {
+    const testo = sql2();
+    expect(testo).not.toMatch(
+      /\b(prezzo\w*|price\w*|valuta|currency|\w*_cents|importo|amount|commissione|iva|vat|peso|weight|dimension\w*|fornitor\w*|supplier\w*)\b/i,
+    );
+    expect(testo).not.toMatch(
+      /\b(public\.)?(listings|orders|payments|payouts|proposals|bottle_units|wines|marketplace_config|balance_\w+)\b/i,
+    );
   });
 });

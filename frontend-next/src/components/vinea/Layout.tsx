@@ -5,6 +5,7 @@ import SommelierChat from "@/components/vinea/SommelierLauncher";
 import { VineaLogo } from "@/components/vinea/VineaLogo";
 import { usePathname } from "next/navigation";
 import {
+  GlassWater,
   Home,
   PlusCircle,
   Users,
@@ -20,7 +21,13 @@ import { Toaster } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
 import { AvatarPersona } from "@/components/vinea/AvatarPersona";
 import { HeaderInboxActions } from "@/components/vinea/notifications/HeaderInboxActions";
-import { ACCESSORI_UI_ABILITATA, AI_UI, CLUB_UI_ABILITATA, DEMO_UI_ABILITATA } from "@/config/features";
+import {
+  ACCESSORI_NAV_MOBILE_ABILITATA,
+  ACCESSORI_UI_ABILITATA,
+  AI_UI,
+  CLUB_UI_ABILITATA,
+  DEMO_UI_ABILITATA,
+} from "@/config/features";
 import type { IncidentNotice } from "@/lib/incidents/notice";
 import {
   classiRicercaHeader,
@@ -54,6 +61,7 @@ const ICONE_NAV: Record<IconaNavMobile, LucideIcon> = {
   // manca. Da autenticati quel posto e della Cantina, perche l'avatar
   // dell'header porta gia al profilo.
   account: User,
+  accessori: GlassWater,
 };
 
 const desktopLinks = [
@@ -80,9 +88,9 @@ export function VineaLayout({
   // scelto a mano, e l'avatar ricade sulla silhouette perche `authProfilo` resta
   // nullo senza una sessione vera - che e esattamente cio che deve succedere.
   const autenticato = ruolo !== "guest";
-  const vociMobile = navMobile(autenticato).filter(
-    (voce) => CLUB_UI_ABILITATA || voce.icona !== "club",
-  );
+  const vociMobile = navMobile(autenticato, {
+    accessoriAlPostoDiHome: ACCESSORI_NAV_MOBILE_ABILITATA,
+  }).filter((voce) => CLUB_UI_ABILITATA || voce.icona !== "club");
   const vociDesktop = desktopLinks.filter(
     (voce) =>
       (CLUB_UI_ABILITATA || voce.to !== "/community") &&

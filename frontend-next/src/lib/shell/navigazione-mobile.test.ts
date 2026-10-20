@@ -91,7 +91,8 @@ describe("la shell sceglie la barra dal ruolo", () => {
   });
 
   it("la barra disegnata e' quella scelta dal ruolo, non una lista fissa", () => {
-    expect(layout).toInclude("const vociMobile = navMobile(autenticato).filter(");
+    expect(layout).toInclude("const vociMobile = navMobile(autenticato, {");
+    expect(layout).toInclude("accessoriAlPostoDiHome: ACCESSORI_NAV_MOBILE_ABILITATA");
     expect(layout).toInclude('CLUB_UI_ABILITATA || voce.icona !== "club"');
     expect(layout).toInclude("{vociMobile.map((n) => {");
     // Nessuna delle due liste e' nominata nel componente: se lo fosse, la
@@ -283,5 +284,65 @@ describe("home autenticata", () => {
   it("tiene l'accesso alla Cantina e non diventa un cruscotto di vendita", () => {
     expect(home).toInclude('href="/cantina"');
     expect(home).not.toMatch(/Saldo|Balance|payout|venditore verificato/i);
+  });
+});
+
+// VPM-015A: Accessori al posto di Home nella barra mobile, solo con la sua
+// flag. La composizione ricalca quella del Layout (modello + filtro Club).
+describe("Accessori al posto di Home (predisposto, spento di default)", () => {
+  const barra = (autenticato: boolean, club: boolean, accessori: boolean) =>
+    navMobile(autenticato, { accessoriAlPostoDiHome: accessori }).filter(
+      (voce) => club || voce.icona !== "club",
+    );
+
+  it("con l'opzione spenta le due barre sono esattamente quelle di prima", () => {
+    expect(navMobile(false)).toBe(NAV_MOBILE_OSPITE);
+    expect(navMobile(true)).toBe(NAV_MOBILE_AUTENTICATA);
+    expect(navMobile(false, {})).toBe(NAV_MOBILE_OSPITE);
+    expect(navMobile(true, { accessoriAlPostoDiHome: false })).toBe(NAV_MOBILE_AUTENTICATA);
+  });
+
+  it("con l'opzione accesa Accessori prende il posto di Home, nella stessa posizione", () => {
+    for (const autenticato of [false, true]) {
+      const base = navMobile(autenticato);
+      const nuova = navMobile(autenticato, { accessoriAlPostoDiHome: true });
+      expect(nuova).toHaveLength(base.length);
+      expect(nuova[0].to).toBe("/accessori");
+      expect(nuova[0].label).toBe("Accessori");
+      expect(nuova.some((v) => v.icona === "home")).toBe(false);
+      // Tutte le altre posizioni restano identiche.
+      expect(nuova.slice(1)).toEqual(base.slice(1));
+    }
+  });
+
+  it("cinque posizioni con il Club acceso, quattro con il Club spento: Accessori non ne toglie ne ne aggiunge", () => {
+    for (const autenticato of [false, true]) {
+      for (const accessori of [false, true]) {
+        expect(barra(autenticato, true, accessori)).toHaveLength(5);
+        expect(barra(autenticato, false, accessori)).toHaveLength(4);
+        expect(barra(autenticato, false, accessori).some((v) => v.icona === "club")).toBe(false);
+      }
+    }
+  });
+
+  it("la voce Accessori punta a una rotta che esiste e si accende sulle sue pagine", () => {
+    const voce = navMobile(true, { accessoriAlPostoDiHome: true })[0];
+    expect(rottaEsiste(voce.to)).toBe(true);
+    expect(voceNavAttiva(voce, "/accessori")).toBe(true);
+    expect(voceNavAttiva(voce, "/accessori/calice-di-prova")).toBe(true);
+    expect(voceNavAttiva(voce, "/accessoriale")).toBe(false);
+    expect(voceNavAttiva(voce, "/home")).toBe(false);
+  });
+
+  it("il marchio dell'header resta il collegamento alla Home", () => {
+    const layout = leggi("src/components/vinea/Layout.tsx");
+    expect(layout).toMatch(/<Link href="\/" className="flex items-center gap-2\.5" data-testid="brand-logo-link">/);
+  });
+
+  it("la sostituzione ha una flag propria, spenta di default e subordinata a quella del catalogo", () => {
+    const features = leggi("src/config/features.ts");
+    expect(features).toContain("NEXT_PUBLIC_ACCESSORI_NAV_MOBILE");
+    expect(features).toMatch(/ACCESSORI_NAV_MOBILE_ABILITATA =\s*ACCESSORI_UI_ABILITATA &&/);
+    expect(leggi(".env.example")).toMatch(/^NEXT_PUBLIC_ACCESSORI_NAV_MOBILE=false$/m);
   });
 });

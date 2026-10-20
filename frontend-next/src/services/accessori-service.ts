@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   BUCKET_ACCESSORI,
+  DURATA_URL_FIRMATA_SECONDI,
   messaggioErroreAccessori,
   nuovoPercorsoImmagine,
   parseCategoria,
@@ -8,6 +9,8 @@ import {
   parseElenco,
   parseScheda,
   parseSchedaAdmin,
+  parseStatoAmministrativo,
+  percorsoImmagineValido,
   type ErroreRpcAccessori,
   type SchedaAccessorioAdmin,
 } from "@/lib/accessori/accessori";
@@ -40,6 +43,34 @@ const fallita = <T>(operazione: string, errore: ErroreRpcAccessori): Result<T> =
   console.error(`[accessori] ${operazione} fallita`, { code: errore?.code, hint: errore?.hint });
   return { ok: false, error: messaggioErroreAccessori(errore, RICADUTA) };
 };
+
+/**
+ * URL firmate delle foto. Il bucket e privato: una foto si legge solo con una
+ * firma, e la firma la concede la policy di Storage soltanto all'admin reale o,
+ * per le foto di schede PUBBLICATE, a chiunque finche il catalogo e acceso. Un
+ * percorso non firmabile resta semplicemente senza URL: la scheda mostra il
+ * segnaposto, mai un errore.
+ */
+async function firmaPercorsi(
+  client: SupabaseClient | null,
+  percorsi: readonly string[],
+): Promise<Result<Record<string, string>>> {
+  if (!client) return senzaClient();
+  const validi = [...new Set(percorsi.filter(percorsoImmagineValido))];
+  if (validi.length === 0) return { ok: true, data: {} };
+  const { data, error } = await client.storage
+    .from(BUCKET_ACCESSORI)
+    .createSignedUrls(validi, DURATA_URL_FIRMATA_SECONDI);
+  if (error || !data) {
+    console.error("[accessori] firma delle immagini non riuscita", { message: error?.message });
+    return { ok: false, error: RICADUTA };
+  }
+  const url: Record<string, string> = {};
+  for (const riga of data) {
+    if (riga.path && riga.signedUrl && !riga.error) url[riga.path] = riga.signedUrl;
+  }
+  return { ok: true, data: url };
+}
 
 export function creaAccessoriLetturaService(client: SupabaseClient | null): AccessoriLetturaService {
   return {
@@ -76,6 +107,8 @@ export function creaAccessoriLetturaService(client: SupabaseClient | null): Acce
       // Una scheda restituita ma illeggibile è un guasto, non un 404.
       return scheda ? { ok: true, data: scheda } : fallita("accessori_dettaglio", null);
     },
+
+    urlImmagini: (percorsi) => firmaPercorsi(client, percorsi),
   };
 }
 
@@ -96,13 +129,28 @@ export function creaAccessoriAdminService(
   };
 
   return {
-    async visibilitaPubblica() {
+    async stato() {
       if (!client) return senzaClient();
       const { data, error } = await client.rpc("accessori_admin_stato");
       if (error) return fallita("accessori_admin_stato", error);
-      const v = (data as { visibilita_pubblica?: unknown } | null)?.visibilita_pubblica;
-      return typeof v === "boolean" ? { ok: true, data: v } : fallita("accessori_admin_stato", null);
+      const stato = parseStatoAmministrativo(data);
+      return stato ? { ok: true, data: stato } : fallita("accessori_admin_stato", null);
     },
+
+    // Accendere richiede il ruolo di rilascio: lo decide la porta del database,
+    // non questo adattatore. Spegnere e consentito a ogni admin.
+    async impostaVisibilita(attiva, motivo) {
+      if (!client) return senzaClient();
+      const { data, error } = await client.rpc("accessori_admin_visibilita_imposta", {
+        p_attiva: attiva,
+        p_motivo: motivo,
+      });
+      if (error) return fallita("accessori_admin_visibilita_imposta", error);
+      const v = (data as { visibilita_pubblica?: unknown } | null)?.visibilita_pubblica;
+      return typeof v === "boolean" ? { ok: true, data: v } : fallita("accessori_admin_visibilita_imposta", null);
+    },
+
+    urlImmagini: (percorsi) => firmaPercorsi(client, percorsi),
 
     async categorie() {
       if (!client) return senzaClient();

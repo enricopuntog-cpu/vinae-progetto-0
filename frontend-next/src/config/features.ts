@@ -134,3 +134,13 @@ export const imballaggioAbilitatoServer = (): boolean =>
 export const ACCESSORI_UI_ABILITATA = valoreFlagEsattamenteTrue(
   process.env.NEXT_PUBLIC_ACCESSORI_ENABLED,
 );
+
+/**
+ * Accessori al posto di Home nella barra mobile. Flag a parte, spenta di
+ * default, e subordinata alla precedente: da sola non fa nulla. Cambia la barra
+ * di tutti gli utenti mobile, quindi si accende con una decisione propria e solo
+ * dopo l'autorizzazione del catalogo.
+ */
+export const ACCESSORI_NAV_MOBILE_ABILITATA =
+  ACCESSORI_UI_ABILITATA &&
+  valoreFlagEsattamenteTrue(process.env.NEXT_PUBLIC_ACCESSORI_NAV_MOBILE);

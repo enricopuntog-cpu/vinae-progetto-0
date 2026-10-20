@@ -37,8 +37,11 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
   }
   if (!esito.data) notFound();
 
+  const foto = await creaAccessoriLetturaService(client).urlImmagini(esito.data.immagini);
+
   return (
     <DettaglioAccessorio
+      immagini={foto.ok ? foto.data : {}}
       scheda={esito.data}
       modalita={modalita}
       stato={esito.data.stato ? ETICHETTE_STATO[esito.data.stato] : null}

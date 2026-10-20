@@ -47,8 +47,14 @@ export default async function Page() {
     );
   }
 
+  // Il bucket e privato: ogni foto passa da una URL firmata a tempo.
+  const foto = await servizio.urlImmagini(
+    schede.data.flatMap((s) => (s.immagini[0] ? [s.immagini[0]] : [])),
+  );
+
   return (
     <AccessoriVetrina
+      immagini={foto.ok ? foto.data : {}}
       titolo="Accessori per il vino"
       introduzione="Cavatappi, calici, decanter e tutto ciò che accompagna una bottiglia, dal momento in cui la apri a quello in cui la conservi."
       categorie={categorie.data}

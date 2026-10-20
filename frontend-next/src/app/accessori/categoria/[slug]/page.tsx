@@ -52,8 +52,13 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
     );
   }
 
+  const foto = await servizio.urlImmagini(
+    schede.data.flatMap((s) => (s.immagini[0] ? [s.immagini[0]] : [])),
+  );
+
   return (
     <AccessoriVetrina
+      immagini={foto.ok ? foto.data : {}}
       titolo={categoria.nome}
       introduzione={categoria.descrizione || "Una selezione di accessori per il vino."}
       categorie={categorie.data}

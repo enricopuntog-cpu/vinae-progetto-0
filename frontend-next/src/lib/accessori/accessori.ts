@@ -250,19 +250,25 @@ export function parseElenco<T>(v: unknown, parse: (x: unknown) => T | null): T[]
 // Immagini e indirizzi
 // ---------------------------------------------------------------------------
 
-/** URL pubblico di un'immagine, solo per percorsi della forma attesa. */
-export function urlImmagineAccessorio(
-  percorso: string | null | undefined,
-  supabaseUrl: string | undefined = process.env.NEXT_PUBLIC_SUPABASE_URL,
-): string | null {
-  if (!percorso || !PERCORSO_IMMAGINE.test(percorso)) return null;
-  try {
-    const base = new URL(supabaseUrl ?? "");
-    if (base.protocol !== "https:" && base.protocol !== "http:") return null;
-    return `${base.origin}/storage/v1/object/public/${BUCKET_ACCESSORI}/${percorso}`;
-  } catch {
-    return null;
-  }
+/** Vero per un percorso della forma `<scheda>/<immagine>.webp`. */
+export const percorsoImmagineValido = (percorso: string | null | undefined): percorso is string =>
+  typeof percorso === "string" && PERCORSO_IMMAGINE.test(percorso);
+
+/**
+ * Durata di una URL firmata. Le foto stanno in un bucket PRIVATO: non esiste un
+ * indirizzo pubblico, e una URL firmata gia emessa vale fino a scadenza anche se
+ * la scheda viene poi ritirata. Resta breve proprio per questo.
+ */
+export const DURATA_URL_FIRMATA_SECONDI = 900;
+
+/** Stato dell'interruttore e diritto di rilascio del chiamante (solo admin). */
+export type StatoAmministrativo = { visibilitaPubblica: boolean; puoRilasciare: boolean };
+
+export function parseStatoAmministrativo(v: unknown): StatoAmministrativo | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Json;
+  if (typeof o.visibilita_pubblica !== "boolean" || typeof o.puo_rilasciare !== "boolean") return null;
+  return { visibilitaPubblica: o.visibilita_pubblica, puoRilasciare: o.puo_rilasciare };
 }
 
 /** Il nome di un file nuovo, nella cartella della scheda. */
@@ -322,6 +328,8 @@ const MESSAGGI_HINT: Readonly<Record<string, string>> = {
   immagini_non_valide: "Le immagini non sono valide (massimo 6, senza duplicati).",
   livello_non_ammesso: "Le categorie hanno due livelli: il genitore deve essere di primo livello.",
   motivo_obbligatorio: "Indica il motivo del cambio.",
+  rilascio_non_autorizzato:
+    "Rendere pubblico il catalogo richiede l'approvazione esplicita del titolare: il tuo account non ha il permesso di rilascio.",
   non_trovato: "Elemento non trovato.",
   campo_sconosciuto: "Alcuni campi non sono ammessi.",
 };

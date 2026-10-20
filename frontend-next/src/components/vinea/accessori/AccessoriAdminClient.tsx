@@ -16,9 +16,9 @@ import {
   MAX_IMMAGINI_ACCESSORIO,
   percorsiAccessori,
   slugDaNome,
-  urlImmagineAccessorio,
   type CategoriaAdmin,
   type SchedaAccessorioAdmin,
+  type StatoAmministrativo,
 } from "@/lib/accessori/accessori";
 import {
   TRANSIZIONI_STATO,
@@ -72,7 +72,7 @@ export function AccessoriAdminClient() {
   const [errore, setErrore] = useState<string | null>(null);
   const [categorie, setCategorie] = useState<CategoriaAdmin[]>([]);
   const [schede, setSchede] = useState<SchedaAccessorioAdmin[]>([]);
-  const [visibilita, setVisibilita] = useState<boolean | null>(null);
+  const [stato, setStato] = useState<StatoAmministrativo | null>(null);
   const [messaggio, setMessaggio] = useState<Messaggio>(null);
 
   const ricarica = useCallback(async () => {
@@ -80,7 +80,7 @@ export function AccessoriAdminClient() {
     const [c, s, v] = await Promise.all([
       servizio.categorie(),
       servizio.elenco(),
-      servizio.visibilitaPubblica(),
+      servizio.stato(),
     ]);
     if (!c.ok) setErrore(c.error);
     else if (!s.ok) setErrore(s.error);
@@ -88,7 +88,7 @@ export function AccessoriAdminClient() {
       setCategorie(c.data);
       setSchede(s.data);
     }
-    setVisibilita(v.ok ? v.data : null);
+    setStato(v.ok ? v.data : null);
     setCaricamento(false);
   }, [servizio]);
 
@@ -113,7 +113,7 @@ export function AccessoriAdminClient() {
           <span>
             Visibilità pubblica (database):{" "}
             <strong data-testid="accessori-visibilita">
-              {visibilita === null ? "non leggibile" : visibilita ? "ACCESA" : "SPENTA"}
+              {stato === null ? "non leggibile" : stato.visibilitaPubblica ? "ACCESA" : "SPENTA"}
             </strong>
           </span>
           <Button asChild variant="outline" size="sm">
@@ -130,6 +130,13 @@ export function AccessoriAdminClient() {
       </header>
 
       <Avviso messaggio={messaggio} />
+
+      <SezioneRilascio
+        servizio={servizio}
+        stato={stato}
+        onCambiato={ricarica}
+        onMessaggio={setMessaggio}
+      />
 
       <SezioneSchede
         servizio={servizio}
@@ -149,6 +156,129 @@ export function AccessoriAdminClient() {
 }
 
 type Servizio = ReturnType<typeof creaAccessoriAdminService>;
+
+// ---------------------------------------------------------------------------
+// Rilascio pubblico
+// ---------------------------------------------------------------------------
+
+const PAROLA_DI_RILASCIO = "PUBBLICA";
+
+/**
+ * Rendere pubblico il catalogo e una decisione del titolare, non di un admin
+ * qualsiasi: il database accetta l'accensione solo da un admin con il ruolo di
+ * rilascio. Qui il pulsante compare soltanto a lui, con una conferma scritta;
+ * a chiunque altro la sezione spiega perche e spenta. Spegnere resta possibile
+ * a ogni admin (interruttore di emergenza).
+ */
+function SezioneRilascio({
+  servizio,
+  stato,
+  onCambiato,
+  onMessaggio,
+}: {
+  servizio: Servizio;
+  stato: StatoAmministrativo | null;
+  onCambiato: () => Promise<void>;
+  onMessaggio: (m: Messaggio) => void;
+}) {
+  const [motivo, setMotivo] = useState("");
+  const [conferma, setConferma] = useState("");
+  const [invio, setInvio] = useState(false);
+
+  if (!stato) return null;
+  const accesa = stato.visibilitaPubblica;
+
+  const applica = async (attiva: boolean) => {
+    setInvio(true);
+    const r = await servizio.impostaVisibilita(attiva, motivo.trim());
+    setInvio(false);
+    if (!r.ok) return onMessaggio({ tono: "errore", testo: r.error });
+    setMotivo("");
+    setConferma("");
+    onMessaggio({
+      tono: "ok",
+      testo: attiva
+        ? "Visibilità pubblica accesa nel database. Il pubblico la vede solo con anche le due flag d'ambiente."
+        : "Visibilità pubblica spenta.",
+    });
+    await onCambiato();
+  };
+
+  const motivoOk = motivo.trim().length > 0;
+
+  return (
+    <section
+      aria-labelledby="acc-rilascio"
+      data-testid="accessori-rilascio"
+      className="space-y-3 rounded-xl border border-border bg-card p-4"
+    >
+      <h2 id="acc-rilascio" className="font-serif text-lg font-semibold text-antracite">
+        Rilascio pubblico
+      </h2>
+
+      {accesa ? (
+        <>
+          <p className="text-sm text-antracite/80">
+            Il catalogo è acceso nel database. Per ritirarlo basta un motivo: spegnere non richiede
+            l'approvazione del titolare.
+          </p>
+          <Label htmlFor="acc-rilascio-motivo">Motivo</Label>
+          <Input
+            id="acc-rilascio-motivo"
+            value={motivo}
+            maxLength={500}
+            onChange={(e) => setMotivo(e.target.value)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={invio || !motivoOk}
+            onClick={() => void applica(false)}
+          >
+            Spegni la visibilità pubblica
+          </Button>
+        </>
+      ) : stato.puoRilasciare ? (
+        <>
+          <p className="text-sm text-antracite/80">
+            Stai per rendere pubblico il catalogo nel database. È l'ultima delle tre chiavi: le due
+            flag d'ambiente devono essere già accese perché il pubblico lo veda. Fallo solo con
+            l'approvazione esplicita del titolare, che è registrata con il tuo nome e il motivo.
+          </p>
+          <Label htmlFor="acc-rilascio-motivo">Motivo e riferimento dell'approvazione</Label>
+          <Input
+            id="acc-rilascio-motivo"
+            value={motivo}
+            maxLength={500}
+            onChange={(e) => setMotivo(e.target.value)}
+          />
+          <Label htmlFor="acc-rilascio-conferma">
+            Per confermare scrivi <strong>{PAROLA_DI_RILASCIO}</strong>
+          </Label>
+          <Input
+            id="acc-rilascio-conferma"
+            value={conferma}
+            autoComplete="off"
+            onChange={(e) => setConferma(e.target.value)}
+          />
+          <Button
+            type="button"
+            disabled={invio || !motivoOk || conferma !== PAROLA_DI_RILASCIO}
+            onClick={() => void applica(true)}
+          >
+            Rendi pubblico il catalogo
+          </Button>
+        </>
+      ) : (
+        <p className="text-sm text-antracite/80" data-testid="accessori-rilascio-negato">
+          La pubblicazione del catalogo richiede l'approvazione esplicita del titolare. Il tuo
+          account non ha il permesso di rilascio: puoi preparare bozze e schede, non renderle
+          pubbliche.
+        </p>
+      )}
+    </section>
+  );
+}
 
 const nomeCategoria = (categorie: readonly CategoriaAdmin[], c: CategoriaAdmin): string => {
   const genitore = categorie.find((g) => g.id === c.genitoreId);
@@ -416,6 +546,20 @@ function EditorScheda({
   const slugBloccato = scheda?.pubblicatoIl != null;
   const immagini = scheda?.immagini ?? [];
 
+  // Il bucket e privato: l'anteprima delle foto usa URL firmate a tempo.
+  const chiaveImmagini = immagini.join("|");
+  const [urlFirmate, setUrlFirmate] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!chiaveImmagini) return;
+    let attivo = true;
+    void servizio.urlImmagini(chiaveImmagini.split("|")).then((r) => {
+      if (attivo && r.ok) setUrlFirmate((prima) => ({ ...prima, ...r.data }));
+    });
+    return () => {
+      attivo = false;
+    };
+  }, [servizio, chiaveImmagini]);
+
   const salva = async (e: FormEvent) => {
     e.preventDefault();
     const esito = validaModuloScheda(modulo);
@@ -655,7 +799,7 @@ function EditorScheda({
           </h4>
           <ul className="grid grid-cols-3 gap-2 sm:grid-cols-6">
             {immagini.map((p) => {
-              const url = urlImmagineAccessorio(p);
+              const url = urlFirmate[p];
               return (
                 <li key={p} className="relative aspect-square overflow-hidden rounded-lg border border-border">
                   {url ? (
