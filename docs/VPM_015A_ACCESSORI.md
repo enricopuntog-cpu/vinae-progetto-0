@@ -23,8 +23,10 @@ Dopo la prima consegna il titolare ha deciso, e questo documento le recepisce:
 3. **Navigazione mobile futura**: Accessori potrà sostituire Home, cinque
    pulsanti, con il marchio come collegamento alla Home. È predisposta e
    spenta; non si accende finché il catalogo non è autorizzato.
-4. **«Accessori della cantina» sul profilo utente**: ancora in valutazione,
-   **non implementata** in questo task.
+4. **«Accessori della cantina» sul profilo utente**: in valutazione al momento
+   della consegna; il 20 ottobre 2026 il titolare ha fissato il requisito del
+   blocco successivo (sezione «Requisito del titolare per il blocco
+   successivo»). **Non implementata** in questo task.
 5. **Nomenclatura delle categorie**: sarà rivista in seguito. Le categorie sono
    righe, non enum: rinominarle o aggiungerne non richiede una migrazione di
    schema.
@@ -244,11 +246,36 @@ misura; fornitori e magazzino fornitori; alcolici e articoli regolamentati.
 
 ## In valutazione, non implementato
 
-- **«Accessori della cantina»** per i profili utente: da valutare dal titolare.
-  Non esiste né una tabella né una route; se verrà ammessa serve una decisione
-  su proprietà dei dati, visibilità e rapporto con la cantina del vino.
+- **«Accessori della cantina»** per i profili utente: il requisito è fissato
+  (sezione «Requisito del titolare per il blocco successivo»), l'implementazione
+  no. Non esiste né una tabella né una route.
 - **Nomenclatura delle categorie**: sarà rivista; si cambia con righe, non con
   una migrazione di schema.
+
+### Requisito del titolare per il blocco successivo: Cantina Accessori
+
+Decisione di prodotto del 20 ottobre 2026, **registrata come requisito e non
+implementata** (nessuna tabella, route o migrazione in questo task):
+
+- Gli accessori **posseduti dagli utenti** seguono il modello della Cantina delle
+  bottiglie: **privati per impostazione predefinita**, poi, per scelta del
+  proprietario, **esposti nella Cantina pubblica** oppure **messi in vendita**.
+- Si **riutilizzano le strutture e le logiche esistenti** della Cantina: la
+  visibilità come proprietà del singolo oggetto del proprietario (come
+  `bottle_units.visibilita`), la Cantina pubblica del profilo come sorgente di
+  esposizione, e, per la vendita, l'annuncio e la sua unica appartenenza aperta
+  (`listing_unita`). Non si forzano gli accessori nelle entità specifiche del
+  vino (`wines`, `bottle_units`, `cellar_slots`, formati e annata): serve un
+  oggetto posseduto proprio, che condivida le regole e non le righe.
+- Resta distinta la scheda di catalogo (`private.accessori`, curata da Vinea) dal
+  **bene posseduto da un utente**, che può rimandare a una scheda ma non la
+  modifica. La vendita di un bene posseduto è soggetta alle stesse decisioni di
+  VPM-015B (chi vende, prezzo, commissione, spedizione) e **non** si attiva con
+  questo requisito: nessuna transazione reale.
+- Domande aperte per il blocco successivo: unità o quantità, stato e condizione
+  (nuovo, usato), foto dell'utente (bucket privato per default, come
+  `accessori-media`), moderazione delle foto e delle descrizioni pubbliche, e
+  rapporto con il Partner che vende accessori nuovi.
 
 ## Decisioni per VPM-015B
 
@@ -265,6 +292,9 @@ misura; fornitori e magazzino fornitori; alcolici e articoli regolamentati.
 6. **Alcolici e regolamentati**: perimetro esplicito degli articoli vendibili.
 7. **Ordini**: riusare `orders` (con una riga per tipo) o un dominio separato;
    regola di unica scrittura per dominio.
+8. **Cantina Accessori**: come l'oggetto posseduto dall'utente riusa la
+   visibilità, la Cantina pubblica e l'annuncio senza entrare nelle entità del
+   vino (requisito sopra).
 
 ## Impatti da inoltrare
 
