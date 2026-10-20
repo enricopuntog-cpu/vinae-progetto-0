@@ -1787,6 +1787,12 @@ alcuna vendita. Regole durevoli:
   flag spenta la barra è identica a prima.
 - **Residuo accettato.** Una URL firmata già emessa vale fino a scadenza anche
   dopo il ritiro della scheda; il ruolo di rilascio si assegna a mano.
+- **Requisito per il blocco successivo (20 ottobre 2026, non implementato).** Gli
+  accessori posseduti dagli utenti seguono il modello della Cantina delle
+  bottiglie: privati per impostazione predefinita, poi esposti nella Cantina
+  pubblica o messi in vendita, riusando visibilità, Cantina pubblica e annuncio
+  senza forzarli nelle entità del vino (`wines`, `bottle_units`). Dettaglio in
+  `../docs/VPM_015A_ACCESSORI.md`.
 
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
