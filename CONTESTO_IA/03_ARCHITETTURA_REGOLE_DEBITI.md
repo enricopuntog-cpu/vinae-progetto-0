@@ -1738,7 +1738,9 @@ Italia ed euro restano l'unico mercato operativo. Regole durevoli:
 
 ## Accessori Vinea — fondazione Beta VPM-015A (20 ottobre 2026)
 
-Migrazione `20261020120000_vpm_015a_accessori_fondazione.sql`, griglia
+Migrazioni `20261020120000_vpm_015a_accessori_fondazione.sql` e, correttiva per
+decisione del titolare, `20261020170000_vpm_015a_accessori_rilascio_e_media_privati.sql`
+(la prima era già distribuita, quindi congelata), griglia
 `supabase/tests/12zh_vpm_015a_accessori.sql` nel gate `Supabase DB regression`;
 contratto completo in `../docs/VPM_015A_ACCESSORI.md`. Catalogo e bozze senza
 alcuna vendita. Regole durevoli:
@@ -1754,11 +1756,17 @@ alcuna vendita. Regole durevoli:
 - **Tre chiavi di visibilità.** `NEXT_PUBLIC_ACCESSORI_ENABLED` (solo
   navigazione), `ACCESSORI_ENABLED` (gate server, serve anche la pubblica) e
   `private.accessori_impostazioni.visibilita_pubblica` (database, spento di
-  default, acceso solo da `accessori_admin_visibilita_imposta` con motivo). Con
-  l'interruttore spento le letture pubbliche sono vuote anche a flag accese.
+  default). Con l'interruttore spento le letture pubbliche sono vuote anche a
+  flag accese.
+- **Il rilascio pubblico è del titolare.** Accendere la visibilità richiede un
+  admin reale con il ruolo `accessori_release` in `public.user_roles` (assegnabile
+  solo da `service_role`/SQL di produzione; nessuna identità nel repo); un admin
+  ordinario può solo spegnere (interruttore di emergenza). Un trigger vincola
+  anche i writer privilegiati; l'accensione è nel registro con utente e motivo.
+  Procedura e limiti in `../docs/VPM_015A_ACCESSORI.md`.
 - **Anteprima admin.** `p_anteprima = true` sulle tre letture richiede il ruolo
   admin reale (`user_roles`) e mostra le bozze; è la via per verificare la Beta
-  in produzione senza accendere nulla. L'interruttore non si cambia dalla UI.
+  in produzione senza accendere nulla.
 - **Elenco chiuso di campi.** `private.accessorio_json` decide tutto il JSON:
   8 chiavi pubbliche, mai `quantita`, `stato`, `id` o date (lo `stato` compare
   solo in anteprima).
@@ -1767,8 +1775,18 @@ alcuna vendita. Regole durevoli:
 - **Catalogo non cancellabile.** Nessuna `DELETE`/`TRUNCATE` (trigger anche per i
   privilegiati): si archivia la scheda o si disattiva la categoria. Registro
   append-only delle azioni admin.
-- **Residuo accettato.** Il bucket `accessori-media` è pubblico per percorso (due
-  uuid casuali, nessun elenco ai client), come `partner-vetrine`.
+- **Foto private.** Il bucket `accessori-media` è privato: nessun URL pubblico,
+  solo URL firmate a tempo (900 s). La policy di Storage concede la firma
+  all'admin reale e, a chiunque, per le sole foto di schede pubblicate in
+  categoria attiva con la visibilità accesa (`private.accessorio_media_pubblica`).
+  Non rendere mai pubblico il bucket né aggiungere policy di lettura per `anon`
+  oltre questa.
+- **Navigazione mobile predisposta.** `NEXT_PUBLIC_ACCESSORI_NAV_MOBILE`
+  (subordinata a `NEXT_PUBLIC_ACCESSORI_ENABLED`, spenta) sostituisce Home con
+  Accessori nella barra mobile; il marchio resta il collegamento alla Home. Con la
+  flag spenta la barra è identica a prima.
+- **Residuo accettato.** Una URL firmata già emessa vale fino a scadenza anche
+  dopo il ritiro della scheda; il ruolo di rilascio si assegna a mano.
 
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
