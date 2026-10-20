@@ -1736,6 +1736,40 @@ Italia ed euro restano l'unico mercato operativo. Regole durevoli:
   `en` dichiarata e `formatImportoMinimo`; le ~37 chiamate `"it-IT"` e
   `config/labels.ts` restano da migrare quando l'inglese sarà ammesso).
 
+## Accessori Vinea — fondazione Beta VPM-015A (20 ottobre 2026)
+
+Migrazione `20261020120000_vpm_015a_accessori_fondazione.sql`, griglia
+`supabase/tests/12zh_vpm_015a_accessori.sql` nel gate `Supabase DB regression`;
+contratto completo in `../docs/VPM_015A_ACCESSORI.md`. Catalogo e bozze senza
+alcuna vendita. Regole durevoli:
+
+- **Dominio separato.** Tabelle `private.accessori*` senza grant e senza viste;
+  nessuna FK da o verso `listings`, `orders`, `payments`, `wines`,
+  `bottle_units`. Gli «accessori» logistici (`packaging_options`, componenti di
+  spedizione) sono costi di transazione del vino e non entrano nel catalogo.
+- **Nessun campo economico.** Niente prezzo, valuta, varianti, dimensioni, peso,
+  fornitore, IVA o commissione finché VPM-015B non li decide con FIN/LEG; il
+  test `accessori-contratto.test.ts` e la griglia (casi 25–27) fanno fallire
+  qualunque percorso di transazione o colonna economica.
+- **Tre chiavi di visibilità.** `NEXT_PUBLIC_ACCESSORI_ENABLED` (solo
+  navigazione), `ACCESSORI_ENABLED` (gate server, serve anche la pubblica) e
+  `private.accessori_impostazioni.visibilita_pubblica` (database, spento di
+  default, acceso solo da `accessori_admin_visibilita_imposta` con motivo). Con
+  l'interruttore spento le letture pubbliche sono vuote anche a flag accese.
+- **Anteprima admin.** `p_anteprima = true` sulle tre letture richiede il ruolo
+  admin reale (`user_roles`) e mostra le bozze; è la via per verificare la Beta
+  in produzione senza accendere nulla. L'interruttore non si cambia dalla UI.
+- **Elenco chiuso di campi.** `private.accessorio_json` decide tutto il JSON:
+  8 chiavi pubbliche, mai `quantita`, `stato`, `id` o date (lo `stato` compare
+  solo in anteprima).
+- **Identità riusate.** Nessun ruolo nuovo: `public.user_roles` /
+  `private.partner_admin_richiesto()`. I Partner non creano accessori in 015A.
+- **Catalogo non cancellabile.** Nessuna `DELETE`/`TRUNCATE` (trigger anche per i
+  privilegiati): si archivia la scheda o si disattiva la categoria. Registro
+  append-only delle azioni admin.
+- **Residuo accettato.** Il bucket `accessori-media` è pubblico per percorso (due
+  uuid casuali, nessun elenco ai client), come `partner-vetrine`.
+
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 
 Migrazione `20260918090918_security_hardening_grants.sql` (PR #119):

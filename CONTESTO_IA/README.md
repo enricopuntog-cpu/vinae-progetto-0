@@ -1,6 +1,6 @@
 # Router del contesto durevole Vinea
 
-Ultimo aggiornamento del router: **12 ottobre 2026**.
+Ultimo aggiornamento del router: **20 ottobre 2026**.
 
 Questa cartella conserva memoria strutturale e storia datata. Non è il bootstrap
 obbligatorio e non sostituisce le fonti vive.
@@ -105,6 +105,12 @@ Aprire soltanto ciò che serve al task:
   commissione, piano WP6B che conosce i colli, domicilio preventivabile ma non
   ordinabile — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`; contratto completo in
   `../docs/VP_E_LOGISTICA_MULTI_COLLO.md`.
+- Accessori Vinea VPM-015A (20 ottobre 2026) — catalogo e bozze in `private`,
+  nessun campo economico né percorso di transazione, tre chiavi di visibilità
+  (flag pubblica, flag server, interruttore nel database spento di default),
+  anteprima solo per l'admin reale, letture pubbliche a 8 chiavi, Partner non
+  creatori — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`; contratto completo in
+  `../docs/VPM_015A_ACCESSORI.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono
