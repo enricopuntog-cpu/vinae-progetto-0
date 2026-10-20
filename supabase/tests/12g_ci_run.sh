@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12zh) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12zi) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
@@ -387,6 +387,13 @@ run_grid "12zg Indirizzi e logistica API" 12zg_logistica_indirizzi_api.sql 3
 # riservate all'admin reale, Storage solo admin, nessuna colonna ne porta di
 # transazione, catalogo non cancellabile. Fixture `.test` sintetiche; ROLLBACK.
 run_grid "12zh Accessori fondazione Beta" 12zh_vpm_015a_accessori.sql 3
+
+# VPM-015B1 Cantina Accessori personale (migrazione 20261021090000): inventario
+# privato per utente, due interruttori nel database spenti di default con
+# accensione riservata al rilascio, tassonomia leggibile con il catalogo spento,
+# esposizione solo per scelta esplicita, proiezione pubblica a campi chiusi,
+# bucket Storage privato per proprietario. Fixture `.test` sintetiche; ROLLBACK.
+run_grid "12zi Cantina Accessori personale" 12zi_vpm_015b1_cantina_accessori.sql 3
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
