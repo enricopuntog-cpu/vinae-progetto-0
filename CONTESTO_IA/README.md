@@ -111,6 +111,13 @@ Aprire soltanto ciò che serve al task:
   anteprima solo per l'admin reale, letture pubbliche a 8 chiavi, Partner non
   creatori — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`; contratto completo in
   `../docs/VPM_015A_ACCESSORI.md`.
+- Cantina Accessori personale VPM-015B1 (21 ottobre 2026) — accessori posseduti
+  dagli utenti in `private.cantina_accessori` (privati alla nascita, esposti solo
+  per scelta, categoria dalla tassonomia Vinea), due interruttori nel database
+  spenti di default (funzione ed esposti, distinti dal catalogo 015A), proiezione
+  pubblica a 10 chiavi, bucket Storage privato per proprietario, nessuna vendita —
+  è in `03_ARCHITETTURA_REGOLE_DEBITI.md`; contratto completo in
+  `../docs/VPM_015B1_CANTINA_ACCESSORI.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono

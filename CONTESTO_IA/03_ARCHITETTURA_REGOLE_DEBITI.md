@@ -1787,12 +1787,62 @@ alcuna vendita. Regole durevoli:
   flag spenta la barra è identica a prima.
 - **Residuo accettato.** Una URL firmata già emessa vale fino a scadenza anche
   dopo il ritiro della scheda; il ruolo di rilascio si assegna a mano.
-- **Requisito per il blocco successivo (20 ottobre 2026, non implementato).** Gli
+- **Requisito per il blocco successivo (20 ottobre 2026; la parte «esposti» è implementata da VPM-015B1, la vendita no).** Gli
   accessori posseduti dagli utenti seguono il modello della Cantina delle
   bottiglie: privati per impostazione predefinita, poi esposti nella Cantina
   pubblica o messi in vendita, riusando visibilità, Cantina pubblica e annuncio
   senza forzarli nelle entità del vino (`wines`, `bottle_units`). Dettaglio in
   `../docs/VPM_015A_ACCESSORI.md`.
+
+## Cantina Accessori personale — VPM-015B1 (21 ottobre 2026)
+
+Migrazione `20261021090000_vpm_015b1_cantina_accessori.sql`, griglia
+`supabase/tests/12zi_vpm_015b1_cantina_accessori.sql` nel gate `Supabase DB
+regression`; contratto completo in `../docs/VPM_015B1_CANTINA_ACCESSORI.md`.
+Implementa il requisito del titolare (accessori posseduti dagli utenti) **senza
+alcuna vendita**. Regole durevoli:
+
+- **Entità dedicata.** `private.cantina_accessori`: una riga per tipo posseduto con
+  `quantita`; nessun accessorio in `wines`, `bottle_units`, `cellar_slots`; nessuna
+  FK verso vino, annunci, ordini o pagamenti (le sole FK vanno a `profiles`, alla
+  tassonomia `accessori_categorie` e, facoltativa e in sola lettura, a
+  `accessori`). Proprietario sempre da `auth.uid()`.
+- **Nasce privato, si espone per scelta.** Lessico `privata | cantina_pubblica`
+  come `bottle_units.visibilita`; il trigger richiede un marcatore dichiarato dalla
+  porta nella stessa transazione, quindi vincola anche i writer privilegiati.
+  Esposto non significa in vendita.
+- **Categoria dalla tassonomia Vinea.** FK per id (rinominare non rompe), foglia e
+  attiva; la sottocategoria è obbligatoria dove esiste; gli utenti non creano
+  categorie. `cantina_accessori_categorie_elenca()` serve la tassonomia a chi
+  inserisce anche con il catalogo commerciale spento.
+- **Due interruttori nel database**, spenti di default, indipendenti da quello del
+  catalogo (015A): `funzione_attiva` e `visibilita_pubblica` in
+  `private.cantina_accessori_impostazioni`. Accensione solo col ruolo
+  `accessori_release` (stesso marcatore `vinae.accessori_rilascio`), spegnimento a
+  ogni admin, registro append-only. Nessuna variabile d'ambiente. Un admin reale
+  collauda la funzione e l'anteprima pubblica anche da spenta.
+- **Lettura pubblica a campi chiusi.** Vista `private.cantina_accessori_pubblica`
+  (`security_invoker = off`, `security_barrier`, filtro esplicito, join con
+  `private.profili_pubblici`, nessun grant) e unica porta
+  `cantina_accessori_pubblica_profilo(uuid, int, int, boolean)`: un profilo per
+  volta, 10 chiavi, tetto 48. Mai note private, proprietario, legame col catalogo.
+  Va aggiunta a ogni elenco chiuso delle viste di lettura pubblica.
+- **Foto in bucket privato** `cantina-accessori-foto` (nome scelto per non
+  collidere con i controlli sul bucket `accessori-media` della 12zh): lettura e
+  scrittura del proprietario nella cartella `<uid>/<accessorio>/`; firma pubblica
+  solo per foto di accessori esposti, non archiviati, con funzione e visibilità
+  accese. Non rendere mai pubblico il bucket né aggiungere policy `anon` oltre
+  quella di SELECT delle foto esposte. URL firmate a 900 s: ritiro efficace sulle
+  nuove letture, non su quelle già emesse.
+- **Frontend.** Sezione `CantinaAccessori` dentro `/cantina` (si nasconde se la
+  funzione non è abilitata), `AccessoriCantinaPubblici` in profilo e Cantina
+  pubblica (rende nulla se vuoto), `leggiAccessoriPubblici` (fail-closed) per le
+  pagine server, pannello `CantinaAccessoriAdmin` in `/admin/accessori`. Per la
+  vetrina Partner non si leggono accessori (la vendita Partner di accessori è
+  fuori perimetro).
+- **Residui accettati.** Contenuti pubblici senza pre-moderazione; file orfani se
+  un account viene cancellato (serve un job di pulizia); ruolo di rilascio
+  assegnato a mano.
 
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 

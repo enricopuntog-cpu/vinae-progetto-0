@@ -255,7 +255,10 @@ misura; fornitori e magazzino fornitori; alcolici e articoli regolamentati.
 ### Requisito del titolare per il blocco successivo: Cantina Accessori
 
 Decisione di prodotto del 20 ottobre 2026, **registrata come requisito e non
-implementata** (nessuna tabella, route o migrazione in questo task):
+implementata in questo task** (nessuna tabella, route o migrazione qui). Aggiornamento:
+la parte «accessori posseduti ed esposti» è stata implementata da
+[VPM-015B1](VPM_015B1_CANTINA_ACCESSORI.md) (21 ottobre 2026); la **vendita** resta
+differita:
 
 - Gli accessori **posseduti dagli utenti** seguono il modello della Cantina delle
   bottiglie: **privati per impostazione predefinita**, poi, per scelta del
