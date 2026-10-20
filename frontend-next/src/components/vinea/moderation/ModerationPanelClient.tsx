@@ -9,7 +9,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { BarChart3, Building2 } from "lucide-react";
+import { BarChart3, Building2, GlassWater } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -971,6 +971,11 @@ export const ModerationPanelClient = () => {
           <Button asChild variant="outline">
             <Link href="/admin/partner">
               <Building2 /> Partner
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/admin/accessori">
+              <GlassWater /> Accessori
             </Link>
           </Button>
           <Button variant="outline" onClick={() => void reload()} disabled={!online}>

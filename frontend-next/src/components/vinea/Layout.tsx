@@ -20,7 +20,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Badge } from "@/components/ui/badge";
 import { AvatarPersona } from "@/components/vinea/AvatarPersona";
 import { HeaderInboxActions } from "@/components/vinea/notifications/HeaderInboxActions";
-import { AI_UI, CLUB_UI_ABILITATA, DEMO_UI_ABILITATA } from "@/config/features";
+import { ACCESSORI_UI_ABILITATA, AI_UI, CLUB_UI_ABILITATA, DEMO_UI_ABILITATA } from "@/config/features";
 import type { IncidentNotice } from "@/lib/incidents/notice";
 import {
   classiRicercaHeader,
@@ -60,6 +60,7 @@ const desktopLinks = [
   { to: "/", label: "Home", exact: true },
   { to: "/esplora", label: "Ricerca", exact: false },
   { to: "/community", label: "Club", exact: false },
+  { to: "/accessori", label: "Accessori", exact: false },
   { to: "/cantina", label: "La mia cantina", exact: false },
   { to: "/vendi", label: "Vendi", exact: false },
   { to: "/account", label: "Account", exact: false },
@@ -83,7 +84,9 @@ export function VineaLayout({
     (voce) => CLUB_UI_ABILITATA || voce.icona !== "club",
   );
   const vociDesktop = desktopLinks.filter(
-    (voce) => CLUB_UI_ABILITATA || voce.to !== "/community",
+    (voce) =>
+      (CLUB_UI_ABILITATA || voce.to !== "/community") &&
+      (ACCESSORI_UI_ABILITATA || voce.to !== "/accessori"),
   );
   // Nella guida Market Validation la navigazione principale, le azioni
   // dell'header e il Sommelier non si disegnano e il marchio non è un link:
