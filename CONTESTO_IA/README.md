@@ -126,6 +126,14 @@ Aprire soltanto ciò che serve al task:
   categorie fail-closed, spedizione indisponibile senza tariffa reale — è in
   `03_ARCHITETTURA_REGOLE_DEBITI.md`; contratto completo in
   `../docs/VPM_015B2_ANNUNCI_ACCESSORI.md`.
+- Pubblicazione automatica e moderazione degli annunci Accessori VPM-015B3 (22
+  ottobre 2026) — pubblicazione senza approvazione preventiva e moderazione
+  successiva sul sistema esistente (`reports`, `audit_log`), interruttore di
+  pubblicazione spento con accensione solo dal ruolo `accessori_release`, categorie
+  pubblicabili separate da `vendibile` (nessun backfill), snapshot pubblico e foto nel
+  bucket privato, oscuramento immediato, nessuna ripubblicazione autonoma, nessun
+  acquisto — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`; contratto completo in
+  `../docs/VPM_015B3_PUBBLICAZIONE_ACCESSORI.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono

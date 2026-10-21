@@ -211,6 +211,7 @@ export function AccessoriVetrina({
   modalita,
   vuoto,
   immagini = {},
+  collegamento,
 }: {
   titolo: string;
   introduzione: string;
@@ -221,6 +222,8 @@ export function AccessoriVetrina({
   vuoto: { titolo: string; messaggio: string };
   /** URL firmate delle foto, per percorso (vedi `urlImmagini` del servizio). */
   immagini?: Readonly<Record<string, string>>;
+  /** Collegamento facoltativo sotto l'avviso (es. gli annunci della community). */
+  collegamento?: { href: string; testo: string };
 }) {
   return (
     <main id="contenuto-principale" className="mx-auto max-w-6xl px-4 py-8 md:py-12">
@@ -235,8 +238,17 @@ export function AccessoriVetrina({
         <p className="mt-2 max-w-2xl text-antracite/75">{introduzione}</p>
       </header>
 
-      <div className="mb-6">
+      <div className="mb-6 space-y-3">
         <AvvisoBetaAccessori />
+        {collegamento ? (
+          <Link
+            href={collegamento.href}
+            data-testid="accessori-collegamento"
+            className="inline-flex items-center gap-2 text-sm font-medium text-bordeaux underline-offset-4 hover:underline"
+          >
+            {collegamento.testo}
+          </Link>
+        ) : null}
       </div>
 
       {categorie.length > 0 ? (

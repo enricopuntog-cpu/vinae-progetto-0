@@ -1,15 +1,20 @@
 import { describe, expect, it } from "bun:test";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * VPM-015B2 — contratto degli annunci Accessori, scritto come test.
+ * VPM-015B2 e VPM-015B3 — contratto degli annunci Accessori, scritto come test.
  *
- * Un annuncio Accessori è una BOZZA di preparazione: nessun gesto d'acquisto,
- * nessuna pubblicazione, nessun legame con ordini, pagamenti o checkout, nessun
- * campo economico deciso dal browser. Il contratto guarda il CODICE (non i
- * commenti) e la migrazione, così che aggiungere una scorciatoia faccia fallire
- * la build invece di passare in una PR.
+ * Un annuncio Accessori si può pubblicare (VPM-015B3) solo dietro l'interruttore
+ * di pubblicazione, il consenso del titolare per categoria e i requisiti
+ * verificati dal database; pubblicato NON è acquistabile. Nessun gesto
+ * d'acquisto, nessun legame con ordini, pagamenti o checkout, nessun campo
+ * economico deciso dal browser. Il contratto guarda il CODICE (non i commenti) e
+ * le migrazioni, così che aggiungere una scorciatoia faccia fallire la build
+ * invece di passare in una PR. Il contratto della migrazione B3 è in
+ * `annunci-accessori-pubblicazione-contratto.test.ts`; qui la migrazione B2 è
+ * storia congelata e si verifica soltanto che non sia stata toccata.
  */
 
 const progetto = join(import.meta.dir, "../../..");
@@ -84,33 +89,47 @@ describe("Annunci Accessori: nessun percorso di transazione", () => {
     expect(leggiRepo("docs/ENVIRONMENT.md")).not.toMatch(/ANNUNCI_ACCESSORI/i);
   });
 
-  it("nessuno stato «attivo» né acquistabile fra gli stati dell'annuncio", () => {
+  it("nessuno stato «attivo» né acquistabile fra gli stati dell'annuncio; nessuna revisione manuale", () => {
     const lib = leggi("src/lib/accessori-vendita/annunci-accessori.ts");
     const stati = /STATI_ANNUNCIO_ACCESSORIO = \[([^\]]*)\]/.exec(lib)?.[1] ?? "";
-    expect(stati.replace(/\s/g, "")).toBe('"bozza","in_revisione","ritirato"');
+    expect(stati.replace(/\s/g, "")).toBe(
+      '"bozza","pubblicato","modifiche_richieste","oscurato","ritirato",',
+    );
+    expect(stati).not.toMatch(/attivo|acquist|venduto|riservato|in_revisione/);
   });
 });
 
 describe("Annunci Accessori: servizio", () => {
   const servizio = senzaCommenti(leggi("src/services/annunci-accessori-service.ts"));
 
-  it("chiama solo funzioni annunci_accessori_* e mai la porta di pubblicazione né le tabelle", () => {
+  it("chiama solo funzioni annunci_accessori_*: nessuna porta di acquisto, nessuna tabella", () => {
     const rpc = [...servizio.matchAll(/\.rpc\(\s*"([a-z_]+)"/g)].map((m) => m[1]);
-    const dinamiche = [...servizio.matchAll(/annuncio\(\s*"([a-z_]+)"/g)].map((m) => m[1]);
-    const tutte = [...rpc, ...dinamiche];
+    const dinamiche = [...servizio.matchAll(/(?:annuncio|senzaRisultato)\(\s*"([a-z_]+)"/g)].map((m) => m[1]);
+    const tutte = [...new Set([...rpc, ...dinamiche])];
     for (const nome of tutte) expect(nome).toMatch(/^annunci_accessori_/);
-    expect(tutte).not.toContain("annunci_accessori_pubblica");
     expect(tutte.sort()).toEqual([
+      "annunci_accessori_admin_categoria_pubblicabile_imposta",
+      "annunci_accessori_admin_categorie_pubblicazione",
+      "annunci_accessori_admin_dettaglio",
+      "annunci_accessori_admin_elenca",
       "annunci_accessori_admin_imposta",
+      "annunci_accessori_admin_modera",
+      "annunci_accessori_admin_pubblicazione_imposta",
       "annunci_accessori_admin_stato",
       "annunci_accessori_elenca",
       "annunci_accessori_preventivo",
+      "annunci_accessori_pubblica",
+      "annunci_accessori_pubblici_elenca",
+      "annunci_accessori_pubblico_dettaglio",
       "annunci_accessori_salva",
       "annunci_accessori_stato",
       "annunci_accessori_transizione",
     ]);
     expect(servizio).not.toMatch(/\.from\(\s*["'`]/);
-    expect(servizio).not.toMatch(/\.storage\b/);
+    // Storage solo per firmare le foto dello snapshot: mai upload, remove o lista del bucket.
+    expect(servizio).not.toMatch(/\.(upload|remove|list|download|getPublicUrl)\(/);
+    expect([...servizio.matchAll(/\.storage\b/g)]).toHaveLength(1);
+    expect(servizio).toContain(".createSignedUrls(");
   });
 
   it("venditore, classe, margine, commissione e stato non sono mai parametri delle porte", () => {
@@ -136,18 +155,58 @@ describe("Annunci Accessori: superfici", () => {
     expect(comando).toMatch(/!contesto\?\.stato\?\.abilitata \|\| accessorio\.archiviato\) return null/);
   });
 
-  it("il dialogo dichiara che le vendite non sono attive e non ha gesti di pubblicazione", () => {
+  it("il dialogo dichiara che gli acquisti non sono disponibili e pubblica solo tramite il servizio", () => {
     const dialogo = senzaCommenti(leggi("src/components/vinea/accessori-vendita/AnnuncioAccessorioDialog.tsx"));
-    expect(dialogo).toContain("Le vendite non sono ancora attive.");
-    expect(dialogo).toContain('data-testid="avviso-vendite-disattivate"');
-    expect(dialogo).not.toMatch(/pubblic[ah]/i);
+    expect(dialogo).toContain("Gli acquisti non sono ancora disponibili.");
+    expect(dialogo).toContain('data-testid="avviso-acquisti-non-disponibili"');
+    expect(dialogo).toContain("servizio.pubblica(");
+    expect(dialogo).toContain("Pubblica annuncio");
+    // nessuna revisione manuale nascosta
+    expect(dialogo).not.toMatch(/in_revisione|Invia in revisione|Riporta in bozza/);
   });
 
-  it("l'area admin mostra l'interruttore e l'accensione chiede la conferma scritta", () => {
+  it("le pagine pubbliche passano dallo stesso gate degli Accessori e non linkano acquisti", () => {
+    for (const pagina of ["src/app/accessori/annunci/page.tsx", "src/app/accessori/annunci/[id]/page.tsx"]) {
+      const c = senzaCommenti(leggi(pagina));
+      expect(c).toContain("risolviModalitaAccessori(client)");
+      expect(c).toContain("notFound()");
+      expect(c).not.toMatch(/process\.env/);
+      expect(c).not.toMatch(/(checkout|phase7|proposal|payment|pagament|orders?-service|listing-service|balance|stripe)/i);
+      expect(c).not.toMatch(/["'`]\/(checkout|ordine|acquisti|vendite|vendi|annuncio)\b/);
+    }
+  });
+
+  it("la vetrina pubblica non ha comandi d'acquisto e l'unica azione è la segnalazione, che richiede l'accesso", () => {
+    const vetrina = senzaCommenti(leggi("src/components/vinea/accessori-vendita/AnnunciPubblici.tsx"));
+    expect(vetrina).toContain("Gli acquisti non sono ancora disponibili.");
+    expect(vetrina).toContain('targetType="annuncio_accessorio"');
+    expect(vetrina).toContain("Segnala annuncio");
+    // senza sessione la segnalazione rimanda all'accesso: nessuna porta anonima
+    expect(vetrina).toContain("autenticato ?");
+    expect(vetrina).toContain("Accedi per segnalare");
+    // le foto non si ritagliano: oggetti verticali interi
+    expect(vetrina).toContain("object-contain");
+    expect(vetrina).not.toContain("object-cover");
+  });
+
+  it("l'area admin ha la moderazione e la porta di segnalazione usa la RPC dedicata", () => {
+    expect(leggi("src/components/vinea/accessori/AccessoriAdminClient.tsx")).toContain("<ModerazioneAnnunciAccessori />");
+    const moderazione = senzaCommenti(leggi("src/components/vinea/accessori-vendita/ModerazioneAnnunciAccessori.tsx"));
+    expect(moderazione).toContain("motivazioneValida(motivazione)");
+    const segnala = leggi("src/services/phase9/supabase-moderation-service.ts");
+    expect(segnala).toContain('"segnalazione_annuncio_accessorio_invia"');
+    expect(leggi("src/data/moderation.ts")).toContain('| "annuncio_accessorio"');
+  });
+
+  it("l'area admin mostra i due interruttori e l'accensione chiede la conferma scritta", () => {
     expect(leggi("src/components/vinea/accessori/AccessoriAdminClient.tsx")).toContain("<AnnunciAccessoriAdmin />");
     const pannello = leggi("src/components/vinea/accessori-vendita/AnnunciAccessoriAdmin.tsx");
     expect(pannello).toContain("PAROLA_DI_RILASCIO");
     expect(pannello).toMatch(/conferma !== PAROLA_DI_RILASCIO/);
+    expect(pannello).toContain("impostaPubblicazione(");
+    expect(pannello).toContain("impostaCategoriaPubblicabile(");
+    // una categoria si approva solo se il database la dichiara vendibile alla preparazione
+    expect(pannello).toMatch(/c\.vendibile && stato\.puoRilasciare/);
   });
 
   it("il riepilogo non scrive mai uno zero per la spedizione: senza tariffa è «non disponibile»", () => {
@@ -159,7 +218,21 @@ describe("Annunci Accessori: superfici", () => {
   });
 });
 
-describe("Annunci Accessori: contratto della migrazione", () => {
+describe("Annunci Accessori: migrazione B2 (storica, congelata)", () => {
+  it("le migrazioni già distribuite non sono state toccate (hash dei contenuti)", () => {
+    const hash = (percorso: string) => createHash("sha256").update(leggiRepo(percorso)).digest("hex");
+    expect(hash("supabase/migrations/20261020120000_vpm_015a_accessori_fondazione.sql")).toBe(
+      "27be50c9b44f5c8bf0852e0f1fda3eb19d99605060d2753940faa2f095753889",
+    );
+    expect(hash("supabase/migrations/20261020170000_vpm_015a_accessori_rilascio_e_media_privati.sql")).toBe(
+      "918821b2d0bef4b12aaf9fd462f82157262ae9923ecea972fd7e533456271f7d",
+    );
+    expect(hash("supabase/migrations/20261021090000_vpm_015b1_cantina_accessori.sql")).toBe(
+      "e74951a6d6299ec104287272a5dd27171ab67e8317c0e0a3e3f59d9b97e85bb5",
+    );
+    expect(hash(MIGRAZIONE)).toBe("8d861d4ee08f00c955cf5f9788cdfe026bf50ef6a17ef0d8b6085cec41847f40");
+  });
+
   it("esiste ed è additiva: nessun drop di tabelle, nessuna scrittura sui dati di altri domini", () => {
     expect(existsSync(join(radiceRepo, MIGRAZIONE))).toBe(true);
     const sql = migrazione();
@@ -202,7 +275,7 @@ describe("Annunci Accessori: contratto della migrazione", () => {
     expect(sql).not.toMatch(/create policy/i);
   });
 
-  it("nessuno stato acquistabile e nessuna pubblicazione accendibile, nemmeno da un writer privilegiato", () => {
+  it("(storico B2) nessuno stato acquistabile e pubblicazione vincolata a falso in quella migrazione; la B3 la sostituisce con l'interruttore e il rilascio", () => {
     const sql = migrazione();
     expect(sql).toMatch(/check \(stato in \('bozza', 'in_revisione', 'ritirato'\)\)/);
     expect(sql).toMatch(/constraint annunci_accessori_nessuna_pubblicazione check \(not pubblicazione_attiva\)/);
@@ -263,7 +336,7 @@ describe("Annunci Accessori: contratto della migrazione", () => {
     expect(fissati).toBe(definer);
   });
 
-  it("la griglia 12zj e la prova di concorrenza sono registrate nel gate CI", () => {
+  it("la griglia 12zj e la prova di concorrenza restano registrate nel gate CI", () => {
     const runner = leggiRepo("supabase/tests/12g_ci_run.sh");
     expect(runner).toContain("12zj_vpm_015b2_annunci_accessori.sql");
     expect(runner).toContain("12zj_vpm_015b2_concorrenza.sh");

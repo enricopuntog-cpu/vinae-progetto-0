@@ -179,7 +179,7 @@ select pg_sleep($pausa) \g /dev/null"
 }
 
 ms() { date +%s%3N; }
-aperti() { sql "select count(*) from private.annunci_accessori where cantina_accessorio_id = '$1' and stato in ('bozza', 'in_revisione')"; }
+aperti() { sql "select count(*) from private.annunci_accessori where cantina_accessorio_id = '$1' and stato <> 'ritirato'"; }
 
 out_a="$(mktemp)"; out_b="$(mktemp)"
 
@@ -274,7 +274,7 @@ fi
 # Invariante finale: nessun accessorio di U1 ha annunci aperti oltre il posseduto.
 viol="$(sql "select count(*) from private.cantina_accessori c
   where (select coalesce(sum(a.quantita), 0) from private.annunci_accessori a
-         where a.cantina_accessorio_id = c.id and a.stato in ('bozza', 'in_revisione')) > c.quantita
+         where a.cantina_accessorio_id = c.id and a.stato <> 'ritirato') > c.quantita
     and c.owner_id = '$U1'")"
 if [ "$viol" = "0" ]; then
   esito "7 invariante finale: nessun accessorio con quantita impegnata oltre il posseduto" ok

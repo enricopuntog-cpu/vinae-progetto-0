@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12zj) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12zk) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
@@ -139,6 +139,10 @@ cleanup() {
     if [ "$(sql "select count(*) from auth.users where email like '%@mfa-12h.test'" 2>/dev/null)" != "0" ]; then
       echo "Pulizia fixture 12h MFA."
       "${PSQL[@]}" -At -f "$TESTS/12h_delegate_mfa_cleanup.sql" >/dev/null || status=1
+    fi
+    if [ "$(sql "select count(*) from auth.users where email like '%@e2e-12zk.test'" 2>/dev/null)" != "0" ]; then
+      echo "Pulizia fixture 12zk Accessori E2E."
+      "${PSQL[@]}" -At -f "$TESTS/12zk_vpm_015b3_e2e_cleanup.sql" >/dev/null || status=1
     fi
     echo "Pulizia fixture 12g."
     local residui
@@ -414,6 +418,27 @@ conc_12zj="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zj_vpm_015b2_concorrenza.sh
 printf '%s\n' "$conc_12zj"
 summary "- $(printf '%s\n' "$conc_12zj" | tail -n 1)"
 
+# VPM-015B3 Pubblicazione automatica e moderazione degli annunci Accessori
+# (migrazione 20261022091000): interruttore di pubblicazione spento di default con
+# accensione riservata al ruolo accessori_release (anche per i writer
+# privilegiati), categorie pubblicabili separate da `vendibile` (nessun backfill,
+# fail-closed), pubblicazione senza approvazione preventiva con tutti i requisiti
+# nella guardia, snapshot pubblico separato dalla Cantina, letture e firme Storage
+# solo per annunci visibili, segnalazioni e provvedimenti sul sistema di
+# moderazione esistente, nessuna ripubblicazione autonoma dopo un oscuramento,
+# nessun percorso d'acquisto. Fixture `.test` sintetiche; ROLLBACK.
+run_grid "12zk Pubblicazione Accessori e moderazione" 12zk_vpm_015b3_pubblicazione_accessori.sql 3
+
+# Stessa famiglia su sessioni separate: due pubblicazioni dello stesso annuncio,
+# oscuramento vs pubblicazione, aggiornamento vs oscuramento, doppio oscuramento,
+# archiviazione e riduzione di quantita vs pubblicazione. Fixture
+# `@conc-12zk.test` committate e rimosse in trap, residui 0; interruttori e
+# approvazioni di categoria valgono solo per la durata dello script.
+conc_12zk="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zk_vpm_015b3_concorrenza.sh")" \
+  || { printf '%s\n' "$conc_12zk"; die "12zk concorrenza: fallita."; }
+printf '%s\n' "$conc_12zk"
+summary "- $(printf '%s\n' "$conc_12zk" | tail -n 1)"
+
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
 # cancello di preparazione, quindi il suo caso 9 registra una prova reale. Una
@@ -496,6 +521,47 @@ summary "- 12h MFA REST (GoTrue + PostgREST): ${mfa_passed:-?}/${mfa_total:-?}, 
   || die "12h MFA REST: ${mfa_passed:-?}/${mfa_total:-?} (uscita $mfa_rc)."
 [ "$mfa_audit" = "3 1" ] || die "12h MFA: audit del delegato '$mfa_audit', atteso '3 1'."
 [ "$mfa_residui" = "0 0 0 0 0 0" ] || die "12h MFA: residui dopo la pulizia '$mfa_residui'."
+
+# --- prova REST e Storage della pubblicazione Accessori (12zk) -----------------
+# Token reali di GoTrue, porte reali di PostgREST e firme reali di Storage:
+# pubblicazione automatica, vetrina anonima, segnalazione, oscuramento
+# immediato sulle nuove letture e firme, ripristino, interruttore. Misura anche
+# il limite di revoca documentato (una URL gia firmata vale fino a scadenza).
+# Utenti propri `@e2e-12zk.test`, interruttori e approvazioni riportati allo
+# stato iniziale subito dopo: la fixture 12g richiede un database senza altri
+# utenti.
+
+ACC_PASSWORD="$(openssl rand -hex 24)"
+if [ -n "${GITHUB_ACTIONS:-}" ]; then
+  echo "::add-mask::$ACC_PASSWORD"
+fi
+
+sed "s/'__E2E_PASSWORD__'/:'e2e_password'/" "$TESTS/12zk_vpm_015b3_e2e_fixture.sql" \
+  | "${PSQL[@]}" -At -F ' ' -v e2e_password="$ACC_PASSWORD" -f - \
+  | tail -n 1 | { read -r utenti profili ruoli
+      echo "Fixture Accessori E2E: utenti=$utenti profili=$profili ruoli=$ruoli"
+      [ "$utenti $profili $ruoli" = "5 5 3" ] || exit 1; } \
+  || die "Fixture 12zk E2E non creata come atteso."
+
+acc_log="$(mktemp)"
+set +e
+E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_ANON_KEY="$E2E_ANON_KEY" E2E_PASSWORD="$ACC_PASSWORD" \
+  node "$TESTS/12zk_vpm_015b3_e2e.mjs" | tee "$acc_log"
+acc_rc=${PIPESTATUS[0]}
+set -e
+acc_last="$(tail -n 1 "$acc_log")"
+rm -f "$acc_log"
+acc_passed="$(printf '%s' "$acc_last" | sed -nE 's/.*"passed":([0-9]+).*/\1/p')"
+acc_total="$(printf '%s' "$acc_last" | sed -nE 's/.*"total":([0-9]+).*/\1/p')"
+
+acc_residui="$("${PSQL[@]}" -At -F ' ' -f "$TESTS/12zk_vpm_015b3_e2e_cleanup.sql" | tail -n 1)" \
+  || die "Pulizia 12zk E2E fallita."
+echo "12zk Accessori REST/Storage: ${acc_passed:-?}/${acc_total:-?}; residui e interruttori: $acc_residui"
+summary "- 12zk Accessori REST/Storage (GoTrue + PostgREST + Storage): ${acc_passed:-?}/${acc_total:-?}, residui \`$acc_residui\`"
+[ "$acc_rc" = "0" ] && [ -n "$acc_total" ] && [ "$acc_passed" = "$acc_total" ] \
+  || die "12zk Accessori REST/Storage: ${acc_passed:-?}/${acc_total:-?} (uscita $acc_rc)."
+[ "$acc_residui" = "0 0 0 0 0 0 0 0 0 false false false" ] \
+  || die "12zk Accessori E2E: residui o interruttori dopo la pulizia '$acc_residui'."
 
 # --- fixture e E2E completo --------------------------------------------------
 

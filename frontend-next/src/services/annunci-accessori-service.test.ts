@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   creaAnnunciAccessoriAdminService,
+  creaAnnunciAccessoriPubbliciService,
   creaAnnunciAccessoriService,
 } from "./annunci-accessori-service";
 
@@ -29,8 +30,9 @@ const annuncio = {
   id: U1, cantina_id: U2, stato: "bozza", quantita: 2, prezzo_unitario_cents: 1200,
   condizione: "usato", descrizione: "", conforme: true,
   spedizione: { peso_g: null, lunghezza_mm: null, larghezza_mm: null, altezza_mm: null, fragile: false },
-  posseduti: 6, impegnati: 2, disponibili: 4, foto: 0, inviato_at: null, ritirato_at: null,
+  posseduti: 6, impegnati: 2, disponibili: 4, foto: 0, ritirato_at: null,
   created_at: "2026-10-21T10:00:00Z", updated_at: "2026-10-21T10:00:00Z",
+  pubblicato_at: null, versione: 0, pubblico: false, moderazione: null,
 };
 
 const dati = {
@@ -46,6 +48,7 @@ describe("servizio degli annunci Accessori", () => {
     expect((await s.elenco(false)).ok).toBe(false);
     expect((await s.preventivo(1000, 1)).ok).toBe(false);
     expect((await s.salva(U1, dati)).ok).toBe(false);
+    expect((await s.pubblica(U1)).ok).toBe(false);
     expect((await s.transizione(U1, "ritirato")).ok).toBe(false);
   });
 
@@ -88,11 +91,46 @@ describe("servizio degli annunci Accessori", () => {
     if (!r.ok) expect(r.error).toContain("non è disponibile");
   });
 
-  it("la transizione chiede solo bozza, in_revisione o ritirato per un id, mai uno stato acquistabile", async () => {
-    const { client, chiamate } = finto(() => ({ data: { ...annuncio, stato: "in_revisione", inviato_at: "2026-10-21T10:05:00Z" } }));
-    const r = await creaAnnunciAccessoriService(client).transizione(U1, "in_revisione");
+  it("la transizione chiede uno stato per un id e nient'altro; il ritiro è sempre una transizione", async () => {
+    const { client, chiamate } = finto(() => ({ data: { ...annuncio, stato: "ritirato", ritirato_at: "2026-10-21T10:05:00Z" } }));
+    const r = await creaAnnunciAccessoriService(client).transizione(U1, "ritirato");
     expect(r.ok).toBe(true);
-    expect(chiamate[0]).toEqual({ nome: "annunci_accessori_transizione", args: { p_id: U1, p_a: "in_revisione" } });
+    expect(chiamate[0]).toEqual({ nome: "annunci_accessori_transizione", args: { p_id: U1, p_a: "ritirato" } });
+  });
+
+  it("pubblica manda solo l'id: nessun consenso, categoria, stato o interruttore dal browser", async () => {
+    const pubblicato = { ...annuncio, stato: "pubblicato", pubblicato_at: "2026-10-22T08:00:00Z", pubblico: true };
+    const { client, chiamate } = finto(() => ({ data: pubblicato }));
+    const r = await creaAnnunciAccessoriService(client).pubblica(U1);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.stato).toBe("pubblicato");
+      expect(r.data.pubblico).toBe(true);
+    }
+    expect(chiamate).toEqual([{ nome: "annunci_accessori_pubblica", args: { p_id: U1 } }]);
+  });
+
+  it("i rifiuti della pubblicazione diventano frasi: interruttore spento, categoria non approvata, articolo rimosso", async () => {
+    for (const [hint, attesa] of [
+      ["pubblicazione_chiusa", "non è ancora aperta"],
+      ["categoria_non_pubblicabile", "non è ancora ammessa alla pubblicazione"],
+      ["ripubblicazione_bloccata", "rimosso da Vinea"],
+      ["contenuto_non_ammesso", "non si può pubblicare"],
+      ["modifiche_non_effettuate", "Modifica l'annuncio"],
+    ] as const) {
+      const { client } = finto(() => ({ error: { code: "42501", hint, message: "interno" } }));
+      const r = await creaAnnunciAccessoriService(client).pubblica(U1);
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.error).toContain(attesa);
+        expect(r.error).not.toContain("interno");
+      }
+    }
+  });
+
+  it("una pubblicazione che il database dice riuscita ma illeggibile è un guasto, non un successo", async () => {
+    const { client } = finto(() => ({ data: { ...annuncio, stato: "pubblicato", pubblico: true, pubblicato_at: null, stato_x: 1, versione: "0" } }));
+    expect((await creaAnnunciAccessoriService(client).pubblica(U1)).ok).toBe(false);
   });
 
   it("gli errori del database diventano frasi, senza esporre interni", async () => {
@@ -119,7 +157,10 @@ describe("servizio degli annunci Accessori", () => {
 
   it("lo stato con vendite dichiarate attive chiude la sezione", async () => {
     const { client } = finto(() => ({
-      data: { abilitata: true, vendite_attive: true, classe: "privato", venditore_ammesso: true, motivo: null },
+      data: {
+        abilitata: true, pubblicazione_aperta: true, vendite_attive: true, classe: "privato",
+        venditore_ammesso: true, motivo: null,
+      },
     }));
     expect((await creaAnnunciAccessoriService(client).stato()).ok).toBe(false);
   });
@@ -140,10 +181,134 @@ describe("servizio admin", () => {
     if (!r.ok) expect(r.error).toContain("approvazione esplicita del titolare");
   });
 
-  it("legge lo stato e rifiuta una pubblicazione dichiarata attiva", async () => {
-    const buono = { preparazione_attiva: false, pubblicazione_attiva: false, cantina_funzione_attiva: true, puo_rilasciare: true };
-    expect((await creaAnnunciAccessoriAdminService(finto(() => ({ data: buono })).client).stato()).ok).toBe(true);
-    const guasto = { ...buono, pubblicazione_attiva: true };
+  it("legge lo stato con i due interruttori e rifiuta una risposta senza il conteggio delle categorie", async () => {
+    const buono = {
+      preparazione_attiva: false, pubblicazione_attiva: false, cantina_funzione_attiva: true,
+      puo_rilasciare: true, categorie_pubblicabili: 0,
+    };
+    const letto = await creaAnnunciAccessoriAdminService(finto(() => ({ data: buono })).client).stato();
+    expect(letto.ok).toBe(true);
+    if (letto.ok) expect(letto.data.pubblicazioneAttiva).toBe(false);
+    const { categorie_pubblicabili: _, ...guasto } = buono;
+    void _;
     expect((await creaAnnunciAccessoriAdminService(finto(() => ({ data: guasto })).client).stato()).ok).toBe(false);
+  });
+
+  it("l'interruttore di pubblicazione manda solo valore e motivo; il rilascio lo decide il database", async () => {
+    const { client, chiamate } = finto();
+    const r = await creaAnnunciAccessoriAdminService(client).impostaPubblicazione(true, "approvazione del titolare");
+    expect(r.ok).toBe(true);
+    expect(chiamate[0]).toEqual({
+      nome: "annunci_accessori_admin_pubblicazione_imposta",
+      args: { p_attiva: true, p_motivo: "approvazione del titolare" },
+    });
+    const { client: negato } = finto(() => ({ error: { code: "42501", hint: "rilascio_non_autorizzato" } }));
+    const rifiuto = await creaAnnunciAccessoriAdminService(negato).impostaPubblicazione(true, "x");
+    expect(rifiuto.ok).toBe(false);
+    if (!rifiuto.ok) expect(rifiuto.error).toContain("approvazione esplicita del titolare");
+  });
+
+  it("approvare una categoria manda solo categoria, valore e motivo; un id non valido non parte", async () => {
+    const { client, chiamate } = finto();
+    const s = creaAnnunciAccessoriAdminService(client);
+    expect((await s.impostaCategoriaPubblicabile(U1, true, "approvata dal titolare")).ok).toBe(true);
+    expect(chiamate[0]).toEqual({
+      nome: "annunci_accessori_admin_categoria_pubblicabile_imposta",
+      args: { p_categoria: U1, p_pubblicabile: true, p_motivo: "approvata dal titolare" },
+    });
+    expect((await s.impostaCategoriaPubblicabile("x", true, "m")).ok).toBe(false);
+    expect(chiamate).toHaveLength(1);
+  });
+
+  it("la moderazione manda azione e motivazione per un id; mai uno stato o un attore", async () => {
+    const { client, chiamate } = finto();
+    const s = creaAnnunciAccessoriAdminService(client);
+    expect((await s.modera(U1, "oscura", "Foto da verificare")).ok).toBe(true);
+    expect(chiamate[0]).toEqual({
+      nome: "annunci_accessori_admin_modera",
+      args: { p_id: U1, p_azione: "oscura", p_motivazione: "Foto da verificare" },
+    });
+    expect((await s.modera("x", "oscura", "m")).ok).toBe(false);
+    const { client: negato } = finto(() => ({ error: { code: "42501", message: "Azione riservata alla moderazione." } }));
+    const r = await creaAnnunciAccessoriAdminService(negato).modera(U1, "oscura", "m");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe("Operazione non consentita.");
+  });
+
+  it("l'elenco di moderazione manda solo il filtro e scarta le voci malformate", async () => {
+    const riga = {
+      id: U1, stato: "pubblicato", provvedimento: null, nome: "Calice", venditore: "ua", quantita: 2,
+      prezzo_unitario_cents: 1200, versione: 0, pubblicato_at: "2026-10-22T08:00:00Z",
+      segnalazioni_aperte: 1, segnalazioni_totali: 2,
+    };
+    const { client, chiamate } = finto(() => ({ data: [riga, { id: "x" }] }));
+    const s = creaAnnunciAccessoriAdminService(client);
+    // una voce malformata rende illeggibile l'intero elenco: non si mostra un elenco mutilato
+    expect((await s.elencoModerazione("segnalati")).ok).toBe(false);
+    expect(chiamate[0]).toEqual({ nome: "annunci_accessori_admin_elenca", args: { p_filtro: "segnalati", p_limite: 100 } });
+    const { client: buono } = finto(() => ({ data: [riga] }));
+    const r = await creaAnnunciAccessoriAdminService(buono).elencoModerazione("tutti");
+    expect(r.ok && r.data[0].segnalazioniAperte).toBe(1);
+    // @ts-expect-error filtro inesistente
+    expect((await s.elencoModerazione("inventato")).ok).toBe(false);
+  });
+
+  it("senza client ogni porta admin risponde con un errore leggibile", async () => {
+    const s = creaAnnunciAccessoriAdminService(null);
+    expect((await s.stato()).ok).toBe(false);
+    expect((await s.impostaPubblicazione(false, "x")).ok).toBe(false);
+    expect((await s.categoriePubblicazione()).ok).toBe(false);
+    expect((await s.elencoModerazione("tutti")).ok).toBe(false);
+    expect((await s.dettaglioModerazione(U1)).ok).toBe(false);
+    expect((await s.urlFoto(["a"])).ok).toBe(false);
+  });
+});
+
+describe("servizio della vetrina pubblica", () => {
+  const FOTO = `${U1}/${U2}/33333333-3333-4333-8333-333333333333.webp`;
+  const pubblico = {
+    id: U1, nome: "Calice", marchio: null,
+    categoria: { slug: "calici-da-rosso", nome: "Calici da rosso", genitore: "Calici" },
+    condizione: "usato", quantita: 2, descrizione: "", foto: [FOTO],
+    prezzo_acquirente_cents: 2273, pubblicato_at: "2026-10-22T08:00:00Z", aggiornato_at: "2026-10-22T08:00:00Z",
+    venditore: { username: "ua", avatar_url: null }, acquistabile: false,
+  };
+
+  it("l'elenco manda solo categoria, limite e offset; nessun id di utente", async () => {
+    const { client, chiamate } = finto(() => ({ data: [pubblico] }));
+    const r = await creaAnnunciAccessoriPubbliciService(client).elenco({ categoriaSlug: "calici", limite: 10, offset: 20 });
+    expect(r.ok).toBe(true);
+    expect(chiamate[0]).toEqual({
+      nome: "annunci_accessori_pubblici_elenca",
+      args: { p_categoria: "calici", p_limite: 10, p_offset: 20 },
+    });
+  });
+
+  it("una risposta che dichiara l'annuncio acquistabile non è quella promessa: scartata dall'elenco, guasto nel dettaglio", async () => {
+    const { client } = finto(() => ({ data: [{ ...pubblico, acquistabile: true }, pubblico] }));
+    const elenco = await creaAnnunciAccessoriPubbliciService(client).elenco();
+    expect(elenco.ok).toBe(true);
+    // l'annuncio che si dichiara acquistabile non entra in vetrina; l'altro sì
+    if (elenco.ok) expect(elenco.data.map((a) => a.id)).toEqual([U1]);
+    const { client: c2 } = finto(() => ({ data: { ...pubblico, acquistabile: true } }));
+    expect((await creaAnnunciAccessoriPubbliciService(c2).dettaglio(U1)).ok).toBe(false);
+  });
+
+  it("il dettaglio nullo (non esiste o non è visibile) è un esito, non un errore; un id malformato non parte", async () => {
+    const { client, chiamate } = finto(() => ({ data: null }));
+    const s = creaAnnunciAccessoriPubbliciService(client);
+    const r = await s.dettaglio(U1);
+    expect(r.ok && r.data).toBeNull();
+    expect(chiamate).toEqual([{ nome: "annunci_accessori_pubblico_dettaglio", args: { p_id: U1 } }]);
+    const malformato = await s.dettaglio("../x");
+    expect(malformato.ok && malformato.data).toBeNull();
+    expect(chiamate).toHaveLength(1);
+  });
+
+  it("senza client risponde con un errore leggibile", async () => {
+    const s = creaAnnunciAccessoriPubbliciService(null);
+    expect((await s.elenco()).ok).toBe(false);
+    expect((await s.dettaglio(U1)).ok).toBe(false);
+    expect((await s.urlFoto([FOTO])).ok).toBe(false);
   });
 });

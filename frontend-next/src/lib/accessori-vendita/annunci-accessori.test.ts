@@ -1,8 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import {
+  AVVISO_ACQUISTI_NON_DISPONIBILI,
   MAX_PREZZO_CENTS,
   MIN_PREZZO_CENTS,
+  STATI_ANNUNCIO_ACCESSORIO,
+  annuncioAperto,
   centesimiDaEuro,
+  messaggioStatoAnnuncio,
+  statoModificabile,
   messaggioErroreAnnunci,
   messaggioVenditoreNonAmmesso,
   moduloAnnuncioVuoto,
@@ -34,10 +39,20 @@ const annuncioJson = (extra: Record<string, unknown> = {}) => ({
   impegnati: 2,
   disponibili: 4,
   foto: 1,
-  inviato_at: null,
   ritirato_at: null,
   created_at: "2026-10-21T10:00:00Z",
   updated_at: "2026-10-21T10:00:00Z",
+  pubblicato_at: null,
+  versione: 0,
+  pubblico: false,
+  moderazione: null,
+  ...extra,
+});
+
+const moderazioneJson = (extra: Record<string, unknown> = {}) => ({
+  provvedimento: "sospensione",
+  motivo: "Foto da verificare",
+  aggiornato_at: "2026-10-22T09:00:00Z",
   ...extra,
 });
 
@@ -91,12 +106,37 @@ describe("parseAnnuncioAccessorio", () => {
     expect(a?.spedizione.fragile).toBe(true);
   });
 
-  it("scarta stati che non esistono: «attivo» non è mai un annuncio valido", () => {
-    expect(parseAnnuncioAccessorio(annuncioJson({ stato: "attivo" }))).toBeNull();
-    expect(parseAnnuncioAccessorio(annuncioJson({ stato: "venduto" }))).toBeNull();
-    for (const stato of ["bozza", "in_revisione", "ritirato"] as const) {
-      expect(parseAnnuncioAccessorio(annuncioJson({ stato }))?.stato).toBe(stato);
+  it("scarta stati che non esistono: né «attivo», né acquistabile, né la vecchia «in_revisione»", () => {
+    for (const stato of ["attivo", "venduto", "riservato", "acquistabile", "in_revisione"]) {
+      expect(parseAnnuncioAccessorio(annuncioJson({ stato }))).toBeNull();
     }
+    expect([...STATI_ANNUNCIO_ACCESSORIO]).toEqual([
+      "bozza", "pubblicato", "modifiche_richieste", "oscurato", "ritirato",
+    ]);
+    expect(parseAnnuncioAccessorio(annuncioJson({ stato: "bozza" }))?.stato).toBe("bozza");
+    expect(parseAnnuncioAccessorio(annuncioJson({ stato: "ritirato" }))?.stato).toBe("ritirato");
+    expect(parseAnnuncioAccessorio(annuncioJson({ stato: "pubblicato", pubblico: true, pubblicato_at: "2026-10-22T08:00:00Z" }))?.pubblico).toBe(true);
+  });
+
+  it("l'esito della moderazione c'è se e solo se Vinea è intervenuta", () => {
+    const mod = moderazioneJson();
+    const oscurato = parseAnnuncioAccessorio(annuncioJson({ stato: "oscurato", moderazione: mod }));
+    expect(oscurato?.moderazione).toEqual({
+      provvedimento: "sospensione", motivo: "Foto da verificare", aggiornatoAt: "2026-10-22T09:00:00Z",
+    });
+    expect(parseAnnuncioAccessorio(annuncioJson({ stato: "modifiche_richieste", moderazione: moderazioneJson({ provvedimento: null }) }))?.moderazione?.provvedimento).toBeNull();
+    // oscurato senza motivo, o un esito su un annuncio che non è in moderazione: risposta guasta
+    expect(parseAnnuncioAccessorio(annuncioJson({ stato: "oscurato" }))).toBeNull();
+    expect(parseAnnuncioAccessorio(annuncioJson({ stato: "bozza", moderazione: mod }))).toBeNull();
+    expect(parseAnnuncioAccessorio(annuncioJson({ stato: "oscurato", moderazione: moderazioneJson({ provvedimento: "ban" }) }))).toBeNull();
+    expect(parseAnnuncioAccessorio(annuncioJson({ stato: "oscurato", moderazione: "Foto" }))).toBeNull();
+  });
+
+  it("visibile solo se pubblicato: un annuncio in altro stato che si dichiara pubblico è guasto", () => {
+    expect(parseAnnuncioAccessorio(annuncioJson({ stato: "bozza", pubblico: true }))).toBeNull();
+    expect(parseAnnuncioAccessorio(annuncioJson({ stato: "oscurato", pubblico: true, moderazione: moderazioneJson() }))).toBeNull();
+    expect(parseAnnuncioAccessorio(annuncioJson({ versione: -1 }))).toBeNull();
+    expect(parseAnnuncioAccessorio(annuncioJson({ pubblico: "si" }))).toBeNull();
   });
 
   it("scarta quantità e prezzi fuori dai limiti del database", () => {
@@ -120,10 +160,16 @@ describe("parseAnnuncioAccessorio", () => {
 });
 
 describe("parseStatoVendita", () => {
-  const base = { abilitata: true, vendite_attive: false, classe: "privato", venditore_ammesso: true, motivo: null };
+  const base = {
+    abilitata: true, pubblicazione_aperta: false, vendite_attive: false, classe: "privato",
+    venditore_ammesso: true, motivo: null,
+  };
 
   it("legge lo stato e conserva il motivo del Partner", () => {
     expect(parseStatoVendita(base)?.abilitata).toBe(true);
+    expect(parseStatoVendita(base)?.pubblicazioneAperta).toBe(false);
+    expect(parseStatoVendita({ ...base, pubblicazione_aperta: true })?.pubblicazioneAperta).toBe(true);
+    expect(parseStatoVendita({ ...base, pubblicazione_aperta: undefined })).toBeNull();
     const p = parseStatoVendita({ ...base, classe: "partner", venditore_ammesso: false, motivo: "partner_percorso_non_consentito" });
     expect(p?.venditoreAmmesso).toBe(false);
     expect(p?.classe).toBe("partner");
@@ -195,10 +241,64 @@ describe("parsePreventivoAnnuncio", () => {
 });
 
 describe("parseStatoInterruttoreAnnunci", () => {
-  it("legge l'interruttore e rifiuta una pubblicazione dichiarata attiva", () => {
-    const ok = { preparazione_attiva: false, pubblicazione_attiva: false, cantina_funzione_attiva: true, puo_rilasciare: false };
-    expect(parseStatoInterruttoreAnnunci(ok)?.preparazioneAttiva).toBe(false);
-    expect(parseStatoInterruttoreAnnunci({ ...ok, pubblicazione_attiva: true })).toBeNull();
+  const ok = {
+    preparazione_attiva: false, pubblicazione_attiva: false, cantina_funzione_attiva: true,
+    puo_rilasciare: false, categorie_pubblicabili: 0,
+  };
+
+  it("legge i due interruttori e il conteggio delle categorie approvate", () => {
+    const s = parseStatoInterruttoreAnnunci(ok);
+    expect(s).toEqual({
+      preparazioneAttiva: false, pubblicazioneAttiva: false, cantinaFunzioneAttiva: true,
+      puoRilasciare: false, categoriePubblicabili: 0,
+    });
+    expect(parseStatoInterruttoreAnnunci({ ...ok, pubblicazione_attiva: true, categorie_pubblicabili: 2 })?.pubblicazioneAttiva).toBe(true);
+  });
+
+  it("rifiuta risposte incomplete o incoerenti", () => {
+    expect(parseStatoInterruttoreAnnunci({ ...ok, categorie_pubblicabili: -1 })).toBeNull();
+    expect(parseStatoInterruttoreAnnunci({ ...ok, categorie_pubblicabili: "2" })).toBeNull();
+    expect(parseStatoInterruttoreAnnunci({ ...ok, pubblicazione_attiva: "no" })).toBeNull();
+    expect(parseStatoInterruttoreAnnunci(null)).toBeNull();
+  });
+});
+
+describe("stato e messaggi per il venditore", () => {
+  it("si corregge in bozza, con modifiche richieste o da pubblicato; mai oscurato o ritirato", () => {
+    expect(STATI_ANNUNCIO_ACCESSORIO.filter(statoModificabile)).toEqual(["bozza", "pubblicato", "modifiche_richieste"]);
+  });
+
+  it("aperto è tutto ciò che non è ritirato (impegna i pezzi dell'accessorio)", () => {
+    expect(STATI_ANNUNCIO_ACCESSORIO.filter((stato) => annuncioAperto({ stato }))).toEqual([
+      "bozza", "pubblicato", "modifiche_richieste", "oscurato",
+    ]);
+  });
+
+  it("il messaggio dice sempre la verità sulla visibilità e che non si può ancora comprare", () => {
+    const visibile = messaggioStatoAnnuncio({ stato: "pubblicato", pubblico: true, moderazione: null });
+    expect(visibile).toContain("chiunque può vederlo");
+    expect(visibile).toContain(AVVISO_ACQUISTI_NON_DISPONIBILI);
+    const nascosto = messaggioStatoAnnuncio({ stato: "pubblicato", pubblico: false, moderazione: null });
+    expect(nascosto).toContain("non è visibile al pubblico");
+    expect(nascosto).not.toContain("chiunque può vederlo");
+    const mod = { provvedimento: "sospensione" as const, motivo: "Foto da verificare", aggiornatoAt: null };
+    expect(messaggioStatoAnnuncio({ stato: "oscurato", pubblico: false, moderazione: mod })).toContain("Foto da verificare");
+    expect(messaggioStatoAnnuncio({ stato: "oscurato", pubblico: false, moderazione: mod })).toContain("non puoi riaprirlo da solo");
+    expect(messaggioStatoAnnuncio({ stato: "modifiche_richieste", pubblico: false, moderazione: mod })).toContain("Foto da verificare");
+    expect(messaggioStatoAnnuncio({ stato: "bozza", pubblico: false, moderazione: null })).toContain("la vedi solo tu");
+    expect(messaggioStatoAnnuncio({ stato: "ritirato", pubblico: false, moderazione: null })).toContain("non è più in vetrina");
+  });
+
+  it("i nuovi errori della pubblicazione sono frasi, non codici", () => {
+    for (const hint of [
+      "categoria_non_pubblicabile", "contenuto_non_ammesso", "ripubblicazione_bloccata",
+      "modifiche_non_effettuate", "moderazione_riservata", "annuncio_pubblicato",
+    ]) {
+      const m = messaggioErroreAnnunci({ hint }, "ricaduta");
+      expect(m).not.toBe("ricaduta");
+      expect(m).not.toContain("_");
+    }
+    expect(messaggioErroreAnnunci({ hint: "ripubblicazione_bloccata" }, "x")).toContain("rimosso da Vinea");
   });
 });
 

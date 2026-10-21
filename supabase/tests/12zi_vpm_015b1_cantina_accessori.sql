@@ -650,14 +650,21 @@ begin
     '');
 
   -- 33: superficie di Storage per anon.
-  perform pg_temp.registra(33, 'per anon una sola policy sul bucket (SELECT delle foto esposte), nessuna di scrittura; gli helper di interruttore non sono eseguibili dai ruoli client',
+  perform pg_temp.registra(33, 'per anon due sole policy sul bucket, entrambe SELECT (foto esposte 015B1 e foto di annunci visibili 015B3), nessuna di scrittura; gli helper di interruttore non sono eseguibili dai ruoli client',
     (select count(*) from pg_policies
      where schemaname = 'storage' and tablename = 'objects'
        and (qual like '%cantina-accessori-foto%' or with_check like '%cantina-accessori-foto%')
-       and 'anon' = any (roles)) = 1
+       and 'anon' = any (roles)) = 2
+    and not exists (select 1 from pg_policies
+                    where schemaname = 'storage' and tablename = 'objects'
+                      and (qual like '%cantina-accessori-foto%' or with_check like '%cantina-accessori-foto%')
+                      and 'anon' = any (roles) and cmd <> 'SELECT')
     and exists (select 1 from pg_policies
                 where schemaname = 'storage' and tablename = 'objects'
                   and policyname = 'cantina_accessori_media_select_esposte' and cmd = 'SELECT' and 'anon' = any (roles))
+    and exists (select 1 from pg_policies
+                where schemaname = 'storage' and tablename = 'objects'
+                  and policyname = 'cantina_accessori_media_select_annunci_pubblicati' and cmd = 'SELECT' and 'anon' = any (roles))
     and not has_function_privilege('anon', 'private.cantina_accessori_consentita()', 'execute')
     and not has_function_privilege('authenticated', 'private.cantina_accessori_consentita()', 'execute')
     and not has_function_privilege('authenticated', 'private.cantina_accessori_utente()', 'execute')

@@ -1,5 +1,13 @@
 # VPM-015B2 — Annunci Accessori: fondazione tecnica della vendita
 
+> **Aggiornamento (22 ottobre 2026).** [VPM-015B3](VPM_015B3_PUBBLICAZIONE_ACCESSORI.md)
+> supera due punti di questo contratto: lo stato `in_revisione` non esiste più (nessuna
+> revisione manuale preventiva) e la pubblicazione non risponde più sempre
+> «chiusa»: è possibile **solo** dietro l'interruttore di pubblicazione (ruolo
+> `accessori_release`), una categoria approvata e i requisiti verificati dal database.
+> Restano invariati: nessun acquisto, ordine o pagamento, margini, quantità, Partner. Il
+> testo sotto è la storia di B2.
+
 Contratto del sotto-blocco 015B2 (21 ottobre 2026), costruito su
 [VPM-015A](VPM_015A_ACCESSORI.md) (catalogo) e
 [VPM-015B1](VPM_015B1_CANTINA_ACCESSORI.md) (Cantina Accessori personale).

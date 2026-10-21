@@ -1892,7 +1892,53 @@ accessori posseduti **senza alcuna vendita**. Regole durevoli:
   mostra.
 - **Residui accettati.** «In revisione» non ha ancora un destinatario operativo
   (moderazione = blocco successivo); le foto dell'annuncio sono quelle private
-  dell'accessorio.
+  dell'accessorio. *(Superati da VPM-015B3: vedi sotto.)*
+
+## Pubblicazione automatica e moderazione degli annunci Accessori — VPM-015B3 (22 ottobre 2026)
+
+Migrazioni `20261022090000_vpm_015b3_report_target_annuncio_accessorio.sql` (solo il
+valore dell'enum, in un file proprio come per i Club) e
+`20261022091000_vpm_015b3_pubblicazione_accessori.sql`; griglia
+`12zk_vpm_015b3_pubblicazione_accessori.sql`, prova di concorrenza
+`12zk_vpm_015b3_concorrenza.sh` e prova REST/Storage `12zk_vpm_015b3_e2e.mjs` nel gate
+`Supabase DB regression`; contratto completo in
+`../docs/VPM_015B3_PUBBLICAZIONE_ACCESSORI.md`. Decisione del titolare: **pubblicazione
+automatica senza approvazione preventiva, moderazione successiva** — decisione sul
+*modello*, non sul rilascio: tutto parte spento e **visibile non è acquistabile**.
+Regole durevoli:
+
+- **Stati.** `bozza | pubblicato | modifiche_richieste | oscurato | ritirato`.
+  `in_revisione` non esiste più (le righe tornano bozza). Nessuno stato acquistabile,
+  nessun ordine/checkout/pagamento/prenotazione di Accessori.
+- **Gate.** `pubblicazione_attiva` spenta di default, accensione solo col ruolo
+  `accessori_release` (anche per i writer privilegiati, marcatore transazionale);
+  spegnere (ogni admin) nasconde subito. «Pubblicazione aperta» = Cantina + preparazione
+  + pubblicazione. Le categorie pubblicabili sono una tabella **separata** da
+  `vendibile` (filtro di preparazione): nessun backfill, fail-closed, approvazione solo
+  dal rilascio e mai per categorie chiuse; revocare nasconde.
+- **Guardia unica.** `private.annunci_accessori_guard` impone ogni requisito
+  all'ingresso in `pubblicato` per ogni writer (interruttore, venditore, categoria,
+  dichiarazione, foto, termini vietati, anti-elusione, prezzo calcolabile, quantità).
+  Oscurare/richiedere modifiche/riaprire e i campi di esito richiedono il marcatore
+  della moderazione; l'offerta pubblicata si cambia solo con l'aggiornamento controllato
+  (`versione`+1, snapshot rifatto).
+- **Snapshot.** `annunci_accessori_snapshot` (nome, marchio, categoria, percorsi foto)
+  separato dalla Cantina, scritto solo alla pubblicazione; non si rifà alla riapertura da
+  oscurato. Foto **non duplicate**: bucket privato, firma solo per snapshot di annunci
+  visibili (o admin in moderazione); un file di un annuncio non ritirato non si
+  cancella.
+- **Moderazione riusata, non parallela.** Nuovo bersaglio `annuncio_accessorio` in
+  `reports`/`audit_log`/`mod_action`; le quattro azioni sulla pratica ora lo gestiscono
+  (senza il ramo avrebbero scritto un audit senza effetto); porta diretta
+  `annunci_accessori_admin_modera`. Segnalazione solo per utenti **autenticati** (nessuna
+  porta anonima). Anti-elusione proporzionata: accessorio con provvedimento non
+  ripubblicabile, stesso articolo entro 90 giorni da una rimozione bloccato.
+- **Letture pubbliche.** Solo funzioni (`annunci_accessori_pubblici_elenca`,
+  `_pubblico_dettaglio`), nessuna vista; forma a 13 chiavi con prezzo per l'acquirente
+  calcolato dal database, mai il prezzo del venditore né id di Cantina.
+- **Residui accettati.** URL firmate già emesse valide fino a scadenza (900 s, misurato
+  in E2E); file orfani alla cancellazione dell'account; nessuna pre-moderazione;
+  segnalazioni anonime non supportate (verifica LEG se richieste dalla normativa).
 
 ## Grant di `public.profiles` dopo l'hardening del 18 settembre 2026
 

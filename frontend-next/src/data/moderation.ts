@@ -27,7 +27,8 @@ export type ReportTargetType =
   | "post"
   | "commento"
   | "recensione"
-  | "club";
+  | "club"
+  | "annuncio_accessorio";
 
 export const reportTargetLabel: Record<ReportTargetType, string> = {
   annuncio: "Annuncio",
@@ -38,6 +39,7 @@ export const reportTargetLabel: Record<ReportTargetType, string> = {
   commento: "Commento",
   recensione: "Recensione",
   club: "Club",
+  annuncio_accessorio: "Annuncio Accessori",
 };
 
 export const reportReasons: Record<ReportTargetType, string[]> = {
@@ -67,6 +69,15 @@ export const reportReasons: Record<ReportTargetType, string[]> = {
   commento: ["Insulti o linguaggio offensivo", "Molestia mirata", "Spam"],
   recensione: ["Recensione falsa", "Contenuto diffamatorio", "Fuori tema rispetto all'ordine"],
   club: ["contenuto_non_conforme", "comportamento_scorretto", "spam", "altro"],
+  annuncio_accessorio: [
+    "Articolo alcolico o regolamentato",
+    "Articolo vietato o pericoloso",
+    "Foto non veritiere o riciclate",
+    "Descrizione ingannevole",
+    "Prezzo anomalo",
+    "Annuncio duplicato",
+    "Articolo contraffatto o frode",
+  ],
 };
 
 export const reportReasonLabel: Partial<Record<ReportTargetType, Record<string, string>>> = {
@@ -125,7 +136,13 @@ export type Report = {
 
 export function priorityFromReason(reason: string): Priorita {
   const r = reason.toLowerCase();
-  if (r.includes("truff") || r.includes("frod") || r.includes("pagament") || r.includes("molest"))
+  if (
+    r.includes("truff") ||
+    r.includes("frod") ||
+    r.includes("pagament") ||
+    r.includes("molest") ||
+    r.includes("regolament")
+  )
     return "alta";
   if (
     r.includes("offens") ||
