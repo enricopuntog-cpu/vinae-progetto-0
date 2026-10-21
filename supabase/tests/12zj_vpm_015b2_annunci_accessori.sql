@@ -527,12 +527,12 @@ begin
   -- INTERRUTTORE E PORTE
   -- =========================================================================
 
-  -- 11: stato iniziale, pubblicazione vincolata a falso.
-  perform pg_temp.registra(11, 'interruttore spento di default (una sola riga); la pubblicazione non puo essere accesa nemmeno da un writer privilegiato; nessun annuncio; settings non cancellabili',
+  -- 11: stato iniziale; la pubblicazione (B3) non si accende senza la porta di rilascio.
+  perform pg_temp.registra(11, 'interruttore spento di default (una sola riga); la pubblicazione non puo essere accesa nemmeno da un writer privilegiato senza la porta di rilascio (rilascio_non_autorizzato); nessun annuncio; settings non cancellabili',
     (select count(*) from private.annunci_accessori_impostazioni) = 1
     and (select preparazione_attiva or pubblicazione_attiva from private.annunci_accessori_impostazioni) = false
     and (select count(*) from private.annunci_accessori) = 0
-    and (pg_temp.diretto($q$update private.annunci_accessori_impostazioni set pubblicazione_attiva = true$q$)).esito = '23514'
+    and (pg_temp.diretto($q$update private.annunci_accessori_impostazioni set pubblicazione_attiva = true$q$)).hint = 'rilascio_non_autorizzato'
     and (pg_temp.diretto($q$delete from private.annunci_accessori_impostazioni$q$)).esito = '42501'
     and exists (select 1 from pg_trigger t where t.tgrelid = 'private.annunci_accessori_impostazioni'::regclass
                 and not t.tgisinternal and (t.tgtype & 32) <> 0),
@@ -545,7 +545,7 @@ begin
     and pg_temp.dato('select public.annunci_accessori_elenca()', c_a)::text = '[]'
     and pg_temp.salva(c_a, v_a1, format('{"cantina_id":"%s","quantita":1,"prezzo_unitario_cents":500}', v_ia)) = '42501:funzione_non_attiva'
     and pg_temp.esito('select public.annunci_accessori_preventivo(500, 1)', c_a) = '42501:funzione_non_attiva'
-    and pg_temp.transizione(c_a, v_a1, 'in_revisione') = '42501:funzione_non_attiva'
+    and pg_temp.transizione(c_a, v_a1, 'bozza') = '42501:funzione_non_attiva'
     and pg_temp.esito('select public.annunci_accessori_stato()', null, 'anon') like '42501:%'
     and pg_temp.esito('select public.annunci_accessori_elenca()', null, 'anon') like '42501:%'
     and pg_temp.esito('select public.annunci_accessori_preventivo(500, 1)', null, 'anon') like '42501:%'
@@ -677,10 +677,11 @@ begin
   -- 19: isolamento fra utenti.
   perform pg_temp.chiama(format(
     $q$select public.annunci_accessori_salva(%L, jsonb_build_object('cantina_id', %L, 'quantita', 1, 'prezzo_unitario_cents', 800))$q$, v_b1, v_ib), c_b);
-  perform pg_temp.registra(19, 'isolamento: B non vede, non modifica, non ritira, non invia gli annunci di A e non ne crea sui suoi accessori; A non tocca quelli di B; elenchi separati; id altrui risponde come inesistente',
+  perform pg_temp.registra(19, 'isolamento: B non vede, non modifica, non ritira, non pubblica gli annunci di A e non ne crea sui suoi accessori; A non tocca quelli di B; elenchi separati; id altrui risponde come inesistente',
     pg_temp.salva(c_b, v_a3, '{"quantita":1}') = 'P0001:non_trovato'
     and pg_temp.transizione(c_b, v_a3, 'ritirato') = 'P0001:non_trovato'
-    and pg_temp.transizione(c_b, v_a3, 'in_revisione') = 'P0001:non_trovato'
+    and pg_temp.transizione(c_b, v_a3, 'bozza') = 'P0001:non_trovato'
+    and pg_temp.esito(format('select public.annunci_accessori_pubblica(%L)', v_a3), c_b) = '42501:pubblicazione_chiusa'
     and pg_temp.salva(c_b, gen_random_uuid(), format('{"cantina_id":"%s","quantita":1,"prezzo_unitario_cents":500}', v_ic)) = 'P0001:non_trovato'
     and pg_temp.esito(format('select public.annunci_accessori_preventivo(500, 1, %L)', v_ic), c_b) = 'P0001:non_trovato'
     and pg_temp.salva(c_a, v_b1, '{"quantita":1}') = 'P0001:non_trovato'
@@ -754,35 +755,29 @@ begin
     and (select archiviato_at from private.cantina_accessori where id = v_ic) is null,
     v_s || ' ' || v_t || ' ' || v_u || ' ' || v_w);
 
-  -- 24: percorso di revisione: dichiarazione, foto, modifica in revisione, ritiro definitivo.
+  -- 24: nessuna revisione manuale (B3): `in_revisione` non esiste piu.
   v_s := pg_temp.transizione(c_a, v_a3, 'in_revisione');
-  perform pg_temp.chiama(format($q$select public.annunci_accessori_salva(%L, '{"conforme":true}'::jsonb)$q$, v_a3), c_a);
-  v_t := pg_temp.transizione(c_a, v_a3, 'in_revisione');
+  v_t := (pg_temp.diretto(format($q$update private.annunci_accessori set stato = 'in_revisione' where id = %L$q$, v_a3))).hint;
   perform pg_temp.chiama(format(
     $q$select public.annunci_accessori_salva(%L, jsonb_build_object('cantina_id', %L, 'quantita', 2, 'prezzo_unitario_cents', 1200,
        'conforme', true, 'condizione', 'usato'))$q$, v_a1, v_ia), c_a);
-  v_u := pg_temp.transizione(c_a, v_a1, 'in_revisione');
-  v_w := pg_temp.salva(c_a, v_a1, '{"quantita":3}');
-  perform pg_temp.registra(24, 'invio in revisione: senza dichiarazione (dichiarazione_mancante) o senza foto (foto_obbligatoria) rifiutato; con entrambe passa a in_revisione (inviato_at); in revisione non si modifica (annuncio_non_modificabile, anche con UPDATE privilegiato)',
-    v_s = '22023:dichiarazione_mancante' and v_t = '22023:foto_obbligatoria' and v_u = 'NESSUN_ERRORE:'
-    and v_w = '22023:annuncio_non_modificabile'
-    and (select stato from private.annunci_accessori where id = v_a1) = 'in_revisione'
-    and (select inviato_at from private.annunci_accessori where id = v_a1) is not null
-    and (pg_temp.diretto(format($q$update private.annunci_accessori set prezzo_unitario_cents = 5 where id = %L$q$, v_a1))).hint = 'annuncio_non_modificabile'
+  v_u := pg_temp.esito(format('select public.annunci_accessori_pubblica(%L)', v_a1), c_a);
+  perform pg_temp.registra(24, 'nessuna revisione manuale nascosta: lo stato in_revisione non esiste piu (transizione_non_ammessa, anche per un UPDATE privilegiato); con l''interruttore di pubblicazione spento la pubblicazione risponde pubblicazione_chiusa e la bozza resta intatta',
+    v_s = '22023:transizione_non_ammessa' and v_t = 'transizione_non_ammessa' and v_u = '42501:pubblicazione_chiusa'
+    and (select stato from private.annunci_accessori where id = v_a1) = 'bozza'
+    and (select inviato_at from private.annunci_accessori where id = v_a1) is null
     and (select prezzo_unitario_cents from private.annunci_accessori where id = v_a1) = 1200,
-    v_s || ' ' || v_t || ' ' || v_u || ' ' || v_w);
+    v_s || ' ' || v_t || ' ' || v_u);
 
-  -- 25: categoria in revisione bloccata; ritorno in bozza; ritiro terminale.
+  -- 25: categoria libera in bozza; ritiro terminale.
   v_s := pg_temp.esito(format(
     $q$select public.cantina_accessori_salva(%L, jsonb_build_object('categoria_id', %L))$q$, v_ia, pg_temp.categoria('cavatappi')), c_a);
-  perform pg_temp.chiama(format('select public.annunci_accessori_transizione(%L, ''bozza'')', v_a1), c_a);
   v_t := pg_temp.esito(format(
     $q$select public.cantina_accessori_salva(%L, jsonb_build_object('categoria_id', %L))$q$, v_ia, pg_temp.categoria('cavatappi')), c_a);
-  perform pg_temp.chiama(format('select public.annunci_accessori_transizione(%L, ''in_revisione'')', v_a1), c_a);
   v_u := pg_temp.transizione(c_a, v_a1, 'ritirato');
   v_w := pg_temp.transizione(c_a, v_a1, 'bozza');
-  perform pg_temp.registra(25, 'categoria dell''accessorio bloccata mentre l''annuncio e in revisione (annuncio_in_revisione), libera in bozza; in_revisione -> bozza -> in_revisione -> ritirato; un annuncio ritirato e terminale (annuncio_ritirato) e libera la quantita',
-    v_s = '22023:annuncio_in_revisione' and v_t = 'NESSUN_ERRORE:' and v_u = 'NESSUN_ERRORE:'
+  perform pg_temp.registra(25, 'categoria dell''accessorio libera finche l''annuncio e in bozza (il blocco con un annuncio pubblicato o in moderazione e provato in 12zk); bozza -> ritirato; un annuncio ritirato e terminale (annuncio_ritirato) e libera la quantita',
+    v_s = 'NESSUN_ERRORE:' and v_t = 'NESSUN_ERRORE:' and v_u = 'NESSUN_ERRORE:'
     and v_w = '22023:annuncio_ritirato'
     and (select stato from private.annunci_accessori where id = v_a1) = 'ritirato'
     and (select ritirato_at from private.annunci_accessori where id = v_a1) is not null
@@ -792,14 +787,14 @@ begin
     and pg_temp.esito(format('select public.cantina_accessori_archivia(%L, false)', v_ia), c_a) = 'NESSUN_ERRORE:',
     v_s || ' ' || v_t || ' ' || v_u || ' ' || v_w);
 
-  -- 26: la pubblicazione e chiusa per tutti, anche con chiamata diretta; nessuno stato acquistabile.
-  perform pg_temp.registra(26, 'pubblicazione commerciale chiusa: annunci_accessori_pubblica risponde pubblicazione_chiusa a proprietario, admin, rilascio e un utente qualunque; nessun annuncio in uno stato diverso da bozza/in_revisione/ritirato; "attivo" impossibile (CHECK)',
+  -- 26: con l'interruttore di pubblicazione spento (default) la pubblicazione e chiusa per tutti, anche con chiamata diretta; nessuno stato acquistabile.
+  perform pg_temp.registra(26, 'pubblicazione chiusa a interruttore spento: annunci_accessori_pubblica risponde pubblicazione_chiusa a proprietario, admin, rilascio e un utente qualunque; nessun annuncio in uno stato diverso da bozza/ritirato; "attivo" impossibile (CHECK)',
     pg_temp.esito(format('select public.annunci_accessori_pubblica(%L)', v_a3), c_a) = '42501:pubblicazione_chiusa'
     and pg_temp.esito(format('select public.annunci_accessori_pubblica(%L)', v_a3), c_b) = '42501:pubblicazione_chiusa'
     and pg_temp.esito(format('select public.annunci_accessori_pubblica(%L)', v_a3), c_adm) = '42501:pubblicazione_chiusa'
     and pg_temp.esito(format('select public.annunci_accessori_pubblica(%L)', v_a3), c_fnd) = '42501:pubblicazione_chiusa'
     and pg_temp.esito(format('select public.annunci_accessori_pubblica(%L)', gen_random_uuid()), c_a) = '42501:pubblicazione_chiusa'
-    and (select count(*) from private.annunci_accessori where stato not in ('bozza', 'in_revisione', 'ritirato')) = 0
+    and (select count(*) from private.annunci_accessori where stato not in ('bozza', 'ritirato')) = 0
     and exists (select 1 from pg_constraint c where c.conrelid = 'private.annunci_accessori'::regclass
                 and c.conname = 'annunci_accessori_stato_ammesso'
                 and pg_get_constraintdef(c.oid) not like '%attivo%'),
@@ -875,9 +870,9 @@ begin
   -- Partner in verifica: ancora un privato; se viene approvato, il suo annuncio non passa in revisione.
   v_s := pg_temp.salva(c_pv, v_a4, format('{"cantina_id":"%s","quantita":2,"prezzo_unitario_cents":700,"conforme":true}', v_ip));
   perform pg_temp.decidi(c_adm, v_pid_v, 'approva');
-  v_t := pg_temp.transizione(c_pv, v_a4, 'in_revisione');
+  v_t := pg_temp.salva(c_pv, v_a4, '{"quantita":1}');
   v_u := pg_temp.transizione(c_pv, v_a4, 'ritirato');
-  perform pg_temp.registra(31, 'Partner in verifica: ancora un privato (bozza ammessa); approvato come Partner, l''invio in revisione dello stesso annuncio e rifiutato (partner_percorso_non_consentito) mentre il ritiro resta possibile',
+  perform pg_temp.registra(31, 'Partner in verifica: ancora un privato (bozza ammessa); approvato come Partner, la modifica dello stesso annuncio e rifiutata (partner_percorso_non_consentito) mentre il ritiro resta possibile',
     v_s = 'NESSUN_ERRORE:' and v_t = '42501:partner_percorso_non_consentito' and v_u = 'NESSUN_ERRORE:',
     v_s || ' ' || v_t || ' ' || v_u);
 
@@ -900,12 +895,15 @@ begin
     v_n::text || ' ' || v_s);
 
   -- 33: separazione dal mercato.
-  perform pg_temp.registra(33, 'nessun legame con il mercato: l''annuncio ha solo FK verso profiles e cantina_accessori; nessuna tabella lo referenzia; nessuna colonna di ordine/pagamento/classe; nessuna vista o tabella in public; public_listings non lo cita; conteggi di listings, ordini, vino, bottiglie, pagamenti e proposte invariati',
+  perform pg_temp.registra(33, 'nessun legame con il mercato: l''annuncio ha solo FK verso profiles e cantina_accessori; lo referenziano solo lo snapshot e le segnalazioni (reports, on delete set null); nessuna colonna di ordine/pagamento/classe; nessuna vista o tabella in public; public_listings non lo cita; conteggi di listings, ordini, vino, bottiglie, pagamenti e proposte invariati',
     not exists (
       select 1 from pg_constraint c
       where c.conrelid = 'private.annunci_accessori'::regclass and c.contype = 'f'
         and c.confrelid not in ('public.profiles'::regclass, 'private.cantina_accessori'::regclass))
-    and not exists (select 1 from pg_constraint c where c.confrelid = 'private.annunci_accessori'::regclass)
+    and not exists (
+      select 1 from pg_constraint c
+      where c.confrelid = 'private.annunci_accessori'::regclass and c.contype = 'f'
+        and c.conrelid not in ('private.annunci_accessori_snapshot'::regclass, 'public.reports'::regclass))
     and not exists (
       select 1 from pg_attribute a
       where a.attrelid = 'private.annunci_accessori'::regclass and a.attnum > 0 and not a.attisdropped
@@ -924,10 +922,13 @@ begin
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.proname like 'annunci\_accessori\_%'
     and has_function_privilege('anon', p.oid, 'execute');
-  perform pg_temp.registra(34, 'anonimo non esegue nessuna porta annunci; le otto sono per authenticated; quattro letture stable e quattro scritture volatili (PostgREST sceglie il modo transazione dalla volatilita); tutte security definer con search_path vuoto',
-    v_chiavi is null
+  perform pg_temp.registra(34, 'anonimo esegue solo le due letture pubbliche degli annunci (vuote a pubblicazione chiusa); le otto porte B2 restano per authenticated; letture stable e scritture volatili (PostgREST sceglie il modo transazione dalla volatilita); tutte security definer con search_path vuoto',
+    v_chiavi = array['annunci_accessori_pubblici_elenca', 'annunci_accessori_pubblico_dettaglio']
     and (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-         where n.nspname = 'public' and p.proname like 'annunci\_accessori\_%'
+         where n.nspname = 'public' and p.proname in (
+           'annunci_accessori_stato', 'annunci_accessori_elenca', 'annunci_accessori_preventivo',
+           'annunci_accessori_salva', 'annunci_accessori_transizione', 'annunci_accessori_pubblica',
+           'annunci_accessori_admin_stato', 'annunci_accessori_admin_imposta')
            and has_function_privilege('authenticated', p.oid, 'execute')) = 8
     and (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
          where n.nspname = 'public' and p.provolatile = 's' and p.proname in (
@@ -983,11 +984,11 @@ begin
   select a.id into v_cat from private.annunci_accessori a where a.seller_id = c_a and a.stato = 'bozza' limit 1;
   perform pg_temp.chiama($q$select public.annunci_accessori_admin_imposta(false, 'spegnimento finale 12zj')$q$, c_adm);
   v_s := pg_temp.salva(c_a, v_cat, '{"quantita":1}');
-  v_t := pg_temp.transizione(c_a, v_cat, 'in_revisione');
+  v_t := pg_temp.transizione(c_a, v_cat, 'bozza');
   v_u := pg_temp.transizione(c_a, v_cat, 'ritirato');
-  perform pg_temp.registra(38, 'interruttore spento dopo l''uso: nuove scritture e invii rifiutati (funzione_non_attiva), elenco vuoto, ma il ritiro resta possibile; i dati non vengono toccati',
+  perform pg_temp.registra(38, 'interruttore spento dopo l''uso: nuove scritture e ritorni in bozza rifiutati (funzione_non_attiva), il ritiro resta possibile e l''elenco degli annunci propri resta leggibile (anche per sapere cosa e successo); i dati non vengono toccati',
     v_s = '42501:funzione_non_attiva' and v_t = '42501:funzione_non_attiva' and v_u = 'NESSUN_ERRORE:'
-    and pg_temp.dato('select public.annunci_accessori_elenca()', c_a)::text = '[]'
+    and jsonb_array_length(pg_temp.dato('select public.annunci_accessori_elenca(true)', c_a)) >= 1
     and (select stato from private.annunci_accessori where id = v_cat) = 'ritirato',
     v_s || ' ' || v_t || ' ' || v_u);
 
