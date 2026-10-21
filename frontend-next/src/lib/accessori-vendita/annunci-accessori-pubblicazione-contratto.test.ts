@@ -244,12 +244,11 @@ describe("B3: moderazione sul sistema esistente", () => {
   });
 
   it("le porte admin verificano il moderatore dentro la funzione", () => {
-    for (const nome of [
-      "public.annunci_accessori_admin_modera",
-      "public.annunci_accessori_admin_elenca",
-      "public.annunci_accessori_admin_dettaglio",
-    ]) {
-      expect(corpoFunzione(nome)).toContain("private.moderazione_attore()");
+    // la scrittura usa il moderatore della Fase 9; le due letture (stable) l'helper admin stabile,
+    // per non dichiarare stable una funzione che ne chiama una volatile
+    expect(corpoFunzione("public.annunci_accessori_admin_modera")).toContain("private.moderazione_attore()");
+    for (const nome of ["public.annunci_accessori_admin_elenca", "public.annunci_accessori_admin_dettaglio"]) {
+      expect(corpoFunzione(nome)).toContain("private.accessori_admin_richiesto()");
     }
   });
 });

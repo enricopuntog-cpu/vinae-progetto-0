@@ -1557,7 +1557,7 @@ declare
   v_limite integer := least(greatest(coalesce(p_limite, 50), 1), 100);
   v_filtro text := coalesce(p_filtro, 'tutti');
 begin
-  perform private.moderazione_attore();
+  perform private.accessori_admin_richiesto();
   if v_filtro not in ('tutti', 'pubblicati', 'segnalati', 'oscurati', 'modifiche') then
     raise exception 'Filtro non valido.' using errcode = '22023', hint = 'dati_non_validi';
   end if;
@@ -1608,7 +1608,7 @@ as $$
 declare
   v_res jsonb;
 begin
-  perform private.moderazione_attore();
+  perform private.accessori_admin_richiesto();
   select jsonb_build_object(
     'id', a.id, 'stato', a.stato, 'provvedimento', a.provvedimento,
     'stato_motivo', a.stato_motivo, 'stato_aggiornato_at', a.stato_aggiornato_at,
