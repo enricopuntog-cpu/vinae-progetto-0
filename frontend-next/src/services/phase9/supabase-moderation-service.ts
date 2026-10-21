@@ -476,8 +476,14 @@ export const createSupabaseModerationService = (
   segnala: async (input) => {
     if (!client) return noPhase9Client("segnala");
 
+    // Club e annunci Accessori hanno una porta dedicata (risolvono il bersaglio dal
+    // database); gli altri passano dalla porta generica.
     const rpcName =
-      input.targetType === "club" ? "segnalazione_club_invia" : "segnalazione_invia";
+      input.targetType === "club"
+        ? "segnalazione_club_invia"
+        : input.targetType === "annuncio_accessorio"
+          ? "segnalazione_annuncio_accessorio_invia"
+          : "segnalazione_invia";
     const rpcArgs =
       input.targetType === "club"
         ? {
@@ -485,7 +491,13 @@ export const createSupabaseModerationService = (
             p_motivo: input.reason,
             p_descrizione: input.descrizione ?? "",
           }
-        : {
+        : input.targetType === "annuncio_accessorio"
+          ? {
+              p_id: input.targetId,
+              p_motivo: input.reason,
+              p_descrizione: input.descrizione ?? "",
+            }
+          : {
             p_target_tipo: input.targetType,
             p_target_id: input.targetId,
             p_target_label: input.targetLabel,

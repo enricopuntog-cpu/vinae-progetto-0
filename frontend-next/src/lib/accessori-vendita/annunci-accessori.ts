@@ -1,11 +1,13 @@
 /**
- * Annunci Accessori — VPM-015B2, fondazione tecnica della futura vendita.
+ * Annunci Accessori — VPM-015B2 (preparazione) e VPM-015B3 (pubblicazione
+ * automatica con moderazione successiva).
  *
  * Tipi, parser e funzioni pure sopra le porte `annunci_accessori_*`. Un annuncio
- * Accessori in questo blocco è una BOZZA di preparazione: nessuno stato
- * «attivo», nessuna pubblicazione, nessun ordine e nessun pagamento. Questa
- * build non contiene alcun gesto d'acquisto, e il test di contratto
- * `annunci-accessori-contratto.test.ts` fa fallire la build se compare.
+ * può essere pubblicato SENZA approvazione preventiva, ma solo se l'interruttore
+ * di pubblicazione è acceso (rilascio del titolare), la categoria è approvata e il
+ * database verifica tutti i requisiti. «Pubblicato» NON significa acquistabile:
+ * nessuno stato, ordine, checkout o pagamento esiste. Questa build non contiene
+ * alcun gesto d'acquisto, e i test di contratto fanno fallire la build se compare.
  *
  * Il browser sceglie soltanto accessorio, quantità, prezzo richiesto e i dati
  * dell'offerta. Classe del venditore, margine, parametri di pagamento e
@@ -23,13 +25,28 @@ export const MAX_PREZZO_CENTS = 1_000_000;
 export const MAX_QUANTITA_ANNUNCIO = 120;
 export const MAX_DESCRIZIONE_ANNUNCIO = 1000;
 
-export const STATI_ANNUNCIO_ACCESSORIO = ["bozza", "in_revisione", "ritirato"] as const;
+export const STATI_ANNUNCIO_ACCESSORIO = [
+  "bozza",
+  "pubblicato",
+  "modifiche_richieste",
+  "oscurato",
+  "ritirato",
+] as const;
 export type StatoAnnuncioAccessorio = (typeof STATI_ANNUNCIO_ACCESSORIO)[number];
 
 export const ETICHETTE_STATO_ANNUNCIO: Readonly<Record<StatoAnnuncioAccessorio, string>> = {
   bozza: "Bozza",
-  in_revisione: "In revisione",
+  pubblicato: "Pubblicato",
+  modifiche_richieste: "Modifiche richieste",
+  oscurato: "Oscurato da Vinea",
   ritirato: "Ritirato",
+};
+
+/** Esito di un provvedimento di Vinea, per il venditore (mai chi lo ha deciso). */
+export type ModerazioneAnnuncio = {
+  provvedimento: "sospensione" | "rimozione" | null;
+  motivo: string;
+  aggiornatoAt: string | null;
 };
 
 export type ClasseAccessori = "privato" | "partner";
@@ -60,15 +77,23 @@ export type AnnuncioAccessorio = {
   /** Pezzi non impegnati da alcun annuncio aperto. */
   disponibili: number;
   foto: number;
-  inviatoAt: string | null;
   ritiratoAt: string | null;
   createdAt: string;
   updatedAt: string;
+  pubblicatoAt: string | null;
+  /** Sale a ogni aggiornamento controllato di un annuncio pubblicato. */
+  versione: number;
+  /** Visibile al pubblico adesso (stato, categoria, interruttore e venditore lo consentono). */
+  pubblico: boolean;
+  /** Presente solo per modifiche richieste o annuncio oscurato. */
+  moderazione: ModerazioneAnnuncio | null;
 };
 
 export type StatoVenditaAccessori = {
   /** La preparazione è usabile da chi chiede (interruttore acceso, o admin in collaudo). */
   abilitata: boolean;
+  /** Si può pubblicare e gli annunci pubblicati sono visibili (tre interruttori accesi). */
+  pubblicazioneAperta: boolean;
   classe: ClasseAccessori;
   venditoreAmmesso: boolean;
   motivo: string | null;
@@ -111,8 +136,12 @@ export type PreventivoAnnuncioAccessori = {
 
 export type StatoInterruttoreAnnunci = {
   preparazioneAttiva: boolean;
+  /** Interruttore di pubblicazione (spento di default, accensione solo col rilascio). */
+  pubblicazioneAttiva: boolean;
   cantinaFunzioneAttiva: boolean;
   puoRilasciare: boolean;
+  /** Categorie approvate dal titolare alla pubblicazione (0 di default). */
+  categoriePubblicabili: number;
 };
 
 /** Ciò che l'utente scrive. Stato, classe, margine e totali non esistono qui. */
@@ -182,25 +211,50 @@ export function parseAnnuncioAccessorio(v: unknown): AnnuncioAccessorio | null {
   const impegnati = intero(o.impegnati);
   const disponibili = intero(o.disponibili);
   const foto = intero(o.foto);
-  const inviatoAt = testoONull(o.inviato_at);
   const ritiratoAt = testoONull(o.ritirato_at);
   const createdAt = testo(o.created_at);
   const updatedAt = testo(o.updated_at);
+  const pubblicatoAt = testoONull(o.pubblicato_at);
+  const versione = intero(o.versione);
+  const moderazione = parseModerazione(o.moderazione);
   if (
     !id || !cantinaId || !st || quantita === null || prezzo === null || !cond ||
     descrizione === null || typeof o.conforme !== "boolean" || !spedizione ||
     posseduti === null || impegnati === null || disponibili === null || foto === null ||
-    inviatoAt === undefined || ritiratoAt === undefined || !createdAt || !updatedAt ||
+    ritiratoAt === undefined || !createdAt || !updatedAt || pubblicatoAt === undefined ||
+    versione === null || versione < 0 || typeof o.pubblico !== "boolean" ||
+    moderazione === undefined ||
     quantita < 1 || quantita > MAX_QUANTITA_ANNUNCIO ||
     prezzo < MIN_PREZZO_CENTS || prezzo > MAX_PREZZO_CENTS
   ) {
     return null;
   }
+  // Coerenze che il database garantisce: se non tornano, la risposta è guasta.
+  if (o.pubblico && st !== "pubblicato") return null;
+  if ((st === "modifiche_richieste" || st === "oscurato") !== (moderazione !== null)) return null;
   return {
     id, cantinaId, stato: st, quantita, prezzoUnitarioCents: prezzo, condizione: cond,
     descrizione, conforme: o.conforme, spedizione, posseduti, impegnati, disponibili,
-    foto, inviatoAt, ritiratoAt, createdAt, updatedAt,
+    foto, ritiratoAt, createdAt, updatedAt, pubblicatoAt, versione, pubblico: o.pubblico,
+    moderazione,
   };
+}
+
+/** `null` = nessun esito; `undefined` = forma non valida. */
+function parseModerazione(v: unknown): ModerazioneAnnuncio | null | undefined {
+  if (v === null) return null;
+  const o = oggetto(v);
+  if (!o) return undefined;
+  const motivo = testo(o.motivo);
+  const aggiornatoAt = testoONull(o.aggiornato_at);
+  const provvedimento =
+    o.provvedimento === null || o.provvedimento === undefined
+      ? null
+      : o.provvedimento === "sospensione" || o.provvedimento === "rimozione"
+        ? o.provvedimento
+        : undefined;
+  if (motivo === null || aggiornatoAt === undefined || provvedimento === undefined) return undefined;
+  return { provvedimento, motivo, aggiornatoAt };
 }
 
 /**
@@ -214,11 +268,18 @@ export function parseStatoVendita(v: unknown): StatoVenditaAccessori | null {
   const motivo = testoONull(o.motivo);
   if (
     typeof o.abilitata !== "boolean" || o.vendite_attive !== false || !cl ||
+    typeof o.pubblicazione_aperta !== "boolean" ||
     typeof o.venditore_ammesso !== "boolean" || motivo === undefined
   ) {
     return null;
   }
-  return { abilitata: o.abilitata, classe: cl, venditoreAmmesso: o.venditore_ammesso, motivo };
+  return {
+    abilitata: o.abilitata,
+    pubblicazioneAperta: o.pubblicazione_aperta,
+    classe: cl,
+    venditoreAmmesso: o.venditore_ammesso,
+    motivo,
+  };
 }
 
 /** Un preventivo coerente o nulla: una somma che non torna non si mostra. */
@@ -295,16 +356,20 @@ export function parsePreventivoAnnuncio(v: unknown): PreventivoAnnuncioAccessori
 
 export function parseStatoInterruttoreAnnunci(v: unknown): StatoInterruttoreAnnunci | null {
   const o = oggetto(v);
+  const categorie = o ? intero(o.categorie_pubblicabili) : null;
   if (
-    !o || typeof o.preparazione_attiva !== "boolean" || o.pubblicazione_attiva !== false ||
-    typeof o.cantina_funzione_attiva !== "boolean" || typeof o.puo_rilasciare !== "boolean"
+    !o || typeof o.preparazione_attiva !== "boolean" || typeof o.pubblicazione_attiva !== "boolean" ||
+    typeof o.cantina_funzione_attiva !== "boolean" || typeof o.puo_rilasciare !== "boolean" ||
+    categorie === null || categorie < 0
   ) {
     return null;
   }
   return {
     preparazioneAttiva: o.preparazione_attiva,
+    pubblicazioneAttiva: o.pubblicazione_attiva,
     cantinaFunzioneAttiva: o.cantina_funzione_attiva,
     puoRilasciare: o.puo_rilasciare,
+    categoriePubblicabili: categorie,
   };
 }
 
@@ -346,14 +411,14 @@ const MESSAGGI_HINT: Readonly<Record<string, string>> = {
   prezzo_non_valido: "Il prezzo deve essere compreso fra 1,00 € e 10.000,00 €.",
   quantita_non_disponibile: "Non hai abbastanza pezzi disponibili: gli altri sono già impegnati.",
   annuncio_gia_aperto: "Questo accessorio ha già un annuncio aperto: modificalo o ritiralo.",
-  annuncio_non_modificabile: "Solo una bozza si modifica: riporta in bozza l'annuncio in revisione.",
+  annuncio_non_modificabile: "Questo annuncio non si può modificare nello stato in cui si trova.",
   annuncio_ritirato: "Un annuncio ritirato non si modifica.",
   annuncio_immutabile: "L'accessorio di un annuncio non cambia.",
   transizione_non_ammessa: "Passaggio non ammesso per questo annuncio.",
   categoria_non_vendibile: "Questa categoria non è ancora ammessa alla vendita.",
   dichiarazione_mancante: "Conferma che l'articolo non è alcolico né regolamentato.",
   dichiarazione_non_valida: "Dichiarazione non valida.",
-  foto_obbligatoria: "Aggiungi almeno una foto all'accessorio prima di inviarlo in revisione.",
+  foto_obbligatoria: "Aggiungi almeno una foto all'accessorio prima di pubblicare l'annuncio.",
   condizione_non_valida: "Scegli una condizione valida.",
   descrizione_non_valida: `La descrizione è troppo lunga (massimo ${MAX_DESCRIZIONE_ANNUNCIO} caratteri).`,
   spedizione_non_valida: "Peso e misure del pacco non sono validi (indica tutte e tre le misure o nessuna).",
@@ -362,6 +427,19 @@ const MESSAGGI_HINT: Readonly<Record<string, string>> = {
   dati_non_validi: "Dati non validi.",
   preventivo_non_valido: "Prezzo o quantità non validi.",
   pubblicazione_chiusa: "La pubblicazione degli annunci non è ancora aperta.",
+  categoria_non_pubblicabile:
+    "Questa categoria non è ancora ammessa alla pubblicazione: puoi tenere l'annuncio in bozza.",
+  contenuto_non_ammesso:
+    "Nome, marca o descrizione indicano un articolo che non si può pubblicare (come armi o sciabole).",
+  ripubblicazione_bloccata:
+    "Questo articolo è stato rimosso da Vinea e non si può ripubblicare. Se ritieni sia un errore, contatta l'assistenza.",
+  modifiche_non_effettuate: "Modifica l'annuncio come richiesto da Vinea prima di ripubblicarlo.",
+  moderazione_riservata: "Questa operazione è riservata alla moderazione di Vinea.",
+  annuncio_pubblicato: "L'accessorio ha un annuncio pubblicato o in moderazione: ritiralo prima.",
+  annuncio_aperto: "Ritira prima l'annuncio di questo accessorio.",
+  preventivo_non_disponibile: "Il prezzo per l'acquirente non è calcolabile: controlla l'importo.",
+  categoria_non_approvabile: "Questa categoria non è ammessa nemmeno alla preparazione: non si può approvare.",
+  categoria_genitore_non_approvata: "Approva prima la categoria genitore.",
   partner_percorso_non_consentito:
     "Un Partner Vinea non usa il percorso degli accessori personali: la vendita professionale arriverà con il catalogo Partner.",
   partner_revocato: "Questo account non può preparare annunci in questo momento.",
@@ -514,3 +592,41 @@ export const quantitaMassimaAnnuncio = (
 ): number => Math.max(0, Math.min(MAX_QUANTITA_ANNUNCIO, posseduti - impegnatiDaAltri));
 
 export const uuidValido = (v: string): boolean => UUID.test(v);
+
+// ---------------------------------------------------------------------------
+// Stato per il venditore
+// ---------------------------------------------------------------------------
+
+/** Stati in cui il dialogo permette di correggere l'offerta (da pubblicato: aggiornamento controllato). */
+export const statoModificabile = (s: StatoAnnuncioAccessorio): boolean =>
+  s === "bozza" || s === "modifiche_richieste" || s === "pubblicato";
+
+/** Un annuncio non ritirato impegna i pezzi dell'accessorio. */
+export const annuncioAperto = (a: Pick<AnnuncioAccessorio, "stato">): boolean => a.stato !== "ritirato";
+
+export const AVVISO_ACQUISTI_NON_DISPONIBILI =
+  "Gli acquisti non sono ancora disponibili: l'annuncio è una vetrina, nessuno può ancora comprarlo.";
+
+/**
+ * Che cosa succede all'annuncio, in parole. Un annuncio pubblicato ma non
+ * visibile (pubblicazione sospesa, categoria revocata, venditore non ammesso) lo
+ * dice: il venditore non deve credere di essere in vetrina quando non lo è.
+ */
+export function messaggioStatoAnnuncio(
+  a: Pick<AnnuncioAccessorio, "stato" | "pubblico" | "moderazione">,
+): string {
+  switch (a.stato) {
+    case "bozza":
+      return "Bozza: la vedi solo tu. Quando è pronta puoi pubblicarla.";
+    case "pubblicato":
+      return a.pubblico
+        ? `Pubblicato: chiunque può vederlo. ${AVVISO_ACQUISTI_NON_DISPONIBILI}`
+        : "Pubblicato, ma al momento non è visibile al pubblico (la pubblicazione è sospesa o la categoria non è attiva).";
+    case "modifiche_richieste":
+      return `Vinea ha chiesto modifiche${a.moderazione?.motivo ? `: ${a.moderazione.motivo}` : "."} L'annuncio non è visibile finché non lo correggi e lo ripubblichi.`;
+    case "oscurato":
+      return `Vinea ha oscurato questo annuncio${a.moderazione?.motivo ? `: ${a.moderazione.motivo}` : "."} Non è visibile e non puoi riaprirlo da solo; puoi ritirarlo.`;
+    case "ritirato":
+      return "Ritirato: non è più in vetrina.";
+  }
+}

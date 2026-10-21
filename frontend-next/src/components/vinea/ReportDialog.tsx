@@ -44,6 +44,7 @@ const titoloPerTarget: Record<ReportTargetType, string> = {
   commento: "Segnala commento",
   recensione: "Segnala recensione",
   club: "Segnala Club",
+  annuncio_accessorio: "Segnala annuncio",
 };
 
 const erroreMediato = (causa: unknown) => {

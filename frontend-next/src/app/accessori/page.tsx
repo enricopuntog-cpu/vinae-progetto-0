@@ -5,6 +5,7 @@ import {
   StatoVuotoAccessori,
 } from "@/components/vinea/accessori/AccessoriVetrina";
 import { risolviModalitaAccessori } from "@/lib/accessori/gate";
+import { percorsiAnnunciAccessori } from "@/lib/accessori-vendita/annunci-pubblici";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { creaAccessoriLetturaService } from "@/services/accessori-service";
 
@@ -61,6 +62,7 @@ export default async function Page() {
       schede={schede.data}
       corrente={null}
       modalita={modalita}
+      collegamento={{ href: percorsiAnnunciAccessori.indice, testo: "Annunci della community (vetrina)" }}
       vuoto={{
         titolo: "Il catalogo si sta preparando",
         messaggio:

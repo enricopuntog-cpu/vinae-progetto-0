@@ -19,9 +19,11 @@ import {
   ETICHETTE_STATO_ANNUNCIO,
   MAX_DESCRIZIONE_ANNUNCIO,
   centesimiDaEuro,
+  messaggioStatoAnnuncio,
   moduloAnnuncioVuoto,
   moduloDaAnnuncio,
   quantitaMassimaAnnuncio,
+  statoModificabile,
   validaModuloAnnuncio,
   MAX_PREZZO_CENTS,
   MIN_PREZZO_CENTS,
@@ -34,13 +36,15 @@ import type { AnnunciAccessoriService } from "@/services/types";
 import { RiepilogoEconomico, type StatoRiepilogo } from "./RiepilogoEconomico";
 
 /**
- * Preparazione dell'annuncio di un accessorio posseduto (VPM-015B2).
+ * Preparazione, pubblicazione e gestione dell'annuncio di un accessorio
+ * posseduto (VPM-015B2 e VPM-015B3).
  *
- * Una BOZZA: nessuno può acquistarla e non compare fra le bottiglie. Il browser
- * sceglie quantità e prezzo richiesto; classe, commissione e totale sono del
- * database (riepilogo). Il dialogo non ha alcun gesto di pubblicazione o
- * d'acquisto: il massimo è «Invia in revisione», che oggi non ha un
- * destinatario operativo.
+ * L'annuncio si pubblica da solo, senza approvazione preventiva, quando il
+ * database lo consente (interruttore, categoria e requisiti). Pubblicato NON
+ * vuol dire acquistabile: il dialogo lo dice sempre e non ha alcun gesto
+ * d'acquisto. Il browser sceglie quantità e prezzo richiesto; classe,
+ * commissione e totale sono del database (riepilogo). Un annuncio oscurato o con
+ * modifiche richieste mostra il motivo di Vinea e non si riapre da qui.
  */
 
 const CAMPO =
@@ -68,11 +72,20 @@ type Props = {
   accessorio: Pick<AccessorioPersonale, "id" | "nome" | "condizione" | "quantita" | "immagini">;
   annuncio: AnnuncioAccessorio | null;
   servizio: AnnunciAccessoriService;
+  /** I tre interruttori sono accesi: si può pubblicare. Il database ricontrolla. */
+  pubblicazioneAperta: boolean;
   onChiudi: () => void;
   onCambiato: () => Promise<void>;
 };
 
-export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChiudi, onCambiato }: Props) {
+export function AnnuncioAccessorioDialog({
+  accessorio,
+  annuncio,
+  servizio,
+  pubblicazioneAperta,
+  onChiudi,
+  onCambiato,
+}: Props) {
   // L'id di un annuncio nuovo lo sceglie il client: ripetere il salvataggio dopo
   // un errore di rete non ne crea due.
   const [idNuovo] = useState(() => crypto.randomUUID());
@@ -86,7 +99,9 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
   const [confermaRitiro, setConfermaRitiro] = useState(false);
   const [riepilogo, setRiepilogo] = useState<StatoRiepilogo>({ tipo: "vuoto" });
 
-  const inRevisione = corrente?.stato === "in_revisione";
+  const stato = corrente?.stato ?? null;
+  const modificabile = stato === null || statoModificabile(stato);
+  const pubblicato = stato === "pubblicato";
   const massimo = quantitaMassimaAnnuncio(accessorio.quantita, 0);
   const modificato = useMemo(
     () => (corrente ? JSON.stringify(modulo) !== JSON.stringify(moduloDaAnnuncio(corrente)) : true),
@@ -125,7 +140,7 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
 
   const salva = async (e: FormEvent) => {
     e.preventDefault();
-    if (inRevisione) return;
+    if (!modificabile) return;
     const v = validaModuloAnnuncio(modulo, accessorio.id, massimo);
     if (!v.ok) {
       setErrori(v.errori);
@@ -138,11 +153,34 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
     if (!r.ok) return setMessaggio({ tono: "errore", testo: r.error });
     setCorrente(r.data);
     setModulo(moduloDaAnnuncio(r.data));
-    setMessaggio({ tono: "ok", testo: "Bozza salvata. Non è in vendita: le vendite non sono ancora attive." });
+    setMessaggio({
+      tono: "ok",
+      testo: pubblicato
+        ? "Annuncio aggiornato: la vetrina mostra la nuova versione (nome e foto vengono riletti dalla Cantina)."
+        : "Bozza salvata. Non è ancora in vetrina.",
+    });
     await onCambiato();
   };
 
-  const passa = async (a: "bozza" | "in_revisione" | "ritirato", testo: string) => {
+  const pubblica = async () => {
+    if (!corrente) return;
+    setInCorso(true);
+    setMessaggio(null);
+    const r = await servizio.pubblica(corrente.id);
+    setInCorso(false);
+    if (!r.ok) return setMessaggio({ tono: "errore", testo: r.error });
+    setCorrente(r.data);
+    setModulo(moduloDaAnnuncio(r.data));
+    setMessaggio({
+      tono: "ok",
+      testo: r.data.pubblico
+        ? "Annuncio pubblicato. Gli acquisti non sono ancora disponibili: è una vetrina."
+        : "Annuncio pubblicato, ma al momento non è visibile al pubblico.",
+    });
+    await onCambiato();
+  };
+
+  const passa = async (a: "bozza" | "ritirato", testo: string) => {
     if (!corrente) return;
     setInCorso(true);
     const r = await servizio.transizione(corrente.id, a);
@@ -167,12 +205,17 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
     ) : null;
   const descritto = (campo: keyof ModuloAnnuncio) => (errori[campo] ? `aa-${campo}-errore` : undefined);
 
+  const puoPubblicare =
+    corrente !== null &&
+    (corrente.stato === "bozza" || corrente.stato === "modifiche_richieste") &&
+    pubblicazioneAperta;
+
   return (
     <Dialog open onOpenChange={(aperto) => (aperto ? null : onChiudi())}>
       <DialogContent className="max-h-[90vh] overflow-y-auto" data-testid="annuncio-accessorio-dialog">
         <DialogHeader>
           <DialogTitle>
-            {corrente ? `Annuncio di «${accessorio.nome}»` : `Prepara la vendita di «${accessorio.nome}»`}
+            {corrente ? `Annuncio di «${accessorio.nome}»` : `Prepara l'annuncio di «${accessorio.nome}»`}
           </DialogTitle>
           <DialogDescription>
             {corrente
@@ -183,12 +226,32 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
 
         <p
           role="note"
-          data-testid="avviso-vendite-disattivate"
+          data-testid="avviso-acquisti-non-disponibili"
           className="rounded-lg border border-border bg-secondary/60 px-3 py-2 text-sm"
         >
-          <strong>Le vendite non sono ancora attive.</strong> Questa è solo la preparazione dell&apos;annuncio:
-          nessuno può acquistarlo e non compare fra le bottiglie.
+          <strong>Gli acquisti non sono ancora disponibili.</strong> Un annuncio pubblicato è una vetrina:
+          nessuno può ancora comprarlo, prenotarlo o pagarlo, e non compare fra le bottiglie.
         </p>
+
+        {corrente ? (
+          <p
+            role={corrente.stato === "oscurato" || corrente.stato === "modifiche_richieste" ? "alert" : "status"}
+            data-testid="annuncio-stato-messaggio"
+            className={`rounded-lg border px-3 py-2 text-sm ${
+              corrente.stato === "oscurato" || corrente.stato === "modifiche_richieste"
+                ? "border-bordeaux/40 bg-bordeaux/5 text-antracite"
+                : "border-border"
+            }`}
+          >
+            {messaggioStatoAnnuncio(corrente)}
+          </p>
+        ) : null}
+
+        {!pubblicazioneAperta && modificabile && stato !== "pubblicato" ? (
+          <p className="text-xs text-muted-foreground" data-testid="aa-pubblicazione-chiusa">
+            La pubblicazione degli annunci non è ancora aperta: per ora puoi preparare la bozza.
+          </p>
+        ) : null}
 
         <form onSubmit={salva} className="space-y-4" aria-label="Annuncio accessorio">
           <Avviso messaggio={messaggio} />
@@ -200,7 +263,7 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
                 id="aa-quantita"
                 inputMode="numeric"
                 value={modulo.quantita}
-                disabled={inRevisione}
+                disabled={!modificabile}
                 aria-describedby={`aa-quantita-aiuto ${descritto("quantita") ?? ""}`.trim()}
                 aria-invalid={errori.quantita ? true : undefined}
                 onChange={(e) => aggiorna("quantita", e.target.value)}
@@ -217,7 +280,7 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
                 inputMode="decimal"
                 placeholder="12,50"
                 value={modulo.prezzo}
-                disabled={inRevisione}
+                disabled={!modificabile}
                 aria-describedby={`aa-prezzo-aiuto ${descritto("prezzo") ?? ""}`.trim()}
                 aria-invalid={errori.prezzo ? true : undefined}
                 onChange={(e) => aggiorna("prezzo", e.target.value)}
@@ -235,7 +298,7 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
               id="aa-condizione"
               className={CAMPO}
               value={modulo.condizione}
-              disabled={inRevisione}
+              disabled={!modificabile}
               onChange={(e) => aggiorna("condizione", e.target.value as ModuloAnnuncio["condizione"])}
             >
               {CONDIZIONI_ACCESSORIO.map((c) => (
@@ -254,9 +317,12 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
               rows={3}
               maxLength={MAX_DESCRIZIONE_ANNUNCIO}
               value={modulo.descrizione}
-              disabled={inRevisione}
+              disabled={!modificabile}
               onChange={(e) => aggiorna("descrizione", e.target.value)}
             />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Questa descrizione è pubblica. La nota privata della Cantina non lo è mai.
+            </p>
             {errore("descrizione")}
           </div>
 
@@ -264,8 +330,8 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
             <summary className="cursor-pointer text-sm font-medium">Dati del pacco (facoltativi)</summary>
             <div className="mt-3 space-y-3">
               <p className="text-xs text-muted-foreground">
-                La spedizione è a carico dell&apos;acquirente e l&apos;imballaggio lo prepari tu, con una scatola
-                adatta: Vinea non addebita né rimborsa costi di scatola. Peso e misure (per pezzo, con
+                La spedizione sarà a carico dell&apos;acquirente e l&apos;imballaggio lo preparerai tu, con una
+                scatola adatta: Vinea non addebita né rimborsa costi di scatola. Peso e misure (per pezzo, con
                 l&apos;imballaggio) serviranno a preventivare la spedizione.
               </p>
               <div className="grid gap-3 sm:grid-cols-4">
@@ -275,7 +341,7 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
                     id="aa-peso"
                     inputMode="numeric"
                     value={modulo.pesoG}
-                    disabled={inRevisione}
+                    disabled={!modificabile}
                     onChange={(e) => aggiorna("pesoG", e.target.value)}
                   />
                   {errore("pesoG")}
@@ -286,7 +352,7 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
                     id="aa-lunghezza"
                     inputMode="numeric"
                     value={modulo.lunghezzaMm}
-                    disabled={inRevisione}
+                    disabled={!modificabile}
                     onChange={(e) => aggiorna("lunghezzaMm", e.target.value)}
                   />
                   {errore("lunghezzaMm")}
@@ -297,7 +363,7 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
                     id="aa-larghezza"
                     inputMode="numeric"
                     value={modulo.larghezzaMm}
-                    disabled={inRevisione}
+                    disabled={!modificabile}
                     onChange={(e) => aggiorna("larghezzaMm", e.target.value)}
                   />
                   {errore("larghezzaMm")}
@@ -308,7 +374,7 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
                     id="aa-altezza"
                     inputMode="numeric"
                     value={modulo.altezzaMm}
-                    disabled={inRevisione}
+                    disabled={!modificabile}
                     onChange={(e) => aggiorna("altezzaMm", e.target.value)}
                   />
                   {errore("altezzaMm")}
@@ -318,7 +384,7 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
                 <input
                   type="checkbox"
                   checked={modulo.fragile}
-                  disabled={inRevisione}
+                  disabled={!modificabile}
                   onChange={(e) => aggiorna("fragile", e.target.checked)}
                 />
                 Fragile (vetro, cristallo)
@@ -331,12 +397,12 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
               type="checkbox"
               className="mt-1"
               checked={modulo.conforme}
-              disabled={inRevisione}
+              disabled={!modificabile}
               onChange={(e) => aggiorna("conforme", e.target.checked)}
             />
             <span>
               Dichiaro che l&apos;articolo non è un prodotto alcolico né un articolo regolamentato (come armi o
-              sciabole).
+              sciabole). Vinea può oscurare gli annunci che non lo rispettano.
             </span>
           </label>
 
@@ -344,8 +410,14 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
 
           {senzaFoto ? (
             <p className="text-xs text-muted-foreground" data-testid="aa-foto-mancante">
-              Per inviare l&apos;annuncio in revisione serve almeno una foto dell&apos;accessorio: aggiungila da
+              Per pubblicare l&apos;annuncio serve almeno una foto dell&apos;accessorio: aggiungila da
               «Modifica» sulla scheda.
+            </p>
+          ) : null}
+          {pubblicato ? (
+            <p className="text-xs text-muted-foreground" data-testid="aa-snapshot-nota">
+              Nome e foto in vetrina sono quelli del momento della pubblicazione: se li cambi in Cantina,
+              «Aggiorna annuncio» li ripubblica.
             </p>
           ) : null}
 
@@ -363,35 +435,40 @@ export function AnnuncioAccessorioDialog({ accessorio, annuncio, servizio, onChi
                 Sì, ritira l&apos;annuncio
               </Button>
             ) : null}
-            {inRevisione ? (
+            {pubblicato ? (
               <Button
                 type="button"
                 variant="outline"
                 disabled={inCorso}
-                onClick={() => void passa("bozza", "Annuncio riportato in bozza.")}
+                onClick={() => void passa("bozza", "L'annuncio non è più in vetrina: è tornato bozza.")}
               >
-                Riporta in bozza
+                Togli dalla vetrina
               </Button>
-            ) : (
-              <>
-                {corrente?.stato === "bozza" ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={inCorso || modificato || senzaFoto}
-                    onClick={() => void passa("in_revisione", "Annuncio inviato in revisione. Non è in vendita.")}
-                  >
-                    Invia in revisione
-                  </Button>
-                ) : null}
-                <Button type="submit" disabled={inCorso}>
-                  {inCorso ? <Loader2 className="animate-spin" aria-hidden /> : null} Salva bozza
-                </Button>
-              </>
-            )}
+            ) : null}
+            {puoPubblicare ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={inCorso || modificato || senzaFoto || !corrente?.conforme}
+                onClick={() => void pubblica()}
+              >
+                Pubblica annuncio
+              </Button>
+            ) : null}
+            {modificabile ? (
+              <Button type="submit" disabled={inCorso}>
+                {inCorso ? <Loader2 className="animate-spin" aria-hidden /> : null}{" "}
+                {pubblicato ? "Aggiorna annuncio" : "Salva bozza"}
+              </Button>
+            ) : null}
           </DialogFooter>
-          {corrente?.stato === "bozza" && modificato ? (
-            <p className="text-xs text-muted-foreground">Salva le modifiche prima di inviare in revisione.</p>
+          {puoPubblicare && modificato ? (
+            <p className="text-xs text-muted-foreground">Salva le modifiche prima di pubblicare.</p>
+          ) : null}
+          {puoPubblicare && !modificato && !corrente?.conforme ? (
+            <p className="text-xs text-muted-foreground">
+              Spunta la dichiarazione di conformità e salva per poter pubblicare.
+            </p>
           ) : null}
         </form>
       </DialogContent>

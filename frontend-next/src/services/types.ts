@@ -44,6 +44,14 @@ import type {
   StatoVenditaAccessori,
 } from "@/lib/accessori-vendita/annunci-accessori";
 import type {
+  AzioneModerazione,
+  CategoriaPubblicazione,
+  DettaglioAnnuncioAdmin,
+  FiltroAnnunciAdmin,
+  RigaAnnuncioAdmin,
+} from "@/lib/accessori-vendita/annunci-moderazione";
+import type { AnnuncioPubblico } from "@/lib/accessori-vendita/annunci-pubblici";
+import type {
   AccessorioPersonale,
   AccessorioPubblico,
   CategoriaTassonomia,
@@ -3471,32 +3479,71 @@ export interface CantinaAccessoriPubblicaService {
   urlFoto(percorsi: readonly string[]): Promise<Result<Record<string, string>>>;
 }
 
-// ---- Annunci Accessori (VPM-015B2) ----------------------------------------
-// Preparazione della futura vendita di un accessorio posseduto. Il venditore non
-// e mai un parametro (lo risolve auth.uid()); classe, margine e parametri di
-// pagamento sono del database. Nessun metodo pubblica, acquista o ordina: lo
-// stato "attivo" non esiste e il contratto di test lo difende.
+// ---- Annunci Accessori (VPM-015B2, VPM-015B3) ------------------------------
+// Preparazione e pubblicazione automatica di un accessorio posseduto. Il
+// venditore non e mai un parametro (lo risolve auth.uid()); classe, margine e
+// parametri di pagamento sono del database. Nessun metodo acquista o ordina:
+// pubblicato non e acquistabile e lo stato "attivo" non esiste; il contratto di
+// test lo difende.
 
 export interface AnnunciAccessoriService {
   stato(): Promise<Result<StatoVenditaAccessori>>;
-  /** Gli annunci del chiamante: aperti (bozza, in revisione) o ritirati. */
+  /** Gli annunci del chiamante: aperti (bozza, pubblicato, in moderazione) o ritirati. */
   elenco(ritirati: boolean): Promise<Result<AnnuncioAccessorio[]>>;
+  /**
+   * Pubblica senza approvazione preventiva, se interruttore, categoria e requisiti
+   * lo consentono (li verifica il database). Non rende l'annuncio acquistabile.
+   */
+  pubblica(id: string): Promise<Result<AnnuncioAccessorio>>;
   /** Preventivo autorevole: prezzo e quantita sono le sole scelte del client. */
   preventivo(
     prezzoUnitarioCents: number,
     quantita: number,
     cantinaId?: string,
   ): Promise<Result<PreventivoAnnuncioAccessori>>;
-  /** Crea (id scelto dal client: il tentativo e ripetibile) o aggiorna una bozza. */
+  /**
+   * Crea (id scelto dal client: il tentativo e ripetibile) o aggiorna una bozza,
+   * corregge un annuncio con modifiche richieste o aggiorna in modo controllato
+   * uno pubblicato (nuova versione dello snapshot).
+   */
   salva(id: string, dati: DatiAnnuncioAccessorio): Promise<Result<AnnuncioAccessorio>>;
-  /** bozza <-> in_revisione, e ritiro. Mai uno stato acquistabile. */
+  /** Ritiro (sempre) e ritorno in bozza di un annuncio pubblicato. Mai uno stato acquistabile. */
   transizione(id: string, a: StatoAnnuncioAccessorio): Promise<Result<AnnuncioAccessorio>>;
+}
+
+/** La vetrina pubblica degli annunci pubblicati: sola lettura, nessun gesto d'acquisto. */
+export interface AnnunciAccessoriPubbliciService {
+  elenco(opzioni?: {
+    categoriaSlug?: string | null;
+    limite?: number;
+    offset?: number;
+  }): Promise<Result<AnnuncioPubblico[]>>;
+  /** `null` = non esiste o non e visibile (stesso esito: non si rivela quale). */
+  dettaglio(id: string): Promise<Result<AnnuncioPubblico | null>>;
+  /** URL firmate (a tempo) delle foto di annunci visibili; le altre mancano dal risultato. */
+  urlFoto(percorsi: readonly string[]): Promise<Result<Record<string, string>>>;
 }
 
 export interface AnnunciAccessoriAdminService {
   stato(): Promise<Result<StatoInterruttoreAnnunci>>;
-  /** Accendere richiede il ruolo di rilascio (deciso dal database); spegnere, ogni admin. */
+  /** Preparazione. Accendere richiede il ruolo di rilascio (deciso dal database); spegnere, ogni admin. */
   imposta(attiva: boolean, motivo: string): Promise<Result<void>>;
+  /** Pubblicazione. Accendere richiede il ruolo di rilascio; spegnere nasconde subito gli annunci. */
+  impostaPubblicazione(attiva: boolean, motivo: string): Promise<Result<void>>;
+  /** Categorie con il loro stato di approvazione alla pubblicazione. */
+  categoriePubblicazione(): Promise<Result<CategoriaPubblicazione[]>>;
+  /** Approvare richiede il ruolo di rilascio e una categoria vendibile; revocare, ogni admin. */
+  impostaCategoriaPubblicabile(
+    categoriaId: string,
+    pubblicabile: boolean,
+    motivo: string,
+  ): Promise<Result<void>>;
+  elencoModerazione(filtro: FiltroAnnunciAdmin): Promise<Result<RigaAnnuncioAdmin[]>>;
+  dettaglioModerazione(id: string): Promise<Result<DettaglioAnnuncioAdmin | null>>;
+  /** Provvedimento diretto: motivazione obbligatoria, registrata nell'audit; il venditore e avvisato. */
+  modera(id: string, azione: AzioneModerazione, motivazione: string): Promise<Result<void>>;
+  /** URL firmate delle foto degli annunci in moderazione (solo admin reale). */
+  urlFoto(percorsi: readonly string[]): Promise<Result<Record<string, string>>>;
 }
 
 export interface CantinaAccessoriAdminService {
