@@ -2200,8 +2200,8 @@ Lo step `Audit dependencies` esegue `.github/scripts/frontend-next-audit.mjs`,
 che legge `bun audit --json` e ammette **un solo** finding, per nome:
 GHSA-vfj7-8cjw-p6xm su `braces` 3.0.3 con intervallo vulnerabile `<=3.0.3`, e
 soltanto mentre il pacchetto resta transitivo di tooling di sviluppo
-(`shadcn › fast-glob › micromatch › braces` ed `eslint-config-next ›
-@next/eslint-plugin-next › fast-glob › micromatch › braces`). La regola durevole
+(`eslint-config-next › @next/eslint-plugin-next › fast-glob › micromatch ›
+braces`; il ramo `shadcn › fast-glob` è sparito con VPM-017). La regola durevole
 è che l'eccezione è **fail-closed fuori da quel caso esatto**: una seconda
 advisory, la stessa advisory su un altro pacchetto, un intervallo vulnerabile
 allargato, una versione installata diversa o doppia, `braces` raggiungibile dal
@@ -2220,6 +2220,31 @@ Nessun `continue-on-error`, nessun `|| true`, nessun filtro di severity e
 scriverla, con la sua motivazione, nello script e qui. Quando `braces` esce
 dall'intervallo vulnerabile — nuova pubblicazione upstream o tooling che non la
 tira più dentro — l'eccezione va rimossa, non lasciata a dormire.
+
+### Rimedio VPM-017 (29 ottobre 2026)
+
+Il 29 ottobre 2026 il gate è tornato rosso su ogni PR con 24 advisory pubblicate
+dopo l'ultimo verde su `main`: tre su `next` 16.3.8 (GHSA-2464-fhr4-w9xw e
+GHSA-673q-mjm6-r5xr critical, GHSA-p3m5-59mp-jv5r high), le altre su
+transitive di solo sviluppo. Il rimedio non tocca il wrapper:
+
+- `next` ed `eslint-config-next` 16.3.8 → 16.4.3 (stabile; la correzione è
+  dalla 16.4.1);
+- `shadcn` tolto dalle `devDependencies`: non era importato da nessun sorgente,
+  script o workflow (solo CLI di generazione dei componenti, `components.json`
+  resta) ed era l'unico ingresso di `deepmerge` (GHSA-gcqx-w48m-w2h4, nessuna
+  versione corretta pubblicata), `undici`, `systeminformation` (via
+  `@dotenvx/dotenvx`), `ip-address` (via `socks`), `@modelcontextprotocol/sdk`
+  con `express`/`body-parser`/`qs`/`@hono/node-server`, `ajv` 8/`fast-uri`;
+  la CLI si usa a richiesta con `bunx shadcn@<versione>`;
+- tolti gli override `@modelcontextprotocol/sdk` e `hono`, che servivano solo
+  a quel ramo;
+- override `zod` 4.6.7 (GHSA-mrhx-c7xc-m3w5, `<4.6.6`): l'unico consumatore
+  rimasto, `eslint-plugin-react-hooks`, dichiara `^3.25.0 || ^4.0.0`.
+
+Una seconda eccezione nominativa per `deepmerge` è stata scartata: l'eccezione
+resta una sola. Se la CLI di `shadcn` torna fra le dipendenze, il gate tornerà
+rosso finché `deepmerge` non pubblica una correzione.
 
 ## Comandi di verifica
 
