@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -15,15 +15,25 @@ const VENDITORE = "9c8b7a65-0000-4000-8000-0000000012ef";
  * ricodifica, ed è la ricodifica a togliere EXIF e GPS. Qui si fornisce solo il
  * minimo perché possa girare fuori dal browser — decodifica e tela — così il
  * test osserva il file che esce davvero dalla sanitizzazione invece di
- * affermare che sia stata chiamata.
+ * affermare che sia stata chiamata. I globali sono condivisi da tutti i file di
+ * `bun test`: vanno restituiti alla fine, o un `document` parziale arriverebbe
+ * ai file eseguiti dopo.
  */
+const globali = globalThis as Record<string, unknown>;
+const precedenti = { createImageBitmap: globali.createImageBitmap, document: globali.document };
+afterAll(() => {
+  for (const [nome, valore] of Object.entries(precedenti)) {
+    if (valore === undefined) delete globali[nome];
+    else globali[nome] = valore;
+  }
+});
 beforeAll(() => {
-  (globalThis as Record<string, unknown>).createImageBitmap = async () => ({
+  globali.createImageBitmap = async () => ({
     width: 3200,
     height: 2400,
     close() {},
   });
-  (globalThis as Record<string, unknown>).document = {
+  globali.document = {
     createElement: () => ({
       width: 0,
       height: 0,
