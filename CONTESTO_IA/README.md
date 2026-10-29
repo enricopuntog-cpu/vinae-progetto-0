@@ -134,6 +134,11 @@ Aprire soltanto ciò che serve al task:
   bucket privato, oscuramento immediato, nessuna ripubblicazione autonoma, nessun
   acquisto — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`; contratto completo in
   `../docs/VPM_015B3_PUBBLICAZIONE_ACCESSORI.md`.
+- Ambiente Claude Code di progetto VPM-LAB-002 (29 ottobre 2026) — 6 agenti e 6
+  skill versionati in `.claude/`, solo due agenti con shell in worktree isolato
+  dietro una guardia a lista bianca con canarino, guardia dei segreti, plugin
+  `frontend-design` fissato da un lock con hash, bootstrap solo locale e verifica
+  statica in CI — è in `../docs/CLAUDE_CODE_SETUP.md`.
 - [`02_STORIA_FASI.md`](02_STORIA_FASI.md) — cronologia delle fasi e delle PR.
 - [`03_ARCHITETTURA_REGOLE_DEBITI.md`](03_ARCHITETTURA_REGOLE_DEBITI.md) —
   architettura durevole, invarianti e debiti. Le regole operative correnti sono
