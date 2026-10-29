@@ -194,6 +194,16 @@ jobs:
           node --check .github/scripts/export-supabase-storage.mjs
           node .github/scripts/status-page-check.mjs
           bash .github/scripts/status-page-check.test.sh
+      # Configurazione Claude Code di progetto (.claude/agents, skills,
+      # settings.json, lock dei plugin, guardie). Il bootstrap gira solo in
+      # locale: qui si eseguono soltanto i suoi test, con una CLI finta.
+      - name: Claude Code setup
+        run: |
+          node --check .github/scripts/claude-agent-guard.mjs
+          node --check .github/scripts/claude-secret-guard.mjs
+          node --check .github/scripts/claude-bootstrap.mjs
+          node --test .github/scripts/claude-agent-guard.test.mjs .github/scripts/claude-secret-guard.test.mjs .github/scripts/claude-setup-verify.test.mjs .github/scripts/claude-bootstrap.test.mjs
+          node .github/scripts/claude-setup-verify.mjs
 
   backend:
     name: Backend - lint, syntax and tests
