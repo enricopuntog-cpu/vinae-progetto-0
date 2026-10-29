@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "claude-plugins-official": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-plugins-official"
+      },
+      "autoUpdate": false
+    }
+  },
+  "permissions": {
+    "ask": [
+      "Bash(claude plugin *)",
+      "PowerShell(claude plugin *)",
+      "Bash(claude mcp *)",
+      "PowerShell(claude mcp *)",
+      "Bash(npm install -g *)",
+      "PowerShell(npm install -g *)",
+      "PowerShell(winget *)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(!.env.example)",
+      "Read(*.pem)",
+      "Read(*.key)"
+    ]
+  }
+}
