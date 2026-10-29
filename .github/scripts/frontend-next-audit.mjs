@@ -5,8 +5,9 @@
 // The admitted exception is GHSA-vfj7-8cjw-p6xm on `braces` 3.0.3, decided on
 // 3 October 2026: the advisory covers `<=3.0.3`, 3.0.3 is the newest version
 // ever published, so no upgrade exists, and the package is reachable only
-// through dev tooling (`shadcn` and `eslint-config-next` via `fast-glob` and
-// `micromatch`), never from the application runtime graph.
+// through dev tooling (`eslint-config-next` via `fast-glob` and `micromatch`;
+// `shadcn` was removed from the workspace in VPM-017), never from the
+// application runtime graph.
 //
 // The exception is fail-closed outside that exact case. It stops holding, and
 // the gate goes red again, as soon as any of these is true: a second advisory

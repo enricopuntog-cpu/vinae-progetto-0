@@ -14,7 +14,7 @@
 // La porta resta una sola: `codaContestazioni`. Non esiste una seconda lettura
 // della coda, e questi test la interrogano sempre da li.
 
-import { describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   codaContestazioni,
@@ -23,7 +23,17 @@ import {
 import { Phase9Error } from "@/services/phase9/shared";
 
 const PROGETTO = "https://vinea-test.supabase.co";
-process.env.NEXT_PUBLIC_SUPABASE_URL = PROGETTO;
+
+// `process.env` e' condiviso da tutti i file di `bun test`: il valore va
+// restituito, o i file eseguiti dopo erediterebbero un progetto configurato.
+const urlPrecedente = process.env.NEXT_PUBLIC_SUPABASE_URL;
+beforeAll(() => {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = PROGETTO;
+});
+afterAll(() => {
+  if (urlPrecedente === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  else process.env.NEXT_PUBLIC_SUPABASE_URL = urlPrecedente;
+});
 
 // `count` esiste per poter simulare la sola cosa che il servizio non puo
 // vedere da solo: un server che dichiara piu righe di quante ne consegni.
