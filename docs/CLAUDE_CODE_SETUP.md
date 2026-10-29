@@ -115,8 +115,10 @@ node .github/scripts/claude-bootstrap.mjs --check \
 - Vietati nel file di progetto: `hooks`, `env`, `permissions.allow`,
   `defaultMode`, `apiKeyHelper`, `mcpServers`. Le liste allow restano locali in
   `settings.local.json`, che non e' versionato.
-- La guardia dei segreti e' il secondo livello: rifiuta Read/Grep/Glob su file
-  di segreti e i comandi Bash/PowerShell che li nominano.
+- La guardia dei segreti e' il secondo livello, solo dentro i sei agenti (il
+  file di progetto non puo' dichiarare `hooks`): rifiuta Read/Grep/Glob su file
+  di segreti e i comandi Bash/PowerShell che li nominano. La sessione
+  principale e' coperta dalle sole regole `deny`.
 
 ## CI
 
@@ -132,9 +134,26 @@ reale non gira mai in CI.
   controlla i nomi, non i contenuti: un nome costruito a runtime la aggira. La
   difesa principale resta non avere segreti nei worktree degli agenti.
 - La negazione `Read(!.env.example)` non e' documentata come sintassi
-  supportata. In una sessione avviata prima che il file di progetto esistesse
-  la lettura di un `.env` finto non e' stata bloccata: l'effetto delle regole
-  `deny` su una sessione nuova resta da verificare.
+  supportata. Effetto misurato il 29 ottobre 2026 in sessioni nuove
+  (Claude Code 2.1.312, profilo `vinea-coding`, `claude -p`): `.env` della
+  radice e `frontend-next/.env.local` finti negati, `frontend-next/.env.example`
+  letto; senza le impostazioni di progetto (`--setting-sources user`) lo stesso
+  `.env` viene letto. Le regole valgono solo per sessioni avviate dopo che il
+  file e' presente nel worktree.
+- Gli `hooks` nel frontmatter degli agenti si caricano solo se la cartella e'
+  considerata attendibile dal file di configurazione globale del profilo. Con
+  `CLAUDE_CONFIG_DIR=~/.claude` (configurazione `~/.claude/.claude.json`, senza
+  il progetto) il canarino di `vinea-qa-runner` non e' stato bloccato e
+  l'agente si e' fermato con `GUARDIA NON ATTIVA`; sul profilo `vinea-coding`,
+  che ha il checkout fra i progetti attendibili, e' stato bloccato. La causa
+  (attendibilita') e' un'ipotesi non verificata; il canarino ha comunque
+  fermato l'agente prima di ogni altro comando.
+- Il plugin `frontend-design` non e' installato nel profilo `vinea-coding`:
+  `claude -p` non lo carica da `enabledPlugins` e lo installa solo
+  `claude-bootstrap.mjs --install` o la richiesta interattiva di Claude Code.
+- Le skill con `paths` (`vinea-design`, `vinea-security`) compaiono solo dopo
+  che la sessione ha letto un file nei percorsi dichiarati; `vinea-task` e
+  `vinea-skill-evaluation` non sono visibili al modello (solo manuali).
 - I worktree creati da una base precedente a questa configurazione non hanno
   `.claude/agents` ne' `.claude/skills`: vanno ricreati da `origin/main`
   aggiornato.
