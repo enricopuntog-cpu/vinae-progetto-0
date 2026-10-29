@@ -1,0 +1,16 @@
+{
+  "plugins": {
+    "frontend-design": {
+      "marketplace": "claude-plugins-official",
+      "repo": "anthropics/claude-plugins-official",
+      "path": "plugins/frontend-design",
+      "commit": "30202c767cfaf325212b3921ab484f83adaec850",
+      "version": "1.1.1",
+      "sha256": {
+        "SKILL.md": "d91970639e9f5c37682ac7ab60094d35f1c7c1f38d731bd56396563aee10c1d3",
+        "LICENSE.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+      },
+      "reviewedAt": "2026-10-29T20:00:00.000Z"
+    }
+  }
+}

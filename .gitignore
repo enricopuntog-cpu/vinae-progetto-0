@@ -108,11 +108,24 @@ credentials.json
 playwright-report/
 test-results/
 
-# Configurazione locale del tooling agentico (launch.json, settings.local.json):
-# è specifica della macchina dello sviluppatore, non del progetto. Già
-# untrackata nel commit 144d9a4; qui si impedisce che rientri per sbaglio.
-# CLAUDE.md resta invece versionato: sono istruzioni di progetto, non locali.
-.claude/
+# Configurazione del tooling agentico. Per default tutta .claude/ resta
+# locale (launch.json, settings.local.json, worktrees/, memorie, cache):
+# è specifica della macchina. Sono versionati SOLO gli asset di progetto
+# condivisi da ogni worktree e profilo: agents/, skills/ e settings.json
+# (VPM-LAB-002). Il pattern è "/.claude/*" e non ".claude/": git non può
+# riaprire file dentro una directory esclusa per intero.
+# CLAUDE.md resta versionato: sono istruzioni di progetto, non locali.
+/.claude/*
+!/.claude/agents/
+!/.claude/skills/
+!/.claude/settings.json
+# Difesa in profondità: file locali o segreti non rientrano mai, neppure
+# se creati per sbaglio dentro le cartelle riaperte.
+/.claude/**/settings.local.json
+/.claude/**/*.local.*
+/.claude/**/.env*
+# Le cartelle .claude/ annidate (sottoprogetti) restano tutte locali.
+*/**/.claude/
 
 # Historical platform artifacts (kept only in the original prerelease archive)
 memory/
