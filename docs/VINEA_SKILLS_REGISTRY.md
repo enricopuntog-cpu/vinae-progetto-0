@@ -1,0 +1,21 @@
+# Registro delle skill Vinea — Ciclo 1
+
+Aggiornato il 30 ottobre 2026. Unità di conto: **strumento/skill**, non voce del catalogo. Gli stati di seguito sono osservazioni documentate, non tappe automaticamente superate. `APPROVATA` richiede una decisione esplicita; `INSTALLATA` una prova nel profilo pertinente; `VERIFICATA` un test pertinente. Per una candidata esterna usare `/vinea-external-skill-audit` prima dell'installazione. Nessuna voce qui autorizza nuovi permessi o nuove funzionalità del prodotto.
+
+| Strumento | Fonte e versione | Stato | Evidenza e limite | Decisione / seguito |
+|---|---|---|---|---|
+| `vinea-task`, `vinea-test`, `vinea-review`, `vinea-security`, `vinea-design`, `vinea-skill-evaluation` | `.claude/skills/*/SKILL.md`, commit Git corrente | VERIFICATA (configurazione) | Sei definizioni versionate; guardie e bootstrap testati in VPM-LAB-002. `vinea-task` e `vinea-skill-evaluation` solo manuali; disponibilità contestuale delle altre dipende dai `paths`. | Conservare; non confondere verifica statica con test dei flussi runtime. |
+| `vinea-external-skill-audit` | `.claude/skills/vinea-external-skill-audit/SKILL.md`, questa PR | IN TEST | Nuova definizione manuale, non esecutiva; test statico nel gate. L'invocazione effettiva in sessione nuova deve ancora essere provata. | Non installa né approva candidate. |
+| `frontend-design` | `anthropics/claude-plugins-official`, commit `30202c767cfaf325212b3921ab484f83adaec850`, v1.1.1 | APPROVATA (uso) | Decisione VPM-LAB-001B §2.6; hash di `SKILL.md` e `LICENSE.txt` in `.github/scripts/claude-plugins.lock.json`; copia marketplace conforme nel profilo `vinea-coding` al 30/10. **Non installata nel profilo** alla verifica `claude plugin list`. | Installare solo la versione bloccata dopo controllo di deriva e provare il caricamento in sessione nuova. |
+| SkillSpector | `NVIDIA/SkillSpector`, v2.13.2 (ricerca del 30/10/2026) | AUDITATA (documentazione) | Licenza Apache-2.0; `--no-llm` non invia contenuti al provider, ma il controllo dipendenze può contattare OSV.dev. Non eseguito su Windows né in sandbox qui. | Controllo supplementare opzionale; prima prova isolata, senza credenziali, con controllo della completezza. |
+| Taste v2, Impeccable | Fonti #3, #8, #105 (Taste), #3, #8 (Impeccable) del catalogo storico | DA VALUTARE (runtime corrente) | VPM-LAB-001B §2.6 raccomanda benchmark isolato, non installazione; nessun benchmark di questo ciclo. | Valutare solo nel contesto di un task ammesso. |
+| UI/UX Pro Max | Fonti #11 e #100 del catalogo storico | DA VALUTARE | Riserva per benchmark in VPM-LAB-001B §2.6; nessuna nuova verifica. | Nessuna installazione. |
+| gstack, Playwright MCP `@latest`, Claudex, find-skills, security-guidance | VPM-LAB-001B §2.6 | SCARTATA (decisione storica) | Motivi documentati nel rapporto: sovrapposizione, installazione in blocco, versione mobile o provenienza non verificata secondo il caso. | Non installare in questo ciclo. |
+
+## Riconciliazione delle 119 fonti
+
+Il **rapporto VPM-LAB-001B §2.6**, non un file di catalogo per voce accessibile in questo repository, registra il conteggio delle 119 *voci*: 30 parcheggiate, 28 incomplete, 21 escluse/non pertinenti, 19 backlog, 12 candidate, 2 repository identificati, 2 da deduplicare, 5 servizi/documentazione. Somma: **119**. Sono categorie **storiche della fonte**, non gli stati del presente registro. Una stessa candidata può apparire più volte (#12 = #59; Taste ×3; Impeccable ×2; UI/UX Pro Max ×2; Remotion ×2; Playwright ×2). Non sono 119 skill installate, né 119 audit correnti.
+
+Il dettaglio riga per riga e i suoi URL/commit non sono disponibili come inventario versionato qui: **NON VERIFICATO**. Non ricostruirlo dai totali o attribuire un esito alle voci non identificate. Quando il catalogo originale sarà disponibile, importare le 119 righe preservando ID, fonte, stato storico e duplicati, e avviare l'audit solo per le candidate pertinenti.
+
+Stati ammessi per ogni candidata: `DA VALUTARE`, `AUDITATA`, `IN TEST`, `APPROVATA`, `INSTALLATA`, `VERIFICATA`, `SCARTATA`. Non trattarli come una scala lineare: approvazione, installazione e verifica sono prove diverse, e una verifica della sola configurazione va qualificata come tale.

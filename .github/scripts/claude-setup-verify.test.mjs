@@ -109,6 +109,15 @@ test("agente: guardia dei segreti obbligatoria; agenti mancanti o extra", () => 
   assert.ok(e.includes("agente non previsto: intruso"), e.join("\n"));
 });
 
+test("audit esterno: skill manuale obbligatoria", () => {
+  const e = erroriDopo(({ modifica }) =>
+    modifica(".claude/skills/vinea-external-skill-audit/SKILL.md", (t) =>
+      t.replace(/^disable-model-invocation:.*\n/m, ""),
+    ),
+  );
+  assert.ok(e.some((x) => x.includes("vinea-external-skill-audit/SKILL.md: disable-model-invocation")), e.join("\n"));
+});
+
 test("skill: allowed-tools, iniezione di shell, invocazione manuale", () => {
   const e = erroriDopo(({ modifica }) => {
     modifica(".claude/skills/vinea-test/SKILL.md", (t) =>
