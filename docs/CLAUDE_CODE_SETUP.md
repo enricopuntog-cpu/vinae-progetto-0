@@ -153,9 +153,13 @@ reale non gira mai in CI.
   che ha il checkout fra i progetti attendibili, e' stato bloccato. La causa
   (attendibilita') e' un'ipotesi non verificata; il canarino ha comunque
   fermato l'agente prima di ogni altro comando.
-- Il plugin `frontend-design` non e' installato nel profilo `vinea-coding`:
-  `claude -p` non lo carica da `enabledPlugins` e lo installa solo
-  `claude-bootstrap.mjs --install` o la richiesta interattiva di Claude Code.
+- Il 30 ottobre 2026 `frontend-design` 1.1.1 e' stato installato nel profilo
+  `vinea-coding` con `claude plugin install ... --scope project` per il worktree
+  `skills-ciclo-1`: `claude plugin list --json` lo mostra abilitato, il bootstrap
+  `--check` conferma due copie conformi al lock e una nuova sessione `claude -p`
+  lo elenca come `frontend-design:frontend-design`. Una copia nel marketplace
+  da sola non prova l'installazione; caricamento interattivo e altri worktree
+  restano da verificare separatamente.
 - Le skill con `paths` (`vinea-design`, `vinea-security`) compaiono solo dopo
   che la sessione ha letto un file nei percorsi dichiarati; `vinea-task` e
   `vinea-skill-evaluation` non sono visibili al modello (solo manuali).
