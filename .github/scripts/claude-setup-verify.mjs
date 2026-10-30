@@ -30,9 +30,10 @@ export const SKILL_ATTESE = [
   "vinea-security",
   "vinea-design",
   "vinea-skill-evaluation",
+  "vinea-external-skill-audit",
 ];
 // Skill che solo l'utente puo' avviare (VPM-LAB-001B §2.4).
-const SKILL_MANUALI = new Set(["vinea-task", "vinea-skill-evaluation"]);
+const SKILL_MANUALI = new Set(["vinea-task", "vinea-skill-evaluation", "vinea-external-skill-audit"]);
 // Agenti con shell e profilo della guardia che devono usare.
 const PROFILO_SHELL = { "vinea-qa-runner": "qa", "vinea-release-verifier": "release" };
 
