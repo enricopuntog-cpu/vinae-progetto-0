@@ -44,11 +44,16 @@ Argomenti ricevuti: $ARGUMENTS
 ## 3. Verifica
 
 - Controlli di `/vinea-test` sul frontend toccato.
-- Screenshot a 375 e 1280 px quando un browser è disponibile; altrimenti
-  `NON VERIFICATO` (non bloccante).
+- Screenshot a 375 e a larghezza desktop con `/vinea-browser-qa` (casi
+  `@cross`: Chromium desktop, Chromium 375 px, WebKit; nessuno scorrimento
+  orizzontale, controlli di accessibilità di base). Se l'ambiente isolato non è
+  disponibile, `NON VERIFICATO` (non bloccante); non usare il browser su
+  produzione.
 - Se il diff contiene transizioni, keyframe o librerie di movimento,
   `/review-animations` sui file toccati, rispettando il brand.
-- Revisione con il subagente `vinea-ux-auditor`, passandogli file e screenshot.
+- Revisione con il subagente `vinea-ux-auditor`, passandogli file e screenshot
+  dei casi browser: il giudizio visivo resta suo e di `frontend-design`; un
+  esito verde della suite non sostituisce la lettura degli screenshot.
 
 ## Completamento
 

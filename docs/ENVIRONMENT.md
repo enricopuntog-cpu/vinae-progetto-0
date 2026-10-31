@@ -573,6 +573,25 @@ nella Edge Function e nei secret GitHub. Responsabile: Enrico / account
 `enricopuntog-cpu`; rotazione ogni 90 giorni e immediata in caso di esposizione
 sospetta. La Fase 7g documenta questi requisiti ma non crea né ruota secret.
 
+### Suite browser E2E (solo prova, mai produzione)
+
+Variabili lette soltanto da `frontend-next/playwright.config.ts`, da
+`frontend-next/e2e/` e da `frontend-next/scripts/e2e-*.mjs`. Non sono variabili
+dell'applicazione, non vanno nel bundle e non vanno impostate in Netlify.
+Procedura in [`E2E_BROWSER.md`](E2E_BROWSER.md).
+
+| Variabile | Ruolo | Note |
+|---|---|---|
+| `E2E_SUPABASE_URL`, `E2E_ANON_KEY` | bersaglio esplicito (come il gate `12g_ci_run.sh`) | se assenti, da `supabase status` dello stack locale. La guardia rifiuta ogni host non loopback e ogni riferimento a un progetto ospitato |
+| `E2E_DB_CONTAINER` | container Docker del database | predefinito `supabase_db_<project_id>`; deve iniziare con `supabase_db_` |
+| `E2E_APP_PORT` | porta dell'app di prova | predefinita `3100` |
+| `E2E_SKIP_BUILD`, `E2E_REUSE_SERVER` | iterazione locale | solo il valore `1`; mai in CI |
+| `E2E_PASSWORD` | password degli utenti di fixture | **generata dalla corsa**, in memoria; non impostarla |
+
+Nel processo di prova le flag Accessori sono accese (`NEXT_PUBLIC_ACCESSORI_ENABLED`,
+`ACCESSORI_ENABLED`), mentre pagamenti e IA restano spenti; il valore di queste
+flag in produzione non cambia.
+
 ## Backend
 
 File di esempio: `backend/.env.example`.
