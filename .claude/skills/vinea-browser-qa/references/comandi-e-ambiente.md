@@ -14,7 +14,7 @@ Tutto si lancia da `frontend-next/`. Versioni fissate: Playwright Test 1.64.1
 
 `bun run e2e:stack up` avvia solo database, Auth, PostgREST, Storage e gateway
 (stessa esclusione del gate CI `supabase-db-regression.yml`) con le migrazioni
-del checkout, e non stampa le chiavi. `down` ferma e **distrugge** lo stack.
+del checkout, e non stampa le chiavi. `down --conferma` ferma e **distrugge** i dati di ogni stack locale con lo stesso project_id (senza `--conferma` rifiuta).
 
 Il database restaurato da un backup precedente è accettato solo se il ledger
 coincide con i file di `supabase/migrations/` e non ci sono utenti estranei: la

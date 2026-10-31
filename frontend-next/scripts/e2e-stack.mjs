@@ -3,7 +3,7 @@
 //
 //   bun run e2e:stack up      avvia lo stack con le migrazioni del checkout
 //   bun run e2e:stack status  stato dei container (senza stampare le chiavi)
-//   bun run e2e:stack down    ferma e DISTRUGGE lo stack locale (--no-backup)
+//   bun run e2e:stack down --conferma   ferma e DISTRUGGE lo stack locale (--no-backup)
 //
 // Stessa CLI fissata e stessi servizi del gate `supabase-db-regression.yml`.
 // Mai un progetto ospitato: la CLI lavora solo sui container Docker locali.
@@ -53,6 +53,12 @@ if (comando === "up") {
   }
   console.log("Stack locale avviato con le migrazioni del checkout.");
 } else if (comando === "down") {
+  // `--no-backup` cancella i volumi di QUALUNQUE stack locale con lo stesso project_id,
+  // anche uno di sviluppo con dati: serve una conferma esplicita.
+  if (!process.argv.includes("--conferma")) {
+    console.error("`down` distrugge i dati di ogni stack Supabase locale di questo progetto. Rilancia con --conferma se è ciò che vuoi.");
+    process.exit(2);
+  }
   process.exit(supabase(["stop", "--no-backup"]).status ?? 1);
 } else if (comando === "status") {
   const esito = spawnSync("docker", ["ps", "--filter", "name=supabase_", "--format", "{{.Names}} {{.Status}}"], {
@@ -61,6 +67,6 @@ if (comando === "up") {
   });
   console.log(esito.stdout.trim() || "Nessun container supabase_* in esecuzione.");
 } else {
-  console.error("Uso: bun run e2e:stack up|status|down");
+  console.error("Uso: bun run e2e:stack up|status|down --conferma");
   process.exit(2);
 }

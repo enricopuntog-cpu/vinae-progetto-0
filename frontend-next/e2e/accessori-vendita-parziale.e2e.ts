@@ -295,7 +295,13 @@ test.describe.serial("Accessori: vendita parziale 2 su 6, moderazione e assenza 
     await dettaglio.getByLabel("Motivazione (obbligatoria, visibile al venditore)").fill("Verifica E2E: sospetto articolo regolamentato.");
     await info.attach("moderazione-oscura.png", { body: await pad.screenshot(), contentType: "image/png" });
     await dettaglio.getByRole("button", { name: "Conferma: Oscura (sospendi)" }).click();
-    await expect(pad.getByRole("status").filter({ hasText: /oscurato|sospes|provvedimento|registrat/i }).first()).toBeVisible();
+    // Esito autorevole dal database, non da un testo generico della UI.
+    await expect
+      .poll(async () => {
+        const mie = await rpc<{ stato: string }[]>("annunci_accessori_elenca", { p_ritirati: false }, await accedi("venditore"));
+        return mie.body.find((a) => a.stato === "oscurato") ? "oscurato" : "non oscurato";
+      })
+      .toBe("oscurato");
     await admin.close();
 
     // Altro account e anonimo: fuori vetrina, dettaglio 404.

@@ -58,7 +58,7 @@ nascono a runtime e non toccano il disco.
    ([references/diagnosi-esiti.md](references/diagnosi-esiti.md)).
 7. Corretto il difetto, **rilancia solo i casi pertinenti**, poi lo smoke
    completo prima di chiudere.
-8. `bun run e2e:stack down` quando hai finito (distrugge lo stack locale).
+8. `bun run e2e:stack down --conferma` quando hai finito (distrugge i dati di ogni stack locale del progetto).
 
 ## 4. Responsive e accessibilità
 

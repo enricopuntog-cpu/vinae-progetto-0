@@ -27,14 +27,17 @@ const abortiTolleratiDalBrowser = /net::ERR_ABORTED|NS_BINDING_ABORTED|cancelled
  * avvia il servizio Realtime (escluso come nel gate CI, `e2e-stack.mjs`), quindi
  * il client non riesce ad aprire il WebSocket. Non è un difetto dell'app.
  */
+// Origine dell'API locale (porta compresa) letta dal bersaglio risolto.
+const ORIGINE_API = new URL(process.env.E2E_SUPABASE_URL ?? "http://127.0.0.1:54321").origin;
+
 const RUMORE_INFRASTRUTTURA = [
   "/realtime/v1/websocket",
   // Il fallback CSP statico (solo Report-Only, `security-headers.ts`) nomina l'origine
   // Supabase di produzione: sullo stack locale WebKit lo scrive in console per ogni
   // chiamata e il rate limit risponde 429 ai report. Una violazione della CSP
   // effettiva (enforcing, nonce del Proxy) NON contiene «[Report Only]» e fa fallire.
-  "[Report Only] Refused to connect to http://127.0.0.1:54321",
-  "[Report Only] Refused to load http://127.0.0.1:54321",
+  `[Report Only] Refused to connect to ${ORIGINE_API}`,
+  `[Report Only] Refused to load ${ORIGINE_API}`,
   "/api/security/csp-report",
 ];
 
