@@ -7,21 +7,21 @@ Questo ciclo ha riesaminato **tutte** le 119 fonti (`VINEA_SKILLS_SOURCE_COVERAG
 Distinzione degli stati usata qui:
 
 - **PRESENTE e CARICATA**: i file sono nel repository (lock con commit e SHA-256) e la sessione headless nel profilo `vinea-coding` elenca la skill nell'evento `init`. Verificato.
-- **Secondo passaggio, 31 ottobre 2026**: Il 31 ottobre 2026, secondo passaggio, la CLI 2.1.316 riporta `loggedIn: false` in entrambi i profili: Anthropic Direct («OAuth session expired and could not be refreshed») e `vinea-coding` (credenziali del profilo senza token di accesso; OmniRoute su `127.0.0.1:20128` risponde 401 senza chiave e nel mio ambiente non esiste una chiave valida). Nessuna chiamata al modello è partita (costo 0). L'accesso è un'azione del titolare e non è stato aggirato. Stato di ogni skill invariato: INSTALLATA e CARICATA (profilo `vinea-coding`), INVOCATA non provata, **NON VERIFICATA**.
-- **INVOCAZIONE**: la skill è stata realmente richiamata da un task e ne è stato letto l'esito. **NON VERIFICATA** per tutte le nuove skill: il login OAuth della CLI headless è scaduto durante la sessione e le chiamate al modello sono fallite («OAuth session expired»), quindi nessun task è partito. Finché la prova non è eseguita (`node .github/scripts/claude-skill-runtime-check.mjs`, vedi `VINEA_SKILLS_USAGE.md`) nessuna di esse va considerata VERIFICATA.
+- **Secondo passaggio, 31 ottobre 2026 (storico)**: allora la CLI 2.1.316 non aveva accesso in entrambi i profili (Direct: OAuth scaduto; `vinea-coding`: 401); nessuna chiamata era partita. Il nuovo collaudo sotto ha superato il blocco nel profilo `vinea-coding`, senza cambiare le credenziali nel repository. Direct non è stato riprovato.
+- **INVOCAZIONE, collaudo finale del 31 ottobre 2026**: nel profilo `vinea-coding` **8/8 skill VERIFICATE** più prova negativa OK. Le sei contestuali sono richiamate con lo strumento `Skill` nel flusso `stream-json`; le due manuali con il comando `/nome` come argomento posizionale di `claude -p`, la cui espansione (`<command-name>/nome</command-name>` e corpo della skill) è registrata dalla CLI nella trascrizione della sessione. Un primo giro con il comando su stdin non era stato espanso (KO, storico). Dettagli e costi in `VINEA_SKILLS_RECOVERY_REPORT.md`. La bozza marketing resta NON APPROVATA.
 
 ### Skill operative nel progetto
 
 | Skill | Origine | Invocazione | Caricata nel profilo `vinea-coding` | Invocazione provata |
 |---|---|---|---|---|
-| `copywriting` | Marketing Skills `88c79f6` (MIT) | contestuale | sì | NON VERIFICATA |
-| `seo-audit` | Marketing Skills `88c79f6` | contestuale | sì | NON VERIFICATA |
-| `cro` | Marketing Skills `88c79f6` | contestuale | sì | NON VERIFICATA |
-| `product-marketing` | Marketing Skills `88c79f6` | contestuale | sì | NON VERIFICATA |
-| `review-animations` | Emil Kowalski `a81dbca` (MIT) | manuale | sì | NON VERIFICATA |
-| `animation-performance` | Emil Kowalski `a81dbca` | contestuale | sì | NON VERIFICATA |
-| `supabase-postgres-best-practices` | Supabase `c9be0e9` (MIT) | contestuale | sì | NON VERIFICATA |
-| `vinea-marketing` | interna | manuale | sì | NON VERIFICATA |
+| `copywriting` | Marketing Skills `88c79f6` (MIT) | contestuale | sì | **VERIFICATA**: `Skill`, task OK |
+| `seo-audit` | Marketing Skills `88c79f6` | contestuale | sì | **VERIFICATA**: `Skill`, task OK |
+| `cro` | Marketing Skills `88c79f6` | contestuale | sì | **VERIFICATA**: `Skill`, task OK |
+| `product-marketing` | Marketing Skills `88c79f6` | contestuale | sì | **VERIFICATA**: `Skill`, task OK |
+| `review-animations` | Emil Kowalski `a81dbca` (MIT) | manuale | sì | **VERIFICATA**: espansione di `/review-animations` nella trascrizione, task OK |
+| `animation-performance` | Emil Kowalski `a81dbca` | contestuale | sì | **VERIFICATA**: `Skill`, task OK |
+| `supabase-postgres-best-practices` | Supabase `c9be0e9` (MIT) | contestuale | sì | **VERIFICATA**: `Skill`, task OK |
+| `vinea-marketing` | interna | manuale | sì | **VERIFICATA**: espansione di `/vinea-marketing` nella trascrizione, task OK |
 | `frontend-design` | plugin ufficiale 1.1.1 | contestuale | sì (nel profilo `vinea-coding`; **assente** dal profilo di default) | verificata nel Ciclo 2 |
 | `vinea-task`, `vinea-test`, `vinea-review`, `vinea-skill-evaluation`, `vinea-external-skill-audit` | interne | miste | sì | già in uso; le modifiche di questo ciclo (instradamento verso le nuove skill) non sono state provate |
 | `vinea-design`, `vinea-security` | interne, con `paths:` | contestuale | si caricano solo quando i file corrispondono (assenti dall'`init` senza file aperti) | idem |
