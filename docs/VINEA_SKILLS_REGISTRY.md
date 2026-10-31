@@ -7,6 +7,7 @@ Questo ciclo ha riesaminato **tutte** le 119 fonti (`VINEA_SKILLS_SOURCE_COVERAG
 Distinzione degli stati usata qui:
 
 - **PRESENTE e CARICATA**: i file sono nel repository (lock con commit e SHA-256) e la sessione headless nel profilo `vinea-coding` elenca la skill nell'evento `init`. Verificato.
+- **Secondo passaggio, 31 ottobre 2026**: Il 31 ottobre 2026, secondo passaggio, la CLI 2.1.316 riporta `loggedIn: false` in entrambi i profili: Anthropic Direct («OAuth session expired and could not be refreshed») e `vinea-coding` (credenziali del profilo senza token di accesso; OmniRoute su `127.0.0.1:20128` risponde 401 senza chiave e nel mio ambiente non esiste una chiave valida). Nessuna chiamata al modello è partita (costo 0). L'accesso è un'azione del titolare e non è stato aggirato. Stato di ogni skill invariato: INSTALLATA e CARICATA (profilo `vinea-coding`), INVOCATA non provata, **NON VERIFICATA**.
 - **INVOCAZIONE**: la skill è stata realmente richiamata da un task e ne è stato letto l'esito. **NON VERIFICATA** per tutte le nuove skill: il login OAuth della CLI headless è scaduto durante la sessione e le chiamate al modello sono fallite («OAuth session expired»), quindi nessun task è partito. Finché la prova non è eseguita (`node .github/scripts/claude-skill-runtime-check.mjs`, vedi `VINEA_SKILLS_USAGE.md`) nessuna di esse va considerata VERIFICATA.
 
 ### Skill operative nel progetto

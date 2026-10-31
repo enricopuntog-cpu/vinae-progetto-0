@@ -31,8 +31,11 @@ Leggi prima `.agents/product-marketing.md`, se esiste: è il contesto che le ski
 terzi cercano da sole e contiene i fatti verificati su Vinea. Se manca, non
 inventarlo: lavora solo sui fatti del repository e proponi `/vinea-marketing contesto`
 per redigerne una bozza da far approvare al titolare.
-Se il file porta lo stato `BOZZA`, ogni sua affermazione non ancora approvata
-dal titolare va trattata come ipotesi, non come fatto pubblicabile.
+Se il file porta lo stato `BOZZA` o `NON APPROVATA DAL TITOLARE`, ogni sua
+affermazione non ancora approvata dal titolare va trattata come ipotesi, non come
+fatto pubblicabile: usa come fatti solo le voci `[VERIFICATO]`, tratta le sezioni
+«Claim ancora da approvare» e `[LEG]` come divieti, e non portare nel testo ciò che
+è `[BETA]`, `[SPENTO]` o `[PIANIFICATO]` come se fosse disponibile.
 
 ## 3. Regole non negoziabili
 

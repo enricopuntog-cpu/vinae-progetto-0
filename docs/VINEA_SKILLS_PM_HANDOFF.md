@@ -22,7 +22,7 @@ Avvertenza trasversale: **nessuna delle nuove skill ha una prova di invocazione*
 ## Decisioni e input richiesti al titolare
 
 1. Rinnovare l'accesso della CLI (`claude` interattivo) per sbloccare la prova di invocazione e la chiusura del ciclo.
-2. Approvare o correggere il contesto di prodotto di `.agents/product-marketing.md` (non ancora creato: si genera con `/vinea-marketing contesto` e si rivede a mano).
+2. Approvare o correggere il contesto di prodotto di `.agents/product-marketing.md` (bozza presente, marcata «NON APPROVATA DAL TITOLARE»: le sezioni «Claim ancora da approvare» e «Questioni legali» sono divieti finché non decide il titolare).
 3. Fornire gli elenchi/link delle 29 fonti NON RISOLTE che interessano (priorità: #2, #55, #109, #112, #118) o confermare che restano chiuse.
 4. Decidere su Strix (budget, chiave LLM, rete isolata) e su UI/UX Pro Max solo-dati.
 5. Chiarire l'organico di Vinea per la licenza Remotion, se i video diventano un task.

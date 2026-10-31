@@ -49,11 +49,15 @@ Per area (caricate): DEV/QA 4 (`vinea-task`, `vinea-test`, `vinea-review`, `vine
 | `claude-setup-verify` e test | verificatore OK; test 19/19 |
 | Suite CI completa, check richiesti sulla testa, post-merge | vedi la PR; NON eseguiti all'atto di questo rapporto |
 
+## Secondo passaggio (31 ottobre 2026)
+
+Il 31 ottobre 2026, secondo passaggio, la CLI 2.1.316 riporta `loggedIn: false` in entrambi i profili: Anthropic Direct («OAuth session expired and could not be refreshed») e `vinea-coding` (credenziali del profilo senza token di accesso; OmniRoute su `127.0.0.1:20128` risponde 401 senza chiave e nel mio ambiente non esiste una chiave valida). Nessuna chiamata al modello è partita (costo 0). L'accesso è un'azione del titolare e non è stato aggirato. Lo script di prova è stato corretto prima di qualsiasi esecuzione: corrispondenza esatta del nome della skill (un nome nel testo o un nome simile non contano), prova strutturale per le skill manuali, esiti distinti per autenticazione, errore API, timeout e interferenza, strumenti ridotti a `Skill`, `Read`, `Grep`, `Glob` con `--tools`, limite di tempo e di spesa per sessione, tetto al buffer di uscita, nuova prova negativa (un task di programmazione non deve attivare le skill di marketing), esito salvato senza prompt né percorsi personali. 15 test offline del classificatore passano; l'esito reale resta NON VERIFICATO per tutte e otto le skill e per la prova negativa.
+
 ## Rischi, costi, limitazioni
 
 - **Rischio principale**: skill contestuali di marketing e `supabase-postgres-best-practices` possono attivarsi in contesti non voluti (la seconda dichiara «carica prima di qualsiasi SQL»). Mitigazione: precedenza di `CLAUDE.md` scritta nelle skill interne; da misurare con la prova di invocazione.
 - **Conflitto noto**: i budget di durata di `review-animations` (UI sotto 300 ms) contraddicono i token Vinea (320/520 ms): le skill `vinea-design` e `vinea-review` dichiarano che i token prevalgono.
-- **Contenuto non provato**: `.agents/product-marketing.md` non è stato creato; senza di esso le skill di marketing non conoscono il contesto Vinea e il loro output va trattato come generico.
+- **Contesto marketing**: `.agents/product-marketing.md` è stato redatto il 31 ottobre 2026 come **BOZZA — NON APPROVATA DAL TITOLARE**, solo con fatti del repository etichettati per stato (`[VERIFICATO]`, `[BETA]`, `[SPENTO]`, `[PIANIFICATO]`, `[IPOTESI]`, `[LEG]`), senza ricerche di mercato, testimonianze, risultati o promesse. `vinea-marketing` lo tratta come orientamento e non come fonte di claim. Finché il titolare non lo approva, l'output delle skill di marketing resta bozza.
 - **Costo di contesto**: ≈1,2k token per sessione (coperti dalla cache); nessun nuovo servizio a pagamento; nessun benchmark a pagamento in questo ciclo. Il costo dei subagenti di audit non è misurato in USD.
 - **Ambiente**: Python e FFmpeg non installati (bloccano UI/UX Pro Max, Claude Ads, Founder Skill, HyperFrames); Docker presente.
 - **Limiti degli audit**: statici e parziali; un audit statico non equivale a un benchmark pratico. Nessun confronto prestazionale nuovo tra strumenti equivalenti.
@@ -65,6 +69,7 @@ Worktree `skills-recovery-001`, branch `docs/skills-recovery-001`, da `origin/ma
 
 ## Per chiudere il ciclo
 
-1. Rinnovare il login CLI e rieseguire `claude-skill-runtime-check.mjs` nel profilo `vinea-coding`; aggiornare il registro con gli esiti reali.
-2. Generare e far approvare `.agents/product-marketing.md`.
+1. Il titolare rinnova l'accesso (vedi `VINEA_SKILLS_USAGE.md`) ed esegue `claude-skill-runtime-check.mjs` nel profilo `vinea-coding`; si aggiorna il registro con gli esiti reali (otto skill più prova negativa).
+2. Il titolare rivede e approva `.agents/product-marketing.md` (bozza già presente).
+
 3. Merge a check verdi e verifica da `origin/main` (lock, verificatore, `init` del profilo da un clone pulito).

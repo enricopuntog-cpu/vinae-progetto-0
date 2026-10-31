@@ -10,7 +10,12 @@ La prova di **invocazione** delle nuove skill è NON VERIFICATA (login CLI scadu
 
     CLAUDE_CONFIG_DIR=<profilo vinea-coding> node .github/scripts/claude-skill-runtime-check.mjs
 
-Lo script lancia otto sessioni headless in sola lettura (circa 0,3–0,5 USD stimati ciascuna), controlla che la skill sia elencata e richiamata, e dichiara `NON VERIFICATO` se l'autenticazione fallisce. Non è un controllo di CI.
+Lo script lancia nove sessioni headless (otto skill più una prova negativa) con i soli strumenti `Skill`, `Read`, `Grep`, `Glob`, ciascuna con limite di tempo (240 s) e di spesa (1 USD, regolabili con `--timeout-s` e `--budget-usd`; stima 0,3–0,5 USD per sessione). Una skill è OK solo se è elencata nell'evento `init` **e** richiamata con prova strutturale (strumento `Skill` con nome esatto, o espansione del comando per le manuali); il nome nel testo non basta. Esiti: `OK`, `KO (non elencata | non richiamata | errore API | timeout | interferenza)`, `NON VERIFICATO (autenticazione)`. Scrive un JSON senza prompt né percorsi personali (`--out file.json`). Non è un controllo di CI.
+
+Accesso, a cura del titolare (mai da un agente):
+
+- profilo Anthropic Direct: `claude auth login` (o `/login` in una sessione interattiva `claude`);
+- profilo `vinea-coding` (OmniRoute): la chiave di OmniRoute va resa disponibile alla CLI nel modo già usato per questo profilo (variabile `ANTHROPIC_API_KEY` o `ANTHROPIC_AUTH_TOKEN` nella sola shell che lancia la prova); la base URL è già nel `settings.json` del profilo. Verifica: `CLAUDE_CONFIG_DIR=<profilo> claude auth status` e una sessione `claude -p` banale.
 
 ## Comandi e attivazioni
 

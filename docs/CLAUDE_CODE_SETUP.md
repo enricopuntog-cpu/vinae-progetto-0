@@ -15,6 +15,8 @@ Anthropic Direct (`~/.claude`) e il profilo OmniRoute
 .github/scripts/claude-plugins.lock.json  lock di frontend-design
 .github/scripts/claude-skills.lock.json   lock delle 7 skill di terzi (commit, SHA-256)
 .github/scripts/claude-skill-runtime-check.mjs  prova manuale di invocazione (mai in CI)
+.github/scripts/claude-skill-runtime-check.test.mjs  test offline del classificatore (in CI)
+.agents/product-marketing.md              contesto marketing, BOZZA non approvata
 .github/scripts/claude-agent-guard.mjs    guardia shell dei due agenti con Bash
 .github/scripts/claude-secret-guard.mjs    guardia dei file di segreti
 .github/scripts/claude-setup-verify.mjs   verifica statica (CI)
