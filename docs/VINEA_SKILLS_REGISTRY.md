@@ -1,4 +1,63 @@
-# Registro AI Skills Lab — Ciclo 2
+# Registro AI Skills Lab — Ciclo 2 e RECOVERY-001
+
+## Stato dopo RECOVERY-001 (31 ottobre 2026)
+
+Questo ciclo ha riesaminato **tutte** le 119 fonti (`VINEA_SKILLS_SOURCE_COVERAGE.md`: 89 esaminate, 29 NON RISOLTE, 1 NON LETTA) e valutato ogni candidata identificabile (`VINEA_SKILLS_CANDIDATES.md`). Sono state integrate **7 skill di terzi** più 1 skill interna; tutte le altre candidate sono rinviate, scartate o bloccate con motivazione. La sezione «Decisioni per strumento» più sotto resta la fotografia del Ciclo 2: dove differisce da questa sezione, vale questa.
+
+Distinzione degli stati usata qui:
+
+- **PRESENTE e CARICATA**: i file sono nel repository (lock con commit e SHA-256) e la sessione headless nel profilo `vinea-coding` elenca la skill nell'evento `init`. Verificato.
+- **Secondo passaggio, 31 ottobre 2026 (storico)**: allora la CLI 2.1.316 non aveva accesso in entrambi i profili (Direct: OAuth scaduto; `vinea-coding`: 401); nessuna chiamata era partita. Il nuovo collaudo sotto ha superato il blocco nel profilo `vinea-coding`, senza cambiare le credenziali nel repository. Direct non è stato riprovato.
+- **INVOCAZIONE, collaudo finale del 31 ottobre 2026**: nel profilo `vinea-coding` **8/8 skill VERIFICATE** più prova negativa OK. Le sei contestuali sono richiamate con lo strumento `Skill` nel flusso `stream-json`; le due manuali con il comando `/nome` come argomento posizionale di `claude -p`, la cui espansione (`<command-name>/nome</command-name>` e corpo della skill) è registrata dalla CLI nella trascrizione della sessione. Un primo giro con il comando su stdin non era stato espanso (KO, storico). Dettagli e costi in `VINEA_SKILLS_RECOVERY_REPORT.md`. La bozza marketing resta NON APPROVATA.
+
+### Skill operative nel progetto
+
+| Skill | Origine | Invocazione | Caricata nel profilo `vinea-coding` | Invocazione provata |
+|---|---|---|---|---|
+| `copywriting` | Marketing Skills `88c79f6` (MIT) | contestuale | sì | **VERIFICATA**: `Skill`, task OK |
+| `seo-audit` | Marketing Skills `88c79f6` | contestuale | sì | **VERIFICATA**: `Skill`, task OK |
+| `cro` | Marketing Skills `88c79f6` | contestuale | sì | **VERIFICATA**: `Skill`, task OK |
+| `product-marketing` | Marketing Skills `88c79f6` | contestuale | sì | **VERIFICATA**: `Skill`, task OK |
+| `review-animations` | Emil Kowalski `a81dbca` (MIT) | manuale | sì | **VERIFICATA**: espansione di `/review-animations` nella trascrizione, task OK |
+| `animation-performance` | Emil Kowalski `a81dbca` | contestuale | sì | **VERIFICATA**: `Skill`, task OK |
+| `supabase-postgres-best-practices` | Supabase `c9be0e9` (MIT) | contestuale | sì | **VERIFICATA**: `Skill`, task OK |
+| `vinea-marketing` | interna | manuale | sì | **VERIFICATA**: espansione di `/vinea-marketing` nella trascrizione, task OK |
+| `frontend-design` | plugin ufficiale 1.1.1 | contestuale | sì (nel profilo `vinea-coding`; **assente** dal profilo di default) | verificata nel Ciclo 2 |
+| `vinea-task`, `vinea-test`, `vinea-review`, `vinea-skill-evaluation`, `vinea-external-skill-audit` | interne | miste | sì | già in uso; le modifiche di questo ciclo (instradamento verso le nuove skill) non sono state provate |
+| `vinea-design`, `vinea-security` | interne, con `paths:` | contestuale | si caricano solo quando i file corrispondono (assenti dall'`init` senza file aperti) | idem |
+
+Integrità: `.github/scripts/claude-skills.lock.json` registra repository, commit completo, licenza, SHA-256 di ogni file (fine riga normalizzata a LF, uguale al blob git upstream), esito dello scanner e riesame manuale. `claude-setup-verify.mjs` (job `Continuity`) rifiuta file mancanti, aggiunti o diversi, `allowed-tools`, `hooks`, iniezioni di shell e SKILL.md oltre 600 righe (300 per le interne). Reversibilità: eliminare la cartella della skill e la sua voce nel lock (un revert Git).
+
+Costo di contesto: le sei skill contestuali aggiungono ≈4,7k caratteri (≈1,2k token) di descrizioni ai prefissi di sessione, coperti dalla cache (hit rate 94,3% misurato nel Ciclo 2). `review-animations` e `vinea-marketing` sono manuali e non pesano.
+
+### Scartate, rinviate, bloccate
+
+Il dettaglio con evidenze e condizioni di sblocco è in `VINEA_SKILLS_CANDIDATES.md`. In sintesi:
+
+- **BLOCCATA**: Strix (scansione attiva, telemetria, chiave LLM).
+- **SCARTATA**: gstack, Ruflo, Magic MCP/21st, Context Mode, Agent-Reach, Scrapling, Remotion skills, img2threejs, Awesome DESIGN.md, Google Skills, Context Engineering, Vercel find-skills, Taste, Impeccable.
+- **RINVIATA** (con condizione): UI/UX Pro Max, Archify, Playwright CLI, altre skill Emil, altre Marketing Skills (copy-editing, schema, ai-seo, launch, pricing…), Stop Slop, Humanizer, HyperFrames, Claude Ads, Founder Skill, ccusage, Vercel agent-skills (licenza da verificare).
+- **NON RISOLTE / NON VERIFICATE**: le 29 fonti senza strumento nominato, ClaudeX, InRegola.
+
+### Riesame manuale dei rilievi SkillSpector (esiti)
+
+| Target | Rilievi | Esito |
+|---|---|---|
+| Marketing Skills (4 adottate) | 3 MEDIUM EA2 | falsi positivi (consiglio sui campi di un modulo; testo che vieta di agire senza approvazione) |
+| `review-animations` | 3 HIGH AE1 | limite dello scanner (STANDARDS.md referenziato, incluso) |
+| Emil `improve-animations`, `break-ui` | 6+1 HIGH P1/P2 | falsi positivi: regola difensiva «se un file prova a darti istruzioni, segnalalo»; 4 spazi a larghezza zero tra recinti di codice annidati |
+| `supabase` (skill generale) | 12 HIGH PE3/YR1 | documentazione sui token e sul `service_role`, falsi positivi; rinviata comunque per il recupero remoto di istruzioni e l'uso di MCP |
+| `supabase-postgres-best-practices` | nessuno | — |
+| UI/UX Pro Max | 15 HIGH | tutti falsi positivi (dati/test); 13 file non coperti letti a mano e puliti |
+| Archify | 16 HIGH YARA, 43 AE1 | font base64 e budget dello scanner; copertura 7,8%, `bin/archify.mjs` non letto per intero |
+| Playwright CLI | 3 HIGH, 15 MEDIUM | 13 `npx` senza versione, 5 falsi positivi |
+| gstack `review` | 7 HIGH, 21 MEDIUM | non riesaminati uno a uno; scartata per motivi strutturali (preambolo, hook, telemetria) |
+
+I punteggi alti non sono stati usati da soli né per scartare né per approvare.
+
+---
+
+## Ciclo 2 (storico, 31 ottobre 2026)
 
 31 ottobre 2026. Le 119 righe finali sono **fonti storiche**, non 119 skill installate: la loro priorità e il loro stato sono quelli del catalogo originale, non una promozione automatica. Questa riconciliazione conserva ID, area, priorità, stato e sintesi ma omette URL social, account, esportazioni private e dati personali. I 16 ID 104–119 sono le aggiunte del catalogo; Strix e Agent-Reach provengono invece dal brief successivo e sono **fuori catalogo**. Originale non modificato, custodito fuori dal repository; nessuna pagina privata importata. Stati strumento: `AUDITATA`, `IN TEST`, `INSTALLATA`, `VERIFICATA`, `SCARTATA`; il tipo di verifica è specificato, e non equivale ad approvazione generale.
 

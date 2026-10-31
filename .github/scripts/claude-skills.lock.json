@@ -1,0 +1,223 @@
+{
+  "version": 1,
+  "hashing": "sha256 del contenuto con fine riga normalizzata a LF (equivale al blob git upstream)",
+  "sources": {
+    "marketingskills": {
+      "repo": "coreyhaines31/marketingskills",
+      "commit": "88c79f6528a9347420e57ceb1fff9a60de651768",
+      "license": "MIT",
+      "licenseFile": "LICENSE"
+    },
+    "emilkowalski-skills": {
+      "repo": "emilkowalski/skills",
+      "commit": "a81dbca07f2217b7103e510c0f13f8d5b017afc9",
+      "license": "MIT",
+      "licenseFile": "LICENSE"
+    },
+    "supabase-agent-skills": {
+      "repo": "supabase/agent-skills",
+      "commit": "c9be0e931b7930f7d02126d04774d904c381e7d7",
+      "license": "MIT",
+      "licenseFile": "LICENSE"
+    }
+  },
+  "skills": {
+    "copywriting": {
+      "source": "marketingskills",
+      "path": "skills/copywriting",
+      "version": "2.3.2",
+      "invocation": "contextual",
+      "files": {
+        "LICENSE": "b70d71e24e40fce5da8f4b6f9cd862096a048e433db7f3c8cac5e348e6d34591",
+        "SKILL.md": "02f0ab1ddd41d95b3c230d4bcff3de6578c8f2e45776c8ef2e4b931636af5bee",
+        "references/ai-tells.md": "b98c3a19b3a75c714d69e80a0076e4c07244b0e833c2ce81ff2631224fb7f7b2",
+        "references/copy-frameworks.md": "4db06c481a904be3e4571ad8f671532c97ec186ddf0fb8aee3e3a56ef8e3d441",
+        "references/natural-transitions.md": "9bd61b0de5be2c4de4ce130c68236b4f290b12737823827a458bb2b4c8584683"
+      },
+      "excluded": [
+        "evals/evals.json"
+      ],
+      "scanner": {
+        "tool": "SkillSpector 2.13.2 --no-llm",
+        "score": 0,
+        "recommendation": "CAUTION",
+        "issues": {},
+        "manualReview": "Nessun rilievo."
+      },
+      "reviewedAt": "2026-10-31"
+    },
+    "seo-audit": {
+      "source": "marketingskills",
+      "path": "skills/seo-audit",
+      "version": "2.2.2",
+      "invocation": "contextual",
+      "files": {
+        "LICENSE": "b70d71e24e40fce5da8f4b6f9cd862096a048e433db7f3c8cac5e348e6d34591",
+        "SKILL.md": "e0ebb5808787f2ff26b96d7b429423874d9785541cd4ab775629a5cf1137e7a9",
+        "references/ai-writing-detection.md": "f1e273f56ce7e2215ff218bf903680ddcec0fd026ab90c3ebfb3439ed0edfaa4",
+        "references/international-seo.md": "0603022cca968acf7889fc224221aa0e70955ba64355bc18b06f7e86b32f45e5",
+        "references/local-seo-pages-and-measurement.md": "20607ef91c4b8b37346f42130a6f51ed4ce64dc2731b6e1328b5b14f16917fe3",
+        "references/local-seo-profile-and-citations.md": "83b1b63eb6083e7aab1f56c4928335ea2a235e837861a9e9e8043b6af162a1f3",
+        "references/local-seo.md": "d2666d9c225bc36f9737ce612894abbe7e263b5974e2db7c1efc50f6010bb376",
+        "references/rankings-push.md": "c21d6d4f9faf7ce5b1dc0f8bd508e7513967492fcd8ed9510a175ce243daf8c8",
+        "references/title-tags.md": "c40b3c6af3600ca15670db8eb81000c7ca6fa25265a6550ccc630f53db3fcf51"
+      },
+      "excluded": [
+        "evals/evals.json"
+      ],
+      "scanner": {
+        "tool": "SkillSpector 2.13.2 --no-llm",
+        "score": 0,
+        "recommendation": "CAUTION",
+        "issues": {},
+        "manualReview": "Nessun rilievo."
+      },
+      "reviewedAt": "2026-10-31"
+    },
+    "cro": {
+      "source": "marketingskills",
+      "path": "skills/cro",
+      "version": "2.0.3",
+      "invocation": "contextual",
+      "files": {
+        "LICENSE": "b70d71e24e40fce5da8f4b6f9cd862096a048e433db7f3c8cac5e348e6d34591",
+        "SKILL.md": "6e172cc38178c800ff41ceb097f36c6a1db8035fb88a1fee53043f8ec38a6f35",
+        "references/experiments.md": "bbcc356c0af36cfaa4556bf9e929deac30c65cafb37f909d7c51d4777fe254ca",
+        "references/form.md": "49b8f29b3da1ae6510572288cad3eb1f3d43a969373443be98b38639746587e6"
+      },
+      "excluded": [
+        "evals/evals.json"
+      ],
+      "scanner": {
+        "tool": "SkillSpector 2.13.2 --no-llm",
+        "score": 7,
+        "recommendation": "CAUTION",
+        "issues": {
+          "MEDIUM": 1
+        },
+        "manualReview": "MEDIUM EA2 su references/form.md:63 (elenco di consigli sui campi del modulo, «no confirmation» e una prassi UX): falso positivo."
+      },
+      "reviewedAt": "2026-10-31"
+    },
+    "product-marketing": {
+      "source": "marketingskills",
+      "path": "skills/product-marketing",
+      "version": "2.2.0",
+      "invocation": "contextual",
+      "files": {
+        "LICENSE": "b70d71e24e40fce5da8f4b6f9cd862096a048e433db7f3c8cac5e348e6d34591",
+        "SKILL.md": "19ece0fa75c72a5a8b6e90db80f506586f54cc93bae6bffbb1bd2ef4ae7d603c",
+        "references/brand-voice.md": "932f3453db2761f03050792e39800150495dab449750b40913a4314ea97e7672"
+      },
+      "excluded": [
+        "evals/evals.json"
+      ],
+      "scanner": {
+        "tool": "SkillSpector 2.13.2 --no-llm",
+        "score": 11,
+        "recommendation": "CAUTION",
+        "issues": {
+          "MEDIUM": 2
+        },
+        "manualReview": "Due MEDIUM EA2 su SKILL.md:136 e :259: l'agente può solo leggere, confrontare e redigere; «without approval» introduce il divieto di modificare budget senza approvazione: falsi positivi."
+      },
+      "reviewedAt": "2026-10-31"
+    },
+    "review-animations": {
+      "source": "emilkowalski-skills",
+      "path": "skills/review-animations",
+      "version": null,
+      "invocation": "manual",
+      "files": {
+        "LICENSE": "4ff5bdb7887ec1435c9cab0e8d1a7caee704d894d65c2a008ccc68b1cc2f260b",
+        "SKILL.md": "6ff590d29e436766135aa3d137be1fac2a867165c7257fc315b189361f1873af",
+        "STANDARDS.md": "e7d3605034acda54ca13e43aec9e64d65b53de20f75b11b8d694e373012fbe07"
+      },
+      "excluded": [],
+      "scanner": {
+        "tool": "SkillSpector 2.13.2 --no-llm",
+        "score": 43,
+        "recommendation": "CAUTION",
+        "issues": {
+          "HIGH": 3
+        },
+        "manualReview": "Tre HIGH AE1 «STANDARDS.md (partial)»: il file referenziato è incluso nella copia; limite dello scanner: falso positivo."
+      },
+      "reviewedAt": "2026-10-31"
+    },
+    "animation-performance": {
+      "source": "emilkowalski-skills",
+      "path": "skills/animation-performance",
+      "version": null,
+      "invocation": "contextual",
+      "files": {
+        "LICENSE": "4ff5bdb7887ec1435c9cab0e8d1a7caee704d894d65c2a008ccc68b1cc2f260b",
+        "SKILL.md": "ceb9dd3fe912615830f725a0120ccf8d012d15a6218001a5cd6c15d38e39a957"
+      },
+      "excluded": [],
+      "scanner": {
+        "tool": "SkillSpector 2.13.2 --no-llm",
+        "score": 0,
+        "recommendation": "CAUTION",
+        "issues": {},
+        "manualReview": "Nessun rilievo."
+      },
+      "reviewedAt": "2026-10-31"
+    },
+    "supabase-postgres-best-practices": {
+      "source": "supabase-agent-skills",
+      "path": "skills/supabase-postgres-best-practices",
+      "version": "1.1.1",
+      "invocation": "contextual",
+      "files": {
+        "LICENSE": "b65e575eb4f04a13c187d64e958321298e2ab84d67aa8428819f362056ba292c",
+        "SKILL.md": "ad65e776f45e761bafc609d3f506c77c1032225aa65e0c4c02f241b8071e5855",
+        "references/_contributing.md": "191e039e7d94764e6073410b513b559f9a594e0fdf0252a30c2a2986df2ab3bc",
+        "references/_sections.md": "c9e992612b422c7122de0b7542ebc2450db283edaab08cfe86c6d657fcccccd5",
+        "references/_template.md": "6299954250f212caabe339d752c3e5313a8e07d1a182a4e4b425baee91df1bd2",
+        "references/advanced-full-text-search.md": "40c2606bbb4c4dce31308f201b24cc7f58c7df05b1d9c6856fe2b888d3b7cf28",
+        "references/advanced-jsonb-indexing.md": "24cacf6a8bc35901dd566d24502ce8e57f810a5c196b897e61d52726e521d106",
+        "references/conn-idle-timeout.md": "630588902c00fcec59a5988cc5d042f76dcf2c923a535abfd8c47dca205eaed5",
+        "references/conn-limits.md": "11b2a67a7c7679cbbc5d807bbb17e69c98484a581d0c8b929c03408f412b81b2",
+        "references/conn-pooling.md": "88cf086bf98ba865d2e9d0579974e1366b14157619d6a93e7da77be91084e4a5",
+        "references/conn-prepared-statements.md": "174e9332fe3dda5c99b2b00159fb1915ae36c00bab3a7882c14e73e4344e946e",
+        "references/data-batch-inserts.md": "531933b82d6a622d0fae29e0ea80be6fe5d78655adf2804c271ea84a1930de37",
+        "references/data-n-plus-one.md": "21a44905e5b16a42741892ec34bb1bfef124d049b140a76934a9acd0f46f5fc2",
+        "references/data-pagination.md": "73c9fa10a3d439bedea0e11b640bd25bf30dd50f0d9006cf85baf7c3151543fa",
+        "references/data-upsert.md": "2612af83b20a2701dde30ef1f8d7efd26b7e9eef84717226b8f038a2d2150ff7",
+        "references/lock-advisory.md": "c88d259dbf81c3771438f59a165f7eab8acd09999dd370bdf807521c73f35aab",
+        "references/lock-deadlock-prevention.md": "09aee46f51d7178c8e55fe056cd5a94a64ba2c122fe418e6900cd99f297b2347",
+        "references/lock-short-transactions.md": "5aa7f61095916986d39644b446cdbcd2bacca7ef698a3bb50b3f82dd60207602",
+        "references/lock-skip-locked.md": "6c45077f430f29cd9cd8f448c94d578e827e7bd023fcdaf717a756acb116fa4b",
+        "references/monitor-explain-analyze.md": "4cb67ffbf8e57f2e5b380b0beb4242528b513723ce314a2c2ffcf083bd4203d7",
+        "references/monitor-pg-stat-statements.md": "89dca99d4e894fcbdcac136be7ad9fbc03d1342904f065c1b198dc9cf495f098",
+        "references/monitor-vacuum-analyze.md": "2892272011710eb49b3f185ec12f15ce9ce4c365792c672f6e2a9c90da426a1a",
+        "references/query-composite-indexes.md": "73e42424e671f0266e74fdb220db3196790f69fb43e2b19c7b9483eb4971b554",
+        "references/query-covering-indexes.md": "daf2a7f0477fb7357b62b5fb5b185b1995a77a186347e45cb780e25e7a7589b6",
+        "references/query-index-types.md": "472a74f22c2df203bd0154999b3a5a0187cca2ab3d9a3978e305bb7c32f1a282",
+        "references/query-missing-indexes.md": "91ad8b0ff4365704b4830a7f077c6f140f7140fd5d3ce5cd0b92b160cf9e25f1",
+        "references/query-partial-indexes.md": "6448982bc8558c6555284958edc331b29239c6a0130e6b4501dd6d4da607a6dd",
+        "references/schema-constraints.md": "90e8efda3e9e81095e642911ad4aae2809d160f29414338fa997253238f510f8",
+        "references/schema-data-types.md": "e01b58c14c7f3f65d8ead580b9a4fcf70b83baaab0f9a5f83c569c9fd113e8c8",
+        "references/schema-foreign-key-indexes.md": "7587713d12a65a212365459b3d39e4717d8a79e4073b10bd62f1054d8192c0dd",
+        "references/schema-lowercase-identifiers.md": "4bc80f70865f2390872591f326c8a6be6456a0aeb5a7e5a2475d7cd9d43059ab",
+        "references/schema-partitioning.md": "541e13fbeaf4bb1485c9059d4c9417dbdb766cf16f4237cd63a04ada7ec45b90",
+        "references/schema-primary-keys.md": "3c8beabef82066f9a0838b926da0885117fd2d9a263aaf84cb5ca9e5f0d400e9",
+        "references/security-privileges.md": "095909274a4fb43df785d7144cf674eeb40284d2d45628f14af4108737b93663",
+        "references/security-rls-basics.md": "e04dd1a3a382aafdaaa73fe9f7976352acdde6e90c2a2470d281b94d4f44b096",
+        "references/security-rls-performance.md": "2e1faeca7d5746e246b1c78f9492fe2a9cfa41c4d7fa1e23c402d58fa18ea014"
+      },
+      "excluded": [
+        "CHANGELOG.md"
+      ],
+      "scanner": {
+        "tool": "SkillSpector 2.13.2 --no-llm",
+        "score": 0,
+        "recommendation": "SAFE",
+        "issues": {},
+        "manualReview": "Nessun rilievo."
+      },
+      "reviewedAt": "2026-10-31"
+    }
+  }
+}

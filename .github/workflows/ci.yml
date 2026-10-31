@@ -202,7 +202,8 @@ jobs:
           node --check .github/scripts/claude-agent-guard.mjs
           node --check .github/scripts/claude-secret-guard.mjs
           node --check .github/scripts/claude-bootstrap.mjs
-          node --test .github/scripts/claude-agent-guard.test.mjs .github/scripts/claude-secret-guard.test.mjs .github/scripts/claude-setup-verify.test.mjs .github/scripts/claude-bootstrap.test.mjs
+          node --check .github/scripts/claude-skill-runtime-check.mjs
+          node --test .github/scripts/claude-agent-guard.test.mjs .github/scripts/claude-secret-guard.test.mjs .github/scripts/claude-setup-verify.test.mjs .github/scripts/claude-bootstrap.test.mjs .github/scripts/claude-skill-runtime-check.test.mjs
           node .github/scripts/claude-setup-verify.mjs
 
   backend:
