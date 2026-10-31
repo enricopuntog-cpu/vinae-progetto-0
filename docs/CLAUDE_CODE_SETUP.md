@@ -11,8 +11,10 @@ Anthropic Direct (`~/.claude`) e il profilo OmniRoute
 ```text
 .claude/settings.json                     plugin, marketplace, permessi ask/deny
 .claude/agents/*.md                       6 subagenti
-.claude/skills/*/SKILL.md                 7 skill (+ references/)
+.claude/skills/*/SKILL.md                 8 skill interne e 7 di terzi (+ references/)
 .github/scripts/claude-plugins.lock.json  lock di frontend-design
+.github/scripts/claude-skills.lock.json   lock delle 7 skill di terzi (commit, SHA-256)
+.github/scripts/claude-skill-runtime-check.mjs  prova manuale di invocazione (mai in CI)
 .github/scripts/claude-agent-guard.mjs    guardia shell dei due agenti con Bash
 .github/scripts/claude-secret-guard.mjs    guardia dei file di segreti
 .github/scripts/claude-setup-verify.mjs   verifica statica (CI)
@@ -65,12 +67,17 @@ ogni altro comando l'agente esegue il canarino
 | `vinea-design` | contestuale (`paths:`) | frontend con brand e frontend-design |
 | `vinea-skill-evaluation` | solo manuale | esito di un task VPM contro i criteri |
 | `vinea-external-skill-audit` | solo manuale | audit non esecutivo di candidate esterne prima di qualsiasi installazione |
+| `vinea-marketing` | solo manuale | bozze di copy, SEO e CRO con le regole Vinea; mai pubblicazioni |
 
 Il registro delle fonti esterne e delle decisioni è in
 [`VINEA_SKILLS_REGISTRY.md`](VINEA_SKILLS_REGISTRY.md); le 119 voci storiche
 non equivalgono a 119 skill installate o verificate.
 
-Le skill non usano `allowed-tools`, hook o iniezione di shell `` !`cmd` ``,
+### Skill di terzi (RECOVERY-001)
+
+Sette skill copiate byte per byte e fissate nel lock: `copywriting`, `seo-audit`, `cro`, `product-marketing` (Marketing Skills), `review-animations`, `animation-performance` (Emil Kowalski), `supabase-postgres-best-practices` (Supabase). Il verificatore ne controlla i file contro gli SHA-256 del lock (fine riga normalizzata a LF) e ammette SKILL.md fino a 600 righe. Per aggiungerne o aggiornarne una: `VINEA_SKILLS_USAGE.md`, sezione «Come aggiungere o aggiornare una skill di terzi».
+
+Le skill interne non usano `allowed-tools`, hook o iniezione di shell `` !`cmd` ``,
 restano sotto 300 righe e spostano il materiale lungo in `references/`.
 
 ## Plugin frontend-design e lock

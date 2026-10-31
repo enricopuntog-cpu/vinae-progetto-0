@@ -1,18 +1,28 @@
-# Handoff PM — AI Skills Lab Ciclo 2
+# Handoff PM — AI Skills Lab, RECOVERY-001
 
-31 ottobre 2026. Questa è una matrice di decisioni, non un'autorizzazione a installare o attivare feature. Prove e limiti in `VINEA_SKILLS_FINAL_REPORT.md`, voci sanificate 1–119 in `VINEA_SKILLS_REGISTRY.md` e denominatori cache in `VINEA_CLAUDE_CACHE_AUDIT.md`. Gli originali locali sono preservati; nessun export social privato, URL di account o DM è pubblicato.
+31 ottobre 2026. Matrice di assegnazione delle skill ai reparti Vinea. Distingue le **competenze operative** (nel repository, caricate dal profilo) dalle **candidate** (rinviate, bloccate, scartate). È una matrice di decisioni, non un'autorizzazione ad attivare funzionalità. Prove e limiti: `VINEA_SKILLS_RECOVERY_REPORT.md`; registro: `VINEA_SKILLS_REGISTRY.md`. Nulla è pubblicato né inviato al PM da questa sessione: il passaggio è del titolare.
 
-| Area | Risultato utilizzabile | Decisione / prerequisito |
-|---|---|---|
-| DEV | `frontend-design` 1.1.1 già installato nel profilo `vinea-coding` e verificato nel task isolato; Playwright Test 1.64.1 ha verificato 14/14 baseline; CLI 0.1.22 solo help. Archify auditato, trial non eseguito. | Continuare con strumenti esistenti; nessun E2E duplicato. Per Archify: riesame manuale dello scan incompleto prima di eseguire codice. |
-| DESIGN | Taste e Impeccable 12/14 contro baseline 14/14, due fallimenti palette per candidato su due viewport. Screenshot e dimensioni nel rapporto/registro. | Non adottare. Nessuna modifica di prodotto o brand dalla pagina demo. |
-| SECURITY | SkillSpector v2.13.2 provato senza LLM né credenziali; score e copertura nel registro. Strix P1 solo metadata: agenti/Docker/telemetria. | Nessuna scansione attiva o installazione Strix. Scanner supplementare, risultati parziali non equivalgono a certificazione. |
-| BETA | Playwright CLI non ha eseguito test negativi né percorso MCP. | Se emerge un test specifico, assegnarlo senza sovrapporlo ai test E2E già in corso; nessuna prova in Production da questo ciclo. |
-| MARKETING | Tre demo temporanee NON PUBBLICATE: copywriting, SEO, CRO; product-marketing solo audit statico. Agent-Reach P2 solo metadata. | Revisione editoriale di claim e contesto della sessione; nessuna indicizzazione `/accessori` senza gate deciso. Nessuna automazione social o scraping senza diritto e perimetro. |
-| PRODUCT | Il prototipo design non cambia roadmap; CRO è un'ipotesi senza baseline. Fonte #114 (guida ufficiale skill) è riferimento metodologico, non funzionalità. | Decidere separatamente su esperimento, KPI e risorse; non promuovere demo a prodotto. |
-| OPS | Remotion non provato: licenza non verificata e nessun task video ammesso. | Chiarire licenza e brief prima di qualsiasi installazione o rendering. |
-| FIN | Costi CLI dei run circa $18,77 stimati, non fatturazione; audit marketing fallito $1,371 + riuscito $1,858. Cache in token misurata, euro non quantificabili. | Non usare risparmi ipotetici per cambiare fallback o disponibilità; valutare soltanto A/B controllato e reversibile con fonti di costo affidabili. |
-| LEG | Le 119 fonti originali includono URL social, qui omessi; niente export privati o DM. Agent-Reach include scraping; Strix include telemetria. | Verificare licenze, termini, privacy, uso contenuti e autorizzazioni prima di reti o dati reali. |
-| HR | Nessuna richiesta di nuova assunzione o accesso ai profili; le skill non sostituiscono responsabili editoriali, QA o sicurezza. | Formazione su limiti delle demo e revisione umana, non distribuzione automatica a tutti i profili. |
+Avvertenza trasversale: **nessuna delle nuove skill ha una prova di invocazione** (login CLI scaduto). «Operativa» qui significa presente, integra e caricata dal profilo `vinea-coding`.
 
-**Stati complessivi:** DESIGN VERIFICATO; QA, MARKETING, ARCH/SEC e CACHE COMPLETATI CON LIMITAZIONI. Archify trial e Remotion runtime NON ESEGUITI, Strix runtime BLOCCATO, Agent-Reach rete NON ESEGUITA, risparmio euro NON VERIFICATO. Nuove installazioni persistenti: zero. Il merge e le verifiche post-merge vanno registrati solo dopo osservazione della nuova PR e dello SHA finale.
+| Reparto | Competenze operative | Candidate (stato) | Decisione / prerequisito |
+|---|---|---|---|
+| DEV | `supabase-postgres-best-practices`; `vinea-task`/`vinea-review` instradano verso di essa | gstack, Ruflo (scartate); Vercel agent-skills (rinviata: manca un file di licenza) | Eseguire la prova di invocazione; per Vercel serve un LICENSE nel repository upstream |
+| ARCHITETTURA | `vinea-architecture-mapper` (esistente) | Archify (rinviata: lettura integrale del CLI e trial senza rete) | Decidere se servono diagrammi condivisibili oltre alla mappa testuale |
+| DESIGN / UX | `frontend-design`, `vinea-design`, `review-animations`, `animation-performance` | UI/UX Pro Max (rinviata: Python assente, palette vino in conflitto), Taste/Impeccable (scartate), Magic MCP (scartata) | I token di movimento Vinea prevalgono sui budget generici; decisione del titolare su una eventuale versione solo-dati di UI/UX Pro Max |
+| SECURITY | `vinea-security`, `vinea-security-auditor`, `vinea-external-skill-audit` | Strix (bloccata), SkillSpector (solo laboratorio), InRegola (non verificata) | Strix richiede chiave LLM autorizzata, rete Docker interna, istanza con dati fittizi e decisione su budget e telemetria; mai contro produzione |
+| QA / BETA | `vinea-test`, `vinea-qa-runner`; `/review-animations` per il movimento | Playwright CLI (rinviata), test con utenti sintetici (#118, non risolta), checklist rete/sessione/pagamento/cancellazione (#55) | Assegnare un task E2E con owner; gli scenari di #55 sono casi di test da implementare |
+| MARKETING | `/vinea-marketing`, `copywriting`, `seo-audit`, `cro`, `product-marketing` | altre Marketing Skills, Stop Slop, Humanizer (rinviate); Claude Ads (rinviata); Scrapling, Agent-Reach (scartate); servizi video/social (non pertinenti) | Approvare `.agents/product-marketing.md` (da creare) prima di usare le bozze; nessuna indicizzazione di `/accessori`; revisione umana di ogni testo |
+| PRODUCT | `cro` (ipotesi senza baseline), `product-marketing` | «Tribunale» (#112, non risolta), Founder Skill (rinviata) | Le simulazioni non sono validazione di mercato; decidere esperimenti e KPI separatamente |
+| LOGISTICA | — | #76 (packaging) e #24 (vendita di vino online) non sono strumenti | Tema per chat logistica/legale, non per skill |
+| FINANZA | — | Founder Skill, prompt di #43 (non strumenti), hosting «$0/mese» (#113, non dimostrato) | Nessuna adozione; usare i numeri reali del Business Plan |
+| LEGALE | `vinea-marketing` impone `REVISIONE LEG OBBLIGATORIA` sui contenuti per alcolici | — | Parere su pubblicità e vendita a distanza di alcolici; licenza Remotion (organico Vinea) |
+| PRODUTTIVITÀ / COSTI | prompt caching nativa (hit 94,3%) | ccusage (rinviata), Context Mode (scartata), Context Engineering (scartata) | Nessuna modifica a OmniRoute; ottenere costo reale per finestra comparabile prima di un A/B |
+| LAB | guida ufficiale Anthropic (standard), `claude-skill-runtime-check.mjs` | find-skills (scartata) | Rinnovare il login CLI e rieseguire la prova di invocazione |
+
+## Decisioni e input richiesti al titolare
+
+1. Rinnovare l'accesso della CLI (`claude` interattivo) per sbloccare la prova di invocazione e la chiusura del ciclo.
+2. Approvare o correggere il contesto di prodotto di `.agents/product-marketing.md` (non ancora creato: si genera con `/vinea-marketing contesto` e si rivede a mano).
+3. Fornire gli elenchi/link delle 29 fonti NON RISOLTE che interessano (priorità: #2, #55, #109, #112, #118) o confermare che restano chiuse.
+4. Decidere su Strix (budget, chiave LLM, rete isolata) e su UI/UX Pro Max solo-dati.
+5. Chiarire l'organico di Vinea per la licenza Remotion, se i video diventano un task.
