@@ -7,31 +7,39 @@
 //   KO (non elencata)                la skill non e' nell'evento init
 //   KO (non richiamata)              elencata, ma il modello non l'ha usata
 //   KO (errore API)                  la chiamata e' fallita per un motivo diverso dall'autenticazione
+//   KO (limite)                      la sessione si e' fermata al tetto di turni o di spesa
 //   KO (interferenza)                prova negativa: una skill di marketing e' partita su un task di codice
 //   KO (timeout)                     la sessione ha superato il tempo massimo
-//   NON VERIFICATO (autenticazione)  il login del profilo e' scaduto o assente: nessun task e' partito
+//   NON VERIFICATO (autenticazione)  nessuna chiamata riuscita e un messaggio di login/401: nessun task e' partito
+//   NON VERIFICATO (non avviata)     nessun evento e nessun segno di autenticazione: causa non determinata
 //
-// Una skill e' "richiamata" solo con prova strutturale nel flusso stream-json:
-// uno strumento Skill con nome ESATTO, oppure (per le skill manuali) l'espansione
-// del comando con la cartella base della skill. Il solo nome nel testo non basta.
+// Una skill e' "richiamata" solo con prova strutturale: uno strumento Skill con nome
+// ESATTO nel flusso stream-json, oppure (per le skill manuali, passate come argomento
+// posizionale di `claude -p`) l'espansione del comando registrata dalla CLI nella
+// trascrizione della sessione, in un messaggio di testo dell'utente (mai nei
+// risultati degli strumenti). La trascrizione viene cancellata dopo la lettura.
+// Il solo nome nel testo non basta.
 //
 // Strumenti: solo Skill, Read, Grep, Glob (--tools). Niente Bash, scrittura, rete
-// o sub-agenti. Ogni sessione ha un tempo massimo e un tetto di spesa. L'esito
-// salvato contiene solo nome del profilo, versione della CLI, modello, esito e
-// costo: niente prompt completi, percorsi personali o credenziali.
+// o sub-agenti. Ogni sessione ha un tempo massimo e un tetto di spesa (massimo
+// 0,50 USD, stima della CLI). L'esito salvato contiene nome del profilo, versione
+// della CLI, esito e costo stimato: niente prompt, risposte, stderr o credenziali.
 //
 // Uso: CLAUDE_CONFIG_DIR=<profilo> node .github/scripts/claude-skill-runtime-check.mjs
-//        [--solo nome,nome] [--out file.json] [--timeout-s 240] [--budget-usd 1]
+//        [--solo nome,nome] [--out file.json] [--timeout-s 240] [--budget-usd 0.5]
 // Esce con 0 solo se ogni prova selezionata e' OK.
 
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export const STRUMENTI = ["Skill", "Read", "Grep", "Glob"];
 export const MAX_BYTE_USCITA = 4 * 1024 * 1024;
+export const BUDGET_MAX_USD = 0.5;
+const AUTENTICAZIONE = /authenticat|OAuth|not logged in|\blog ?in\b|unauthori[sz]ed|invalid.{0,20}(api.?key|token)|\b401\b/i;
 export const SKILL_MARKETING = ["copywriting", "seo-audit", "cro", "product-marketing", "vinea-marketing"];
 
 // manuale: la skill ha disable-model-invocation e si prova con il comando /nome.
@@ -74,19 +82,18 @@ export function stessoNome(richiamata, nome) {
 }
 
 // Per una skill manuale il comando slash viene espanso in un messaggio utente che
-// riporta la cartella base della skill o il nome del comando.
+// riporta la cartella base della skill o il nome del comando. Contano solo i blocchi
+// di testo: un risultato di Glob/Read che contiene il percorso non e' un'invocazione.
 export function espansioneComando(ev, nome) {
   const marcatori = [`<command-name>/${nome}</command-name>`, `skills/${nome}`, `skills\\${nome}`];
   return ev
     .filter((e) => e.type === "user")
     .flatMap((e) => blocchi(e))
-    .some((b) => {
-      const t = typeof b.text === "string" ? b.text : typeof b.content === "string" ? b.content : "";
-      return marcatori.some((m) => t.includes(m));
-    });
+    .filter((b) => b.type === "text" && typeof b.text === "string")
+    .some((b) => marcatori.some((m) => b.text.includes(m)));
 }
 
-export function classifica(prova, ev, uscitaForzata = null) {
+export function classifica(prova, ev, uscitaForzata = null, stderr = "") {
   const init = ev.find((e) => e.type === "system" && e.subtype === "init");
   const r = ev.find((e) => e.type === "result");
   const richiamate = skillRichiamate(ev);
@@ -100,12 +107,14 @@ export function classifica(prova, ev, uscitaForzata = null) {
   if (uscitaForzata === "timeout") return { ...base, esito: "KO (timeout)" };
   const testo = String(r?.result ?? "");
   const nessunaChiamata = !r || ((r.total_cost_usd ?? 0) === 0 && (r.usage?.output_tokens ?? 0) === 0);
-  const autenticazione = nessunaChiamata && (
-    /authenticat|OAuth|not logged in|log ?in|unauthori[sz]ed|\b401\b/i.test(testo) ||
-    r?.terminal_reason === "api_error" || r?.is_error === true || !init
-  );
-  if (autenticazione) return { ...base, esito: "NON VERIFICATO (autenticazione)" };
-  if (r?.is_error) return { ...base, esito: "KO (errore API)" };
+  // Autenticazione solo con un segno esplicito: un errore API qualunque prima del
+  // primo token (sovraccarico, 5xx, modello sconosciuto) resta un errore API.
+  if (nessunaChiamata && (AUTENTICAZIONE.test(testo) || AUTENTICAZIONE.test(String(stderr)))) {
+    return { ...base, esito: "NON VERIFICATO (autenticazione)" };
+  }
+  if (!r && !init) return { ...base, esito: "NON VERIFICATO (non avviata)" };
+  if (/^error_max_/.test(String(r?.subtype ?? ""))) return { ...base, esito: "KO (limite)", limite: r.subtype };
+  if (!r || r.is_error || r.terminal_reason === "api_error") return { ...base, esito: "KO (errore API)" };
   if (prova.negativa) {
     const partite = richiamate.filter((s) => prova.vietate.some((v) => stessoNome(s, v)));
     return { ...base, esito: partite.length ? "KO (interferenza)" : "OK", skillVietateRichiamate: partite };
@@ -115,30 +124,67 @@ export function classifica(prova, ev, uscitaForzata = null) {
   return { ...base, esito: invocata ? "OK" : "KO (non richiamata)" };
 }
 
+// Un comando manuale deve essere l'argomento posizionale di `claude -p`: solo cosi' la CLI
+// espande `/nome` (via stdin arriva come testo libero). I prompt sono costanti del file;
+// questa forma ristretta li rende sicuri anche dentro la shell di Windows.
+export const COMANDO_SICURO = /^\/[a-z0-9-]+( [A-Za-z0-9_./-]+)*$/;
+
+// Lo stream-json non ripete il prompt iniziale, quindi l'espansione di un comando
+// manuale non vi compare. La CLI la registra pero' nella trascrizione della sessione
+// (`<command-name>/nome</command-name>` e il corpo della skill): per le prove manuali
+// la sessione viene salvata con un id noto, letta e poi cancellata.
+export function argomenti(prova, budgetUsd, sessione = null) {
+  const manuale = prova.manuale === true;
+  if (manuale && !COMANDO_SICURO.test(prova.prompt)) throw new Error(`prompt manuale non ammesso: ${prova.skill}`);
+  if (manuale && !/^[0-9a-f-]{36}$/.test(String(sessione))) throw new Error(`id di sessione mancante: ${prova.skill}`);
+  return [
+    "-p", ...(manuale ? [prova.prompt] : []), "--output-format", "stream-json", "--verbose",
+    "--max-turns", "25", "--max-budget-usd", String(budgetUsd),
+    "--tools", STRUMENTI.join(","), "--strict-mcp-config",
+    ...(manuale ? ["--session-id", sessione] : ["--no-session-persistence"]),
+  ];
+}
+
+// Cerca la trascrizione della sessione nel profilo effettivo, ne restituisce i soli
+// messaggi utente e la cancella: non resta nulla del prompt ne' delle risposte.
+export function leggiTrascrizione(sessione, configDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude")) {
+  const progetti = join(configDir, "projects");
+  if (!existsSync(progetti)) return [];
+  for (const d of readdirSync(progetti)) {
+    const f = join(progetti, d, `${sessione}.jsonl`);
+    if (!existsSync(f)) continue;
+    const ev = eventi(readFileSync(f, "utf8")).filter((e) => e.type === "user");
+    rmSync(f, { force: true });
+    return ev;
+  }
+  return [];
+}
+
 // Su Windows claude e' uno shim .cmd che richiede la shell; gli argomenti sono costanti
-// del file (il prompt passa da stdin), quindi la riga di comando e' composta qui.
+// del file (i prompt contestuali passano da stdin), quindi la riga di comando e' composta qui.
 function lancia(args, cwd) {
   if (process.platform !== "win32") return spawn("claude", args, { cwd });
-  return spawn(["claude.cmd", ...args].join(" "), { cwd, shell: true, windowsHide: true });
+  const riga = args.map((a) => (a.includes(" ") ? `"${a}"` : a));
+  return spawn(["claude.cmd", ...riga].join(" "), { cwd, shell: true, windowsHide: true });
 }
 
 function esegui(radice, prova, { timeoutS, budgetUsd }) {
   return new Promise((risolvi) => {
-    const args = [
-      "-p", "--output-format", "stream-json", "--verbose",
-      "--max-turns", "25", "--max-budget-usd", String(budgetUsd),
-      "--tools", STRUMENTI.join(","), "--strict-mcp-config", "--no-session-persistence",
-    ];
+    const sessione = prova.manuale === true ? randomUUID() : null;
+    const args = argomenti(prova, budgetUsd, sessione);
     const p = lancia(args, radice);
     let out = "";
+    let err = "";
     let troncata = false;
     let forzata = null;
     p.stdout.on("data", (d) => {
       if (out.length < MAX_BYTE_USCITA) out += d;
       else troncata = true;
     });
-    p.stderr.on("data", () => {});
-    p.stdin.end(prova.prompt);
+    // stderr serve solo a riconoscere un errore di autenticazione: mai salvato.
+    p.stderr.on("data", (d) => { if (err.length < 64 * 1024) err += d; });
+    // I comandi manuali sono gia' nell'argomento posizionale: stdin resta vuoto.
+    p.stdin.end(prova.manuale === true ? "" : prova.prompt);
     const t = setTimeout(() => {
       forzata = "timeout";
       if (process.platform === "win32") spawnSync("taskkill", ["/pid", String(p.pid), "/T", "/F"]);
@@ -146,7 +192,10 @@ function esegui(radice, prova, { timeoutS, budgetUsd }) {
     }, timeoutS * 1000);
     p.on("close", () => {
       clearTimeout(t);
-      risolvi({ ...classifica(prova, eventi(out), forzata), uscitaTroncata: troncata });
+      const trascrizione = sessione ? leggiTrascrizione(sessione) : [];
+      const ev = [...eventi(out), ...trascrizione];
+      const extra = sessione ? { trascrizioneLetta: trascrizione.length > 0 } : {};
+      risolvi({ ...classifica(prova, ev, forzata, err), ...extra, uscitaTroncata: troncata });
     });
   });
 }
@@ -168,7 +217,11 @@ async function main() {
   const solo = opzione("--solo") ? opzione("--solo").split(",") : null;
   const scelte = PROVE.filter((p) => !solo || solo.includes(p.skill));
   const timeoutS = Number(opzione("--timeout-s", 240));
-  const budgetUsd = Number(opzione("--budget-usd", 1));
+  const budgetUsd = Number(opzione("--budget-usd", BUDGET_MAX_USD));
+  if (!(budgetUsd > 0 && budgetUsd <= BUDGET_MAX_USD)) {
+    console.error(`--budget-usd deve essere fra 0 e ${BUDGET_MAX_USD} USD per prova`);
+    process.exit(2);
+  }
   const risultati = [];
   for (const p of scelte) risultati.push(await esegui(radice, p, { timeoutS, budgetUsd }));
   const profilo = process.env.CLAUDE_CONFIG_DIR ? basename(process.env.CLAUDE_CONFIG_DIR.replace(/[\\/]+$/, "")) : "predefinito (Anthropic Direct)";
