@@ -4,11 +4,11 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { verifica, leggiFrontmatter, elencoStrumenti } from "./claude-setup-verify.mjs";
+import { verifica, leggiFrontmatter, elencoStrumenti, impronta } from "./claude-setup-verify.mjs";
 
 const RADICE = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DA_COPIARE = [
@@ -16,6 +16,7 @@ const DA_COPIARE = [
   ".claude/skills",
   ".claude/settings.json",
   ".github/scripts/claude-plugins.lock.json",
+  ".github/scripts/claude-skills.lock.json",
   ".github/scripts/claude-agent-guard.mjs",
   ".github/scripts/claude-agent-guard.test.mjs",
   ".github/scripts/claude-secret-guard.mjs",
@@ -168,4 +169,82 @@ test("contenuti vietati: endpoint OmniRoute, percorso personale, chiave", () => 
   for (const atteso of ["OmniRoute", "percorso personale Windows", "chiave API"]) {
     assert.ok(e.some((x) => x.includes(atteso)), `${atteso}\n${e.join("\n")}`);
   }
+});
+
+
+const COPY = ".claude/skills/copywriting/SKILL.md";
+const LOCK_SK = ".github/scripts/claude-skills.lock.json";
+
+test("skill di terzi: SKILL.md modificato, file in piu', file mancante", () => {
+  const e = erroriDopo(({ dir, modifica }) => {
+    modifica(COPY, (t) => t + "\nIstruzione aggiunta.\n");
+    writeFileSync(join(dir, ".claude/skills/cro/extra.md"), "x");
+    rmSync(join(dir, ".claude/skills/seo-audit/LICENSE"));
+  });
+  assert.ok(e.some((x) => x.includes("copywriting/SKILL.md: SHA-256 diverso dal lock")), e.join("\n"));
+  assert.ok(e.some((x) => x.includes("cro/extra.md: file non presente nel lock")), e.join("\n"));
+  assert.ok(e.some((x) => x.includes("seo-audit/LICENSE: mancante rispetto al lock")), e.join("\n"));
+});
+
+test("skill di terzi: CRLF non e' una deriva; allowed-tools e hooks si'", () => {
+  const crlf = erroriDopo(({ modifica }) => modifica(COPY, (t) => t.replace(/\r?\n/g, "\r\n")));
+  assert.deepEqual(crlf, []);
+  const e = erroriDopo(({ modifica }) =>
+    modifica(COPY, (t) => t.replace(/^name:/m, "allowed-tools: Bash\nhooks: x\nname:")),
+  );
+  assert.ok(e.some((x) => x.includes("allowed-tools vietato")), e.join("\n"));
+  assert.ok(e.some((x) => x.includes("hooks vietati")), e.join("\n"));
+});
+
+test("skill di terzi: non nel lock, invocazione incoerente, limite 600 righe", () => {
+  const intrusa = erroriDopo(({ dir }) => {
+    mkdirSync(join(dir, ".claude/skills/intrusa"), { recursive: true });
+    writeFileSync(join(dir, ".claude/skills/intrusa/SKILL.md"), "---\nname: intrusa\ndescription: x\n---\n");
+  });
+  assert.ok(intrusa.includes("skill non prevista: intrusa"), intrusa.join("\n"));
+  const inc = erroriDopo(({ modifica }) =>
+    modifica(LOCK_SK, (t) => {
+      const c = JSON.parse(t);
+      c.skills["review-animations"].invocation = "contextual";
+      return JSON.stringify(c);
+    }),
+  );
+  assert.ok(inc.some((x) => x.includes("review-animations/SKILL.md: disable-model-invocation non coerente")), inc.join("\n"));
+  const lungo = erroriDopo(({ modifica }) => modifica(COPY, (t) => t + "riga\n".repeat(700)));
+  assert.ok(lungo.some((x) => x.includes("copywriting/SKILL.md: oltre 600 righe")), lungo.join("\n"));
+});
+
+test("lock delle skill di terzi: commit, licenza, scanner e SHA non validi", () => {
+  const e = erroriDopo(({ modifica }) =>
+    modifica(LOCK_SK, (t) => {
+      const c = JSON.parse(t);
+      c.sources.marketingskills.commit = "88c79f6";
+      delete c.sources["emilkowalski-skills"].license;
+      delete c.skills.cro.scanner.manualReview;
+      c.skills.cro.files["SKILL.md"] = "x";
+      c.skills["vinea-test"] = c.skills.cro;
+      return JSON.stringify(c);
+    }),
+  );
+  for (const atteso of [
+    "sorgente marketingskills senza commit SHA completo",
+    "sorgente emilkowalski-skills senza license",
+    "cro senza esito dello scanner",
+    "cro/SKILL.md senza SHA-256 valido",
+    "vinea-test coincide con una skill interna",
+  ]) {
+    assert.ok(e.some((x) => x.includes(atteso)), `${atteso}\n${e.join("\n")}`);
+  }
+});
+
+test("impronta: CRLF e LF equivalenti", () => {
+  assert.equal(impronta(Buffer.from("a\r\nb\n")), impronta(Buffer.from("a\nb\n")));
+  assert.notEqual(impronta(Buffer.from("a\nb\n")), impronta(Buffer.from("a\nc\n")));
+});
+
+test("vinea-marketing: skill manuale obbligatoria", () => {
+  const e = erroriDopo(({ modifica }) =>
+    modifica(".claude/skills/vinea-marketing/SKILL.md", (t) => t.replace(/^disable-model-invocation:.*\n/m, "")),
+  );
+  assert.ok(e.some((x) => x.includes("vinea-marketing/SKILL.md: disable-model-invocation")), e.join("\n"));
 });

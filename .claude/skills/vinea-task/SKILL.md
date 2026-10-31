@@ -46,8 +46,18 @@ Strumenti di supporto, quando servono:
 
 - `/vinea-test` per i controlli locali o il subagente `vinea-qa-runner` su uno SHA;
 - `/vinea-review` e `/vinea-security` prima della PR;
-- `/vinea-design` per le modifiche frontend;
+- `/vinea-design` per le modifiche frontend (con `animation-performance` e,
+  per le animazioni, `/review-animations`);
+- la skill `supabase-postgres-best-practices` per SQL, indici e migrazioni
+  (prestazioni; per le regole di sicurezza e di processo vale `CLAUDE.md`);
+- `/vinea-marketing` per copy, SEO e CRO: solo bozze non pubblicate;
 - `vinea-release-verifier` per la verifica post-merge in sola lettura.
+
+Le skill di terzi in `.claude/skills/` (elenco, commit e SHA-256 in
+`.github/scripts/claude-skills.lock.json`) sono ausiliarie: in caso di
+conflitto prevalgono `CLAUDE.md` e le skill `vinea-*`. Un task non aggiunge
+né aggiorna skill di terzi; per proporne una si usa
+`/vinea-external-skill-audit` e poi una PR dedicata con lock aggiornato.
 
 ## 4. Handoff
 

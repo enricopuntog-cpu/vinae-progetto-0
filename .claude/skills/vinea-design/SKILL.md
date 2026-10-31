@@ -23,6 +23,13 @@ Argomenti ricevuti: $ARGUMENTS
   nuovi in contrasto con i token esistenti.
 - Se `frontend-design` non è disponibile nella sessione, prosegui con le sole
   linee guida Vinea e dichiaralo nel report. Non installare plugin.
+- Movimento: la skill di terzi `animation-performance` (si attiva da sola sui
+  temi di fluidità) e il comando manuale `/review-animations <file o diff>`
+  (revisione di transizioni e animazioni, sola lettura). I **token di
+  movimento Vinea** (`--ease-out-expo`, `--dur-fast|med|slow` in
+  `references/brand.md`) prevalgono sui budget generici di quelle skill: una
+  durata di 320 o 520 ms coerente coi token è un'osservazione, non un blocco.
+  Le skill non modificano il codice: le correzioni le applichi tu.
 
 ## 2. Procedura
 
@@ -39,6 +46,8 @@ Argomenti ricevuti: $ARGUMENTS
 - Controlli di `/vinea-test` sul frontend toccato.
 - Screenshot a 375 e 1280 px quando un browser è disponibile; altrimenti
   `NON VERIFICATO` (non bloccante).
+- Se il diff contiene transizioni, keyframe o librerie di movimento,
+  `/review-animations` sui file toccati, rispettando il brand.
 - Revisione con il subagente `vinea-ux-auditor`, passandogli file e screenshot.
 
 ## Completamento

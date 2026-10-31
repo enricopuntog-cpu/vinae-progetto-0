@@ -13,6 +13,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
 export const AGENTI_ATTESI = [
@@ -31,9 +32,16 @@ export const SKILL_ATTESE = [
   "vinea-design",
   "vinea-skill-evaluation",
   "vinea-external-skill-audit",
+  "vinea-marketing",
 ];
 // Skill che solo l'utente puo' avviare (VPM-LAB-001B §2.4).
-const SKILL_MANUALI = new Set(["vinea-task", "vinea-skill-evaluation", "vinea-external-skill-audit"]);
+const SKILL_MANUALI = new Set(["vinea-task", "vinea-skill-evaluation", "vinea-external-skill-audit", "vinea-marketing"]);
+// Skill di terzi copiate byte per byte: ammesse solo se elencate nel lock con
+// commit upstream, licenza e SHA-256 di ogni file (RECOVERY-001).
+export const LOCK_SKILL_ESTERNE = ".github/scripts/claude-skills.lock.json";
+const RIGHE_MAX_INTERNE = 300;
+const RIGHE_MAX_ESTERNE = 600;
+const INVOCAZIONI = new Set(["contextual", "manual"]);
 // Agenti con shell e profilo della guardia che devono usare.
 const PROFILO_SHELL = { "vinea-qa-runner": "qa", "vinea-release-verifier": "release" };
 
@@ -110,6 +118,12 @@ export function elencoStrumenti(valore) {
     .split(",")
     .map((s) => s.trim().replace(/^["']|["']$/g, ""))
     .filter(Boolean);
+}
+
+/** SHA-256 con fine riga normalizzata a LF: coincide col blob git upstream anche con autocrlf. */
+export function impronta(buf) {
+  const lf = Buffer.from(buf.toString("latin1").replace(/\r\n/g, "\n"), "latin1");
+  return createHash("sha256").update(lf).digest("hex");
 }
 
 function fileRicorsivi(dir) {
@@ -210,14 +224,43 @@ export function verifica(root, opzioni = {}) {
     if (!/claude-secret-guard\.mjs" \|\| exit 2/.test(blocco)) err(`${rel}: hook della guardia dei segreti mancante`);
   }
 
+  // --- Lock delle skill di terzi -------------------------------------------
+  let lockSk = null;
+  if (!esiste(LOCK_SKILL_ESTERNE)) err(`${LOCK_SKILL_ESTERNE}: mancante`);
+  else lockSk = json(LOCK_SKILL_ESTERNE);
+  const esterne = Object.keys(lockSk?.skills ?? {});
+  if (lockSk) {
+    if (lockSk.version !== 1) err(`${LOCK_SKILL_ESTERNE}: version deve essere 1`);
+    for (const [k, src] of Object.entries(lockSk.sources ?? {})) {
+      if (!/^[0-9a-f]{40}$/.test(src.commit ?? "")) err(`${LOCK_SKILL_ESTERNE}: sorgente ${k} senza commit SHA completo`);
+      for (const c of ["repo", "license", "licenseFile"]) if (!src[c]) err(`${LOCK_SKILL_ESTERNE}: sorgente ${k} senza ${c}`);
+    }
+    for (const [nome, voce] of Object.entries(lockSk.skills ?? {})) {
+      if (SKILL_ATTESE.includes(nome)) err(`${LOCK_SKILL_ESTERNE}: ${nome} coincide con una skill interna`);
+      if (!lockSk.sources?.[voce.source]) err(`${LOCK_SKILL_ESTERNE}: ${nome} cita una sorgente assente`);
+      if (!INVOCAZIONI.has(voce.invocation)) err(`${LOCK_SKILL_ESTERNE}: ${nome} invocation deve essere contextual o manual`);
+      if (!voce.scanner?.recommendation || !voce.scanner?.manualReview) err(`${LOCK_SKILL_ESTERNE}: ${nome} senza esito dello scanner e riesame manuale`);
+      if (!voce.reviewedAt) err(`${LOCK_SKILL_ESTERNE}: ${nome} senza reviewedAt`);
+      const files = voce.files ?? {};
+      for (const richiesto of ["SKILL.md", lockSk.sources?.[voce.source]?.licenseFile ?? "LICENSE"]) {
+        if (!(richiesto in files)) err(`${LOCK_SKILL_ESTERNE}: ${nome} senza ${richiesto}`);
+      }
+      for (const [rel, h] of Object.entries(files)) {
+        if (!/^[0-9a-f]{64}$/.test(h)) err(`${LOCK_SKILL_ESTERNE}: ${nome}/${rel} senza SHA-256 valido`);
+        if (rel.includes("..") || rel.startsWith("/")) err(`${LOCK_SKILL_ESTERNE}: ${nome}/${rel} percorso non ammesso`);
+      }
+    }
+  }
+
   // --- Skill ---------------------------------------------------------------
   const DIR_SKILL = ".claude/skills";
   const skill = esiste(DIR_SKILL)
     ? readdirSync(join(root, DIR_SKILL), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)
     : [];
-  for (const s of SKILL_ATTESE) if (!skill.includes(s)) err(`skill mancante: ${s}`);
-  for (const s of skill) if (!SKILL_ATTESE.includes(s)) err(`skill non prevista: ${s}`);
+  for (const s of [...SKILL_ATTESE, ...esterne]) if (!skill.includes(s)) err(`skill mancante: ${s}`);
+  for (const s of skill) if (!SKILL_ATTESE.includes(s) && !esterne.includes(s)) err(`skill non prevista: ${s}`);
   for (const s of skill) {
+    const esterna = esterne.includes(s);
     const rel = `${DIR_SKILL}/${s}/SKILL.md`;
     if (!esiste(rel)) {
       err(`${rel}: mancante`);
@@ -239,11 +282,32 @@ export function verifica(root, opzioni = {}) {
       if (/[A-Z]/.test(k)) err(`${rel}: chiave ${k} non riconosciuta (usare la forma kebab-case)`);
     }
     const manuale = chiavi["disable-model-invocation"] === "true";
-    if (SKILL_MANUALI.has(s) && !manuale) err(`${rel}: disable-model-invocation: true obbligatorio`);
-    if (!SKILL_MANUALI.has(s) && manuale) avvisi.push(`${rel}: skill contestuale resa manuale`);
+    if (esterna) {
+      const voce = lockSk.skills[s];
+      if ((voce.invocation === "manual") !== manuale) {
+        err(`${rel}: disable-model-invocation non coerente con invocation "${voce.invocation}" del lock`);
+      }
+    } else {
+      if (SKILL_MANUALI.has(s) && !manuale) err(`${rel}: disable-model-invocation: true obbligatorio`);
+      if (!SKILL_MANUALI.has(s) && manuale) avvisi.push(`${rel}: skill contestuale resa manuale`);
+    }
     // Iniezione dinamica: "!" seguito da un comando tra backtick.
     if (/!`[^`]+`/.test(testo)) err(`${rel}: iniezione dinamica di shell vietata`);
-    if (testo.split("\n").length > 300) err(`${rel}: oltre 300 righe, spostare in references/`);
+    const righe = testo.split("\n").length;
+    const massimo = esterna ? RIGHE_MAX_ESTERNE : RIGHE_MAX_INTERNE;
+    if (righe > massimo) err(`${rel}: oltre ${massimo} righe${esterna ? "" : ", spostare in references/"}`);
+
+    // Integrita' delle skill di terzi: nessun file in piu', in meno o diverso dal lock.
+    if (esterna) {
+      const base = join(root, DIR_SKILL, s);
+      const attesi = lockSk.skills[s].files;
+      const presenti = fileRicorsivi(base).map((p) => relative(base, p).replace(/\\/g, "/"));
+      for (const f of presenti) if (!(f in attesi)) err(`${DIR_SKILL}/${s}/${f}: file non presente nel lock (deriva)`);
+      for (const [f, atteso] of Object.entries(attesi)) {
+        if (!presenti.includes(f)) err(`${DIR_SKILL}/${s}/${f}: mancante rispetto al lock`);
+        else if (impronta(readFileSync(join(base, f))) !== atteso) err(`${DIR_SKILL}/${s}/${f}: SHA-256 diverso dal lock (deriva)`);
+      }
+    }
   }
 
   // --- settings.json di progetto -------------------------------------------
@@ -318,12 +382,12 @@ export function verifica(root, opzioni = {}) {
     }
   }
 
-  return { errori, avvisi };
+  return { errori, avvisi, nEsterne: esterne.length };
 }
 
 function main() {
   const root = process.argv[2] ?? process.cwd();
-  const { errori, avvisi } = verifica(root);
+  const { errori, avvisi, nEsterne } = verifica(root);
   for (const a of avvisi) console.warn(`AVVISO: ${a}`);
   for (const e of errori) console.error(`ERRORE: ${e}`);
   if (errori.length > 0) {
@@ -331,8 +395,8 @@ function main() {
     process.exit(1);
   }
   console.log(
-    `claude-setup-verify: OK (${AGENTI_ATTESI.length} agenti, ${SKILL_ATTESE.length} skill, ` +
-      `${MATRICE_GITIGNORE.length} casi .gitignore, ${avvisi.length} avvisi)`,
+    `claude-setup-verify: OK (${AGENTI_ATTESI.length} agenti, ${SKILL_ATTESE.length} skill interne, ` +
+      `${nEsterne} skill di terzi nel lock, ${MATRICE_GITIGNORE.length} casi .gitignore, ${avvisi.length} avvisi)`,
   );
 }
 

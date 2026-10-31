@@ -32,6 +32,10 @@ Individua i file da esaminare dagli argomenti o dal diff
 - La checklist è quella di `CLAUDE.md`, *Security invariants*: Trust
   boundaries, PostgreSQL exposure, Money; più *Supabase workflow* per le
   migrazioni. Cita le sezioni, non ricopiarle.
+- La skill di terzi `supabase-postgres-best-practices` aiuta sulle prestazioni
+  (RLS, indici, blocchi) ma non sostituisce gli invarianti: se un suo esempio
+  contraddice `CLAUDE.md` (grant, `SECURITY DEFINER`, enum, transazioni di
+  PostgREST), vale `CLAUDE.md`.
 
 ## 3. Report
 
