@@ -29,6 +29,13 @@ I revisori non hanno shell: il diff arriva loro come file da leggere.
   di sicurezza, aggiungi `/vinea-security`.
 - Se tocca `frontend/**` o `frontend-next/**`, valuta `/vinea-design`; se il
   diff contiene animazioni, aggiungi `/review-animations` sui file toccati.
+- Se cambia la UI di `frontend-next/**`, cerca nel diff e nella PR le **prove
+  browser** (`/vinea-browser-qa`): casi eseguiti, screenshot, regressioni visive o
+  anomalie funzionali riprodotte. Una modifica UI senza prova browser è
+  `NON VERIFICATO`, non un rilievo bloccante da sola. Per `frontend-next/e2e/**`
+  controlla che i casi nuovi abbiano una prova mutazionale (il caso diventa
+  rosso se la funzione si rompe), non allarghino `RUMORE_INFRASTRUTTURA` senza
+  motivo scritto e non attenuino un'attesa per far passare un rosso.
 - Se tocca `supabase/migrations/**` o SQL, carica la skill
   `supabase-postgres-best-practices` per indici sulle chiavi esterne, prestazioni
   delle policy RLS, blocchi e cicli di vita delle transazioni. È una lettura

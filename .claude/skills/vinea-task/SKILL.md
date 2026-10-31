@@ -45,6 +45,10 @@ post-merge. Non chiedere conferme intermedie per operazioni già nello scope.
 Strumenti di supporto, quando servono:
 
 - `/vinea-test` per i controlli locali o il subagente `vinea-qa-runner` su uno SHA;
+- `/vinea-browser-qa` per ogni modifica frontend significativa (pagine, dialoghi,
+  moduli, gate, layout, Accessori/Cantina): controllo nel browser su stack
+  Supabase isolato, mai contro produzione. Senza Docker o stack isolato il caso
+  è `NON VERIFICATO`, non verde;
 - `/vinea-review` e `/vinea-security` prima della PR;
 - `/vinea-design` per le modifiche frontend (con `animation-performance` e,
   per le animazioni, `/review-animations`);

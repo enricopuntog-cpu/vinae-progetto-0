@@ -19,12 +19,26 @@ Dal diff rispetto a `origin/main` (`git diff --name-only origin/main...HEAD`):
 |---|---|
 | `frontend/**` | `bun install --frozen-lockfile`, `lint`, `typecheck`, `test`, `build` |
 | `frontend-next/**` | come sopra; rispetta la soglia minima di test in `.github/workflows/ci.yml` |
+| `frontend-next/src/**` con effetto visibile (UI, gate, Accessori) o `frontend-next/e2e/**` | in più la suite browser con `/vinea-browser-qa` (smoke; `bun run e2e` per i tre progetti) |
 | `backend/**` | `python -m compileall -q .`, `python -m ruff check .`, `python -m pytest -q` |
 | `.github/scripts/*.mjs` | `node --test .github/scripts/<nome>.test.mjs` |
 | `.claude/**` | `node .github/scripts/claude-setup-verify.mjs` e i test `claude-*.test.mjs` |
 | `supabase/**` | griglie solo nel workflow CI `Supabase DB regression`: qui sono `NON VERIFICATO` finché il gate non riporta |
 
 Esegui prima il controllo più piccolo, poi lo stack completo toccato.
+
+## Tipi di prova (non intercambiabili)
+
+| Tipo | Strumento | Prova che |
+|---|---|---|
+| Unitario | `bun run test`, `pytest` | la logica è corretta in isolamento |
+| Integrazione / database | griglie `supabase/tests/`, solo nel gate CI | schema, RLS e porte SQL si comportano |
+| API/REST | prove `supabase/tests/12*_e2e.mjs`, gate CI | i servizi reali (Auth, PostgREST, Storage) rispondono come previsto |
+| **E2E browser** | `bun run e2e` / `e2e:smoke` via `/vinea-browser-qa` | l'utente, in un browser, vede e ottiene ciò che deve |
+
+Un rendering statico o una chiamata REST non sono una prova browser. Riporta tra
+i `FATTI VERIFICATI` solo le prove eseguite davvero, con comando, progetti
+(Chromium desktop, Chromium 375 px, WebKit) e conteggio passati/totali.
 
 ## 2. Dove eseguirli
 
@@ -33,16 +47,22 @@ Esegui prima il controllo più piccolo, poi lo stack completo toccato.
   `vinea-qa-runner` passandogli SHA e controlli; lui lavora in un worktree
   isolato con comandi a lista bianca.
 
+Il subagente non esegue la suite browser: la sua lista bianca non ammette Docker,
+build con ambiente di prova né Playwright, e non va allargata per comodità. La
+suite la lancia il Claude principale nel worktree, oppure gira nel workflow
+`E2E browser` sullo SHA della PR.
+
 Mai credenziali reali: i test backend usano `APP_ENV=test` e i fake di
-`backend/tests/conftest.py`; nessuno stack Supabase locale, nessuna rete verso
-servizi di produzione.
+`backend/tests/conftest.py`; nessuna rete verso servizi di produzione. Uno
+stack Supabase locale serve solo alla suite browser, che rifiuta da sola ogni
+bersaglio non isolato.
 
 ## 3. Report
 
     FATTI VERIFICATI
     - <comando>: <esito, conteggi pass/fail> (SHA)
     NON VERIFICATO
-    - <controllo> — <perché>
+    - <controllo> — <perché> (es. browser: nessuno stack isolato, Docker spento)
     RISCHI
     - <regressione> — file:riga
     RACCOMANDAZIONI

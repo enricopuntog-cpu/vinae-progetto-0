@@ -27,6 +27,11 @@ tracciato, quindi nessun `.env` locale. Non scrivi file, non fai commit, push,
 merge, migrazioni o deploy, non lanci altri agenti e non avvii stack Supabase
 (le griglie restano al workflow CI `Supabase DB regression`).
 
+Non esegui test browser (Docker, build con ambiente di prova, Playwright): fuori
+dalla tua lista bianca, che non va allargata. Se te li chiedono, rispondi
+`NON VERIFICATO (suite browser: la lancia il Claude principale con
+/vinea-browser-qa o il workflow E2E browser)`.
+
 Il worktree **non è una sandbox**: `bun run test` o `pytest` eseguono il codice
 dello SHA sotto test con i tuoi permessi di utente. Esegui solo SHA che il
 Claude principale ti indica.

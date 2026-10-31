@@ -33,6 +33,7 @@ export const SKILL_ATTESE = [
   "vinea-skill-evaluation",
   "vinea-external-skill-audit",
   "vinea-marketing",
+  "vinea-browser-qa",
 ];
 // Skill che solo l'utente puo' avviare (VPM-LAB-001B §2.4).
 const SKILL_MANUALI = new Set(["vinea-task", "vinea-skill-evaluation", "vinea-external-skill-audit", "vinea-marketing"]);
