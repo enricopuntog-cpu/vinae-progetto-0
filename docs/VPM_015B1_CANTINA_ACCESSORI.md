@@ -125,7 +125,10 @@ cancellato.
    letture: l'elenco torna vuoto e le nuove firme falliscono. Una URL firmata già
    emessa vale fino a scadenza (**900 s**): residuo accettato e documentato.
    Il proprietario può sempre riportare un accessorio a privato, anche a funzione spenta.
-5. Con gli interruttori spenti la pagina non rende **niente** (né titolo né
+5. Dalla correzione VPM-015QA/M1 la vista esclude anche gli accessori il cui annuncio B3 è
+   oscurato, con modifiche richieste, ritirato dopo un provvedimento o ritirato con il contenuto per cui furono chieste modifiche (profilo e firme Storage):
+   vedi [VPM-015B3 §3 bis](VPM_015B3_PUBBLICAZIONE_ACCESSORI.md).
+6. Con gli interruttori spenti la pagina non rende **niente** (né titolo né
    segnaposto): un blocco vuoto racconterebbe la funzione o una scelta privata.
 
 ## Interruttori (fail-closed)

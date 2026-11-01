@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12zk) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12zl) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su

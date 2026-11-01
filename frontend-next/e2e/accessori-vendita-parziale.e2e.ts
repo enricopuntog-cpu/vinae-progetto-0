@@ -277,6 +277,25 @@ test.describe.serial("Accessori: vendita parziale 2 su 6, moderazione e assenza 
 
   test("7. l'amministratore oscura l'annuncio dalla pratica; il contenuto non è più raggiungibile", async ({ browser, diagnostica }, info) => {
     diagnostica.ammetti("status of 404"); // il dettaglio oscurato risponde 404: è l'esito atteso
+
+    // VPM-015QA/M1, controllo positivo: esposto dal proprietario e con l'annuncio pubblicato,
+    // l'accessorio è nel profilo pubblico e la sua foto si firma. Senza questo passo la prova
+    // negativa dopo l'oscuramento potrebbe passare per un motivo qualunque.
+    const espone = await rpc(
+      "cantina_accessori_visibilita_imposta",
+      { p_id: cantinaId, p_visibilita: "cantina_pubblica" },
+      await accedi("venditore"),
+    );
+    expect(espone.ok, `Esposizione non impostata: HTTP ${espone.status}`).toBe(true);
+    const prima = await contestoAutenticato(browser, "altro", opzioniDelProgetto(info));
+    const pPrima = await prima.newPage();
+    diagnostica.osserva(pPrima, "altro");
+    await pPrima.goto(`/profilo/${venditoreId}`);
+    await attendiCaricamento(pPrima);
+    await expect(pPrima.getByTestId("accessorio-cantina-pubblico").filter({ hasText: NOME })).toBeVisible();
+    expect(await firmaFoto(percorsoFoto)).toBeLessThan(400);
+    await prima.close();
+
     const admin = await contestoAutenticato(browser, "adminSenzaRilascio", opzioniDelProgetto(info));
     const pad = await admin.newPage();
     diagnostica.osserva(pad, "admin");
@@ -313,6 +332,13 @@ test.describe.serial("Accessori: vendita parziale 2 su 6, moderazione e assenza 
     await expect(pa.getByText("Nessun annuncio in vetrina")).toBeVisible();
     await expect(pa.locator(`a[href="${annuncioUrl}"]`)).toHaveCount(0);
     expect((await pa.goto(annuncioUrl))?.status()).toBe(404);
+
+    // VPM-015QA/M1: il proprietario ha lasciato l'accessorio esposto, ma con l'annuncio oscurato
+    // non resta nella Cantina pubblica: il provvedimento non si aggira per un'altra porta.
+    await pa.goto(`/profilo/${venditoreId}`);
+    await attendiCaricamento(pa);
+    await expect(pa.getByTestId("accessorio-cantina-pubblico").filter({ hasText: NOME })).toHaveCount(0);
+    await expect(pa.getByText(NOME)).toHaveCount(0);
     await altro.close();
 
     const anonimo = await browser.newContext(opzioniDelProgetto(info));
@@ -321,7 +347,7 @@ test.describe.serial("Accessori: vendita parziale 2 su 6, moderazione e assenza 
     expect((await pn.goto(annuncioUrl))?.status()).toBe(404);
     await anonimo.close();
 
-    // La foto non si firma più per il pubblico; il database lo conferma.
+    // La foto non si firma più per il pubblico, nemmeno con l'accessorio esposto (M1); il database lo conferma.
     expect(await firmaFoto(percorsoFoto)).toBeGreaterThanOrEqual(400);
     const dettaglioPubblico = await rpc("annunci_accessori_pubblico_dettaglio", { p_id: annuncioUrl.split("/").pop() });
     expect(dettaglioPubblico.body).toBeNull();
