@@ -452,6 +452,15 @@ summary "- $(printf '%s\n' "$conc_12zk" | tail -n 1)"
 # bottiglie toccata. Fixture .test e servizi di prova sintetici; ROLLBACK.
 run_grid "12zm Logistica Accessori" 12zm_vpm_015b4_logistica_accessori.sql 3
 
+# Stessa logistica su sessioni separate: due congelamenti dello stesso acquirente,
+# due consumi dello stesso preventivo, aggiornamento del prezzo durante un
+# congelamento. Fixture `@conc-12zm.test`, servizio e tariffa di PROVA (provider
+# `conc_b4`) committati e rimossi in trap, residui 0; interruttori ripristinati.
+conc_12zm="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zm_vpm_015b4_concorrenza.sh")" \
+  || { printf '%s\n' "$conc_12zm"; die "12zm concorrenza: fallita."; }
+printf '%s\n' "$conc_12zm"
+summary "- $(printf '%s\n' "$conc_12zm" | tail -n 1)"
+
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
 # cancello di preparazione, quindi il suo caso 9 registra una prova reale. Una

@@ -152,8 +152,7 @@ Per accendere la logistica degli Accessori servono, tutti **non decisi né forni
 
 ## 10. Limiti dichiarati
 
-- Nessuna prova di concorrenza su sessioni separate per `congela` e `consuma` (la serializzazione è per
-  progetto — lock consultivo e `FOR UPDATE` — ma non misurata come in 12zk/12zc): debito aperto.
+- La concorrenza di `congela` e `consuma` è provata su sessioni PostgreSQL separate da `supabase/tests/12zm_vpm_015b4_concorrenza.sh` (gate DB): doppio congelamento (stesso preventivo, una riga), doppio consumo (il secondo rifiutato, un solo consumo), prezzo aggiornato durante un congelamento (il preventivo resta alla versione congelata e poi è `annuncio_cambiato`).
 - `annunci_accessori_preventivo` (B2, lato venditore) continua a dire che la spedizione non è disponibile;
   la stima per annuncio è la nuova porta. Allineare la vista del venditore è lavoro di B5.
 - Il dialogo del venditore non ha ancora il campo «pezzi per collo»: la porta esiste, senza valore vale 1.
