@@ -41,8 +41,11 @@ describe("B3: migrazioni additive e distinte", () => {
       "alter type public.report_target_tipo add value if not exists 'annuncio_accessorio';",
     );
     expect(ENUM < MIGRAZIONE).toBe(true);
-    // nessuna migrazione successiva alle B2 oltre alle due di B3
-    const nuove = readdirSync(join(radiceRepo, "supabase/migrations")).filter((f) => f.slice(0, 14) > "20261021150000" && f.slice(0, 14) <= "20261022091000");
+    // fra B2 e la migrazione principale di B3 non c'e altro che le due di B3 (le migrazioni
+    // successive, come la correzione VPM-015QA/M1, sono fuori da questo intervallo)
+    const nuove = readdirSync(join(radiceRepo, "supabase/migrations")).filter(
+      (f) => f.slice(0, 14) > "20261021150000" && f.slice(0, 14) <= "20261022091000",
+    );
     expect(nuove.sort()).toEqual([ENUM, MIGRAZIONE].map((f) => f.replace("supabase/migrations/", "")));
   });
 

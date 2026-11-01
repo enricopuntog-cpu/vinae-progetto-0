@@ -101,6 +101,45 @@ condizione, descrizione) vive sull'annuncio ed è **congelata** mentre è pubbli
   proprietario è già pubblico (profilo), l'id dell'accessorio non apre nulla (tabella
   senza grant). Il dettaglio pubblico non contiene altri id interni.
 
+## 3 bis. La moderazione non si aggira dalla Cantina né con una nuova pubblicazione (VPM-015QA/M1)
+
+L'accessorio di Cantina da cui nasce un annuncio può essere **esposto** dal proprietario
+(B1). Prima della correzione la moderazione agiva solo sull'annuncio: con gli
+interruttori della Cantina accesi, un annuncio oscurato lasciava l'accessorio, con le
+stesse foto, nel profilo pubblico e nelle firme dello Storage (difetto misurato dalla
+griglia 12zl). La migrazione `20261101090000_vpm_015qa_cantina_pubblica_annuncio_oscurato.sql`
+non scrive nulla sulla Cantina e fa due cose:
+
+1. **Filtro derivato nella vista** `private.cantina_accessori_pubblica` (profilo pubblico
+   e policy Storage la leggono entrambi):
+
+| Stato dell'annuncio collegato | Accessorio nella Cantina pubblica |
+| --- | --- |
+| nessun annuncio, `bozza`, `pubblicato`, ritirato **senza** provvedimento né richiesta di modifiche | sì, se il proprietario l'ha esposto |
+| `oscurato` (sospensione o rimozione) | **no** |
+| `modifiche_richieste` | **no**, finché il venditore non corregge e l'annuncio torna `pubblicato` (o l'admin ripristina) |
+| `ritirato` con `provvedimento` (ritiro dopo sospensione o rimozione) | **no**, in modo terminale: coerente con `ripubblicazione_bloccata` |
+| `ritirato` dopo una richiesta di modifiche | **no** finché il contenuto (offerta congelata + nome, marchio e foto della Cantina) coincide con quello per cui furono chieste modifiche (impronta `hash_richiesta`); **sì** appena cambia davvero qualcosa |
+
+   Un annuncio oscurato mentre era in `modifiche_richieste` e ripristinato torna
+   `modifiche_richieste` (B3): l'accessorio resta nascosto fino al secondo ripristino o alla
+   correzione.
+
+2. **Trigger `annunci_accessori_richiesta_modifiche_guard`**: la regola B3 «si ripubblica solo
+   cambiando davvero qualcosa» vale anche per un **nuovo** annuncio dello stesso accessorio.
+   Un venditore che ritira durante la richiesta di modifiche e ricrea l'annuncio con lo
+   stesso contenuto riceve `modifiche_non_effettuate`; cambiando davvero qualcosa si
+   pubblica da solo. Non agisce sulle azioni dell'amministrazione e non è un blocco
+   permanente. Il modello approvato (pubblicazione automatica, moderazione successiva)
+   non cambia.
+
+Dopo un ripristino legittimo il filtro cessa da solo e vale la scelta di visibilità del
+proprietario. Il proprietario vede sempre tutto nella propria Cantina (porta del
+proprietario e policy Storage «proprie»). Nessun privilegio nuovo; due indici parziali
+sostengono il filtro. Una URL firmata già emessa resta valida fino a scadenza (§9).
+
+**Osservazione su B3:** l'impronta di ripubblicazione include nome, marchio e foto letti
+dalla Cantina, quindi un cambio di nome privato conta come modifica reale.
 ## 4. Moderazione successiva: componenti riusati
 
 Nessun sistema parallelo. Riutilizzati: `reports`, `report_events`, `report_reasons`,
@@ -196,6 +235,12 @@ privilegiati. Lock sempre nello stesso ordine: accessorio della Cantina, poi ann
   con effetto immediato, **limite di revoca misurato** (una URL già firmata resta
   valida fino a scadenza), nessuna riapertura da parte del venditore, ripristino
   dell'admin, spegnimento.
+- Griglia `supabase/tests/12zl_vpm_015qa_m1_cantina_moderazione.sql` (20 casi, nel gate): oscuramento,
+  rimozione, richiesta di modifiche, ritiro dopo provvedimento e dopo richiesta, elusioni del
+  venditore (modifiche private, ripubblicazione, bozza, nuovo annuncio identico), ripristino
+  (anche da oscurato in modifiche_richieste), proprietario, note private, inventario,
+  pubblicazione automatica, assenza di blocchi permanenti, nessun ordine. Prima della correzione
+  10/20 (dieci casi rossi), dopo 20/20.
 - Griglie aggiornate (invarianti superate, non eliminate): 12zh caso 25, 12zi caso 33,
   12zj casi 11, 12, 19, 24, 25, 26, 31, 33, 34, 38 (39/39), concorrenza 12zj.
 - **Mutazioni di controllo** (stack locale): 12 regole rotte di proposito (interruttore
@@ -224,6 +269,14 @@ privilegiati. Lock sempre nello stesso ordine: accessorio della Cantina, poi ann
 - L'oscuramento di un annuncio non chiude da solo le pratiche aperte (si chiudono
   dalla coda).
 - Segnalazioni anonime non supportate (vedi §5).
+- La Cantina pubblica non ha un canale di segnalazione né di moderazione proprio: un contenuto
+  si modera solo attraverso un annuncio. Un accessorio NUOVO e diverso (duplicato con altro id e
+  foto ricaricate) non è raggiunto dal provvedimento (debito medio, a monte: interruttori della
+  Cantina spenti di default). Eliminare un accessorio cancella a cascata anche l'annuncio e quindi
+  il provvedimento (modello B2/B3): rimozione e ricreazione aggirano filtro e blocco di
+  ripubblicazione (debito medio). Un annuncio ritirato dopo un provvedimento non ha percorso di
+  riapertura, nemmeno amministrativo (debito basso). Da decidere con il titolare insieme alla
+  moderazione della Cantina esposta.
 
 ## 10. Dipendenze e decisioni ancora aperte
 

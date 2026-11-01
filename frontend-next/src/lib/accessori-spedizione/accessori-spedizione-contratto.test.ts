@@ -155,8 +155,8 @@ describe("B4: forma della migrazione", () => {
 });
 
 describe("B4: prove nel gate CI", () => {
-  it("la griglia 12zl è registrata nel gate e le migrazioni precedenti non sono state toccate", () => {
-    expect(existsSync(join(radiceRepo, "supabase/tests/12zl_vpm_015b4_logistica_accessori.sql"))).toBe(true);
-    expect(leggiRepo("supabase/tests/12g_ci_run.sh")).toContain("12zl_vpm_015b4_logistica_accessori.sql");
+  it("la griglia 12zm è registrata nel gate e le migrazioni precedenti non sono state toccate", () => {
+    expect(existsSync(join(radiceRepo, "supabase/tests/12zm_vpm_015b4_logistica_accessori.sql"))).toBe(true);
+    expect(leggiRepo("supabase/tests/12g_ci_run.sh")).toContain("12zm_vpm_015b4_logistica_accessori.sql");
   });
 });

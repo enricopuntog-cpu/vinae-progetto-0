@@ -1,4 +1,4 @@
--- VPM-015B4 — Logistica completa degli Accessori (griglia 12zl).
+-- VPM-015B4 — Logistica completa degli Accessori (griglia 12zm).
 --
 -- SOLO stack Supabase locale/effimero. Utenti `.test`, accessori, annunci,
 -- servizi, tariffe e preventivi di prova vivono nella transazione e spariscono
@@ -21,11 +21,11 @@ begin;
 do $$
 begin
   if exists (select 1 from auth.users where email not like '%.test') then
-    raise exception 'Guard 12zl: il database contiene utenti reali, griglia rifiutata.';
+    raise exception 'Guard 12zm: il database contiene utenti reali, griglia rifiutata.';
   end if;
 end $$;
 
-create temp table esiti_12zl (
+create temp table esiti_12zm (
   id integer primary key,
   descrizione text not null,
   passed boolean not null,
@@ -35,7 +35,7 @@ create temp table esiti_12zl (
 create function pg_temp.registra(
   p_id integer, p_descrizione text, p_passed boolean, p_detail text default ''
 ) returns void language sql as $f$
-  insert into esiti_12zl (id, descrizione, passed, detail)
+  insert into esiti_12zm (id, descrizione, passed, detail)
   values (p_id, p_descrizione, coalesce(p_passed, false), coalesce(p_detail, ''));
 $f$;
 
@@ -142,7 +142,7 @@ begin
          'categoria_id', %L, 'nome', %L, 'quantita', %s, 'note', %L, 'condizione', 'usato'))$q$,
     p_id, pg_temp.categoria(p_slug), p_nome, p_quantita, p_note), p_uid);
   if v_c.esito <> 'NESSUN_ERRORE' then
-    raise exception 'fixture 12zl: accessorio % fallito (% %)', p_nome, v_c.esito, v_c.hint;
+    raise exception 'fixture 12zm: accessorio % fallito (% %)', p_nome, v_c.esito, v_c.hint;
   end if;
   return v_c.esito || ':' || v_c.hint;
 end;
@@ -213,17 +213,17 @@ $f$;
 
 set local session_replication_role = replica;
 insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values
-  (:'adm', 'adm@grid-12zl.test', now(), '{}'::jsonb),
-  (:'ua', 'ua@grid-12zl.test', now(), '{}'::jsonb),
-  (:'ub', 'ub@grid-12zl.test', now(), '{}'::jsonb),
-  (:'fnd', 'fnd@grid-12zl.test', now(), '{}'::jsonb),
-  (:'uc', 'uc@grid-12zl.test', now(), '{}'::jsonb);
+  (:'adm', 'adm@grid-12zm.test', now(), '{}'::jsonb),
+  (:'ua', 'ua@grid-12zm.test', now(), '{}'::jsonb),
+  (:'ub', 'ub@grid-12zm.test', now(), '{}'::jsonb),
+  (:'fnd', 'fnd@grid-12zm.test', now(), '{}'::jsonb),
+  (:'uc', 'uc@grid-12zm.test', now(), '{}'::jsonb);
 insert into public.profiles (id, username, dob) values
-  (:'adm', 'adm-12zl', date '1980-01-01'),
-  (:'ua', 'ua-12zl', date '1980-01-01'),
-  (:'ub', 'ub-12zl', date '1980-01-01'),
-  (:'fnd', 'fnd-12zl', date '1980-01-01'),
-  (:'uc', 'uc-12zl', date '1980-01-01');
+  (:'adm', 'adm-12zm', date '1980-01-01'),
+  (:'ua', 'ua-12zm', date '1980-01-01'),
+  (:'ub', 'ub-12zm', date '1980-01-01'),
+  (:'fnd', 'fnd-12zm', date '1980-01-01'),
+  (:'uc', 'uc-12zm', date '1980-01-01');
 set local session_replication_role = origin;
 
 -- Fixture logistica DI PROVA (provider fittizi, valori inventati per la prova,
@@ -291,7 +291,7 @@ begin
        'condizione', 'come_nuovo', 'conforme', true) || %L::jsonb)$q$,
     p_ann, p_cantina, p_quantita, p_prezzo, p_extra), p_uid);
   if v_c.esito <> 'NESSUN_ERRORE' then
-    raise exception 'fixture 12zl: salva fallita (% %)', v_c.esito, v_c.hint;
+    raise exception 'fixture 12zm: salva fallita (% %)', v_c.esito, v_c.hint;
   end if;
   return pg_temp.pubblica(p_uid, p_ann);
 end;
@@ -396,12 +396,12 @@ begin
     '');
 
   -- Catena di rilascio degli annunci (B1-B3), come nella griglia 12zk.
-  perform pg_temp.chiama($q$select public.cantina_accessori_admin_imposta('funzione', true, 'collaudo 12zl')$q$, c_fnd);
-  perform pg_temp.chiama($q$select public.annunci_accessori_admin_imposta(true, 'collaudo 12zl')$q$, c_fnd);
-  perform pg_temp.chiama($q$select public.annunci_accessori_admin_pubblicazione_imposta(true, 'collaudo 12zl')$q$, c_fnd);
-  perform pg_temp.chiama(format('select public.annunci_accessori_admin_categoria_pubblicabile_imposta(%L, true, ''collaudo 12zl'')',
+  perform pg_temp.chiama($q$select public.cantina_accessori_admin_imposta('funzione', true, 'collaudo 12zm')$q$, c_fnd);
+  perform pg_temp.chiama($q$select public.annunci_accessori_admin_imposta(true, 'collaudo 12zm')$q$, c_fnd);
+  perform pg_temp.chiama($q$select public.annunci_accessori_admin_pubblicazione_imposta(true, 'collaudo 12zm')$q$, c_fnd);
+  perform pg_temp.chiama(format('select public.annunci_accessori_admin_categoria_pubblicabile_imposta(%L, true, ''collaudo 12zm'')',
     pg_temp.categoria('calici')), c_fnd);
-  perform pg_temp.chiama(format('select public.annunci_accessori_admin_categoria_pubblicabile_imposta(%L, true, ''collaudo 12zl'')',
+  perform pg_temp.chiama(format('select public.annunci_accessori_admin_categoria_pubblicabile_imposta(%L, true, ''collaudo 12zm'')',
     pg_temp.categoria('calici-da-rosso')), c_fnd);
   perform set_config('vinae.accessori_rilascio', '', true);
 
@@ -451,7 +451,7 @@ begin
     and pg_temp.esito($q$select public.accessori_logistica_admin_imposta(false, 'x')$q$, c_a) like '42501:%',
     v_s || ' ' || v_t || ' ' || v_u || ' ' || v_w);
 
-  v_s := pg_temp.esito($q$select public.accessori_logistica_admin_imposta(true, 'collaudo 12zl')$q$, c_fnd);
+  v_s := pg_temp.esito($q$select public.accessori_logistica_admin_imposta(true, 'collaudo 12zm')$q$, c_fnd);
   select * into v_cfg from private.accessori_logistica_impostazioni;
   perform pg_temp.registra(5, 'il ruolo di rilascio accende la logistica (registro con motivo, versione 2); admin_stato la dichiara accesa; aperta=true',
     v_s = 'NESSUN_ERRORE:' and v_cfg.logistica_attiva and v_cfg.versione = 2
@@ -763,7 +763,7 @@ begin
     v_s || ' ' || v_t);
 
   -- Interruttore di emergenza.
-  v_s := pg_temp.esito($q$select public.accessori_logistica_admin_imposta(false, 'emergenza 12zl')$q$, c_adm);
+  v_s := pg_temp.esito($q$select public.accessori_logistica_admin_imposta(false, 'emergenza 12zm')$q$, c_adm);
   v_id := (select id from private.accessori_logistica_preventivi
            where buyer_id = c_b and quantita = 2 and annuncio_id = v_a1 and consumato_at is null limit 1);
   v_j := private.accessori_logistica_preventivo_verifica(v_id, c_b, v_a1, 2);
@@ -772,7 +772,7 @@ begin
   perform pg_temp.registra(35, 'spegnere la logistica (anche un admin ordinario): le stime tornano ok=false, il congelamento e funzione_non_attiva, i preventivi gia congelati non sono piu utilizzabili (non_disponibile)',
     v_s = 'NESSUN_ERRORE:' and (v_j ->> 'motivo') = 'non_disponibile' and v_t = '42501:funzione_non_attiva'
     and pg_temp.motivi(v_j2) = 'annuncio_non_disponibile', v_s || ' ' || v_t);
-  perform pg_temp.esito($q$select public.accessori_logistica_admin_imposta(true, 'ripristino 12zl')$q$, c_fnd);
+  perform pg_temp.esito($q$select public.accessori_logistica_admin_imposta(true, 'ripristino 12zm')$q$, c_fnd);
 
   -- =========================================================================
   -- 36-40: configurazione versionata, privilegi, separazione
@@ -896,7 +896,7 @@ begin
 end $$;
 
 select id, descrizione, passed, detail
-from esiti_12zl
+from esiti_12zm
 order by id;
 
 rollback;

@@ -20,7 +20,7 @@ Visibile e stimabile non vuol dire acquistabile.
 | `preventivo_dominio('accessori_enologici', classe, …)` per commissione, margine, copertura della fee di pagamento | assicurazione contrattuale (vuota), pezzi per collo, pianificatore, preventivo congelato |
 | guardie di rilascio (`accessori_rilascio_richiesto`, marcatore `vinae.accessori_rilascio`), `accessori_registro`, `rate_limit_consume`, visibilità `annuncio_accessorio_visibile` | interruttore `logistica_attiva` |
 
-Nessuna tabella condivisa con le bottiglie è modificata (verificato dalla griglia 12zl, caso 39,
+Nessuna tabella condivisa con le bottiglie è modificata (verificato dalla griglia 12zm, caso 39,
 e dal test di contratto).
 
 ## 2. Modello dati (schema `private`, RLS, nessun grant client)
@@ -118,7 +118,7 @@ differita.
 
 ## 8. Prove
 
-- Griglia `supabase/tests/12zl_vpm_015b4_logistica_accessori.sql` (**40 casi**, nel gate `Supabase DB
+- Griglia `supabase/tests/12zm_vpm_015b4_logistica_accessori.sql` (**41 casi**, nel gate `Supabase DB
   regression`): stato iniziale e privilegi; accensione e rilascio; fail-closed uno per uno;
   accessorio singolo con totale calcolato indipendentemente; quantità multiple; pezzi per collo e
   multi-collo; fragile; peso/misure mancanti; fuori misura; troppi colli; domicilio; servizi

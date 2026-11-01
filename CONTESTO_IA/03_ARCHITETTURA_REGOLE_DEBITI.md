@@ -1827,6 +1827,9 @@ alcuna vendita**. Regole durevoli:
   `cantina_accessori_pubblica_profilo(uuid, int, int, boolean)`: un profilo per
   volta, 10 chiavi, tetto 48. Mai note private, proprietario, legame col catalogo.
   Va aggiunta a ogni elenco chiuso delle viste di lettura pubblica.
+  Dalla VPM-015QA/M1 (migrazione 20261101090000) la vista esclude gli accessori il cui annuncio
+  B3 e oscurato, con modifiche richieste, ritirato dopo un provvedimento o ritirato col contenuto segnalato: la moderazione
+  dell'annuncio non si aggira esponendo l'accessorio dalla Cantina (griglia 12zl).
 - **Foto in bucket privato** `cantina-accessori-foto` (nome scelto per non
   collidere con i controlli sul bucket `accessori-media` della 12zh): lettura e
   scrittura del proprietario nella cartella `<uid>/<accessorio>/`; firma pubblica

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12zl) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12zm) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
@@ -429,6 +429,10 @@ summary "- $(printf '%s\n' "$conc_12zj" | tail -n 1)"
 # nessun percorso d'acquisto. Fixture `.test` sintetiche; ROLLBACK.
 run_grid "12zk Pubblicazione Accessori e moderazione" 12zk_vpm_015b3_pubblicazione_accessori.sql 3
 
+# VPM-015QA/M1: l'accessorio il cui annuncio e oscurato o rimosso non resta nella
+# Cantina pubblica ne con le foto firmabili. Transazione chiusa da ROLLBACK.
+run_grid "12zl Cantina pubblica e annuncio oscurato" 12zl_vpm_015qa_m1_cantina_moderazione.sql 3
+
 # Stessa famiglia su sessioni separate: due pubblicazioni dello stesso annuncio,
 # oscuramento vs pubblicazione, aggiornamento vs oscuramento, doppio oscuramento,
 # archiviazione e riduzione di quantita vs pubblicazione. Fixture
@@ -446,7 +450,7 @@ summary "- $(printf '%s\n' "$conc_12zk" | tail -n 1)"
 # logistica, preventivo congelato (scadenza, impronta, uso unico, immutabilita),
 # manipolazioni, privilegi, versionamento, nessun ordine ne tariffa delle
 # bottiglie toccata. Fixture .test e servizi di prova sintetici; ROLLBACK.
-run_grid "12zl Logistica Accessori" 12zl_vpm_015b4_logistica_accessori.sql 3
+run_grid "12zm Logistica Accessori" 12zm_vpm_015b4_logistica_accessori.sql 3
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
