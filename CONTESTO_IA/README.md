@@ -134,6 +134,13 @@ Aprire soltanto ciò che serve al task:
   bucket privato, oscuramento immediato, nessuna ripubblicazione autonoma, nessun
   acquisto — è in `03_ARCHITETTURA_REGOLE_DEBITI.md`; contratto completo in
   `../docs/VPM_015B3_PUBBLICAZIONE_ACCESSORI.md`.
+- Logistica completa degli Accessori VPM-015B4 (1 novembre 2026) — tariffe per collo
+  versionate (nessuna seminata) sopra i servizi logistici esistenti, pianificatore
+  multi-collo fail-closed, assicurazione solo se contrattuale, voci separate di
+  prezzo, commissione, pagamento e logistica, preventivo congelato a uso unico per il
+  checkout B5, interruttore spento con accensione dal ruolo `accessori_release`;
+  contratto, limiti e configurazione mancante in
+  `../docs/VPM_015B4_LOGISTICA_ACCESSORI.md`.
 - Ambiente Claude Code di progetto VPM-LAB-002 (29 ottobre 2026) — 6 agenti e 6
   skill versionati in `.claude/`, solo due agenti con shell in worktree isolato
   dietro una guardia a lista bianca con canarino, guardia dei segreti, plugin

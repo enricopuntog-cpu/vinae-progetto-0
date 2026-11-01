@@ -144,3 +144,14 @@ export const ACCESSORI_UI_ABILITATA = valoreFlagEsattamenteTrue(
 export const ACCESSORI_NAV_MOBILE_ABILITATA =
   ACCESSORI_UI_ABILITATA &&
   valoreFlagEsattamenteTrue(process.env.NEXT_PUBLIC_ACCESSORI_NAV_MOBILE);
+
+/**
+ * Logistica Accessori (VPM-015B4). Gate server della stima di spedizione sulla
+ * scheda dell'annuncio: spento di default, solo la stringa esatta `true` lo
+ * accende. Sotto di esso l'interruttore nel database (`logistica_attiva`,
+ * accendibile solo con `accessori_release`) e le tariffe attive: senza una
+ * tariffa commerciale reale la stima resta «non disponibile». Da leggere solo
+ * in codice server.
+ */
+export const accessoriLogisticaAbilitataServer = (): boolean =>
+  valoreFlagEsattamenteTrue(process.env.ACCESSORI_LOGISTICA_ENABLED);

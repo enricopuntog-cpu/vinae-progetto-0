@@ -42,7 +42,7 @@ describe("B3: migrazioni additive e distinte", () => {
     );
     expect(ENUM < MIGRAZIONE).toBe(true);
     // nessuna migrazione successiva alle B2 oltre alle due di B3
-    const nuove = readdirSync(join(radiceRepo, "supabase/migrations")).filter((f) => f.slice(0, 14) > "20261021150000");
+    const nuove = readdirSync(join(radiceRepo, "supabase/migrations")).filter((f) => f.slice(0, 14) > "20261021150000" && f.slice(0, 14) <= "20261022091000");
     expect(nuove.sort()).toEqual([ENUM, MIGRAZIONE].map((f) => f.replace("supabase/migrations/", "")));
   });
 

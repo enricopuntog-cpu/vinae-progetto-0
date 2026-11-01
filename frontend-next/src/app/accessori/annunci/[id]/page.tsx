@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { StatoVuotoAccessori } from "@/components/vinea/accessori/AccessoriVetrina";
+import { StimaSpedizioneAccessorio } from "@/components/vinea/accessori-spedizione/StimaSpedizioneAccessorio";
+import { accessoriLogisticaAbilitataServer } from "@/config/features";
 import { DettaglioAnnuncioPubblico } from "@/components/vinea/accessori-vendita/AnnunciPubblici";
 import { risolviModalitaAccessori } from "@/lib/accessori/gate";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -47,11 +49,16 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   }
 
   return (
-    <DettaglioAnnuncioPubblico
-      annuncio={esito.data}
-      immagini={foto.ok ? foto.data : {}}
-      modalita={modalita}
-      autenticato={autenticato}
-    />
+    <>
+      <DettaglioAnnuncioPubblico
+        annuncio={esito.data}
+        immagini={foto.ok ? foto.data : {}}
+        modalita={modalita}
+        autenticato={autenticato}
+      />
+      {accessoriLogisticaAbilitataServer() ? (
+        <StimaSpedizioneAccessorio annuncioId={esito.data.id} disponibili={esito.data.quantita} />
+      ) : null}
+    </>
   );
 }
