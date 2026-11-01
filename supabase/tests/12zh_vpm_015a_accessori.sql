@@ -494,13 +494,13 @@ begin
     v_n::text);
 
   -- 25: separazione dal vino e dal denaro: nessun legame, nessuna colonna economica.
-  perform pg_temp.registra(25, 'separazione: nessuna FK verso o da listings, orders, payments, wines, bottle_units; riferimenti solo a profiles e fra tabelle accessori (uniche eccezioni: la Cantina Accessori personale 015B1, che punta a tassonomia e schede, le regole di vendita per categoria 015B2 e quelle di pubblicazione e lo snapshot 015B3, che puntano alla tassonomia)',
+  perform pg_temp.registra(25, 'separazione: nessuna FK verso o da listings, orders, payments, wines, bottle_units; riferimenti solo a profiles e fra tabelle accessori (uniche eccezioni: la Cantina Accessori personale 015B1, che punta a tassonomia e schede, le regole di vendita per categoria 015B2 e quelle di pubblicazione e lo snapshot 015B3, che puntano alla tassonomia; la logistica 015B4, tabelle accessori_logistica_*, che punta agli annunci)',
     not exists (
       select 1 from pg_constraint k
       join pg_class cr on cr.oid = k.conrelid join pg_namespace nr on nr.oid = cr.relnamespace
       join pg_class cf on cf.oid = k.confrelid join pg_namespace nf on nf.oid = cf.relnamespace
       where k.contype = 'f'
-        and ((nr.nspname = 'private' and cr.relname like 'accessori%'
+        and ((nr.nspname = 'private' and cr.relname like 'accessori%' and cr.relname not like 'accessori_logistica_%'
               and not (nf.nspname = 'private' and cf.relname like 'accessori%')
               and not (nf.nspname = 'public' and cf.relname = 'profiles'))
           or (nf.nspname = 'private' and cf.relname like 'accessori%'
@@ -511,7 +511,7 @@ begin
   perform pg_temp.registra(26, 'nessuna colonna di prezzo, valuta, importo, IVA, commissione, peso, dimensioni, fornitore o pagamento nelle tabelle accessori',
     not exists (
       select 1 from information_schema.columns
-      where table_schema = 'private' and table_name like 'accessori%'
+      where table_schema = 'private' and table_name like 'accessori%' and table_name not like 'accessori_logistica_%'
         and column_name ~* '(prezzo|price|valuta|currency|cents|importo|amount|(^|_)iva(_|$)|(^|_)vat(_|$)|commission|peso|weight|dimension|fornitor|supplier|payment|pagamento|checkout|spedizion|shipping)'),
     (select string_agg(table_name || '.' || column_name, ',') from information_schema.columns
      where table_schema = 'private' and table_name like 'accessori%'));
