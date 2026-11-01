@@ -429,6 +429,10 @@ summary "- $(printf '%s\n' "$conc_12zj" | tail -n 1)"
 # nessun percorso d'acquisto. Fixture `.test` sintetiche; ROLLBACK.
 run_grid "12zk Pubblicazione Accessori e moderazione" 12zk_vpm_015b3_pubblicazione_accessori.sql 3
 
+# VPM-015QA/M1: l'accessorio il cui annuncio e oscurato o rimosso non resta nella
+# Cantina pubblica ne con le foto firmabili. Transazione chiusa da ROLLBACK.
+run_grid "12zl Cantina pubblica e annuncio oscurato" 12zl_vpm_015qa_m1_cantina_moderazione.sql 3
+
 # Stessa famiglia su sessioni separate: due pubblicazioni dello stesso annuncio,
 # oscuramento vs pubblicazione, aggiornamento vs oscuramento, doppio oscuramento,
 # archiviazione e riduzione di quantita vs pubblicazione. Fixture
