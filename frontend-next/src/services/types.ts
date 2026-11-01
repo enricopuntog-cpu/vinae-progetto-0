@@ -51,6 +51,7 @@ import type {
   RigaAnnuncioAdmin,
 } from "@/lib/accessori-vendita/annunci-moderazione";
 import type { AnnuncioPubblico } from "@/lib/accessori-vendita/annunci-pubblici";
+import type { DestinazioneLogistica, StimaLogistica } from "@/lib/accessori-spedizione/stima";
 import type {
   AccessorioPersonale,
   AccessorioPubblico,
@@ -3522,6 +3523,30 @@ export interface AnnunciAccessoriPubbliciService {
   dettaglio(id: string): Promise<Result<AnnuncioPubblico | null>>;
   /** URL firmate (a tempo) delle foto di annunci visibili; le altre mancano dal risultato. */
   urlFoto(percorsi: readonly string[]): Promise<Result<Record<string, string>>>;
+}
+
+/**
+ * Logistica Accessori (VPM-015B4). Il chiamante sceglie annuncio, quantità,
+ * modalità di consegna e assicurazione; mai un importo, una tariffa o un
+ * servizio. Nessun metodo ordina, paga o contatta un corriere.
+ */
+export interface AccessoriLogisticaService {
+  /** Stima non persistita: stessa visibilità dell'annuncio. */
+  stima(r: {
+    annuncioId: string;
+    quantita: number;
+    destinazione?: DestinazioneLogistica;
+    assicurazione?: boolean;
+  }): Promise<Result<StimaLogistica>>;
+  /** Congela il preventivo (solo utenti autenticati, solo punto di ritiro). */
+  congela(r: {
+    annuncioId: string;
+    quantita: number;
+    destinazione?: DestinazioneLogistica;
+    assicurazione?: boolean;
+  }): Promise<Result<StimaLogistica>>;
+  /** Rilegge il proprio preventivo congelato. */
+  leggi(preventivoId: string): Promise<Result<StimaLogistica>>;
 }
 
 export interface AnnunciAccessoriAdminService {

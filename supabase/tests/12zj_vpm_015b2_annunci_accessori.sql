@@ -895,7 +895,7 @@ begin
     v_n::text || ' ' || v_s);
 
   -- 33: separazione dal mercato.
-  perform pg_temp.registra(33, 'nessun legame con il mercato: l''annuncio ha solo FK verso profiles e cantina_accessori; lo referenziano solo lo snapshot e le segnalazioni (reports, on delete set null); nessuna colonna di ordine/pagamento/classe; nessuna vista o tabella in public; public_listings non lo cita; conteggi di listings, ordini, vino, bottiglie, pagamenti e proposte invariati',
+  perform pg_temp.registra(33, 'nessun legame con il mercato: l''annuncio ha solo FK verso profiles e cantina_accessori; lo referenziano solo lo snapshot e le segnalazioni (reports, on delete set null) e, dal 015B4, le dichiarazioni e i preventivi della logistica; nessuna colonna di ordine/pagamento/classe; nessuna vista o tabella in public; public_listings non lo cita; conteggi di listings, ordini, vino, bottiglie, pagamenti e proposte invariati',
     not exists (
       select 1 from pg_constraint c
       where c.conrelid = 'private.annunci_accessori'::regclass and c.contype = 'f'
@@ -903,7 +903,7 @@ begin
     and not exists (
       select 1 from pg_constraint c
       where c.confrelid = 'private.annunci_accessori'::regclass and c.contype = 'f'
-        and c.conrelid not in ('private.annunci_accessori_snapshot'::regclass, 'public.reports'::regclass))
+        and c.conrelid not in ('private.annunci_accessori_snapshot'::regclass, 'public.reports'::regclass, 'private.annunci_accessori_logistica'::regclass, 'private.accessori_logistica_preventivi'::regclass))
     and not exists (
       select 1 from pg_attribute a
       where a.attrelid = 'private.annunci_accessori'::regclass and a.attnum > 0 and not a.attisdropped

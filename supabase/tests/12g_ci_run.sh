@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12zl) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12zm) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
@@ -442,6 +442,24 @@ conc_12zk="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zk_vpm_015b3_concorrenza.sh
   || { printf '%s\n' "$conc_12zk"; die "12zk concorrenza: fallita."; }
 printf '%s\n' "$conc_12zk"
 summary "- $(printf '%s\n' "$conc_12zk" | tail -n 1)"
+
+# VPM-015B4 — logistica Accessori: interruttore spento e riservato al rilascio,
+# fail-closed su servizio, tariffa, peso, misure, fragilita, rotta e colli,
+# accessorio singolo, quantita multiple, multi-collo, assicurazione solo se
+# contrattualmente prevista, separazione di prezzo, commissione, pagamento e
+# logistica, preventivo congelato (scadenza, impronta, uso unico, immutabilita),
+# manipolazioni, privilegi, versionamento, nessun ordine ne tariffa delle
+# bottiglie toccata. Fixture .test e servizi di prova sintetici; ROLLBACK.
+run_grid "12zm Logistica Accessori" 12zm_vpm_015b4_logistica_accessori.sql 3
+
+# Stessa logistica su sessioni separate: due congelamenti dello stesso acquirente,
+# due consumi dello stesso preventivo, aggiornamento del prezzo durante un
+# congelamento. Fixture `@conc-12zm.test`, servizio e tariffa di PROVA (provider
+# `conc_b4`) committati e rimossi in trap, residui 0; interruttori ripristinati.
+conc_12zm="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zm_vpm_015b4_concorrenza.sh")" \
+  || { printf '%s\n' "$conc_12zm"; die "12zm concorrenza: fallita."; }
+printf '%s\n' "$conc_12zm"
+summary "- $(printf '%s\n' "$conc_12zm" | tail -n 1)"
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal

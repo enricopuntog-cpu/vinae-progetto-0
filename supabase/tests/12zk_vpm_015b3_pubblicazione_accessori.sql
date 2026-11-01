@@ -867,12 +867,12 @@ begin
     '');
 
   -- 34: nessun percorso d'acquisto.
-  perform pg_temp.registra(34, 'visibile non vuol dire acquistabile: nessuna FK da orders, payments, proposals, listings o bottle_units verso annunci e snapshot (solo reports); nessuna colonna o funzione d''ordine, pagamento, checkout, carrello, prenotazione; lo stato dichiara vendite_attive=false; nessun stato acquistabile; conteggi di listings, ordini, vino e pagamenti invariati',
+  perform pg_temp.registra(34, 'visibile non vuol dire acquistabile: nessuna FK da orders, payments, proposals, listings o bottle_units verso annunci e snapshot (solo reports) (e, dal 015B4, le dichiarazioni e i preventivi della logistica); nessuna colonna o funzione d''ordine, pagamento, checkout, carrello, prenotazione; lo stato dichiara vendite_attive=false; nessun stato acquistabile; conteggi di listings, ordini, vino e pagamenti invariati',
     not exists (
       select 1 from pg_constraint c
       where c.confrelid in ('private.annunci_accessori'::regclass, 'private.annunci_accessori_snapshot'::regclass)
         and c.contype = 'f'
-        and c.conrelid not in ('private.annunci_accessori_snapshot'::regclass, 'public.reports'::regclass))
+        and c.conrelid not in ('private.annunci_accessori_snapshot'::regclass, 'public.reports'::regclass, 'private.annunci_accessori_logistica'::regclass, 'private.accessori_logistica_preventivi'::regclass))
     and not exists (
       select 1 from pg_attribute a
       where a.attrelid in ('private.annunci_accessori'::regclass, 'private.annunci_accessori_snapshot'::regclass)
