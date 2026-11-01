@@ -111,6 +111,13 @@ phases.
   with `gh pr merge --squash --admin` — **only after every required check on
   the exact head is green**. The admin bypass is never a way around CI.
 
+When a task authorizes PR and merge, complete CI and merge autonomously. If the
+automatic PR monitor is unavailable or denied, wait with `gh pr checks <n> --watch`
+or `gh run watch <id> --exit-status`; if no workflow starts, diagnose conflicts
+(`mergeStateStatus`), triggers and permissions. Stop for a new prompt only on a
+real, unsurmountable blocker, an unauthorized new expense, or a decision reserved
+to the founder. This applies to every later block (B5A, B5B, B5C, C, final QA).
+
 Always forbidden:
 
 - force-pushing or rewriting `main`;
