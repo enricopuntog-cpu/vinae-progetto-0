@@ -94,8 +94,8 @@ Gli artefatti stanno in `frontend-next/e2e/artifacts/` (ignorata da Git).
 
 | Livello | Quando | Cosa | Durata |
 |---|---|---|---|
-| Smoke | PR e push su `main` che toccano `frontend-next/`, `supabase/migrations/`, `supabase/config.toml`, la griglia 12zk o il workflow | `bun run e2e:smoke`, Chromium desktop, 17 casi `@smoke` | circa 3 min con build |
-| Completa | `workflow_dispatch` con `suite=completa`; in locale `bun run e2e` prima di chiudere una modifica UI | tre progetti, 33 casi | circa 4 min con build |
+| Smoke | PR e push su `main` che toccano `frontend-next/`, `supabase/migrations/`, `supabase/config.toml`, la griglia 12zk o il workflow | `bun run e2e:smoke`, Chromium desktop, 17 casi `@smoke` | 3 min 31 s misurati in CI (PR #248, 17/17) |
+| Completa | `workflow_dispatch` con `suite=completa`; in locale `bun run e2e` prima di chiudere una modifica UI | tre progetti, 33 casi | circa 4-5 min (33 casi misurati in locale: 1,0-1,3 min più build e installazione di WebKit) |
 
 Il workflow `E2E browser` **non** è un check richiesto dal ruleset
 `main-protection`: non cambia le condizioni di merge. Se se ne vuole fare un
