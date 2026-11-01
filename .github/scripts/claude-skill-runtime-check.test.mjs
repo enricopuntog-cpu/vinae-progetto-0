@@ -158,10 +158,10 @@ test("eventi ignora righe non JSON", () => {
   assert.equal(eventi('rumore\n{"type":"result"}\n\n{rotto').length, 1);
 });
 
-test("le otto skill e la prova negativa sono tutte previste", () => {
+test("le nove skill e la prova negativa sono tutte previste", () => {
   assert.deepEqual(
     PROVE.map((p) => p.skill).sort(),
-    ["animation-performance", "copywriting", "cro", "negativo", "product-marketing", "review-animations", "seo-audit", "supabase-postgres-best-practices", "vinea-marketing"],
+    ["animation-performance", "copywriting", "cro", "negativo", "product-marketing", "review-animations", "seo-audit", "supabase-postgres-best-practices", "vinea-browser-qa", "vinea-marketing"],
   );
   for (const p of PROVE) assert.ok(p.prompt.length > 20);
 });

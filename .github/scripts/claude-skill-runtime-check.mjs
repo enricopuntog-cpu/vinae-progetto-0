@@ -52,6 +52,7 @@ export const PROVE = [
   { skill: "animation-performance", prompt: "Usa la skill animation-performance per valutare le animazioni in frontend-next/src/components/ui/dialog.tsx. Solo lettura, massimo 150 parole, con riferimenti file:riga." },
   { skill: "review-animations", manuale: true, prompt: "/review-animations frontend-next/src/components/ui/dialog.tsx" },
   { skill: "supabase-postgres-best-practices", prompt: "Rivedi dal punto di vista delle prestazioni Postgres (indici sulle chiavi esterne, policy RLS) la migrazione supabase/migrations/20261021090000_vpm_015b1_cantina_accessori.sql. Carica la skill pertinente. Solo lettura, massimo 200 parole, con file:riga." },
+  { skill: "vinea-browser-qa", prompt: "Usa la skill vinea-browser-qa: in solo lettura, dimmi in massimo 80 parole con quali comandi si avvia lo stack isolato e si esegue lo smoke browser di frontend-next, e quando il caso e' NON VERIFICATO. Non eseguire nulla." },
   { skill: "vinea-marketing", manuale: true, prompt: "/vinea-marketing seo frontend-next/src/app/robots.ts" },
   { skill: "negativo", negativa: true, vietate: SKILL_MARKETING, prompt: "Spiega in massimo 80 parole cosa fa la funzione che calcola l'eta' in frontend-next/src/lib/age.ts e se il file ha un test. Solo lettura." },
 ];

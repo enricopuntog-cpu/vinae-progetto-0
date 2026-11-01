@@ -11,7 +11,7 @@ Anthropic Direct (`~/.claude`) e il profilo OmniRoute
 ```text
 .claude/settings.json                     plugin, marketplace, permessi ask/deny
 .claude/agents/*.md                       6 subagenti
-.claude/skills/*/SKILL.md                 8 skill interne e 7 di terzi (+ references/)
+.claude/skills/*/SKILL.md                 9 skill interne e 7 di terzi (+ references/)
 .github/scripts/claude-plugins.lock.json  lock di frontend-design
 .github/scripts/claude-skills.lock.json   lock delle 7 skill di terzi (commit, SHA-256)
 .github/scripts/claude-skill-runtime-check.mjs  prova manuale di invocazione (mai in CI)
@@ -70,6 +70,7 @@ ogni altro comando l'agente esegue il canarino
 | `vinea-skill-evaluation` | solo manuale | esito di un task VPM contro i criteri |
 | `vinea-external-skill-audit` | solo manuale | audit non esecutivo di candidate esterne prima di qualsiasi installazione |
 | `vinea-marketing` | solo manuale | bozze di copy, SEO e CRO con le regole Vinea; mai pubblicazioni |
+| `vinea-browser-qa` | contestuale | suite browser Playwright su stack Supabase isolato: esecuzione, diagnosi dei rossi, report (VPM-LAB-003; vedi `E2E_BROWSER.md`) |
 
 Il registro delle fonti esterne e delle decisioni è in
 [`VINEA_SKILLS_REGISTRY.md`](VINEA_SKILLS_REGISTRY.md); le 119 voci storiche
@@ -169,6 +170,7 @@ reale non gira mai in CI.
   lo elenca come `frontend-design:frontend-design`. Una copia nel marketplace
   da sola non prova l'installazione; caricamento interattivo e altri worktree
   restano da verificare separatamente.
+- `vinea-qa-runner` non esegue la suite browser: la sua lista bianca non ammette Docker, build con ambiente di prova né Playwright e non è stata allargata (VPM-LAB-003). La suite la lancia il Claude principale con `/vinea-browser-qa` oppure gira nel workflow `E2E browser`.
 - Le skill con `paths` (`vinea-design`, `vinea-security`) compaiono solo dopo
   che la sessione ha letto un file nei percorsi dichiarati; `vinea-task` e
   `vinea-skill-evaluation` non sono visibili al modello (solo manuali).

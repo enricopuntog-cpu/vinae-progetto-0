@@ -13,6 +13,11 @@
 # testing
 /coverage
 
+# suite browser Playwright (report, trace, screenshot: artefatti di corsa)
+/e2e/artifacts/
+# spec esplorativi temporanei (vedi e2e/support/esplora.ts): mai committati
+/e2e/esplora*.e2e.ts
+
 # next.js
 /.next/
 /out/

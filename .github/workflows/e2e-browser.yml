@@ -1,0 +1,165 @@
+name: E2E browser
+
+# Suite browser Playwright di frontend-next (VPM-LAB-003) su uno stack Supabase
+# locale ed effimero costruito dalle migrazioni del commit, e su un'app costruita
+# nel job con le flag Accessori accese nel solo processo di prova.
+#
+# Due livelli, volutamente separati per non rallentare ogni PR:
+#   - smoke  (pull_request e push su main, solo per percorsi pertinenti):
+#     Chromium desktop, casi marcati @smoke, circa 3 minuti compresa la build;
+#   - completa (avvio manuale, suite=completa): Chromium desktop, Chromium 375 px
+#     e WebKit, tutti i casi.
+#
+# Non e un check richiesto dal ruleset `main-protection`: ne il nome ne i
+# trigger di quel ruleset cambiano. Non usa secret e non puo raggiungere la
+# produzione: la suite rifiuta da sola ogni bersaglio che non sia loopback
+# (frontend-next/e2e/support/target.ts) e il runner non ha credenziali.
+# Procedura e limiti in docs/E2E_BROWSER.md.
+
+on:
+  pull_request:
+    paths:
+      - "frontend-next/**"
+      - "supabase/migrations/**"
+      - "supabase/config.toml"
+      - "supabase/tests/12zk_*"
+      - ".github/workflows/e2e-browser.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend-next/**"
+      - "supabase/migrations/**"
+      - "supabase/config.toml"
+      - ".github/workflows/e2e-browser.yml"
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "smoke (Chromium desktop, @smoke) oppure completa (tre progetti)"
+        type: choice
+        options:
+          - smoke
+          - completa
+        default: smoke
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-browser-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: E2E browser - Accessori (stack isolato)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SUITE: ${{ github.event_name == 'workflow_dispatch' && inputs.suite || 'smoke' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Cache Bun packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('frontend-next/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        working-directory: frontend-next
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: frontend-next
+        run: |
+          if [ "$SUITE" = "completa" ]; then
+            bun x playwright install --with-deps chromium webkit
+          else
+            bun x playwright install --with-deps chromium
+          fi
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.117.0
+
+      # Solo database, Auth, PostgREST, Storage e gateway, come il gate 12g.
+      # L'output di `supabase start` contiene le chiavi dello stack e non viene
+      # stampato; in caso di errore esce filtrato.
+      - name: Start ephemeral Supabase stack
+        run: |
+          log="$RUNNER_TEMP/supabase-start.log"
+          for registry in "${SUPABASE_INTERNAL_IMAGE_REGISTRY:-ghcr.io}" public.ecr.aws; do
+            if SUPABASE_INTERNAL_IMAGE_REGISTRY="$registry" supabase start \
+              --exclude realtime,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor \
+              > "$log" 2>&1; then
+              rm -f "$log"
+              echo "Stack locale avviato con le migrazioni del commit (immagini da $registry)."
+              exit 0
+            fi
+            grep -viE 'key|secret|jwt|token|password|postgres(ql)?://' "$log" | tail -n 20
+            echo "::warning title=E2E browser::Avvio non riuscito con le immagini da $registry."
+            supabase stop --no-backup > /dev/null 2>&1 || true
+          done
+          rm -f "$log"
+          echo "::error title=E2E browser::Stack Supabase locale non avviato."
+          exit 1
+
+      - name: Run browser suite
+        working-directory: frontend-next
+        env:
+          CI: "true"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          stack_env="$(supabase status -o env 2>/dev/null)"
+          value() { printf '%s\n' "$stack_env" | sed -nE "s/^$1=\"?([^\"]*)\"?$/\1/p" | head -n 1; }
+          api_url="$(value API_URL)"
+          anon_key="$(value ANON_KEY)"
+          unset stack_env
+          if [ -n "$anon_key" ]; then echo "::add-mask::$anon_key"; fi
+          export E2E_SUPABASE_URL="$api_url" E2E_ANON_KEY="$anon_key"
+          if [ "$SUITE" = "completa" ]; then
+            bun run e2e
+          else
+            bun run e2e:smoke
+          fi
+
+      - name: Summary
+        if: always()
+        working-directory: frontend-next
+        run: |
+          if [ -f e2e/artifacts/results.json ]; then
+            node -e '
+              const r = JSON.parse(require("fs").readFileSync("e2e/artifacts/results.json", "utf8"));
+              const s = r.stats ?? {};
+              console.log(`E2E browser (${process.env.SUITE}): attesi ${s.expected ?? 0}, inattesi ${s.unexpected ?? 0}, instabili ${s.flaky ?? 0}, saltati ${s.skipped ?? 0}`);
+            ' | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "E2E browser: nessun risultato (la suite non è partita)." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Report, screenshot e trace dei casi: nessuna password (l'accesso avviene
+      # in Node), solo sessioni di utenti fittizi di uno stack che si distrugge.
+      - name: Upload report, screenshots and traces
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-browser-${{ env.SUITE }}
+          path: frontend-next/e2e/artifacts
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Destroy ephemeral Supabase stack
+        if: always()
+        run: supabase stop --no-backup
