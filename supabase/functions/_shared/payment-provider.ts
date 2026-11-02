@@ -32,6 +32,12 @@ export type CheckoutRequest = {
   cancelUrl: string;
   idempotencyKey: string;
   expiresAt: string | null;
+  /**
+   * Dominio Vinea che possiede l'incasso. Assente = vino (comportamento
+   * storico). Viaggia presso il fornitore come marcatore, cosi il webhook firmato
+   * instrada l'evento al dominio giusto; la decisione resta del database.
+   */
+  dominio?: "accessori";
 };
 
 /**

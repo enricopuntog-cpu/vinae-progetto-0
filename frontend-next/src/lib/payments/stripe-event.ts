@@ -48,7 +48,7 @@ type StripeObject = Record<string, unknown> & {
   currency?: string;
   balance_transaction?: string | StripeBalanceTransaction;
   latest_charge?: string | { id?: string; balance_transaction?: string | StripeBalanceTransaction };
-  metadata?: { order_id?: string };
+  metadata?: { order_id?: string; vinea_dominio?: string };
 };
 
 type StripeAccountObject = Record<string, unknown> & {
@@ -157,6 +157,9 @@ export const normalizeStripeObject = (
     fee_reale_cents: saldo.feeCents,
     fee_transazione_id: saldo.transazioneId,
     order_id: object.metadata?.order_id,
+    // Marcatore di dominio dell'incasso: solo "accessori" instrada altrove. Il
+    // vino non lo porta e resta sul percorso storico.
+    dominio: object.metadata?.vinea_dominio === "accessori" ? "accessori" : undefined,
   };
 };
 

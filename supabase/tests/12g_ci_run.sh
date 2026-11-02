@@ -479,6 +479,22 @@ conc_12zn="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zn_vpm_015b5a_concorrenza.s
 printf '%s\n' "$conc_12zn"
 summary "- $(printf '%s\n' "$conc_12zn" | tail -n 1)"
 
+# VPM-015B5B — pagamenti Accessori sul sistema pagamenti esistente: apertura
+# idempotente e riserva rinnovata una volta, un solo intento, eventi firmati
+# deduplicati/fuori ordine/divergenti, dominio vino scambiato, pagamento fallito,
+# scaduto, dopo oscuramento o annullo (rimborso dovuto), vendita applicata una
+# volta, gate, privilegi, nessun payout, vino invariato. Eventi di PROVA; ROLLBACK.
+run_grid "12zo Pagamenti Accessori" 12zo_vpm_015b5b_pagamenti_accessori.sql 3
+
+# Gli stessi pagamenti su sessioni separate con barriera: stesso evento due
+# volte, due eventi diversi, incasso contro annullamento, due aperture. Fixture
+# `@conc-12zo.test`, servizio e tariffa di PROVA (provider `conc_b5b`)
+# committati e rimossi in trap, residui 0; interruttori ripristinati.
+conc_12zo="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zo_vpm_015b5b_concorrenza.sh")" \
+  || { printf '%s\n' "$conc_12zo"; die "12zo concorrenza: fallita."; }
+printf '%s\n' "$conc_12zo"
+summary "- $(printf '%s\n' "$conc_12zo" | tail -n 1)"
+
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
 # cancello di preparazione, quindi il suo caso 9 registra una prova reale. Una
