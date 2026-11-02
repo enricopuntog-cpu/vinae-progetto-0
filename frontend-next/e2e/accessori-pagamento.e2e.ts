@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { BrowserContext } from "@playwright/test";
-import { accedi, accendiPubblicazione, passwordFixture, pubblicaAnnuncioPreparato, rpc } from "./support/api";
+import { accedi, accendiPubblicazione, caricaFoto, idCategoriaCalici, passwordFixture, rpc } from "./support/api";
 import { contestoAutenticato, opzioniDelProgetto } from "./support/browser";
 import { eseguiSql, ripristinaFixture } from "./support/db";
 import { senzaScorrimentoOrizzontale } from "./support/pagina";
@@ -143,6 +143,48 @@ const installaMock = async (contesto: BrowserContext): Promise<Mock> => {
 const statoDb = (id: string): string =>
   eseguiSql(`select stato || ' ' || coalesce(pagamento_modo, '-') from private.accessori_ordini where id = '${id}';`);
 
+
+/** 6 calici in Cantina, 4 in annuncio a 20,00 € con peso e misure del collo (senza, l'annuncio non è ordinabile). */
+const pubblicaAnnuncioOrdinabile = async (): Promise<string> => {
+  const venditore = await accedi("venditore");
+  const categoriaId = await idCategoriaCalici();
+  const cantinaId = randomUUID();
+  const creato = await rpc(
+    "cantina_accessori_salva",
+    { p_id: cantinaId, p_dati: { categoria_id: categoriaId, nome: NOME, quantita: 6, note: "NOTA-PRIVATA-E2E", condizione: "usato" } },
+    venditore,
+  );
+  if (!creato.ok) throw new Error(`Accessorio non creato: HTTP ${creato.status}`);
+  const percorsoFoto = `${venditore.id}/${cantinaId}/${randomUUID()}.webp`;
+  if ((await caricaFoto(venditore, percorsoFoto)) >= 300) throw new Error("Foto non caricata.");
+  const foto = await rpc("cantina_accessori_immagini_imposta", { p_id: cantinaId, p_percorsi: [percorsoFoto] }, venditore);
+  if (!foto.ok) throw new Error(`Foto non collegata: HTTP ${foto.status}`);
+  const id = randomUUID();
+  const bozza = await rpc(
+    "annunci_accessori_salva",
+    {
+      p_id: id,
+      p_dati: {
+        cantina_id: cantinaId,
+        quantita: 4,
+        prezzo_unitario_cents: 2000,
+        condizione: "come_nuovo",
+        descrizione: "Quattro calici da rosso.",
+        conforme: true,
+        peso_g: 400,
+        lunghezza_mm: 250,
+        larghezza_mm: 100,
+        altezza_mm: 100,
+        fragile: false,
+      },
+    },
+    venditore,
+  );
+  if (!bozza.ok) throw new Error(`Bozza non creata: HTTP ${bozza.status}`);
+  const pubblicato = await rpc("annunci_accessori_pubblica", { p_id: id }, venditore);
+  if (!pubblicato.ok) throw new Error(`Annuncio non pubblicato: HTTP ${pubblicato.status}`);
+  return id;
+};
 let annuncioId = "";
 let ordineId = "";
 
@@ -153,13 +195,13 @@ const creaOrdine = async (): Promise<string> => {
     { p_annuncio: annuncioId, p_quantita: 1, p_destinazione: "punto_ritiro", p_assicurazione: false },
     sessione,
   );
-  if (!congelato.ok) throw new Error(`Preventivo non congelato: HTTP ${congelato.status}`);
+  if (!congelato.ok) throw new Error(`Preventivo non congelato: HTTP ${congelato.status} ${JSON.stringify(congelato.body).slice(0, 200)}`);
   const ordine = await rpc<{ id: string }>(
     "accessori_checkout_crea",
     { p_preventivo_id: congelato.body.preventivoId, p_chiave: `e2e-b5d-${randomUUID()}` },
     sessione,
   );
-  if (!ordine.ok) throw new Error(`Ordine non creato: HTTP ${ordine.status}`);
+  if (!ordine.ok) throw new Error(`Ordine non creato: HTTP ${ordine.status} ${JSON.stringify(ordine.body).slice(0, 200)}`);
   return ordine.body.id;
 };
 
@@ -173,7 +215,7 @@ test.describe.serial("Accessori: Payment Element con provider simulato @smoke @c
     const logistica = await rpc("accessori_logistica_admin_imposta", { p_attiva: true, p_motivo: motivo }, rilascio);
     const checkout = await rpc("accessori_checkout_admin_imposta", { p_attivo: true, p_motivo: motivo }, rilascio);
     if (!logistica.ok || !checkout.ok) throw new Error("Interruttori di prova non accesi.");
-    annuncioId = (await pubblicaAnnuncioPreparato(NOME)).annuncioId;
+    annuncioId = await pubblicaAnnuncioOrdinabile();
     ordineId = await creaOrdine();
   });
 
