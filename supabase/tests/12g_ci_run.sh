@@ -495,6 +495,21 @@ conc_12zo="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zo_vpm_015b5b_concorrenza.s
 printf '%s\n' "$conc_12zo"
 summary "- $(printf '%s\n' "$conc_12zo" | tail -n 1)"
 
+# VPM-015B5C — rimborsi riconciliati, contestazioni, ricavi e resi.
+# Solo payload sintetici nella transazione con ROLLBACK: nessun fornitore reale.
+run_grid "12zp Postvendita Accessori" 12zp_vpm_015b5c_postvendita_accessori.sql 3
+
+# Otto contese su sessioni reali: rimborsi, webhook contro rilascio,
+# contestazioni ai due lati della finestra, retry e storno dopo accredito.
+# Fixture isolate rimosse in trap; nessun flag modificato, nessun provider.
+conc_12zp="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zp_vpm_015b5c_concorrenza.sh")" \
+  || { printf '%s\n' "$conc_12zp"; die "12zp concorrenza: fallita."; }
+printf '%s\n' "$conc_12zp"
+summary "- $(printf '%s\n' "$conc_12zp" | tail -n 1)"
+# Recovery regressions: signed per-refund evidence and bounded retry/release.
+# NON VERIFICATO until this ephemeral loopback gate executes successfully.
+run_grid "12zq Riconciliazione e code Accessori" 12zq_vpm_015b5c_riconciliazione_code.sql 3
+
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
 # cancello di preparazione, quindi il suo caso 9 registra una prova reale. Una

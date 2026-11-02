@@ -9,12 +9,15 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 type Chiamata = { nome: string; args: Record<string, unknown> };
 const chiamate: Chiamata[] = [];
 let rispostaRpc: { error: { code?: string } | null } = { error: null };
+let riconoscimento: { data: boolean | null; error: { code?: string } | null } = { data: false, error: null };
 
 mock.module("@supabase/supabase-js", () => ({
   createClient: () => ({
     rpc: async (nome: string, args: Record<string, unknown>) => {
       chiamate.push({ nome, args });
-      return nome === "rate_limit_consume" ? { error: null } : rispostaRpc;
+      if (nome === "rate_limit_consume") return { error: null };
+      if (nome === "accessori_pagamento_riconosci") return riconoscimento;
+      return rispostaRpc;
     },
   }),
 }));
@@ -62,6 +65,7 @@ const rpcDominio = () => chiamate.filter((c) => c.nome !== "rate_limit_consume")
 beforeEach(() => {
   chiamate.length = 0;
   rispostaRpc = { error: null };
+  riconoscimento = { data: false, error: null };
   process.env.PAYMENTS_ENABLED = "true";
   process.env.STRIPE_WEBHOOK_SECRET = SEGRETO;
   process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
@@ -141,5 +145,60 @@ describe("webhook Stripe: instradamento dei domini", () => {
     await invia(payload);
     const ids = rpcDominio().map((c) => c.args.p_event_id);
     expect(ids).toEqual(["evt_route_1", "evt_route_1"]);
+  });
+
+  // VPM-015B5C — `charge.refunded`: la Charge non porta sempre i metadata dell intento.
+  const rimborso = (metadata?: Record<string, string>) =>
+    JSON.stringify({
+      id: "evt_route_r1",
+      created: 1_900_000_000,
+      type: "charge.refunded",
+      data: {
+        object: {
+          id: "ch_route_1",
+          payment_intent: "pi_route_1",
+          amount: 4321,
+          amount_refunded: 4321,
+          refunded: true,
+          currency: "eur",
+          ...(metadata ? { metadata } : {}),
+        },
+      },
+    });
+
+  it("charge.refunded SENZA metadata: il dominio si riconosce dal PaymentIntent verificato nel database", async () => {
+    riconoscimento = { data: true, error: null };
+    const res = await invia(rimborso());
+    expect(res.status).toBe(200);
+    expect(rpcDominio().map((c) => c.nome)).toEqual([
+      "accessori_pagamento_riconosci",
+      "accessori_pagamento_applica_evento",
+    ]);
+    expect(rpcDominio()[0]?.args).toEqual({ p_provider: "stripe", p_intent_id: "pi_route_1" });
+    expect(rpcDominio()[1]?.args.p_outcome).toBe("refunded");
+    expect(rpcDominio()[1]?.args.p_object).toMatchObject({ intent_id: "pi_route_1", amount_refunded: 4321 });
+  });
+
+  it("charge.refunded di un intento non Accessori: resta sulla RPC del vino", async () => {
+    riconoscimento = { data: false, error: null };
+    await invia(rimborso());
+    expect(rpcDominio().map((c) => c.nome)).toEqual(["accessori_pagamento_riconosci", "payment_apply_provider_event"]);
+  });
+
+  it("charge.refunded con il marcatore nei metadata: nessuna verifica aggiuntiva, il database riverifica comunque", async () => {
+    await invia(rimborso({ vinea_dominio: "accessori" }));
+    expect(rpcDominio().map((c) => c.nome)).toEqual(["accessori_pagamento_applica_evento"]);
+  });
+
+  it("riconoscimento del dominio fallito: 500 senza applicare nulla (il fornitore ritenta, nessun indovinare)", async () => {
+    riconoscimento = { data: null, error: { code: "57014" } };
+    const res = await invia(rimborso());
+    expect(res.status).toBe(500);
+    expect(rpcDominio().map((c) => c.nome)).toEqual(["accessori_pagamento_riconosci"]);
+  });
+
+  it("un incasso (non un rimborso) non attiva la verifica del dominio", async () => {
+    await invia(evento({ order_id: "22222222-2222-4222-8222-222222222222" }));
+    expect(rpcDominio().map((c) => c.nome)).toEqual(["payment_apply_provider_event"]);
   });
 });

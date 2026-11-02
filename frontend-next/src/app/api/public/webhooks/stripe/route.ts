@@ -117,12 +117,32 @@ export const POST = async (request: Request): Promise<NextResponse> => {
   // Accessori, tutto il resto alla RPC del vino, invariata. Il database
   // riverifica comunque: ciascuna RPC conosce soltanto i propri pagamenti.
   const oggetto = normalizeStripeObject(event.data.object, event.type);
+  const esitoEvento = traduciEventoStripe(event.type, event.data.object);
+  let accessori = oggetto.dominio === "accessori";
+  // `charge.refunded` porta il PaymentIntent ma non sempre i metadata dell'intento:
+  // il dominio di un rimborso si riconosce dal collegamento al PaymentIntent
+  // verificato nel database (B5C), non da un'etichetta del payload. Se la
+  // verifica fallisce non si indovina: l'evento viene ritentato dal fornitore.
+  if (!accessori && esitoEvento === "refunded" && typeof oggetto.intent_id === "string") {
+    const { data: riconosciuto, error: riconosciError } = await supabase.rpc("accessori_pagamento_riconosci", {
+      p_provider: PROVIDER,
+      p_intent_id: oggetto.intent_id,
+    });
+    if (riconosciError) {
+      console.error("[Stripe webhook] riconoscimento dominio fallito", {
+        eventId: event.id,
+        code: riconosciError.code,
+      });
+      return NextResponse.json({ error: "Evento non applicato." }, { status: 500 });
+    }
+    accessori = riconosciuto === true;
+  }
   const { error } = await supabase.rpc(
-    oggetto.dominio === "accessori" ? "accessori_pagamento_applica_evento" : "payment_apply_provider_event",
+    accessori ? "accessori_pagamento_applica_evento" : "payment_apply_provider_event",
     {
       p_provider: PROVIDER,
       p_event_id: event.id,
-      p_outcome: traduciEventoStripe(event.type, event.data.object),
+      p_outcome: esitoEvento,
       p_occurred_at: event.created,
       p_object: oggetto,
     },

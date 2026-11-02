@@ -122,6 +122,27 @@ export const riferimentoSaldoDa = (object: StripeObject): RiferimentoSaldo => {
   return diretta;
 };
 
+/** Prove singole dal webhook firmato: una pagina non prova l'intero storico. */
+const rimborsiConfermati = (value: unknown): Record<string, unknown>[] => {
+  if (!value || typeof value !== "object" || !("data" in value) || !Array.isArray(value.data)) return [];
+  return value.data.flatMap((item: unknown) => {
+    if (!item || typeof item !== "object") return [];
+    const r = item as Record<string, unknown>;
+    if (typeof r.id !== "string" || !r.id.startsWith("re_") || r.id.length > 255 ||
+        typeof r.amount !== "number" || !Number.isSafeInteger(r.amount) || r.amount <= 0 ||
+        r.status !== "succeeded") return [];
+    const metadata = r.metadata && typeof r.metadata === "object"
+      ? r.metadata as Record<string, unknown> : {};
+    return [{
+      id: r.id,
+      amount_cents: r.amount,
+      status: "succeeded",
+      rimborso_id: typeof metadata.rimborso_id === "string" ? metadata.rimborso_id : null,
+      dominio: metadata.vinea_dominio === "accessori" ? "accessori" : null,
+    }];
+  });
+};
+
 /**
  * Riduce l'oggetto Stripe ai soli campi che la RPC riverifica, con nomi che non
  * sono di Stripe: è il payload che attraversa il confine verso il database.
@@ -141,6 +162,7 @@ export const normalizeStripeObject = (
 ): Record<string, unknown> => {
   const saldo = riferimentoSaldoDa(object);
   return {
+    ...(eventType === "charge.refunded" ? { refunds: rimborsiConfermati(object.refunds) } : {}),
     session_id: object.id,
     intent_id: isPaymentIntentEvent(eventType)
       ? object.id

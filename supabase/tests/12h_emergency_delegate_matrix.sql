@@ -367,6 +367,10 @@ with helper as (
   select p.oid, p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.prokind = 'f'
     and p.proname <> 'incident_notice_set'
+    -- Porta mista parti/admin: il ruolo admin non evita l'obbligo di un ordine
+    -- esistente. Chiamarla con NULL nega anche l'admin, non prova un gate admin.
+    -- Rimane nella matrice 17 (delegato = utente) e nella griglia dominio 12zp.
+    and p.oid <> 'public.accessori_postvendita_leggi(uuid)'::regprocedure
     and has_function_privilege('authenticated', p.oid, 'execute')
     and (p.prosrc ~* '(has_role\([^,]+,\s*''admin''|role\s*=\s*''admin'')'
       or exists (select 1 from helper h where p.prosrc ~ ('private\.' || h.proname || '\(')))

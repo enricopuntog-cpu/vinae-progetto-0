@@ -179,3 +179,23 @@ export interface TransferProvider {
   readonly id: string;
   creaTransfer(input: TransferRequest): Promise<Result<{ transferId: string }>>;
 }
+
+/**
+ * Rimborso di un incasso (VPM-015B5C). Un rimborso è un'uscita di denaro dalla
+ * piattaforma verso l'acquirente: l'importo e la chiave di idempotenza arrivano
+ * dal database (mai dal browser), la chiave è stabile per richiesta, e la
+ * risposta "accettato" NON è un rimborso eseguito: l'esecuzione la conferma
+ * soltanto l'evento firmato `charge.refunded`.
+ */
+export type RefundRequest = {
+  paymentIntentId: string;
+  amountCents: number;
+  currency: string;
+  idempotencyKey: string;
+  refundRef: string;
+};
+
+export interface RefundProvider {
+  readonly id: string;
+  creaRimborso(input: RefundRequest): Promise<Result<{ refundId: string }>>;
+}

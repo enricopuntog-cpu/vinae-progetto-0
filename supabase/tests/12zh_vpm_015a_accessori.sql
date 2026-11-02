@@ -511,8 +511,9 @@ begin
   perform pg_temp.registra(26, 'nessuna colonna di prezzo, valuta, importo, IVA, commissione, peso, dimensioni, fornitore o pagamento nelle tabelle accessori',
     not exists (
       select 1 from information_schema.columns
-      where table_schema = 'private' and table_name like 'accessori%' and table_name not like 'accessori_logistica_%'
-        and table_name not in ('accessori_ordini', 'accessori_checkout_impostazioni', 'accessori_pagamenti')
+      -- Invariante del catalogo 015A, non dei successivi adapter transazionali.
+      where table_schema = 'private' and table_name in
+        ('accessori', 'accessori_categorie', 'accessori_impostazioni', 'accessori_registro')
         and column_name ~* '(prezzo|price|valuta|currency|cents|importo|amount|(^|_)iva(_|$)|(^|_)vat(_|$)|commission|peso|weight|dimension|fornitor|supplier|payment|pagamento|checkout|spedizion|shipping)'),
     (select string_agg(table_name || '.' || column_name, ',') from information_schema.columns
      where table_schema = 'private' and table_name like 'accessori%'));
@@ -531,7 +532,18 @@ begin
            and not has_function_privilege('anon', p.oid, 'execute')) = 9
     and not exists (
       select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-      where n.nspname in ('public', 'private') and p.proname like 'accessori%'
+      -- Le porte del catalogo rimangono separate dal denaro; B5C riusa
+      -- deliberatamente balance_* nei suoi adapter, provati da 12zp/12zq.
+      where n.nspname in ('public', 'private') and p.proname in (
+        'accessori_categorie_elenca', 'accessori_dettaglio', 'accessori_elenca',
+        'accessori_admin_stato', 'accessori_admin_categorie_elenca',
+        'accessori_admin_categoria_salva', 'accessori_admin_elenca',
+        'accessori_admin_dettaglio', 'accessori_admin_salva',
+        'accessori_admin_stato_imposta', 'accessori_admin_immagini_imposta',
+        'accessori_admin_visibilita_imposta', 'accessori_categorie_guard',
+        'accessori_guard', 'accessori_registro_immutabile', 'accessori_non_si_cancella',
+        'accessori_admin_richiesto', 'accessori_e_admin', 'accessori_visibili_al_pubblico',
+        'accessorio_json', 'accessorio_in_gestione', 'accessorio_media_cancellabile')
         and p.prosrc ~* '(public\.|private\.)?(orders|payments|payouts|listings|proposals|bottle_units|wines|marketplace_config|balance_)'),
     array_to_string(v_chiavi, ','));
 

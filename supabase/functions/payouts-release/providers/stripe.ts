@@ -8,6 +8,8 @@
 // piattaforma per il fatto stesso di non comparire in questa chiamata.
 
 import type {
+  RefundProvider,
+  RefundRequest,
   Result,
   TransferProvider,
   TransferRequest,
@@ -65,5 +67,65 @@ export const creaStripeTransferProvider = (): TransferProvider => ({
       };
     }
     return { ok: true, data: { transferId: result.id } };
+  },
+});
+
+const STRIPE_REFUNDS = "https://api.stripe.com/v1/refunds";
+
+type StripeRefundResponse = {
+  id?: string;
+  error?: { type?: string; code?: string; message?: string };
+};
+
+/**
+ * Rimborso di un PaymentIntent (VPM-015B5C). Stesso file e stessa struttura
+ * del Transfer: l'unico punto di questa funzione che nomina Stripe. La chiave
+ * di idempotenza è quella del database, derivata dall'ordine e dall'importo:
+ * un timeout seguito da un nuovo tentativo riceve lo STESSO rimborso e non ne
+ * crea un secondo. Un esito positivo significa "accettato dal fornitore", non
+ * "eseguito".
+ */
+export const creaStripeRefundProvider = (): RefundProvider => ({
+  id: "stripe",
+
+  async creaRimborso(input: RefundRequest): Promise<Result<{ refundId: string }>> {
+    const secretKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!secretKey) return { ok: false, error: "stripe_secret_missing" };
+
+    const form = new URLSearchParams({
+      payment_intent: input.paymentIntentId,
+      amount: String(input.amountCents),
+      "metadata[vinea_dominio]": "accessori",
+      "metadata[rimborso_id]": input.refundRef,
+    });
+
+    let response: Response;
+    try {
+      response = await fetch(STRIPE_REFUNDS, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Idempotency-Key": input.idempotencyKey,
+        },
+        body: form,
+      });
+    } catch {
+      return { ok: false, error: "stripe_unreachable" };
+    }
+
+    let result: StripeRefundResponse;
+    try {
+      result = (await response.json()) as StripeRefundResponse;
+    } catch {
+      return { ok: false, error: `stripe_bad_response_${response.status}` };
+    }
+    if (!response.ok || !result.id) {
+      return {
+        ok: false,
+        error: `stripe_refund_failed_${result.error?.code ?? result.error?.type ?? response.status}`,
+      };
+    }
+    return { ok: true, data: { refundId: result.id } };
   },
 });

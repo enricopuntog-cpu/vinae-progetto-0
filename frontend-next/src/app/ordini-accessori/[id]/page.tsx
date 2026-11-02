@@ -2,11 +2,15 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { DettaglioOrdineAccessorio } from "@/components/vinea/ordini-accessori/OrdiniAccessori";
+import { PostvenditaErrore } from "@/components/vinea/ordini-accessori/PostvenditaErrore";
+import { caricaFascicolo, dettaglioAccessorioDisponibile } from "@/lib/accessori-postvendita/fascicolo";
+import { PostVenditaAccessorioPannello } from "@/components/vinea/ordini-accessori/PostVenditaAccessorio";
 import { accessoriOrdiniAbilitatoServer } from "@/config/features";
 import { risolviModalitaAccessori } from "@/lib/accessori/gate";
 import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { creaAccessoriOrdiniService } from "@/services/accessori-ordini-service";
+import { creaAccessoriPostvenditaService } from "@/services/accessori-postvendita-service";
 
 export const metadata: Metadata = {
   title: "Ordine Accessori — Vinea",
@@ -18,16 +22,26 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   await connection();
   const { id } = await params;
   const client = await getSupabaseServerClient();
-  if (!accessoriOrdiniAbilitatoServer() || !(await risolviModalitaAccessori(client))) notFound();
+  const commercioAperto = accessoriOrdiniAbilitatoServer() && !!(await risolviModalitaAccessori(client));
   const utente = client ? (await client.auth.getUser()).data.user : null;
   if (!client || !utente) redirect(`/accedi?${PARAMETRO_NEXT}=${encodeURIComponent(`/ordini-accessori/${id}`)}`);
 
   const esito = await creaAccessoriOrdiniService(client).leggi(id);
   if (!esito.ok) notFound();
 
+  // Post-vendita (B5C): solo per un ordine incassato dal fornitore; per gli altri il pannello non compare.
+  const servizioPostvendita = creaAccessoriPostvenditaService(client);
+  const fascicolo = await caricaFascicolo(servizioPostvendita, id);
+  // Nessun nuovo checkout: l'eccezione è solo per il post-vendita già incassato.
+  // Se la lettura fallisce su un ordine pagato reale, resta il riprova, mai comandi privilegiati.
+  if (!dettaglioAccessorioDisponibile(commercioAperto, fascicolo, esito.data)) notFound();
+
   return (
     <main id="contenuto-principale" className="mx-auto max-w-3xl px-4 py-8">
       <DettaglioOrdineAccessorio iniziale={esito.data} />
+      {fascicolo.ok ? (
+        <PostVenditaAccessorioPannello postvendita={fascicolo.data.postvendita} foto={fascicolo.data.foto} ruolo={esito.data.ruolo} />
+      ) : <PostvenditaErrore />}
     </main>
   );
 }

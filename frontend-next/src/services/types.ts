@@ -1,3 +1,4 @@
+import type { ElencoPostVenditaAdmin, PostVenditaAccessorio } from "@/lib/accessori-postvendita/postvendita";
 /**
  * Contratti servizio (solo interfacce per i domini ancora mock).
  * I tipi di dominio vivono in src/data/*.ts — qui riesportiamo solo le firme.
@@ -3567,6 +3568,25 @@ export interface AccessoriOrdiniService {
   annulla(ordineId: string): Promise<Result<OrdineAccessorio>>;
   leggi(ordineId: string): Promise<Result<OrdineAccessorio>>;
   elenca(ruolo: "acquisti" | "vendite"): Promise<Result<OrdineAccessorio[]>>;
+}
+
+/**
+ * Post-vendita degli ordini Accessori (VPM-015B5C): contestazione, risposta del
+ * venditore, decisione admin, consegna e reso. Nessun metodo porta un importo
+ * economico dal browser se non la scelta dell admin di QUANTO rimborsare entro
+ * il residuo che il database ricontrolla; nessun metodo esegue un rimborso o un
+ * rilascio (lo fa il job del database).
+ */
+export interface AccessoriPostvenditaService {
+  leggi(ordineId: string): Promise<Result<PostVenditaAccessorio>>;
+  /** URL temporanei delle prove (bucket privato). */
+  firmaProve(percorsi: string[]): Promise<string[]>;
+  apriContestazione(r: { ordineId: string; motivo: string; descrizione: string; foto: File[] }): Promise<Result<void>>;
+  rispondi(r: { ordineId: string; tipo: DisputeSellerResponseKind; risposta: string; foto: File[] }): Promise<Result<void>>;
+  adminElenco(): Promise<Result<ElencoPostVenditaAdmin>>;
+  adminDecidi(r: { ordineId: string; esito: "rimborsata" | "risolta" | "respinta"; importoCents: number | null; nota: string }): Promise<Result<void>>;
+  adminConsegna(r: { ordineId: string; riferimento: string }): Promise<Result<void>>;
+  adminReso(r: { ordineId: string; quantita: number; nota: string }): Promise<Result<void>>;
 }
 
 export interface AnnunciAccessoriAdminService {

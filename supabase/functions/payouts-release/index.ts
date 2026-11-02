@@ -31,8 +31,8 @@
 // di abilitare i pagamenti.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { TransferProvider } from "../_shared/payment-provider.ts";
-import { creaStripeTransferProvider } from "./providers/stripe.ts";
+import type { RefundProvider, TransferProvider } from "../_shared/payment-provider.ts";
+import { creaStripeRefundProvider, creaStripeTransferProvider } from "./providers/stripe.ts";
 
 type Preparazione = {
   esito: "da_trasferire" | "gia_trasferito" | "bloccato" | "non_dovuto";
@@ -69,6 +69,20 @@ type Esito = {
   prelievi_trasferiti: number;
   prelievi_bloccati: number;
   prelievi_falliti: number;
+  ricavi_accessori_rilasciati: number;
+  rimborsi_accessori_inviati: number;
+  rimborsi_accessori_bloccati: number;
+  rimborsi_accessori_falliti: number;
+};
+
+type PreparazioneRimborso = {
+  esito: "da_rimborsare" | "gia_inviato" | "bloccato" | "non_dovuto";
+  rimborso_id?: string;
+  payment_intent_id?: string;
+  amount_cents?: number;
+  currency?: string;
+  idempotency_key?: string;
+  motivo?: string;
 };
 
 type LimiteInput = { limit?: unknown };
@@ -100,6 +114,7 @@ const tokenValido = (ricevuto: string, atteso: string): boolean => {
 };
 
 const provider: TransferProvider = creaStripeTransferProvider();
+const rimborsiProvider: RefundProvider = creaStripeRefundProvider();
 
 const leggiLimite = async (request: Request, fallback: number): Promise<number> => {
   const testo = await request.text();
@@ -265,6 +280,63 @@ const preleva = async (
   else esito.prelievi_falliti += 1;
 };
 
+/**
+ * Esecuzione di un rimborso Accessori (VPM-015B5C). Stessa forma del rilascio e
+ * dello stesso scheduler: nessuna decisione vive qui. `accessori_rimborso_prepara`
+ * decide (importo dal database, chiave stabile, residuo rimborsabile) e questa
+ * funzione esegue e riferisce.
+ *
+ * "Accettato dal fornitore" è registrato come `inviato`, MAI come eseguito:
+ * l'esecuzione la conferma solo il webhook firmato `charge.refunded`. Un
+ * timeout lascia il rimborso ritentabile con la stessa chiave: il fornitore
+ * restituisce lo stesso rimborso invece di crearne un secondo.
+ */
+const rimborsa = async (
+  supabase: SupabaseClient,
+  rimborsoId: string,
+  esito: Esito,
+): Promise<void> => {
+  const { data, error } = await supabase.rpc("accessori_rimborso_prepara", { p_id: rimborsoId });
+  if (error) {
+    console.error("[payouts-release] preparazione rimborso fallita", { rimborsoId, code: error.code });
+    esito.rimborsi_accessori_falliti += 1;
+    return;
+  }
+  const preparazione = data as PreparazioneRimborso;
+  if (preparazione.esito === "gia_inviato") return;
+  if (preparazione.esito !== "da_rimborsare") {
+    esito.rimborsi_accessori_bloccati += 1;
+    return;
+  }
+
+  const rimborso = await rimborsiProvider.creaRimborso({
+    paymentIntentId: preparazione.payment_intent_id!,
+    amountCents: preparazione.amount_cents!,
+    currency: preparazione.currency!,
+    idempotencyKey: preparazione.idempotency_key!,
+    refundRef: preparazione.rimborso_id!,
+  });
+
+  const { error: registrazioneError } = await supabase.rpc("accessori_rimborso_registra_esito", {
+    p_id: preparazione.rimborso_id,
+    p_ok: rimborso.ok,
+    p_provider_refund_id: rimborso.ok ? rimborso.data.refundId : null,
+    p_errore: rimborso.ok ? null : rimborso.error,
+  });
+  if (registrazioneError) {
+    // Il rimborso può essere partito senza che il nostro stato lo registri: la
+    // chiave è stabile, quindi il prossimo giro riceve lo stesso rimborso.
+    console.error("[payouts-release] registrazione rimborso fallita", {
+      rimborsoId,
+      code: registrazioneError.code,
+    });
+    esito.rimborsi_accessori_falliti += 1;
+    return;
+  }
+  if (rimborso.ok) esito.rimborsi_accessori_inviati += 1;
+  else esito.rimborsi_accessori_falliti += 1;
+};
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") return json({ error: "Metodo non consentito." }, 405);
 
@@ -309,6 +381,10 @@ Deno.serve(async (request) => {
     prelievi_trasferiti: 0,
     prelievi_bloccati: 0,
     prelievi_falliti: 0,
+    ricavi_accessori_rilasciati: 0,
+    rimborsi_accessori_inviati: 0,
+    rimborsi_accessori_bloccati: 0,
+    rimborsi_accessori_falliti: 0,
   };
 
   if (!esito.payments_enabled) {
@@ -356,6 +432,28 @@ Deno.serve(async (request) => {
   }
   for (const withdrawalId of (codaPrelievi as string[] | null) ?? []) {
     await preleva(supabase, withdrawalId, esito);
+  }
+
+  // Accessori (VPM-015B5C): rilascio del ricavo nel saldo Vinea (stesso libro del
+  // vino, nessun Transfer) e rimborsi. Le decisioni stanno nel database.
+  const { data: ricavi, error: ricaviError } = await supabase.rpc("accessori_ricavo_rilascio_esegui", {
+    p_limit: limite,
+  });
+  if (ricaviError) {
+    console.error("[payouts-release] rilascio ricavi Accessori fallito", { code: ricaviError.code });
+    return json({ error: "Rilascio non disponibile." }, 502);
+  }
+  esito.ricavi_accessori_rilasciati = (ricavi as string[] | null)?.length ?? 0;
+
+  const { data: codaRimborsi, error: rimborsiError } = await supabase.rpc("accessori_rimborso_coda", {
+    p_limit: limite,
+  });
+  if (rimborsiError) {
+    console.error("[payouts-release] lettura coda rimborsi fallita", { code: rimborsiError.code });
+    return json({ error: "Rilascio non disponibile." }, 502);
+  }
+  for (const rimborsoId of (codaRimborsi as string[] | null) ?? []) {
+    await rimborsa(supabase, rimborsoId, esito);
   }
 
   try {
