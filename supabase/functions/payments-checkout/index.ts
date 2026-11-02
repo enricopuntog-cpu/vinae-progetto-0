@@ -23,7 +23,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { corsHeadersFor } from "../_shared/cors.ts";
-import type { CheckoutProvider } from "../_shared/payment-provider.ts";
+import type { CheckoutHandle, CheckoutProvider } from "../_shared/payment-provider.ts";
 import { creaStripeProvider } from "./providers/stripe.ts";
 
 type CheckoutInput = {
@@ -221,9 +221,72 @@ const pagaOrdineAccessori = async (
     p_session_id: apertura.data.ref.sessionId,
   });
   if (collegaError) {
-    return json({ error: "Pagamento creato ma non ancora collegato; riprova." }, 502, corsHeaders);
+    return await gestisciCollegaFallita(supabase, buyerId, reservation, apertura.data, corsHeaders);
   }
   return json(rispostaCheckout(reservation, apertura.data), 201, corsHeaders);
+};
+
+/**
+ * VPM-015QA-FINAL-B1: l'intento esiste presso il fornitore ma `collega` e fallita.
+ * Il database (sotto lock ordine -> pagamento) decide, e solo lui:
+ *  - `collegato`: una richiesta concorrente ha gia agganciato LO STESSO intento. Non si
+ *    annulla; se l'ordine e ancora pagabile la risposta e quella normale.
+ *  - `aperto` / `conflitto`: ordine ancora pagabile (errore transitorio: il retry con la
+ *    stessa chiave ritrova lo stesso intento) o altro intento collegato. Non si annulla.
+ *  - `orfano`: l'ordine non e piu pagabile. L'intento e gia registrato sulla riga; si
+ *    annulla presso il fornitore e si registra l'esito (anche se incerto, cosi resta
+ *    visibile all'admin). Il `client_secret` di un intento non collegato non esce mai.
+ * Se la decisione stessa fallisce non si annulla nulla: l'intento potrebbe essere
+ * collegato; l'incasso eventuale e riconosciuto dal webhook firmato.
+ */
+const gestisciCollegaFallita = async (
+  supabase: ReturnType<typeof createClient>,
+  buyerId: string,
+  reservation: Reservation,
+  handle: CheckoutHandle,
+  corsHeaders: HeadersInit,
+): Promise<Response> => {
+  const riprova = () =>
+    json({ error: "Pagamento creato ma non ancora collegato; riprova." }, 502, corsHeaders);
+  const { data, error } = await supabase.rpc("accessori_pagamento_orfano_gestisci", {
+    p_ordine: reservation.order_id,
+    p_buyer: buyerId,
+    p_provider: handle.ref.provider,
+    p_intent: handle.ref.sessionId,
+  });
+  if (error || !data) {
+    console.error("[payments-checkout] decisione intento non collegato fallita", {
+      orderId: reservation.order_id,
+      code: error?.code ?? null,
+    });
+    return riprova();
+  }
+  const decisione = data as { decisione?: string; pagabile?: boolean };
+  if (decisione.decisione === "collegato" && decisione.pagabile === true) {
+    return json(rispostaCheckout(reservation, handle), 201, corsHeaders);
+  }
+  if (decisione.decisione !== "orfano") return riprova();
+
+  const esito = await provider.annullaCheckout(handle.ref);
+  const { error: esitoError } = await supabase.rpc("accessori_pagamento_orfano_esito", {
+    p_ordine: reservation.order_id,
+    p_provider: handle.ref.provider,
+    p_intent: handle.ref.sessionId,
+    p_esito: esito.kind,
+    p_importo: esito.kind === "incassato" ? esito.amountCents : null,
+    p_valuta: esito.kind === "incassato" ? esito.currency : null,
+    p_ordine_ref: esito.kind === "incassato" ? esito.orderRef : null,
+  });
+  if (esitoError || (esito.kind !== "annullato" && esito.kind !== "gia_annullato")) {
+    // L'esito non e una cancellazione confermata (o non si e potuto registrare):
+    // la riga resta `da_annullare`/`incerto` ed e nell'elenco admin.
+    console.error("[payments-checkout] annullo intento orfano non confermato", {
+      orderId: reservation.order_id,
+      esito: esito.kind,
+      registrazione: esitoError?.code ?? "ok",
+    });
+  }
+  return json({ error: "L'ordine non e piu pagabile." }, 409, corsHeaders);
 };
 
 Deno.serve(async (request) => {
