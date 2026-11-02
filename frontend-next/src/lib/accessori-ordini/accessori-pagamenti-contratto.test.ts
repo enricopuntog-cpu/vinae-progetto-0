@@ -69,9 +69,7 @@ describe("B5B: riuso del sistema pagamenti esistente", () => {
     expect(route.match(/new Request|createHmac|crypto\.subtle\.importKey/g)).toBeNull();
   });
 
-  it("nessun payout per gli ordini Accessori: payouts-release non nomina il dominio", () => {
-    const payouts = senzaCommenti(leggiRepo("supabase/functions/payouts-release/index.ts"));
-    expect(payouts).not.toMatch(/accessori/i);
+  it("B5B non liquida: la migrazione dei pagamenti non nomina payout, trasferimenti o liquidazione (B5C li aggiunge nella sua migrazione)", () => {
     const mig = senzaCommentiSql(leggiRepo(MIGRAZIONE));
     expect(mig).not.toMatch(/payout|transfer|liquidazione/i);
   });
