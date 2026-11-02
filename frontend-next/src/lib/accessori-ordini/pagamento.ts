@@ -61,7 +61,7 @@ export function indirizzoRitorno(origine: string, ordineId: string): string | nu
   } catch {
     return null;
   }
-  if (url.origin !== origine || (url.protocol !== "https:" && url.hostname !== "localhost")) return null;
+  if (url.origin !== origine || (url.protocol !== "https:" && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))) return null;
   return `${url.origin}/ordini-accessori/${encodeURIComponent(ordineId)}?checkout=ritorno`;
 }
 

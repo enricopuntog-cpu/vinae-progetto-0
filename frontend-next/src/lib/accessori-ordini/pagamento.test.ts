@@ -118,6 +118,7 @@ describe("idempotenza e ritorno", () => {
       `https://vinea.example/ordini-accessori/${ID}?checkout=ritorno`,
     );
     expect(indirizzoRitorno("http://localhost:3000", ID)).toContain("/ordini-accessori/");
+    expect(indirizzoRitorno("http://127.0.0.1:3100", ID)).toContain("/ordini-accessori/");
     expect(indirizzoRitorno("http://evil.example", ID)).toBeNull();
     expect(indirizzoRitorno("https://vinea.example/percorso", ID)).toBeNull();
     expect(indirizzoRitorno("non un url", ID)).toBeNull();
