@@ -724,12 +724,17 @@ begin
   v_o7 := (r.ordine ->> 'id')::uuid;
   perform pg_temp.apri(v_o7, c_d);
   perform pg_temp.collega(v_o7, c_d, 'pi_b5b_7');
+  -- QA-FINAL-A: con l'intento collegato e la prenotazione valida l'annullo e rifiutato; dopo la
+  -- scadenza e ammesso e l'incasso tardivo prende la via del rimborso dovuto.
+  v_u := pg_temp.annulla(c_d, v_o7);
+  perform pg_temp.invecchia(v_o7);
   v_s := pg_temp.annulla(c_d, v_o7);
   v_t := pg_temp.ev('evt_b5b_n1', 'settled', pg_temp.obj('pi_b5b_7', v_o7, pg_temp.tot(v_o7), 'payment_intent.succeeded'));
-  perform pg_temp.registra(19, 'annullo poi incasso: il denaro non resta senza uscita (refund_due, ordine_chiuso:acquirente), nessuna vendita',
-    v_s = 'NESSUN_ERRORE:' and v_t = 'late_paid_requires_refund' and pg_temp.pstato(v_o7) = 'refund_due'
-    and (select motivo = 'ordine_chiuso:acquirente' from private.accessori_pagamenti where ordine_id = v_o7)
-    and pg_temp.inv(v_ic1, v_a1) = '56/36/36', v_s || ' ' || v_t);
+  perform pg_temp.registra(19, 'annullo con intento collegato: rifiutato (pagamento_in_corso) a prenotazione valida, ammesso a prenotazione scaduta; poi incasso tardivo: il denaro non resta senza uscita (refund_due, ordine_chiuso:scadenza), nessuna vendita',
+    v_u = '22023:pagamento_in_corso' and v_s = 'NESSUN_ERRORE:' and v_t = 'late_paid_requires_refund'
+    and pg_temp.pstato(v_o7) = 'refund_due'
+    and (select motivo = 'ordine_chiuso:scadenza' from private.accessori_pagamenti where ordine_id = v_o7)
+    and pg_temp.inv(v_ic1, v_a1) = '56/36/36', v_u || ' ' || v_s || ' ' || v_t);
 
   perform pg_temp.reset_rl();
   select * into r from pg_temp.prenota(c_d, v_a1, 1);
