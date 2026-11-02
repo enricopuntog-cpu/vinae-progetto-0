@@ -53,18 +53,35 @@ describe("parseOrdineAccessorio", () => {
     );
   });
 
-  it("pagato solo con data e pagamento simulato coerenti", () => {
+  it("pagato richiede la data; simulato e pagato dal fornitore sono entrambi validi", () => {
     expect(parseOrdineAccessorio(ordineValido({ stato: "pagato", pagatoAt: null, pagamentoSimulato: true }))).toBeNull();
-    expect(
-      parseOrdineAccessorio(ordineValido({ stato: "pagato", pagatoAt: "2026-11-02T10:05:00Z", pagamentoSimulato: false })),
-    ).toBeNull();
+    expect(parseOrdineAccessorio(ordineValido({ stato: "pagato", pagatoAt: null, pagamentoSimulato: false }))).toBeNull();
     expect(
       parseOrdineAccessorio(ordineValido({ stato: "in_attesa_pagamento", pagatoAt: "2026-11-02T10:05:00Z" })),
     ).toBeNull();
+    // Pagato dal fornitore (webhook firmato): pagamentoSimulato=false.
+    const provider = parseOrdineAccessorio(
+      ordineValido({ stato: "pagato", pagatoAt: "2026-11-02T10:05:00Z", pagamentoSimulato: false }),
+    );
+    expect(provider?.stato).toBe("pagato");
+    expect(provider?.pagamentoSimulato).toBe(false);
     const o = parseOrdineAccessorio(
       ordineValido({ stato: "pagato", pagatoAt: "2026-11-02T10:05:00Z", pagamentoSimulato: true }),
     );
     expect(o?.pagamentoSimulato).toBe(true);
+  });
+
+  it("un ordine non pagato non può dichiararsi pagato in simulazione", () => {
+    for (const stato of ["in_attesa_pagamento", "scaduto"]) {
+      expect(parseOrdineAccessorio(ordineValido({ stato, pagamentoSimulato: true }))).toBeNull();
+    }
+    expect(
+      parseOrdineAccessorio(ordineValido({ stato: "annullato", motivoChiusura: "acquirente", pagamentoSimulato: true })),
+    ).toBeNull();
+    expect(parseOrdineAccessorio(ordineValido({ stato: "in_attesa_pagamento", pagamentoSimulato: false }))).not.toBeNull();
+    expect(
+      parseOrdineAccessorio(ordineValido({ stato: "annullato", motivoChiusura: "scadenza", pagamentoSimulato: false })),
+    ).not.toBeNull();
   });
 
   it("rifiuta scadenze impossibili, identificativi malformati e destinazioni diverse dal punto di ritiro", () => {

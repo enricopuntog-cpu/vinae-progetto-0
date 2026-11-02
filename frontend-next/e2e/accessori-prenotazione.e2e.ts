@@ -180,7 +180,7 @@ test.describe.serial("Accessori: prenotazione 2 su 6, retry, doppio click, scade
     await expect(ordine).toBeVisible();
     await expect(ordine.getByTestId("ordine-stato")).toHaveText("Prenotato, in attesa di pagamento");
     await expect(ordine.getByTestId("ordine-totale")).toHaveText(euro(totaleDb));
-    await expect(ordine.getByTestId("ordine-scadenza")).toContainText("Nessun addebito");
+    await expect(ordine.getByTestId("ordine-scadenza")).toContainText("non addebita denaro");
 
     // Prenotazione: nessuna quantità scritta, disponibili 2. Un solo ordine, nessun ordine del vino.
     expect(inventario(s)).toBe("6/4/2");

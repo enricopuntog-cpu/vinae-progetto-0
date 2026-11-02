@@ -30,13 +30,16 @@ const SUPERFICI = [
   "src/components/vinea/ordini-accessori",
   "src/app/ordini-accessori",
 ];
+/** VPM-015B5D: le sole superfici che portano il Payment Element; il resto del dominio resta senza legami con il pagamento. */
+const SUPERFICI_PAGAMENTO_B5D = /[\\/](pagamento\.ts|PagamentoAccessorio\.tsx)$/;
+const IMPORT_B5D = 'from "./PagamentoAccessorio"';
 const codice = () =>
   SUPERFICI.flatMap((voce) => {
     const abs = join(progetto, voce);
     const file = voce.endsWith(".ts") ? [abs] : ricorsivi(abs);
     return file
-      .filter((f) => /\.(ts|tsx)$/.test(f) && !/\.(test|fixture)\.tsx?$/.test(f))
-      .map((f) => ({ file: f, codice: senzaCommenti(readFileSync(f, "utf8")) }));
+      .filter((f) => /\.(ts|tsx)$/.test(f) && !/\.(test|fixture)\.tsx?$/.test(f) && !SUPERFICI_PAGAMENTO_B5D.test(f))
+      .map((f) => ({ file: f, codice: senzaCommenti(readFileSync(f, "utf8")).replace(IMPORT_B5D, "") }));
   });
 
 const MIGRAZIONE = "supabase/migrations/20261102090000_vpm_015b5a_checkout_accessori.sql";
@@ -167,5 +170,30 @@ describe("B5A: forma della migrazione", () => {
   it("il checkout non riceve importi: due soli argomenti", () => {
     const m = migrazione();
     expect(m).toMatch(/function public\.accessori_checkout_crea\(p_preventivo_id uuid, p_chiave text\)/);
+  });
+});
+
+describe("B5D: il Payment Element non decide nulla", () => {
+  const b5d = () =>
+    ["src/lib/accessori-ordini/pagamento.ts", "src/components/vinea/ordini-accessori/PagamentoAccessorio.tsx"].map((f) =>
+      senzaCommenti(leggi(f)),
+    );
+
+  it("usa il solo servizio B5B, senza chiavi segrete né chiamate dirette alla Edge Function", () => {
+    for (const c of b5d()) {
+      expect(/(sk_(live|test)|STRIPE_SECRET|payments-checkout|service_role|SERVICE_ROLE)/i.test(c)).toBe(false);
+    }
+    expect(b5d()[1]).toContain("apriPagamentoAccessori");
+  });
+
+  it("non scrive mai lo stato pagato e non legge il redirect come prova", () => {
+    for (const c of b5d()) {
+      expect(/(stato\s*[:=]\s*["']pagato["']|redirect_status|checkout\s*===\s*["']success["'])/.test(c)).toBe(false);
+    }
+  });
+
+  it("non invia importi, venditori o quantità al pagamento", () => {
+    const c = b5d()[1] ?? "";
+    expect(/(amount|importo|prezzo|sellerId|venditoreId|quantita)\s*:/i.test(c.replace(/ordine\.id/g, ""))).toBe(false);
   });
 });

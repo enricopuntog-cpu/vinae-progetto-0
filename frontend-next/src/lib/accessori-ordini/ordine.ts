@@ -128,7 +128,9 @@ export function parseOrdineAccessorio(v: unknown): OrdineAccessorio | null {
   if ((stato === "pagato") !== (pagatoAt !== null)) return null;
   if (stato === "annullato" && !motivoChiusura) return null;
   if ((stato === "in_attesa_pagamento" || stato === "pagato") && motivoChiusura) return null;
-  if (o.pagamentoSimulato !== (stato === "pagato")) return null;
+  // `pagamentoSimulato` vale solo per un ordine pagato: pagato dal fornitore (webhook firmato)
+  // è `pagato` con `pagamentoSimulato=false`; un ordine non pagato non ha alcun modo di pagamento.
+  if (o.pagamentoSimulato && stato !== "pagato") return null;
 
   const base = {
     id: o.id,
@@ -258,6 +260,10 @@ export const MESSAGGI_ORDINI_ACCESSORI: Readonly<Record<string, string>> = {
 
 export const messaggioOrdineAccessori = (hint: string): string | null => MESSAGGI_ORDINI_ACCESSORI[hint] ?? null;
 
+/** Lo stato in parole; un ordine pagato distingue la prova (simulata) dal pagamento del fornitore. */
+export const testoStatoOrdine = (o: Pick<OrdineAccessorio, "stato" | "pagamentoSimulato">): string =>
+  o.stato === "pagato" ? (o.pagamentoSimulato ? "Pagato (simulato)" : "Pagamento confermato") : TESTI_STATO_ORDINE[o.stato];
+
 export const TESTI_STATO_ORDINE: Readonly<Record<StatoOrdineAccessorio, string>> = {
   in_attesa_pagamento: "Prenotato, in attesa di pagamento",
   pagato: "Pagato (simulato)",
@@ -277,7 +283,7 @@ export const TESTI_ORDINI_ACCESSORI = {
   introduzione:
     "Scegli quanti pezzi: il riepilogo con spedizione al punto di ritiro lo calcola Vinea. Confermando prenoti i pezzi per alcuni minuti.",
   nessunAddebito:
-    "Nessun addebito: il pagamento non è ancora attivo. La prenotazione tiene da parte i pezzi finché non scade o la annulli.",
+    "La sola prenotazione non addebita denaro: tiene da parte i pezzi finché non scade o la annulli. L'addebito avviene solo se confermi il pagamento, quando sarà attivo.",
   chiuso: "Gli acquisti non sono ancora disponibili.",
   esaurito: "Questo annuncio è esaurito: non ci sono più pezzi da prenotare.",
   nonRaggiungibile: "La prenotazione non è disponibile in questo momento.",
