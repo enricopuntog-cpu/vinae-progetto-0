@@ -21,7 +21,6 @@
 //     trattenuta senza che nessun altro file se ne accorga.
 
 import type {
-  AnnulloEsito,
   CheckoutHandle,
   CheckoutProvider,
   CheckoutRequest,
@@ -35,10 +34,7 @@ type StripePaymentIntentResponse = {
   id?: string;
   client_secret?: string | null;
   status?: string;
-  amount?: number;
-  currency?: string;
-  metadata?: { order_id?: string };
-  error?: { type?: string; code?: string };
+  error?: { type?: string };
 };
 
 const handleDa = (intent: StripePaymentIntentResponse): CheckoutHandle => ({
@@ -145,75 +141,5 @@ export const creaStripeProvider = (): CheckoutProvider => ({
       };
     }
     return { ok: true, data: handleDa(result) };
-  },
-
-  // Annulla un PaymentIntent mai collegato a un ordine pagabile (QA-FINAL-B1).
-  // POST /v1/payment_intents/{id}/cancel: Stripe lo consente in requires_payment_method,
-  // requires_confirmation, requires_action, requires_capture e, di rado, processing;
-  // altrimenti risponde con errore `payment_intent_unexpected_state`. Un errore non
-  // dice quale stato abbia l'intento: lo si rilegge e lo si classifica, senza mai
-  // trattare "non ho potuto annullare" come "annullato".
-  async annullaCheckout(ref: ProviderPaymentRef): Promise<AnnulloEsito> {
-    const secretKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!secretKey) return { kind: "sconosciuto", error: "stripe_secret_missing" };
-    const base = `${STRIPE_PAYMENT_INTENTS}/${encodeURIComponent(ref.sessionId)}`;
-
-    let response: Response;
-    try {
-      response = await fetch(`${base}/cancel`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${secretKey}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-          // Stabile per intento: un retry non produce un secondo annullo.
-          "Idempotency-Key": `cancel-${ref.sessionId}`,
-        },
-        body: new URLSearchParams({ cancellation_reason: "abandoned" }),
-      });
-    } catch {
-      return { kind: "sconosciuto", error: "stripe_unreachable" };
-    }
-    let result: StripePaymentIntentResponse;
-    try {
-      result = (await response.json()) as StripePaymentIntentResponse;
-    } catch {
-      return { kind: "sconosciuto", error: `stripe_bad_response_${response.status}` };
-    }
-    if (response.ok) {
-      return result.id === ref.sessionId && result.status === "canceled"
-        ? { kind: "annullato" }
-        : { kind: "sconosciuto", error: `stripe_cancel_unexpected_${result.status ?? "n_d"}` };
-    }
-    if (result.error?.code !== "payment_intent_unexpected_state") {
-      return { kind: "sconosciuto", error: `stripe_cancel_failed_${result.error?.code ?? response.status}` };
-    }
-
-    // Stato non annullabile: rileggerlo per distinguere annullato / incassato / in elaborazione.
-    let lettura: Response;
-    try {
-      lettura = await fetch(base, { headers: { Authorization: `Bearer ${secretKey}` } });
-    } catch {
-      return { kind: "sconosciuto", error: "stripe_unreachable" };
-    }
-    let intent: StripePaymentIntentResponse;
-    try {
-      intent = (await lettura.json()) as StripePaymentIntentResponse;
-    } catch {
-      return { kind: "sconosciuto", error: `stripe_bad_response_${lettura.status}` };
-    }
-    if (!lettura.ok || intent.id !== ref.sessionId) {
-      return { kind: "sconosciuto", error: `stripe_reread_failed_${intent.error?.code ?? lettura.status}` };
-    }
-    if (intent.status === "canceled") return { kind: "gia_annullato" };
-    if (intent.status === "processing") return { kind: "in_elaborazione" };
-    if (intent.status === "succeeded" && Number.isSafeInteger(intent.amount) && intent.currency) {
-      return {
-        kind: "incassato",
-        amountCents: intent.amount as number,
-        currency: intent.currency,
-        orderRef: intent.metadata?.order_id ?? null,
-      };
-    }
-    return { kind: "sconosciuto", error: `stripe_cancel_state_${intent.status ?? "n_d"}` };
   },
 });
