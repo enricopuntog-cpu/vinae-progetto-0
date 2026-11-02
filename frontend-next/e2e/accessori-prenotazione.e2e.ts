@@ -297,7 +297,7 @@ test.describe.serial("Accessori: prenotazione 2 su 6, retry, doppio click, scade
     await page.goto("/ordini-accessori");
     const acquisti = page.getByRole("region", { name: "I tuoi acquisti" });
     await expect(acquisti).toContainText("Scaduto");
-    await acquisti.getByTestId("ordine-riga").first().getByRole("link").click();
+    await acquisti.getByTestId("ordine-riga").filter({ hasText: "Scaduto" }).getByRole("link").click();
     await expect(page.getByTestId("ordine-stato")).toHaveText("Scaduto");
     await expect(page.getByTestId("ordine-chiusura")).toContainText("tornati disponibili");
     await expect(page.getByTestId("prenotazione-annulla")).toHaveCount(0);
@@ -320,6 +320,9 @@ test.describe.serial("Accessori: prenotazione 2 su 6, retry, doppio click, scade
     diagnostica,
   }, info) => {
     diagnostica.ammetti("status of 404");
+    // Il preventivo per il proprio annuncio è rifiutato (403) e il servizio lo registra: esito atteso.
+    diagnostica.ammetti("status of 403");
+    diagnostica.ammetti("hint: proprio_annuncio");
     const contesto = await contestoAutenticato(browser, "venditore", opzioniDelProgetto(info));
     const page = await contesto.newPage();
     diagnostica.osserva(page, "venditore");
