@@ -10,15 +10,16 @@ export function buildPageCsp(nonce: string, supabaseUrl?: string, development = 
   socket.protocol = api.protocol === "https:" ? "wss:" : "ws:";
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${development ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://js.stripe.com${development ? " 'unsafe-eval'" : ""}`,
     "script-src-attr 'none'",
     // Radix, charts and React set inline styles. This does not allow scripts.
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     `img-src 'self' data: blob: ${api.origin}`,
     "font-src 'self' data: https://fonts.gstatic.com",
-    `connect-src 'self' ${api.origin} ${socket.origin}${development ? " ws://localhost:* ws://127.0.0.1:*" : ""}`,
+    `connect-src 'self' ${api.origin} ${socket.origin} https://api.stripe.com${development ? " ws://localhost:* ws://127.0.0.1:*" : ""}`,
     "worker-src 'self' blob:",
-    "frame-src 'none'",
+    // Payment Element (VPM-015B5D): Stripe.js e le sue pagine di autenticazione.
+    "frame-src https://js.stripe.com https://hooks.stripe.com",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",

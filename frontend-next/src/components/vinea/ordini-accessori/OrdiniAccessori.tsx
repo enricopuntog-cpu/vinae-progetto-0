@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  TESTI_STATO_ORDINE,
+  testoStatoOrdine,
   MESSAGGI_CHIUSURA,
   TESTI_ORDINI_ACCESSORI,
   type OrdineAccessorio,
@@ -11,6 +11,7 @@ import {
 import { euro } from "@/lib/prezzi/classe";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { creaAccessoriOrdiniService } from "@/services/accessori-ordini-service";
+import { PagamentoAccessorio } from "./PagamentoAccessorio";
 
 const ora = (iso: string) =>
   new Intl.DateTimeFormat("it-IT", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Rome" }).format(
@@ -24,7 +25,7 @@ export function RiepilogoOrdineAccessorio({ ordine }: { ordine: OrdineAccessorio
   return (
     <div data-testid="ordine-accessorio" className="space-y-2 text-sm">
       <p className="font-medium" data-testid="ordine-stato">
-        {TESTI_STATO_ORDINE[ordine.stato]}
+        {testoStatoOrdine(ordine)}
       </p>
       <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
         <dt>
@@ -130,15 +131,32 @@ export function AnnullaPrenotazione({
   );
 }
 
-export function DettaglioOrdineAccessorio({ iniziale }: { iniziale: OrdineAccessorio }) {
+export type ImpostazioniPagamento = { azioniAbilitate: boolean; chiavePublishable: string | null; inRitorno: boolean };
+
+export function DettaglioOrdineAccessorio({
+  iniziale,
+  pagamento,
+}: {
+  iniziale: OrdineAccessorio;
+  pagamento?: ImpostazioniPagamento;
+}) {
   const [ordine, setOrdine] = useState(iniziale);
+  const [pagamentoImpegnato, setPagamentoImpegnato] = useState(false);
   return (
     <section aria-labelledby="titolo-ordine" className="space-y-4">
       <h1 id="titolo-ordine" className="font-serif text-2xl">
         Ordine Accessori
       </h1>
       <RiepilogoOrdineAccessorio ordine={ordine} />
-      <AnnullaPrenotazione ordine={ordine} onAnnullato={setOrdine} />
+      <PagamentoAccessorio
+        ordine={ordine}
+        azioniAbilitate={pagamento?.azioniAbilitate === true}
+        chiavePublishable={pagamento?.chiavePublishable ?? null}
+        inRitorno={pagamento?.inRitorno === true}
+        onOrdine={setOrdine}
+        onImpegnato={setPagamentoImpegnato}
+      />
+      {pagamentoImpegnato ? null : <AnnullaPrenotazione ordine={ordine} onAnnullato={setOrdine} />}
       <Link href="/ordini-accessori" className="text-sm underline">
         {TESTI_ORDINI_ACCESSORI.tuttiGliOrdini}
       </Link>
@@ -169,7 +187,7 @@ export function ElencoOrdiniAccessori({
                   {o.articolo.nome} · {o.quantita} {o.quantita === 1 ? "pezzo" : "pezzi"}
                 </span>
                 <span className="block text-sm text-muted-foreground">
-                  {TESTI_STATO_ORDINE[o.stato]} ·{" "}
+                  {testoStatoOrdine(o)} ·{" "}
                   {o.ruolo === "venditore" ? `incassi ${euro(o.ricevoCents ?? 0)}` : euro(o.totaleAcquirenteCents ?? 0)}
                 </span>
               </Link>

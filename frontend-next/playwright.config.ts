@@ -61,7 +61,7 @@ export default defineConfig({
       PORT: String(new URL(URL_APP).port),
       NEXT_PUBLIC_SUPABASE_URL: bersaglio.apiUrl,
       NEXT_PUBLIC_SUPABASE_ANON_KEY: bersaglio.anonKey,
-      // Accessori acceso nel solo processo di prova; pagamenti e IA sempre spenti.
+      // Accessori acceso nel solo processo di prova; pagamenti lato server (PAYMENTS_ENABLED) e IA sempre spenti.
       NEXT_PUBLIC_ACCESSORI_ENABLED: "true",
       ACCESSORI_ENABLED: "true",
       NEXT_PUBLIC_ACCESSORI_NAV_MOBILE: "false",
@@ -70,7 +70,9 @@ export default defineConfig({
       ACCESSORI_LOGISTICA_ENABLED: "true",
       ACCESSORI_ORDINI_ENABLED: "true",
       NEXT_PUBLIC_PHASE_7_PAYMENTS_ENABLED: "false",
-      NEXT_PUBLIC_PAYMENT_ACTIONS_ENABLED: "false",
+      // B5D: azioni di pagamento visibili con una chiave FINTA; Stripe.js e la funzione dei pagamenti sono mock del browser.
+      NEXT_PUBLIC_PAYMENT_ACTIONS_ENABLED: "true",
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "pk_test_e2eFintaNonStripe0001",
       PAYMENTS_ENABLED: "false",
       NEXT_PUBLIC_AI_UI_ENABLED: "false",
       NEXT_PUBLIC_AI_ACTIONS_ENABLED: "false",

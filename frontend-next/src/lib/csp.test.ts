@@ -16,7 +16,7 @@ describe("CSP enforcing delle pagine", () => {
   });
   it("ammette REST, Storage e Realtime della sola origine configurata", () => {
     const csp = buildPageCsp(nonce, "https://preview.supabase.co");
-    expect(csp).toContain("connect-src 'self' https://preview.supabase.co wss://preview.supabase.co;");
+    expect(csp).toContain("connect-src 'self' https://preview.supabase.co wss://preview.supabase.co https://api.stripe.com;");
     expect(csp).not.toContain("pijnmcllmfgjmgsvtcej");
     expect(csp).not.toContain("pravatar");
   });

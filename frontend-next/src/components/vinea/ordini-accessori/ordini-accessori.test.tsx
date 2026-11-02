@@ -24,7 +24,7 @@ describe("RiepilogoOrdineAccessorio", () => {
     expect(t).toContain("Costo di pagamento sulla spedizione");
     expect(t).toContain("0,25");
     expect(t).toContain("56,85");
-    expect(t).toContain("Nessun addebito");
+    expect(t).toContain("non addebita denaro");
     expect(t).toContain("Venditore: ua");
   });
 
