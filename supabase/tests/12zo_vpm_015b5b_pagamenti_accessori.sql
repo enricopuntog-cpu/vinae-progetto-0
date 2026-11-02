@@ -474,7 +474,8 @@ declare
   v_a3 uuid := gen_random_uuid();    -- 1 su 1
   r record;
   v_o1 uuid; v_o2 uuid; v_o3 uuid; v_o5 uuid; v_o6 uuid; v_o7 uuid; v_o8 uuid; v_o9 uuid;
-  v_o10 uuid; v_o11 uuid;
+  v_o10 uuid; v_o11 uuid; v_o12 uuid; v_o13 uuid; v_o14 uuid; v_o15 uuid;
+  v_ic4 uuid := gen_random_uuid(); v_a4 uuid := gen_random_uuid(); v_inv text;
   v_s text; v_t text; v_u text; v_w text; v_x text;
   v_scad0 timestamptz; v_scad1 timestamptz; v_scad2 timestamptz;
   v_tot1 integer;
@@ -505,7 +506,7 @@ begin
     and not has_function_privilege('authenticated', 'public.accessori_pagamento_collega(uuid,uuid,text,text)', 'execute')
     and not has_function_privilege('authenticated', 'public.accessori_pagamento_applica_evento(text,text,public.payment_outcome,bigint,jsonb)', 'execute')
     and not has_function_privilege('anon', 'public.accessori_pagamento_applica_evento(text,text,public.payment_outcome,bigint,jsonb)', 'execute')
-    and not has_function_privilege('service_role', 'private.accessori_ordine_vendita_applica(uuid,text)', 'execute')
+    and not has_function_privilege('service_role', 'private.accessori_ordine_vendita_applica(uuid,text,boolean)', 'execute')
     and not has_function_privilege('service_role', 'private.accessori_ordine_segna_pagato(uuid)', 'execute')
     and has_function_privilege('authenticated', 'public.accessori_pagamenti_rimborso_dovuto()', 'execute')
     and not has_function_privilege('anon', 'public.accessori_pagamenti_rimborso_dovuto()', 'execute')
@@ -795,6 +796,78 @@ begin
     and pg_temp.esito('select public.accessori_pagamenti_rimborso_dovuto()', c_b) like '42501:%', v_j::text);
 
   -- =========================================================================
+  -- Correzioni da audit: webhook in ritardo, rimborsi parziali e fuori ordine
+  -- =========================================================================
+
+  -- 28: incasso fatto IN TEMPO, evento che arriva dopo la scadenza: si applica.
+  perform pg_temp.reset_rl();
+  select * into r from pg_temp.prenota(c_c, v_a1, 1);
+  v_o12 := (r.ordine ->> 'id')::uuid;
+  perform pg_temp.apri(v_o12, c_c);
+  perform pg_temp.collega(v_o12, c_c, 'pi_b5b_12');
+  v_inv := pg_temp.inv(v_ic1, v_a1);
+  perform pg_temp.invecchia(v_o12);
+  v_s := pg_temp.ev('evt_b5b_l1', 'settled', pg_temp.obj('pi_b5b_12', v_o12, pg_temp.tot(v_o12), 'payment_intent.succeeded'),
+    now() - interval '20 minutes');
+  perform pg_temp.registra(28, 'webhook in ritardo: un incasso fatto prima della scadenza si applica anche se l''evento arriva dopo (pezzi liberi, ordine ancora in attesa): ordine pagato, una sola sottrazione',
+    v_s = 'processed' and pg_temp.stato_ordine(v_o12) = 'pagato' and pg_temp.pstato(v_o12) = 'paid'
+    and v_inv = '55/35/34' and pg_temp.inv(v_ic1, v_a1) = '54/34/34', v_s || ' ' || v_inv || ' ' || pg_temp.inv(v_ic1, v_a1));
+
+  -- 29: stesso ritardo ma l'ultimo pezzo e stato venduto ad altri: rimborso dovuto.
+  perform pg_temp.accessorio(c_a, v_ic4, 'calici-da-rosso', 'Calice B5B quarto', 1);
+  perform pg_temp.foto(c_a, v_ic4, 1);
+  perform pg_temp.annuncio(c_a, v_a4, v_ic4, 1, 2500,
+    '{"peso_g":400,"lunghezza_mm":250,"larghezza_mm":100,"altezza_mm":100,"fragile":false}');
+  perform pg_temp.reset_rl();
+  select * into r from pg_temp.prenota(c_d, v_a4, 1);
+  v_o13 := (r.ordine ->> 'id')::uuid;
+  perform pg_temp.apri(v_o13, c_d);
+  perform pg_temp.collega(v_o13, c_d, 'pi_b5b_13');
+  perform pg_temp.invecchia(v_o13);
+  perform pg_temp.reset_rl();
+  select * into r from pg_temp.prenota(c_c, v_a4, 1);
+  v_o14 := (r.ordine ->> 'id')::uuid;
+  perform pg_temp.apri(v_o14, c_c);
+  perform pg_temp.collega(v_o14, c_c, 'pi_b5b_14');
+  v_t := pg_temp.ev('evt_b5b_l2', 'settled', pg_temp.obj('pi_b5b_14', v_o14, pg_temp.tot(v_o14), 'payment_intent.succeeded'));
+  v_s := pg_temp.ev('evt_b5b_l3', 'settled', pg_temp.obj('pi_b5b_13', v_o13, pg_temp.tot(v_o13), 'payment_intent.succeeded'),
+    now() - interval '20 minutes');
+  perform pg_temp.registra(29, 'webhook in ritardo con pezzi gia venduti ad altri: l''incasso in tempo non si applica (nessuna doppia vendita), pagamento in refund_due',
+    v_t = 'processed' and v_s = 'late_paid_requires_refund' and pg_temp.pstato(v_o13) = 'refund_due'
+    and pg_temp.stato_ordine(v_o14) = 'pagato' and pg_temp.stato_ordine(v_o13) <> 'pagato'
+    and (select quantita from private.cantina_accessori where id = v_ic4) = 0, v_t || ' ' || v_s);
+
+  -- 30: rimborso parziale di un incasso non applicato: resta dovuto e visibile; un parziale piu vecchio non lo riduce.
+  v_s := pg_temp.ev('evt_b5b_p1', 'refunded', pg_temp.obj('pi_b5b_5', v_o5, pg_temp.tot(v_o5), 'charge.refunded', 'eur', 'accessori', pg_temp.tot(v_o5) / 2, false));
+  v_t := pg_temp.ev('evt_b5b_p2', 'refunded', pg_temp.obj('pi_b5b_5', v_o5, pg_temp.tot(v_o5), 'charge.refunded', 'eur', 'accessori', pg_temp.tot(v_o5) / 4, false));
+  v_j := pg_temp.dato('select public.accessori_pagamenti_rimborso_dovuto()', c_adm);
+  perform pg_temp.registra(30, 'rimborso parziale da refund_due: resta refund_due nell''elenco admin con il rimborsato (non si perde il residuo); un parziale piu vecchio non lo riduce',
+    v_s = 'processed' and v_t = 'processed' and pg_temp.pstato(v_o5) = 'refund_due'
+    and (select amount_refunded_cents = pg_temp.tot(v_o5) / 2 from private.accessori_pagamenti where ordine_id = v_o5)
+    and exists (select 1 from jsonb_array_elements(v_j) e where e ->> 'ordine_id' = v_o5::text
+                and (e ->> 'rimborsato_cents')::integer = pg_temp.tot(v_o5) / 2), v_j::text);
+  v_s := pg_temp.ev('evt_b5b_p3', 'refunded', pg_temp.obj('pi_b5b_5', v_o5, pg_temp.tot(v_o5), 'charge.refunded', 'eur', 'accessori', pg_temp.tot(v_o5), true));
+  v_t := pg_temp.ev('evt_b5b_p4', 'refunded', pg_temp.obj('pi_b5b_5', v_o5, pg_temp.tot(v_o5), 'charge.refunded', 'eur', 'accessori', 100, false));
+  perform pg_temp.registra(31, 'rimborsi fuori ordine: dopo il rimborso totale un parziale vecchio non fa regredire lo stato (resta refunded, importo = incassato)',
+    v_s = 'processed' and v_t = 'processed' and pg_temp.pstato(v_o5) = 'refunded'
+    and (select amount_refunded_cents = amount_cents from private.accessori_pagamenti where ordine_id = v_o5), v_s || ' ' || v_t);
+
+  -- 32: rimborso parziale che precede l'incasso: l'incasso successivo non vende, il residuo resta dovuto.
+  -- 32: rimborso parziale che precede l'incasso: l'incasso successivo non vende, il residuo resta dovuto.
+  perform pg_temp.reset_rl();
+  select * into r from pg_temp.prenota(c_d, v_a1, 1);
+  v_o15 := (r.ordine ->> 'id')::uuid;
+  perform pg_temp.apri(v_o15, c_d);
+  perform pg_temp.collega(v_o15, c_d, 'pi_b5b_15');
+  v_inv := pg_temp.inv(v_ic1, v_a1);
+  v_s := pg_temp.ev('evt_b5b_q1', 'refunded', pg_temp.obj('pi_b5b_15', v_o15, pg_temp.tot(v_o15), 'charge.refunded', 'eur', 'accessori', pg_temp.tot(v_o15) / 2, false));
+  v_t := pg_temp.ev('evt_b5b_q2', 'settled', pg_temp.obj('pi_b5b_15', v_o15, pg_temp.tot(v_o15), 'payment_intent.succeeded'));
+  perform pg_temp.registra(32, 'rimborso parziale prima dell''incasso (fuori ordine): il pagamento diventa refund_due, l''incasso successivo non vende, nessuna quantita scritta, il residuo resta nell''elenco',
+    v_s = 'processed' and v_t = 'processed' and pg_temp.pstato(v_o15) = 'refund_due'
+    and (select motivo = 'rimborso_prima_dell_incasso' from private.accessori_pagamenti where ordine_id = v_o15)
+    and pg_temp.stato_ordine(v_o15) <> 'pagato' and pg_temp.inv(v_ic1, v_a1) = v_inv, v_s || ' ' || v_t);
+
+  -- =========================================================================
   -- Nessun payout, vino invariato
   -- =========================================================================
   perform pg_temp.registra(26, 'nessun payout: nessuna porta di liquidazione, trasferimento o saldo per gli ordini Accessori e nessuna colonna di payout su ordini e pagamenti',
@@ -813,7 +886,7 @@ begin
       (select count(*) from public.order_events)) = v_snap_prima
     and pg_get_functiondef('public.payment_apply_provider_event(text,text,public.payment_outcome,bigint,jsonb)'::regprocedure) !~* 'accessori', '');
 
-  perform pg_temp.registra(28, 'invarianti finali: nessuna quantita negativa, un solo pagamento per ordine, ogni ordine pagato dal fornitore ha un pagamento paid',
+  perform pg_temp.registra(33, 'invarianti finali: nessuna quantita negativa, un solo pagamento per ordine, ogni ordine pagato dal fornitore ha un pagamento paid',
     not exists (select 1 from private.annunci_accessori where quantita < 0)
     and not exists (select 1 from private.cantina_accessori where quantita < 0)
     and not exists (select 1 from private.accessori_pagamenti group by ordine_id having count(*) > 1)

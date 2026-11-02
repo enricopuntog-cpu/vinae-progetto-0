@@ -220,7 +220,7 @@ $$;
 
 -- Il corpo e quello di `accessori_ordine_segna_pagato` di B5A; cambia soltanto
 -- il modo di pagamento scritto. Stessi lock (Cantina -> annuncio -> ordine).
-create function private.accessori_ordine_vendita_applica(p_ordine uuid, p_modo text)
+create function private.accessori_ordine_vendita_applica(p_ordine uuid, p_modo text, p_tardivo boolean default false)
 returns jsonb
 language plpgsql
 security definer
@@ -250,7 +250,7 @@ begin
     raise exception 'Questo ordine non e piu pagabile.'
       using errcode = '22023', hint = 'ordine_non_pagabile';
   end if;
-  if o.scade_at <= now() then
+  if o.scade_at <= now() and not p_tardivo then
     raise exception 'La prenotazione e scaduta.'
       using errcode = '22023', hint = 'prenotazione_scaduta';
   end if;
@@ -285,7 +285,7 @@ begin
 end;
 $$;
 
-revoke execute on function private.accessori_ordine_vendita_applica(uuid, text)
+revoke execute on function private.accessori_ordine_vendita_applica(uuid, text, boolean)
   from public, anon, authenticated, service_role;
 
 -- La funzione simulata di B5A resta, ora come strato sottile sul nucleo.
@@ -441,6 +441,8 @@ declare
   v_currency text := lower(coalesce(p_object ->> 'currency', ''));
   v_order_ref uuid := nullif(p_object ->> 'order_id', '')::uuid;
   v_motivo text;
+  v_tardivo boolean;
+  v_nuovo integer;
   p0 private.accessori_pagamenti%rowtype;
   p private.accessori_pagamenti%rowtype;
   o private.accessori_ordini%rowtype;
@@ -492,9 +494,19 @@ begin
       raise exception 'Importo, valuta o ordine non corrispondono.' using errcode = 'P0001';
     end if;
 
-    if o.stato = 'in_attesa_pagamento' and o.scade_at > now() and v_created <= o.scade_at then
+    -- Vale il momento dell'incasso presso il fornitore, non il ritardo con cui
+    -- l'evento arriva: un incasso fatto in tempo si applica anche se il webhook
+    -- (o un suo ritentativo) arriva dopo la scadenza, purche l'ordine sia ancora
+    -- in attesa (la pulizia non chiude una prenotazione con pagamento aperto, per
+    -- un'ora dopo la scadenza) e i pezzi siano ancora liberi. Altrimenti: rimborso dovuto.
+    v_tardivo := o.scade_at <= now();
+    if o.stato = 'in_attesa_pagamento' and v_created <= o.scade_at
+       and (not v_tardivo or exists (
+              select 1 from private.annunci_accessori an
+              where an.id = o.annuncio_id and an.stato = 'pubblicato'
+                and an.quantita - private.accessori_prenotati(an.id) >= o.quantita)) then
       begin
-        perform private.accessori_ordine_vendita_applica(o.id, 'provider');
+        perform private.accessori_ordine_vendita_applica(o.id, 'provider', v_tardivo);
         update private.accessori_pagamenti set
           stato = 'paid', motivo = null,
           provider_intent_id = coalesce(v_intent_id, provider_intent_id),
@@ -543,11 +555,23 @@ begin
   elsif p_outcome = 'refunded' and v_refunded > 0 then
     -- Il rimborso si registra sul pagamento. Il destino dell'ordine pagato
     -- (resi, contestazioni, ripristino delle quantita) appartiene a B5C.
+    -- Lo stato deriva dal massimo rimborso noto, non dal singolo evento: un
+    -- evento vecchio (fuori ordine) non fa regredire un rimborso totale. Un
+    -- rimborso parziale di un incasso non applicato (o non ancora confermato)
+    -- resta `refund_due`: il residuo e ancora dovuto e resta nell'elenco admin.
+    v_nuovo := greatest(p.amount_refunded_cents, least(v_refunded, p.amount_cents));
+    if v_fully_refunded then v_nuovo := p.amount_cents; end if;
     update private.accessori_pagamenti set
-      amount_refunded_cents = greatest(amount_refunded_cents, least(v_refunded, amount_cents)),
+      amount_refunded_cents = v_nuovo,
       stato = case
-        when v_fully_refunded or v_refunded >= amount_cents then 'refunded'
+        when v_nuovo >= amount_cents then 'refunded'
+        when stato in ('checkout_pending', 'processing', 'failed', 'expired', 'refund_due')
+          then 'refund_due'
         else 'partially_refunded' end,
+      motivo = case
+        when v_nuovo < amount_cents and stato in ('checkout_pending', 'processing', 'failed', 'expired')
+          then 'rimborso_prima_dell_incasso'
+        else motivo end,
       provider_event_at = greatest(coalesce(provider_event_at, v_created), v_created)
     where id = p.id;
   end if;
@@ -555,6 +579,46 @@ begin
   return 'processed';
 end;
 $$;
+
+-- Pulizia delle prenotazioni scadute (B5A) con UNA differenza: non chiude una
+-- prenotazione con pagamento aperto (checkout_pending/processing) nell'ora che
+-- segue la scadenza, cosi un incasso fatto in tempo il cui evento arriva in
+-- ritardo trova ancora l'ordine da applicare. Oltre l'ora si chiude come prima
+-- (e l'incasso tardivo va a refund_due). La disponibilita non cambia: e derivata
+-- dalla scadenza e ignora comunque le prenotazioni scadute.
+create or replace function private.accessori_prenotazioni_scadute_chiudi(p_annuncio uuid default null)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_o record;
+  v_n integer := 0;
+begin
+  for v_o in
+    select o.id from private.accessori_ordini o
+    where o.stato = 'in_attesa_pagamento' and o.scade_at <= now()
+      and (p_annuncio is null or o.annuncio_id = p_annuncio)
+      and not exists (
+        select 1 from private.accessori_pagamenti p
+        where p.ordine_id = o.id and p.stato in ('checkout_pending', 'processing')
+          and o.scade_at > now() - interval '1 hour')
+    order by o.id
+    for update of o skip locked
+  loop
+    perform set_config('vinae.accessori_ordine_transizione', 'ok:' || v_o.id::text, true);
+    update private.accessori_ordini
+    set stato = 'scaduto', motivo_chiusura = 'scadenza'
+    where id = v_o.id;
+    v_n := v_n + 1;
+  end loop;
+  perform set_config('vinae.accessori_ordine_transizione', '', true);
+  return v_n;
+end;
+$$;
+
+revoke execute on function private.accessori_prenotazioni_scadute_chiudi(uuid) from public, anon, authenticated;
 
 -- Elenco, per l'admin, dei pagamenti incassati e non applicabili (rimborso dovuto).
 create function public.accessori_pagamenti_rimborso_dovuto()
@@ -569,6 +633,7 @@ begin
   return coalesce((
     select jsonb_agg(jsonb_build_object(
       'ordine_id', p.ordine_id, 'importo_cents', p.amount_cents, 'valuta', p.currency,
+      'rimborsato_cents', p.amount_refunded_cents,
       'motivo', p.motivo, 'aggiornato_at', p.aggiornato_at) order by p.aggiornato_at)
     from private.accessori_pagamenti p where p.stato = 'refund_due'), '[]'::jsonb);
 end;

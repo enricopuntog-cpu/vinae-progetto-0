@@ -77,7 +77,7 @@ test di contratto); il rilascio dopo consegna arriva con B5C.
 
 ## 5. Prove
 
-- `supabase/tests/12zo_vpm_015b5b_pagamenti_accessori.sql` — **28 casi** (nel gate `Supabase DB regression`):
+- `supabase/tests/12zo_vpm_015b5b_pagamenti_accessori.sql` — **33 casi** (nel gate `Supabase DB regression`):
   privilegi, gate spento, apertura idempotente con importo dallo snapshot, rinnovo unico, un solo intento, pagamento
   corretto, processing, evento duplicato e fuori ordine, importo/valuta/ordine/dominio divergenti, ordine vino
   scambiato, gate spento dopo l'apertura, fallito, tardivo dopo il fallimento, compensazione e rimborso, scaduta,
@@ -100,3 +100,23 @@ test di contratto); il rilascio dopo consegna arriva con B5C.
 4. Scelta dei metodi di pagamento ammessi per gli Accessori (asincroni ammessi o no).
 5. B5C: resi, contestazioni, rilascio dei fondi dopo la consegna, notifiche, IVA/fatturazione dei beni non-vino.
 6. Accensione di `checkout_attivo` / `ACCESSORI_ORDINI_ENABLED` (`accessori_release`).
+
+## 7. Esiti dell'audit di sicurezza (corretti prima del merge)
+
+- **Webhook in ritardo**: vale il momento dell'incasso presso il fornitore (`evento <= scadenza`), non l'arrivo
+  dell'evento. Un incasso in tempo con evento tardivo si applica se l'ordine è ancora in attesa e i pezzi sono liberi
+  (altrimenti `refund_due`). La pulizia delle prenotazioni scadute non chiude un ordine con pagamento aperto per
+  un'ora dopo la scadenza (la disponibilità non cambia: è derivata dalla scadenza).
+- **Rimborsi**: lo stato deriva dal rimborso massimo noto (un evento vecchio non fa regredire); un rimborso parziale
+  di un incasso non applicato o non ancora confermato resta `refund_due` (residuo visibile nell'elenco admin, con
+  `rimborsato_cents`); un rimborso che precede l'incasso porta a `refund_due` (`rimborso_prima_dell_incasso`) e l'incasso
+  successivo non vende.
+- **Note accettate**: `payment_intent.payment_failed` chiude l'ordine come nel vino (un successo successivo sullo stesso
+  intento va a `refund_due`); un importo/valuta/ordine divergente solleva `P0001` e il fornitore ritenta (come nel vino);
+  annullo/scadenza/moderazione non annullano l'intento presso Stripe (la cancellazione dell'intento è un'operazione reale,
+  fuori da questo blocco); la ripresa di un pagamento già aperto non richiede `checkout_attivo` (l'interruttore ferma
+  solo le nuove aperture).
+- **Da provare in test mode Stripe**: la copia dei metadata dell'intento sulla charge (`charge.refunded` → dominio).
+  Se non fosse copiata, il rimborso Accessori non verrebbe riconosciuto (500 e ritentativi, nessun effetto errato).
+- Ordine pagato con `charge.refunded` totale (es. rimborso dalla dashboard Stripe): l'ordine resta `pagato` e le
+  quantità scese; il ripristino appartiene a B5C.
