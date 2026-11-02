@@ -150,7 +150,7 @@ const creaOrdine = async (): Promise<string> => {
   const sessione = await accedi("altro");
   const congelato = await rpc<{ preventivoId: string }>(
     "accessori_logistica_preventivo_congela",
-    { p_annuncio: annuncioId, p_quantita: 1 },
+    { p_annuncio: annuncioId, p_quantita: 1, p_destinazione: "punto_ritiro", p_assicurazione: false },
     sessione,
   );
   if (!congelato.ok) throw new Error(`Preventivo non congelato: HTTP ${congelato.status}`);

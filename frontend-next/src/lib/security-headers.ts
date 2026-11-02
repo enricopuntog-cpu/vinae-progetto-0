@@ -20,11 +20,12 @@ const SUPABASE_ORIGIN = "pijnmcllmfgjmgsvtcej.supabase.co";
 
 export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'unsafe-inline' https://js.stripe.com",
+  "frame-src https://js.stripe.com https://hooks.stripe.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   `img-src 'self' data: blob: https://${SUPABASE_ORIGIN}`,
   "font-src 'self' data: https://fonts.gstatic.com",
-  `connect-src 'self' https://${SUPABASE_ORIGIN} wss://${SUPABASE_ORIGIN}`,
+  `connect-src 'self' https://${SUPABASE_ORIGIN} wss://${SUPABASE_ORIGIN} https://api.stripe.com`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

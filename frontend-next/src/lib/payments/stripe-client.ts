@@ -1,4 +1,5 @@
-import { loadStripe, type Stripe } from "@stripe/stripe-js";
+// `/pure`: l import semplice inserirebbe lo script di Stripe in ogni pagina che importa il modulo.
+import { loadStripe, type Stripe } from "@stripe/stripe-js/pure";
 
 /**
  * Stripe.js nel browser (solo chiave publishable). Una sola istanza per chiave:
