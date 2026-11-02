@@ -22,18 +22,18 @@ delete from public.reports where reporter_id::text like '12ab2000-%';
 delete from private.annunci_accessori_snapshot
  where annuncio_id in (select id from private.annunci_accessori where seller_id::text like '12ab2000-%');
 -- VPM-015B5A / B4: ordini, preventivi congelati, dichiarazioni di logistica e il
--- servizio/tariffa di PROVA (provider `e2e_b5a`) creati dalla prova browser.
+-- servizio/tariffa di PROVA (provider `e2e_b5a` e `e2e_b5d`) creati dalla prova browser.
 delete from private.accessori_ordini where buyer_id::text like '12ab2000-%' or seller_id::text like '12ab2000-%';
 delete from private.accessori_logistica_preventivi where buyer_id::text like '12ab2000-%';
 delete from private.annunci_accessori_logistica
  where annuncio_id in (select id from private.annunci_accessori where seller_id::text like '12ab2000-%');
-delete from private.accessori_logistica_tariffe where provider_code = 'e2e_b5a';
+delete from private.accessori_logistica_tariffe where provider_code in ('e2e_b5a', 'e2e_b5d');
 delete from private.logistics_service_pudo_networks
- where service_definition_id in (select id from private.logistics_service_definitions where provider_code = 'e2e_b5a');
+ where service_definition_id in (select id from private.logistics_service_definitions where provider_code in ('e2e_b5a', 'e2e_b5d'));
 delete from private.logistics_service_capabilities
- where service_definition_id in (select id from private.logistics_service_definitions where provider_code = 'e2e_b5a');
-delete from private.logistics_service_definitions where provider_code = 'e2e_b5a';
-delete from private.logistics_pudo_networks where provider_code = 'e2e_b5a';
+ where service_definition_id in (select id from private.logistics_service_definitions where provider_code in ('e2e_b5a', 'e2e_b5d'));
+delete from private.logistics_service_definitions where provider_code in ('e2e_b5a', 'e2e_b5d');
+delete from private.logistics_pudo_networks where provider_code in ('e2e_b5a', 'e2e_b5d');
 delete from private.annunci_accessori where seller_id::text like '12ab2000-%';
 delete from private.cantina_accessori where owner_id::text like '12ab2000-%';
 delete from storage.objects where bucket_id = 'cantina-accessori-foto' and name like '12ab2000-%';
