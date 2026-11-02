@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gate DB (12e-12zm) su uno stack Supabase locale ed effimero, costruito dalle
+# Gate DB (12e-12zn) su uno stack Supabase locale ed effimero, costruito dalle
 # migrazioni del checkout; include Club/contestazioni e le matrici successive.
 #
 # Pensato per il job CI `supabase-db-regression.yml`, ma eseguibile a mano su
@@ -460,6 +460,24 @@ conc_12zm="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zm_vpm_015b4_concorrenza.sh
   || { printf '%s\n' "$conc_12zm"; die "12zm concorrenza: fallita."; }
 printf '%s\n' "$conc_12zm"
 summary "- $(printf '%s\n' "$conc_12zm" | tail -n 1)"
+
+# VPM-015B5A — checkout Accessori e inventario transazionale: interruttore
+# spento e riservato al rilascio, prenotazione derivata (nessuna sottrazione
+# anticipata), vendita applicata una sola volta, scadenza e annullamento,
+# retry e doppio click, ultima unita, venditore sospeso, annuncio oscurato,
+# preventivo non disponibile, alterazioni, RLS e ruoli, nessuna quantita
+# negativa ne ordine duplicato, vino invariato. Fixture .test sintetiche; ROLLBACK.
+run_grid "12zn Checkout Accessori" 12zn_vpm_015b5a_checkout_accessori.sql 3
+
+# Lo stesso checkout su sessioni separate con barriera: ultima unita contesa,
+# doppio click, due preventivi dello stesso acquirente, overbooking, pagamento
+# contro annullamento e contro riduzione del venditore. Fixture
+# `@conc-12zn.test`, servizio e tariffa di PROVA (provider `conc_b5a`)
+# committati e rimossi in trap, residui 0; interruttori ripristinati.
+conc_12zn="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zn_vpm_015b5a_concorrenza.sh")" \
+  || { printf '%s\n' "$conc_12zn"; die "12zn concorrenza: fallita."; }
+printf '%s\n' "$conc_12zn"
+summary "- $(printf '%s\n' "$conc_12zn" | tail -n 1)"
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal

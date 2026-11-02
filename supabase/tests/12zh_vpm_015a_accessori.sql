@@ -512,6 +512,7 @@ begin
     not exists (
       select 1 from information_schema.columns
       where table_schema = 'private' and table_name like 'accessori%' and table_name not like 'accessori_logistica_%'
+        and table_name not in ('accessori_ordini', 'accessori_checkout_impostazioni')
         and column_name ~* '(prezzo|price|valuta|currency|cents|importo|amount|(^|_)iva(_|$)|(^|_)vat(_|$)|commission|peso|weight|dimension|fornitor|supplier|payment|pagamento|checkout|spedizion|shipping)'),
     (select string_agg(table_name || '.' || column_name, ',') from information_schema.columns
      where table_schema = 'private' and table_name like 'accessori%'));
@@ -523,7 +524,7 @@ begin
   where n.nspname = 'public' and p.proname like 'accessori%'
     and has_function_privilege('anon', p.oid, 'execute');
   perform pg_temp.registra(27, 'anonimo esegue solo le tre letture pubbliche; le nove porte admin non sono eseguibili da anon; nessuna funzione accessori cita ordini, pagamenti o annunci',
-    v_chiavi = array['accessori_categorie_elenca', 'accessori_dettaglio', 'accessori_elenca']
+    v_chiavi = array['accessori_categorie_elenca', 'accessori_dettaglio', 'accessori_disponibilita', 'accessori_elenca']
     and (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
          where n.nspname = 'public' and p.proname like 'accessori_admin_%'
            and has_function_privilege('authenticated', p.oid, 'execute')

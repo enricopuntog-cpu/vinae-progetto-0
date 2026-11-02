@@ -141,6 +141,13 @@ Aprire soltanto ciò che serve al task:
   checkout B5, interruttore spento con accensione dal ruolo `accessori_release`;
   contratto, limiti e configurazione mancante in
   `../docs/VPM_015B4_LOGISTICA_ACCESSORI.md`.
+- Checkout Accessori privati e inventario transazionale VPM-015B5A (2 novembre 2026) —
+  ordini in tabella separata (nessuna modifica a `orders` del vino), prenotazione
+  derivata (annuncio − ordini in attesa non scaduti) senza sottrazioni anticipate,
+  vendita applicata una sola volta dal pagamento simulato privato, preventivo B4
+  consumato dal checkout, interruttore `checkout_attivo` spento con accensione dal
+  ruolo `accessori_release`, nessun pagamento reale; modello esatto, prove e
+  integrazioni mancanti in `../docs/VPM_015B5A_CHECKOUT_ACCESSORI.md`.
 - Ambiente Claude Code di progetto VPM-LAB-002 (29 ottobre 2026) — 6 agenti e 6
   skill versionati in `.claude/`, solo due agenti con shell in worktree isolato
   dietro una guardia a lista bianca con canarino, guardia dei segreti, plugin

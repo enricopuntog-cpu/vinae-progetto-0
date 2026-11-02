@@ -65,6 +65,10 @@ export default defineConfig({
       NEXT_PUBLIC_ACCESSORI_ENABLED: "true",
       ACCESSORI_ENABLED: "true",
       NEXT_PUBLIC_ACCESSORI_NAV_MOBILE: "false",
+      // Stima di spedizione e prenotazione visibili nel solo processo di prova:
+      // gli interruttori nel database restano spenti finche un caso non li accende.
+      ACCESSORI_LOGISTICA_ENABLED: "true",
+      ACCESSORI_ORDINI_ENABLED: "true",
       NEXT_PUBLIC_PHASE_7_PAYMENTS_ENABLED: "false",
       NEXT_PUBLIC_PAYMENT_ACTIONS_ENABLED: "false",
       PAYMENTS_ENABLED: "false",
