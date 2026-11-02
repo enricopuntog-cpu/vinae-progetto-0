@@ -85,6 +85,17 @@ pulizia() {
 begin;
 set local session_replication_role = replica;
 select set_config('vinae.accessori_ordini_pulizia', 'on', true) \g /dev/null
+-- B5C: l'ordine pagato via provider apre il post-vendita e il ricavo pending del
+-- venditore; vanno tolti prima di pagamenti e ordini, figli per primi.
+delete from private.accessori_rimborsi_evidenze
+  where pagamento_id in (select id from private.accessori_pagamenti where buyer_id in ('$U3', '$U4', '$U5'));
+delete from private.accessori_resi where ordine_id in (select id from private.accessori_ordini where seller_id = '$U1');
+delete from private.accessori_rimborsi where ordine_id in (select id from private.accessori_ordini where seller_id = '$U1');
+delete from private.accessori_contestazioni where ordine_id in (select id from private.accessori_ordini where seller_id = '$U1');
+delete from private.accessori_postvendita_eventi where ordine_id in (select id from private.accessori_ordini where seller_id = '$U1');
+delete from private.accessori_postvendita where seller_id = '$U1';
+delete from public.balance_movimenti where owner_id in ('$U1', '$U3', '$U4', '$U5');
+delete from public.balance_accounts where owner_id in ('$U1', '$U3', '$U4', '$U5');
 delete from private.accessori_pagamenti where buyer_id in ('$U3', '$U4', '$U5');
 delete from private.accessori_ordini where buyer_id in ('$U3', '$U4', '$U5') or seller_id = '$U1';
 delete from private.accessori_logistica_preventivi where buyer_id in ('$U3', '$U4', '$U5');
@@ -129,7 +140,10 @@ residui() {
             + (select count(*) from private.logistics_pudo_networks where provider_code = '$PROVIDER')
             + (select count(*) from private.annunci_accessori_categorie_pubblicabili where approvata_da = '$U2')
             + (select count(*) from storage.objects where bucket_id = 'cantina-accessori-foto' and name like '$U1/%')
-            + (select count(*) from public.audit_log where attore_id = '$U2')"
+            + (select count(*) from public.audit_log where attore_id = '$U2')
+            + (select count(*) from private.accessori_postvendita where seller_id = '$U1')
+            + (select count(*) from public.balance_movimenti where owner_id in ('$U1', '$U3', '$U4', '$U5'))
+            + (select count(*) from public.balance_accounts where owner_id in ('$U1', '$U3', '$U4', '$U5'))"
 }
 
 riporta() {
