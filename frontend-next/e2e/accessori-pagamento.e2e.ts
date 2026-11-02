@@ -335,6 +335,7 @@ test.describe.serial("Accessori: Payment Element con provider simulato @smoke @c
     const estraneo = await contestoAutenticato(browser, "segnalante", opzioniDelProgetto(info));
     const pe = await estraneo.newPage();
     diagnostica.osserva(pe, "estraneo");
+    diagnostica.ammetti("status of 404");
     const risposta = await pe.goto(`/ordini-accessori/${nuovo}`);
     expect(risposta?.status()).toBe(404);
     await expect(pe.getByTestId("pagamento-paga")).toHaveCount(0);
@@ -348,8 +349,10 @@ test.describe.serial("Accessori: Payment Element con provider simulato @smoke @c
     const mockA = await installaMock(acquirente);
     const pa = await acquirente.newPage();
     diagnostica.osserva(pa, "acquirente");
-    const spenta = await pa.goto(`/ordini-accessori/${nuovo}`);
-    expect(spenta?.status()).toBe(404);
+    // Il database ha chiuso il checkout: la prenotazione resta leggibile ma senza alcun pulsante di pagamento.
+    await pa.goto(`/ordini-accessori/${nuovo}`);
+    await expect(pa.getByTestId("ordine-stato")).toHaveText("Prenotato, in attesa di pagamento");
+    await expect(pa.getByTestId("pagamento-non-disponibile")).toContainText("non è ancora attivo");
     await expect(pa.getByTestId("pagamento-paga")).toHaveCount(0);
     await pa.goto(`/ordini-accessori/${ordineId}`);
     await expect(pa.getByTestId("ordine-stato")).toHaveText("Pagamento confermato");

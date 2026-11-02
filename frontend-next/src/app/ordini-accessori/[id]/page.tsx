@@ -43,13 +43,22 @@ export default async function Page({
   // Se la lettura fallisce su un ordine pagato reale, resta il riprova, mai comandi privilegiati.
   if (!dettaglioAccessorioDisponibile(commercioAperto, fascicolo, esito.data)) notFound();
 
+  // `checkout_attivo` nel database: se la lettura fallisce il pagamento resta chiuso (fail-closed).
+  // Solo l acquirente di una prenotazione ancora aperta ha bisogno di saperlo.
+  const checkoutAperto =
+    esito.data.ruolo === "acquirente" && esito.data.stato === "in_attesa_pagamento"
+      ? await creaAccessoriOrdiniService(client)
+          .disponibilita(esito.data.annuncioId)
+          .then((d) => d.ok && d.data.motivo !== "checkout_non_attivo")
+      : false;
+
   return (
     <main id="contenuto-principale" className="mx-auto max-w-3xl px-4 py-8">
       <DettaglioOrdineAccessorio
         iniziale={esito.data}
         pagamento={{
           // Solo un filtro di interfaccia: i gate autoritativi sono nella Edge Function e nel database.
-          azioniAbilitate: commercioAperto && AZIONI_PAGAMENTO_ABILITATE,
+          azioniAbilitate: commercioAperto && checkoutAperto && AZIONI_PAGAMENTO_ABILITATE,
           chiavePublishable: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? null,
           // Un invito a rileggere l ordine dopo il ritorno da Stripe, mai una prova di pagamento.
           inRitorno: checkout === "ritorno",
