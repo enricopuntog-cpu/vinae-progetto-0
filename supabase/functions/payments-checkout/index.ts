@@ -42,6 +42,11 @@ type CheckoutInput = {
    * la logistica per colli multipli non esiste) e quali bottiglie allocare.
    */
   quantita?: number | null;
+  /**
+   * VPM-015B5B: paga la prenotazione Accessori indicata. Solo l'identificativo
+   * dell'ordine: importo, valuta e venditore li decide il database.
+   */
+  accessoriOrdineId?: string;
 };
 
 type Reservation = {
@@ -129,6 +134,98 @@ const rispostaCheckout = (
   saldoOnly: false,
 });
 
+type PagamentoAccessori = {
+  order_id: string;
+  amount_cents: number;
+  currency: string;
+  descrizione: string;
+  annuncio_id: string;
+  reservation_expires_at: string | null;
+  provider: string | null;
+  provider_session_id: string | null;
+};
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Pagamento di una prenotazione Accessori. La RPC `accessori_pagamento_apri` e
+ * idempotente (stesso ordine = stessa riga) e rinnova la riserva una sola volta;
+ * la chiave presso il fornitore deriva dall'ordine, quindi due richieste
+ * parallele non possono aprire due PaymentIntent. Se l'apertura presso il
+ * fornitore fallisce la prenotazione non si cancella: scade da sola o si
+ * riprova.
+ */
+const pagaOrdineAccessori = async (
+  supabase: ReturnType<typeof createClient>,
+  buyerId: string,
+  ordineId: unknown,
+  corsHeaders: HeadersInit,
+): Promise<Response> => {
+  if (typeof ordineId !== "string" || !UUID.test(ordineId)) {
+    return json({ error: "Ordine non valido." }, 400, corsHeaders);
+  }
+  const { data, error } = await supabase.rpc("accessori_pagamento_apri", {
+    p_ordine: ordineId,
+    p_buyer: buyerId,
+  });
+  if (error) {
+    const readable = new Set(["P0001", "42501", "22023", "23505", "PGRST"]);
+    return json(
+      { error: readable.has(error.code ?? "") ? error.message : "Pagamento non disponibile." },
+      error.code === "PGRST" ? 429 : 409,
+      corsHeaders,
+    );
+  }
+  const pagamento = data as PagamentoAccessori;
+  const reservation: Reservation = {
+    order_id: pagamento.order_id,
+    amount_cents: pagamento.amount_cents,
+    currency: pagamento.currency,
+    reservation_expires_at: pagamento.reservation_expires_at,
+  };
+
+  if (pagamento.provider_session_id) {
+    const ripresa = await provider.riprendiCheckout({
+      provider: pagamento.provider ?? provider.id,
+      sessionId: pagamento.provider_session_id,
+    });
+    if (!ripresa.ok) return json({ error: "Pagamento temporaneamente non disponibile." }, 502, corsHeaders);
+    return json(rispostaCheckout(reservation, ripresa.data), 200, corsHeaders);
+  }
+
+  let redirectOrigin: string;
+  try {
+    redirectOrigin = risolviOrigineRitorno();
+  } catch {
+    return json({ error: "Pagamento temporaneamente non disponibile." }, 502, corsHeaders);
+  }
+  const apertura = await provider.apriCheckout({
+    orderId: pagamento.order_id,
+    buyerId,
+    listingId: pagamento.annuncio_id,
+    descrizione: pagamento.descrizione,
+    amountCents: pagamento.amount_cents,
+    currency: pagamento.currency,
+    successUrl: `${redirectOrigin}/ordini-accessori/${pagamento.order_id}?checkout=success`,
+    cancelUrl: `${redirectOrigin}/ordini-accessori/${pagamento.order_id}?checkout=cancelled`,
+    idempotencyKey: `accessori-${pagamento.order_id}`,
+    expiresAt: pagamento.reservation_expires_at,
+    dominio: "accessori",
+  });
+  if (!apertura.ok) return json({ error: "Pagamento temporaneamente non disponibile." }, 502, corsHeaders);
+
+  const { error: collegaError } = await supabase.rpc("accessori_pagamento_collega", {
+    p_ordine: pagamento.order_id,
+    p_buyer: buyerId,
+    p_provider: apertura.data.ref.provider,
+    p_session_id: apertura.data.ref.sessionId,
+  });
+  if (collegaError) {
+    return json({ error: "Pagamento creato ma non ancora collegato; riprova." }, 502, corsHeaders);
+  }
+  return json(rispostaCheckout(reservation, apertura.data), 201, corsHeaders);
+};
+
 Deno.serve(async (request) => {
   const corsHeaders = corsHeadersFor(request);
   if (!corsHeaders) return json({ error: "Origine non consentita." }, 403);
@@ -157,6 +254,13 @@ Deno.serve(async (request) => {
   } catch {
     return json({ error: "Corpo richiesta non valido." }, 400, corsHeaders);
   }
+  // Ordini Accessori (VPM-015B5B): stesso provider, stesso adapter, stesso
+  // gate e stessa autenticazione; la prenotazione e l'importo sono quelli
+  // congelati dal database sull'ordine, non c'e nulla da calcolare qui.
+  if (input.accessoriOrdineId !== undefined) {
+    return await pagaOrdineAccessori(supabase, authData.user.id, input.accessoriOrdineId, corsHeaders);
+  }
+
   if (!input.listingId || !["consegna_mano", "spedizione"].includes(input.deliveryMode ?? "")) {
     return json({ error: "Dati checkout non validi." }, 400, corsHeaders);
   }

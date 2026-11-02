@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { noClient, serviceError } from "@/services/phase7/shared";
-import type { CheckoutAperto, PaymentRecord, PaymentService } from "@/services/types";
+import type { CheckoutAperto, PaymentRecord, PaymentService, Result } from "@/services/types";
 
 export const createPaymentService = (client: SupabaseClient | null): PaymentService => ({
   creaCheckout: async (input) => {
@@ -42,3 +42,25 @@ export const createPaymentService = (client: SupabaseClient | null): PaymentServ
       : { ok: true, data: data as PaymentRecord | null };
   },
 });
+
+/**
+ * VPM-015B5B — paga una prenotazione Accessori con la STESSA Edge Function del
+ * vino. Il browser invia solo l'identificativo dell'ordine: importo, valuta e
+ * venditore sono quelli congelati dal database sull'ordine (nessun campo
+ * economico nella richiesta). Il gate `PAYMENTS_ENABLED` è quello della function.
+ */
+export const apriPagamentoAccessori = async (
+  client: SupabaseClient | null,
+  input: { ordineId: string; idempotencyKey: string },
+): Promise<Result<CheckoutAperto>> => {
+  if (!client) return noClient();
+  const { data, error } = await client.functions.invoke("payments-checkout", {
+    body: { accessoriOrdineId: input.ordineId },
+    headers: { "x-idempotency-key": input.idempotencyKey },
+  });
+  if (error) return serviceError("payments-checkout", error);
+  const aperto = data as CheckoutAperto | null;
+  return aperto && (aperto.clientSecret || aperto.checkoutUrl)
+    ? { ok: true, data: aperto }
+    : { ok: false, error: "Il pagamento non è disponibile in questo momento." };
+};

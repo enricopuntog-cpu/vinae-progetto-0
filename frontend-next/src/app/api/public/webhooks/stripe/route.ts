@@ -111,13 +111,22 @@ export const POST = async (request: Request): Promise<NextResponse> => {
 
   // La traduzione dal vocabolario Stripe alla tassonomia interna avviene qui,
   // prima del confine: la RPC riceve un esito e non un nome evento.
-  const { error } = await supabase.rpc("payment_apply_provider_event", {
-    p_provider: PROVIDER,
-    p_event_id: event.id,
-    p_outcome: traduciEventoStripe(event.type, event.data.object),
-    p_occurred_at: event.created,
-    p_object: normalizeStripeObject(event.data.object, event.type),
-  });
+  //
+  // Il dominio lo dichiara il marcatore che l'adapter ha messo sull'intento (e
+  // che torna in un evento firmato): "accessori" va alla RPC degli ordini
+  // Accessori, tutto il resto alla RPC del vino, invariata. Il database
+  // riverifica comunque: ciascuna RPC conosce soltanto i propri pagamenti.
+  const oggetto = normalizeStripeObject(event.data.object, event.type);
+  const { error } = await supabase.rpc(
+    oggetto.dominio === "accessori" ? "accessori_pagamento_applica_evento" : "payment_apply_provider_event",
+    {
+      p_provider: PROVIDER,
+      p_event_id: event.id,
+      p_outcome: traduciEventoStripe(event.type, event.data.object),
+      p_occurred_at: event.created,
+      p_object: oggetto,
+    },
+  );
   if (error) {
     console.error("[Stripe webhook] applicazione evento fallita", {
       eventId: event.id,

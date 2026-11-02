@@ -1691,6 +1691,8 @@ export type CheckoutRequest = {
   cancelUrl: string;
   idempotencyKey: string;
   expiresAt: string | null;
+  /** Dominio proprietario dell'incasso (assente = vino). */
+  dominio?: "accessori";
 };
 
 export type CheckoutHandle = {

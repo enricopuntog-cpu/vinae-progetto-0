@@ -512,7 +512,7 @@ begin
     not exists (
       select 1 from information_schema.columns
       where table_schema = 'private' and table_name like 'accessori%' and table_name not like 'accessori_logistica_%'
-        and table_name not in ('accessori_ordini', 'accessori_checkout_impostazioni')
+        and table_name not in ('accessori_ordini', 'accessori_checkout_impostazioni', 'accessori_pagamenti')
         and column_name ~* '(prezzo|price|valuta|currency|cents|importo|amount|(^|_)iva(_|$)|(^|_)vat(_|$)|commission|peso|weight|dimension|fornitor|supplier|payment|pagamento|checkout|spedizion|shipping)'),
     (select string_agg(table_name || '.' || column_name, ',') from information_schema.columns
      where table_schema = 'private' and table_name like 'accessori%'));

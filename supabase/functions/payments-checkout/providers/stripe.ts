@@ -76,6 +76,10 @@ export const creaStripeProvider = (): CheckoutProvider => ({
       "metadata[listing_id]": input.listingId,
     });
 
+    // Marcatore di dominio (solo Accessori): il webhook lo legge dall'evento
+    // firmato per instradare l'incasso. Il vino non lo porta.
+    if (input.dominio) form.set("metadata[vinea_dominio]", input.dominio);
+
     let response: Response;
     try {
       response = await fetch(STRIPE_PAYMENT_INTENTS, {
