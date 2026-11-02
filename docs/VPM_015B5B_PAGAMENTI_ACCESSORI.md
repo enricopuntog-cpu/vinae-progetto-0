@@ -14,7 +14,7 @@ rimborso o trasferimento reale.
 | `payments-checkout/index.ts` (auth, gate `PAYMENTS_ENABLED`, CORS/origini di ritorno, `rispostaCheckout`): +1 ramo `accessoriOrdineId` | `private.accessori_pagamenti` (un pagamento per ordine) |
 | `providers/stripe.ts` (PaymentIntent, **niente** `transfer_data`/`on_behalf_of`): +1 riga di metadata `vinea_dominio` | `accessori_pagamento_apri` / `_collega` / `_applica_evento` (solo `service_role`) |
 | `_shared/payment-provider.ts`, `services/types.ts`: campo opzionale `dominio` | `accessori_pagamenti_rimborso_dovuto()` (elenco admin) |
-| Webhook `api/public/webhooks/stripe/route.ts` + `stripe-signature.ts` + `stripe-event.ts`: unico verificatore, +1 instradamento | `private.accessori_ordine_vendita_applica(ordine, modo)` (nucleo di B5A con il modo scritto) |
+| Webhook `api/public/webhooks/stripe/route.ts` + `stripe-signature.ts` + `stripe-event.ts`: unico verificatore, +1 instradamento | `private.accessori_ordine_vendita_applica(ordine, modo, tardivo)` (nucleo di B5A con il modo scritto) |
 | `public.payment_provider_events`: stesso registro e stessa deduplica `(provider, event_id)` | `apriPagamentoAccessori` in `services/phase7/payment-service.ts` |
 | `public.payment_outcome` e `traduciEventoStripe` (nessun nuovo vocabolario) | |
 
@@ -105,7 +105,7 @@ test di contratto); il rilascio dopo consegna arriva con B5C.
 
 - **Webhook in ritardo**: vale il momento dell'incasso presso il fornitore (`evento <= scadenza`), non l'arrivo
   dell'evento. Un incasso in tempo con evento tardivo si applica se l'ordine è ancora in attesa e i pezzi sono liberi
-  (altrimenti `refund_due`). La pulizia delle prenotazioni scadute non chiude un ordine con pagamento aperto per
+  (altrimenti `refund_due`). La pulizia delle prenotazioni scadute non chiude un ordine con pagamento `processing` per
   un'ora dopo la scadenza (la disponibilità non cambia: è derivata dalla scadenza).
 - **Rimborsi**: lo stato deriva dal rimborso massimo noto (un evento vecchio non fa regredire); un rimborso parziale
   di un incasso non applicato o non ancora confermato resta `refund_due` (residuo visibile nell'elenco admin, con
@@ -120,3 +120,7 @@ test di contratto); il rilascio dopo consegna arriva con B5C.
   Se non fosse copiata, il rimborso Accessori non verrebbe riconosciuto (500 e ritentativi, nessun effetto errato).
 - Ordine pagato con `charge.refunded` totale (es. rimborso dalla dashboard Stripe): l'ordine resta `pagato` e le
   quantità scese; il ripristino appartiene a B5C.
+- Una prenotazione con pagamento `processing` oltre la scadenza resta «aperta» per un'ora (la pulizia non la chiude): in
+  quell'ora lo stesso acquirente non può riprenotare lo stesso annuncio, salvo annullarla. Un ordine annullato o scaduto
+  mentre il pagamento è ancora `checkout_pending` o `processing` manda un incasso successivo a `refund_due`
+  (`ordine_chiuso:<motivo>`), anche se fatto in tempo.

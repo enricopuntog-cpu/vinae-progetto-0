@@ -106,6 +106,7 @@ delete from private.logistics_service_capabilities
 delete from private.logistics_service_definitions where provider_code = '$PROVIDER';
 delete from private.logistics_pudo_networks where provider_code = '$PROVIDER';
 delete from private.accessori_registro where admin_id = '$U2';
+delete from public.payment_provider_events where provider = 'stripe' and event_id like 'conc-evt-%';
 delete from private.rate_limit_buckets where subject in ('user:$U1', 'user:$U3', 'user:$U4', 'user:$U5');
 delete from public.notifications where recipient_id in ('$U1', '$U2', '$U3', '$U4', '$U5');
 delete from public.user_roles where user_id in ('$U1', '$U2', '$U3', '$U4', '$U5');
@@ -121,6 +122,7 @@ residui() {
             + (select count(*) from private.cantina_accessori where owner_id = '$U1')
             + (select count(*) from private.accessori_ordini where seller_id = '$U1')
             + (select count(*) from private.accessori_pagamenti where buyer_id in ('$U3', '$U4', '$U5'))
+            + (select count(*) from public.payment_provider_events where provider = 'stripe' and event_id like 'conc-evt-%')
             + (select count(*) from private.accessori_logistica_preventivi where buyer_id in ('$U3', '$U4', '$U5'))
             + (select count(*) from private.accessori_logistica_tariffe where provider_code = '$PROVIDER')
             + (select count(*) from private.logistics_service_definitions where provider_code = '$PROVIDER')

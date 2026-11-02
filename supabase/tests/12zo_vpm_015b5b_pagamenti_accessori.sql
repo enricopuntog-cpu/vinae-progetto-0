@@ -12,7 +12,6 @@
 -- vino scambiato, pagamento fallito, scaduto, dopo oscuramento o annullo
 -- (refund_due), vendita applicata una sola volta, interruttori, privilegi,
 -- nessun payout, vino invariato.
---   - nessuna disponibilita negativa, nessun ordine duplicato, vino invariato.
 begin;
 
 \set ON_ERROR_STOP on
@@ -852,7 +851,6 @@ begin
     v_s = 'processed' and v_t = 'processed' and pg_temp.pstato(v_o5) = 'refunded'
     and (select amount_refunded_cents = amount_cents from private.accessori_pagamenti where ordine_id = v_o5), v_s || ' ' || v_t);
 
-  -- 32: rimborso parziale che precede l'incasso: l'incasso successivo non vende, il residuo resta dovuto.
   -- 32: rimborso parziale che precede l'incasso: l'incasso successivo non vende, il residuo resta dovuto.
   perform pg_temp.reset_rl();
   select * into r from pg_temp.prenota(c_d, v_a1, 1);

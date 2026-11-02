@@ -443,6 +443,7 @@ declare
   v_motivo text;
   v_tardivo boolean;
   v_nuovo integer;
+  v_hint text;
   p0 private.accessori_pagamenti%rowtype;
   p private.accessori_pagamenti%rowtype;
   o private.accessori_ordini%rowtype;
@@ -514,6 +515,8 @@ begin
         where id = p.id;
         return 'processed';
       exception when check_violation then
+        get stacked diagnostics v_hint = pg_exception_hint;
+        if v_hint is distinct from 'inventario_incoerente' then raise; end if;
         -- Inventario incoerente: il sotto-blocco si annulla e il denaro prende
         -- l'uscita del rimborso dovuto.
         v_motivo := 'inventario_incoerente';
@@ -581,7 +584,7 @@ end;
 $$;
 
 -- Pulizia delle prenotazioni scadute (B5A) con UNA differenza: non chiude una
--- prenotazione con pagamento aperto (checkout_pending/processing) nell'ora che
+-- prenotazione con pagamento in corso (processing: fondi in transito) nell'ora che
 -- segue la scadenza, cosi un incasso fatto in tempo il cui evento arriva in
 -- ritardo trova ancora l'ordine da applicare. Oltre l'ora si chiude come prima
 -- (e l'incasso tardivo va a refund_due). La disponibilita non cambia: e derivata
@@ -602,7 +605,7 @@ begin
       and (p_annuncio is null or o.annuncio_id = p_annuncio)
       and not exists (
         select 1 from private.accessori_pagamenti p
-        where p.ordine_id = o.id and p.stato in ('checkout_pending', 'processing')
+        where p.ordine_id = o.id and p.stato = 'processing'
           and o.scade_at > now() - interval '1 hour')
     order by o.id
     for update of o skip locked
