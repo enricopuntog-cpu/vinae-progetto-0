@@ -29,6 +29,11 @@ export default async function Page() {
         <p className="text-muted-foreground">La tua attività su Vinea.</p>
       </header>
       <PartnerAreaClient />
+      <p className="text-sm">
+        <a href="/partner/accessori" className="underline">
+          Accessori nuovi: scorte e annunci della tua attività
+        </a>
+      </p>
       <VetrinaEditorClient />
     </div>
   );

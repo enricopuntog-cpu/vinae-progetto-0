@@ -127,6 +127,25 @@ echo "Ledger allineato al checkout: $migrations_count migrazioni."
 foreign_users="$(sql "select count(*) from auth.users where email not like '%@e2e-12g.test'")"
 [ "$foreign_users" = "0" ] || die "Rifiutato: il database contiene $foreign_users utenti estranei alla fixture." 3
 
+# Prova di identità dello stack (VPM-015C). Superati i controlli sopra (loopback,
+# ledger = file di questo commit, nessun utente estraneo) il runner scrive nel
+# database un nonce casuale: le prove di concorrenza con sessioni reali e
+# distruttive (oggi 12zp) lo pretendono uguale a quello ricevuto in
+# E2E_STACK_NONCE. Un indirizzo privato, CI=true o l'assenza di utenti reali non
+# provano che il database sia questo stack effimero; il nonce sì, perché esiste
+# solo dove questo runner lo ha scritto, e viene tolto in uscita.
+stack_marca() { # $1 = set | reset: commento del database = nonce del runner
+  if [ "$1" = set ]; then
+    sql "do \$n\$ begin execute format('comment on database %I is %L', current_database(), 'vinea-ephemeral-stack:$E2E_STACK_NONCE'); end \$n\$"
+  else
+    sql "do \$n\$ begin execute format('comment on database %I is null', current_database()); end \$n\$"
+  fi
+}
+E2E_STACK_NONCE="$(sql "select replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')")"
+[ "${#E2E_STACK_NONCE}" -ge 32 ] || die "Nonce dello stack non generato." 4
+stack_marca set >/dev/null
+export E2E_STACK_NONCE
+
 # --- pulizia garantita --------------------------------------------------------
 
 cleanup_done=0
@@ -134,6 +153,7 @@ cleanup() {
   local status=$?
   if [ "$cleanup_done" = "0" ]; then
     cleanup_done=1
+    stack_marca reset >/dev/null 2>&1 || status=1
     # Uscita anticipata durante la prova MFA 12h: i suoi utenti vanno rimossi
     # prima, altrimenti il guard della pulizia 12g la rifiuta.
     if [ "$(sql "select count(*) from auth.users where email like '%@mfa-12h.test'" 2>/dev/null)" != "0" ]; then
@@ -499,6 +519,21 @@ summary "- $(printf '%s\n' "$conc_12zo" | tail -n 1)"
 # Solo payload sintetici nella transazione con ROLLBACK: nessun fornitore reale.
 run_grid "12zp Postvendita Accessori" 12zp_vpm_015b5c_postvendita_accessori.sql 3
 
+# Prova NEGATIVA della guardia di identità (VPM-015C): senza nonce, con un nonce
+# sbagliato e con il nonce giusto ma marcatore assente nel database, 12zp deve
+# rifiutarsi (uscita 3) prima di toccare qualunque dato. Una guardia che non
+# rifiuta qui è rotta: il gate fallisce.
+guard_rc() { local rc=0; "$@" >/dev/null 2>&1 || rc=$?; printf '%s' "$rc"; }
+neg_senza="$(guard_rc env -u E2E_STACK_NONCE E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zp_vpm_015b5c_concorrenza.sh")"
+neg_errato="$(guard_rc env E2E_STACK_NONCE=00000000000000000000000000000000 E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zp_vpm_015b5c_concorrenza.sh")"
+stack_marca reset
+neg_assente="$(guard_rc env E2E_STACK_NONCE="$E2E_STACK_NONCE" E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zp_vpm_015b5c_concorrenza.sh")"
+stack_marca set >/dev/null
+neg_query="$(guard_rc env E2E_STACK_NONCE="$E2E_STACK_NONCE" E2E_DB_URL="${E2E_DB_URL}?host=db.example.invalid" bash "$TESTS/12zp_vpm_015b5c_concorrenza.sh")"
+[ "$neg_senza$neg_errato$neg_assente$neg_query" = "3333" ] \
+  || die "Guardia 12zp: la prova negativa non rifiuta (uscite: $neg_senza $neg_errato $neg_assente $neg_query)." 5
+summary "- Guardia 12zp (identità dello stack): prova negativa 4/4 (senza nonce, nonce errato, marcatore assente, URL con ?host=)"
+
 # Otto contese su sessioni reali: rimborsi, webhook contro rilascio,
 # contestazioni ai due lati della finestra, retry e storno dopo accredito.
 # Fixture isolate rimosse in trap; nessun flag modificato, nessun provider.
@@ -509,6 +544,10 @@ summary "- $(printf '%s\n' "$conc_12zp" | tail -n 1)"
 # Recovery regressions: signed per-refund evidence and bounded retry/release.
 # NON VERIFICATO until this ephemeral loopback gate executes successfully.
 run_grid "12zq Riconciliazione e code Accessori" 12zq_vpm_015b5c_riconciliazione_code.sql 3
+
+# VPM-015C — Accessori nuovi dei Partner: scorte commerciali, classe per
+# articolo, margine 15%, checkout, sospensione e revoca. Transazione con ROLLBACK.
+run_grid "12zr Accessori Partner" 12zr_vpm_015c_accessori_partner.sql 3
 
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal

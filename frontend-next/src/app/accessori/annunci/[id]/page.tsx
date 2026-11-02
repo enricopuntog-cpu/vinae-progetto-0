@@ -8,6 +8,8 @@ import { DettaglioAnnuncioPubblico } from "@/components/vinea/accessori-vendita/
 import { risolviModalitaAccessori } from "@/lib/accessori/gate";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { creaAnnunciAccessoriPubbliciService } from "@/services/annunci-accessori-service";
+import { BadgeVenditoreAccessorio } from "@/components/vinea/accessori-vendita/BadgeVenditoreAccessorio";
+import { leggiVenditoreAnnuncio } from "@/services/partner-accessori-service";
 
 export const metadata: Metadata = {
   title: "Annuncio Accessori — Vinea",
@@ -43,6 +45,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   if (!esito.data) notFound();
 
   const foto = await servizio.urlFoto(esito.data.foto);
+  const venditore = await leggiVenditoreAnnuncio(client, esito.data.id);
   let autenticato = false;
   try {
     autenticato = Boolean(client && (await client.auth.getUser()).data.user);
@@ -52,6 +55,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 
   return (
     <>
+      {venditore.ok && venditore.data ? <BadgeVenditoreAccessorio venditore={venditore.data} /> : null}
       <DettaglioAnnuncioPubblico
         annuncio={esito.data}
         immagini={foto.ok ? foto.data : {}}

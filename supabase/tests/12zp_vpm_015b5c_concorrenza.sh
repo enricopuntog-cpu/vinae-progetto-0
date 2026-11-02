@@ -31,11 +31,20 @@ unset PGHOST PGHOSTADDR PGPORT PGDATABASE PGUSER PGSERVICE PGSERVICEFILE PGOPTIO
 export PGCONNECT_TIMEOUT=5
 PSQL=(psql "$DB_URL" -X -qAt -v ON_ERROR_STOP=1 --no-psqlrc)
 sql() { "${PSQL[@]}" -c "$1"; }
-# L'URL è loopback, ma dietro un port-forward Docker il server vede il proprio
-# indirizzo sulla rete del container (bridge, es. 172.17.0.2): vale loopback OPPURE
-# 172.16.0.0/12 (reti Docker). Non è una prova di "stack effimero": un tunnel verso un
-# database privato con quell'intervallo la supererebbe, perciò la difesa decisiva sono
-# i controlli sui dati qui sotto (nessun utente reale), non l'indirizzo.
+# Prova di identità dello stack (VPM-015C). Né un indirizzo privato (anche
+# 172.16.0.0/12), né CI=true, né l'assenza di utenti reali dimostrano che il
+# database sia lo stack effimero di test: un tunnel verso un database privato li
+# supererebbe tutti. La prova è un nonce che il runner del gate (12g_ci_run.sh)
+# scrive nel database SOLO dopo i propri controlli (loopback, ledger = file,
+# nessun utente estraneo) e passa in E2E_STACK_NONCE: qui deve coincidere con
+# il commento del database (`vinea-ephemeral-stack:<nonce>`) letto dal server. Senza nonce, o con un nonce diverso,
+# lo script non tocca nulla (uscita 3). Il nonce prova l'identità del runner, non è un segreto: non sostituisce l'isolamento di rete dello stack. Una sessione manuale su uno stack proprio
+# deve prima scrivere il marcatore con lo stesso runner.
+NONCE="${E2E_STACK_NONCE:-}"
+[ -n "$NONCE" ] && [ "${#NONCE}" -ge 16 ] \
+  || { echo 'E2E_STACK_NONCE mancante: identità dello stack effimero non dimostrata.' >&2; exit 3; }
+[ "$(sql "select coalesce(shobj_description((select oid from pg_database where datname = current_database()), 'pg_database'), '')")" = "vinea-ephemeral-stack:$NONCE" ] \
+  || { echo 'Marcatore dello stack effimero assente o diverso: rifiutato.' >&2; exit 3; }
 [ "$(sql "select coalesce(inet_server_addr() <<= any (array['127.0.0.0/8','172.16.0.0/12','::1/128']::inet[]), false)")" = t ] \
   || { echo 'Server né loopback né su rete Docker locale.' >&2; exit 3; }
 [ "$(sql "select count(*) from auth.users where email is null or email not like '%.test'")" = 0 ] \
