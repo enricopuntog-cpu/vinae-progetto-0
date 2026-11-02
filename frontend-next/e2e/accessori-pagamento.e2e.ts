@@ -89,6 +89,10 @@ const STRIPE_FINTO = `
         if (e === "errore") return Promise.resolve({ error: { type: "card_error", message: "Carta rifiutata (prova)." } });
         return Promise.resolve({ paymentIntent: { status: e } });
       },
+      createToken: function () { return Promise.resolve({}); },
+      createPaymentMethod: function () { return Promise.resolve({}); },
+      confirmCardPayment: function () { return Promise.resolve({}); },
+      retrievePaymentIntent: function () { return Promise.resolve({}); },
       _registerWrapper: function () {}, registerAppInfo: function () {}
     };
   }
