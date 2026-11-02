@@ -334,6 +334,19 @@ avvia_barriera() { barriera "$1" >/dev/null 2>&1 & HOLDER=$!; sleep 0.8; }
 
 out1="$(mktemp)"; out2="$(mktemp)"; out3="$(mktemp)"
 
+# Il vincitore di una contesa e casuale: ogni prova parte senza prenotazioni aperte,
+# cosi il tetto per acquirente non dipende dall'esito della prova precedente.
+libera() {
+  "${PSQL[@]}" >/dev/null <<SQL
+begin;
+alter table private.accessori_ordini disable trigger accessori_ordini_guard;
+update private.accessori_ordini set stato = 'annullato', motivo_chiusura = 'acquirente'
+ where stato = 'in_attesa_pagamento' and buyer_id in ('$U3', '$U4', '$U5');
+alter table private.accessori_ordini enable trigger accessori_ordini_guard;
+commit;
+SQL
+}
+
 # ---------------------------------------------------------------------------
 # 1. ULTIMA UNITA contesa.
 read -r A1 C1 <<<"$(annuncio 1)"
@@ -354,6 +367,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+libera
 # 2. DOPPIO CLICK: stessa chiave e stesso preventivo da due sessioni.
 read -r A2 C2 <<<"$(annuncio 6)"
 P3="$(congela "$U3" "$A2" 2)"
@@ -372,6 +386,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+libera
 # 3. Due richieste dello stesso acquirente, preventivi e chiavi diversi.
 P4a="$(congela "$U4" "$A2" 1)"
 # il preventivo identico ancora valido sarebbe lo stesso: ne serve uno diverso (quantita 3).
@@ -389,6 +404,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+libera
 # 4. OVERBOOKING: 3 pezzi, tre acquirenti da 2.
 read -r A4 C4 <<<"$(annuncio 3)"
 P3="$(congela "$U3" "$A4" 2)"; P4="$(congela "$U4" "$A4" 2)"; P5="$(congela "$U5" "$A4" 2)"
@@ -407,6 +423,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+libera
 # 5. PAGAMENTO contro ANNULLAMENTO (3 giri).
 giro_ok=0
 for giro in 1 2 3; do
