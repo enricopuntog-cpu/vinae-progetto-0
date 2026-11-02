@@ -18,6 +18,45 @@ const MIGRAZIONE = readFileSync(
   "utf8",
 );
 
+describe("evidenze rimborso Accessori", () => {
+  it("propaga solo i campi della prova firmata senza inferire la completezza della pagina", () => {
+    const result = normalizeStripeObject({ refunds: { has_more: true, data: [{
+      id: "re_confirmed", amount: 500, status: "succeeded", ignored: "private",
+      metadata: { rimborso_id: "11111111-1111-4111-8111-111111111111", vinea_dominio: "accessori", ignored: "private" },
+    }] } }, "charge.refunded");
+    expect(result.refunds).toEqual([{
+      id: "re_confirmed", amount_cents: 500, status: "succeeded",
+      rimborso_id: "11111111-1111-4111-8111-111111111111", dominio: "accessori",
+    }]);
+  });
+
+  it("esclude rimborsi non riusciti e importi o identificativi invalidi", () => {
+    const invalid = [null, "refund", {},
+      { id: "re_pending", amount: 500, status: "pending" },
+      { id: "re_failed", amount: 500, status: "failed" },
+      { id: "re_zero", amount: 0, status: "succeeded" },
+      { id: "re_negative", amount: -1, status: "succeeded" },
+      { id: "re_fraction", amount: 1.5, status: "succeeded" },
+      { id: "re_unsafe", amount: Number.MAX_SAFE_INTEGER + 1, status: "succeeded" },
+      { id: "pi_wrong", amount: 500, status: "succeeded" }];
+    expect(normalizeStripeObject({ refunds: { data: invalid } }, "charge.refunded").refunds).toEqual([]);
+  });
+
+  it("non inventa associazione o dominio dai soli importi aggregati", () => {
+    expect(normalizeStripeObject({ amount_refunded: 500 }, "charge.refunded").refunds).toEqual([]);
+    expect(normalizeStripeObject({ refunds: { data: [{ id: "re_external", amount: 500, status: "succeeded" }] } }, "charge.refunded").refunds)
+      .toEqual([{ id: "re_external", amount_cents: 500, status: "succeeded", rimborso_id: null, dominio: null }]);
+  });
+
+  it("non propaga prove da eventi diversi o strutture malformate", () => {
+    const refunds = { data: [{ id: "re_wrong_event", amount: 500, status: "succeeded" }] };
+    expect(normalizeStripeObject({ refunds }, "payment_intent.succeeded")).not.toHaveProperty("refunds");
+    for (const value of [null, 1, [], { data: "invalid" }]) {
+      expect(normalizeStripeObject({ refunds: value }, "charge.refunded").refunds).toEqual([]);
+    }
+  });
+});
+
 describe("eventi Stripe", () => {
   it("accetta soltanto gli eventi gestiti", () => {
     expect(isSupportedStripeEvent("checkout.session.completed")).toBeTrue();

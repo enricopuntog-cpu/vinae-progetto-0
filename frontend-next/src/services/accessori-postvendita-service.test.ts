@@ -20,6 +20,34 @@ const base = {
   ricavo: null,
 };
 
+const storageFinto = (opzioni: { uploadFallisce?: number; rpcFallisce?: boolean; firmaFallisce?: boolean } = {}) => {
+  const caricati: string[] = [];
+  const rimossi: string[] = [];
+  const chiamate: Chiamata[] = [];
+  const firme: Array<{ bucket: string; paths: string[]; durata: number }> = [];
+  const client = {
+    auth: { getUser: async () => ({ data: { user: { id: "utente-test" } } }) },
+    rpc: async (nome: string, args: Record<string, unknown>) => {
+      chiamate.push({ nome, args });
+      return { error: opzioni.rpcFallisce ? { code: "XX000" } : null };
+    },
+    storage: { from: (bucket: string) => ({
+      upload: async (path: string) => {
+        caricati.push(path);
+        return { error: caricati.length === opzioni.uploadFallisce ? { code: "XX000" } : null };
+      },
+      remove: async (paths: string[]) => { rimossi.push(...paths); return { error: null }; },
+      createSignedUrls: async (paths: string[], durata: number) => {
+        firme.push({ bucket, paths, durata });
+        return { error: opzioni.firmaFallisce ? { code: "XX000" } : null,
+          data: [{ signedUrl: "https://prove.test/1" }, { signedUrl: "" }, { signedUrl: null }] };
+      },
+    }) },
+  } as unknown as SupabaseClient;
+  return { client, caricati, rimossi, chiamate, firme };
+};
+const foto = () => new File(["webp"], "prova.webp", { type: "image/webp" });
+
 type Chiamata = { nome: string; args?: Record<string, unknown> };
 const finto = (risposte: Record<string, { data?: unknown; error?: { code?: string; hint?: string } | null }>) => {
   const chiamate: Chiamata[] = [];
@@ -107,6 +135,56 @@ describe("creaAccessoriPostvenditaService (B5C)", () => {
     expect((await buona.leggi(ORDINE)).ok).toBe(true);
     const cattiva = creaAccessoriPostvenditaService(finto({ accessori_postvendita_leggi: { data: { ordineId: ORDINE } } }).client);
     expect((await cattiva.leggi(ORDINE)).ok).toBe(false);
+  });
+
+  for (const operazione of ["apri", "rispondi"] as const) {
+    const invia = (s: ReturnType<typeof creaAccessoriPostvenditaService>, files: File[]) => operazione === "apri"
+      ? s.apriContestazione({ ordineId: ORDINE, motivo: "Articolo rotto", descrizione: "Rotto.", foto: files })
+      : s.rispondi({ ordineId: ORDINE, tipo: "contesta", risposta: "Integro.", foto: files });
+    it(`${operazione}: carica le prove, invia solo percorsi e non cancella sul successo`, async () => {
+      const f = storageFinto();
+      expect((await invia(creaAccessoriPostvenditaService(f.client), [foto(), foto()])).ok).toBe(true);
+      expect(f.caricati).toHaveLength(2);
+      expect(f.chiamate[0]?.nome).toBe(operazione === "apri" ? "accessori_contestazione_apri" : "accessori_contestazione_venditore_rispondi");
+      expect(f.chiamate[0]?.args?.p_foto).toEqual(f.caricati);
+      expect(f.rimossi).toHaveLength(0);
+    });
+    it(`${operazione}: upload parziale fallito ripulisce solo le prove già caricate e non chiama RPC`, async () => {
+      const f = storageFinto({ uploadFallisce: 2 });
+      expect((await invia(creaAccessoriPostvenditaService(f.client), [foto(), foto()])).ok).toBe(false);
+      expect(f.rimossi).toEqual([f.caricati[0]!]);
+      expect(f.chiamate).toHaveLength(0);
+    });
+    it(`${operazione}: RPC rifiutata ripulisce tutte le nuove prove`, async () => {
+      const f = storageFinto({ rpcFallisce: true });
+      expect((await invia(creaAccessoriPostvenditaService(f.client), [foto(), foto()])).ok).toBe(false);
+      expect(f.rimossi).toEqual(f.caricati);
+    });
+  }
+
+  it("firmaProve usa bucket privato e TTL 900, filtra URL vuoti e gestisce gli errori", async () => {
+    const f = storageFinto();
+    const s = creaAccessoriPostvenditaService(f.client);
+    expect(await s.firmaProve([])).toEqual([]);
+    expect(f.firme).toHaveLength(0);
+    expect(await s.firmaProve(["a.webp"])).toEqual(["https://prove.test/1"]);
+    expect(f.firme).toEqual([{ bucket: "dispute-evidence", paths: ["a.webp"], durata: 900 }]);
+    expect(await creaAccessoriPostvenditaService(storageFinto({ firmaFallisce: true }).client).firmaProve(["a"])).toEqual([]);
+    expect(await creaAccessoriPostvenditaService(null).firmaProve(["a"])).toEqual([]);
+  });
+
+  it("adminConsegna e adminReso usano solo le porte di dominio, con errori sicuri", async () => {
+    const f = finto({ accessori_reso_rientro_admin_registra: { error: { hint: "quantita_non_valida" } } });
+    const s = creaAccessoriPostvenditaService(f.client);
+    expect((await s.adminConsegna({ ordineId: ORDINE, riferimento: "Prova manuale" })).ok).toBe(true);
+    expect(await s.adminReso({ ordineId: ORDINE, quantita: 2, nota: "Rientrati" })).toEqual({ ok: false, error: "Quantità non valida." });
+    expect(f.chiamate).toEqual([
+      { nome: "accessori_consegna_admin_registra", args: { p_ordine: ORDINE, p_riferimento: "Prova manuale" } },
+      { nome: "accessori_reso_rientro_admin_registra", args: { p_ordine: ORDINE, p_quantita: 2, p_nota: "Rientrati" } },
+    ]);
+    await s.adminConsegna({ ordineId: "x", riferimento: "x" });
+    await s.adminReso({ ordineId: "x", quantita: 2, nota: "x" });
+    expect(f.chiamate).toHaveLength(2);
   });
 
   it("nessun metodo raggiunge Stripe, un rimborso o un rilascio", () => {

@@ -71,6 +71,35 @@ describe("B5C: webhook firmato", () => {
   });
 });
 
+describe("B5C: regressioni interfacce post-vendita", () => {
+  it("l'admin carica il fascicolo, riusa DisputePanel e blocca decisioni senza fascicolo corrente", () => {
+    const ui = leggiRepo("frontend-next/src/components/vinea/ordini-accessori/AccessoriPostvenditaAdmin.tsx");
+    expect(ui).toContain("caricatore.current.carica(servizio(), id");
+    expect(ui).toContain("caricatore.current.invalida()");
+    expect(ui).toContain("fascicolo?.postvendita.ordineId === ordine");
+    expect(ui).toContain("disabled={!puoDecidere}");
+    expect(ui).toContain("puoDecidere && esegui");
+    expect(ui).toContain("<DisputePanel");
+    expect(ui).toContain("Carica / riprova fascicolo");
+    expect(ui).toContain("cambiaOrdine(e.target.value.trim())");
+  });
+  it("il dettaglio autentica e legge l'ordine prima dell'eccezione ai gate commerciali", () => {
+    const ui = leggiRepo("frontend-next/src/app/ordini-accessori/[id]/page.tsx");
+    expect(ui.indexOf("client.auth.getUser()")).toBeLessThan(ui.indexOf(".leggi(id)"));
+    expect(ui.indexOf("if (!esito.ok) notFound()")).toBeLessThan(ui.indexOf("dettaglioAccessorioDisponibile(commercioAperto"));
+    expect(ui).toContain("caricaFascicolo(servizioPostvendita, id)");
+    expect(ui).toContain("<PostvenditaErrore />");
+    expect(ui).not.toContain("creaCheckout");
+  });
+  it("l'errore di lettura ha un messaggio sicuro e un riprova esplicito", () => {
+    const ui = leggiRepo("frontend-next/src/components/vinea/ordini-accessori/PostvenditaErrore.tsx");
+    expect(ui).toContain('role="alert"');
+    expect(ui).toContain("Riprova post-vendita");
+    expect(ui).toContain("router.refresh()");
+    expect(ui).not.toContain("error.message");
+  });
+});
+
 describe("B5C: forma della migrazione", () => {
   const mig = senzaCommentiSql(leggiRepo(MIGRAZIONE));
 

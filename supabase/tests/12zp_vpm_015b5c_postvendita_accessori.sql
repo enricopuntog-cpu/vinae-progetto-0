@@ -699,16 +699,22 @@ begin
   v_j := pg_temp.prep(v_rid);
   v_k := pg_temp.prep(v_rid);
   v_s := 'vinea-rimborso-accessori-' || replace(v_oL::text, '-', '') || '-dovuto_automatico-' || v_tot;
-  perform pg_temp.registra(4, 'preparazione: da_rimborsare con intento, importo ricavato dal database e chiave stabile (ordine+origine+importo); un retry restituisce la stessa chiave; stato in_invio (mai "inviato" da solo)',
+  perform pg_temp.registra(4, 'preparazione: importo e chiave dal database; retry immediato bloccato dal backoff senza secondo invio; stato in_invio',
     v_j ->> 'esito' = 'da_rimborsare' and (v_j ->> 'payment_intent_id') = 'pi_b5c_L'
     and (v_j ->> 'amount_cents')::integer = v_tot and (v_j ->> 'currency') = 'eur'
-    and (v_j ->> 'idempotency_key') = v_s and (v_k ->> 'idempotency_key') = v_s
-    and (v_k ->> 'tentativi')::integer = 2 and pg_temp.rimb(v_oL) = 'in_invio:' || v_tot, v_j::text);
+    and (v_j ->> 'idempotency_key') = v_s
+    and v_k ->> 'esito' = 'bloccato' and v_k ->> 'motivo' = 'retry_backoff'
+    and (select tentativi = 1 and idempotency_key = v_s from private.accessori_rimborsi where id = v_rid)
+    and pg_temp.rimb(v_oL) = 'in_invio:' || v_tot, v_j::text);
 
   v_s := pg_temp.esito_rimb(v_rid, false, null, 'stripe_unreachable');
+  -- Tempo sintetico della fixture, non attesa reale: il backoff deve essere trascorso.
+  set local session_replication_role = replica;
+  update private.accessori_rimborsi set aggiornato_at = now() - interval '2 hours' where id = v_rid;
+  set local session_replication_role = origin;
   v_j := pg_temp.prep(v_rid);
   perform pg_temp.registra(5, 'timeout del fornitore: il rimborso resta fallito/ritentabile (non eseguito), il pagamento resta refund_due, la coda lo riprende con la STESSA chiave',
-    v_s = 'NESSUN_ERRORE:' and (v_j ->> 'esito') = 'da_rimborsare' and (v_j ->> 'tentativi')::integer = 3
+    v_s = 'NESSUN_ERRORE:' and (v_j ->> 'esito') = 'da_rimborsare' and (v_j ->> 'tentativi')::integer = 2
     and (v_j ->> 'idempotency_key') = 'vinea-rimborso-accessori-' || replace(v_oL::text, '-', '') || '-dovuto_automatico-' || v_tot
     and pg_temp.pstato(v_oL) = 'refund_due', v_s);
 
@@ -724,7 +730,7 @@ begin
   -- charge.refunded SENZA metadata di dominio: si riconosce dal PaymentIntent verificato.
   v_u := pg_temp.sr('select public.accessori_pagamento_riconosci(''stripe'', ''pi_b5c_L'')');
   v_w := pg_temp.sr('select public.accessori_pagamento_riconosci(''stripe'', ''pi_sconosciuto'')');
-  v_s := pg_temp.ev('evt_b5c_r1', 'refunded', pg_temp.obj('pi_b5c_L', v_oL, v_tot, 'charge.refunded', 'eur', null, v_tot, true));
+  v_s := pg_temp.ev('evt_b5c_r1', 'refunded', (pg_temp.obj('pi_b5c_L', v_oL, v_tot, 'charge.refunded', 'eur', null, v_tot, true) || jsonb_build_object('refunds', jsonb_build_array(jsonb_build_object('id', 're_b5c_L', 'amount_cents', v_tot, 'status', 'succeeded', 'rimborso_id', v_rid, 'dominio', 'accessori')))));
   perform pg_temp.registra(7, 'rimborso totale riconciliato dal solo PaymentIntent (nessun metadata sulla Charge): pagamento refunded, rimborso eseguito (solo ora), riconoscimento vero per l''intento noto e falso per uno sconosciuto',
     v_s = 'processed' and pg_temp.pstato(v_oL) = 'refunded'
     and (select amount_refunded_cents = v_tot from private.accessori_pagamenti where ordine_id = v_oL)
@@ -733,7 +739,7 @@ begin
     and pg_temp.dato('select to_jsonb(public.accessori_pagamento_riconosci(''stripe'', ''pi_sconosciuto''))', null, 'service_role') = 'false'::jsonb,
     v_s);
 
-  v_s := pg_temp.ev('evt_b5c_r1', 'refunded', pg_temp.obj('pi_b5c_L', v_oL, v_tot, 'charge.refunded', 'eur', null, v_tot, true));
+  v_s := pg_temp.ev('evt_b5c_r1', 'refunded', (pg_temp.obj('pi_b5c_L', v_oL, v_tot, 'charge.refunded', 'eur', null, v_tot, true) || jsonb_build_object('refunds', jsonb_build_array(jsonb_build_object('id', 're_b5c_L', 'amount_cents', v_tot, 'status', 'succeeded', 'rimborso_id', v_rid, 'dominio', 'accessori')))));
   v_t := pg_temp.ev('evt_b5c_r0', 'refunded', pg_temp.obj('pi_b5c_L', v_oL, v_tot, 'charge.refunded', 'eur', null, 100, false), now() - interval '1 hour');
   perform pg_temp.registra(8, 'webhook di rimborso duplicato (stesso id) -> duplicate; evento VECCHIO e minore (fuori ordine) non fa regredire: ancora refunded, rimborsato = totale, un solo rimborso',
     v_s = 'duplicate' and v_t = 'processed' and pg_temp.pstato(v_oL) = 'refunded'
@@ -755,7 +761,7 @@ begin
     v_s || ' ' || v_t || ' ' || v_j::text);
 
   perform pg_temp.esito_rimb(v_rid2, true, 're_b5c_L2', null);
-  v_s := pg_temp.ev('evt_b5c_p2', 'refunded', pg_temp.obj('pi_b5c_L2', v_oL2, v_tot, 'charge.refunded', 'eur', null, v_tot, true));
+  v_s := pg_temp.ev('evt_b5c_p2', 'refunded', (pg_temp.obj('pi_b5c_L2', v_oL2, v_tot, 'charge.refunded', 'eur', null, v_tot, true) || jsonb_build_object('refunds', jsonb_build_array(jsonb_build_object('id', 're_b5c_L2', 'amount_cents', v_tot - v_tot / 2, 'status', 'succeeded', 'rimborso_id', v_rid2, 'dominio', 'accessori')))));
   perform pg_temp.registra(10, 'rimborso del residuo confermato: refund_due si chiude solo a rimborso totale verificato (refunded); richiesta eseguita',
     v_s = 'processed' and pg_temp.pstato(v_oL2) = 'refunded' and pg_temp.rimb(v_oL2) like 'eseguito:%', v_s);
 
@@ -934,7 +940,7 @@ begin
   v_s := pg_temp.esito_rimb(v_rid, true, 're_b5c_P', null);
   v_bal0 := pg_temp.bal(c_a);
   v_k := pg_temp.rilascia();
-  v_t := pg_temp.ev('evt_b5c_rp1', 'refunded', pg_temp.obj('pi_b5c_P', v_oP, v_tot, 'charge.refunded', 'eur', null, 1500, false));
+  v_t := pg_temp.ev('evt_b5c_rp1', 'refunded', (pg_temp.obj('pi_b5c_P', v_oP, v_tot, 'charge.refunded', 'eur', null, 1500, false) || jsonb_build_object('refunds', jsonb_build_array(jsonb_build_object('id', 're_b5c_P', 'amount_cents', 1500, 'status', 'succeeded', 'rimborso_id', v_rid, 'dominio', 'accessori')))));
   v_bal1 := pg_temp.bal(c_a);
   perform pg_temp.registra(24, 'rimborso parziale durante la contestazione: richiesta inviata (non eseguita) blocca ancora il rilascio; alla conferma firmata il pagamento e partially_refunded, il rimborso eseguito e il ricavo del venditore ridotto di 1500 (attesa -1500) senza toccare il disponibile',
     (v_j ->> 'amount_cents')::integer = 1500 and (v_j ->> 'idempotency_key') like '%-contestazione-1500'
