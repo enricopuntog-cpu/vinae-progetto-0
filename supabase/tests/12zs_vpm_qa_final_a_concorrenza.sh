@@ -359,6 +359,9 @@ alter table private.accessori_ordini disable trigger accessori_ordini_guard;
 update private.accessori_ordini set stato = 'annullato', motivo_chiusura = 'acquirente'
  where stato = 'in_attesa_pagamento' and buyer_id in ('$U3', '$U4', '$U5');
 alter table private.accessori_ordini enable trigger accessori_ordini_guard;
+-- Il limite di frequenza (checkout, annullo, apertura) vale per utente al minuto: ogni prova riparte da zero,
+-- altrimenti su uno stack veloce la sequenza supera il tetto e la prova fallisce per la ragione sbagliata.
+delete from private.rate_limit_buckets where subject in ('user:$U1', 'user:$U2', 'user:$U3', 'user:$U4', 'user:$U5', 'user:$U6');
 commit;
 SQL
 }
