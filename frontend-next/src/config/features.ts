@@ -155,3 +155,14 @@ export const ACCESSORI_NAV_MOBILE_ABILITATA =
  */
 export const accessoriLogisticaAbilitataServer = (): boolean =>
   valoreFlagEsattamenteTrue(process.env.ACCESSORI_LOGISTICA_ENABLED);
+
+/**
+ * Ordini Accessori (VPM-015B5A). Gate server della prenotazione sulla scheda
+ * dell'annuncio e delle pagine `/ordini-accessori`: spento di default, solo la
+ * stringa esatta `true` lo accende. Sotto di esso l'interruttore nel database
+ * (`checkout_attivo`, accendibile solo con `accessori_release`) e, più sotto,
+ * la logistica con le tariffe `active`: senza di esse nessun ordine nasce.
+ * Non attiva pagamenti. Da leggere solo in codice server.
+ */
+export const accessoriOrdiniAbilitatoServer = (): boolean =>
+  valoreFlagEsattamenteTrue(process.env.ACCESSORI_ORDINI_ENABLED);

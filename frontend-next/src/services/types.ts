@@ -52,6 +52,7 @@ import type {
 } from "@/lib/accessori-vendita/annunci-moderazione";
 import type { AnnuncioPubblico } from "@/lib/accessori-vendita/annunci-pubblici";
 import type { DestinazioneLogistica, StimaLogistica } from "@/lib/accessori-spedizione/stima";
+import type { DisponibilitaAccessorio, OrdineAccessorio } from "@/lib/accessori-ordini/ordine";
 import type {
   AccessorioPersonale,
   AccessorioPubblico,
@@ -3547,6 +3548,23 @@ export interface AccessoriLogisticaService {
   }): Promise<Result<StimaLogistica>>;
   /** Rilegge il proprio preventivo congelato. */
   leggi(preventivoId: string): Promise<Result<StimaLogistica>>;
+}
+
+/**
+ * Ordini Accessori (VPM-015B5A). Il chiamante passa un preventivo congelato e
+ * una chiave di idempotenza: prezzo, quantità, venditore, commissione e
+ * logistica li decide il database. Nessun metodo paga, rimborsa o contatta un
+ * corriere.
+ */
+export interface AccessoriOrdiniService {
+  /** Pezzi ancora prenotabili di un annuncio visibile (anche per anonimi). */
+  disponibilita(annuncioId: string): Promise<Result<DisponibilitaAccessorio>>;
+  /** Prenota consumando il preventivo congelato. Idempotente per chiave. */
+  crea(r: { preventivoId: string; chiave: string }): Promise<Result<OrdineAccessorio>>;
+  /** Annulla la propria prenotazione non pagata. */
+  annulla(ordineId: string): Promise<Result<OrdineAccessorio>>;
+  leggi(ordineId: string): Promise<Result<OrdineAccessorio>>;
+  elenca(ruolo: "acquisti" | "vendite"): Promise<Result<OrdineAccessorio[]>>;
 }
 
 export interface AnnunciAccessoriAdminService {

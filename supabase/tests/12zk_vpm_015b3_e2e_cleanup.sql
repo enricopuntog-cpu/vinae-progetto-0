@@ -21,6 +21,19 @@ delete from public.audit_log
 delete from public.reports where reporter_id::text like '12ab2000-%';
 delete from private.annunci_accessori_snapshot
  where annuncio_id in (select id from private.annunci_accessori where seller_id::text like '12ab2000-%');
+-- VPM-015B5A / B4: ordini, preventivi congelati, dichiarazioni di logistica e il
+-- servizio/tariffa di PROVA (provider `e2e_b5a`) creati dalla prova browser.
+delete from private.accessori_ordini where buyer_id::text like '12ab2000-%' or seller_id::text like '12ab2000-%';
+delete from private.accessori_logistica_preventivi where buyer_id::text like '12ab2000-%';
+delete from private.annunci_accessori_logistica
+ where annuncio_id in (select id from private.annunci_accessori where seller_id::text like '12ab2000-%');
+delete from private.accessori_logistica_tariffe where provider_code = 'e2e_b5a';
+delete from private.logistics_service_pudo_networks
+ where service_definition_id in (select id from private.logistics_service_definitions where provider_code = 'e2e_b5a');
+delete from private.logistics_service_capabilities
+ where service_definition_id in (select id from private.logistics_service_definitions where provider_code = 'e2e_b5a');
+delete from private.logistics_service_definitions where provider_code = 'e2e_b5a';
+delete from private.logistics_pudo_networks where provider_code = 'e2e_b5a';
 delete from private.annunci_accessori where seller_id::text like '12ab2000-%';
 delete from private.cantina_accessori where owner_id::text like '12ab2000-%';
 delete from storage.objects where bucket_id = 'cantina-accessori-foto' and name like '12ab2000-%';
@@ -37,6 +50,10 @@ update private.annunci_accessori_impostazioni
    set preparazione_attiva = false, pubblicazione_attiva = false, aggiornato_da = null;
 update private.cantina_accessori_impostazioni
    set funzione_attiva = false, aggiornato_da = null;
+update private.accessori_logistica_impostazioni
+   set logistica_attiva = false, aggiornato_da = null;
+update private.accessori_checkout_impostazioni
+   set checkout_attivo = false, aggiornato_da = null;
 
 set local session_replication_role = origin;
 

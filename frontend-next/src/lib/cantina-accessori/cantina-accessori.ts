@@ -137,9 +137,10 @@ function parseFoto(v: unknown): string[] | null {
   return out;
 }
 
-function parseQuantita(v: unknown): number | null {
+/** Zero solo per un accessorio archiviato: l'ultimo pezzo venduto (VPM-015B5A). */
+function parseQuantita(v: unknown, ammettiZero = false): number | null {
   const n = intero(v);
-  return n !== null && n >= 1 && n <= MAX_QUANTITA_CANTINA_ACCESSORIO ? n : null;
+  return n !== null && n >= (ammettiZero ? 0 : 1) && n <= MAX_QUANTITA_CANTINA_ACCESSORIO ? n : null;
 }
 
 export function parseCategoriaTassonomia(v: unknown): CategoriaTassonomia | null {
@@ -187,7 +188,7 @@ export function parseAccessorioPersonale(v: unknown): AccessorioPersonale | null
   const descrizione = testo(o.descrizione);
   const marchio = testoONull(o.marchio);
   const cond = condizione(o.condizione);
-  const quantita = parseQuantita(o.quantita);
+  const quantita = parseQuantita(o.quantita, o.archiviato === true);
   const note = testo(o.note);
   const immagini = parseFoto(o.immagini);
   const vis = visibilita(o.visibilita);

@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { StatoVuotoAccessori } from "@/components/vinea/accessori/AccessoriVetrina";
 import { StimaSpedizioneAccessorio } from "@/components/vinea/accessori-spedizione/StimaSpedizioneAccessorio";
-import { accessoriLogisticaAbilitataServer } from "@/config/features";
+import { PrenotazioneAccessorio } from "@/components/vinea/ordini-accessori/PrenotazioneAccessorio";
+import { accessoriLogisticaAbilitataServer, accessoriOrdiniAbilitatoServer } from "@/config/features";
 import { DettaglioAnnuncioPubblico } from "@/components/vinea/accessori-vendita/AnnunciPubblici";
 import { risolviModalitaAccessori } from "@/lib/accessori/gate";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -14,10 +15,11 @@ export const metadata: Metadata = {
 };
 
 /**
- * Dettaglio di un annuncio Accessori pubblicato (VPM-015B3). Nessuna azione di
- * acquisto: il prezzo è indicativo, la pagina dichiara che gli acquisti non sono
- * disponibili e da qui non parte alcun percorso verso checkout, ordini o
- * pagamenti. Un annuncio non pubblicato, oscurato, ritirato o inesistente
+ * Dettaglio di un annuncio Accessori pubblicato (VPM-015B3). Con le flag server
+ * spente (default) è una vetrina: il prezzo è indicativo e gli acquisti non sono
+ * disponibili. Con `ACCESSORI_ORDINI_ENABLED` mostra, sotto la stima di
+ * spedizione, la prenotazione (VPM-015B5A): nessun pagamento, e solo se il
+ * database la apre. Un annuncio non pubblicato, oscurato, ritirato o inesistente
  * risponde 404 senza distinguere i casi.
  */
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
@@ -58,6 +60,9 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       />
       {accessoriLogisticaAbilitataServer() ? (
         <StimaSpedizioneAccessorio annuncioId={esito.data.id} disponibili={esito.data.quantita} />
+      ) : null}
+      {accessoriOrdiniAbilitatoServer() ? (
+        <PrenotazioneAccessorio annuncioId={esito.data.id} autenticato={autenticato} />
       ) : null}
     </>
   );

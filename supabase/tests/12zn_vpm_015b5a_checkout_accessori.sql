@@ -749,7 +749,7 @@ begin
   v_s := pg_temp.salva(c_a, v_a3, '{"quantita":1}');
   v_t := pg_temp.salva(c_a, v_a3, '{"quantita":2}');
   perform pg_temp.registra(19, 'il venditore non riduce sotto i pezzi prenotati (quantita_prenotata) ma puo arrivare al prenotato; cantina 3, annuncio 2, disponibili 0',
-    r.esito = 'NESSUN_ERRORE:' and v_s like '22023:%' and v_t = 'NESSUN_ERRORE:'
+    r.esito = 'NESSUN_ERRORE:' and v_s = '22023:quantita_prenotata' and v_t = 'NESSUN_ERRORE:'
     and pg_temp.inv(v_ic3, v_a3) = '3/2/0',
     v_s || ' ' || v_t || ' ' || pg_temp.inv(v_ic3, v_a3));
   v_s := pg_temp.transizione(c_a, v_a3, 'ritirato');
@@ -857,7 +857,7 @@ begin
     and pg_temp.esito(format('select public.accessori_ordine_annulla(%L)', v_o3), null, 'anon') like '42501:%'
     and pg_temp.esito(format('select public.accessori_ordine_leggi(%L)', v_o3), null, 'anon') like '42501:%'
     and pg_temp.esito('select public.accessori_ordini_elenca(''acquisti'')', null, 'anon') like '42501:%'
-    and pg_temp.conta('select count(*) from private.accessori_ordini', c_b) = -1
+    and pg_temp.esito('select count(*) from private.accessori_ordini', c_b) like '42501:%'
     and (pg_temp.diretto(format($q$set local role authenticated; delete from private.accessori_ordini where id = %L$q$, v_o3))).esito = '42501'
     and not has_function_privilege('service_role', 'public.accessori_checkout_crea(uuid,text)', 'execute')
     and not has_function_privilege('service_role', 'public.accessori_ordine_leggi(uuid)', 'execute')
@@ -870,14 +870,17 @@ begin
   -- 27: lettura per parte, forma chiusa.
   v_j := pg_temp.dato(format('select public.accessori_ordine_leggi(%L)', v_o3), c_b);
   v_s := pg_temp.esito(format('select public.accessori_ordine_leggi(%L)', v_o3), c_d);
-  perform pg_temp.registra(27, 'lettura: acquirente e venditore leggono, un terzo no (non_trovato); l''acquirente vede il venditore e non i dati interni (nessun margine, servizio, tariffa, id di Cantina); il venditore vede cio che incassa e il nome pubblico dell''acquirente, non il resto; gli elenchi sono per ruolo',
+  perform pg_temp.registra(27, 'lettura: acquirente e venditore leggono, un terzo no (non_trovato); l''acquirente vede il venditore e non i dati interni (nessun margine, servizio, tariffa, id di Cantina); il venditore vede cio che incassa (mai commissione, spedizione o totale dell''acquirente) e il nome pubblico dell''acquirente solo a vendita avvenuta; gli elenchi sono per ruolo',
     (v_j ->> 'ruolo') = 'acquirente' and v_s = 'P0001:non_trovato'
     and (v_j -> 'venditore' ->> 'username') = 'ua-12zn' and not (v_j ? 'ricevi') and not (v_j ? 'acquirente')
     and not (v_j::text ~* '(margine|servizio|provider|tariffa|cantina|piano|economia)')
     and (pg_temp.dato(format('select public.accessori_ordine_leggi(%L)', v_o3), c_a) ->> 'ruolo') = 'venditore'
     and (pg_temp.dato(format('select public.accessori_ordine_leggi(%L)', v_o3), c_a) #>> '{ricevi,cents}') = '2300'
-    and (pg_temp.dato(format('select public.accessori_ordine_leggi(%L)', v_o3), c_a) #>> '{acquirente,username}') = 'ub-12zn'
+    and not (pg_temp.dato(format('select public.accessori_ordine_leggi(%L)', v_o3), c_a) ? 'acquirente')
+    and (pg_temp.dato(format('select public.accessori_ordine_leggi(%L)', (select id from private.accessori_ordini
+          where annuncio_id = v_a1 and stato = 'pagato' limit 1)), c_a) #>> '{acquirente,username}') = 'ub-12zn'
     and not (pg_temp.dato(format('select public.accessori_ordine_leggi(%L)', v_o3), c_a) ? 'venditore')
+    and not (pg_temp.dato(format('select public.accessori_ordine_leggi(%L)', v_o3), c_a) ?| array['commissione', 'pagamento', 'logistica', 'totaleAcquirenteCents', 'valuta'])
     and jsonb_array_length(pg_temp.dato('select public.accessori_ordini_elenca(''acquisti'')', c_a)) = 0
     and jsonb_array_length(pg_temp.dato('select public.accessori_ordini_elenca(''vendite'')', c_a)) >= 5
     and jsonb_array_length(pg_temp.dato('select public.accessori_ordini_elenca(''acquisti'')', c_b)) >= 3
@@ -963,6 +966,60 @@ begin
     and (select consumato_at is null from private.accessori_logistica_preventivi where id = v_p1)
     and (select count(*) from private.accessori_ordini where buyer_id = c_a) = 0,
     r2.esito);
+
+  -- 33: tetto di prenotazioni aperte per acquirente.
+  perform pg_temp.reset_rl();
+  update private.accessori_checkout_impostazioni set max_prenotazioni_aperte = 1;
+  select * into r from pg_temp.prenota(c_d, v_a1, 1);
+  v_o4 := (r.ordine ->> 'id')::uuid;
+  select * into r2 from pg_temp.prenota(c_d, v_a4, 1);
+  v_t := (select consumato_at is null from private.accessori_logistica_preventivi where id = r2.preventivo)::text;
+  v_s := pg_temp.annulla(c_d, v_o4);
+  select * into r from pg_temp.prenota(c_d, v_a4, 1);
+  perform pg_temp.annulla(c_d, (r.ordine ->> 'id')::uuid);
+  update private.accessori_checkout_impostazioni set max_prenotazioni_aperte = 3;
+  perform pg_temp.registra(33, 'tetto di prenotazioni aperte per acquirente (qui 1): la seconda, su un altro annuncio, e rifiutata (troppe_prenotazioni) senza consumare il preventivo; annullando la prima si puo prenotare di nuovo; impostazione fra 1 e 10',
+    r2.esito = '22023:troppe_prenotazioni'
+    and v_t = 'true'
+    and v_s = 'NESSUN_ERRORE:' and r.esito = 'NESSUN_ERRORE:'
+    and (select (pg_temp.diretto($q$update private.accessori_checkout_impostazioni set max_prenotazioni_aperte = 11$q$)).esito) = '23514'
+    and (select max_prenotazioni_aperte from private.accessori_checkout_impostazioni) = 3,
+    r2.esito);
+
+  -- 34: un accessorio esaurito non si riattiva (errore chiaro) e la versione di configurazione
+  -- dell'ordine e quella del preventivo, non la corrente.
+  v_s := pg_temp.esito(format('select public.cantina_accessori_archivia(%L, false)', v_ic2), c_a);
+  perform pg_temp.registra(34, 'un accessorio esaurito (ultimo pezzo venduto) non si riattiva: errore con hint accessorio_esaurito, non il vincolo grezzo; resta archiviato a quantita 0',
+    v_s = '22023:accessorio_esaurito'
+    and (select quantita = 0 and archiviato_at is not null from private.cantina_accessori where id = v_ic2),
+    v_s);
+
+  perform pg_temp.reset_rl();
+  select * into r from pg_temp.prenota(c_d, v_a4, 1);
+  v_o4 := (r.ordine ->> 'id')::uuid;
+  perform pg_temp.annulla(c_d, v_o4);
+  v_p1 := (pg_temp.congela(c_d, v_a4, 1) ->> 'preventivoId')::uuid;
+  update private.accessori_logistica_impostazioni set validita_preventivo_min = 20;
+  select * into r2 from pg_temp.crea(c_d, v_p1, 'versione-12zn-key-1');
+  perform pg_temp.registra(35, 'la versione di configurazione della logistica scritta nell''ordine e quella del preventivo congelato (non la corrente, cambiata nel frattempo)',
+    r2.esito = 'NESSUN_ERRORE:'
+    and (select o.logistica_config_versione = q.config_versione
+                and q.config_versione < (select versione from private.accessori_logistica_impostazioni)
+         from private.accessori_ordini o join private.accessori_logistica_preventivi q on q.id = o.preventivo_id
+         where o.id = (r2.ordine ->> 'id')::uuid),
+    r2.esito);
+  perform pg_temp.annulla(c_d, (r2.ordine ->> 'id')::uuid);
+
+  -- 36: oscurando un annuncio con una prenotazione gia scaduta ma non chiusa, il motivo e la scadenza.
+  perform pg_temp.reset_rl();
+  select * into r from pg_temp.prenota(c_c, v_a4, 1);
+  v_o5 := (r.ordine ->> 'id')::uuid;
+  perform pg_temp.invecchia(v_o5);
+  perform pg_temp.esito_v(format('public.annunci_accessori_admin_modera(%L, ''oscura'', ''Sospeso per verifica'')', v_a4), c_adm);
+  perform pg_temp.registra(36, 'oscurando un annuncio, una prenotazione gia scaduta (ma non ancora chiusa) risulta scaduta per scadenza, non annullata per annuncio non disponibile',
+    pg_temp.stato_ordine(v_o5) = 'scaduto'
+    and (select motivo_chiusura = 'scadenza' from private.accessori_ordini where id = v_o5),
+    pg_temp.stato_ordine(v_o5));
 end $$;
 
 select id, descrizione, passed, detail

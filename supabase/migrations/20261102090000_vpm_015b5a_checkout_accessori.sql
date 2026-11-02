@@ -66,10 +66,14 @@ create table private.accessori_checkout_impostazioni (
   singleton boolean primary key default true check (singleton),
   checkout_attivo boolean not null default false,
   prenotazione_min integer not null default 15,
+  -- Tetto di prenotazioni aperte (non pagate, non scadute) per acquirente su tutti
+  -- gli annunci: nessuno tiene fuori dal mercato molti annunci senza pagare.
+  max_prenotazioni_aperte integer not null default 3,
   versione integer not null default 1,
   aggiornato_da uuid references public.profiles (id) on delete set null,
   updated_at timestamptz not null default now(),
-  constraint accessori_checkout_prenotazione_forma check (prenotazione_min between 5 and 60)
+  constraint accessori_checkout_prenotazione_forma check (prenotazione_min between 5 and 60),
+  constraint accessori_checkout_tetto_forma check (max_prenotazioni_aperte between 1 and 10)
 );
 
 insert into private.accessori_checkout_impostazioni (singleton) values (true);
@@ -140,6 +144,27 @@ alter table private.cantina_accessori
   add constraint cantina_accessori_quantita_forma check (quantita between 0 and 999),
   add constraint cantina_accessori_esaurito_archiviato
     check (quantita >= 1 or archiviato_at is not null);
+
+-- Un accessorio esaurito non si riattiva: errore chiaro (con hint), non il CHECK.
+create function private.cantina_accessori_esaurito_guard()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.quantita = 0 and new.archiviato_at is null then
+    raise exception 'Un accessorio esaurito non si riattiva: aggiungine uno nuovo.'
+      using errcode = '22023', hint = 'accessorio_esaurito';
+  end if;
+  return new;
+end;
+$$;
+
+revoke execute on function private.cantina_accessori_esaurito_guard() from public, anon, authenticated;
+
+create trigger cantina_accessori_esaurito_guard
+  before update on private.cantina_accessori
+  for each row execute function private.cantina_accessori_esaurito_guard();
 
 -- ---------------------------------------------------------------------------
 -- [3] Ordini Accessori
@@ -379,8 +404,9 @@ revoke execute on function private.accessori_prenotazioni_scadute_chiudi(uuid) f
 -- La guardia di B3 con UN ramo in piu: la vendita confermata (marcatore
 -- `vinae.accessori_vendita` = 'ok:<annuncio>') puo solo scendere di quantita, o
 -- ritirare l'annuncio esaurito, senza i controlli di pubblicazione e senza
--- toccare versione e snapshot. Il pagamento e gia avvenuto: la moderazione o un
--- interruttore spento non devono poter bloccare l'incasso (CLAUDE.md, Money).
+-- toccare versione e snapshot. Una volta confermato il pagamento, moderazione e
+-- interruttori spenti non devono poter bloccare la vendita (CLAUDE.md, Money);
+-- PRIMA del pagamento, invece, la moderazione libera le prenotazioni (vedi sotto).
 create or replace function private.annunci_accessori_guard()
 returns trigger
 language plpgsql
@@ -683,6 +709,9 @@ as $$
 declare
   v_o record;
 begin
+  -- Le prenotazioni gia scadute si chiudono come scadute, non come «annuncio non
+  -- disponibile»: il motivo che l'utente legge deve essere vero.
+  perform private.accessori_prenotazioni_scadute_chiudi(new.id);
   for v_o in
     select o.id from private.accessori_ordini o
     where o.annuncio_id = new.id and o.stato = 'in_attesa_pagamento'
@@ -733,30 +762,37 @@ as $$
     'prezzo', jsonb_build_object(
       'unitarioCents', o.prezzo_unitario_cents, 'quantita', o.quantita,
       'subtotaleCents', o.prezzo_cents),
-    'commissione', jsonb_build_object('cents', o.commissione_cents),
-    'pagamento', jsonb_build_object('coperturaSuLogisticaCents', o.copertura_pagamento_cents),
-    'logistica', jsonb_build_object(
-      'trasportoCents', o.logistica_cents - o.assicurazione_cents,
-      'assicurazioneCents', o.assicurazione_cents,
-      'totaleCents', o.logistica_cents,
-      'colli', o.colli, 'pezziPerCollo', o.pezzi_per_collo,
-      'destinazione', o.destinazione),
-    'totaleAcquirenteCents', o.totale_acquirente_cents,
-    'valuta', o.currency,
     'creatoAt', o.creato_at,
     'scadeAt', o.scade_at,
     'pagatoAt', o.pagato_at,
     'motivoChiusura', o.motivo_chiusura,
     'pagamentoSimulato', coalesce(o.pagamento_modo = 'simulato', false)
   ) || case when p_ruolo = 'acquirente' then
-      jsonb_build_object('venditore',
-        (select jsonb_build_object('username', pp.username)
-         from private.profili_pubblici pp where pp.user_id = o.seller_id))
+      jsonb_build_object(
+        'valuta', o.currency,
+        'commissione', jsonb_build_object('cents', o.commissione_cents),
+        'pagamento', jsonb_build_object('coperturaSuLogisticaCents', o.copertura_pagamento_cents),
+        'logistica', jsonb_build_object(
+          'trasportoCents', o.logistica_cents - o.assicurazione_cents,
+          'assicurazioneCents', o.assicurazione_cents,
+          'totaleCents', o.logistica_cents,
+          'colli', o.colli, 'pezziPerCollo', o.pezzi_per_collo,
+          'destinazione', o.destinazione),
+        'totaleAcquirenteCents', o.totale_acquirente_cents,
+        'venditore',
+          (select jsonb_build_object('username', pp.username)
+           from private.profili_pubblici pp where pp.user_id = o.seller_id))
     else
-      jsonb_build_object('acquirente',
-        (select jsonb_build_object('username', pp.username)
-         from private.profili_pubblici pp where pp.user_id = o.buyer_id),
+      -- Il venditore vede quanto incassa e le date; non il margine di Vinea, non
+      -- la spedizione, non il totale dell'acquirente. L'acquirente gli e noto solo
+      -- a vendita avvenuta: una semplice prenotazione resta anonima.
+      jsonb_build_object(
         'ricevi', jsonb_build_object('cents', o.prezzo_cents))
+      || case when o.stato = 'pagato' then
+           jsonb_build_object('acquirente',
+             (select jsonb_build_object('username', pp.username)
+              from private.profili_pubblici pp where pp.user_id = o.buyer_id))
+         else '{}'::jsonb end
     end;
 $$;
 
@@ -889,10 +925,10 @@ declare
   v_eco jsonb;
   v_piano jsonb;
   v_cfg private.accessori_checkout_impostazioni%rowtype;
-  v_lcfg private.accessori_logistica_impostazioni%rowtype;
   v_v record;
   v_disp integer;
   v_check jsonb;
+  v_vincolo text;
 begin
   if p_preventivo_id is null or length(coalesce(p_chiave, '')) not between 8 and 128
      or p_chiave !~ '^[A-Za-z0-9._:-]+$' then
@@ -969,6 +1005,14 @@ begin
       using errcode = '23505', hint = 'prenotazione_aperta';
   end if;
 
+  select * into v_cfg from private.accessori_checkout_impostazioni;
+  if (select count(*) from private.accessori_ordini x
+      where x.buyer_id = v_uid and x.stato = 'in_attesa_pagamento' and x.scade_at > now())
+     >= v_cfg.max_prenotazioni_aperte then
+    raise exception 'Hai gia troppe prenotazioni aperte: completane o annullane una.'
+      using errcode = '22023', hint = 'troppe_prenotazioni';
+  end if;
+
   v_disp := private.accessori_disponibili(a.id);
   if v_disp < q.quantita then
     raise exception 'Disponibili solo % pezzi.', v_disp
@@ -981,18 +1025,25 @@ begin
 
   v_eco := q.dettaglio -> 'interno' -> 'economia';
   v_piano := q.dettaglio -> 'interno' -> 'piano';
+  -- Null-safe: una chiave mancante nel preventivo e un preventivo incoerente,
+  -- non un controllo che non scatta.
   if v_eco is null or v_piano is null
-     or (v_eco ->> 'subtotaleCents')::integer <> a.prezzo_unitario_cents * q.quantita
-     or (v_eco ->> 'addebitoTotaleCents')::integer <> q.addebito_totale_cents
-     or (v_eco ->> 'addebitoTotaleCents')::integer
-        <> (v_eco ->> 'subtotaleCents')::integer + (v_eco ->> 'commissioneCents')::integer
-           + (v_eco ->> 'coperturaPagamentoSpedizioneCents')::integer + q.logistica_cents then
+     or not coalesce(
+       (v_eco ->> 'subtotaleCents')::integer = a.prezzo_unitario_cents * q.quantita
+       and (v_eco ->> 'addebitoTotaleCents')::integer = q.addebito_totale_cents
+       and (v_eco ->> 'addebitoTotaleCents')::integer
+           = (v_eco ->> 'subtotaleCents')::integer + (v_eco ->> 'commissioneCents')::integer
+             + (v_eco ->> 'coperturaPagamentoSpedizioneCents')::integer + q.logistica_cents
+       and (v_eco ->> 'classe') in ('privato', 'partner')
+       and (v_eco ->> 'margineObiettivoBps') is not null
+       and (v_eco ->> 'riferimentoPercentualeBps') is not null
+       and (v_eco ->> 'riferimentoFissoCents') is not null
+       and (v_piano ->> 'colliTotali') is not null
+       and (v_piano ->> 'pezziPerCollo') is not null, false) then
     raise exception 'Il preventivo non e coerente.' using errcode = '23514', hint = 'preventivo_incoerente';
   end if;
 
   select * into s from private.annunci_accessori_snapshot where annuncio_id = a.id;
-  select * into v_cfg from private.accessori_checkout_impostazioni;
-  select * into v_lcfg from private.accessori_logistica_impostazioni;
 
   perform set_config('vinae.accessori_ordine_crea', 'crea:' || v_id::text, true);
   insert into private.accessori_ordini (
@@ -1007,21 +1058,27 @@ begin
     s.nome, s.marchio, a.condizione,
     q.quantita, a.prezzo_unitario_cents, (v_eco ->> 'subtotaleCents')::integer,
     (v_eco ->> 'commissioneCents')::integer, (v_eco ->> 'coperturaPagamentoSpedizioneCents')::integer,
-    q.logistica_cents, q.assicurazione_cents, q.addebito_totale_cents, v_v.classe,
+    q.logistica_cents, q.assicurazione_cents, q.addebito_totale_cents, (v_eco ->> 'classe')::public.classe_venditore,
     (v_eco ->> 'margineObiettivoBps')::integer, (v_eco ->> 'riferimentoPercentualeBps')::integer,
     (v_eco ->> 'riferimentoFissoCents')::integer,
     (v_piano ->> 'colliTotali')::integer, (v_piano ->> 'pezziPerCollo')::integer,
-    v_lcfg.versione, q.dettaglio -> 'interno',
+    q.config_versione, q.dettaglio -> 'interno',
     now() + make_interval(mins => v_cfg.prenotazione_min))
   returning * into o;
   perform set_config('vinae.accessori_ordine_crea', '', true);
 
   return private.accessori_ordine_json(o, 'acquirente');
 exception when unique_violation then
-  -- Una corsa fra due richieste dello stesso acquirente: l'indice unico ha
-  -- vinto. Nessun nome di vincolo verso il browser.
-  raise exception 'Hai gia una prenotazione per questo annuncio: annullala o completala.'
-    using errcode = '23505', hint = 'prenotazione_aperta';
+  -- Una corsa fra richieste dello stesso acquirente: un indice unico ha vinto.
+  -- Mai un nome di vincolo verso il browser. Il controllo esplicito (che non ha
+  -- vincolo) e l'indice della prenotazione aperta sono "prenotazione_aperta";
+  -- chiave o preventivo gia usati sono una richiesta gia in corso.
+  get stacked diagnostics v_vincolo = constraint_name;
+  if coalesce(v_vincolo, '') in ('', 'accessori_ordini_una_prenotazione_aperta') then
+    raise exception 'Hai gia una prenotazione per questo annuncio: annullala o completala.'
+      using errcode = '23505', hint = 'prenotazione_aperta';
+  end if;
+  raise exception 'Richiesta gia in corso.' using errcode = '22023', hint = 'chiave_riusata';
 end;
 $$;
 
@@ -1221,7 +1278,7 @@ begin
                             'accessori_prenotazioni_scadute_chiudi',
                             'accessori_quantita_riservata_guard',
                             'accessori_riserve_rilascia_annuncio',
-                            'annunci_accessori_guard'))
+                            'annunci_accessori_guard', 'cantina_accessori_esaurito_guard'))
   loop
     execute format('revoke all on function %s from public, anon, authenticated, service_role', v_f.firma);
   end loop;

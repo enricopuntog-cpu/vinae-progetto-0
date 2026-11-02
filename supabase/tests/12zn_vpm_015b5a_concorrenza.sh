@@ -445,7 +445,7 @@ ann_q="$(q_n "select quantita || '/' || stato from private.annunci_accessori whe
 cant_q="$(q_n "select quantita from private.cantina_accessori where id = '$C6'")"
 # Esiti coerenti: pagato (cantina 2) con annuncio 2 (prima il pagamento, poi la riduzione a 2 = nessun cambiamento)
 # oppure ritirato per esaurimento (riduzione a 2 prima, poi il pagamento dei 2 prenotati).
-if [ "$ra" = "0" ] && [ "$stato" = "pagato" ] && [ "$neg" = "0" ] && [ "$cant_q" = "2" ] \
+if [ "$ra" = "0" ] && [ "$rb" = "0" ] && [ "$stato" = "pagato" ] && [ "$neg" = "0" ] && [ "$cant_q" = "2" ] \
    && { [ "$ann_q" = "2/pubblicato" ] || [ "$ann_q" = "2/ritirato" ]; }; then
   esito "6 pagamento contro riduzione del venditore: nessuna quantita negativa, Cantina 2, annuncio $ann_q" ok
 else
