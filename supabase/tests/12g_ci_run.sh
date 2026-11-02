@@ -549,6 +549,18 @@ run_grid "12zq Riconciliazione e code Accessori" 12zq_vpm_015b5c_riconciliazione
 # articolo, margine 15%, checkout, sospensione e revoca. Transazione con ROLLBACK.
 run_grid "12zr Accessori Partner" 12zr_vpm_015c_accessori_partner.sql 3
 
+# VPM-015QA-FINAL-A — annullamento contro pagamento aperto (apertura, processing,
+# failed/expired, incasso tardivo, replay) e ULTIMA unita del Partner contesa da
+# due acquirenti su sessioni PostgreSQL reali; sospensione/revoca durante la
+# vendita, aliquote e vino invariati. Stessa guardia di identita di 12zp (nonce
+# gia esportato), fixture `@conc-12zs.test` rimosse in trap EXIT, residui = 0.
+conc_12zs="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zs_vpm_qa_final_a_concorrenza.sh")"   || { printf '%s
+' "$conc_12zs"; die "12zs concorrenza: fallita."; }
+printf '%s
+' "$conc_12zs"
+summary "- $(printf '%s
+' "$conc_12zs" | tail -n 1)"
+
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
 # cancello di preparazione, quindi il suo caso 9 registra una prova reale. Una

@@ -255,6 +255,7 @@ export const MESSAGGI_ORDINI_ACCESSORI: Readonly<Record<string, string>> = {
   preventivo_quantita_non_disponibile: "Non ci sono abbastanza pezzi disponibili: riduci la quantità.",
   chiave_riusata: "Richiesta non valida. Riprova.",
   ordine_pagato: "Un ordine pagato non si annulla da qui.",
+  pagamento_in_corso: "Il pagamento è in corso: attendi l'esito prima di annullare.",
   non_trovato: "Ordine non trovato.",
 };
 
