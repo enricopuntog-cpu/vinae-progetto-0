@@ -111,7 +111,7 @@ jobs:
       # che si svuota in silenzio.
       - name: Test
         env:
-          MIN_TESTS: "3280"
+          MIN_TESTS: "3306"
         run: |
           set -o pipefail
           bun run test 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
@@ -188,6 +188,7 @@ jobs:
           bash -n supabase/tests/12g_ci_run.sh
           bash -n supabase/tests/12zo_vpm_015b5b_concorrenza.sh
           bash -n supabase/tests/12zs_vpm_qa_final_a_concorrenza.sh
+          bash -n supabase/tests/12zt_vpm_qa_final_b1_intenti_orfani.sh
           bash -n supabase/tests/12z_vp_c_concorrenza.sh
           bash -n supabase/tests/12zb_vp_d_concorrenza.sh
           node --check supabase/tests/12g_club_dispute_e2e.mjs

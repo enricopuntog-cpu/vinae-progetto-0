@@ -103,12 +103,38 @@ export interface PaymentProvider {
 }
 
 /**
+ * Esito dell'annullo di un incasso aperto ma mai collegato a un ordine pagabile
+ * (VPM-015QA-FINAL-B1). Sei esiti distinti, perché solo i primi due provano che
+ * l'incasso non è più possibile:
+ *
+ *  - `annullato`: il fornitore ha confermato la cancellazione;
+ *  - `gia_annullato`: era già cancellato (idempotente, verificato rileggendolo);
+ *  - `incassato`: l'incasso era già riuscito, NON è una cancellazione: importo,
+ *    valuta e ordine dichiarati dal fornitore servono al database per riverificare;
+ *  - `in_elaborazione`: il fornitore non lo cancella (metodo asincrono in corso);
+ *  - `sconosciuto`: rete, timeout, risposta ambigua. Non prova nulla: va riconciliato.
+ */
+export type AnnulloEsito =
+  | { kind: "annullato" }
+  | { kind: "gia_annullato" }
+  | { kind: "incassato"; amountCents: number; currency: string; orderRef: string | null }
+  | { kind: "in_elaborazione" }
+  | { kind: "sconosciuto"; error: string };
+
+export interface CancelProvider {
+  readonly id: string;
+  /** Il riferimento viene sempre dalla risposta del fornitore alla creazione, mai dal browser. */
+  annullaCheckout(ref: ProviderPaymentRef): Promise<AnnulloEsito>;
+}
+
+/**
  * La fetta che serve all'apertura del checkout. La Edge Function `payments-checkout`
  * dipende da questa e non dall'interfaccia intera: gli altri metodi vivono nel
  * runtime del webhook, che è un processo diverso. Restringere qui evita di
  * pretendere da un adapter di checkout codice che non gli compete.
  */
-export type CheckoutProvider = Pick<PaymentProvider, "id" | "apriCheckout" | "riprendiCheckout">;
+export type CheckoutProvider = Pick<PaymentProvider, "id" | "apriCheckout" | "riprendiCheckout"> &
+  Pick<CancelProvider, "annullaCheckout">;
 
 // ---- Account di incasso del venditore --------------------------------------
 //
