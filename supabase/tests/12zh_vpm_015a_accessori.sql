@@ -524,8 +524,8 @@ begin
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.proname like 'accessori%'
     and has_function_privilege('anon', p.oid, 'execute');
-  perform pg_temp.registra(27, 'anonimo esegue solo le tre letture pubbliche; le nove porte admin non sono eseguibili da anon; nessuna funzione accessori cita ordini, pagamenti o annunci',
-    v_chiavi = array['accessori_categorie_elenca', 'accessori_dettaglio', 'accessori_disponibilita', 'accessori_elenca']
+  perform pg_temp.registra(27, 'anonimo esegue solo le letture pubbliche (catalogo, disponibilita, venditore pubblico di un annuncio visibile); le nove porte admin non sono eseguibili da anon; nessuna funzione accessori cita ordini, pagamenti o annunci',
+    v_chiavi = array['accessori_categorie_elenca', 'accessori_dettaglio', 'accessori_disponibilita', 'accessori_elenca', 'accessori_venditore_pubblico']
     and (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
          where n.nspname = 'public' and p.proname like 'accessori_admin_%'
            and has_function_privilege('authenticated', p.oid, 'execute')

@@ -682,7 +682,7 @@ begin
     v_c.esito || ':' || v_c.hint);
 
   -- 35: nessun legame con vino, bottiglie, ordini, pagamenti; nessuna colonna economica.
-  perform pg_temp.registra(35, 'nessun accessorio in wines/bottle_units/cellar_slots: conteggi invariati; nessuna FK verso vino/annunci/ordini; nessuna colonna di prezzo; nessuna funzione cantina_accessori cita ordini, pagamenti, annunci o bottiglie',
+  perform pg_temp.registra(35, 'nessun accessorio in wines/bottle_units/cellar_slots: conteggi invariati; nessuna FK verso vino/annunci/ordini (solo il Partner proprietario della scorta commerciale, VPM-015C); nessuna colonna di prezzo; nessuna funzione cantina_accessori cita ordini, pagamenti, annunci o bottiglie',
     concat_ws('/',
       (select count(*) from public.listings), (select count(*) from public.orders),
       (select count(*) from public.wines), (select count(*) from public.bottle_units),
@@ -692,7 +692,7 @@ begin
       select 1 from pg_constraint c
       where c.conrelid = 'private.cantina_accessori'::regclass and c.contype = 'f'
         and c.confrelid not in ('public.profiles'::regclass, 'private.accessori_categorie'::regclass,
-                                'private.accessori'::regclass))
+                                'private.accessori'::regclass, 'private.partners'::regclass))
     and not exists (
       select 1 from pg_attribute a
       where a.attrelid = 'private.cantina_accessori'::regclass and a.attnum > 0 and not a.attisdropped

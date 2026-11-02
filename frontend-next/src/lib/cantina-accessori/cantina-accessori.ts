@@ -327,6 +327,8 @@ const MESSAGGI_HINT: Readonly<Record<string, string>> = {
   limite_raggiunto: "Hai raggiunto il numero massimo di accessori.",
   archiviato: "Un accessorio archiviato non si modifica né si espone: ripristinalo prima.",
   non_trovato: "Accessorio non trovato.",
+  partner_non_attivo: "Le scorte commerciali si gestiscono solo con un Partner attivo.",
+  utente_non_attivo: "Il tuo account non è abilitato a questa operazione.",
   annuncio_aperto: "Questo accessorio ha un annuncio aperto: ritiralo prima.",
   quantita_sotto_impegnata: "La quantità è inferiore ai pezzi messi in vendita: riduci o ritira prima l'annuncio.",
   annuncio_in_revisione: "L'annuncio di questo accessorio è in revisione: riportalo in bozza prima.",

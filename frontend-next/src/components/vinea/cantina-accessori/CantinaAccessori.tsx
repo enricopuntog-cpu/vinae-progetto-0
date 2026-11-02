@@ -34,6 +34,7 @@ import { preparaImmagineVetrina } from "@/lib/partner/prepara-immagine-vetrina";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { creaAccessoriLetturaService } from "@/services/accessori-service";
 import { creaCantinaAccessoriService } from "@/services/cantina-accessori-service";
+import { creaPartnerAccessoriService } from "@/services/partner-accessori-service";
 
 /**
  * Sezione «Accessori» della Cantina personale (VPM-015B1).
@@ -71,9 +72,14 @@ function Avviso({ messaggio }: { messaggio: Messaggio }) {
   );
 }
 
-export function CantinaAccessori() {
+/** `partner`: scorte commerciali NUOVE del Vinea Partner (VPM-015C), stesse schermate e stesse porte di foto, catalogo e vendita. */
+export function CantinaAccessori({ modalita = "personale" }: { modalita?: "personale" | "partner" } = {}) {
+  const commerciale = modalita === "partner";
   const client = useMemo(() => getSupabaseClient(), []);
-  const servizio = useMemo(() => creaCantinaAccessoriService(client), [client]);
+  const servizio = useMemo(
+    () => (commerciale ? creaPartnerAccessoriService(client) : creaCantinaAccessoriService(client)),
+    [client, commerciale],
+  );
   const lettura = useMemo(() => creaAccessoriLetturaService(client), [client]);
 
   const [stato, setStato] = useState<StatoCantinaAccessori | null>(null);
@@ -176,13 +182,13 @@ export function CantinaAccessori() {
     <section aria-labelledby="cantina-accessori-titolo" className="space-y-4" data-testid="cantina-accessori">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-salvia">Cantina</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-salvia">{commerciale ? "Vinea Partner" : "Cantina"}</p>
           <h2 id="cantina-accessori-titolo" className="font-serif text-2xl font-semibold">
-            Accessori
+            {commerciale ? "Accessori nuovi in vendita" : "Accessori"}
           </h2>
           <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-            I calici, i cavatappi e gli altri strumenti che possiedi. Restano privati finché non
-            scegli di esporli nel tuo profilo; esporli non li mette in vendita.
+            {commerciale ? "Le scorte commerciali della tua attività: solo articoli nuovi, separate dalla tua Cantina personale. Prepara un annuncio dalla scheda; il margine Partner è calcolato dal database." : "I calici, i cavatappi e gli altri strumenti che possiedi. Restano privati finché non"}
+            {commerciale ? "" : "scegli di esporli nel tuo profilo; esporli non li mette in vendita."}
           </p>
         </div>
         <Button type="button" onClick={() => setModifica({ accessorio: null })}>
@@ -257,7 +263,7 @@ export function CantinaAccessori() {
                       {stato.espostiVisibili ? "" : " (non ancora visibile al pubblico)"}
                     </span>
                   ) : (
-                    <span className="rounded-full bg-secondary px-2 py-0.5">Privato</span>
+                    <span className="rounded-full bg-secondary px-2 py-0.5">{commerciale ? "Scorta commerciale · nuovo" : "Privato"}</span>
                   )}
                 </p>
                 <div className="mt-auto flex flex-wrap gap-2 pt-1">
@@ -266,7 +272,7 @@ export function CantinaAccessori() {
                       <Pencil aria-hidden /> Modifica
                     </Button>
                   ) : null}
-                  {!a.archiviato ? (
+                  {!a.archiviato && !commerciale ? (
                     a.visibilita === "cantina_pubblica" ? (
                       <Button type="button" size="sm" variant="outline" disabled={occupato} onClick={() => cambiaVisibilita(a, false)}>
                         <EyeOff aria-hidden /> Rendi privato
@@ -298,6 +304,7 @@ export function CantinaAccessori() {
           tassonomia={tassonomia}
           schedeCatalogo={schedeCatalogo}
           servizio={servizio}
+          commerciale={commerciale}
           onChiudi={() => setModifica(null)}
           onCambiato={async (testo) => {
             await dopoCambio(testo);
@@ -355,6 +362,7 @@ function ModuloAccessorioDialog({
   tassonomia,
   schedeCatalogo,
   servizio,
+  commerciale = false,
   onChiudi,
   onCambiato,
 }: {
@@ -362,6 +370,7 @@ function ModuloAccessorioDialog({
   tassonomia: CategoriaTassonomia[];
   schedeCatalogo: { slug: string; nome: string }[];
   servizio: ReturnType<typeof creaCantinaAccessoriService>;
+  commerciale?: boolean;
   onChiudi: () => void;
   onCambiato: (testo: string) => Promise<void>;
 }) {
@@ -541,24 +550,33 @@ function ModuloAccessorioDialog({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="ca-condizione">Condizione</Label>
-              <select
-                id="ca-condizione"
-                className={CAMPO}
-                value={modulo.condizione}
-                onChange={(e) =>
-                  setModulo((m) => ({ ...m, condizione: e.target.value as ModuloCantinaAccessorio["condizione"] }))
-                }
-              >
-                {CONDIZIONI_ACCESSORIO.map((c) => (
-                  <option key={c} value={c}>
-                    {ETICHETTE_CONDIZIONE[c]}
-                  </option>
-                ))}
-              </select>
-              {errore("condizione")}
-            </div>
+            {commerciale ? (
+              <div>
+                <Label>Condizione</Label>
+                <p className="rounded-md border border-input bg-secondary/40 px-3 py-2 text-sm">
+                  Nuovo (solo articoli nuovi)
+                </p>
+              </div>
+            ) : (
+              <div>
+                <Label htmlFor="ca-condizione">Condizione</Label>
+                <select
+                  id="ca-condizione"
+                  className={CAMPO}
+                  value={modulo.condizione}
+                  onChange={(e) =>
+                    setModulo((m) => ({ ...m, condizione: e.target.value as ModuloCantinaAccessorio["condizione"] }))
+                  }
+                >
+                  {CONDIZIONI_ACCESSORIO.map((c) => (
+                    <option key={c} value={c}>
+                      {ETICHETTE_CONDIZIONE[c]}
+                    </option>
+                  ))}
+                </select>
+                {errore("condizione")}
+              </div>
+            )}
             <div>
               <Label htmlFor="ca-quantita">Quantità</Label>
               <Input
