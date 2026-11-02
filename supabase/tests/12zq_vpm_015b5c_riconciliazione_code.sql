@@ -16,7 +16,7 @@ $$;
 create function pg_temp.fixture_zq(tag text,seller uuid,buyer uuid) returns uuid language plpgsql as $$
 declare o uuid := gen_random_uuid();
 begin
-  perform set_config('session_replication_role','replica',true);
+  set local session_replication_role = replica;
   insert into private.accessori_ordini(
     id,buyer_id,seller_id,annuncio_id,cantina_accessorio_id,preventivo_id,chiave_idempotenza,
     stato,articolo_nome,articolo_condizione,quantita,prezzo_unitario_cents,prezzo_cents,
@@ -28,7 +28,7 @@ begin
     'privato',800,209,25,1,1,1,'{}',now()+interval '15 minutes',now(),'provider');
   insert into private.accessori_pagamenti(ordine_id,buyer_id,provider,provider_session_id,provider_intent_id,stato,amount_cents,currency)
     values(o,buyer,'stripe','pi_'||o,'pi_'||o,'paid',3000,'eur');
-  perform set_config('session_replication_role','origin',true);
+  set local session_replication_role = origin;
   perform private.accessori_postvendita_apri(o);
   return o;
 end $$;
@@ -49,16 +49,16 @@ returns text language sql as $$
         'dominio',case when with_metadata then 'accessori' end))));
 $$;
 create function pg_temp.age_zq(r uuid) returns void language plpgsql as $$ begin
-  perform set_config('session_replication_role','replica',true);
+  set local session_replication_role = replica;
   update private.accessori_rimborsi set aggiornato_at=now()-interval '2 hours' where id=r;
-  perform set_config('session_replication_role','origin',true);
+  set local session_replication_role = origin;
 end $$;
 create function pg_temp.due_zq(o uuid,age integer) returns void language plpgsql as $$ begin
   perform public.accessori_consegna_vettore_registra(o,'synthetic delivery',now());
-  perform set_config('session_replication_role','replica',true);
+  set local session_replication_role = replica;
   update private.accessori_postvendita set consegnato_at=now()-make_interval(hours=>age+48),
     finestra_scade_at=now()-make_interval(hours=>age) where ordine_id=o;
-  perform set_config('session_replication_role','origin',true);
+  set local session_replication_role = origin;
 end $$;
 
 do $$
@@ -67,11 +67,11 @@ declare
  o uuid; r uuid; j jsonb; k text; i integer; old_o uuid; valid_o uuid; released uuid[];
  before_mov bigint; oldkey text;
 begin
- perform set_config('session_replication_role','replica',true);
+ set local session_replication_role = replica;
  insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values
   (s,'seller@12zq.test',now(),'{}'),(b,'buyer@12zq.test',now(),'{}');
  insert into public.profiles(id,username,dob) values(s,'seller-12zq','1980-01-01'),(b,'buyer-12zq','1980-01-01');
- perform set_config('session_replication_role','origin',true);
+ set local session_replication_role = origin;
 
  -- Both event orders, lost/failed result, duplicate deliveries, no aggregate attribution.
  o:=pg_temp.fixture_zq('before',s,b); r:=pg_temp.request_zq(o);
@@ -156,9 +156,9 @@ begin
  o:=pg_temp.fixture_zq('ambiguous',s,b); r:=pg_temp.request_zq(o);
  perform public.accessori_rimborso_prepara(r);
  perform public.accessori_rimborso_registra_esito(r,false,null,'stripe_unreachable');
- perform set_config('session_replication_role','replica',true);
+ set local session_replication_role = replica;
  update private.accessori_rimborsi set primo_invio_ambiguo_at=now()-interval '25 hours' where id=r;
- perform set_config('session_replication_role','origin',true);
+ set local session_replication_role = origin;
  perform pg_temp.age_zq(r);
  j:=public.accessori_rimborso_prepara(r);
  perform pg_temp.check_zq(16,'expired provider idempotency window blocks ambiguous resubmit',j->>'motivo'='retry_richiede_riconciliazione'
@@ -197,10 +197,10 @@ begin
    and not has_function_privilege('service_role','private.accessori_rimborsi_riconcilia(uuid)','execute'));
  perform pg_temp.check_zq(24,'backoff bounded at one hour, not a permanent ceiling',
    private.accessori_rimborso_retry_at(100,now())=now()+interval '1 hour');
- perform set_config('session_replication_role','replica',true);
+ set local session_replication_role = replica;
  insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values(suspended,'suspended@12zq.test',now(),'{}');
  insert into public.profiles(id,username,dob,stato_utente) values(suspended,'suspended-12zq','1980-01-01','sospeso');
- perform set_config('session_replication_role','origin',true);
+ set local session_replication_role = origin;
  old_o:=pg_temp.fixture_zq('blockedSuspension',suspended,b); perform pg_temp.due_zq(old_o,6);
  valid_o:=pg_temp.fixture_zq('validSuspension',s,b); perform pg_temp.due_zq(valid_o,3);
  select array_agg(x) into released from public.accessori_ricavo_rilascio_esegui(1) x;
