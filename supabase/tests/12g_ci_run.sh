@@ -561,6 +561,17 @@ printf '%s
 summary "- $(printf '%s
 ' "$conc_12zs" | tail -n 1)"
 
+# VPM-015QA-FINAL-B1 — PaymentIntent orfani: annullo tra apertura e collegamento, decisione
+# collegato/aperto/orfano sotto lock, esito dell'annullo (anche incerto), incasso su intento
+# registrato o mai registrato (webhook firmato), importo/valuta/ordine divergenti, checkout
+# spento, privilegi. Stessa guardia di identita di 12zs, fixture `@conc-12zt.test`, residui = 0.
+conc_12zt="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zt_vpm_qa_final_b1_intenti_orfani.sh")"   || { printf '%s
+' "$conc_12zt"; die "12zt concorrenza: fallita."; }
+printf '%s
+' "$conc_12zt"
+summary "- $(printf '%s
+' "$conc_12zt" | tail -n 1)"
+
 # Fase 7c — ciclo post-pagamento, contestazione, recensione e imballaggio. E la
 # griglia che la WP3 ha dovuto riscrivere: da adesso la spedizione passa dal
 # cancello di preparazione, quindi il suo caso 9 registra una prova reale. Una
