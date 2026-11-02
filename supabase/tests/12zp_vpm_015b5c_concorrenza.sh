@@ -26,12 +26,18 @@ case "$authority" in
   *) echo 'Richiesto database loopback con porta esplicita.' >&2; exit 3 ;;
 esac
 # Non ereditare opzioni libpq che possano cambiare il target o il search_path.
-unset PGHOST PGHOSTADDR PGPORT PGDATABASE PGUSER PGSERVICE PGSERVICEFILE PGOPTIONS
+unset PGHOST PGHOSTADDR PGPORT PGDATABASE PGUSER PGSERVICE PGSERVICEFILE PGOPTIONS \
+  PGPASSFILE PGSSLMODE PGSSLROOTCERT PGSSLCERT PGSSLKEY PGTARGETSESSIONATTRS
 export PGCONNECT_TIMEOUT=5
 PSQL=(psql "$DB_URL" -X -qAt -v ON_ERROR_STOP=1 --no-psqlrc)
 sql() { "${PSQL[@]}" -c "$1"; }
-[ "$(sql "select coalesce(inet_server_addr() <<= '127.0.0.0/8'::inet or inet_server_addr() = '::1'::inet, false)")" = t ] \
-  || { echo 'Server non loopback.' >&2; exit 3; }
+# L'URL è loopback, ma dietro un port-forward Docker il server vede il proprio
+# indirizzo sulla rete del container (bridge, es. 172.17.0.2): vale loopback OPPURE
+# 172.16.0.0/12 (reti Docker). Non è una prova di "stack effimero": un tunnel verso un
+# database privato con quell'intervallo la supererebbe, perciò la difesa decisiva sono
+# i controlli sui dati qui sotto (nessun utente reale), non l'indirizzo.
+[ "$(sql "select coalesce(inet_server_addr() <<= any (array['127.0.0.0/8','172.16.0.0/12','::1/128']::inet[]), false)")" = t ] \
+  || { echo 'Server né loopback né su rete Docker locale.' >&2; exit 3; }
 [ "$(sql "select count(*) from auth.users where email is null or email not like '%.test'")" = 0 ] \
   || { echo 'Rifiutato: utenti non sintetici.' >&2; exit 3; }
 

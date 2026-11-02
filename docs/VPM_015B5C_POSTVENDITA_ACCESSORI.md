@@ -6,7 +6,7 @@ Recupero dell'implementazione esistente nel commit `67bca11`, non un nuovo blocc
 
 La correttiva `20261102170000_vpm_015b5c_riconciliazione_code.sql` aggiunge evidenze dei singoli rimborsi firmati e riconciliazione in entrambi gli ordini di arrivo, selezione dei ricavi ammissibili prima del limite e retry con backoff senza abbandono al decimo tentativo. Le richieste con invio ambiguo oltre la finestra prudenziale di 23 ore restano obblighi visibili, senza reinvio automatico: occorre prova firmata o riconciliazione con il provider. Un errore di rete non dimostra mancato invio; solo la configurazione mancante prima della chiamata è trattata come tale. Esecuzione SQL della correttiva NON VERIFICATA.
 
-Il codice è in verifica sul branch `vpm-015b5c-postvendita-accessori`: questo documento non certifica merge, deployment né applicazione remota. Produzione non interrogata o modificata durante il recupero.
+Il codice è in verifica sul branch `vpm-015b5c-postvendita-accessori`, PR #256: questo documento non certifica merge, deployment né applicazione remota. Prima CI sulla testa `01dc55d`: frontend, backend, payout runner, continuità, Preview ed E2E Accessori verdi. Gate DB fermo sulla classificazione della porta mista `accessori_postvendita_leggi` nel caso 16 di 12h; `f2c9594` corregge la sola classificazione admin-only, conservando matrice delegato/utente e prove di dominio. Nuova esecuzione ancora in attesa; nessuna prova 12zp/12zq dichiarata verde. Produzione non interrogata o modificata durante il recupero.
 
 ## Riuso e autorità
 
