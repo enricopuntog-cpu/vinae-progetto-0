@@ -147,8 +147,9 @@ export default function AccediPageClient() {
    * email, SMTP) dove per uno sconosciuto risponde 200 (R-AUTH-01). Il servizio,
    * chiamato senza `indirizzoDellaSessione`, restituisce quegli errori come
    * successo; qui arrivano solo i guasti uguali per tutti. È una mitigazione
-   * dell'interfaccia: `/auth/v1/recover` resta un oracolo per chi lo chiama
-   * direttamente (docs/VPM_018_R_AUTH_01.md).
+   * del testo mostrato: stato e tempo della risposta di `/auth/v1/recover`
+   * restano osservabili (strumenti del browser, chiamata diretta), quindi il
+   * provider resta un oracolo (docs/VPM_018_R_AUTH_01.md).
    */
   const recupera = async () => {
     if (inCorso) return;

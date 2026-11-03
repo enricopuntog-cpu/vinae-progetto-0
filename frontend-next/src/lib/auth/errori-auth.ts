@@ -254,17 +254,21 @@ const ERRORI_RECUPERO_PRIMA_DELL_ACCOUNT: ReadonlySet<string> = new Set([
  * Classifica l'esito di un recupero password chiesto per un indirizzo DIGITATO
  * da chi non ha dimostrato di possederlo (`/accedi`). Restituisce un codice solo
  * per gli errori che non dipendono dall'esistenza dell'account: richiesta mai
- * arrivata al server (supabase-js: `status` 0 o assente) e i rifiuti elencati
- * sopra. Ogni altro errore restituisce `null`, e la superficie mostra la stessa
- * conferma neutra del successo.
+ * arrivata al server (supabase-js `AuthRetryableFetchError` con `status` 0) e i
+ * rifiuti elencati sopra. Ogni altro errore restituisce `null`, e la superficie
+ * mostra la stessa conferma neutra del successo; anche un `AuthUnknownError`
+ * (risposta non JSON, `status` assente), che un proxy potrebbe produrre solo per
+ * gli iscritti.
  *
- * È una MITIGAZIONE PARZIALE: toglie l'oracolo dall'interfaccia di Vinea, non da
- * `/auth/v1/recover`, che resta pubblico e continua a distinguere gli iscritti
- * per stato, codice e tempo di risposta (docs/VPM_018_R_AUTH_01.md).
+ * È una MITIGAZIONE PARZIALE: toglie la distinzione dal TESTO mostrato. La
+ * risposta di GoTrue (stato, codice) e il tempo restano osservabili dalla stessa
+ * pagina e con una chiamata diretta a `/auth/v1/recover`, pubblica con la chiave
+ * anon (docs/VPM_018_R_AUTH_01.md). La lista va riverificata a ogni
+ * aggiornamento di GoTrue o di supabase-js.
  */
 export const classificaErroreRecuperoSenzaSessione = (errore: ErroreGrezzo): CodiceErroreAuth | null => {
   if (!errore) return null;
-  if (!errore.status || (errore.code !== undefined && ERRORI_RECUPERO_PRIMA_DELL_ACCOUNT.has(errore.code))) {
+  if (errore.status === 0 || (errore.code !== undefined && ERRORI_RECUPERO_PRIMA_DELL_ACCOUNT.has(errore.code))) {
     return classificaErroreAuth(errore, "recupero-password");
   }
   return null;

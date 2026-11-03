@@ -197,8 +197,9 @@ describe("inviaRecuperoPassword — eseguito", () => {
   });
 
   it("il testo del provider non esce dal servizio", async () => {
+    // Sul ramo che mostra l'errore: senza sessione questo errore è già neutro.
     erroreProvider = { message: "User with this email address not found in project" };
-    const esito = await supabaseAuthService.inviaRecuperoPassword("chi@esempio.it");
+    const esito = await supabaseAuthService.inviaRecuperoPassword("chi@esempio.it", { indirizzoDellaSessione: true });
 
     expect(esito.ok).toBe(false);
     if (esito.ok) return;
@@ -209,16 +210,19 @@ describe("inviaRecuperoPassword — eseguito", () => {
 
   /**
    * R-AUTH-01. Le risposte di GoTrue v2.196.0 `POST /recover` misurate nel
-   * laboratorio isolato (docs/VPM_018_R_AUTH_01.md § 3): a sinistra quelle che
-   * esistono SOLO per un indirizzo registrato, a destra quelle decise prima
-   * della ricerca dell'account.
+   * laboratorio isolato (docs/VPM_018_R_AUTH_01.md § 3), nella forma che
+   * supabase-js ne dà: qui quelle che esistono SOLO per un indirizzo registrato
+   * (un 5xx arriva come `AuthRetryableFetchError` con lo stato e senza codice),
+   * più la risposta non JSON (`AuthUnknownError`, senza stato) che un proxy
+   * potrebbe dare solo agli iscritti; sotto quelle decise prima della ricerca.
    */
   const SOLO_PER_ISCRITTI = [
     { status: 429, code: "over_email_send_rate_limit", message: "For security purposes, you can only request this after 59 seconds." },
     { status: 429, code: "over_email_send_rate_limit", message: "email rate limit exceeded" },
-    { status: 500, code: "unexpected_failure", message: "Error sending recovery email" },
+    { status: 500, message: "Error sending recovery email" },
     { status: 400, code: "email_address_invalid", message: "Email address \"x@y.test\" is invalid" },
     { status: 504, message: "upstream request timeout" },
+    { message: "Unexpected token '<', \"<html>\" is not valid JSON" },
   ];
 
   it("senza sessione: un errore che esiste solo per un iscritto risponde come il successo", async () => {
@@ -239,7 +243,7 @@ describe("inviaRecuperoPassword — eseguito", () => {
       [{ status: 400, code: "captcha_failed", message: "captcha protection: request disallowed" }, "recupero-non-inviato"],
       [{ status: 400, code: "email_provider_disabled", message: "Email logins are disabled" }, "recupero-non-inviato"],
       [{ status: 0, message: "Failed to fetch" }, "recupero-non-inviato"],
-      [{ message: "Load failed" }, "recupero-non-inviato"],
+      [{ status: 0, message: "Load failed" }, "recupero-non-inviato"],
     ] as const;
     for (const [errore, atteso] of casi) {
       erroreProvider = { ...errore };
@@ -252,7 +256,7 @@ describe("inviaRecuperoPassword — eseguito", () => {
     expect(
       await supabaseAuthService.inviaRecuperoPassword("mio@esempio.it", { indirizzoDellaSessione: true }),
     ).toEqual({ ok: false, error: "troppi-tentativi" });
-    erroreProvider = { status: 500, code: "unexpected_failure", message: "Error sending recovery email" };
+    erroreProvider = { status: 500, message: "Error sending recovery email" };
     expect(
       await supabaseAuthService.inviaRecuperoPassword("mio@esempio.it", { indirizzoDellaSessione: true }),
     ).toEqual({ ok: false, error: "recupero-non-inviato" });

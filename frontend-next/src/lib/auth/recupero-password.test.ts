@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   CODICI_ERRORE_AUTH,
@@ -345,6 +345,18 @@ describe("/account — Sicurezza", () => {
     expect(SICUREZZA).toInclude("Funziona anche");
     // L'indirizzo è quello della sessione: l'errore vero non rivela nulla di nuovo.
     expect(SICUREZZA).toInclude("authInviaRecuperoPassword(email, { indirizzoDellaSessione: true })");
+  });
+
+  it("solo questa sezione dichiara l'indirizzo della sessione (R-AUTH-01)", () => {
+    // Un'altra superficie che passasse l'opzione con un indirizzo digitato
+    // riaprirebbe l'oracolo nel testo della pagina.
+    const chiamanti = ["src/app", "src/components"].flatMap((radice) =>
+      (readdirSync(join(process.cwd(), radice), { recursive: true }) as string[])
+        .filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
+        .map((f) => join(radice, f).replaceAll("\\", "/"))
+        .filter((f) => senzaCommenti(leggi(f)).includes("indirizzoDellaSessione")),
+    );
+    expect(chiamanti).toEqual(["src/app/account/sicurezza-account.tsx"]);
   });
 
   it("l'indirizzo è quello della sessione, non un campo compilabile", () => {
