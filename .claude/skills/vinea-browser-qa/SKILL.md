@@ -38,7 +38,7 @@ container `supabase_db_vinea_e2e`, marcatore nel database uguale al nonce del
 file `e2e/.stack-e2e.json`, ledger delle migrazioni uguale ai file del commit,
 nessun utente estraneo alla fixture. Ogni SQL della suite ripete la verifica del
 marcatore. Lo stack di sviluppo condiviso (`project_id` di `supabase/config.toml`)
-non è mai un bersaglio. Se la guardia rifiuta, **non aggirarla**: correggi
+non è mai un bersaglio. Dopo la presa di possesso del setup, ogni SQL verifica anche il token della corsa. Se la guardia rifiuta, **non aggirarla**: correggi
 l'ambiente o segnala `NON VERIFICATO`.
 
 Mai: chiavi o URL di produzione, `E2E_*` che puntano a un host remoto,
