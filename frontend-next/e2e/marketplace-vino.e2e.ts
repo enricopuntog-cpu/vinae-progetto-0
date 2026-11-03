@@ -85,6 +85,7 @@ test.describe.serial("Marketplace vino: pubblicazione dal wizard, ricerca, sched
     // Senza le due dichiarazioni il passo non si supera (il database rifiuterebbe la pubblicazione).
     await continua.click();
     await expect(page.getByRole("heading", { name: "Consegna", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Anteprima", exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: /Nessuna confezione originale/ }).click();
     await page.getByRole("button", { name: /Drop-off presso punto di consegna/ }).click();
     await continua.click();
@@ -142,9 +143,9 @@ test.describe.serial("Marketplace vino: pubblicazione dal wizard, ricerca, sched
     const contesto = await contestoAutenticato(browser, "altro", opzioniDelProgetto(info));
     const page = await contesto.newPage();
     diagnostica.osserva(page, "acquirente");
-    const risposte: string[] = [];
-    page.on("response", async (r) => {
-      if (r.url().includes("/rest/v1/") && r.request().method() === "GET") risposte.push(await r.text().catch(() => ""));
+    const risposte: Promise<string>[] = [];
+    page.on("response", (r) => {
+      if (r.url().includes("/rest/v1/") && r.request().method() === "GET") risposte.push(r.text().catch(() => ""));
     });
 
     await page.goto(`/annuncio/${slug}`);
@@ -155,7 +156,19 @@ test.describe.serial("Marketplace vino: pubblicazione dal wizard, ricerca, sched
       expect(visibile, `testo privato visibile: ${privato}`).not.toContain(privato);
       expect(html, `testo privato nell'HTML: ${privato}`).not.toContain(privato);
     }
-    for (const corpo of risposte) {
+    // La scheda è resa dal server: il browser può non leggere REST. Si aggiunge quindi la lettura
+    // pubblica dell'annuncio fatta dall'acquirente, che deve trovarlo (controllo positivo) senza dati privati.
+    const { apiUrl, anonKey } = risolviBersaglio();
+    const altro = await accedi("altro");
+    const pubblica = await fetch(`${apiUrl}/rest/v1/public_listings?id=eq.${listingId}&select=*`, {
+      headers: { apikey: anonKey, Authorization: `Bearer ${altro.token}` },
+    });
+    expect(pubblica.ok).toBe(true);
+    const corpoPubblico = await pubblica.text();
+    expect(corpoPubblico, "annuncio nella lettura pubblica").toContain(listingId);
+    const corpi = [corpoPubblico, ...(await Promise.all(risposte))];
+    await info.attach("letture-rest.json", { body: JSON.stringify({ letture: corpi.length }), contentType: "application/json" });
+    for (const corpo of corpi) {
       expect(corpo).not.toContain(EMAIL.venditore);
       expect(corpo).not.toContain(String(COSTO_PRIVATO_CENTS));
       expect(corpo).not.toContain("dropoff_pudo");
@@ -209,7 +222,10 @@ test.describe.serial("Marketplace vino: pubblicazione dal wizard, ricerca, sched
     await page.goto("/esplora");
     await attendiCaricamento(page);
     await campoRicerca(page).fill(nomeVino);
-    await expect(page.getByTestId("esplora-page")).toBeVisible();
+    // Controllo positivo prima dell'assenza: la ricerca ha girato e non ha trovato nulla.
+    // (lo stato vuoto cambia testo se non resta alcun annuncio: si legge il contatore).
+    await expect(campoRicerca(page)).toHaveValue(nomeVino);
+    await expect(page.getByText(/^0 risultati$/)).toBeVisible();
     await expect(page.getByRole("link", { name: new RegExp(nomeVino) })).toHaveCount(0);
     await contesto.close();
   });

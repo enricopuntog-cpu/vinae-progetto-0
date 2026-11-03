@@ -17,10 +17,16 @@ export const scriviSegreto = async (campo: Locator, valore: string): Promise<voi
 };
 
 /**
- * Righe di uno spec che digiterebbero una password con un'azione che la mette nel
- * titolo del passo. Puro, per il test statico (`segreti.test.ts`).
+ * Chiamate di uno spec che digiterebbero una password con un'azione che la mette
+ * nel titolo del passo, anche spezzate su più righe. Puro, per il test statico
+ * (`segreti.test.ts`).
  */
 export const digitazioniDiPassword = (sorgente: string): string[] =>
-  sorgente
-    .split(/\r?\n/)
-    .filter((riga) => /\.(fill|type|pressSequentially|insertText)\s*\([^)]*password/i.test(riga));
+  // Per istruzione (fino al `;`), quindi anche spezzata su più righe.
+  sorgente.split(";").filter(
+    (istruzione) =>
+      // per nome del valore digitato…
+      /\.(fill|type|pressSequentially|insertText)\s*\([^)]*(password|segreto|pwd|sbagliata)/i.test(istruzione) ||
+      // …e per campo: qualunque valore scritto con queste azioni in un campo password.
+      /(getByLabel\(\s*["'/][^"'/]*password|type=["']?password)[\s\S]*\.(fill|type|pressSequentially)\s*\(/i.test(istruzione),
+  );

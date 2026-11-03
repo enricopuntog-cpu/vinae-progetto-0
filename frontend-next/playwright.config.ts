@@ -12,7 +12,8 @@ import { URL_APP, risolviBersaglio } from "./e2e/support/stack";
  * a setup fallito. La pulizia è la funzione restituita da `global-setup.ts`.
  *
  * Progetti: Chromium desktop esegue tutto; Chromium a 375 px e WebKit eseguono i
- * soli casi marcati `@cross` (sola lettura sullo stesso stato).
+ * soli casi marcati `@cross`. Ogni describe `@cross` che scrive (checkout,
+ * messaggi) riprepara il proprio stato in `beforeAll` per ciascun progetto.
  */
 const bersaglio = risolviBersaglio();
 const inCi = Boolean(process.env.CI);
@@ -38,8 +39,9 @@ export default defineConfig({
     baseURL: URL_APP,
     locale: "it-IT",
     timezoneId: "Europe/Rome",
-    // Le trace non contengono credenziali: l'accesso con password avviene in
-    // contesti senza tracciamento (vedi `accediDaBrowser`).
+    // Le trace non contengono credenziali: i casi accedono in Node e iniettano
+    // i cookie; `auth-critico`, che scrive password nei moduli, spegne trace,
+    // screenshot e video e usa `scriviSegreto` (support/segreti.ts).
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },

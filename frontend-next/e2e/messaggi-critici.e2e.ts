@@ -132,12 +132,17 @@ test.describe.serial("Messaggi fra utenti distinti: conversazione, persistenza, 
     // Le porte rifiutano il terzo anche chiamate direttamente.
     const terzo = await accedi("segnalante");
     const lettura = await rpc<unknown[]>("messages_page", { p_conversation_id: conversazioneId, p_before_created_at: null, p_before_id: null, p_limit: 50 }, terzo);
-    expect(lettura.ok && Array.isArray(lettura.body) && lettura.body.length > 0).toBe(false);
+    // La porta risponde (niente 404 di firma): rifiuto o pagina vuota, mai i messaggi altrui.
+    expect(lettura.status).not.toBe(404);
+    if (lettura.ok) expect(lettura.body).toEqual([]);
     const scrittura = await rpc("message_send", { p_conversation_id: conversazioneId, p_text: "intruso", p_idempotency_key: crypto.randomUUID() }, terzo);
     expect(scrittura.ok).toBe(false);
+    expect(scrittura.status).not.toBe(404);
     const apertura = await rpc("conversation_open", { p_listing_id: annuncio.listingId, p_order_id: null }, terzo);
-    // Il terzo può aprire SOLO una propria conversazione col venditore, mai entrare in quella esistente.
-    if (apertura.ok) expect(JSON.stringify(apertura.body)).not.toContain(conversazioneId);
+    // Il terzo può aprire SOLO una propria conversazione col venditore, mai entrare in quella esistente:
+    // la porta risponde (ok o rifiuto), ma in nessun caso con l'id della conversazione altrui.
+    expect([200, 400, 401, 403, 404]).toContain(apertura.status);
+    expect(JSON.stringify(apertura.body ?? null)).not.toContain(conversazioneId);
     expect(leggiDalDatabase(`select count(*) from public.messages where conversation_id = '${conversazioneId}';`)).toBe("3");
   });
 
@@ -153,8 +158,9 @@ test.describe.serial("Messaggi fra utenti distinti: conversazione, persistenza, 
       headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ p_conversation_id: conversazioneId, p_text: "anonimo", p_idempotency_key: crypto.randomUUID() }),
     });
+    // 401 (anonimo senza permesso), non 404: un 404 di PostgREST vorrebbe dire firma non trovata.
     expect(res.ok).toBe(false);
-    expect([401, 403, 404]).toContain(res.status);
+    expect(res.status).toBe(401);
     expect(leggiDalDatabase(`select count(*) from public.messages where conversation_id = '${conversazioneId}';`)).toBe("3");
   });
 
@@ -162,12 +168,14 @@ test.describe.serial("Messaggi fra utenti distinti: conversazione, persistenza, 
     const contesto = await contestoAutenticato(browser, "altro", opzioniDelProgetto(info));
     const page = await contesto.newPage();
     diagnostica.osserva(page, "acquirente");
-    // Guasto simulato nel solo browser e una sola volta: la richiesta non raggiunge il database.
+    // Guasto simulato una sola volta e nel caso peggiore: la richiesta RAGGIUNGE il database (il messaggio è
+    // scritto) ma la risposta si perde. Il nuovo tentativo deve riusare la chiave d'idempotenza, non duplicare.
     diagnostica.ammetti("/rest/v1/rpc/message_send", "message_send");
     let guasti = 0;
     await page.route("**/rest/v1/rpc/message_send", async (route) => {
       if (guasti === 0) {
         guasti += 1;
+        await route.fetch();
         await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "servizio non disponibile" }) });
         return;
       }

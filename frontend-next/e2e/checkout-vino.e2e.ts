@@ -88,17 +88,21 @@ test.describe.serial("Checkout vino: gate fail-closed, nessun pagamento, ordine 
     await expect(page.getByText(new RegExp(`${totale}\\s€`)).first()).toBeVisible();
 
     await page.getByLabel("Telefono").fill("3331234567");
-    for (let passo = 0; passo < 4; passo += 1) {
-      const conferma = page.getByTestId("checkout-confirm");
-      if (await conferma.isVisible()) break;
-      await page.getByTestId("checkout-next").click();
-    }
     const conferma = page.getByTestId("checkout-confirm");
+    const avanti = page.getByTestId("checkout-next");
+    for (let passo = 0; passo < 4; passo += 1) {
+      // Si attende che il passo sia reso (avanti o conferma) prima di decidere: niente clic su un passo in transizione.
+      await expect(avanti.or(conferma)).toBeVisible();
+      if (await conferma.isVisible()) break;
+      await avanti.click();
+    }
     await expect(conferma).toBeVisible();
     await expect(conferma).toBeEnabled();
+    // La pagina può già mostrare avvisi (es. logistica): l'errore della conferma è un avviso IN PIÙ.
+    const avvisiPrima = await page.getByRole("alert").filter({ hasText: /./ }).count();
     await conferma.click();
 
-    await expect(page.getByRole("alert").filter({ hasText: /./ }).first()).toBeVisible();
+    await expect(page.getByRole("alert").filter({ hasText: /./ })).toHaveCount(avvisiPrima + 1);
     await expect(page).toHaveURL(new RegExp(`/checkout/${annuncio.slug}`));
     expect(richieste.filter((u) => /stripe\.com|stripe\.network/.test(u)), "richieste verso Stripe").toEqual([]);
     expect(richieste.some((u) => u.includes("/functions/v1/payments-checkout")), "la conferma non è partita").toBe(true);
@@ -130,8 +134,9 @@ test.describe.serial("Checkout vino: gate fail-closed, nessun pagamento, ordine 
       },
       altro,
     );
+    // 403 (permesso negato), non 404: un 404 di PostgREST vorrebbe dire firma non trovata, non porta chiusa.
     expect(esito.ok).toBe(false);
-    expect([401, 403, 404]).toContain(esito.status);
+    expect(esito.status).toBe(403);
     expect(leggiDalDatabase("select count(*) from public.orders;")).toBe("0");
   });
 
