@@ -22,13 +22,13 @@ Legenda livelli: **FV** = fatto verificato in questa revisione · **EP** = evide
 | ID | Priorità originale → corretta | Livello | Esito della revisione |
 |---|---|---|---|
 | GAP-001 | P1 → P1 (lacuna di prova, non difetto) | FV | Confermato: 7 spec, 54 `test(`, tutte `accessori-*`; auth, marketplace vino, messaggi senza E2E. Club e pagamenti spenti esclusi dal perimetro P1. Non è «assenza totale di test»: ci sono ~3324 unit test e le griglie SQL. |
-| GAP-002 | P1 → BE (non è un difetto) | NV/BE | Confermato come verifica mancante. Unificato con GAP-008 nel blocco «Verifiche Production» (B-02). |
-| GAP-003 | P2 → P3 | FV | Ridimensionato: il blocco da ledger era effetto dello stack sbagliato (causa in GAP-004); la procedura locale e il check non obbligatorio sono già documentati in `docs/E2E_BROWSER.md` (righe ~31, 100); «nessun browser scaricato» è un limite dell'ambiente di prova, non del repository. |
-| GAP-004 | P2 → **P1 (tooling/processo)** | FV (catena statica + incidente osservato) | Riclassificato: vedi § 0.2. Non blocca il lancio del prodotto; blocca qualunque ripresa di E2E mutativi. |
-| GAP-005 | P2 | FV | Confermato: nessun `error.tsx`, `global-error.tsx`, `not-found.tsx` in `src/app/`. |
+| GAP-002 | P1 → BE (non è un difetto) | NV/BE | Confermato come verifica mancante. Unificato con GAP-008 nel backlog VER-PROD-01 (§ 0.5). |
+| GAP-003 | P2 → P3 | FV | Ridimensionato: il blocco da ledger era effetto dello stack sbagliato (causa in GAP-004); la procedura locale e il check non obbligatorio sono già documentati in `docs/E2E_BROWSER.md` (procedura ~riga 84, check non richiesto riga 100); «nessun browser scaricato» è un limite dell'ambiente di prova, non del repository. |
+| GAP-004 | P2 → **P1 (tooling/processo)** | FV (catena statica); EP (incidente osservato) | Riclassificato: vedi § 0.2. Non blocca il lancio del prodotto; blocca qualunque ripresa di E2E mutativi. |
+| GAP-005 | P2 | FV | Confermato: nessun `error.tsx`, `global-error.tsx` né `not-found.tsx` di root in `src/app/` (esistono 4 `not-found.tsx` annidati). |
 | GAP-006 | P2 | FV | Confermato: `package.json` non ha dipendenze di error tracking né analytics (la corrispondenza «posthog» è solo in un test). |
 | GAP-007 | P2 | FV | Confermato: in `.github/workflows/` solo 6 workflow (ci, e2e, regressione DB, backup, payout); nessun gitleaks/CodeQL né `dependabot.yml`. Secret scanning nativo GitHub: NV. |
-| GAP-008 | P2 → BE (non è un difetto) | NV/BE | Fuso in B-02 con GAP-002. `config.toml` locale è config di sviluppo, non prova nulla sul remoto. |
+| GAP-008 | P2 → BE (non è un difetto) | NV/BE | Fuso in VER-PROD-01 con GAP-002. `config.toml` locale è config di sviluppo, non prova nulla sul remoto. |
 | GAP-009 | P2 → P2 (IP) | IP/NV | Non verificato: il contenuto delle griglie `12r`…`12w` non è stato letto. Il rilievo è «da verificare», non un difetto. |
 | GAP-010 | P2 → P3 | FV parziale | Corretto: esistono controlli puntuali (`prosecdef`/`proconfig` in 10b, 12m, 12o, 12p, 12s…12y), manca solo una griglia **globale**. Stato odierno sano (EP). |
 | GAP-011 | P2 | EP | Inventario del subagente, non rieseguito; sovrapposto in parte a GAP-001 (prova assente) ma distinto (test di componente). |
@@ -43,7 +43,7 @@ Legenda livelli: **FV** = fatto verificato in questa revisione · **EP** = evide
 | GAP-020 | P3 | EP | Da subagente. |
 | GAP-021 | P3 | FV parziale | `dangerouslySetInnerHTML` confermato in `ui/chart.tsx:76`; usato da `vendite`, `PriceIntelligencePanel`, `ValoreNelTempo`; provenienza di `config` non verificata (IP). |
 | GAP-022 | P3 | FV | Confermato: nessun `admin/layout.tsx`; guardia per pagina. |
-| GAP-023 | P3 | FV | Confermato: `use-beta-checkout.ts:103` `window.location.assign(checkoutUrl)`. Raggiungibilità nel flusso attivo NV. |
+| GAP-023 | P3 | FV | Confermato: `use-beta-checkout.ts:103` `window.location.assign(checkoutUrl)` (voce A-13 del subagente, assente dall'indice E-011 che elenca A-01…A-12). Raggiungibilità nel flusso attivo NV. |
 | GAP-024 | P3 | EP | Aggregato di tre punti eterogenei (lista viste, `x-forwarded-for`, limite CSP): da spezzare se si procede. |
 
 Netto sui 24 finding: 0 P0; **2 P1** (GAP-001 lacuna di prova, GAP-004 barriera E2E); **2 verifiche remote mancanti in BE** (GAP-002, GAP-008: sono prove non eseguite, non vulnerabilità); **5 P2** (GAP-005, 006, 007, 009, 011); **14 P3** (GAP-003, 010, 012, 014…024); **1 rimosso** (GAP-013). 2+2+5+14+1 = 24. Nessun finding è una vulnerabilità sfruttata.
@@ -74,7 +74,7 @@ Netto sui 24 finding: 0 P0; **2 P1** (GAP-001 lacuna di prova, GAP-004 barriera 
 
 ### 0.3 Copertura E2E rispetto al perimetro di lancio
 
-Distinzione: **assenza di E2E ≠ assenza di test.** Perimetro di lancio = beta pubblica di `frontend-next` (target stack, **non** il cutover); `frontend/` + `backend/` restano il prodotto servito e non sono stati auditati. Dentro il perimetro: auth/sessioni, marketplace vino (esplora, scheda, vendi), Cantina, messaggi, moderazione, profilo/ruoli. Ognuna ha unit test e, in larga parte, griglie SQL (vedi `VPM-018-TEST-COVERAGE.md`), nessuna ha E2E. Spenti per scelta, **non** blocchi P1: Club, pagamenti, IA, Accessori pubblico (collaudato). I 7 spec contano 54 `test(` (la CI riporta 17 smoke / 33 completi per progetto: la cifra ~56 del testo originale era una stima).
+Distinzione: **assenza di E2E ≠ assenza di test.** Perimetro di lancio = beta pubblica di `frontend-next` (target stack, **non** il cutover); `frontend/` + `backend/` restano il prodotto servito e non sono stati auditati. Dentro il perimetro: auth/sessioni, marketplace vino (esplora, scheda, vendi), Cantina, messaggi, moderazione, profilo/ruoli. Ognuna ha unit test e, in larga parte, griglie SQL (vedi `VPM-018-TEST-COVERAGE.md`), nessuna ha E2E. Spenti per scelta, **non** blocchi P1: Club, pagamenti, IA, Accessori pubblico (collaudato). I 7 spec contano 54 `test(` letterali (la cifra ~56 del testo originale era una stima). I numeri «17 smoke / 33 completi» di `docs/E2E_BROWSER.md` (PR #248) sono datati e non riconciliano i 54 casi; `CHANGES.log` (QA-FINAL-B2-COMPLETION) riporta 54 casi per progetto, 130/130 su tre progetti.
 
 ### 0.4 Verifiche non distruttive: stato
 
@@ -104,16 +104,21 @@ Distinzione: **assenza di E2E ≠ assenza di test.** Perimetro di lancio = beta 
 
 Ordine: **FIX-E2E-01 → VER-PROD-01 (con autorizzazione) → E2E-CRIT-01 → ERR-PAGE-01/SEC-CI-01 → resto.**
 
-### 0.6 Skill e subagenti nella revisione
+### 0.6 Skill e subagenti (VPM-018-RECOVERY e VPM-018-RECOVERY-CLOSE)
+
+Eseguiti realmente (invocati con gli strumenti):
 
 | Nome | Tipo | Scopo | Esito | Evidenza |
 |---|---|---|---|---|
-| Lettura diretta di `CLAUDE.md`, `.claude/skills/` e `.claude/agents/` | manuale | Disponibilità reale | Skill e 6 agenti presenti | elenco directory |
-| `vinea-security` / `vinea-security-auditor`, `supabase-postgres-best-practices`, `vinea-browser-qa`, `vinea-design`, `vinea-ux-auditor`, `vinea-review`, `vinea-code-reviewer` | **non invocati** | — | Il perimetro (lettura di ~8 file e SQL di pulizia) non richiedeva una seconda lettura indipendente; criteri della skill di sicurezza applicati manualmente | § 0.2 |
-| `frontend-design`, `/review-animations`, `animation-performance` | non invocati | Nessuna animazione né UI esaminata | — | — |
-| `vinea-qa-runner` | non usato | Vietato per Playwright/Docker | — | — |
+| `/vinea-review 265` | skill | Revisione indipendente della PR #265 e readiness | Invocata in VPM-018-RECOVERY-CLOSE | `gh pr diff 265` salvato fuori dal repository |
+| `/code-review` (medium) | skill integrata, richiamata da `/vinea-review` | Lettura del diff per correttezza e coerenza | Invocata; corretti riferimenti obsoleti (`B-02`, `~56`, livello di GAP-004) | commit di CLOSE |
+| `vinea-code-reviewer` | subagente in sola lettura | Seconda lettura non ancorata del diff | Invocato una volta: esito: 9 rilievi (conteggi P0-P3 coerenti; corretti spec 5/3, 17/33 datato, 18 aree, impatto GAP-004, not-found annidati, A-13, livello GAP-011, riga E2E_BROWSER) | file del diff |
 
-Modello della sessione: Sonnet 5.5 (`claude-sonnet-5-5`), come indicato dal contesto; `/status` non è disponibile in questa sessione, il provider non è stato verificato altrimenti.
+Letti manualmente, non invocati: `CLAUDE.md`, `.claude/skills/` e `.claude/agents/` (skill e 6 agenti presenti). I criteri di sicurezza per l'analisi E2E di § 0.2 sono stati applicati a mano.
+
+Non invocati: `/vinea-security` e `vinea-security-auditor`, `supabase-postgres-best-practices`, `/vinea-browser-qa`, `/vinea-design`, `vinea-ux-auditor`, `frontend-design`, `/review-animations`, `animation-performance` (nessun codice, SQL, UI o animazione modificati); `vinea-qa-runner` (vietato per Playwright e Docker).
+
+Modello della sessione: Sonnet 5.5 (`claude-sonnet-5-5`) come da contesto; `/status` non è disponibile, il provider non è stato verificato.
 
 ---
 
@@ -124,7 +129,7 @@ Modello della sessione: Sonnet 5.5 (`claude-sonnet-5-5`), come indicato dal cont
 | Priorità | N. rilievi | Significato |
 |---|---|---|
 | P0 | 0 | Nessun blocco confermato |
-| P1 | 2 | GAP-001 (prova), GAP-004 (barriera E2E): condizionano la decisione di lancio / ogni E2E mutativo |
+| P1 | 2 | GAP-001 (prova): condiziona la decisione di lancio; GAP-004 (barriera E2E): non blocca il lancio, blocca ogni E2E mutativo locale |
 | BE | 2 | GAP-002, GAP-008: verifiche remote mancanti, non difetti |
 | P2 | 5 | GAP-005, 006, 007, 009, 011: da chiudere prima di un lancio pubblico |
 | P3 | 14 | GAP-003, 010, 012, 014…024: igiene, deriva documentale, difese in profondità |
@@ -150,7 +155,7 @@ Modello della sessione: Sonnet 5.5 (`claude-sonnet-5-5`), come indicato dal cont
 ## 2. Ambiente e metodo (sessione OmniRoute: EVIDENZA PRECEDENTE)
 
 - Stack isolato creato da zero con la CLI Supabase (progetto `vpm018_audit`, porte 56321–56329), 108 migrazioni applicate dal checkout. App `frontend-next` buildata e servita su `127.0.0.1:3100` contro lo stack isolato, con flag Accessori/logistica/ordini accesi **solo nel processo di prova**; pagamenti e IA spenti.
-- Audit statico app e DB tramite subagenti in sola lettura (`vinea-security-auditor`), inventario delle 16 aree funzionali tramite `vinea-architecture-mapper`.
+- Audit statico app e DB tramite subagenti in sola lettura (`vinea-security-auditor`), inventario delle aree funzionali (18 righe nella matrice di copertura) tramite `vinea-architecture-mapper`.
 - **Incidente di processo (dichiarato):** `bun run e2e:smoke` ha puntato per default allo stack condiviso `p_rogettto_vinae` (loopback, 101 migrazioni) e il teardown ha tentato `delete from private.accessori_partner_movimenti`. Verifica successiva con `psql` (EP): 0 righe fixture, visibilità pubblica Accessori ancora spenta, 9 bucket, ledger a 101 — nessun residuo rilevato (E-005, E-017). Lo stack condiviso **è stato toccato** dal teardown; i valori degli interruttori di sviluppo prima dell'evento non sono noti, quindi l'assenza di danno non è dimostrata. Il disallineamento di ledger (101 vs 108) riguardava lo stack condiviso scelto per errore, non lo stack isolato `vpm018_audit` (108/108). Vedi GAP-004 e § 0.2.
 - Un primo allarme (D-01: vista `order_margine_riconciliazione` senza WHERE) è stato **ritirato**: `revoke all … from public, anon, authenticated` in `20260803150000_phase_7b_stripe_connect_marketplace.sql:929`, nessun `grant` successivo, `create or replace view` conserva i privilegi.
 
@@ -163,7 +168,7 @@ Formato: ID · priorità · livello di evidenza · impatto · fix minimo propost
 ### P1
 
 **VPM-018-GAP-001 — P1 — Nessun E2E sui percorsi critici fuori Accessori** *(ASSENZA DI TEST, FATTO VERIFICATO sull'inventario)*
-- **Evidenza:** le 7 spec Playwright (~56 casi) coprono solo Accessori. Nessuna spec per registrazione/login/recupero/MFA, marketplace del vino (esplora, scheda, vendi), checkout/ordini/contestazioni del vino, messaggi/notifiche, Club, moderazione/segnalazioni, Cantina, beta-test. Vedi `VPM-018-TEST-COVERAGE.md`. I route handler `auth/{accesso,callback,confirm,recupero}` e le pagine `accedi`/`registrati`/`reimposta-password` non hanno test unitari (solo gli helper `lib/auth/*`).
+- **Evidenza:** le 7 spec Playwright (54 `test(`) coprono solo Accessori. Nessuna spec per registrazione/login/recupero/MFA, marketplace del vino (esplora, scheda, vendi), checkout/ordini/contestazioni del vino, messaggi/notifiche, Club, moderazione/segnalazioni, Cantina, beta-test. Vedi `VPM-018-TEST-COVERAGE.md`. I route handler `auth/{accesso,callback,confirm,recupero}` e le pagine `accedi`/`registrati`/`reimposta-password` non hanno test unitari (solo gli helper `lib/auth/*`).
 - **Impatto:** una regressione sul percorso d'ingresso (account) o sul ciclo di vendita del vino arriverebbe in beta senza alcuna rete automatica. Il solo dominio collaudato end-to-end è un dominio chiuso di default.
 - **Fix minimo:** spec `@smoke` per (1) registrazione→login→logout→recupero, (2) pubblicazione annuncio→ricerca→scheda, (3) checkout vino con provider fake, (4) invio/lettura messaggio. Riusare `e2e/support/*`.
 - **Complessità:** M (≈4 spec).
@@ -223,7 +228,7 @@ Formato: ID · priorità · livello di evidenza · impatto · fix minimo propost
 - **Complessità:** S–M.
 - **Accettazione:** richieste oltre soglia → errore di rate limit; capability errata → rifiuto; esito registrato nella griglia.
 
-**VPM-018-GAP-011 — P2 — Superficie di UI senza test unitari** *(FATTO VERIFICATO sull'inventario)*
+**VPM-018-GAP-011 — P2 — Superficie di UI senza test unitari** *(EP: inventario del subagente, non rieseguito)*
 - **Evidenza:** nessun test per `MessagesPageClient`, `use-phase8-controller`, `/notifiche`, `Layout.tsx`, `SommelierChat`, `ReportDialog`, page-client di Home/Esplora/Annuncio/Checkout/Cantina. Servizi senza test omonimo: `auth-service`, `market-validation-service`, `partner-scorte-service`, `preventivo-service`, `logistica-service`, `admin-operations`, `phase12/club-governance`, `phase9/supabase-moderation` (copertura indiretta non verificata).
 - **Impatto:** i flussi utente principali dipendono dalla sola tipizzazione.
 - **Fix minimo:** test di componente per messaggi, segnalazione e checkout; test di servizio per `auth-service`.
