@@ -108,6 +108,8 @@ Ordine: **FIX-E2E-01 → VER-PROD-01 (con autorizzazione) → E2E-CRIT-01 → ER
 
 > Aggiornamento del 3 novembre 2026 (VPM-018-E2E-CRIT-01, PR dedicata): E2E-CRIT-01 è implementato con quattro spec `@smoke` (`auth-critico`, `marketplace-vino`, `checkout-vino`, `messaggi-critici`). GAP-001 è chiuso nel codice per autenticazione, marketplace vino e messaggistica. Il checkout vino è al livello **GATE VERIFICATO, CHECKOUT E2E NON VERIFICATO**: il provider fake previsto sopra non esiste per il vino nello stack dedicato (Edge Function esclusa, Stripe test mode non autorizzata). Nuovi rilievi aperti: R-AUTH-01 (P2) e R-A11Y-01 (P3). Dettagli ed evidenze in `docs/VPM_018_E2E_CRIT_01.md`. R-AUTH-01 è poi PARZIALMENTE MITIGATO / BLOCCATO DAL PROVIDER (VPM-018-R-AUTH-01, `docs/VPM_018_R_AUTH_01.md`).
 
+> Aggiornamento del 3 novembre 2026 (VPM-018-UX-A11Y-01, PR dedicata): ERR-PAGE-01 (GAP-005) e R-A11Y-01 sono chiusi nel codice; esiti, prove e backlog in `docs/VPM_018_UX_A11Y_01.md`.
+
 ### 0.6 Skill e subagenti (VPM-018-RECOVERY e VPM-018-RECOVERY-CLOSE)
 
 Eseguiti realmente (invocati con gli strumenti):
