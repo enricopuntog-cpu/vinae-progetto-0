@@ -578,17 +578,23 @@ sospetta. La Fase 7g documenta questi requisiti ma non crea né ruota secret.
 ### Suite browser E2E (solo prova, mai produzione)
 
 Variabili lette soltanto da `frontend-next/playwright.config.ts`, da
-`frontend-next/e2e/` e da `frontend-next/scripts/e2e-*.mjs`. Non sono variabili
+`frontend-next/e2e/` e da `frontend-next/scripts/e2e-*`. Non sono variabili
 dell'applicazione, non vanno nel bundle e non vanno impostate in Netlify.
 Procedura in [`E2E_BROWSER.md`](E2E_BROWSER.md).
 
 | Variabile | Ruolo | Note |
 |---|---|---|
-| `E2E_SUPABASE_URL`, `E2E_ANON_KEY` | bersaglio esplicito (come il gate `12g_ci_run.sh`) | se assenti, da `supabase status` dello stack locale. La guardia rifiuta ogni host non loopback e ogni riferimento a un progetto ospitato |
-| `E2E_DB_CONTAINER` | container Docker del database | predefinito `supabase_db_<project_id>`; deve iniziare con `supabase_db_` |
+| `E2E_SUPABASE_URL`, `E2E_ANON_KEY` | URL e chiave dello stack E2E dedicato | se assenti, da `supabase status` del progetto riservato `vinea_e2e`; l'URL deve essere loopback sulla porta `55321` (VPM-018-FIX-E2E-01), quindi lo stack di sviluppo è rifiutato |
+| `E2E_DB_CONTAINER` | container Docker del database | ammesso solo `supabase_db_vinea_e2e`; qualunque altro valore è rifiutato |
 | `E2E_APP_PORT` | porta dell'app di prova | predefinita `3100` |
-| `E2E_SKIP_BUILD`, `E2E_REUSE_SERVER` | iterazione locale | solo il valore `1`; mai in CI |
+| `E2E_SKIP_BUILD` | iterazione locale | solo il valore `1`; mai in CI. Riusa `.next` solo se l'impronta `.next/e2e-bersaglio.json` (BUILD_ID + URL Supabase) coincide, altrimenti ricostruisce. `E2E_REUSE_SERVER` è stato rimosso (un server riusato può puntare a un altro stack) |
 | `E2E_PASSWORD` | password degli utenti di fixture | **generata dalla corsa**, in memoria; non impostarla |
+| `E2E_CORSA` | token di possesso della corsa | **generato dal setup**, che scarta un valore ereditato dalla shell; non impostarlo |
+
+L'identità dello stack dedicato non è una variabile: è il file
+`frontend-next/e2e/.stack-e2e.json` (ignorato da Git) scritto da
+`bun run e2e:stack up`, con un nonce che lo stesso comando registra nel database
+dello stack.
 
 Nel processo di prova le flag Accessori sono accese (`NEXT_PUBLIC_ACCESSORI_ENABLED`,
 `ACCESSORI_ENABLED`), mentre pagamenti e IA restano spenti; il valore di queste
