@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -41,6 +40,7 @@ import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
 import { FotoGriglia } from "@/components/vinea/FotoGriglia";
 import { BetaActionNotice } from "@/components/vinea/BetaActionNotice";
 import { BottleSelector } from "@/app/vendi/bottle-selector";
+import { CAMPO_ID, Field } from "@/app/vendi/field";
 import { SmartSellPricePanel } from "@/components/vinea/SmartSellPricePanel";
 import { chiaveVino } from "@/lib/price-intelligence/insights";
 import {
@@ -524,35 +524,38 @@ function WizardVendi() {
             )}
 
             <div className="grid gap-3 md:grid-cols-2">
-              <Field label="Produttore">
+              <Field label="Produttore" htmlFor={CAMPO_ID.produttore}>
                 <Input
+                  id={CAMPO_ID.produttore}
                   value={d.produttore}
                   onChange={(e) => set("produttore")(e.target.value)}
                   placeholder="Es. Antinori"
                 />
               </Field>
-              <Field label="Nome / Etichetta">
+              <Field label="Nome / Etichetta" htmlFor={CAMPO_ID.nome}>
                 <Input
+                  id={CAMPO_ID.nome}
                   value={d.nome}
                   onChange={(e) => set("nome")(e.target.value)}
                   placeholder="Es. Tignanello"
                 />
               </Field>
-              <Field label="Annata">
+              <Field label="Annata" htmlFor={CAMPO_ID.annata}>
                 <Input
+                  id={CAMPO_ID.annata}
                   type="number"
                   value={d.annata}
                   onChange={(e) => set("annata")(e.target.value)}
                   placeholder="Es. 2019"
                 />
               </Field>
-              <Field label="Regione (obbligatoria)">
+              <Field label="Regione (obbligatoria)" htmlFor={CAMPO_ID.regione}>
                 <Select
                   value={d.regione || undefined}
                   onValueChange={set("regione")}
                   disabled={regioni.stato !== "disponibili"}
                 >
-                  <SelectTrigger aria-label="Regione" aria-required="true">
+                  <SelectTrigger id={CAMPO_ID.regione} aria-required="true">
                     <SelectValue
                       placeholder={
                         regioni.stato === "caricamento"
@@ -581,9 +584,9 @@ function WizardVendi() {
                   <p className="text-[11px] text-destructive">{regioni.messaggio}</p>
                 ) : null}
               </Field>
-              <Field label="Tipologia">
+              <Field label="Tipologia" htmlFor={CAMPO_ID.tipologia}>
                 <Select value={d.tipo} onValueChange={set("tipo")}>
-                  <SelectTrigger>
+                  <SelectTrigger id={CAMPO_ID.tipologia}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -597,9 +600,9 @@ function WizardVendi() {
               </Field>
               {!isVendita ? (
                 <>
-                  <Field label="Formato">
+                  <Field label="Formato" htmlFor={CAMPO_ID.formato}>
                     <Select value={d.formato} onValueChange={set("formato")}>
-                      <SelectTrigger aria-label="Formato della bottiglia">
+                      <SelectTrigger id={CAMPO_ID.formato}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -611,8 +614,9 @@ function WizardVendi() {
                       </SelectContent>
                     </Select>
                   </Field>
-                  <Field label="Quante bottiglie">
+                  <Field label="Quante bottiglie" htmlFor={CAMPO_ID.quantita}>
                     <Input
+                      id={CAMPO_ID.quantita}
                       type="number"
                       inputMode="numeric"
                       min={1}
@@ -641,10 +645,12 @@ function WizardVendi() {
               {["Perfetto", "Ottimo", "Buono"].map((c) => (
                 <button
                   key={c}
+                  type="button"
+                  aria-pressed={d.condizione === c}
                   onClick={() => set("condizione")(c)}
                   className={`rounded-xl border p-3 text-sm ${d.condizione === c ? "border-bordeaux bg-bordeaux/5" : "border-border"}`}
                 >
-                  <p className="font-serif text-base">{c}</p>
+                  <span className="block font-serif text-base">{c}</span>
                 </button>
               ))}
             </div>
@@ -654,15 +660,17 @@ function WizardVendi() {
         {step === 4 && (
           <div className="space-y-4">
             <h2 className="font-serif text-2xl">Provenienza e conservazione</h2>
-            <Field label="Come è stata conservata">
+            <Field label="Come è stata conservata" htmlFor={CAMPO_ID.conservazione}>
               <Textarea
+                id={CAMPO_ID.conservazione}
                 value={d.conservazione}
                 onChange={(e) => set("conservazione")(e.target.value)}
                 placeholder="Cantina climatizzata a 14°C, umidità 70%, bottiglia sdraiata…"
               />
             </Field>
-            <Field label="Racconta la sua storia (opzionale)">
+            <Field label="Racconta la sua storia (opzionale)" htmlFor={CAMPO_ID.storia}>
               <Textarea
+                id={CAMPO_ID.storia}
                 value={d.storia}
                 onChange={(e) => set("storia")(e.target.value)}
                 placeholder="Regalata da mio nonno, dalla verticale di famiglia…"
@@ -670,8 +678,9 @@ function WizardVendi() {
             </Field>
             {!isVendita ? (
               <div className="grid gap-3 md:grid-cols-2">
-                <Field label="Prezzo di acquisto per bottiglia (€, opzionale)">
+                <Field label="Prezzo di acquisto per bottiglia (€, opzionale)" htmlFor={CAMPO_ID.prezzoAcquisto}>
                   <Input
+                    id={CAMPO_ID.prezzoAcquisto}
                     type="number"
                     min="0"
                     step="0.01"
@@ -680,8 +689,9 @@ function WizardVendi() {
                     placeholder="Quanto l'hai pagata"
                   />
                 </Field>
-                <Field label="Data di acquisto (opzionale)">
+                <Field label="Data di acquisto (opzionale)" htmlFor={CAMPO_ID.dataAcquisto}>
                   <Input
+                    id={CAMPO_ID.dataAcquisto}
                     type="date"
                     value={d.dataAcquisto}
                     onChange={(e) => set("dataAcquisto")(e.target.value)}
@@ -728,16 +738,18 @@ function WizardVendi() {
             ) : null}
 
             <div className="grid gap-3 md:grid-cols-2">
-              <Field label="Prezzo per bottiglia (€)">
+              <Field label="Prezzo per bottiglia (€)" htmlFor={CAMPO_ID.prezzo}>
                 <Input
+                  id={CAMPO_ID.prezzo}
                   type="number"
                   value={d.prezzo}
                   onChange={(e) => impostaPrezzo(e.target.value)}
                   placeholder="Inserisci il prezzo"
                 />
               </Field>
-              <Field label="Bottiglie in vendita">
+              <Field label="Bottiglie in vendita" htmlFor={CAMPO_ID.disponibili}>
                 <Input
+                  id={CAMPO_ID.disponibili}
                   type="number"
                   inputMode="numeric"
                   min={1}
@@ -1037,11 +1049,3 @@ function OpzioneLogistica({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs uppercase tracking-wide text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  );
-}

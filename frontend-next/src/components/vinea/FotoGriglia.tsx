@@ -164,7 +164,7 @@ export function FotoGriglia({
               type="button"
               onClick={() => void onRimuovi(i)}
               disabled={editor && inCorso}
-              aria-label={editor ? `Rimuovi la fotografia ${i + 1}` : "Rimuovi fotografia"}
+              aria-label={`Rimuovi la fotografia ${i + 1}`}
               className={
                 editor
                   ? "absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-background/95 text-foreground shadow-sm hover:bg-destructive hover:text-destructive-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
@@ -182,7 +182,7 @@ export function FotoGriglia({
             key={`vuota-${i}`}
             onClick={() => inputAggiunta.current?.click()}
             disabled={inCorso}
-            aria-label={editor ? "Aggiungi fotografia" : undefined}
+            aria-label="Aggiungi fotografia"
             className="grid aspect-square place-items-center rounded-xl border-2 border-dashed border-border bg-secondary/50 text-muted-foreground hover:border-bordeaux hover:text-bordeaux disabled:opacity-50"
           >
             {inCorso && i === 0 ? (
