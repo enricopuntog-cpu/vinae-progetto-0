@@ -45,3 +45,5 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# identità dello stack E2E dedicato (scritta da `bun run e2e:stack up`, VPM-018-FIX-E2E-01)
+/e2e/.stack-e2e.json

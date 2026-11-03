@@ -2,31 +2,36 @@ import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { CARTELLA_TEST_SQL, fileMigrazioni, risolviBersaglio } from "./stack";
-import { IsolamentoNonProvato, confrontaLedger, versioniMigrazioni } from "./target";
+import { CARTELLA_TEST_SQL, fileMigrazioni, leggiIdentita, risolviBersaglio } from "./stack";
+import { IsolamentoNonProvato, NOME_VARIABILE_CORSA, confrontaLedger, sqlProtetto, versioniMigrazioni } from "./target";
 
 /**
- * Esegue SQL nel container del database LOCALE (mai un URL: il bersaglio è il
- * nome del container, validato da `garantisciBersaglioIsolato`). La password
- * della fixture viaggia su stdin come variabile psql, non negli argomenti e non
- * su disco.
+ * Esegue SQL nel container dello stack E2E DEDICATO (mai un URL, mai un
+ * container scelto dall'ambiente). Ogni chiamata rilegge bersaglio e identità e
+ * antepone la verifica del marcatore nella stessa sessione psql: se il database
+ * non è lo stack di questa copia di lavoro, o la corsa non lo possiede più,
+ * nessuna istruzione parte. La password della fixture viaggia su stdin come
+ * variabile psql, non negli argomenti e non su disco.
  */
 export const eseguiSql = (sql: string, variabili: Record<string, string> = {}): string => {
   const { dbContainer } = risolviBersaglio();
-  const intestazione = Object.entries(variabili)
-    .map(([nome, valore]) => {
-      if (!/^[A-Za-z0-9_]+$/.test(nome) || !/^[A-Za-z0-9_.-]*$/.test(valore)) {
-        throw new Error("Variabile psql non ammessa.");
-      }
-      return `\\set ${nome} '${valore}'`;
-    })
-    .join("\n");
+  const { nonce } = leggiIdentita();
+  const corsa = process.env[NOME_VARIABILE_CORSA] ?? "";
   return execFileSync(
     "docker",
     ["exec", "-i", dbContainer, "psql", "-U", "postgres", "-X", "-q", "-At", "-F", " ", "-v", "ON_ERROR_STOP=1", "-f", "-"],
-    { input: `${intestazione}\n${sql}`, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], timeout: 120_000 },
+    { input: sqlProtetto(sql, variabili, { nonce, corsa }), encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], timeout: 120_000 },
   ).trim();
 };
+
+/** Il setup prende possesso dello stack: una corsa precedente ancora viva non passa più la guardia. */
+export const rivendicaStack = (corsa: string): void => {
+  eseguiSql("update vinea_e2e.identita set corsa = :'e2e_corsa_nuova';", { e2e_corsa_nuova: corsa });
+};
+
+/** Utenti Auth estranei alla fixture, comprese le righe senza email. */
+export const utentiEstranei = (): number =>
+  Number(eseguiSql("select count(*) from auth.users where coalesce(email, '') not like '%@e2e-12zk.test';"));
 
 const leggiSqlDiTest = (nome: string): string => readFileSync(path.join(CARTELLA_TEST_SQL, nome), "utf8");
 
@@ -34,6 +39,8 @@ const leggiSqlDiTest = (nome: string): string => readFileSync(path.join(CARTELLA
 const conPasswordComeVariabile = (sql: string): string => sql.replace(/'__E2E_PASSWORD__'/g, ":'e2e_password'");
 
 export const generaPasswordFixture = (): string => randomBytes(24).toString("hex");
+
+export const generaTokenCorsa = (): string => randomBytes(16).toString("hex");
 
 /** Il ledger dello stack deve coincidere con i file di questo commit. */
 export const verificaLedgerCoincideConFile = (): number => {

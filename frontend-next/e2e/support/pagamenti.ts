@@ -93,11 +93,14 @@ export const eventoRimborso = (
 
 /** Invecchia la prenotazione oltre i 15 minuti (la scrittura diretta è vietata: la guardia si sospende SOLO sullo stack di prova). */
 export const invecchiaPrenotazione = (ordineId: string): void => {
+  // In una transazione: se l'update fallisce, la guardia non resta sospesa.
   eseguiSql(`
+    begin;
     alter table private.accessori_ordini disable trigger accessori_ordini_guard;
     update private.accessori_ordini set creato_at = now() - interval '30 minutes', scade_at = now() - interval '15 minutes'
      where id = '${ordineId}';
-    alter table private.accessori_ordini enable trigger accessori_ordini_guard;`);
+    alter table private.accessori_ordini enable trigger accessori_ordini_guard;
+    commit;`);
 };
 
 export const etichetta = (): string => `${Date.now().toString(36)}${progressivo++}`;
