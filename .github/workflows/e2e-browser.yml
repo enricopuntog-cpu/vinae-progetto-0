@@ -145,8 +145,11 @@ jobs:
             echo "E2E browser: nessun risultato (la suite non è partita)." | tee -a "$GITHUB_STEP_SUMMARY"
           fi
 
-      # Report, screenshot e trace dei casi: nessuna password (l'accesso avviene
-      # in Node), solo sessioni di utenti fittizi di uno stack che si distrugge.
+      # Report, screenshot e trace dei casi: nessuna password. Gli accessi dei casi
+      # avvengono in Node; `auth-critico` scrive nei moduli password nuove di
+      # utenti effimeri con `scriviSegreto` (mai `fill`, il cui titolo finirebbe nel
+      # report) e con trace, screenshot e video spenti. Restano sessioni di utenti
+      # fittizi di uno stack che si distrugge.
       - name: Upload report, screenshots and traces
         if: always()
         uses: actions/upload-artifact@v7
