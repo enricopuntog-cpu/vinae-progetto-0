@@ -36,6 +36,7 @@ import {
   unitaVendibiliDelGruppo,
 } from "@/lib/cantina/gruppo";
 import {
+  performanceConfrontabile,
   voceCapitaleNoto,
   voceIncassiTrasferiti,
   vocePerformance,
@@ -499,7 +500,7 @@ function ContabilitaCantina({
   // performance non è zero, è un conto che non si può fare, e una freccia
   // piatta lo racconterebbe come un pareggio.
   const segno =
-    analitica.performanceCents === null
+    analitica.performanceCents === null || !performanceConfrontabile(analitica)
       ? null
       : analitica.performanceCents >= 0
         ? "positivo"
