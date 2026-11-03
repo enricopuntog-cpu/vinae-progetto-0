@@ -191,8 +191,8 @@ test.describe.serial("Autenticazione dal browser: registrazione, accesso, uscita
     const contesto = await contestoNuovo(browser, info);
     const page = await contesto.newPage();
     diagnostica.osserva(page, "recupero");
-    // Lo stack dedicato non avvia Mailpit: per un iscritto GoTrue fallisce l'invio (500). È il guasto che il
-    // caso vuole: non lo si simula, lo si osserva dalla risposta vera.
+    // Lo stack dedicato non avvia Mailpit: per un iscritto GoTrue fallisce l'invio (500, oppure 429 se il
+    // budget `email_sent` è esaurito). È il guasto che il caso vuole: non lo si simula, lo si osserva.
     diagnostica.ammetti("/auth/v1/recover");
     const esiti: string[] = [];
     const statiProvider: number[] = [];
@@ -224,6 +224,7 @@ test.describe.serial("Autenticazione dal browser: registrazione, accesso, uscita
         method: "POST",
         headers: { apikey: anonKey, "Content-Type": "application/json" },
         body: JSON.stringify({ email: indirizzo }),
+        signal: AbortSignal.timeout(10_000),
       });
       const corpo = (await r.json().catch(() => ({}))) as { error_code?: string };
       return `${r.status} ${corpo.error_code ?? ""}`.trim();

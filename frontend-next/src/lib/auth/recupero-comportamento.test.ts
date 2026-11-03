@@ -188,8 +188,8 @@ describe("inviaRecuperoPassword — eseguito", () => {
   });
 
   it("un indirizzo sconosciuto è indistinguibile da uno noto", async () => {
-    // Il provider risponde ok in entrambi i casi, ed è l'unica cosa che il
-    // servizio riferisce: non c'è alcun ramo che possa dire «non esiste».
+    // Nel ramo di successo il servizio risponde identico; gli errori che il
+    // provider dà solo agli iscritti sono provati sotto (R-AUTH-01).
     const noto = await supabaseAuthService.inviaRecuperoPassword("noto@esempio.it");
     const ignoto = await supabaseAuthService.inviaRecuperoPassword("mai-visto@esempio.it");
     expect(ignoto).toEqual(noto);
