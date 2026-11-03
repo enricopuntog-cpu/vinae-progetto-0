@@ -11,9 +11,8 @@
 import { spawnSync, type SpawnSyncOptions } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, rmSync, writeFileSync } from "node:fs";
-import { FILE_IDENTITA, RADICE_REPO, leggiIdentita, projectIdSviluppo } from "../e2e/support/stack";
+import { FILE_IDENTITA, RADICE_REPO, garantisciGatewayDelProgetto, leggiIdentita, projectIdSviluppo } from "../e2e/support/stack";
 import {
-  CONTAINER_API_E2E,
   CONTAINER_DB_E2E,
   ETICHETTA_PROGETTO,
   IsolamentoNonProvato,
@@ -28,6 +27,11 @@ import {
 } from "../e2e/support/target";
 
 const ESCLUSI = "realtime,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor";
+const RISORSE_NON_RIMOSSE =
+  `Le risorse del progetto \`${PROJECT_ID_E2E}\` non vengono rimosse da qui ` +
+  "(potrebbero essere di un'altra copia di lavoro avviata nello stesso momento). " +
+  "Solo dopo aver verificato che nessun altro worktree abbia `frontend-next/e2e/.stack-e2e.json`: " +
+  `npx --yes supabase@${SUPABASE_CLI_VERSION} stop --no-backup --project-id ${PROJECT_ID_E2E}`;
 
 const supabase = (args: string[], opzioni: SpawnSyncOptions = { stdio: "inherit" }) =>
   spawnSync("npx", ["--yes", `supabase@${SUPABASE_CLI_VERSION}`, ...args], {
@@ -107,36 +111,35 @@ try {
         .slice(-20)
         .join("\n");
       console.error(filtrato);
-      esci(
-        `Stack non avviato. Le risorse parziali del progetto \`${PROJECT_ID_E2E}\` non vengono rimosse da qui ` +
-          "(potrebbero essere di un'altra copia di lavoro avviata nello stesso momento). " +
-          "Solo dopo aver verificato che nessun altro worktree abbia `frontend-next/e2e/.stack-e2e.json`: " +
-          `npx --yes supabase@${SUPABASE_CLI_VERSION} stop --no-backup --project-id ${PROJECT_ID_E2E}`,
-        esito.status ?? 1,
+      esci(`Stack non avviato. ${RISORSE_NON_RIMOSSE}`, esito.status ?? 1);
+    }
+
+    // Da qui uno stack esiste ma non ha ancora un proprietario. Non lo si ferma da solo: con due `up`
+    // concorrenti il secondo fallirebbe sul marcatore e distruggerebbe lo stack del primo.
+    try {
+      // La CLI ha davvero usato il progetto e le porte riservati?
+      if (etichettaDelContainer(CONTAINER_DB_E2E) !== PROJECT_ID_E2E) {
+        throw new IsolamentoNonProvato(`dopo l'avvio manca il container \`${CONTAINER_DB_E2E}\``);
+      }
+      garantisciGatewayDelProgetto();
+
+      // Marcatore di possesso: `create schema` senza `if not exists` fallisce su uno stack non nuovo.
+      const nonce = randomBytes(16).toString("hex");
+      const marcatore = docker(
+        ["exec", "-i", CONTAINER_DB_E2E, "psql", "-U", "postgres", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-f", "-"],
+        `\\set e2e_nonce '${nonce}'\n${SQL_MARCATORE}\n`,
       );
+      if (!marcatore.ok || nonceNelDatabase() !== nonce) {
+        throw new IsolamentoNonProvato("marcatore dello stack E2E non scritto: lo stack non era nuovo");
+      }
+      writeFileSync(
+        FILE_IDENTITA,
+        `${JSON.stringify({ projectId: PROJECT_ID_E2E, nonce, creatoIl: new Date().toISOString() }, null, 2)}\n`,
+      );
+    } catch (errore) {
+      if (errore instanceof IsolamentoNonProvato) esci(`${errore.message}. ${RISORSE_NON_RIMOSSE}`);
+      throw errore;
     }
-
-    // La CLI ha davvero usato il progetto e le porte riservati?
-    if (etichettaDelContainer(CONTAINER_DB_E2E) !== PROJECT_ID_E2E) {
-      throw new IsolamentoNonProvato(`dopo l'avvio manca il container \`${CONTAINER_DB_E2E}\``);
-    }
-    if (!righe(docker(["port", CONTAINER_API_E2E, "8000/tcp"]).out).some((r) => r.endsWith(`:${PORTE_E2E.api}`))) {
-      throw new IsolamentoNonProvato(`il gateway \`${CONTAINER_API_E2E}\` non pubblica la porta ${PORTE_E2E.api}`);
-    }
-
-    // Marcatore di possesso: `create schema` senza `if not exists` fallisce su uno stack non nuovo.
-    const nonce = randomBytes(16).toString("hex");
-    const marcatore = docker(
-      ["exec", "-i", CONTAINER_DB_E2E, "psql", "-U", "postgres", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-f", "-"],
-      `\\set e2e_nonce '${nonce}'\n${SQL_MARCATORE}\n`,
-    );
-    if (!marcatore.ok || nonceNelDatabase() !== nonce) {
-      throw new IsolamentoNonProvato("marcatore dello stack E2E non scritto: lo stack non era nuovo");
-    }
-    writeFileSync(
-      FILE_IDENTITA,
-      `${JSON.stringify({ projectId: PROJECT_ID_E2E, nonce, creatoIl: new Date().toISOString() }, null, 2)}\n`,
-    );
     console.log(`Stack E2E dedicato \`${PROJECT_ID_E2E}\` avviato (API 127.0.0.1:${PORTE_E2E.api}) con le migrazioni del checkout.`);
   } else if (comando === "down") {
     const argomenti = decidiDown({
