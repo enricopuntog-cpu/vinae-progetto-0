@@ -73,8 +73,88 @@ export const RESIDUI_ATTESI = "0 0 0 0 0 0 0 0 0 false false false false";
 export const utentiFixturePresenti = (): number =>
   Number(eseguiSql("select count(*) from auth.users where email like '%@e2e-12zk.test';"));
 
-/** Riusa la pulizia 12zk della CI; ritorna la riga dei residui. */
+/**
+ * Pulizia dei domini critici (VPM-018-E2E-CRIT-01): vino, annunci, ordini,
+ * conversazioni e utenti registrati dal browser. Precede la pulizia 12zk, che
+ * resta invariata: ordini, conversazioni e messaggi legano i profili con vincoli
+ * `restrict` che quella pulizia non conosce.
+ */
+export const puliziaDominiCritici = (): void => {
+  eseguiSql(readFileSync(path.join(__dirname, "pulizia-domini-critici.sql"), "utf8"));
+};
+
+/**
+ * Conteggi dei domini critici sullo stack dedicato, in forma `nome=n`. Il setup
+ * li fotografa dopo la pulizia iniziale e la pulizia finale pretende gli stessi
+ * valori: un caso che lascia un vino, un annuncio, un ordine, un messaggio, una
+ * sessione o un file fa fallire la corsa (le tabelle sono intere, non filtrate
+ * per utente: anche un residuo orfano si vede). `orfani` conta, per ogni chiave
+ * esterna a colonna singola verso utenti, profili, vini, bottiglie, annunci,
+ * ordini e conversazioni, le righe il cui genitore non esiste più: la pulizia
+ * gira in modalità replica, dove nessun ON DELETE agisce, e un orfano in una
+ * tabella non elencata qui sopra resterebbe altrimenti invisibile.
+ */
+export const contaDominiCritici = (): string =>
+  // `rollback` in coda: la funzione temporanea non sopravvive e nulla si scrive.
+  eseguiSql(`begin;
+  create function pg_temp.e2e_orfani() returns bigint language plpgsql as $f$
+  declare
+    v record;
+    n bigint;
+    totale bigint := 0;
+  begin
+    for v in
+      select c.conrelid::regclass as figlia, a.attname as colonna, c.confrelid::regclass as genitore, r.attname as chiave
+        from pg_constraint c
+        join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
+        join pg_attribute r on r.attrelid = c.confrelid and r.attnum = c.confkey[1]
+       where c.contype = 'f' and array_length(c.conkey, 1) = 1
+         and c.confrelid in ('auth.users'::regclass, 'public.profiles'::regclass, 'public.wines'::regclass,
+                             'public.bottle_units'::regclass, 'public.listings'::regclass,
+                             'public.orders'::regclass, 'public.conversations'::regclass)
+    loop
+      execute format('select count(*) from %s f where f.%I is not null and not exists (select 1 from %s g where g.%I = f.%I)',
+                     v.figlia, v.colonna, v.genitore, v.chiave, v.colonna) into n;
+      totale := totale + n;
+    end loop;
+    return totale;
+  end;
+  $f$;
+  select concat_ws(' ',
+    'utenti=' || (select count(*) from auth.users),
+    'identita=' || (select count(*) from auth.identities),
+    'sessioni=' || (select count(*) from auth.sessions),
+    'refresh=' || (select count(*) from auth.refresh_tokens),
+    'profili=' || (select count(*) from public.profiles),
+    'ruoli=' || (select count(*) from public.user_roles),
+    'vini=' || (select count(*) from public.wines),
+    'osservazioni_prezzo=' || (select count(*) from public.wine_price_observations),
+    'bottiglie=' || (select count(*) from public.bottle_units),
+    'lotti=' || (select count(*) from private.cellar_lotti),
+    'annunci=' || (select count(*) from public.listings),
+    'unita_annuncio=' || (select count(*) from private.listing_unita),
+    'allocazioni=' || (select count(*) from private.listing_allocazioni),
+    'proposte=' || (select count(*) from public.proposals),
+    'ordini=' || (select count(*) from public.orders),
+    'pagamenti=' || (select count(*) from public.payments),
+    'eventi_ordine=' || (select count(*) from public.order_events),
+    'consegne=' || (select count(*) from private.checkout_consegne),
+    'conversazioni=' || (select count(*) from public.conversations),
+    'partecipanti=' || (select count(*) from public.conversation_participants),
+    'messaggi=' || (select count(*) from public.messages),
+    'notifiche=' || (select count(*) from public.notifications),
+    'audit=' || (select count(*) from public.audit_log),
+    'saldi=' || (select count(*) from public.balance_accounts),
+    'file=' || (select count(*) from storage.objects),
+    'orfani=' || pg_temp.e2e_orfani());
+  rollback;`)
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .pop() ?? "?";
+
+/** Riusa la pulizia 12zk della CI, preceduta da quella dei domini critici; ritorna la riga dei residui di 12zk. */
 export const puliziaFixture = (): string => {
+  puliziaDominiCritici();
   const uscita = eseguiSql(leggiSqlDiTest("12zk_vpm_015b3_e2e_cleanup.sql"));
   const residui = uscita.split(/\r?\n/).filter(Boolean).pop() ?? "";
   // Solo si spegne (mai si accende): la guardia di accensione non si applica.

@@ -1,6 +1,7 @@
 import { IsolamentoNonProvato, NOME_VARIABILE_CORSA, type BersaglioE2E } from "./support/target";
 import {
   RESIDUI_ATTESI,
+  contaDominiCritici,
   generaPasswordFixture,
   generaTokenCorsa,
   puliziaFixture,
@@ -21,6 +22,8 @@ export interface DipendenzeSetup {
   utentiFixturePresenti: () => number;
   puliziaFixture: () => string;
   verificaResidui: () => string;
+  /** Conteggi dei domini critici (vino, annunci, ordini, messaggi, Auth, file): linea di base e controllo finale. */
+  contaDomini: () => string;
   generaCorsa: () => string;
   generaPassword: () => string;
   env: Record<string, string | undefined>;
@@ -53,6 +56,8 @@ export const preparaCorsa = (d: DipendenzeSetup): (() => Promise<void>) => {
   d.rivendicaStack(corsa);
   d.env[NOME_VARIABILE_CORSA] = corsa;
   if (d.utentiFixturePresenti() > 0) d.puliziaFixture();
+  // Dopo la pulizia di un eventuale residuo: è lo stato a cui la corsa deve tornare.
+  const lineaDiBase = d.contaDomini();
 
   d.env.E2E_PASSWORD = d.generaPassword();
   console.log(`[e2e] stack dedicato ${bersaglio.apiUrl}, ${migrazioni} migrazioni = file del commit, 0 utenti estranei`);
@@ -60,6 +65,11 @@ export const preparaCorsa = (d: DipendenzeSetup): (() => Promise<void>) => {
   return async () => {
     d.env[NOME_VARIABILE_CORSA] = corsa;
     const residui = d.verificaResidui();
+    const domini = d.contaDomini();
+    if (domini !== lineaDiBase) {
+      throw new Error(`Residui nei domini critici dopo la pulizia: "${domini}" (linea di base "${lineaDiBase}").`);
+    }
+    console.log(`[e2e] domini critici tornati alla linea di base: "${domini}"`);
     console.log(`[e2e] pulizia completata, residui e interruttori: "${residui}" (attesi "${RESIDUI_ATTESI}")`);
   };
 };
@@ -74,6 +84,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     utentiFixturePresenti,
     puliziaFixture,
     verificaResidui,
+    contaDomini: contaDominiCritici,
     generaCorsa: generaTokenCorsa,
     generaPassword: generaPasswordFixture,
     env: process.env,
