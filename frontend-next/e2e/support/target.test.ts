@@ -284,10 +284,12 @@ describe("runner senza percorsi distruttivi impliciti (VPM-018-FIX-E2E-01)", () 
 
   test("il workflow non avvia né distrugge stack senza il progetto riservato", () => {
     const workflow = leggi(".github/workflows/e2e-browser.yml");
-    expect(workflow).not.toMatch(/^\s*supabase (start|stop|status)/m);
-    for (const riga of workflow.split("\n").filter((r) => /supabase@[\d.]+ stop/.test(r))) {
-      expect(riga).toContain(`--project-id ${PROJECT_ID_E2E}`);
-    }
+    // Ogni comando della CLI che avvia, ferma o interroga uno stack passa dal progetto riservato o da `e2e:stack`.
+    const comandiCli = workflow
+      .split("\n")
+      .filter((r) => !r.trim().startsWith("#") && /\bsupabase(@[\d.]+)?\s+(start|stop|status)\b/.test(r));
+    expect(comandiCli.length).toBeGreaterThan(0);
+    for (const riga of comandiCli) expect(riga).toContain(`--project-id ${PROJECT_ID_E2E}`);
     expect(workflow).toContain("bun run e2e:stack up");
     expect(workflow).toContain("bun run e2e:stack down --conferma");
     expect(workflow).toContain("pulizia completata");

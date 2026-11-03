@@ -79,8 +79,7 @@ describe("setup e pulizia della suite browser (VPM-018-FIX-E2E-01)", () => {
   const fallimenti: [string, Partial<DipendenzeSetup>][] = [
     ["identità dello stack non provata", { risolviBersaglio: fallisce("nessuno stack E2E dedicato") }],
     ["gateway di un altro progetto", { garantisciGateway: fallisce("porta del gateway") }],
-    ["ledger errato", { verificaLedger: fallisce("il ledger non coincide") }],
-    ["marcatore assente o di un'altra copia di lavoro", { verificaLedger: fallisce("marcatore") }],
+    ["ledger errato o marcatore di un'altra copia di lavoro", { verificaLedger: fallisce("il ledger non coincide") }],
     ["utenti estranei (stack di sviluppo)", { utentiEstranei: () => 3 }],
   ];
 
@@ -98,6 +97,21 @@ describe("setup e pulizia della suite browser (VPM-018-FIX-E2E-01)", () => {
       expect(env.E2E_PASSWORD).toBeUndefined();
     });
   }
+
+  test("setup fallito DOPO la presa di possesso: nessuna pulizia restituita, nessuna verifica dei residui", () => {
+    const { chiamate, env, dipendenze } = finte({
+      utentiFixturePresenti: () => 5,
+      puliziaFixture: fallisce("possesso perso durante la pulizia del residuo"),
+    });
+    let pulizia: unknown;
+    expect(() => {
+      pulizia = preparaCorsa(dipendenze);
+    }).toThrow(IsolamentoNonProvato);
+    expect(pulizia).toBeUndefined();
+    expect(chiamate).toContain(`rivendicaStack:${CORSA}`);
+    expect(chiamate.some((c) => c.startsWith("verificaResidui"))).toBe(false);
+    expect(env.E2E_PASSWORD).toBeUndefined();
+  });
 
   test("un token di corsa dalla shell non concede il possesso", () => {
     const { chiamate, env, dipendenze } = finte();

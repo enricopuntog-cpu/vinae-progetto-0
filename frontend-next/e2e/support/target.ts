@@ -189,7 +189,10 @@ export const componiBersaglio = (fonti: {
   projectIdSviluppo: string;
 }): BersaglioE2E => {
   const { identita, apiUrl, anonKey, appUrl, dbContainerRichiesto, projectIdSviluppo } = fonti;
-  if (identita.projectId !== PROJECT_ID_E2E || projectIdSviluppo === PROJECT_ID_E2E) {
+  if (identita.projectId !== PROJECT_ID_E2E) {
+    throw new IsolamentoNonProvato(`l'identità non nomina il progetto E2E riservato \`${PROJECT_ID_E2E}\``);
+  }
+  if (projectIdSviluppo === PROJECT_ID_E2E) {
     throw new IsolamentoNonProvato("il progetto E2E coincide con quello di sviluppo");
   }
   if (dbContainerRichiesto && dbContainerRichiesto !== CONTAINER_DB_E2E) {

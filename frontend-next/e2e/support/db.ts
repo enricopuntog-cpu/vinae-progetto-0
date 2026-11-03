@@ -13,11 +13,7 @@ import { IsolamentoNonProvato, NOME_VARIABILE_CORSA, confrontaLedger, corsaPerSq
  * nessuna istruzione parte. La password della fixture viaggia su stdin come
  * variabile psql, non negli argomenti e non su disco.
  */
-export const eseguiSql = (
-  sql: string,
-  variabili: Record<string, string> = {},
-  { primaDelPossesso = false }: { primaDelPossesso?: boolean } = {},
-): string => {
+const esegui = (sql: string, variabili: Record<string, string>, primaDelPossesso: boolean): string => {
   const { dbContainer } = risolviBersaglio();
   const { nonce } = leggiIdentita();
   const corsa = corsaPerSql(process.env[NOME_VARIABILE_CORSA], primaDelPossesso);
@@ -28,16 +24,21 @@ export const eseguiSql = (
   ).trim();
 };
 
+/** Per i casi e la pulizia: sempre con il token della corsa che possiede lo stack. */
+export const eseguiSql = (sql: string, variabili: Record<string, string> = {}): string => esegui(sql, variabili, false);
+
+/** Solo le tre chiamate del setup che precedono la presa di possesso; non esportata di proposito. */
+const eseguiSqlPrimaDelPossesso = (sql: string, variabili: Record<string, string> = {}): string =>
+  esegui(sql, variabili, true);
+
 /** Il setup prende possesso dello stack: una corsa precedente ancora viva non passa più la guardia. */
 export const rivendicaStack = (corsa: string): void => {
-  eseguiSql("update vinea_e2e.identita set corsa = :'e2e_corsa_nuova';", { e2e_corsa_nuova: corsa }, { primaDelPossesso: true });
+  eseguiSqlPrimaDelPossesso("update vinea_e2e.identita set corsa = :'e2e_corsa_nuova';", { e2e_corsa_nuova: corsa });
 };
 
 /** Utenti Auth estranei alla fixture, comprese le righe senza email. */
 export const utentiEstranei = (): number =>
-  Number(
-    eseguiSql("select count(*) from auth.users where coalesce(email, '') not like '%@e2e-12zk.test';", {}, { primaDelPossesso: true }),
-  );
+  Number(eseguiSqlPrimaDelPossesso("select count(*) from auth.users where coalesce(email, '') not like '%@e2e-12zk.test';"));
 
 const leggiSqlDiTest = (nome: string): string => readFileSync(path.join(CARTELLA_TEST_SQL, nome), "utf8");
 
@@ -50,7 +51,7 @@ export const generaTokenCorsa = (): string => randomBytes(16).toString("hex");
 
 /** Il ledger dello stack deve coincidere con i file di questo commit. */
 export const verificaLedgerCoincideConFile = (): number => {
-  const ledger = eseguiSql("select version from supabase_migrations.schema_migrations order by 1;", {}, { primaDelPossesso: true })
+  const ledger = eseguiSqlPrimaDelPossesso("select version from supabase_migrations.schema_migrations order by 1;")
     .split(/\s+/)
     .filter(Boolean);
   const { mancanti, inPiu } = confrontaLedger(ledger, versioniMigrazioni(fileMigrazioni()));
