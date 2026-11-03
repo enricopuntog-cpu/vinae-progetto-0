@@ -1,6 +1,6 @@
 # VPM-018 — Matrice funzionalità / copertura test
 
-Stati usati: **COMPLETE E VERIFICATE** / **IMPLEMENTATE MA NON COLLAUDATE E2E** / **INCOMPLETE** / **INTENZIONALMENTE DISABILITATE** (flag fail-closed, non bug) / **BLOCCATE DA PROVIDER O DECISIONI ESTERNE**. Lo stato implementativo è tenuto separato dallo stato del collaudo.
+Stati usati: **COMPLETE E VERIFICATE** / **IMPLEMENTATE MA NON COLLAUDATE E2E** / **INCOMPLETE** / **INTENZIONALMENTE DISABILITATE** (flag fail-closed, non bug) / **BLOCCATE DA PROVIDER O DECISIONI ESTERNE**. Lo stato implementativo è tenuto separato dallo stato del collaudo. Perimetro: beta di `frontend-next` + `supabase/`; `frontend/` + `backend/` (prodotto servito) e il cutover sono fuori matrice.
 
 ## Matrice per area
 
@@ -25,11 +25,11 @@ Stati usati: **COMPLETE E VERIFICATE** / **IMPLEMENTATE MA NON COLLAUDATE E2E** 
 | AI | (nessuna route dedicata; pannelli in esplora/vendi/annuncio) | Edge Function (`verify_jwt = true`) | `NEXT_PUBLIC_AI_UI_ENABLED`, `…_ACTIONS_ENABLED`, `AI_ENABLED` (Edge) | ~60 | Nessuno | `10b_sommelier_storico` | Implementato, spento di default | Non collaudato E2E |
 | Legale / SEO | `/legale`, `/legale/documenti-qualifica` | No | Nessuna | ~23 | Nessuno | Nessuna | Implementato (parziale) | Non collaudato |
 
-## Test effettivamente eseguiti in questa sessione (FATTO VERIFICATO)
+## Test eseguiti nella sessione OmniRoute (EVIDENZA PRECEDENTE, non rieseguiti in VPM-018-RECOVERY)
 
 | Controllo | Comando | Esito |
 |---|---|---|
-| Lint frontend-next | `bun run lint` | 0 errori, 12 warning (LCP ``) |
+| Lint frontend-next | `bun run lint` | 0 errori, 12 warning (`<img>`, impatto LCP) |
 | Typecheck frontend-next | `bun run typecheck` | OK (dopo `bun install --frozen-lockfile`) |
 | Unit test frontend-next | `bun run test` | 3324 passati / 0 falliti (soglia CI 3324, margine zero) |
 | Build frontend-next | `bun run build` | OK, 23 route + proxy |
@@ -37,7 +37,7 @@ Stati usati: **COMPLETE E VERIFICATE** / **IMPLEMENTATE MA NON COLLAUDATE E2E** 
 | Ispezione statica sicurezza app | subagente `vinea-security-auditor` | 12 rischi plausibili (max P2), nessuna confermata |
 | Ispezione statica sicurezza DB | subagente `vinea-security-auditor` (parziale) | RLS, secdef, grant, bucket verificati sullo stack isolato |
 | Stack Supabase isolato | `supabase start` + `psql` | 108/108 migrazioni, UP, healthy |
-| E2E Playwright | `bun run e2e:smoke` | BLOCCATO (ledger mismatch + nessun browser Playwright). Causa: stack condiviso selezionato implicitamente, vedi report § 0.2; non rilanciare prima di FIX-E2E-01 |
+| E2E Playwright | `bun run e2e:smoke` | NON VERIFICATO: bloccato dal ledger (101 vs 108) dello stack **condiviso** selezionato per errore, non dello stack isolato. Vedi report § 0.2; non rilanciare prima di FIX-E2E-01 |
 
 ## Aree senza alcun test unitario di route/UI
 
@@ -53,7 +53,7 @@ Stati usati: **COMPLETE E VERIFICATE** / **IMPLEMENTATE MA NON COLLAUDATE E2E** 
 
 ## Flag (solo stringa esatta `true` accende; fail-closed)
 
-`frontend-next/src/config/features.ts`: AI UI/Azioni, pagamenti, imballaggio, demo UI, Club, market validation, Accessori (+ `ACCESSORI_LOGISTICA_ENABLED`, `ACCESSORI_ORDINI_ENABLED`, `…_NAV_MOBILE`). Flag DB: `private.accessori_impostazioni.visibilita_pubblica` (attualmente `f` sullo stack condiviso e isolato). Webhook Stripe: `PAYMENTS_ENABLED` (spento di default → 503).
+`frontend-next/src/config/features.ts`: AI UI/Azioni, pagamenti, imballaggio, demo UI, Club, market validation, Accessori (+ `ACCESSORI_LOGISTICA_ENABLED`, `ACCESSORI_ORDINI_ENABLED`, `…_NAV_MOBILE`). Flag DB: `private.accessori_impostazioni.visibilita_pubblica` (`f` sullo stack condiviso e isolato al momento delle verifiche OmniRoute, EP). Webhook Stripe: `PAYMENTS_ENABLED` (spento di default → 503).
 
 ## Presenze / assenze (rilevanti per la copertura)
 
