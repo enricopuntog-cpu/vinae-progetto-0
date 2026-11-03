@@ -33,8 +33,8 @@ export const problemiAccessibilita = (page: Page): Promise<string[]> =>
         e.getAttribute("aria-labelledby") ||
         e.textContent ||
         e.getAttribute("title") ||
-        // un `<label for>` dà il nome anche a un pulsante (interruttori Radix)
-        ((e as HTMLButtonElement).labels?.length ? "etichetta" : "")
+        // un `<label for>` con testo dà il nome anche a un pulsante (interruttori Radix)
+        [...((e as HTMLButtonElement).labels ?? [])].map((l) => l.textContent?.trim()).find(Boolean) || ""
       ).trim();
     const titoli = [...document.querySelectorAll("h1")].filter(esposto).length;
     if (titoli !== 1) problemi.push(`h1 presenti: ${titoli} (atteso 1)`);

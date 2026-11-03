@@ -182,7 +182,7 @@ export function FotoGriglia({
             key={`vuota-${i}`}
             onClick={() => inputAggiunta.current?.click()}
             disabled={inCorso}
-            aria-label="Aggiungi fotografia"
+            aria-label={`Aggiungi la fotografia ${foto.length + i + 1}`}
             className="grid aspect-square place-items-center rounded-xl border-2 border-dashed border-border bg-secondary/50 text-muted-foreground hover:border-bordeaux hover:text-bordeaux disabled:opacity-50"
           >
             {inCorso && i === 0 ? (

@@ -38,10 +38,10 @@ test.describe("Pagine non trovate: marchio, italiano, nessun dettaglio @smoke @c
     }
     await expect(home).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL((url) => url.pathname === "/");
   });
 
-  test("un annuncio inesistente resta 404 e ha un titolo di pagina", async ({ page, diagnostica }) => {
+  test("un annuncio inesistente resta 404 e ha un titolo di primo livello", async ({ page, diagnostica }) => {
     diagnostica.ammetti(`/annuncio/${UUID_INESISTENTE}`);
     const risposta = await page.goto(`/annuncio/${UUID_INESISTENTE}`);
     expect(risposta?.status()).toBe(404);

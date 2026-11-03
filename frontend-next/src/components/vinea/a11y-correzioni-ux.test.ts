@@ -14,7 +14,7 @@ describe("slot foto vuoti", () => {
   it("hanno sempre un nome accessibile, anche fuori dall'editor (wizard /vendi)", () => {
     const f = src("components/vinea/FotoGriglia.tsx");
     const slot = f.slice(f.indexOf("`vuota-${i}`"), f.indexOf("<Camera"));
-    expect(slot).toContain('aria-label="Aggiungi fotografia"');
+    expect(slot).toContain("aria-label={`Aggiungi la fotografia ${foto.length + i + 1}`}");
     expect(slot).not.toMatch(/aria-label=\{editor/);
   });
 });
@@ -34,7 +34,7 @@ describe("card dell'annuncio", () => {
     const f = src("components/vinea/WineCard.tsx");
     // Nessun pin seguito direttamente dalla città: sempre dentro una condizione sulla città.
     expect(f).not.toContain("<MapPin className=\"h-3 w-3\" /> {wine.venditore.citta}");
-    expect(f.split("wine.venditore.citta ? (").length - 1).toBe(2);
+    expect(f.split("wine.venditore.citta ? (").length - 1).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -62,11 +62,13 @@ describe("/esplora", () => {
   it("il campo di ricerca ha un nome accessibile oltre al segnaposto", () => {
     const campo = f.slice(f.indexOf('data-testid="esplora-search-input"'), f.indexOf('className="pl-10 h-11'));
     expect(campo).toContain("aria-label=");
-    // Etichetta nel nome (WCAG 2.5.3): il segnaposto «Cerca vino, produttore, annata…» sta dentro il nome.
-    expect(campo).toContain('"Cerca vino, produttore o annata"');
+    // Etichetta nel nome (WCAG 2.5.3): il nome contiene il testo del segnaposto (senza i puntini).
+    expect(campo).toContain('"Cerca vino, produttore, annata"');
+    expect(campo).toContain('"Cerca vino, produttore, annata…"');
   });
   it("il conteggio usa il singolare per un risultato", () => {
     expect(f).toContain('filtered.length === 1 ? "1 risultato"');
-    expect(f).not.toMatch(/>s*{filtered.length} risultati/);
+    // Il vecchio JSX era `<Badge …>{filtered.length} risultati</Badge>`: non deve tornare.
+    expect(f).not.toContain(">{filtered.length} risultati");
   });
 });

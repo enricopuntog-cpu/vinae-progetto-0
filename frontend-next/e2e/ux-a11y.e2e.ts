@@ -10,7 +10,7 @@ import { etichettaCorsa, preparaBottigliaInCantina } from "./support/vino";
  * R-A11Y-01). Ogni campo è trovato per etichetta (non per segnaposto), nessun
  * campo o pulsante resta senza nome accessibile nei passi del wizard, `/messaggi`
  * senza conversazioni ha il suo titolo e il campo di ricerca di `/esplora` ha un
- * nome. Sola lettura sul database: la bottiglia si prepara con la porta reale
+ * nome. Nessuna scrittura dal browser: la bottiglia si prepara con la porta reale
  * della Cantina e la pulizia dei domini critici la rimuove.
  */
 
@@ -33,7 +33,9 @@ test.describe("Accessibilità del wizard /vendi e delle pagine ritoccate @cross"
     const continua = page.getByRole("button", { name: /Continua/ });
 
     // Fotografie: sei slot vuoti, ognuno con un nome (prima: pulsanti con la sola icona).
-    await expect(page.getByRole("button", { name: "Aggiungi fotografia" })).toHaveCount(6);
+    // «Aggiungi la fotografia 1» … «… 6»: nome numerato (il nome di ruolo corrisponde per sottostringa).
+    await expect(page.getByRole("button", { name: "Aggiungi la fotografia" })).toHaveCount(6);
+    await expect(page.getByRole("button", { name: "Aggiungi la fotografia 1", exact: true })).toHaveCount(1);
     expect(await problemiAccessibilita(page), "passo Fotografie").toEqual([]);
     await continua.click();
     await expect(page.getByRole("heading", { name: "Identificazione", exact: true })).toBeVisible();
@@ -49,8 +51,8 @@ test.describe("Accessibilità del wizard /vendi e delle pagine ritoccate @cross"
 
     // Provenienza e conservazione: le due etichette del componente Field.
     await expect(page.getByRole("heading", { name: "Provenienza e conservazione" })).toBeVisible();
-    const conservazione = page.getByLabel("Come è stata conservata");
-    const storia = page.getByLabel("Racconta la sua storia (opzionale)");
+    const conservazione = page.getByLabel("Come è stata conservata", { exact: true });
+    const storia = page.getByLabel("Racconta la sua storia (opzionale)", { exact: true });
     await expect(conservazione).toBeVisible();
     await expect(storia).toBeVisible();
     // Toccare l'etichetta porta il fuoco sul campo: è la prova dell'associazione, non solo del nome.
@@ -62,12 +64,12 @@ test.describe("Accessibilità del wizard /vendi e delle pagine ritoccate @cross"
 
     // Prezzo e bottiglie in vendita.
     await expect(page.getByRole("heading", { name: "Prezzo", exact: true })).toBeVisible();
-    const prezzo = page.getByLabel("Prezzo per bottiglia (€)");
+    const prezzo = page.getByLabel("Prezzo per bottiglia (€)", { exact: true });
     await page.locator('label[for="vendi-prezzo"]').click();
     await expect(prezzo).toBeFocused();
     await prezzo.fill("42");
     await expect(prezzo).toHaveValue("42");
-    await expect(page.getByLabel("Bottiglie in vendita")).toBeVisible();
+    await expect(page.getByLabel("Bottiglie in vendita", { exact: true })).toBeVisible();
     expect(await problemiAccessibilita(page), "passo Prezzo").toEqual([]);
     expect(await senzaScorrimentoOrizzontale(page), "scorrimento orizzontale nel wizard").toBe(true);
     await contesto.close();
@@ -76,7 +78,7 @@ test.describe("Accessibilità del wizard /vendi e delle pagine ritoccate @cross"
   test("/messaggi senza conversazioni ha un titolo e /esplora un campo di ricerca con nome", async ({ browser, page, diagnostica }, info) => {
     await page.goto("/esplora");
     await attendiCaricamento(page);
-    await expect(page.getByRole("textbox", { name: /Cerca vino, produttore o annata/ })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: /Cerca vino, produttore, annata/ })).toBeVisible();
     expect(await problemiAccessibilita(page), "/esplora").toEqual([]);
 
     const contesto = await contestoAutenticato(browser, "venditore", opzioniDelProgetto(info));

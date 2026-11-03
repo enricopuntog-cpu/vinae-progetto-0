@@ -76,10 +76,10 @@ test.describe.serial("Marketplace vino: pubblicazione dal wizard, ricerca, sched
     await continua.click();
     await expect(page.getByRole("heading", { name: "Provenienza e conservazione" })).toBeVisible();
     // Etichetta associata al campo (R-A11Y-01): si trova per nome accessibile, non per segnaposto.
-    await page.getByLabel("Come è stata conservata").fill("Cantina interrata, 14 gradi, bottiglia coricata.");
+    await page.getByLabel("Come è stata conservata", { exact: true }).fill("Cantina interrata, 14 gradi, bottiglia coricata.");
     await continua.click();
     await expect(page.getByRole("heading", { name: "Prezzo", exact: true })).toBeVisible();
-    await page.getByLabel("Prezzo per bottiglia (€)").fill(PREZZO_EURO);
+    await page.getByLabel("Prezzo per bottiglia (€)", { exact: true }).fill(PREZZO_EURO);
     await continua.click();
     await expect(page.getByRole("heading", { name: "Consegna", exact: true })).toBeVisible();
     // Senza le due dichiarazioni il passo non si supera (il database rifiuterebbe la pubblicazione).

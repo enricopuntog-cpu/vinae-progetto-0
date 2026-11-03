@@ -210,7 +210,7 @@ export default function EsploraPageClient({
             value={q}
             onChange={(e) => aggiornaQuery(e.target.value)}
             data-testid="esplora-search-input"
-            aria-label={abbinamentoAttivo ? "Cosa stai preparando?" : "Cerca vino, produttore o annata"}
+            aria-label={abbinamentoAttivo ? "Cosa stai preparando?" : "Cerca vino, produttore, annata"}
             placeholder={
               abbinamentoAttivo
                 ? "Cosa stai preparando? es. brasato, ostriche, risotto…"
