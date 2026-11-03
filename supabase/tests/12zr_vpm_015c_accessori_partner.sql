@@ -668,6 +668,17 @@ begin
     and (pg_temp.dato(format('select public.accessori_venditore_pubblico(%L)', v_au), null, 'anon') ->> 'titolare_id') is null,
     coalesce(v_j::text, 'null'));
 
+  -- 24 (VPM-015QA-FINAL-B2): il prezzo PUBBLICO coincide con quello del checkout per classe.
+  perform pg_temp.registra(24, 'prezzo pubblico coerente col checkout: vetrina e dettaglio dell''annuncio Partner mostrano 23,75 (1500 bps), quello del privato 22,73; mai il prezzo privato su un articolo Partner',
+    (select (e ->> 'prezzo_acquirente_cents')::int
+       from jsonb_array_elements(coalesce(pg_temp.dato('select public.annunci_accessori_pubblici_elenca()', null, 'anon'), '[]'::jsonb)) e
+      where e ->> 'id' = v_a1::text) = 2375
+    and (pg_temp.dettaglio_pubblico(v_a1) ->> 'prezzo_acquirente_cents')::int = 2375
+    and (select (e ->> 'prezzo_acquirente_cents')::int
+           from jsonb_array_elements(coalesce(pg_temp.dato('select public.annunci_accessori_pubblici_elenca()', null, 'anon'), '[]'::jsonb)) e
+          where e ->> 'id' = v_au::text) = 2273,
+    coalesce((pg_temp.dettaglio_pubblico(v_a1) ->> 'prezzo_acquirente_cents'), 'null'));
+
   select * into r from pg_temp.prenota(c_b1, v_a1, 2);
   v_o := (r.ordine ->> 'id')::uuid;
   perform pg_temp.registra(13, 'checkout test: 2 pezzi a 20,00 -> prenotazione 6/4/2; classe partner, margine 1500 bps, commissione dalla formula (4000 -> 4724 totale, 724 con copertura pagamento), totale = somma delle voci',

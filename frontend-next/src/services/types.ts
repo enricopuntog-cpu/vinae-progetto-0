@@ -1,4 +1,9 @@
-import type { ElencoPostVenditaAdmin, PostVenditaAccessorio } from "@/lib/accessori-postvendita/postvendita";
+import type {
+  ElencoPostVenditaAdmin,
+  IntentoOrfanoAdmin,
+  PostVenditaAccessorio,
+  RimborsoDovutoAdmin,
+} from "@/lib/accessori-postvendita/postvendita";
 /**
  * Contratti servizio (solo interfacce per i domini ancora mock).
  * I tipi di dominio vivono in src/data/*.ts — qui riesportiamo solo le firme.
@@ -3584,6 +3589,10 @@ export interface AccessoriPostvenditaService {
   apriContestazione(r: { ordineId: string; motivo: string; descrizione: string; foto: File[] }): Promise<Result<void>>;
   rispondi(r: { ordineId: string; tipo: DisputeSellerResponseKind; risposta: string; foto: File[] }): Promise<Result<void>>;
   adminElenco(): Promise<Result<ElencoPostVenditaAdmin>>;
+  /** Sola lettura: intenti di pagamento orfani non risolti (B1). Nessuna azione sul fornitore. */
+  adminIntentiOrfani(): Promise<Result<IntentoOrfanoAdmin[]>>;
+  /** Sola lettura: pagamenti incassati e non applicabili, in attesa di `charge.refunded` firmato. */
+  adminRimborsiDovuti(): Promise<Result<RimborsoDovutoAdmin[]>>;
   adminDecidi(r: { ordineId: string; esito: "rimborsata" | "risolta" | "respinta"; importoCents: number | null; nota: string }): Promise<Result<void>>;
   adminConsegna(r: { ordineId: string; riferimento: string }): Promise<Result<void>>;
   adminReso(r: { ordineId: string; quantita: number; nota: string }): Promise<Result<void>>;

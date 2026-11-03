@@ -35,14 +35,19 @@ export default async function Page() {
         .filter((ruolo): ruolo is string => typeof ruolo === "string");
   if (!eAdminReale(ruoli)) notFound();
 
-  const elenco = await creaAccessoriPostvenditaService(client).adminElenco();
+  const servizio = creaAccessoriPostvenditaService(client);
+  const [elenco, orfani, dovuti] = await Promise.all([
+    servizio.adminElenco(),
+    servizio.adminIntentiOrfani(),
+    servizio.adminRimborsiDovuti(),
+  ]);
   if (!elenco.ok) notFound();
 
   return (
     <main id="contenuto-principale" className="mx-auto max-w-4xl px-4 py-8">
       <h1 className="font-display text-2xl">Post-vendita Accessori</h1>
       <div className="mt-6">
-        <AccessoriPostvenditaAdmin iniziale={elenco.data} />
+        <AccessoriPostvenditaAdmin iniziale={elenco.data} pagamenti={{ orfani, dovuti }} />
       </div>
     </main>
   );

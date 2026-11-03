@@ -24,8 +24,11 @@ import { useVenditaAccessori } from "./VenditaAccessoriProvider";
  */
 export function VenditaAccessorio({
   accessorio,
+  commerciale = false,
 }: {
   accessorio: Pick<AccessorioPersonale, "id" | "nome" | "condizione" | "quantita" | "immagini" | "archiviato">;
+  /** Scorta commerciale di un Partner (VPM-015C): l'ammissione si decide per articolo (preventivo, salvataggio e pubblicazione). */
+  commerciale?: boolean;
 }) {
   const contesto = useVenditaAccessori();
   const [aperto, setAperto] = useState(false);
@@ -35,7 +38,11 @@ export function VenditaAccessorio({
   const { stato, annunci, servizio, ricarica } = contesto;
   const annuncio = annunci.find((a) => a.cantinaId === accessorio.id && annuncioAperto(a)) ?? null;
 
-  if (!stato.venditoreAmmesso) {
+  // `stato.venditoreAmmesso` è la risposta per gli accessori PERSONALI: per un Partner dice sempre
+  // `partner_percorso_non_consentito`. Una scorta commerciale non passa da lì: ogni porta per articolo
+  // (preventivo, bozza, pubblicazione) ricontrolla Partner attivo, proprietà e interruttori nel database.
+  const percorsoPartner = commerciale && stato.motivo === "partner_percorso_non_consentito";
+  if (!stato.venditoreAmmesso && !percorsoPartner) {
     const spiegazione = messaggioVenditoreNonAmmesso(stato.motivo);
     return spiegazione ? (
       <p className="text-xs text-muted-foreground" data-testid="vendita-accessorio-non-ammessa">

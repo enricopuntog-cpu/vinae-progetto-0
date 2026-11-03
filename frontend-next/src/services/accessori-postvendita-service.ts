@@ -3,6 +3,8 @@ import { uuidValido } from "@/lib/accessori-vendita/annunci-accessori";
 import {
   messaggioPostvendita,
   parseElencoPostVenditaAdmin,
+  parseIntentiOrfaniAdmin,
+  parseRimborsiDovutiAdmin,
   parsePostvendita,
 } from "@/lib/accessori-postvendita/postvendita";
 import { createDisputeService } from "@/services/phase7c/dispute-service";
@@ -107,6 +109,22 @@ export function creaAccessoriPostvenditaService(client: SupabaseClient | null): 
       if (error) return fallita("accessori_postvendita_admin_elenco", error);
       const letto = parseElencoPostVenditaAdmin(data);
       return letto ? { ok: true, data: letto } : fallita("accessori_postvendita_admin_elenco", null);
+    },
+
+    async adminIntentiOrfani() {
+      if (!client) return { ok: false, error: NON_CONFIGURATO };
+      const { data, error } = await client.rpc("accessori_pagamenti_intenti_orfani");
+      if (error) return fallita("accessori_pagamenti_intenti_orfani", error);
+      const letto = parseIntentiOrfaniAdmin(data);
+      return letto ? { ok: true, data: letto } : fallita("accessori_pagamenti_intenti_orfani", null);
+    },
+
+    async adminRimborsiDovuti() {
+      if (!client) return { ok: false, error: NON_CONFIGURATO };
+      const { data, error } = await client.rpc("accessori_pagamenti_rimborso_dovuto");
+      if (error) return fallita("accessori_pagamenti_rimborso_dovuto", error);
+      const letto = parseRimborsiDovutiAdmin(data);
+      return letto ? { ok: true, data: letto } : fallita("accessori_pagamenti_rimborso_dovuto", null);
     },
 
     adminDecidi({ ordineId, esito, importoCents, nota }) {

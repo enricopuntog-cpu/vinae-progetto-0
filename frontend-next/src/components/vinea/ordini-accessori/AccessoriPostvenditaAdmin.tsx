@@ -4,7 +4,11 @@ import { useRef, useState } from "react";
 import { DisputePanel } from "@/components/vinea/orders/DisputePanel";
 import { creaCaricatoreFascicolo, contestazioneComeFascicolo, type FascicoloAccessorio } from "@/lib/accessori-postvendita/fascicolo";
 import { Button } from "@/components/ui/button";
-import type { ElencoPostVenditaAdmin } from "@/lib/accessori-postvendita/postvendita";
+import type {
+  ElencoPostVenditaAdmin,
+  IntentoOrfanoAdmin,
+  RimborsoDovutoAdmin,
+} from "@/lib/accessori-postvendita/postvendita";
 import { euro } from "@/lib/prezzi/classe";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { creaAccessoriPostvenditaService } from "@/services/accessori-postvendita-service";
@@ -21,8 +25,20 @@ const ORIGINE = { dovuto_automatico: "Incasso non applicabile", contestazione: "
  * decidere, rimborsi non conclusi (compreso ogni `refund_due`), consegna
  * manuale e reso rientrato. Ogni porta ricontrolla il ruolo nel database.
  */
-export function AccessoriPostvenditaAdmin({ iniziale }: { iniziale: ElencoPostVenditaAdmin }) {
+export type PagamentiDaVerificare = {
+  orfani: { ok: true; data: IntentoOrfanoAdmin[] } | { ok: false; error: string };
+  dovuti: { ok: true; data: RimborsoDovutoAdmin[] } | { ok: false; error: string };
+};
+
+export function AccessoriPostvenditaAdmin({
+  iniziale,
+  pagamenti: pagamentiIniziali,
+}: {
+  iniziale: ElencoPostVenditaAdmin;
+  pagamenti: PagamentiDaVerificare;
+}) {
   const [elenco, setElenco] = useState(iniziale);
+  const [pagamenti, setPagamenti] = useState(pagamentiIniziali);
   const [messaggio, setMessaggio] = useState<string | null>(null);
   const [ordine, setOrdine] = useState("");
   const [quantita, setQuantita] = useState("1");
@@ -60,8 +76,14 @@ export function AccessoriPostvenditaAdmin({ iniziale }: { iniziale: ElencoPostVe
   const disputa = fascicolo ? contestazioneComeFascicolo(fascicolo.postvendita, fascicolo.foto) : null;
 
   const ricarica = async () => {
-    const esito = await servizio().adminElenco();
+    const [esito, orfani, dovuti] = await Promise.all([
+      servizio().adminElenco(),
+      servizio().adminIntentiOrfani(),
+      servizio().adminRimborsiDovuti(),
+    ]);
     if (esito.ok) setElenco(esito.data);
+    // Una lettura fallita resta un errore visibile: mai un elenco vecchio spacciato per aggiornato.
+    setPagamenti({ orfani, dovuti });
   };
   const esegui = async (azione: () => Promise<{ ok: boolean; error?: string }>) => {
     if (inCorso) return;
@@ -123,6 +145,67 @@ export function AccessoriPostvenditaAdmin({ iniziale }: { iniziale: ElencoPostVe
         </ul>
       </section>
 
+      <section data-testid="rimborsi-dovuti-admin">
+        <h2 className="font-display text-lg">Rimborsi dovuti (incasso non applicabile)</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Pagamenti incassati dal fornitore che l&apos;ordine non ha potuto usare. Si chiudono solo con l&apos;evento firmato
+          del fornitore: non esiste un&apos;azione manuale da qui.
+        </p>
+        {!pagamenti.dovuti.ok ? (
+          <p role="alert" className="mt-2">Elenco non disponibile: {pagamenti.dovuti.error} Non significa che non ci siano rimborsi dovuti.</p>
+        ) : pagamenti.dovuti.data.length === 0 ? (
+          <p className="mt-2 text-muted-foreground">Nessuno.</p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {pagamenti.dovuti.data.map((d) => (
+              <li key={d.ordineId} className="rounded-xl border p-3">
+                <p className="font-medium">
+                  {euro(d.importoCents)} {d.valuta.toUpperCase()} · già rimborsato {euro(d.rimborsatoCents)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Ordine {d.ordineId} · aggiornato {ora(d.aggiornatoAt)}
+                  {d.motivo ? ` · motivo: ${d.motivo}` : ""}
+                </p>
+                <Button size="sm" variant="outline" className="mt-2" disabled={inCorso} onClick={() => void carica(d.ordineId)}>
+                  Apri nel fascicolo
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section data-testid="intenti-orfani-admin">
+        <h2 className="font-display text-lg">Intenti di pagamento orfani</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Controllo manuale: cerca l&apos;identificativo del PaymentIntent nel pannello del fornitore. «Da annullare»: l&apos;annullo
+          è ancora da confermare. «Incerto»: lo stato presso il fornitore non è noto. Se risulta incassato deve comparire fra i
+          rimborsi dovuti. Questa pagina non annulla né rimborsa e non riconcilia in automatico.
+        </p>
+        {!pagamenti.orfani.ok ? (
+          <p role="alert" className="mt-2">Elenco non disponibile: {pagamenti.orfani.error} Non significa che non ci siano intenti orfani.</p>
+        ) : pagamenti.orfani.data.length === 0 ? (
+          <p className="mt-2 text-muted-foreground">Nessuno.</p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {pagamenti.orfani.data.map((o) => (
+              <li key={`${o.ordineId}-${o.intento}`} className="rounded-xl border p-3">
+                <p className="font-medium">
+                  {o.statoIntento === "incerto" ? "Incerto" : "Da annullare"} · {euro(o.importoCents)} {o.valuta.toUpperCase()}
+                </p>
+                <p className="break-all text-xs text-muted-foreground">
+                  Ordine {o.ordineId} · {o.provider} {o.intento} · pagamento {o.statoPagamento.replaceAll("_", " ")} · dal {ora(o.aggiornatoAt)}
+                  {o.motivo ? ` · motivo: ${o.motivo}` : ""}
+                </p>
+                <Button size="sm" variant="outline" className="mt-2" disabled={inCorso} onClick={() => void carica(o.ordineId)}>
+                  Apri nel fascicolo
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <section className="space-y-3 rounded-2xl border p-4">
         <h2 className="font-display text-lg">Operazioni sull&apos;ordine</h2>
         <label className="block">
@@ -142,7 +225,7 @@ export function AccessoriPostvenditaAdmin({ iniziale }: { iniziale: ElencoPostVe
           <div className="space-y-3" data-testid="fascicolo-accessorio-admin">
             <p>Ordine {fascicolo.postvendita.ordineId} · {fascicolo.postvendita.incassato ? "Incassato" : "Non incassato"}</p>
             <p>Rimborsato: {euro(fascicolo.postvendita.rimborso?.rimborsatoCents ?? 0)} · in elaborazione: {euro(fascicolo.postvendita.rimborso?.inCorsoCents ?? 0)}</p>
-            <p className="text-xs text-muted-foreground">La lettura admin non espone il totale pagato né il ricavo del venditore. Non sono deducibili da questi importi.</p>
+            <p className="text-xs text-muted-foreground">La lettura del fascicolo non espone il ricavo del venditore. Gli importi delle liste «Rimborsi dovuti» e «Intenti di pagamento orfani» sono quelli del pagamento dell'acquirente, solo per l'admin.</p>
             {c?.importoRimborsoCents != null ? <p>Rimborso deciso: {euro(c.importoRimborsoCents)}</p> : null}
             {disputa ? <DisputePanel contestazione={disputa} eventi={[]} ruolo="compratore" inCorso={inCorso} onRispondi={async () => "Operazione non disponibile."} /> : <p>Nessuna contestazione.</p>}
           </div>

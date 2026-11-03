@@ -291,7 +291,7 @@ export function CantinaAccessori({ modalita = "personale" }: { modalita?: "perso
                     <Trash2 aria-hidden /> Rimuovi
                   </Button>
                 </div>
-                <VenditaAccessorio accessorio={a} />
+                <VenditaAccessorio accessorio={a} commerciale={commerciale} />
               </div>
             </li>
           ))}
