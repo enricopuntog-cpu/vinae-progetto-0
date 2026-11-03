@@ -13,7 +13,7 @@ Livelli di evidenza usati: **FATTO VERIFICATO** (misurato in questa sessione) ·
 
 **Stato dell'audit: PARZIALE.** VPM-018 non è dichiarato completato: restano non eseguiti Playwright (bloccato dal rischio di isolamento, vedi § 0.2), le verifiche su Supabase Production (BLOCCO ESTERNO) e le misure UX/accessibilità/prestazioni su browser.
 
-Recuperati senza sovrascrivere: tre documenti non tracciati in `docs/audits/` nel worktree `C:\Users\enrico\OneDrive\Desktop\vinae-vpm-015qa` (branch `audit/vpm-018-prelaunch-gap-report` = `origin/main` = `a008bbc`, nessun commit proprio). Nessuna modifica a codice, migration, flag o `CLAUDE.md`. Risultati di lint, typecheck, 3324 unit test, build, audit dipendenze e stack isolato sono **EVIDENZA PRECEDENTE** (sessione OmniRoute): non rieseguiti qui per scelta.
+Recuperati senza sovrascrivere: tre documenti non tracciati in `docs/audits/` nel worktree locale `vinae-vpm-015qa` (branch `audit/vpm-018-prelaunch-gap-report` = `origin/main` = `a008bbc`, nessun commit proprio). Nessuna modifica a codice, migration, flag o `CLAUDE.md`. Risultati di lint, typecheck, 3324 unit test, build, audit dipendenze e stack isolato sono **EVIDENZA PRECEDENTE** (sessione OmniRoute): non rieseguiti qui per scelta.
 
 Legenda livelli: **FV** = fatto verificato in questa revisione · **EP** = evidenza precedente, non rieseguita · **IP** = ipotesi / rischio plausibile da lettura statica · **NV** = non verificato · **BE** = blocco esterno.
 
