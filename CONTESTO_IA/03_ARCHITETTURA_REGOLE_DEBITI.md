@@ -2093,6 +2093,14 @@ successive possono costruire.
 - Leaked Password Protection in Supabase Auth: ON dal 18 settembre 2026 con
   secure email change e secure password change (record in
   `docs/PRELAUNCH_TASK_RECONCILIATION.md`); resta da valutare le passkey.
+- enumerazione degli account nel recupero password (R-AUTH-01, 3 novembre
+  2026, `docs/VPM_018_R_AUTH_01.md`): `/accedi` mostra lo stesso testo a
+  iscritti e sconosciuti (il servizio, senza `indirizzoDellaSessione`, tratta
+  come successo ogni errore non deciso prima della ricerca dell'account), ma
+  GoTrue `/auth/v1/recover` resta un oracolo per stato, codice e tempo con la
+  chiave anon (supabase/auth#2398). PARZIALMENTE MITIGATO / BLOCCATO DAL
+  PROVIDER; la scelta fra CAPTCHA, Send Email Hook, limiti e recupero
+  server-side è del titolare.
 
 ### Debiti della migrazione
 

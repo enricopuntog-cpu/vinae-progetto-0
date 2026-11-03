@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   CODICI_ERRORE_AUTH,
@@ -222,13 +222,28 @@ describe("/accedi: password dimenticata senza enumerazione degli account", () =>
     expect(codice).toInclude("setRecuperoRichiesto(true)");
   });
 
-  it("il provider risponde ok anche per un indirizzo sconosciuto: nessuna distinzione a valle", () => {
+  it("una sola richiesta, senza dichiararsi indirizzo della sessione: gli errori dei soli iscritti restano neutri", () => {
     const corpo = senzaCommenti(ACCEDI).slice(
       senzaCommenti(ACCEDI).indexOf("const recupera ="),
       senzaCommenti(ACCEDI).indexOf("if (authLoading)"),
     );
     expect((corpo.match(/authInviaRecuperoPassword\(/g) ?? []).length).toBe(1);
     expect(corpo).toInclude("if (inCorso) return");
+    // R-AUTH-01: l'indirizzo è digitato, quindi il servizio usa la classificazione
+    // senza sessione. Passare l'opzione qui riaprirebbe l'oracolo nella pagina.
+    expect(corpo).toInclude("authInviaRecuperoPassword(email.trim())");
+    expect(senzaCommenti(ACCEDI)).not.toInclude("indirizzoDellaSessione");
+  });
+
+  it("il servizio sceglie la classificazione senza sessione per default", () => {
+    const codice = senzaCommenti(SERVIZIO);
+    const recupero = codice.slice(
+      codice.indexOf("async inviaRecuperoPassword"),
+      codice.indexOf("async aggiornaPasswordNuova"),
+    );
+    expect(recupero).toInclude("if (opzioni?.indirizzoDellaSessione)");
+    expect(recupero).toInclude("classificaErroreRecuperoSenzaSessione(error)");
+    expect(recupero).toInclude("codice ? { ok: false, error: codice } : { ok: true, data: undefined }");
   });
 
   it("l'errore mostrato è tradotto, mai il testo del provider", () => {
@@ -328,7 +343,20 @@ describe("/account — Sicurezza", () => {
     expect(SICUREZZA).toInclude("Imposta o cambia password");
     expect(SICUREZZA).toInclude("Riceverai un link alla tua email");
     expect(SICUREZZA).toInclude("Funziona anche");
-    expect(SICUREZZA).toInclude("authInviaRecuperoPassword(email)");
+    // L'indirizzo è quello della sessione: l'errore vero non rivela nulla di nuovo.
+    expect(SICUREZZA).toInclude("authInviaRecuperoPassword(email, { indirizzoDellaSessione: true })");
+  });
+
+  it("solo questa sezione dichiara l'indirizzo della sessione (R-AUTH-01)", () => {
+    // Un'altra superficie che passasse l'opzione con un indirizzo digitato
+    // riaprirebbe l'oracolo nel testo della pagina.
+    const chiamanti = ["src/app", "src/components", "src/lib"].flatMap((radice) =>
+      (readdirSync(join(process.cwd(), radice), { recursive: true }) as string[])
+        .filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
+        .map((f) => join(radice, f).replaceAll("\\", "/"))
+        .filter((f) => senzaCommenti(leggi(f)).includes("indirizzoDellaSessione")),
+    );
+    expect(chiamanti).toEqual(["src/app/account/sicurezza-account.tsx"]);
   });
 
   it("l'indirizzo è quello della sessione, non un campo compilabile", () => {

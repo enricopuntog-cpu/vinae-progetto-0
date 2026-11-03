@@ -6,6 +6,7 @@ import { supabaseAuthService } from "@/services/auth-service";
 import { supabaseProfileService } from "@/services/profile-service";
 import type {
   OAuthProvider,
+  OpzioniRecuperoPassword,
   ProfiloCorrente,
   ProfiloModifica,
   Result,
@@ -262,8 +263,8 @@ export const useRealAuthDomain = () => {
   );
 
   const authInviaRecuperoPassword = useCallback(
-    (email: string): Promise<ResultAuth<void>> =>
-      supabaseAuthService.inviaRecuperoPassword(email),
+    (email: string, opzioni?: OpzioniRecuperoPassword): Promise<ResultAuth<void>> =>
+      supabaseAuthService.inviaRecuperoPassword(email, opzioni),
     [],
   );
 

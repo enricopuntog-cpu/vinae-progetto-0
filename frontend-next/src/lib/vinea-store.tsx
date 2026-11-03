@@ -24,6 +24,7 @@ import {
 import type {
   DatiNuovoAmbiente,
   OAuthProvider,
+  OpzioniRecuperoPassword,
   ProfiloCorrente,
   ProfiloModifica,
   Result,
@@ -77,11 +78,14 @@ type StoreState = {
   authInviaMagicLink: (email: string, contesto?: ContestoRitornoAuth) => Promise<ResultAuth<void>>;
   authVerificaEmail: (tokenHash: string) => Promise<ResultAuth<void>>;
   /**
-   * Chiede il link di recupero password. L'esito non rivela se l'indirizzo
-   * corrisponde a un account: le superfici mostrano la stessa frase neutra in
-   * ogni caso.
+   * Chiede il link di recupero password. Senza `indirizzoDellaSessione` gli
+   * errori che dipendono dall'esistenza dell'account tornano come successo, e
+   * la superficie mostra la frase neutra (`AuthService.inviaRecuperoPassword`).
    */
-  authInviaRecuperoPassword: (email: string) => Promise<ResultAuth<void>>;
+  authInviaRecuperoPassword: (
+    email: string,
+    opzioni?: OpzioniRecuperoPassword,
+  ) => Promise<ResultAuth<void>>;
   /** Imposta la password dell'utente della sessione corrente. */
   authAggiornaPasswordNuova: (password: string) => Promise<ResultAuth<void>>;
   authAccediConOAuth: (

@@ -181,6 +181,12 @@ export type OAuthProvider = "google" | "facebook";
  */
 export type ResultAuth<T> = Result<T, CodiceErroreAuth>;
 
+/** Vedi `AuthService.inviaRecuperoPassword`. */
+export type OpzioniRecuperoPassword = {
+  /** L'indirizzo è quello della sessione aperta, non uno digitato. */
+  readonly indirizzoDellaSessione?: boolean;
+};
+
 export interface AuthService {
   /**
    * Una registrazione riuscita ha tre esiti distinti, non due:
@@ -215,12 +221,16 @@ export interface AuthService {
    * — che una password non ce l'ha mai avuta, e a cui quindi non si può
    * chiedere quella vecchia — e il cambio password dall'area account.
    *
-   * L'esito **non** dice se quell'indirizzo esiste: Supabase risponde ok anche
-   * per un'email sconosciuta, e le superfici mostrano comunque la stessa frase
-   * neutra. Un `ok: false` qui è un guasto del canale, non un verdetto
-   * sull'account.
+   * Supabase risponde 200 per un'email sconosciuta ma può fallire SOLO per una
+   * registrata (intervallo minimo, budget email, SMTP: R-AUTH-01). Per questo,
+   * di default, un errore che dipende dall'account diventa `ok: true` e la
+   * superficie mostra la frase neutra; `ok: false` resta per i guasti decisi
+   * prima della ricerca dell'account (rete, limite per origine, CAPTCHA,
+   * formato). Solo chi chiede il link per l'indirizzo della PROPRIA sessione
+   * passa `indirizzoDellaSessione` e riceve l'errore vero, che non gli insegna
+   * nulla di nuovo.
    */
-  inviaRecuperoPassword(email: string): Promise<ResultAuth<void>>;
+  inviaRecuperoPassword(email: string, opzioni?: OpzioniRecuperoPassword): Promise<ResultAuth<void>>;
   /**
    * Imposta la password dell'utente **della sessione corrente**.
    *

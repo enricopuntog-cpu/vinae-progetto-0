@@ -142,9 +142,14 @@ export default function AccediPageClient() {
    * Il messaggio di successo è **identico** per un indirizzo registrato e per
    * uno che non lo è, e non c'è nessun ramo che li distingua: se questa pagina
    * dicesse "nessun account con questa email" diventerebbe un modo per
-   * scoprire chi è iscritto a Vinea provando indirizzi altrui. Supabase stesso
-   * risponde ok in entrambi i casi; qui si evita di reintrodurre la
-   * distinzione a valle.
+   * scoprire chi è iscritto a Vinea provando indirizzi altrui. Supabase NON
+   * risponde sempre ok: per un iscritto può fallire (intervallo minimo, budget
+   * email, SMTP) dove per uno sconosciuto risponde 200 (R-AUTH-01). Il servizio,
+   * chiamato senza `indirizzoDellaSessione`, restituisce quegli errori come
+   * successo; qui arrivano solo i guasti uguali per tutti. È una mitigazione
+   * del testo mostrato: stato e tempo della risposta di `/auth/v1/recover`
+   * restano osservabili (strumenti del browser, chiamata diretta), quindi il
+   * provider resta un oracolo (docs/VPM_018_R_AUTH_01.md).
    */
   const recupera = async () => {
     if (inCorso) return;
@@ -300,7 +305,8 @@ export default function AccediPageClient() {
               className="rounded-xl border border-border bg-crema p-3 text-sm text-antracite/80"
             >
               Se esiste un account associato a questa email, riceverai le istruzioni per
-              reimpostare la password.
+              reimpostare la password. Se non arriva entro qualche minuto, controlla lo spam
+              oppure riprova più tardi.
             </p>
           )}
 

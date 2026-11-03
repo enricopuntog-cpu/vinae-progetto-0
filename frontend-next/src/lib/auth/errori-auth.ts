@@ -233,6 +233,48 @@ export const classificaErroreAuth = (
 };
 
 /**
+ * Errori del recupero password che GoTrue decide PRIMA di cercare l'account
+ * (R-AUTH-01, GoTrue v2.196.0 `POST /recover`): limite per origine, CAPTCHA e
+ * provider email spento sono middleware della rotta; `validation_failed` viene
+ * da `RecoverParams.Validate`, che precede la ricerca. Per un indirizzo
+ * sconosciuto `Recover` risponde subito 200; per uno registrato prosegue e può
+ * fallire con `over_email_send_rate_limit` (intervallo minimo per utente o
+ * budget email del progetto), con 500 `unexpected_failure` (SMTP che rifiuta o
+ * non risponde) o con `email_address_invalid` (verifica all'invio). Questi
+ * esistono SOLO per gli iscritti: mostrarli dice che l'account c'è.
+ */
+const ERRORI_RECUPERO_PRIMA_DELL_ACCOUNT: ReadonlySet<string> = new Set([
+  "over_request_rate_limit",
+  "captcha_failed",
+  "email_provider_disabled",
+  "validation_failed",
+]);
+
+/**
+ * Classifica l'esito di un recupero password chiesto per un indirizzo DIGITATO
+ * da chi non ha dimostrato di possederlo (`/accedi`). Restituisce un codice solo
+ * per gli errori che non dipendono dall'esistenza dell'account: richiesta mai
+ * arrivata al server (supabase-js `AuthRetryableFetchError` con `status` 0) e i
+ * rifiuti elencati sopra. Ogni altro errore restituisce `null`, e la superficie
+ * mostra la stessa conferma neutra del successo; anche un `AuthUnknownError`
+ * (risposta non JSON, `status` assente), che un proxy potrebbe produrre solo per
+ * gli iscritti.
+ *
+ * È una MITIGAZIONE PARZIALE: toglie la distinzione dal TESTO mostrato. La
+ * risposta di GoTrue (stato, codice) e il tempo restano osservabili dalla stessa
+ * pagina e con una chiamata diretta a `/auth/v1/recover`, pubblica con la chiave
+ * anon (docs/VPM_018_R_AUTH_01.md). La lista va riverificata a ogni
+ * aggiornamento di GoTrue o di supabase-js.
+ */
+export const classificaErroreRecuperoSenzaSessione = (errore: ErroreGrezzo): CodiceErroreAuth | null => {
+  if (!errore) return null;
+  if (errore.status === 0 || (errore.code !== undefined && ERRORI_RECUPERO_PRIMA_DELL_ACCOUNT.has(errore.code))) {
+    return classificaErroreAuth(errore, "recupero-password");
+  }
+  return null;
+};
+
+/**
  * Classifica il rientro di errore di un provider OAuth, cioè il caso in cui la
  * callback riceve `?error=` invece di `?code=`.
  *
