@@ -83,7 +83,7 @@ export function DisputePanel({
           Contestazione · {contestazione.lifecycle_status.replaceAll("_", " ")}
         </p>
         <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-700">
-          {new Date(contestazione.apertura_at).toLocaleDateString("it-IT")}
+          {new Date(contestazione.apertura_at).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}
         </span>
       </div>
 
@@ -156,7 +156,7 @@ export function DisputePanel({
             <li key={event.id}>
               <b>{EVENTI[event.event_kind]}</b>
               {" · "}
-              {new Date(event.created_at).toLocaleString("it-IT")}
+              {new Date(event.created_at).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}
             </li>
           ))}
         </ol>
@@ -173,7 +173,7 @@ export function DisputePanel({
         {chiusa
           ? "Pratica chiusa. La decisione descrive l'esito; eventuali operazioni economiche seguono un flusso separato."
           : contestazione.lifecycle_status === "attesa_venditore"
-            ? `In attesa della risposta del venditore entro ${new Date(contestazione.venditore_scadenza_at).toLocaleString("it-IT")}.`
+            ? `In attesa della risposta del venditore entro ${new Date(contestazione.venditore_scadenza_at).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}.`
             : "Vinea mira normalmente a esaminare il caso entro 3 giorni lavorativi dalla documentazione completa."}
       </p>
     </section>

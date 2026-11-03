@@ -44,6 +44,15 @@ prova il database e l'interazione utente/admin, **non Stripe**.
 
 Risultato completo (suite intera, tre progetti): vedi la sezione «Esecuzione» in fondo.
 
+## Difetto trovato dalla CI (P2, corretto)
+
+Il primo giro della CI ha fallito su un solo caso: la pagina dell'ordine di un Partner con una contestazione
+dava `Minified React error #418` (idratazione). `DisputePanel` (condiviso con il vino) formattava le date con
+`toLocale*String("it-IT")` senza fuso: il server gira in UTC, il browser in Europe/Rome, quindi HTML del server e
+del client differivano. Riprodotto in locale con `TZ=UTC` (prima: caso 7 rosso; dopo: 12/12) e corretto fissando
+`timeZone: "Europe/Rome"`, come già fa il resto dei pannelli; test di contratto `dispute-panel-fuso.test.ts`.
+Sulla macchina di sviluppo (fuso di Roma) il difetto non si vedeva: soglia dei test portata a 3324.
+
 ## Pannello admin (solo lettura)
 
 `/admin/accessori-postvendita` esteso, nessuna seconda dashboard e nessuna nuova RPC:
@@ -122,7 +131,7 @@ coerenza di importo, valuta e ordine; nessun rilascio anticipato dei fondi al ve
   contatori delle tabelle di prova a 0, 9 contatori delle tabelle figlie a 0, interruttori tutti falsi (compresi
   `vendita_partner` e visibilità del catalogo).
 - **Griglia `12zr`**: caso 24 **fallisce prima** della migrazione (24/25, dettaglio `2273`) e passa dopo (**25/25**).
-- **Unit/contract**: 3323 test, 0 falliti (soglia CI alzata da 3310 a 3323); lint 0 errori; typecheck e build puliti.
+- **Unit/contract**: 3324 test, 0 falliti (soglia CI alzata da 3310 a 3324); lint 0 errori; typecheck e build puliti.
 - **Mutazioni**: togliere il ramo d'errore dell'elenco admin o accettare qualunque `stato_intento` fa fallire i test
   unitari. Togliere la guardia di ruolo dalla *pagina* NON fa fallire il caso browser: l'ammissione è nella RPC
   `accessori_postvendita_admin_elenco` (e nelle due nuove), per cui la pagina risponde comunque 404; la guardia di
