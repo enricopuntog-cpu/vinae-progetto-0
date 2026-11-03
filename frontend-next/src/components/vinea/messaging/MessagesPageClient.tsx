@@ -50,17 +50,41 @@ export const MessagesPageClient = ({ initialConversationId }: { initialConversat
     };
   }, [loadMessages, markConversationRead, selectedExists, selectedId]);
 
-  if (!online && conversations.length === 0) return <OfflineState onRetry={() => void reload()} />;
-  if (loading && conversations.length === 0) return <LoadingBlock label="Caricamento conversazioni" />;
+  // Stati senza elenco: la pagina ha comunque un titolo, per chi naviga per intestazioni.
+  const titoloNascosto = <h1 className="sr-only">Messaggi</h1>;
+  if (!online && conversations.length === 0) {
+    return (
+      <>
+        {titoloNascosto}
+        <OfflineState onRetry={() => void reload()} />
+      </>
+    );
+  }
+  if (loading && conversations.length === 0) {
+    return (
+      <>
+        {titoloNascosto}
+        <LoadingBlock label="Caricamento conversazioni" />
+      </>
+    );
+  }
   if (error && conversations.length === 0) {
-    return <ErrorState message={error} onRetry={() => void reload()} />;
+    return (
+      <>
+        {titoloNascosto}
+        <ErrorState message={error} onRetry={() => void reload()} />
+      </>
+    );
   }
   if (conversations.length === 0) {
     return (
-      <EmptyState
-        title="Nessuna conversazione"
-        message="Apri un annuncio attivo e scrivi al venditore per iniziare."
-      />
+      <>
+        {titoloNascosto}
+        <EmptyState
+          title="Nessuna conversazione"
+          message="Apri un annuncio attivo e scrivi al venditore per iniziare."
+        />
+      </>
     );
   }
 

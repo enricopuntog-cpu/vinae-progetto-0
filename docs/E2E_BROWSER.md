@@ -73,6 +73,17 @@ ciò che si certifica passa dal browser.
 | `checkout-vino` (`@cross`) | nessun «Compra ora» con i pagamenti spenti; checkout aperto per indirizzo: totale del preventivo del database, conferma che non crea ordini, pagamenti né prenotazioni e mostra l'errore, zero richieste a Stripe; `order_checkout_reserve` negata a un utente; anonimo senza conferma; annuncio inesistente 404; ordine in attesa (porta del server) visibile all'acquirente e non a un estraneo, anche via REST | GATE VERIFICATO; CHECKOUT E2E NON VERIFICATO (Edge Function e Stripe fuori dallo stack) |
 | `messaggi-critici` (`@cross`) | conversazione aperta dall'annuncio (vuota, due partecipanti); invio, persistenza e ordine dopo il ricaricamento; il venditore legge dopo la navigazione e risponde; il terzo utente non vede, non legge e non scrive (anche via RPC); anonimo senza contatto e invio rifiutato; errore d'invio visibile e nuovo tentativo senza duplicati | E2E completo; consegna in tempo reale NON VERIFICATA (Realtime escluso) |
 
+## Casi di UX e accessibilità (VPM-018-UX-A11Y-01)
+
+| File | Casi | Livello |
+|---|---|---|
+| `pagine-di-errore` (`@smoke @cross`) | URL senza pagina, annuncio inesistente e route spenta dalla flag (`/beta-test`): 404 con la pagina di marca in italiano (un `h1`, nessun «could not be found»), nessuno scorrimento orizzontale, via d'uscita da tastiera (su WebKit il fuoco si porta a mano: Safari non include i link in Tab) | E2E completo per il non trovato; `error.tsx` e `global-error.tsx` NON provocabili dal browser senza una route di prova: test di componente in `src/app/pagine-di-errore.test.tsx` |
+| `ux-a11y` (`@cross`) | wizard `/vendi`: sei slot foto con nome, campi trovati per etichetta (non per segnaposto), il clic sull'etichetta porta il fuoco sul campo, nessun campo o pulsante senza nome nei passi Foto, Identificazione, Provenienza e Prezzo; `/esplora` con campo di ricerca nominato; `/messaggi` vuoto con il suo `h1` | E2E completo |
+
+`problemiAccessibilita` (`support/pagina.ts`) conta solo gli elementi esposti: non
+quelli `hidden`, sotto `aria-hidden` o `display: none` (campo file nascosto, copia
+nativa dei selettori Radix, frammento nascosto di Suspense).
+
 ## Isolamento (fail-closed, VPM-018-FIX-E2E-01)
 
 La suite non lavora mai sullo stack di sviluppo (`project_id` di

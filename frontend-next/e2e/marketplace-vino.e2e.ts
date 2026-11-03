@@ -75,11 +75,11 @@ test.describe.serial("Marketplace vino: pubblicazione dal wizard, ricerca, sched
     await page.getByRole("button", { name: "Ottimo" }).click();
     await continua.click();
     await expect(page.getByRole("heading", { name: "Provenienza e conservazione" })).toBeVisible();
-    // Il componente `Field` del wizard non associa la Label al campo (nessun `htmlFor`): si usa il segnaposto.
-    await page.getByPlaceholder(/Cantina climatizzata/).fill("Cantina interrata, 14 gradi, bottiglia coricata.");
+    // Etichetta associata al campo (R-A11Y-01): si trova per nome accessibile, non per segnaposto.
+    await page.getByLabel("Come è stata conservata", { exact: true }).fill("Cantina interrata, 14 gradi, bottiglia coricata.");
     await continua.click();
     await expect(page.getByRole("heading", { name: "Prezzo", exact: true })).toBeVisible();
-    await page.getByPlaceholder("Inserisci il prezzo").fill(PREZZO_EURO);
+    await page.getByLabel("Prezzo per bottiglia (€)", { exact: true }).fill(PREZZO_EURO);
     await continua.click();
     await expect(page.getByRole("heading", { name: "Consegna", exact: true })).toBeVisible();
     // Senza le due dichiarazioni il passo non si supera (il database rifiuterebbe la pubblicazione).

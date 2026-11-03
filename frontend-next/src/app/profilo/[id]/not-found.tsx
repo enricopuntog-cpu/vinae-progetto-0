@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function NotFound() {
   return (
     <div className="grid place-items-center py-24 text-center">
-      <p className="font-serif text-3xl">Profilo non disponibile</p>
+      <h1 className="font-serif text-3xl">Profilo non disponibile</h1>
       <p className="mt-2 max-w-md text-sm text-muted-foreground">
         Il profilo richiesto non è disponibile.
       </p>

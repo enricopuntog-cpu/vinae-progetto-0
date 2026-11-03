@@ -16,21 +16,38 @@ export const attendiCaricamento = async (page: Page): Promise<void> => {
 export const senzaScorrimentoOrizzontale = (page: Page): Promise<boolean> =>
   page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 
-/** Controlli minimi di accessibilità sul DOM (nessuna dipendenza aggiuntiva). */
+/**
+ * Controlli minimi di accessibilità sul DOM (nessuna dipendenza aggiuntiva).
+ * Contano solo gli elementi esposti: non quelli `hidden`, sotto `aria-hidden` o
+ * non resi (`display: none`, come il campo file nascosto o la copia nativa dei
+ * selettori Radix), che un lettore di schermo non incontra.
+ */
 export const problemiAccessibilita = (page: Page): Promise<string[]> =>
   page.evaluate(() => {
     const problemi: string[] = [];
+    const esposto = (e: Element): boolean =>
+      !e.closest("[hidden], [aria-hidden='true']") && (e as HTMLElement).checkVisibility?.() !== false;
     const nomeAccessibile = (e: Element): string =>
-      (e.getAttribute("aria-label") || e.getAttribute("aria-labelledby") || e.textContent || e.getAttribute("title") || "").trim();
-    if (document.querySelectorAll("h1").length !== 1) problemi.push(`h1 presenti: ${document.querySelectorAll("h1").length} (atteso 1)`);
+      (
+        e.getAttribute("aria-label") ||
+        e.getAttribute("aria-labelledby") ||
+        e.textContent ||
+        e.getAttribute("title") ||
+        // un `<label for>` con testo dà il nome anche a un pulsante (interruttori Radix)
+        [...((e as HTMLButtonElement).labels ?? [])].map((l) => l.textContent?.trim()).find(Boolean) || ""
+      ).trim();
+    const titoli = [...document.querySelectorAll("h1")].filter(esposto).length;
+    if (titoli !== 1) problemi.push(`h1 presenti: ${titoli} (atteso 1)`);
     if (!document.documentElement.lang) problemi.push("lang mancante su <html>");
     for (const img of document.querySelectorAll("img")) {
       if (!img.hasAttribute("alt")) problemi.push(`img senza alt: ${img.getAttribute("src")?.slice(0, 60)}`);
     }
     for (const e of document.querySelectorAll("button, a[href]")) {
+      if (!esposto(e)) continue;
       if (!nomeAccessibile(e) && !e.querySelector("img[alt]:not([alt=''])")) problemi.push(`<${e.tagName.toLowerCase()}> senza nome accessibile`);
     }
     for (const campo of document.querySelectorAll("input:not([type=hidden]), textarea, select")) {
+      if (!esposto(campo)) continue;
       const id = campo.getAttribute("id");
       const etichettato =
         campo.getAttribute("aria-label") ||

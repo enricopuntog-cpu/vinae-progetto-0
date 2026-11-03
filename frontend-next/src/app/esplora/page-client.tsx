@@ -210,10 +210,11 @@ export default function EsploraPageClient({
             value={q}
             onChange={(e) => aggiornaQuery(e.target.value)}
             data-testid="esplora-search-input"
+            aria-label={abbinamentoAttivo ? "Cosa stai preparando?" : "Cerca vino, produttore, annata"}
             placeholder={
               abbinamentoAttivo
                 ? "Cosa stai preparando? es. brasato, ostriche, risotto…"
-                : "Cerca produttore, denominazione, annata…"
+                : "Cerca vino, produttore, annata…"
             }
             className="pl-10 h-11 rounded-full bg-card"
           />
@@ -465,7 +466,9 @@ export default function EsploraPageClient({
       )}
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <Badge variant="secondary">{filtered.length} risultati</Badge>
+        <Badge variant="secondary">
+          {filtered.length === 1 ? "1 risultato" : `${filtered.length} risultati`}
+        </Badge>
         {abbinamentoAttivo && q.trim() && (
           <Badge className="bg-bordeaux text-crema">
             <UtensilsCrossed className="mr-1 h-3 w-3" /> Abbinamento: {q}
