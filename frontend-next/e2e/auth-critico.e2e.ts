@@ -25,10 +25,10 @@ import { etichettaCorsa, leggiDalDatabase } from "./support/vino";
  *
  * Limiti dichiarati (stack dedicato senza Mailpit, `enable_confirmations=false`
  * come la configurazione locale): la conferma email e il link di recupero
- * password NON sono esercitati; si prova solo che la richiesta di recupero dal
- * browser ha un esito visibile e, per un indirizzo non registrato, il messaggio
- * neutro (per un iscritto con invio fallito vedi il rilievo R-AUTH-01). OAuth e
- * MFA non sono chiamati (nessun provider esterno).
+ * password NON sono esercitati; si prova che la richiesta di recupero dal
+ * browser dà lo stesso testo neutro a un iscritto con invio fallito e a un
+ * indirizzo sconosciuto (R-AUTH-01: mitigazione dell'interfaccia; GoTrue resta
+ * un oracolo, annotato). OAuth e MFA non sono chiamati (nessun provider esterno).
  */
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
@@ -187,30 +187,51 @@ test.describe.serial("Autenticazione dal browser: registrazione, accesso, uscita
     await contesto.close();
   });
 
-  test("recupero password: esito visibile dal browser, messaggio neutro per un indirizzo non registrato", async ({ browser, diagnostica }, info) => {
+  test("recupero password: la pagina risponde allo stesso modo a un iscritto con invio fallito e a un indirizzo sconosciuto (R-AUTH-01)", async ({ browser, diagnostica }, info) => {
     const contesto = await contestoNuovo(browser, info);
     const page = await contesto.newPage();
     diagnostica.osserva(page, "recupero");
-    // Lo stack dedicato non avvia Mailpit: GoTrue può rifiutare l'invio. Si registra l'esito, non lo si simula.
+    // Lo stack dedicato non avvia Mailpit: per un iscritto GoTrue fallisce l'invio (500). È il guasto che il
+    // caso vuole: non lo si simula, lo si osserva dalla risposta vera.
     diagnostica.ammetti("/auth/v1/recover");
     const esiti: string[] = [];
+    const statiProvider: number[] = [];
     for (const indirizzo of [email, `assente-${tag}@e2e-12zk.test`]) {
       await page.goto("/accedi");
       await attendiCaricamento(page);
       await page.getByLabel("Email", { exact: true }).fill(indirizzo);
+      const risposta = page.waitForResponse((r) => r.url().includes("/auth/v1/recover") && r.request().method() === "POST");
       await page.getByTestId("password-dimenticata").click();
+      statiProvider.push((await risposta).status());
       const esito = page.getByTestId("recupero-inviato").or(page.getByTestId("errore-recupero"));
       await expect(esito).toBeVisible();
       esiti.push(`${await esito.getAttribute("data-testid")}: ${await esito.innerText()}`);
     }
-    await info.attach("esiti-recupero.json", { body: JSON.stringify(esiti, null, 2), contentType: "application/json" });
-    // Un indirizzo non registrato riceve il messaggio neutro: GoTrue non invia nulla e risponde ok.
+    await info.attach("esiti-recupero.json", { body: JSON.stringify({ esiti, statiProvider }, null, 2), contentType: "application/json" });
+    // Un indirizzo sconosciuto: GoTrue risponde 200 senza cercare oltre, la pagina dà la conferma neutra.
+    expect(statiProvider[1]).toBe(200);
     expect(esiti[1]).toMatch(/^recupero-inviato: Se esiste un account associato a questa email/);
-    // Un indirizzo registrato fa partire l'invio, che qui NON può riuscire (nessun Mailpit): la pagina mostra
-    // l'errore. È un rilievo, non un verde: quando l'invio fallisce (SMTP o limite `email_sent`) la pagina
-    // distingue gli iscritti (VPM-018-E2E-CRIT-01, R-AUTH-01). Si registra l'esito osservato, non lo si nasconde.
-    expect(esiti[0]).toMatch(/^(recupero-inviato|errore-recupero): /);
-    info.annotations.push({ type: "rilievo R-AUTH-01", description: `registrato → ${esiti[0]} | non registrato → ${esiti[1]}` });
+    // Un iscritto: GoTrue ha davvero fallito l'invio (senza questo il caso proverebbe solo il successo)...
+    expect(statiProvider[0], "senza Mailpit l'invio a un iscritto deve fallire: il caso esercita il guasto").not.toBe(200);
+    // ...e la pagina mostra lo STESSO testo dell'indirizzo sconosciuto.
+    expect(esiti[0]).toBe(esiti[1]);
+
+    // Il provider resta un oracolo per chi chiama `/auth/v1/recover` direttamente con la chiave anon
+    // (mitigazione PARZIALE): lo si misura dal protocollo e lo si annota, senza farne un verde.
+    const { apiUrl, anonKey } = risolviBersaglio();
+    const sonda = async (indirizzo: string) => {
+      const r = await fetch(`${apiUrl}/auth/v1/recover`, {
+        method: "POST",
+        headers: { apikey: anonKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ email: indirizzo }),
+      });
+      const corpo = (await r.json().catch(() => ({}))) as { error_code?: string };
+      return `${r.status} ${corpo.error_code ?? ""}`.trim();
+    };
+    info.annotations.push({
+      type: "R-AUTH-01 residuo del provider",
+      description: `pagina: identica | GoTrue dal browser: registrato ${statiProvider[0]}, non registrato ${statiProvider[1]} | GoTrue diretto: registrato ${await sonda(email)}, non registrato ${await sonda(`assente2-${tag}@e2e-12zk.test`)}`,
+    });
     await contesto.close();
   });
 });

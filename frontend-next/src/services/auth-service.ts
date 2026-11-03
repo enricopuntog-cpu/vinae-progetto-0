@@ -6,7 +6,7 @@ import {
   urlRitornoAuthDalBrowser,
   type ContestoRitornoAuth,
 } from "@/lib/auth/ritorno-auth";
-import { classificaErroreAuth } from "@/lib/auth/errori-auth";
+import { classificaErroreAuth, classificaErroreRecuperoSenzaSessione } from "@/lib/auth/errori-auth";
 import { metodiRiautenticazioneDa } from "@/lib/auth/riautenticazione";
 import type { AuthService, OAuthProvider, Result } from "./types";
 
@@ -116,7 +116,7 @@ export const supabaseAuthService: AuthService = {
     return { ok: true, data: undefined };
   },
 
-  async inviaRecuperoPassword(email) {
+  async inviaRecuperoPassword(email, opzioni) {
     const supabase = getSupabaseClient();
     if (!supabase) return { ok: false, error: NON_CONFIGURATO };
 
@@ -129,8 +129,14 @@ export const supabaseAuthService: AuthService = {
       email,
       redirectTo ? { redirectTo } : undefined,
     );
-    if (error) return { ok: false, error: classificaErroreAuth(error, "recupero-password") };
-    return { ok: true, data: undefined };
+    if (!error) return { ok: true, data: undefined };
+    if (opzioni?.indirizzoDellaSessione) {
+      return { ok: false, error: classificaErroreAuth(error, "recupero-password") };
+    }
+    // Indirizzo digitato da chiunque: un errore che GoTrue produce solo per un
+    // iscritto si risponde come il successo (R-AUTH-01, mitigazione parziale).
+    const codice = classificaErroreRecuperoSenzaSessione(error);
+    return codice ? { ok: false, error: codice } : { ok: true, data: undefined };
   },
 
   async aggiornaPasswordNuova(password) {

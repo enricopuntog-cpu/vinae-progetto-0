@@ -37,7 +37,9 @@ export default function SicurezzaAccount() {
     if (inCorso || !email) return;
     setErrore(null);
     setInCorso(true);
-    const esito = await authInviaRecuperoPassword(email);
+    // L'indirizzo è della sessione: l'errore vero (intervallo minimo, invio
+    // fallito) non rivela nulla a chi ha già quell'account aperto.
+    const esito = await authInviaRecuperoPassword(email, { indirizzoDellaSessione: true });
     setInCorso(false);
     if (!esito.ok) {
       setErrore(esito.error);

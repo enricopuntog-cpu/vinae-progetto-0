@@ -207,10 +207,55 @@ describe("inviaRecuperoPassword — eseguito", () => {
     expect(String(esito.error)).not.toInclude("not found");
   });
 
-  it("un limite di frequenza resta riconoscibile, perché l'azione utile è diversa", async () => {
-    erroreProvider = { status: 429, message: "email rate limit exceeded" };
-    const esito = await supabaseAuthService.inviaRecuperoPassword("chi@esempio.it");
-    expect(esito).toEqual({ ok: false, error: "troppi-tentativi" });
+  /**
+   * R-AUTH-01. Le risposte di GoTrue v2.196.0 `POST /recover` misurate nel
+   * laboratorio isolato (docs/VPM_018_R_AUTH_01.md § 3): a sinistra quelle che
+   * esistono SOLO per un indirizzo registrato, a destra quelle decise prima
+   * della ricerca dell'account.
+   */
+  const SOLO_PER_ISCRITTI = [
+    { status: 429, code: "over_email_send_rate_limit", message: "For security purposes, you can only request this after 59 seconds." },
+    { status: 429, code: "over_email_send_rate_limit", message: "email rate limit exceeded" },
+    { status: 500, code: "unexpected_failure", message: "Error sending recovery email" },
+    { status: 400, code: "email_address_invalid", message: "Email address \"x@y.test\" is invalid" },
+    { status: 504, message: "upstream request timeout" },
+  ];
+
+  it("senza sessione: un errore che esiste solo per un iscritto risponde come il successo", async () => {
+    const neutro = await supabaseAuthService.inviaRecuperoPassword("mai-visto@esempio.it");
+    for (const errore of SOLO_PER_ISCRITTI) {
+      erroreProvider = errore;
+      expect(await supabaseAuthService.inviaRecuperoPassword("iscritto@esempio.it")).toEqual(neutro);
+    }
+    expect(neutro).toEqual({ ok: true, data: undefined });
+    // La chiamata al provider parte comunque, una per richiesta: nulla è simulato.
+    expect(soloNome("resetPasswordForEmail").length).toBe(SOLO_PER_ISCRITTI.length + 1);
+  });
+
+  it("senza sessione: i rifiuti decisi prima della ricerca dell'account restano visibili", async () => {
+    const casi = [
+      [{ status: 429, code: "over_request_rate_limit", message: "Request rate limit reached" }, "troppi-tentativi"],
+      [{ status: 400, code: "validation_failed", message: "Unable to validate email address: invalid format" }, "email-non-valida"],
+      [{ status: 400, code: "captcha_failed", message: "captcha protection: request disallowed" }, "recupero-non-inviato"],
+      [{ status: 400, code: "email_provider_disabled", message: "Email logins are disabled" }, "recupero-non-inviato"],
+      [{ status: 0, message: "Failed to fetch" }, "recupero-non-inviato"],
+      [{ message: "Load failed" }, "recupero-non-inviato"],
+    ] as const;
+    for (const [errore, atteso] of casi) {
+      erroreProvider = { ...errore };
+      expect(await supabaseAuthService.inviaRecuperoPassword("chiunque@esempio.it")).toEqual({ ok: false, error: atteso });
+    }
+  });
+
+  it("con l'indirizzo della sessione l'errore vero resta riconoscibile, perché l'azione utile è diversa", async () => {
+    erroreProvider = { status: 429, code: "over_email_send_rate_limit", message: "email rate limit exceeded" };
+    expect(
+      await supabaseAuthService.inviaRecuperoPassword("mio@esempio.it", { indirizzoDellaSessione: true }),
+    ).toEqual({ ok: false, error: "troppi-tentativi" });
+    erroreProvider = { status: 500, code: "unexpected_failure", message: "Error sending recovery email" };
+    expect(
+      await supabaseAuthService.inviaRecuperoPassword("mio@esempio.it", { indirizzoDellaSessione: true }),
+    ).toEqual({ ok: false, error: "recupero-non-inviato" });
   });
 
   it("senza configurazione non parte alcuna chiamata", async () => {
