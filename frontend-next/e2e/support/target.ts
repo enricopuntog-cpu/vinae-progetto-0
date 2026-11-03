@@ -207,6 +207,17 @@ export const componiBersaglio = (fonti: {
 export const NOME_VARIABILE_CORSA = "E2E_CORSA";
 
 /**
+ * Token da verificare in un SQL. Senza corsa sono ammesse solo le chiamate del
+ * setup che precedono la presa di possesso (ledger, utenti estranei, rivendica):
+ * un caso lanciato senza setup (UI mode, processo senza ambiente) non scrive.
+ */
+export const corsaPerSql = (corsa: string | undefined, primaDelPossesso: boolean): string => {
+  if (primaDelPossesso) return "";
+  if (!corsa) throw new IsolamentoNonProvato("nessuna corsa possiede lo stack: SQL fuori dal setup rifiutato");
+  return corsa;
+};
+
+/**
  * Antepone a ogni SQL della suite la verifica del marcatore, nella stessa
  * sessione psql (ON_ERROR_STOP): se il database non è lo stack dedicato di
  * questa copia di lavoro, o la corsa non lo possiede più, nessuna istruzione

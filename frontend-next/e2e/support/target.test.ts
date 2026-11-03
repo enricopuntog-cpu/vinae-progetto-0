@@ -11,6 +11,7 @@ import {
   ambienteStackE2E,
   componiBersaglio,
   confrontaLedger,
+  corsaPerSql,
   decidiDown,
   decidiUp,
   garantisciDockerLocale,
@@ -227,6 +228,14 @@ describe("stack E2E dedicato (VPM-018-FIX-E2E-01)", () => {
     expect(() => sqlProtetto("select 1;", {}, { nonce: NONCE, corsa: "x'; --" })).toThrow(IsolamentoNonProvato);
     expect(() => sqlProtetto("select 1;", { "a;b": "1" }, { nonce: NONCE, corsa: "" })).toThrow("Variabile psql non ammessa.");
     expect(() => sqlProtetto("select 1;", { e2e_password: "x'y" }, { nonce: NONCE, corsa: "" })).toThrow("Variabile psql non ammessa.");
+  });
+
+  test("senza token di corsa solo le chiamate del setup prima del possesso possono eseguire SQL", () => {
+    expect(() => corsaPerSql(undefined, false)).toThrow(IsolamentoNonProvato);
+    expect(() => corsaPerSql("", false)).toThrow(IsolamentoNonProvato);
+    expect(corsaPerSql(NONCE, false)).toBe(NONCE);
+    expect(corsaPerSql(undefined, true)).toBe("");
+    expect(corsaPerSql(NONCE, true)).toBe("");
   });
 
   test("il marcatore si scrive solo su uno stack nuovo e non è esposto", () => {

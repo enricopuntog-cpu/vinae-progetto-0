@@ -108,7 +108,9 @@ try {
         .join("\n");
       console.error(filtrato);
       esci(
-        `Stack non avviato. Le risorse parziali del progetto \`${PROJECT_ID_E2E}\` non vengono rimosse da qui: ` +
+        `Stack non avviato. Le risorse parziali del progetto \`${PROJECT_ID_E2E}\` non vengono rimosse da qui ` +
+          "(potrebbero essere di un'altra copia di lavoro avviata nello stesso momento). " +
+          "Solo dopo aver verificato che nessun altro worktree abbia `frontend-next/e2e/.stack-e2e.json`: " +
           `npx --yes supabase@${SUPABASE_CLI_VERSION} stop --no-backup --project-id ${PROJECT_ID_E2E}`,
         esito.status ?? 1,
       );
