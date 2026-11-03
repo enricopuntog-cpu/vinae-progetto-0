@@ -38,6 +38,7 @@ const finte = (sovrascritture: Partial<DipendenzeSetup> = {}) => {
       chiamate.push(`verificaResidui:${env[NOME_VARIABILE_CORSA] ?? "-"}`);
       return "0 0 0 0 0 0 0 0 0 false false false false";
     },
+    contaDomini: traccia("contaDomini", "vini=8 annunci=0 ordini=0 messaggi=0"),
     generaCorsa: () => CORSA,
     generaPassword: () => "password-di-prova",
     env,
@@ -64,16 +65,36 @@ describe("setup e pulizia della suite browser (VPM-018-FIX-E2E-01)", () => {
       "utentiEstranei",
       `rivendicaStack:${CORSA}`,
       "utentiFixturePresenti",
+      "contaDomini",
     ]);
     env[NOME_VARIABILE_CORSA] = "manomessa";
     await pulizia();
-    expect(chiamate.at(-1)).toBe(`verificaResidui:${CORSA}`);
+    expect(chiamate.slice(-2)).toEqual([`verificaResidui:${CORSA}`, "contaDomini"]);
   });
 
   test("residui di una corsa interrotta sullo stesso stack: puliti DOPO la presa di possesso", () => {
     const { chiamate, dipendenze } = finte({ utentiFixturePresenti: () => 5 });
     preparaCorsa(dipendenze);
     expect(chiamate.indexOf("puliziaFixture")).toBeGreaterThan(chiamate.indexOf(`rivendicaStack:${CORSA}`));
+  });
+
+  test("domini critici (VPM-018-E2E-CRIT-01): la linea di base si prende DOPO la pulizia del residuo", () => {
+    const { chiamate, dipendenze } = finte({ utentiFixturePresenti: () => 5 });
+    preparaCorsa(dipendenze);
+    expect(chiamate.indexOf("contaDomini")).toBeGreaterThan(chiamate.indexOf("puliziaFixture"));
+  });
+
+  test("domini critici: un residuo (annuncio, messaggio, sessione…) fa fallire la pulizia finale", async () => {
+    const conteggi = ["vini=8 annunci=0 messaggi=0", "vini=8 annunci=1 messaggi=0"];
+    const { dipendenze } = finte({ contaDomini: () => conteggi.shift() ?? "?" });
+    const pulizia = preparaCorsa(dipendenze);
+    await expect(pulizia()).rejects.toThrow('Residui nei domini critici dopo la pulizia: "vini=8 annunci=1 messaggi=0"');
+  });
+
+  test("domini critici: senza residui la pulizia finale riesce", async () => {
+    const { dipendenze } = finte();
+    const pulizia = preparaCorsa(dipendenze);
+    await expect(pulizia()).resolves.toBeUndefined();
   });
 
   const fallimenti: [string, Partial<DipendenzeSetup>][] = [

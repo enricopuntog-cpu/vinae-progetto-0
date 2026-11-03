@@ -15,6 +15,9 @@ l'uso è `.claude/skills/vinea-browser-qa/`.
 - Il primo banco di prova è Accessori (VPM-015): vetrina, Cantina, vendita
   parziale, segnalazione, oscuramento. Gli Accessori restano una vetrina:
   «pubblicato» non significa «acquistabile».
+- Dal 3 novembre 2026 (VPM-018-E2E-CRIT-01) copre anche i percorsi critici
+  della Beta: autenticazione dai moduli, marketplace vino, checkout vino
+  fail-closed e messaggistica fra utenti distinti (§ Casi dei percorsi critici).
 
 ## Componenti
 
@@ -25,6 +28,9 @@ l'uso è `.claude/skills/vinea-browser-qa/`.
 | `frontend-next/e2e/support/target.ts` | guardie di isolamento e di possesso (pure, con test in `bun test`) |
 | `frontend-next/e2e/global-setup.ts` | verifiche, presa di possesso e pulizia finale restituita (test in `global-setup.test.ts`) |
 | `frontend-next/e2e/support/{stack,db,api,browser,test,pagina,immagine,esplora}.ts` | bersaglio, SQL protetto nel container dedicato, porte reali, sessioni, diagnostica |
+| `frontend-next/e2e/support/vino.ts` | fixture vino con le porte reali del venditore, ordine in attesa dalla porta del server, letture di controllo in sola lettura |
+| `frontend-next/e2e/support/pulizia-domini-critici.sql` | pulizia di vino, annunci, ordini, conversazioni, file e righe Auth degli utenti della fixture (solo via `eseguiSql`, prima della 12zk) |
+| `frontend-next/e2e/support/segreti.ts` (+ `segreti.test.ts`) | password scritte nei moduli senza finire nel report; il test vieta `fill`/`type` sulle password |
 | `frontend-next/scripts/e2e-stack.ts` (Bun), `e2e-serve.mjs` | stack E2E dedicato e server dell'app |
 | `.github/workflows/e2e-browser.yml` | smoke su PR pertinenti, suite completa a richiesta |
 
@@ -53,6 +59,20 @@ stato preparato per progetto. I casi che accendono interruttori e creano dati
 | `accessori-vendita-parziale` | Cantina con 6 calici privati e foto; privato → esposto ma invisibile (interruttore pubblico spento) → visibile → di nuovo privato; annuncio di **2 pezzi su 6** a 20,00 € con preventivo mostrato uguale a quello del database (22,73 € per l'acquirente); pubblicazione automatica; vetrina e dettaglio da un altro account senza controlli di acquisto né note private; segnalazione; oscuramento dall'admin; contenuto non più raggiungibile (404, fuori vetrina, firma Storage negata); nessuna richiesta di checkout e `public.orders` vuota |
 | `accessori-vetrina` | vetrina e dettaglio in Chromium, Chromium 375 px e WebKit: nessuno scorrimento orizzontale, accessibilità di base, sessione riconosciuta dal client |
 
+## Casi dei percorsi critici (VPM-018-E2E-CRIT-01)
+
+Utenti: i cinque della fixture 12zk (`venditore`, `altro` come acquirente,
+`segnalante` come terzo utente) più gli utenti registrati dal browser con email
+`crit-*@e2e-12zk.test`. Vino e annunci nascono dalle porte reali del venditore;
+ciò che si certifica passa dal browser.
+
+| File | Casi | Livello |
+|---|---|---|
+| `auth-critico` | pagine private senza sessione; registrazione dal modulo `/registrati` (profilo nato dal trigger); accesso dal modulo `/accedi`; «Esci» e perdita di accesso; cookie di una sessione chiusa rifiutati (GoTrue 403); cookie manomesso = nessuna sessione, senza 5xx; credenziali errate; richiesta di recupero (rilievo R-AUTH-01); `@cross`: accesso, rifiuto e uscita nei tre motori | E2E completo per registrazione, accesso, uscita e sessioni; conferma email, link di recupero, OAuth e MFA NON VERIFICATI |
+| `marketplace-vino` | pubblicazione dal wizard `/vendi` partendo dalla Cantina, stato `attivo` nel database; ricerca in `/esplora` e scheda da un altro account (titolo, prezzo, disponibilità, venditore); nessun dato privato del venditore nella pagina né nelle risposte REST; un estraneo non ritira né modifica (porte e PATCH rifiutati) e il wizard non apre la sua bottiglia; rimozione dalla vendita → 404 e fuori dalla ricerca; annuncio inesistente 404; `@cross`: ricerca e scheda nei tre motori | E2E completo |
+| `checkout-vino` (`@cross`) | nessun «Compra ora» con i pagamenti spenti; checkout aperto per indirizzo: totale del preventivo del database, conferma che non crea ordini, pagamenti né prenotazioni e mostra l'errore, zero richieste a Stripe; `order_checkout_reserve` negata a un utente; anonimo senza conferma; annuncio inesistente 404; ordine in attesa (porta del server) visibile all'acquirente e non a un estraneo, anche via REST | GATE VERIFICATO; CHECKOUT E2E NON VERIFICATO (Edge Function e Stripe fuori dallo stack) |
+| `messaggi-critici` (`@cross`) | conversazione aperta dall'annuncio (vuota, due partecipanti); invio, persistenza e ordine dopo il ricaricamento; il venditore legge dopo la navigazione e risponde; il terzo utente non vede, non legge e non scrive (anche via RPC); anonimo senza contatto e invio rifiutato; errore d'invio visibile e nuovo tentativo senza duplicati | E2E completo; consegna in tempo reale NON VERIFICATA (Realtime escluso) |
+
 ## Isolamento (fail-closed, VPM-018-FIX-E2E-01)
 
 La suite non lavora mai sullo stack di sviluppo (`project_id` di
@@ -71,6 +91,8 @@ L'identità si dimostra, non si dichiara: nessuna variabile di consenso.
 | Interruttori | la pulizia 12zk li azzera, ma solo sullo stack dedicato: la guardia del marcatore la precede |
 | Distruzione | `down --conferma` esegue `stop --no-backup --project-id vinea_e2e` solo se il container porta l'etichetta del progetto e il nonce nel database coincide con il file; `up` rifiuta se esiste già una risorsa Docker di `vinea_e2e` |
 | Server dell'app | mai riusato (`reuseExistingServer: false`): un server già in ascolto può puntare a un altro stack |
+| Domini critici (VPM-018-E2E-CRIT-01) | `pulizia-domini-critici.sql` precede la 12zk (invariata) dentro `puliziaFixture`, con la stessa guardia sugli utenti estranei; il setup fotografa i conteggi di vino, annunci, ordini, pagamenti, conversazioni, messaggi, notifiche, audit, sessioni e file più un contatore di orfani (righe il cui genitore utente/profilo/vino/bottiglia/annuncio/ordine/conversazione non esiste) e la pulizia finale li pretende uguali, altrimenti la corsa fallisce prima della riga «pulizia completata» |
+| Password nel browser | solo in `auth-critico`: utenti effimeri con password nuove, scritte con `scriviSegreto` (passo «Evaluate», mai `Fill "…"` nel report); trace, screenshot e video spenti per il file e verificati in ogni caso; `segreti.test.ts` rifiuta `fill`/`type` su una password in qualunque spec |
 
 Restano anche le condizioni precedenti: loopback, nessun riferimento al progetto
 di produzione (`pijnmcllmfgjmgsvtcej`) né a `*.supabase.co`, chiave anonima senza
@@ -99,9 +121,12 @@ altrimenti ricostruisce: una build per un altro stack non viene mai servita. Un
 
 Segreti: la password degli utenti di fixture nasce a runtime, vive nella memoria
 della corsa e non tocca il disco; l'accesso dei casi avviene in Node con
-`@supabase/ssr` e i cookie sono iniettati nei contesti, quindi nessuna password
-è mai digitata nel browser né compare in trace, video o screenshot. I report
-oscurano `apikey` e JWT.
+`@supabase/ssr` e i cookie sono iniettati nei contesti, quindi la password della
+fixture non è mai scritta nel browser né compare in trace, video o screenshot.
+Le sole password scritte nei moduli sono quelle, nuove e di utenti effimeri, di
+`auth-critico` (riga «Password nel browser» sopra); verificato che report HTML,
+`results.json` e `test-results/` non le contengono, anche con casi falliti. I
+report oscurano `apikey` e JWT.
 
 ## Uso
 
@@ -124,8 +149,8 @@ Gli artefatti stanno in `frontend-next/e2e/artifacts/` (ignorata da Git).
 
 | Livello | Quando | Cosa | Durata |
 |---|---|---|---|
-| Smoke | PR e push su `main` che toccano `frontend-next/`, `supabase/migrations/`, `supabase/config.toml`, la griglia 12zk o il workflow | `bun run e2e:smoke`, Chromium desktop, casi `@smoke` (54 al 3 novembre 2026) | 3 min 31 s misurati in CI con 17 casi (PR #248); 2,4 min in locale con 54 casi (VPM-018-FIX-E2E-01) |
-| Completa | `workflow_dispatch` con `suite=completa`; in locale `bun run e2e` prima di chiudere una modifica UI | tre progetti, 33 casi | circa 4-5 min (33 casi misurati in locale: 1,0-1,3 min più build e installazione di WebKit) |
+| Smoke | PR e push su `main` che toccano `frontend-next/`, `supabase/migrations/`, `supabase/config.toml`, la griglia 12zk o il workflow | `bun run e2e:smoke`, Chromium desktop, casi `@smoke` (80 al 3 novembre 2026, VPM-018-E2E-CRIT-01) | 3 min 31 s misurati in CI con 17 casi (PR #248); 3,8 min in locale con 80 casi |
+| Completa | `workflow_dispatch` con `suite=completa`; in locale `bun run e2e` prima di chiudere una modifica UI | tre progetti, 188 casi | circa 10 min in locale (VPM-018-E2E-CRIT-01), più build e installazione di WebKit |
 
 Il workflow `E2E browser` **non** è un check richiesto dal ruleset
 `main-protection`: non cambia le condizioni di merge. Se se ne vuole fare un
@@ -148,9 +173,16 @@ sorgente con `git checkout`, build nuova, **33/33 verdi** e residui a zero.
 - Il fallback CSP statico (`security-headers.ts`, solo Report-Only) nomina l'origine
   Supabase di produzione: su stack locale WebKit lo scrive in console. Una
   violazione della CSP effettiva (enforcing) fa fallire il caso.
-- Nessun modulo di login via interfaccia: l'accesso con password non si digita nel
-  browser (per non lasciarla in trace). Il form `/accedi` non è coperto da questa
-  suite.
+- I moduli `/accedi` e `/registrati` sono coperti dal solo `auth-critico`, con
+  utenti effimeri; gli altri casi accedono in Node. Conferma email e link di
+  recupero password non sono esercitati (`enable_confirmations=false` e nessun
+  Mailpit nello stack dedicato); OAuth e MFA non sono chiamati.
+- Checkout vino: lo stack dedicato non serve le Edge Function né parla con
+  Stripe, quindi la risposta di `payments-checkout` con `PAYMENTS_ENABLED`
+  spento e un pagamento simulato end-to-end NON sono provati nel browser (il
+  gate è coperto dai test Bun della funzione). La build di prova accende
+  `NEXT_PUBLIC_PAYMENT_ACTIONS_ENABLED` per il mock Accessori: la conferma del
+  checkout vino parte e fallisce senza ordini.
 - Nessun test di carico, nessun test visivo a confronto di pixel: gli screenshot
   si leggono, non si confrontano in automatico.
 - La prova da un'altra sessione Claude Code nel profilo OmniRoute `vinea-coding` è

@@ -78,6 +78,15 @@ import { IndirizzoRitiroVenditore } from "@/components/vinea/indirizzi/Indirizzo
  * vero, non un ruolo scelto da un menu.
  */
 export default function VendiPageClient() {
+  // Un wizard per bottiglia. Dal selettore della Cantina (`/vendi?mode=sell` →
+  // `&bottiglia=…`) la rotta è la stessa e senza `key` il componente non si
+  // rimonterebbe: passo, dati, foto, bozza e riuso resterebbero quelli di prima
+  // («Passo 0 di 7», VPM-018-E2E-CRIT-01).
+  const bottiglia = useSearchParams().get("bottiglia");
+  return <WizardVendi key={bottiglia ?? "nuova"} />;
+}
+
+function WizardVendi() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { authUser, authLoading, bottiglieCantina, viniCantina, cantinaLoading, ricaricaCantina } =
