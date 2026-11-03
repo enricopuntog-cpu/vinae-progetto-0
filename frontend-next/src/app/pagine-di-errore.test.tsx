@@ -47,7 +47,7 @@ describe("error.tsx", () => {
 
   it("usa retry (non reset) e non ricarica da sé: nessun ciclo", () => {
     const src = sorgente("error.tsx");
-    expect(src).toContain("onRetry={retry}");
+    expect(src).toContain("onRetry={retry ?? reset}");
     expect(src).not.toMatch(/useEffect|setTimeout|router\.refresh/);
   });
 

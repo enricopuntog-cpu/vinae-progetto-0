@@ -101,11 +101,14 @@ export function WineCard({
           <p className="truncate font-serif text-base font-semibold">
             {wine.nome} {wine.annata}
           </p>
-          {wine.venditore.citta ? (
-            <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
-              <MapPin className="h-3 w-3" aria-hidden="true" /> {wine.venditore.citta}
-            </p>
-          ) : null}
+          {/* Altezza minima: le card con e senza città restano allineate nella griglia. */}
+          <p className="mt-0.5 flex min-h-4 items-center gap-1 truncate text-xs text-muted-foreground">
+            {wine.venditore.citta ? (
+              <>
+                <MapPin className="h-3 w-3" aria-hidden="true" /> {wine.venditore.citta}
+              </>
+            ) : null}
+          </p>
           <div className="mt-auto flex items-baseline justify-between">
             {priceHidden ? (
               <p className="flex items-center gap-1 text-xs text-muted-foreground">

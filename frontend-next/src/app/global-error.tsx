@@ -15,7 +15,15 @@ import { LOCALE_PREDEFINITO } from "@/lib/mercato";
  * il layout (`error.tsx`) si caricano. Per una pagina di ultima istanza si usano i
  * caratteri di sistema già previsti dai token (`ui-serif`, `ui-sans-serif`).
  */
-export default function ErroreGlobale({ error, retry }: { error: unknown; retry: () => void }) {
+export default function ErroreGlobale({
+  error,
+  retry,
+  reset,
+}: {
+  error: unknown;
+  retry?: () => void;
+  reset?: () => void;
+}) {
   return (
     <html lang={LOCALE_PREDEFINITO} className="h-full antialiased">
       <head>
@@ -27,7 +35,7 @@ export default function ErroreGlobale({ error, retry }: { error: unknown; retry:
           <p className="px-4 pt-8 text-center font-serif text-xl text-bordeaux">
             {brand.nome} <span className="text-sm text-muted-foreground">{brand.descrittore}</span>
           </p>
-          <ErroreDiPagina errore={error} onRetry={retry} />
+          <ErroreDiPagina errore={error} onRetry={retry ?? reset} />
         </main>
       </body>
     </html>
