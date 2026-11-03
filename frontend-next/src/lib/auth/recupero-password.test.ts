@@ -350,7 +350,7 @@ describe("/account — Sicurezza", () => {
   it("solo questa sezione dichiara l'indirizzo della sessione (R-AUTH-01)", () => {
     // Un'altra superficie che passasse l'opzione con un indirizzo digitato
     // riaprirebbe l'oracolo nel testo della pagina.
-    const chiamanti = ["src/app", "src/components"].flatMap((radice) =>
+    const chiamanti = ["src/app", "src/components", "src/lib"].flatMap((radice) =>
       (readdirSync(join(process.cwd(), radice), { recursive: true }) as string[])
         .filter((f) => /\.tsx?$/.test(f) && !/\.test\.tsx?$/.test(f))
         .map((f) => join(radice, f).replaceAll("\\", "/"))
