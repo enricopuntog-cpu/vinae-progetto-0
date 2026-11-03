@@ -143,7 +143,7 @@ describe("Annunci Accessori: superfici", () => {
   it("la scheda della Cantina integra il comando senza toccare le bottiglie", () => {
     const cantina = leggi("src/components/vinea/cantina-accessori/CantinaAccessori.tsx");
     expect(cantina).toContain("<VenditaAccessoriProvider>");
-    expect(cantina).toContain("<VenditaAccessorio accessorio={a} />");
+    expect(cantina).toContain("<VenditaAccessorio accessorio={a} commerciale={commerciale} />");
     const pagina = leggi("src/app/cantina/page-client.tsx");
     expect(pagina).toContain("<CantinaAccessori />");
     expect(pagina).toContain("<BottiglieView");

@@ -184,6 +184,67 @@ export function parseElencoPostVenditaAdmin(v: unknown): ElencoPostVenditaAdmin 
   return { contestazioni, rimborsi };
 }
 
+export type IntentoOrfanoAdmin = {
+  ordineId: string;
+  provider: string;
+  intento: string;
+  importoCents: number;
+  valuta: string;
+  statoPagamento: string;
+  statoIntento: "da_annullare" | "incerto";
+  motivo: string | null;
+  aggiornatoAt: string;
+};
+
+export type RimborsoDovutoAdmin = {
+  ordineId: string;
+  importoCents: number;
+  valuta: string;
+  rimborsatoCents: number;
+  motivo: string | null;
+  aggiornatoAt: string;
+};
+
+/** VPM-015QA-FINAL-B2: elenco admin degli intenti orfani non risolti (`accessori_pagamenti_intenti_orfani`). */
+export function parseIntentiOrfaniAdmin(v: unknown): IntentoOrfanoAdmin[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: IntentoOrfanoAdmin[] = [];
+  for (const raw of v) {
+    const r = oggetto(raw);
+    const importo = r ? intero(r.importo_cents) : null;
+    const stato = r && (r.stato_intento === "da_annullare" || r.stato_intento === "incerto") ? r.stato_intento : null;
+    if (!r || !stato || importo === null || !testo(r.ordine_id) || !testo(r.provider) || !testo(r.intento)
+        || !testo(r.valuta) || !testo(r.stato_pagamento) || !testo(r.aggiornato_at)) {
+      return null;
+    }
+    out.push({
+      ordineId: r.ordine_id as string, provider: r.provider as string, intento: r.intento as string,
+      importoCents: importo, valuta: r.valuta as string, statoPagamento: r.stato_pagamento as string,
+      statoIntento: stato, motivo: typeof r.motivo === "string" ? r.motivo : null, aggiornatoAt: r.aggiornato_at as string,
+    });
+  }
+  return out;
+}
+
+/** VPM-015QA-FINAL-B2: pagamenti incassati e non applicabili (`accessori_pagamenti_rimborso_dovuto`). */
+export function parseRimborsiDovutiAdmin(v: unknown): RimborsoDovutoAdmin[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: RimborsoDovutoAdmin[] = [];
+  for (const raw of v) {
+    const r = oggetto(raw);
+    const importo = r ? intero(r.importo_cents) : null;
+    const rimborsato = r ? intero(r.rimborsato_cents) : null;
+    if (!r || importo === null || rimborsato === null || !testo(r.ordine_id) || !testo(r.valuta) || !testo(r.aggiornato_at)) {
+      return null;
+    }
+    out.push({
+      ordineId: r.ordine_id as string, importoCents: importo, valuta: r.valuta as string, rimborsatoCents: rimborsato,
+      motivo: typeof r.motivo === "string" ? r.motivo : null, aggiornatoAt: r.aggiornato_at as string,
+    });
+  }
+  return out;
+}
+
 /** Messaggi per gli `hint` delle porte (mai testo del database né dettagli interni). */
 export const MESSAGGI_POSTVENDITA: Readonly<Record<string, string>> = {
   non_trovato: "Ordine non trovato.",

@@ -89,10 +89,36 @@ export const ripristinaFixture = (password: string): void => {
   creaFixture(password);
 };
 
+/**
+ * Residui delle tabelle figlie che la riga di 12zk non conta (la CI la confronta alla lettera, quindi non si
+ * cambia): ordini, pagamenti, post-vendita, rimborsi, resi, movimenti, Partner e inviti, e le prove private e gli eventi del fornitore simulati.
+ * Atteso: tutti zero. Righe senza genitore contano come residuo.
+ */
+export const RESIDUI_FIGLI_ATTESI = "0 0 0 0 0 0 0 0 0";
+
+const residuiFigli = (): string =>
+  eseguiSql(`select
+    (select count(*) from private.accessori_ordini),
+    (select count(*) from private.accessori_pagamenti),
+    (select count(*) from private.accessori_postvendita),
+    (select count(*) from private.accessori_contestazioni),
+    (select count(*) from private.accessori_rimborsi) + (select count(*) from private.accessori_resi),
+    (select count(*) from private.accessori_partner_movimenti),
+    (select count(*) from private.partners) + (select count(*) from private.partner_inviti),
+    (select count(*) from storage.objects where bucket_id = 'dispute-evidence' and name like '%/12ab2000-%'),
+    (select count(*) from public.payment_provider_events where event_id like 'evt_e2e\_%');`)
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .pop() ?? "?";
+
 export const verificaResidui = (): string => {
   const residui = puliziaFixture();
   if (residui !== RESIDUI_ATTESI) {
     throw new Error(`Residui o interruttori dopo la pulizia: "${residui}" (attesi "${RESIDUI_ATTESI}").`);
+  }
+  const figli = residuiFigli();
+  if (figli !== RESIDUI_FIGLI_ATTESI) {
+    throw new Error(`Residui nelle tabelle figlie dopo la pulizia: "${figli}" (attesi "${RESIDUI_FIGLI_ATTESI}").`);
   }
   return residui;
 };

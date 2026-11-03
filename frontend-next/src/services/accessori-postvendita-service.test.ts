@@ -190,7 +190,8 @@ describe("creaAccessoriPostvenditaService (B5C)", () => {
   it("nessun metodo raggiunge Stripe, un rimborso o un rilascio", () => {
     const s = creaAccessoriPostvenditaService(null) as unknown as Record<string, unknown>;
     expect(Object.keys(s).sort()).toEqual([
-      "adminConsegna", "adminDecidi", "adminElenco", "adminReso", "apriContestazione", "firmaProve", "leggi", "rispondi",
+      "adminConsegna", "adminDecidi", "adminElenco", "adminIntentiOrfani", "adminReso", "adminRimborsiDovuti",
+      "apriContestazione", "firmaProve", "leggi", "rispondi",
     ]);
   });
 });
