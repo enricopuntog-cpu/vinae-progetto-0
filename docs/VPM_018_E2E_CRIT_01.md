@@ -107,7 +107,7 @@ letta né scritta.
 
 - Checkout reale e risposta della Edge Function non provati nel browser: richiedono
   Edge Function nello stack di prova o Stripe test mode autorizzata.
-- R-AUTH-01 (P2) aperto; R-A11Y-01 (P3) aperto.
+- R-AUTH-01 (P2): PARZIALMENTE MITIGATO / BLOCCATO DAL PROVIDER in VPM-018-R-AUTH-01 (`docs/VPM_018_R_AUTH_01.md`: testo di `/accedi` neutro, `/auth/v1/recover` resta un oracolo); R-A11Y-01 (P3) aperto.
 - In modalità replica i file su disco dello Storage non sono rimossi dalla
   pulizia SQL (la riga di `storage.objects` sì); lo stack si distrugge.
 - `leggiDalDatabase` gira come `postgres` ma solo con `select` e in transazione di
