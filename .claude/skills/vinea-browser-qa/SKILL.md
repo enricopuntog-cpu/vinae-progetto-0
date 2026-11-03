@@ -31,11 +31,15 @@ UI. Se non puoi isolare l'ambiente, il caso è `NON VERIFICATO`: non si forza.
 
 ## 2. Ambiente: solo isolato
 
-La suite parte solo se API, app e database sono provabilmente locali
-(`frontend-next/e2e/support/target.ts`): loopback, nessun riferimento al progetto
-di produzione, container `supabase_db_*`, ledger delle migrazioni uguale ai file
-del commit, nessun utente estraneo alla fixture. Se la guardia rifiuta, **non
-aggirarla**: correggi l'ambiente o segnala `NON VERIFICATO`.
+La suite parte solo contro lo stack E2E **dedicato** `vinea_e2e` creato da
+`bun run e2e:stack up` in questa copia di lavoro
+(`frontend-next/e2e/support/target.ts`): loopback sulla porta riservata 55321,
+container `supabase_db_vinea_e2e`, marcatore nel database uguale al nonce del
+file `e2e/.stack-e2e.json`, ledger delle migrazioni uguale ai file del commit,
+nessun utente estraneo alla fixture. Ogni SQL della suite ripete la verifica del
+marcatore. Lo stack di sviluppo condiviso (`project_id` di `supabase/config.toml`)
+non è mai un bersaglio. Dopo la presa di possesso del setup, ogni SQL verifica anche il token della corsa. Se la guardia rifiuta, **non aggirarla**: correggi
+l'ambiente o segnala `NON VERIFICATO`.
 
 Mai: chiavi o URL di produzione, `E2E_*` che puntano a un host remoto,
 credenziali reali, password digitate nel browser. Le password della fixture
@@ -58,7 +62,9 @@ nascono a runtime e non toccano il disco.
    ([references/diagnosi-esiti.md](references/diagnosi-esiti.md)).
 7. Corretto il difetto, **rilancia solo i casi pertinenti**, poi lo smoke
    completo prima di chiudere.
-8. `bun run e2e:stack down --conferma` quando hai finito (distrugge i dati di ogni stack locale del progetto).
+8. `bun run e2e:stack down --conferma` quando hai finito: distrugge solo lo stack
+   dedicato `vinea_e2e` di questa copia di lavoro, dopo averne verificato
+   etichetta e marcatore; lo stack di sviluppo non è mai un bersaglio.
 
 ## 4. Responsive e accessibilità
 

@@ -2,10 +2,14 @@ import { defineConfig, devices } from "@playwright/test";
 import { URL_APP, risolviBersaglio } from "./e2e/support/stack";
 
 /**
- * Suite browser Vinea (VPM-LAB-003). Gira SOLO contro uno stack Supabase locale
- * ed effimero e contro un'app costruita qui con le flag Accessori accese nel
- * processo di prova: `risolviBersaglio()` rifiuta qualunque altro bersaglio
- * prima di avviare il server o aprire un browser.
+ * Suite browser Vinea (VPM-LAB-003). Gira SOLO contro lo stack Supabase E2E
+ * dedicato creato da `bun run e2e:stack up` in questa copia di lavoro e contro
+ * un'app costruita qui con le flag Accessori accese nel processo di prova:
+ * `risolviBersaglio()` rifiuta qualunque altro bersaglio prima di avviare il
+ * server o aprire un browser.
+ *
+ * Nessun `globalTeardown` (VPM-018-FIX-E2E-01): Playwright lo eseguirebbe anche
+ * a setup fallito. La pulizia è la funzione restituita da `global-setup.ts`.
  *
  * Progetti: Chromium desktop esegue tutto; Chromium a 375 px e WebKit eseguono i
  * soli casi marcati `@cross` (sola lettura sullo stesso stato).
@@ -18,7 +22,6 @@ export default defineConfig({
   testMatch: "**/*.e2e.ts",
   outputDir: "./e2e/artifacts/test-results",
   globalSetup: "./e2e/global-setup.ts",
-  globalTeardown: "./e2e/global-teardown.ts",
   // Un solo database condiviso: i casi cambiano interruttori e utenti.
   fullyParallel: false,
   workers: 1,
@@ -52,8 +55,8 @@ export default defineConfig({
   webServer: {
     command: "node scripts/e2e-serve.mjs",
     url: `${URL_APP}/accedi`,
-    // Mai riusare un server qualunque: potrebbe avere flag o bersaglio diversi.
-    reuseExistingServer: process.env.E2E_REUSE_SERVER === "1",
+    // Mai riusare un server già avviato: potrebbe puntare a un altro stack (VPM-018-FIX-E2E-01).
+    reuseExistingServer: false,
     timeout: 900_000,
     stdout: "pipe",
     stderr: "pipe",

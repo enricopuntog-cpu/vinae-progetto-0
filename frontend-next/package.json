@@ -12,7 +12,7 @@
     "e2e": "playwright test",
     "e2e:smoke": "playwright test --project=chromium-desktop --grep @smoke",
     "e2e:report": "playwright show-report e2e/artifacts/report",
-    "e2e:stack": "node scripts/e2e-stack.mjs",
+    "e2e:stack": "bun scripts/e2e-stack.ts",
     "market-validation:qr:generate": "node scripts/generate-market-validation-qr.mjs",
     "market-validation:qr:verify": "node scripts/verify-market-validation-qr.mjs"
   },

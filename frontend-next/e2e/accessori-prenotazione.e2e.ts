@@ -285,10 +285,12 @@ test.describe.serial("Accessori: prenotazione 2 su 6, retry, doppio click, scade
 
   test("5. prenotazione scaduta: i pezzi tornano disponibili (4/2/2) e la UI la mostra scaduta", async ({ browser, diagnostica }, info) => {
     eseguiSql(`
+      begin;
       alter table private.accessori_ordini disable trigger accessori_ordini_guard;
       update private.accessori_ordini set creato_at = now() - interval '30 minutes', scade_at = now() - interval '15 minutes'
        where stato = 'in_attesa_pagamento';
-      alter table private.accessori_ordini enable trigger accessori_ordini_guard;`);
+      alter table private.accessori_ordini enable trigger accessori_ordini_guard;
+      commit;`);
     expect(inventario(s)).toBe("4/2/2");
 
     const contesto = await contestoAutenticato(browser, "segnalante", opzioniDelProgetto(info));

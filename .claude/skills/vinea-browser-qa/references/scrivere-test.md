@@ -4,8 +4,8 @@ Struttura di `frontend-next/e2e/`:
 
 ```text
 playwright.config.ts            progetti, trace, report, webServer (../playwright.config.ts)
-e2e/global-setup.ts             guardia di isolamento, ledger = file, nessun utente estraneo
-e2e/global-teardown.ts          pulizia finale e prova dei residui
+e2e/global-setup.ts             stack dedicato, ledger = file, nessun utente estraneo, possesso della corsa;
+                                restituisce la pulizia finale (eseguita solo a setup riuscito, mai un globalTeardown)
 e2e/*.e2e.ts                    i casi (suffisso .e2e.ts: `bun test` non li raccoglie)
 e2e/support/target.ts           guardia pura (testata da target.test.ts con bun test)
 e2e/support/stack.ts, db.ts     bersaglio, SQL nel container locale, fixture 12zk
@@ -33,7 +33,7 @@ e2e/support/esplora.ts          descrizione di una pagina per l'esplorazione
 4. **Fixture deterministica e pulita.** `ripristinaFixture(passwordFixture())` in
    `test.beforeAll`: riusa fixture e pulizia SQL della griglia 12zk (cinque
    utenti `@e2e-12zk.test`, rifiuta database con utenti estranei o interruttori
-   accesi). Il teardown globale verifica residui e interruttori: un caso che
+   accesi). La pulizia finale (restituita dal setup) verifica residui e interruttori: un caso che
    scrive fuori dalla fixture fa fallire la corsa.
 5. **Selettori**: prima ruolo e nome accessibile (`getByRole`, `getByLabel`), poi
    `data-testid` già presenti nel codice. Niente selettori CSS legati allo stile.

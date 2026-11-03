@@ -104,6 +104,8 @@ Distinzione: **assenza di E2E ≠ assenza di test.** Perimetro di lancio = beta 
 
 Ordine: **FIX-E2E-01 → VER-PROD-01 (con autorizzazione) → E2E-CRIT-01 → ERR-PAGE-01/SEC-CI-01 → resto.**
 
+> Aggiornamento del 3 novembre 2026 (VPM-018-FIX-E2E-01, PR dedicata): FIX-E2E-01 è implementato. La soluzione differisce dalla proposta sopra: niente `E2E_EPHEMERAL=1`, sostituito da stack dedicato `vinea_e2e`, marcatore con nonce verificato a ogni SQL e pulizia restituita da `globalSetup` al posto del `globalTeardown`. GAP-004 è chiuso nel codice. Stato e residui sono in `docs/E2E_BROWSER.md` § Isolamento e in `CHANGES.log`. Il resto di questo documento resta la fotografia dell'audit.
+
 ### 0.6 Skill e subagenti (VPM-018-RECOVERY e VPM-018-RECOVERY-CLOSE)
 
 Eseguiti realmente (invocati con gli strumenti):

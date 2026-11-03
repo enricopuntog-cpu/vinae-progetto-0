@@ -24,7 +24,7 @@ const abortiTolleratiDalBrowser = /net::ERR_ABORTED|NS_BINDING_ABORTED|cancelled
 
 /**
  * Rumore d'infrastruttura noto, ammesso in ogni caso: lo stack di prova non
- * avvia il servizio Realtime (escluso come nel gate CI, `e2e-stack.mjs`), quindi
+ * avvia il servizio Realtime (escluso come nel gate CI, `scripts/e2e-stack.ts`), quindi
  * il client non riesce ad aprire il WebSocket. Non è un difetto dell'app.
  */
 // Origine dell'API locale (porta compresa) letta dal bersaglio risolto.

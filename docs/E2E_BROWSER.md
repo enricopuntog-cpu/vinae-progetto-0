@@ -22,9 +22,10 @@ l'uso è `.claude/skills/vinea-browser-qa/`.
 |---|---|
 | `frontend-next/playwright.config.ts` | tre progetti, trace, report, `webServer` |
 | `frontend-next/e2e/*.e2e.ts` | i casi (`.e2e.ts`: `bun test` non li raccoglie) |
-| `frontend-next/e2e/support/target.ts` | guardia di isolamento (pura, con test in `bun test`) |
-| `frontend-next/e2e/support/{stack,db,api,browser,test,pagina,immagine,esplora}.ts` | bersaglio, SQL nel container locale, porte reali, sessioni, diagnostica |
-| `frontend-next/scripts/e2e-stack.mjs`, `e2e-serve.mjs` | stack locale e server dell'app |
+| `frontend-next/e2e/support/target.ts` | guardie di isolamento e di possesso (pure, con test in `bun test`) |
+| `frontend-next/e2e/global-setup.ts` | verifiche, presa di possesso e pulizia finale restituita (test in `global-setup.test.ts`) |
+| `frontend-next/e2e/support/{stack,db,api,browser,test,pagina,immagine,esplora}.ts` | bersaglio, SQL protetto nel container dedicato, porte reali, sessioni, diagnostica |
+| `frontend-next/scripts/e2e-stack.ts` (Bun), `e2e-serve.mjs` | stack E2E dedicato e server dell'app |
 | `.github/workflows/e2e-browser.yml` | smoke su PR pertinenti, suite completa a richiesta |
 
 Versioni fissate: `@playwright/test` **1.64.1** (esatta nel `package.json` e nel
@@ -52,23 +53,49 @@ stato preparato per progetto. I casi che accendono interruttori e creano dati
 | `accessori-vendita-parziale` | Cantina con 6 calici privati e foto; privato → esposto ma invisibile (interruttore pubblico spento) → visibile → di nuovo privato; annuncio di **2 pezzi su 6** a 20,00 € con preventivo mostrato uguale a quello del database (22,73 € per l'acquirente); pubblicazione automatica; vetrina e dettaglio da un altro account senza controlli di acquisto né note private; segnalazione; oscuramento dall'admin; contenuto non più raggiungibile (404, fuori vetrina, firma Storage negata); nessuna richiesta di checkout e `public.orders` vuota |
 | `accessori-vetrina` | vetrina e dettaglio in Chromium, Chromium 375 px e WebKit: nessuno scorrimento orizzontale, accessibilità di base, sessione riconosciuta dal client |
 
-## Isolamento (fail-closed)
+## Isolamento (fail-closed, VPM-018-FIX-E2E-01)
 
-Prima di aprire un browser, `risolviBersaglio()` + `globalSetup` richiedono:
+La suite non lavora mai sullo stack di sviluppo (`project_id` di
+`supabase/config.toml`, condiviso da ogni worktree), ma solo su uno **stack E2E
+dedicato**: progetto riservato `vinea_e2e`, porte 55321 (API) e 55322
+(database), creato da `bun run e2e:stack up` nella stessa copia di lavoro.
+L'identità si dimostra, non si dichiara: nessuna variabile di consenso.
 
-1. API e app su loopback, nessun riferimento al progetto di produzione
-   (`pijnmcllmfgjmgsvtcej`) né a `*.supabase.co`, chiave anonima senza `ref`;
-2. container `supabase_db_*` su un daemon Docker locale (`DOCKER_HOST` assente o
-   locale);
-3. ledger delle migrazioni dello stack **uguale** ai file di `supabase/migrations/`;
-4. nessun utente Auth estraneo alla fixture.
+| Invariante | Come è garantito |
+|---|---|
+| Bersaglio esplicito | senza il file `frontend-next/e2e/.stack-e2e.json` (scritto da `up`, ignorato da Git) la configurazione rifiuta prima di eseguire qualsiasi comando; il container è sempre `supabase_db_vinea_e2e` (`E2E_DB_CONTAINER` diverso è rifiutato) e l'API deve stare sulla porta 55321, pubblicata dal gateway `supabase_kong_vinea_e2e` |
+| Identità verificabile | `up` scrive nel database un marcatore (`vinea_e2e.identita`, schema senza privilegi per `anon`/`authenticated`) con un nonce casuale che solo il file di identità conosce; `create schema` senza `if not exists` fallisce su uno stack non nuovo |
+| Verifica all'uso | ogni SQL della suite (`eseguiSql`) antepone, nella stessa sessione psql con `ON_ERROR_STOP`, un blocco che verifica marcatore e nonce: su un altro database nessuna istruzione parte |
+| Possesso della corsa | il setup scrive un token di corsa nel marcatore; da lì ogni SQL (worker e pulizia) lo verifica, quindi una corsa più nuova toglie il possesso alla vecchia. Un token ereditato dalla shell viene scartato |
+| Setup fallito | nessun `globalTeardown` (Playwright lo esegue anche a setup fallito: task registrato prima del setup). La pulizia è la funzione restituita da `globalSetup`, che Playwright esegue solo a setup completato, nello stesso processo |
+| Interruttori | la pulizia 12zk li azzera, ma solo sullo stack dedicato: la guardia del marcatore la precede |
+| Distruzione | `down --conferma` esegue `stop --no-backup --project-id vinea_e2e` solo se il container porta l'etichetta del progetto e il nonce nel database coincide con il file; `up` rifiuta se esiste già una risorsa Docker di `vinea_e2e` |
+| Server dell'app | mai riusato (`reuseExistingServer: false`): un server già in ascolto può puntare a un altro stack |
+
+Restano anche le condizioni precedenti: loopback, nessun riferimento al progetto
+di produzione (`pijnmcllmfgjmgsvtcej`) né a `*.supabase.co`, chiave anonima senza
+`ref`, daemon Docker locale, ledger **uguale** ai file di `supabase/migrations/`,
+nessun utente Auth estraneo alla fixture (comprese le righe senza email).
 
 Se una condizione non è provata la corsa si ferma con `ISOLAMENTO NON PROVATO`:
 il caso è `NON VERIFICATO`, non si forza. Fixture e pulizia sono quelle della
-griglia 12zk (`supabase/tests/12zk_vpm_015b3_e2e_*.sql`, riusate senza copia);
+griglia 12zk (`supabase/tests/12zk_vpm_015b3_e2e_*.sql`, riusate senza copia né
+modifiche: il gate `Supabase DB regression` le usa sul proprio stack effimero);
 la pulizia finale riporta residui e interruttori a zero e ne verifica il valore.
 La visibilità pubblica della Cantina Accessori, che la pulizia 12zk non azzera, è
 azzerata e verificata dal harness.
+
+Uno stack dedicato per macchina alla volta (porte fisse). Se il database dello
+stack dedicato non risponde, `down` non può leggere il marcatore e rifiuta: la
+rimozione manuale e consapevole è
+`npx --yes supabase@2.117.0 stop --no-backup --project-id vinea_e2e`, **solo dopo
+aver verificato che nessun altro worktree abbia `frontend-next/e2e/.stack-e2e.json`**
+(quel comando non controlla il proprietario: è la via d'uscita, non l'uso normale).
+`E2E_SKIP_BUILD=1` riusa `.next` solo se l'ha costruita `e2e-serve.mjs` per lo
+stesso `BUILD_ID` e lo stesso URL Supabase (impronta `.next/e2e-bersaglio.json`),
+altrimenti ricostruisce: una build per un altro stack non viene mai servita. Un
+`supabase db reset` sullo stack dedicato cancella il marcatore: serve un nuovo
+`down`/`up`.
 
 Segreti: la password degli utenti di fixture nasce a runtime, vive nella memoria
 della corsa e non tocca il disco; l'accesso dei casi avviene in Node con
@@ -81,12 +108,15 @@ oscurano `apikey` e JWT.
 Da `frontend-next/` (dettagli e problemi tipici nella skill):
 
 ```bash
-bun run e2e:stack up      # stack isolato (Docker acceso)
+bun run e2e:stack up      # stack E2E dedicato vinea_e2e (Docker acceso)
 bun run e2e:smoke         # Chromium desktop, @smoke
 bun run e2e               # tre progetti
 bun run e2e:report        # report HTML
-bun run e2e:stack down --conferma    # distrugge lo stack
+bun run e2e:stack down --conferma    # distrugge SOLO lo stack dedicato di questa copia di lavoro
 ```
+
+La CI (`e2e-browser.yml`) usa gli stessi comandi `up`/`down` e fallisce se la
+riga `[e2e] pulizia completata` non compare nella corsa.
 
 Gli artefatti stanno in `frontend-next/e2e/artifacts/` (ignorata da Git).
 
@@ -94,7 +124,7 @@ Gli artefatti stanno in `frontend-next/e2e/artifacts/` (ignorata da Git).
 
 | Livello | Quando | Cosa | Durata |
 |---|---|---|---|
-| Smoke | PR e push su `main` che toccano `frontend-next/`, `supabase/migrations/`, `supabase/config.toml`, la griglia 12zk o il workflow | `bun run e2e:smoke`, Chromium desktop, 17 casi `@smoke` | 3 min 31 s misurati in CI (PR #248, 17/17) |
+| Smoke | PR e push su `main` che toccano `frontend-next/`, `supabase/migrations/`, `supabase/config.toml`, la griglia 12zk o il workflow | `bun run e2e:smoke`, Chromium desktop, casi `@smoke` (54 al 3 novembre 2026) | 3 min 31 s misurati in CI con 17 casi (PR #248); 2,4 min in locale con 54 casi (VPM-018-FIX-E2E-01) |
 | Completa | `workflow_dispatch` con `suite=completa`; in locale `bun run e2e` prima di chiudere una modifica UI | tre progetti, 33 casi | circa 4-5 min (33 casi misurati in locale: 1,0-1,3 min più build e installazione di WebKit) |
 
 Il workflow `E2E browser` **non** è un check richiesto dal ruleset
