@@ -161,7 +161,12 @@ export function useSellWizard({
   // si parte dal secondo. Gli indici dei passi restano quelli di prima: cambia
   // il punto di partenza, non la numerazione interna.
   const primoPasso = daCantina ? 1 : 0;
-  const [step, setStep] = useState(primoPasso);
+  // Il passo mostrato non scende mai sotto `primoPasso`. Dal selettore della
+  // Cantina (`/vendi?mode=sell` → `/vendi?mode=sell&bottiglia=…`) la rotta è la
+  // stessa, il componente non si rimonta e lo stato nato senza bottiglia (0,
+  // «Modalità») restava: «Passo 0 di 7» (VPM-018-E2E-CRIT-01).
+  const [passoScelto, setStep] = useState(primoPasso);
+  const step = Math.max(passoScelto, primoPasso);
   const [d, setD] = useState({
     produttore: "",
     nome: "",
@@ -556,8 +561,9 @@ export function useSellWizard({
         return;
       }
     }
-    setStep((corrente) => Math.min(steps.length - 1, corrente + 1));
+    setStep((corrente) => Math.min(steps.length - 1, Math.max(corrente, primoPasso) + 1));
   }, [
+    primoPasso,
     regioneValida,
     statoLogistica,
     suConsegna,
