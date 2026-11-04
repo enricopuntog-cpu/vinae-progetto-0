@@ -475,8 +475,8 @@ export default function EsploraPageClient({
             <UtensilsCrossed className="mr-1 h-3 w-3" /> Abbinamento: {q}
           </Badge>
         )}
-        {regione !== "Tutte" && <Badge className="bg-salvia text-crema">{regione}</Badge>}
-        {tipo !== "Tutti" && <Badge className="bg-salvia text-crema">{tipo}</Badge>}
+        {regione !== "Tutte" && <Badge variant="outline" className="border-salvia/25 bg-salvia/10 text-salvia-scuro">{regione}</Badge>}
+        {tipo !== "Tutti" && <Badge variant="outline" className="border-salvia/25 bg-salvia/10 text-salvia-scuro">{tipo}</Badge>}
       </div>
 
       {filtered.length === 0 ? (

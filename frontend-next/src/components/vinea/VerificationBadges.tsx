@@ -14,8 +14,8 @@ import type { EmailStatus, AgeStatus, IdentityStatus, SellerStatus } from "@/dat
 type Tone = "ok" | "warn" | "err" | "muted";
 
 const toneClass: Record<Tone, string> = {
-  ok: "bg-salvia/15 text-salvia border-salvia/30",
-  warn: "bg-oro/15 text-oro border-oro/30",
+  ok: "bg-salvia/15 text-salvia-scuro border-salvia/30",
+  warn: "bg-oro/15 text-oro-scuro border-oro/30",
   err: "bg-bordeaux/10 text-bordeaux border-bordeaux/30",
   muted: "bg-secondary text-muted-foreground border-border",
 };

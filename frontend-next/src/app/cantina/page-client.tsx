@@ -761,16 +761,16 @@ function DashCard({
   const toneClass = {
     bordeaux: "bg-bordeaux text-crema",
     oro: "bg-oro/20 text-antracite",
-    salvia: "bg-salvia/20 text-antracite",
+    salvia: "bg-salvia/10 text-salvia-scuro",
     antracite: "bg-antracite text-crema",
   }[tone];
   return (
     <div className={`rounded-2xl p-4 ${toneClass}`}>
-      <div className="flex items-center gap-2 text-xs uppercase tracking-wide opacity-80">
+      <div className={`flex items-center gap-2 text-xs uppercase tracking-wide ${tone === "salvia" ? "" : "opacity-80"}`}>
         <Icon className="h-3.5 w-3.5" /> {title}
       </div>
       <p className="mt-1 font-serif text-3xl font-semibold">{count}</p>
-      <p className="text-xs opacity-75">{hint}</p>
+      <p className={`text-xs ${tone === "salvia" ? "" : "opacity-75"}`}>{hint}</p>
     </div>
   );
 }
@@ -1239,7 +1239,7 @@ function BottiglieView({
                   esposta === "tutte"
                     ? "border-salvia bg-salvia text-crema"
                     : esposta === "alcune"
-                      ? "border-salvia bg-card text-salvia"
+                      ? "border-salvia bg-card text-salvia-scuro"
                       : "border-border bg-card"
                 }`}
               >

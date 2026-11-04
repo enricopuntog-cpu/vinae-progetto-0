@@ -24,6 +24,7 @@ rispetto al frontend servito.
 - Nei componenti si usano le classi dei token (`bg-primary`, `text-accent`,
   `bg-crema`…), mai gli esadecimali. I valori di `palette` servono solo per SVG,
   canvas e `theme-color`.
+- Target Next.js (VPM-019): `--salvia: #4C6245` (foglia di vite), `--accent: var(--salvia)`; `--salvia-scuro: #4A5344` per i testi piccoli coinvolti. Verde validato con confronto reale prima/dopo su build di produzione localhost in stack E2E isolati; il frontend legacy conserva salvia `#74806C`. Gli accenti restano subordinati a crema, bordeaux e dettagli oro. Vedi `docs/VPM_019_DESIGN_VITE_01.md` per contrasti e limiti.
 - Tipografia: `--font-serif` (Cormorant Garamond, Playfair Display) per titoli,
   `--font-sans` (Inter) per il testo.
 - Movimento: `--ease-out-expo`, `--ease-in-out-quart`, durate `--dur-fast`

@@ -15,7 +15,7 @@ export const brand = {
 } as const;
 
 /**
- * Palette semantica (mirror dei token CSS in src/styles.css).
+ * Palette semantica (mirror dei token CSS in src/app/globals.css).
  * Usa i token CSS in componente (`bg-primary`, `text-accent`) — questi valori
  * servono solo per contesti non-CSS (SVG chart, canvas, meta theme-color).
  */
@@ -24,7 +24,7 @@ export const palette = {
   crema: "#F7F3EC",
   bianco: "#FFFFFF",
   antracite: "#202020",
-  salvia: "#74806C",
+  salvia: "#4C6245",
   oro: "#B59A63",
 } as const;
 

@@ -2,7 +2,7 @@ import { ShieldCheck, User, Sparkles } from "lucide-react";
 import { trustLabel, trustHint, type TrustSource } from "@/data/moderation";
 
 const styles: Record<TrustSource, { cls: string; Icon: typeof ShieldCheck }> = {
-  piattaforma: { cls: "bg-salvia/15 text-salvia border-salvia/30", Icon: ShieldCheck },
+  piattaforma: { cls: "bg-salvia/15 text-salvia-scuro border-salvia/30", Icon: ShieldCheck },
   venditore: { cls: "bg-secondary text-antracite border-border", Icon: User },
   ia: { cls: "bg-oro/15 text-antracite border-oro/40", Icon: Sparkles },
 };

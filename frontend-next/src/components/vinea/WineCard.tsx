@@ -97,7 +97,7 @@ export function WineCard({
           )}
         </div>
         <div className="flex min-w-0 flex-1 flex-col">
-          <p className="text-xs uppercase tracking-wide text-salvia">{wine.produttore}</p>
+          <p className="text-xs uppercase tracking-wide text-salvia-scuro">{wine.produttore}</p>
           <p className="truncate font-serif text-base font-semibold">
             {wine.nome} {wine.annata}
           </p>
@@ -172,7 +172,7 @@ export function WineCard({
           />
         </div>
         <div className="p-4">
-          <p className="text-[11px] uppercase tracking-wider text-salvia">{wine.produttore}</p>
+          <p className="text-[11px] uppercase tracking-wider text-salvia-scuro">{wine.produttore}</p>
           <h3 className="mt-1 line-clamp-2 font-serif text-lg font-semibold leading-tight">
             {wine.nome} <span className="text-antracite/70">{wine.annata}</span>
           </h3>
@@ -183,7 +183,7 @@ export function WineCard({
               </>
             ) : null}
             {wine.venditore.verificato && (
-              <span className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-salvia/15 px-1.5 py-0.5 text-[10px] text-salvia">
+              <span className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-salvia/15 px-1.5 py-0.5 text-[10px] text-salvia-scuro">
                 <ShieldCheck className="h-2.5 w-2.5" /> Verificato
               </span>
             )}

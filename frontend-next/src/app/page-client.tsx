@@ -64,7 +64,7 @@ const TrustBar = () => (
       { icon: Sparkles, title: "Beta trasparente", text: "Le azioni non ancora operative sono indicate prima dell'uso." },
     ].map(({ icon: Icon, title, text }) => (
       <div key={title} className="flex gap-3 rounded-2xl border border-border bg-card p-5">
-        <span className="grid h-11 w-11 place-items-center rounded-full bg-salvia/15 text-salvia"><Icon className="h-5 w-5" /></span>
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-salvia/10 text-salvia-scuro"><Icon className="h-5 w-5" /></span>
         <div><p className="font-serif text-lg font-semibold">{title}</p><p className="text-sm text-muted-foreground">{text}</p></div>
       </div>
     ))}
@@ -231,7 +231,7 @@ const RegionGrid = () => (
   <section>
     <SectionTitle><span className="inline-flex items-center gap-2"><Search className="h-5 w-5" /> Cerca per regione</span></SectionTitle>
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      {REGIONI.map((regione) => <Link key={regione} href={`/esplora?regione=${encodeURIComponent(regione)}`} className="rounded-2xl border bg-card p-4 font-serif hover:border-bordeaux">{regione}</Link>)}
+      {REGIONI.map((regione) => <Link key={regione} href={`/esplora?regione=${encodeURIComponent(regione)}`} className="rounded-2xl border border-salvia/25 bg-salvia/5 p-4 font-serif hover:border-salvia hover:bg-salvia/10">{regione}</Link>)}
     </div>
   </section>
 );
