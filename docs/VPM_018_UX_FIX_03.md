@@ -1,8 +1,9 @@
 # VPM-018-UX-FIX-03 — Coerenza UX residua (4 novembre 2026)
 
-Correzioni piccole e indipendenti del backlog di `docs/VPM_018_UX_A11Y_01.md` § 4. Ogni difetto è
-stato riprodotto nel browser sul codice originale, con la spec `e2e/ux-fix-03.e2e.ts` rossa prima
-della correzione. Nessuna migrazione, flag, Stripe o Production toccati; i calcoli della Cantina
+Correzioni piccole e indipendenti del backlog di `docs/VPM_018_UX_A11Y_01.md` § 4. I difetti di layout, 404 e
+titolo sono stati riprodotti nel browser sul codice originale, con la spec `e2e/ux-fix-03.e2e.ts` rossa prima
+della correzione. UX-B7 è una misura della stringa, il copy parziale e il 404 del Club hanno prove di
+contratto e unitarie (§ 5). Nessuna migrazione, flag, Stripe o Production toccati; i calcoli della Cantina
 non cambiano.
 
 ## 1. Esiti
@@ -44,9 +45,10 @@ non toccato).
 | Prova | Esito |
 |---|---|
 | `ux-fix-03` sul codice originale | 22 rossi su 27: 18 per i difetti reali, 4 per errori della spec poi corretti (selettore su un percorso sbagliato, campo di ricerca doppio a 375 px) |
-| `ux-fix-03`, `pagine-di-errore`, `ux-a11y`, `ux-fix-02`, `marketplace-vino`, `messaggi-critici` sul codice finale, tre progetti | **81/81**, pulizia `0 0 0 0 0 0 0 0 0 false false false false` |
+| `ux-fix-03`, `pagine-di-errore`, `ux-a11y`, `ux-fix-02`, `marketplace-vino`, `messaggi-critici`, tre progetti, prima dei ritocchi della code review | **81/81**, pulizia `0 0 0 0 0 0 0 0 0 false false false false` |
+| `ux-fix-03` e `ux-a11y` sul codice finale, tre progetti | **39/39**, stessa pulizia |
 | Suite completa, prima dei ritocchi dell'audit UX | 235/236: unico rosso WebKit `accessori-spenti`, «access control checks» su prefetch RSC annullati, classe già nota, spec non toccata, non silenziato |
-| Unit, typecheck, lint | 3458/3458, nessun errore, 12 warning `<img>` già noti |
+| Unit, typecheck, lint | 3459/3459 (soglia CI 3459), nessun errore, 12 warning `<img>` già noti |
 | Screenshot prima e dopo | letti a vista: barra, ultimo passo, `completa-profilo`, 404, messaggi. Artefatti locali non versionati |
 
 ## 4. Revisione
@@ -62,4 +64,6 @@ presente e verificato da `pagine-di-errore`.
 - La nota della performance con dati parziali è provata da test unitari, non vista nel browser: lo stato
   richiede un riferimento di valore e non è predisposto dalle fixture.
 - Il 404 del Club è coperto solo a livello di contratto: i Club sono spenti nella build di prova.
+- La modalità abbinamento non è mai stata vista dal vivo: è dietro la flag IA, spenta nella prova. Il caso misura
+  la stringa condivisa col carattere e la larghezza reali del campo a 375 px.
 - Lettura reale con screen reader NON VERIFICATA.

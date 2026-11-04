@@ -933,7 +933,8 @@ function WizardVendi() {
       </div>
 
       {/* A 375 px: «Indietro» e «Salva bozza» affiancati, l'azione principale su una riga
-          propria. Senza bozza le due azioni restano affiancate. Da sm in su, una riga sola. */}
+          propria. Senza bozza «Continua» sta accanto a «Indietro»; l'ultimo passo ha sempre
+          una riga propria, perché l'etichetta è lunga. Da sm in su, una riga sola. */}
       <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-between">
         <Button variant="outline" onClick={prev} disabled={step === primoPasso || inviando}>
           <ArrowLeft className="h-4 w-4" /> Indietro

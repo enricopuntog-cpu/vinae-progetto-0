@@ -50,11 +50,23 @@ describe("/messaggi", () => {
   it("ogni stato senza elenco ha il titolo h1 «Messaggi»", () => {
     const f = src("components/vinea/messaging/MessagesPageClient.tsx");
     // Visibile dal UX-B6: la prova di ciò che si vede è in `e2e/ux-fix-03.e2e.ts`.
+    expect(f.match(/<h1\b[^>]*>Messaggi<\/h1>/g)).toHaveLength(1);
     expect(f).not.toContain("sr-only");
     for (const stato of ["OfflineState", "LoadingBlock", "ErrorState", "EmptyState"]) {
       const i = f.indexOf(`<${stato}`);
       expect(f.slice(Math.max(0, i - 80), i), stato).toContain("{intestazione}");
     }
+  });
+});
+
+describe("/completa-profilo", () => {
+  it("il campo descrive i requisiti solo quando ci sono: nessun riferimento a vuoto", () => {
+    const f = src("app/completa-profilo/page-client.tsx");
+    expect(f).toContain('aria-describedby={passwordGiaImpostata ? undefined : "requisiti-password-vinea"}');
+    // Dopo lo spread di attributiPasswordNuova, che imposterebbe il riferimento comunque.
+    expect(f.indexOf("aria-describedby={passwordGiaImpostata")).toBeGreaterThan(
+      f.indexOf('{...attributiPasswordNuova("requisiti-password-vinea")}'),
+    );
   });
 });
 

@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { createServerClient } from "@supabase/ssr";
 import type { Browser, BrowserContext, Page, TestInfo } from "@playwright/test";
+import { SEGNAPOSTO_ABBINAMENTO } from "../src/app/esplora/testi";
 import { passwordFixture } from "./support/api";
 import { contestoAutenticato, opzioniDelProgetto } from "./support/browser";
 import { ripristinaFixture } from "./support/db";
@@ -15,7 +16,6 @@ import { etichettaCorsa, preparaBottigliaInCantina } from "./support/vino";
  * sul testo dei sorgenti non dicono cosa sta sotto a cosa.
  */
 
-const SEGNAPOSTO_ABBINAMENTO = "Cosa prepari? es. brasato, risotto";
 const ID_INESISTENTE = "00000000-0000-4000-8000-000000000000";
 
 /** Dopo la verifica della sessione: l'overlay dell'AgeGate coprirebbe ciò che si vuole vedere. */
@@ -132,10 +132,10 @@ test.describe("UX-FIX-03 wizard /vendi @cross", () => {
 
     // Le azioni secondarie stanno insieme: «Indietro» non resta da solo su una riga.
     expect(Math.abs(i.y - b.y)).toBeLessThan(2);
-    // Un pulsante a una riga è alto come gli altri: il testo non è andato a capo.
-    expect(Math.abs(i.height - b.height)).toBeLessThan(2);
-    expect(Math.abs(c.height - b.height)).toBeLessThan(2);
-    expect(c.height).toBeLessThan(48);
+    // I pulsanti non vanno a capo per costruzione: il difetto possibile è il testo che esce.
+    for (const pulsante of [indietro, bozza, continua]) {
+      expect(await pulsante.evaluate((p) => p.scrollWidth <= p.clientWidth + 1)).toBe(true);
+    }
 
     const stretta = (page.viewportSize()?.width ?? 1280) < 640;
     if (stretta) {
@@ -144,6 +144,34 @@ test.describe("UX-FIX-03 wizard /vendi @cross", () => {
       expect(c.width).toBeGreaterThan(i.width + b.width);
     } else {
       expect(Math.abs(i.y - c.y)).toBeLessThan(2);
+    }
+    expect(await senzaScorrimentoOrizzontale(page)).toBe(true);
+    await contesto.close();
+  });
+
+  test("a 640 px, dove la griglia lascia il posto alla riga, i tre pulsanti entrano", async ({ browser, diagnostica }, info) => {
+    const contesto = await contestoAutenticato(browser, "venditore", {
+      ...opzioniDelProgetto(info),
+      viewport: { width: 640, height: 800 },
+    });
+    const page = await contesto.newPage();
+    diagnostica.osserva(page, "venditore");
+    await page.goto(`/vendi?mode=sell&bottiglia=${bottigliaId}`);
+    await attendiCaricamento(page);
+
+    const pulsanti = [
+      page.getByRole("button", { name: "Indietro" }),
+      page.getByRole("button", { name: "Salva bozza" }),
+      page.getByRole("button", { name: /Continua/ }),
+    ];
+    const riquadri = await Promise.all(pulsanti.map((p) => p.boundingBox()));
+    const [i, b, c] = riquadri;
+    if (!i || !b || !c) throw new Error("Geometria non disponibile.");
+    expect(Math.abs(i.y - c.y)).toBeLessThan(2);
+    expect(Math.abs(b.y - c.y)).toBeLessThan(2);
+    expect(c.x + c.width).toBeLessThanOrEqual(640);
+    for (const pulsante of pulsanti) {
+      expect(await pulsante.evaluate((p) => p.scrollWidth <= p.clientWidth + 1)).toBe(true);
     }
     expect(await senzaScorrimentoOrizzontale(page)).toBe(true);
     await contesto.close();

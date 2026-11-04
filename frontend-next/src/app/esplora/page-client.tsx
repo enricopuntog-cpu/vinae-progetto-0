@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { SEGNAPOSTO_ABBINAMENTO } from "@/app/esplora/testi";
 import Link from "next/link";
 import {
   Search,
@@ -210,10 +211,10 @@ export default function EsploraPageClient({
             value={q}
             onChange={(e) => aggiornaQuery(e.target.value)}
             data-testid="esplora-search-input"
-            aria-label={abbinamentoAttivo ? "Cosa prepari? es. brasato, risotto" : "Cerca vino, produttore, annata"}
+            aria-label={abbinamentoAttivo ? SEGNAPOSTO_ABBINAMENTO : "Cerca vino, produttore, annata"}
             placeholder={
               abbinamentoAttivo
-                ? "Cosa prepari? es. brasato, risotto"
+                ? SEGNAPOSTO_ABBINAMENTO
                 : "Cerca vino, produttore, annata…"
             }
             className="pl-10 h-11 rounded-full bg-card"
