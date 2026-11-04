@@ -268,6 +268,7 @@ export default function AccountPageClient() {
               >
                 {avatarDaMostrare ? (
                   anteprimaFoto || avatarPersonale ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- anteprima locale blob: del file scelto, o avatar già ridotto al caricamento
                     <img
                       src={avatarDaMostrare}
                       alt="Foto profilo scelta"

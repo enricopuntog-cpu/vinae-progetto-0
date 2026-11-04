@@ -29,6 +29,7 @@
  * rifiuterebbe. Chi rende un menù lo antepone da sé.
  */
 
+import { codiceErrore } from "@/lib/errore-per-log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Result, WineRegionsService } from "./types";
 
@@ -71,7 +72,7 @@ export function creaWineRegionsService(client: SupabaseClient | null): WineRegio
       if (error) {
         // Il dettaglio di PostgreSQL resta nei log: al chiamante arriva una
         // frase in italiano, mai il messaggio del database.
-        console.error("[WineRegionsService] lettura regioni fallita:", error);
+        console.error("[WineRegionsService] lettura regioni fallita:", codiceErrore(error));
         return { ok: false, error: LETTURA_FALLITA };
       }
 

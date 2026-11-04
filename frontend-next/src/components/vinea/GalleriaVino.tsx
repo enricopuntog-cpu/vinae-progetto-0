@@ -24,6 +24,7 @@ export function GalleriaVino({ immagini, nome }: { immagini: string[]; nome: str
   return (
     <div>
       <div className="aspect-[4/5] overflow-hidden rounded-2xl bg-secondary">
+        {/* eslint-disable-next-line @next/next/no-img-element -- indirizzi misti da database; va misurato prima di cambiarlo, è la foto principale */}
         <img src={immagini[indice]} alt={nome} className="h-full w-full object-cover" />
       </div>
       {immagini.length > 1 ? (
@@ -37,6 +38,7 @@ export function GalleriaVino({ immagini, nome }: { immagini: string[]; nome: str
                 indice === i ? "border-bordeaux" : "border-transparent"
               }`}
             >
+              {/* eslint-disable-next-line @next/next/no-img-element -- indirizzi misti da database, miniatura da 64 px */}
               <img src={src} alt="" className="h-full w-full object-cover" />
             </button>
           ))}

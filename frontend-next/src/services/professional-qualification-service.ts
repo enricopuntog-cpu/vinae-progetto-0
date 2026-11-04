@@ -1,5 +1,6 @@
 "use client";
 
+import { codiceErrore } from "@/lib/errore-per-log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -51,7 +52,7 @@ const erroreServizio = (
   errore: { message?: string; code?: string } | null,
   ricaduta: string,
 ): string => {
-  console.error(`[qualifiche] ${operazione} fallita:`, errore);
+  console.error(`[qualifiche] ${operazione} fallita:`, codiceErrore(errore));
   if (errore?.code === "P0001" && errore.message) return errore.message;
   if (errore?.code === "42501") {
     return "Questa operazione non è consentita sulla qualifica in questo stato.";
@@ -249,7 +250,7 @@ export function creaProfessionalQualificationService(
         .from(BUCKET_QUALIFICHE)
         .upload(percorso, file, { contentType: controllo.mime, upsert: false });
       if (erroreUpload) {
-        console.error("[qualifiche] caricamento documento fallito:", erroreUpload);
+        console.error("[qualifiche] caricamento documento fallito:", codiceErrore(erroreUpload));
         return { ok: false, error: "Non è stato possibile caricare il documento. Riprova." };
       }
 

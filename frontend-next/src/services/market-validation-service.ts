@@ -1,3 +1,4 @@
+import { codiceErrore } from "@/lib/errore-per-log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   MarketValidationEventMetadata,
@@ -49,7 +50,7 @@ function mapSession(
 }
 
 function report(operation: string, error: unknown): void {
-  console.error(`[MarketValidationService] ${operation}:`, error);
+  console.error(`[MarketValidationService] ${operation}:`, codiceErrore(error));
 }
 
 /**

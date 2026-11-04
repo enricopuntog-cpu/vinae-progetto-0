@@ -14,6 +14,7 @@
  * `getWineMeta(slug)`, che è esattamente il comportamento di oggi.
  */
 
+import { codiceErrore } from "@/lib/errore-per-log";
 import { getWineMeta, type FoodPairing, type WineVintageMeta } from "@/data/cellar";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -107,7 +108,7 @@ export async function caricaMetaPerVino(
     .in("slug", richiesti);
 
   if (error) {
-    console.error("[wine-meta] lettura fallita:", error);
+    console.error("[wine-meta] lettura fallita:", codiceErrore(error));
     return {};
   }
 

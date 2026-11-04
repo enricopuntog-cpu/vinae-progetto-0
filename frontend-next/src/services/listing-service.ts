@@ -19,6 +19,7 @@
  * presente in Cantina e non può più coniare una scheda catalogo.
  */
 
+import { codiceErrore } from "@/lib/errore-per-log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { IMMAGINE_ASSENTE, urlImmagine } from "@/lib/images/url-annuncio";
 import { avatarSicuro, riferimentoAvatarSicuro } from "@/lib/profilo/avatar";
@@ -277,7 +278,7 @@ export function rigaAWine(riga: PublicListingRow): Wine {
  * non a chi attacca.
  */
 function segnalaErrore(operazione: string, errore: unknown): void {
-  console.error(`[ListingService] ${operazione} fallita:`, errore);
+  console.error(`[ListingService] ${operazione} fallita:`, codiceErrore(errore));
 }
 
 /**

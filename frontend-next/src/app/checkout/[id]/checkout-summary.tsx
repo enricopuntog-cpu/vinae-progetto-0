@@ -64,6 +64,7 @@ export const CheckoutSummary = ({
   return (
     <aside className="space-y-4 rounded-2xl border border-border bg-card p-4 lg:sticky lg:top-24" data-testid="checkout-summary">
       <div className="flex gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element -- indirizzi misti da database, miniatura da 64 px */}
         <img src={wine.immagini[0]} alt="" className="h-20 w-16 rounded-lg object-cover" />
         <div className="min-w-0">
           <p className="truncate font-serif text-lg font-semibold">{wine.nome} {wine.annata}</p>

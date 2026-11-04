@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   percorsoRelativoSicuro,
+  origineDaRifiutare,
   risolviOriginePubblica,
   type AmbienteOrigine,
 } from "@/lib/auth/origine-redirect";
@@ -200,6 +201,25 @@ describe("origine pubblica dei redirect Auth", () => {
 
     expect(risolta.sorgente).toBe("richiesta-non-attendibile");
   });
+
+  it("in produzione un'origine dedotta dalla richiesta si rifiuta, e solo quella", () => {
+    expect(origineDaRifiutare("richiesta-non-attendibile", "production")).toBe(true);
+    expect(origineDaRifiutare("richiesta-non-attendibile", "development")).toBe(false);
+    expect(origineDaRifiutare("richiesta-non-attendibile", "test")).toBe(false);
+    for (const sorgente of ["override-esplicito", "netlify-produzione", "richiesta-locale"] as const) {
+      expect(origineDaRifiutare(sorgente, "production")).toBe(false);
+    }
+  });
+
+  it.each(["app/auth/callback/route.ts", "app/auth/confirm/route.ts", "lib/auth/link-email-route.ts"])(
+    "%s controlla l'origine prima di costruire un redirect",
+    (percorso) => {
+      const testo = readFileSync(join(import.meta.dir, "..", "..", percorso), "utf8");
+      const controllo = testo.indexOf("if (origineDaRifiutare(sorgente))");
+      expect(controllo).toBeGreaterThan(-1);
+      expect(controllo).toBeLessThan(testo.indexOf("NextResponse.redirect"));
+    },
+  );
 
   it("l'override esplicito vince su Netlify, per gli ambienti che Netlify non sono", () => {
     const risolta = risolviOriginePubblica(richiesta(`${IMMUTABILE}/auth/callback`), {

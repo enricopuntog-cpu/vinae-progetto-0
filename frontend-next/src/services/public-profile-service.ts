@@ -28,6 +28,7 @@
  * badge di fiducia che non sia calcolato da righe reali.
  */
 
+import { codiceErrore } from "@/lib/errore-per-log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { routes } from "@/config/routes";
 import { riferimentoAvatarSicuro } from "@/lib/profilo/avatar";
@@ -185,7 +186,7 @@ function interoOpzionale(valore: unknown): number | null {
  * PostgreSQL. Il dettaglio resta nei log, dove serve a chi ripara.
  */
 function segnalaErrore(operazione: string, errore: unknown): void {
-  console.error(`[PublicProfileService] ${operazione} fallita:`, errore);
+  console.error(`[PublicProfileService] ${operazione} fallita:`, codiceErrore(errore));
 }
 
 /**

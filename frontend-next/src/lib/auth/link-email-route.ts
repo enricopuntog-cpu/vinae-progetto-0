@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { ambienteCorrente, risolviOriginePubblica } from "@/lib/auth/origine-redirect";
+import { ambienteCorrente, origineDaRifiutare, risolviOriginePubblica } from "@/lib/auth/origine-redirect";
 import {
   classificaErroreLinkEmail,
   leggiLinkEmail,
@@ -34,6 +34,12 @@ export const gestoreLinkEmail =
       ambienteCorrente(),
       hostAnnunciato,
     );
+    if (origineDaRifiutare(sorgente)) {
+      return new NextResponse("Configurazione incompleta.", {
+        status: 503,
+        headers: { "Cache-Control": "private, no-store" },
+      });
+    }
 
     const vaiA = (percorso: string) => {
       const risposta = NextResponse.redirect(`${origine}${percorso}`, 303);

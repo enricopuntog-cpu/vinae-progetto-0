@@ -109,6 +109,13 @@ describe("webhook Stripe: instradamento dei domini", () => {
     expect(chiamate).toHaveLength(0);
   });
 
+  it("corpo oltre 1 MiB: 413 e nessuna RPC, anche con firma valida", async () => {
+    const riempimento = "x".repeat(1_048_576);
+    const grande = await invia(JSON.stringify({ id: "evt_grande", riempimento }));
+    expect(grande.status).toBe(413);
+    expect(chiamate).toHaveLength(0);
+  });
+
   it("payload modificato dopo la firma: rifiutato", async () => {
     const payload = evento({ vinea_dominio: "accessori" });
     const t = Math.floor(Date.now() / 1000);

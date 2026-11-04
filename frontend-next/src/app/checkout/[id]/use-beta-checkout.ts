@@ -7,6 +7,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { eseguiAzioneBeta } from "@/lib/beta/external-actions";
 import {
   creaDatiCheckout,
+  destinazioneEsternaAmmessa,
   destinazioneSaldoOnly,
   passiCheckout,
   validaPassoCheckout,
@@ -100,7 +101,8 @@ export const useBetaCheckout = (
       router.push(destinazioneSaldoOnly(esito.valore.data.orderId));
       return;
     }
-    if (esito.valore.data.checkoutUrl) window.location.assign(esito.valore.data.checkoutUrl);
+    const indirizzo = esito.valore.data.checkoutUrl;
+    if (indirizzo && destinazioneEsternaAmmessa(indirizzo)) window.location.assign(indirizzo);
     else setErroreAzione("Il metodo di pagamento incorporato non è disponibile in questa build.");
   };
 

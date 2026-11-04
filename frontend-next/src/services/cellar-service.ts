@@ -18,6 +18,7 @@
  * una stima.
  */
 
+import { codiceErrore } from "@/lib/errore-per-log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   CellarBottle,
@@ -447,7 +448,7 @@ export function slotsDaModuli(
 // -- Errori ------------------------------------------------------------------
 
 function segnalaErrore(operazione: string, errore: unknown): void {
-  console.error(`[CellarService] ${operazione} fallita:`, errore);
+  console.error(`[CellarService] ${operazione} fallita:`, codiceErrore(errore));
 }
 
 /** Stessa regola di ListingService: all'utente solo i messaggi scritti da noi.

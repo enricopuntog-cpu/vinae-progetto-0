@@ -409,6 +409,7 @@ export default function AnnuncioDetailPageClient({
                 href={`/annuncio/${w.id}`}
                 className="group overflow-hidden rounded-xl border border-border bg-card"
               >
+                {/* eslint-disable-next-line @next/next/no-img-element -- indirizzi misti da database (illustrazioni e Storage), senza dimensioni note */}
                 <img
                   src={w.immagini[0]}
                   alt=""

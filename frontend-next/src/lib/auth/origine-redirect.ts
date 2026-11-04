@@ -141,7 +141,8 @@ const origineDa = (valore: string | undefined): string | null => {
  * L'ultimo caso ricade sull'origine della richiesta: è esattamente il
  * comportamento precedente a questa correzione, quindi non introduce una
  * regressione, e su Netlify non è raggiungibile perché `URL` esiste sempre.
- * È marcato `richiesta-non-attendibile` proprio perché si veda quando accade.
+ * È marcato `richiesta-non-attendibile` proprio perché si veda quando accade, e
+ * in produzione le route lo rifiutano con `origineDaRifiutare`.
  */
 export const risolviOriginePubblica = (
   richiesta: URL,
@@ -212,6 +213,16 @@ export const risolviOriginePubblica = (
 
   return { origine: richiesta.origin, sorgente: "richiesta-non-attendibile" };
 };
+
+/**
+ * In produzione un'origine dedotta dall'`Host` della richiesta non si usa: un redirect dopo il
+ * login seguirebbe un'intestazione che il chiamante controlla. Su Netlify non accade, perché
+ * `URL` esiste sempre; su un altro host senza `AUTH_REDIRECT_ORIGIN` si fallisce chiusi (GAP-016).
+ */
+export const origineDaRifiutare = (
+  sorgente: OriginePubblica["sorgente"],
+  ambienteNode: string | undefined = process.env.NODE_ENV,
+): boolean => sorgente === "richiesta-non-attendibile" && ambienteNode === "production";
 
 /**
  * Ammette per `next` soltanto un percorso relativo alla nostra stessa origine.

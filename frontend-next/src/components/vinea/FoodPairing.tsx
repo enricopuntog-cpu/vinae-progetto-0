@@ -217,6 +217,7 @@ export function FindWineFromCellar() {
               onClick={() => setOpen(false)}
               className="flex items-center gap-3 rounded-xl border border-border p-2 hover:bg-secondary/40"
             >
+              {/* eslint-disable-next-line @next/next/no-img-element -- indirizzi misti da database, miniatura da 44 px */}
               <img src={r.wine.immagini[0]} alt="" className="h-14 w-11 rounded object-cover" />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-serif text-sm font-semibold">
