@@ -57,7 +57,7 @@
         "vaul": "^1.1.2",
       },
       "devDependencies": {
-        "@happy-dom/global-registrator": "20.9.0",
+        "@happy-dom/global-registrator": "21.0.4",
         "@playwright/test": "1.64.1",
         "@tailwindcss/node": "4.3.3",
         "@tailwindcss/postcss": "^4",
@@ -163,7 +163,7 @@
 
     "@floating-ui/utils": ["@floating-ui/utils@0.2.12", "", {}, "sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww=="],
 
-    "@happy-dom/global-registrator": ["@happy-dom/global-registrator@20.9.0", "", { "dependencies": { "@types/node": ">=20.0.0", "happy-dom": "^20.9.0" } }, "sha512-lBW6/m5BIFl3pMuWPNN0lIOYw9LMCmPfix53ExS3FBi4E+NELEljQ3xH6aAV9IYiQRfn9YIIgzzMrD0vIcD7tw=="],
+    "@happy-dom/global-registrator": ["@happy-dom/global-registrator@21.0.4", "", { "dependencies": { "@types/node": ">=20.0.0", "happy-dom": "^21.0.4" } }, "sha512-Bbr0hW9hhDhBf3Jp0EyDlkCbFgbr0z2jd3BMKYOYW+fOkPM4Nx195GMXyCtRCGEgoNn6i09FabXrSkNFm2ONzg=="],
 
     "@humanfs/core": ["@humanfs/core@0.19.2", "", { "dependencies": { "@humanfs/types": "^0.15.0" } }, "sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA=="],
 
@@ -869,7 +869,7 @@
 
     "graceful-fs": ["graceful-fs@4.2.11", "", {}, "sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ=="],
 
-    "happy-dom": ["happy-dom@20.14.6", "", { "dependencies": { "@types/node": ">=20.0.0", "@types/whatwg-mimetype": "^3.0.2", "@types/ws": "^8.18.1", "buffer-image-size": "^0.6.4", "entities": "^7.0.1", "whatwg-mimetype": "^3.0.0", "ws": "^8.21.0" } }, "sha512-5DDsf4QmEIlRL6NkCv/fxSjYHHkZceL/IaYQdJc2h3G7DRTEai++VTjbfL0LB9geW2VrA3+vrjF3Efx+OTtX0Q=="],
+    "happy-dom": ["happy-dom@21.0.4", "", { "dependencies": { "@types/node": ">=20.0.0", "@types/whatwg-mimetype": "^3.0.2", "@types/ws": "^8.18.1", "buffer-image-size": "^0.6.4", "entities": "^7.0.1", "whatwg-mimetype": "^3.0.0", "ws": "^8.21.0" } }, "sha512-tFm+GaLBgo6o0awHnvHaNoraVo27qJ+2tZEtZ+cIa08hXbeitrxAJajLI05hsUy/2/YTKcUjQYzHe5mCcraLBw=="],
 
     "has-bigints": ["has-bigints@1.1.0", "", {}, "sha512-R3pbpkcIqv2Pm3dUwgjclDRVmWpTJW2DcMzcIhEXEx1oh/CEMObMm3KLmRJOdvhM7o4uQBnwr8pzRK2sJWIqfg=="],
 

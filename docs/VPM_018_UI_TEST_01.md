@@ -13,7 +13,7 @@ e ruoli.
 
 ## 2. Infrastruttura
 
-- Dipendenze di sviluppo a versione esatta: `@happy-dom/global-registrator` 20.9.0,
+- Dipendenze di sviluppo a versione esatta: `@happy-dom/global-registrator` 21.0.4,
   `@testing-library/react` 16.3.0, `@testing-library/dom` 10.4.1. Nessuna entra nell'applicazione.
 - **`bun test --isolate`** è ora lo script `test`. Senza isolamento i moduli sono condivisi fra i
   file: Radix, caricato da un test in ambiente server, valuta `useLayoutEffect` come funzione vuota
