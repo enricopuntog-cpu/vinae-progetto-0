@@ -20,16 +20,16 @@ id = "generic-api-key"
 [[rules.allowlists]]
 description = "Identificativi di dominio, non credenziali"
 regexTarget = "match"
-regexes = ['''(?i)^[\s\w."'.]*\b(idempotency_?key|lookup_key|wine_?key)["']?\s*[:=]''']
+regexes = ['''(?i)^(?:[a-z]\.)?(idempotency_?key|lookup_key|wine_?key)["']?\s*[:=]''']
 
 # Unico valore noto: il formato non valido di una chiave di prova nel test del
-# parser di pagamento, composto da lettere in sequenza. Vincolato a percorso E valore.
+# parser di pagamento, lettere e cifre in sequenza. Vincolato a percorso E valore esatto.
 [[rules]]
 id = "stripe-access-token"
 
 [[rules.allowlists]]
-description = "Chiave finta in sequenza alfabetica nel test del parser di pagamento"
+description = "Chiave finta in sequenza nel test del parser di pagamento"
 condition = "AND"
 paths = ['''^frontend-next/src/lib/accessori-ordini/pagamento\.test\.ts$''']
 regexTarget = "match"
-regexes = ['''sk_test_abc''']
+regexes = ['''^sk_test_abcdefgh12345678\b''']

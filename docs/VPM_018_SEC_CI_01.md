@@ -27,17 +27,22 @@ Letto con `gh api` il 4 novembre 2026, repository pubblico:
   - **Gitleaks 8.30.1**: binario scaricato e verificato con SHA-256 fissata, senza
     Action di terzi, così il codice esterno eseguito è un solo file verificato. Su PR
     esamina ogni commit del ramo, su push l'intervallo dell'evento, nella corsa
-    settimanale l'intera storia. Output sempre `--redact`.
+    settimanale l'intera storia. Output sempre `--redact`. Su PR vale la configurazione
+    della **base**, così una PR non può indebolire la regola che la esamina: un'eccezione
+    nuova entra con una PR propria. `gitleaks:allow` e `.gitleaksignore` sono ignorati.
+    Solo le PR annullano una corsa precedente: su `main` resterebbe un intervallo scoperto.
   - **Self-test** (`secret-scan-selftest.sh`): prima di ogni scansione, in un
-    repository temporaneo e con valori generati a runtime, prova cinque casi: token di
-    provider, segreto aggiunto e poi rimosso (resta nella storia), chiave diversa nel
-    percorso di un'eccezione, `api_key` generica, falsi positivi noti. Una
+    repository temporaneo e con valori generati a runtime, prova sette casi: token di
+    provider, segreto aggiunto e poi rimosso (resta nella storia), chiave diversa o con lo
+    stesso prefisso nel percorso di un'eccezione, nome di campo solo simile a uno ammesso,
+    `api_key` generica, falsi positivi noti. Una
     configurazione rotta diventa rosso invece di un verde silenzioso.
   - **CodeQL**: `actions`, `javascript-typescript`, `python`, `build-mode: none`, query
     predefinite. Solo questo job ha `security-events: write`.
 - **`.github/dependabot.yml`**: Actions, Bun (`frontend-next`, `frontend`), pip
   (`backend`); settimanale, massimo 2-3 PR per ecosistema, gruppi minor/patch, attesa di
-  7 giorni dalla pubblicazione, salti di versione maggiore esclusi. Le PR passano dagli
+  7 giorni dalla pubblicazione, salti di versione maggiore esclusi per i pacchetti e
+  inclusi per le Action. Le PR passano dagli
   stessi check e dalla stessa review, senza merge automatico.
 - **`.gitleaks.toml`**: regole predefinite più due eccezioni strette (§ 3).
 - **Rischio supply-chain**: ogni `uses:` di tutti i workflow è fissato a uno SHA da 40
@@ -45,7 +50,9 @@ Letto con `gh api` il 4 novembre 2026, repository pubblico:
   `persist-credentials: false`. Riguarda anche i workflow con i secret di backup e
   payout: i loro passi non usano il token del checkout.
 - **`workflow-security.test.mjs`** nel job `Continuity scripts - syntax`, già
-  **richiesto**: un'Action a tag mobile, permessi assenti o larghi, `pull_request_target`,
+  **richiesto**: un'Action a tag mobile, permessi assenti, ogni scrittura fuori da un
+  elenco chiuso (solo `issues` per il controllo di freschezza e `security-events` per
+  CodeQL), `read-all`/`write-all`, `pull_request_target`,
   `workflow_run` fuori dal controllo di freschezza o un checkout con token persistito
   bloccano il merge. Contiene anche la prova inversa delle proprie regole.
 
@@ -61,8 +68,8 @@ Prima corsa sull'intera storia (790 commit, 30,8 MB, immagine `v8.30.1`, `--reda
 | `generic-api-key` | `insights.test.ts` | chiave del vino |
 | `stripe-access-token` | `accessori-ordini/pagamento.test.ts:38` | caso negativo: lettere in sequenza |
 
-L'eccezione generica guarda il **nome del campo**, non il percorso. Quella Stripe esige
-percorso **e** valore. Dopo le eccezioni la storia completa dà 0 riscontri, e il
+L'eccezione generica guarda il **nome esatto del campo**, non il percorso. Quella Stripe
+esige percorso **e** valore esatto. Dopo le eccezioni la storia completa dà 0 riscontri, e il
 self-test prova che un valore casuale nel percorso eccettuato o un `api_key` restano
 segnalati. **Nessun segreto reale trovato nella storia di Git** (limite: Gitleaks trova
 ciò che somiglia a un segreto; non è una prova di assenza).
@@ -71,8 +78,8 @@ ciò che somiglia a un segreto; non è una prova di assenza).
 
 | Prova | Esito |
 |---|---|
-| Self-test in container, poi in CI | 5/5 |
-| Regole dei workflow in locale | 31/31 |
+| Self-test in container e in CI | 7/7 |
+| Regole dei workflow in locale | tutte verdi, compresa la prova inversa delle regole |
 | Canarino PR #271 (ramo mai fuso, chiuso e cancellato) | **Gitleaks rosso**: 2 commit esaminati, 1 riscontro su un valore casuale generato al momento, non una credenziale |
 | Canarino, CodeQL | **`CodeQL` rosso**: `py/command-line-injection` e `py/sql-injection` (gravità error) sul codice sintetico |
 
@@ -86,11 +93,13 @@ Tempi e impatto sui check obbligatori sono nel corpo della PR, misurati sulla te
 1. **Rendere obbligatori `Gitleaks - secret scan` e CodeQL** nel ruleset
    `main-protection`. Finché non lo sono, un rosso è visibile ma non blocca il merge. Il
    merge amministrativo richiede comunque tutti i check rilevanti verdi secondo
-   `CLAUDE.md`, ma senza vincolo tecnico. Consiglio: Gitleaks sì, costa pochi secondi;
+   `CLAUDE.md`, ma senza vincolo tecnico. Il check che blocca gli avvisi è `CodeQL`, non i
+   job `CodeQL - <lingua>`, che restavano verdi sul canarino. Consiglio: Gitleaks sì, costa pochi secondi;
    CodeQL dopo qualche settimana di osservazione dei falsi positivi. La modifica del
    ruleset è un'impostazione di sicurezza e la lascio al titolare.
 2. **Accendere avvisi Dependabot e security updates**: oggi `dependabot.yml` propone solo
-   aggiornamenti di versione e **non** segnala le vulnerabilità note. Da *Settings → Code
+   aggiornamenti di versione, **non** segnala le vulnerabilità note e, con i salti maggiori
+   esclusi, non propone correzioni che richiedono una versione maggiore. Da *Settings → Code
    security* (gratuito sui repository pubblici).
 3. **Pattern non-provider e validity check** del secret scanning, da *Settings → Code
    security*: facoltativi, possono generare avvisi su valori finti.

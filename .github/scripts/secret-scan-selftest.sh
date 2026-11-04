@@ -28,7 +28,8 @@ temp="$(mktemp -d)"
 trap 'rm -rf "$temp"' EXIT
 
 # Stringa casuale alfanumerica, generata a runtime.
-casuale() { LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c "$1" || true; }
+# Senza vocali: le regole generiche scartano i valori che contengono parole comuni.
+casuale() { LC_ALL=C tr -dc 'BCDFGHJKLMNPQRSTVWXZbcdfghjklmnpqrstvwxz0-9' < /dev/urandom | head -c "$1" || true; }
 
 falliti=0
 
@@ -103,6 +104,19 @@ printf 'const k = "sk_live_%s";\n' "$(casuale 30)" > "$d/frontend-next/src/lib/a
 committa "$d" "stesso percorso, altro valore"
 atteso_trovato "eccezione legata anche al valore" "$d" "stripe-access-token"
 
+# 3b. Stesso percorso e stesso prefisso di test: l'eccezione vale per il solo valore esatto.
+d="$(repo_nuovo eccezione-prefisso)"
+mkdir -p "$d/frontend-next/src/lib/accessori-ordini"
+printf 'const k = "sk_test_abcdefgh12345678%s";\n' "$(casuale 12)" > "$d/frontend-next/src/lib/accessori-ordini/pagamento.test.ts"
+committa "$d" "prefisso del valore finto"
+atteso_trovato "eccezione non estesa al prefisso" "$d" "stripe-access-token"
+
+# 3c. Un altro campo che finisce con un nome di dominio resta una possibile credenziale.
+d="$(repo_nuovo eccezione-nome)"
+printf 'api_secret.lookup_key = "%s"\n' "$(casuale 40)" > "$d/a.txt"
+committa "$d" "prefisso largo"
+atteso_trovato "eccezione non estesa ai prefissi del nome" "$d" "generic-api-key"
+
 # 4. L'eccezione sui nomi di dominio NON copre una vera api key con valore casuale.
 d="$(repo_nuovo chiave-generica)"
 printf 'api_key = "%s"\n' "$(casuale 40)" > "$d/a.env.txt"
@@ -116,10 +130,11 @@ mkdir -p "$d/frontend-next/src/lib/accessori-ordini"
 {
   printf 'idempotencyKey: "%s",\n' "$(casuale 32)"
   printf "idempotency_key = '%s'\n" "$(casuale 32)"
+  printf "l.idempotency_key = '%s'\n" "$(casuale 32)"
   printf '"lookup_key": "%s",\n' "$(casuale 32)"
   printf 'wineKey: "%s",\n' "$(casuale 32)"
 } > "$d/identificativi.ts"
-printf 'for (const k of ["sk_test_%s"]) {}\n' "abcdefghijklmnop" > "$d/frontend-next/src/lib/accessori-ordini/pagamento.test.ts"
+printf 'for (const k of ["sk_test_%s"]) {}\n' "abcdefgh12345678" > "$d/frontend-next/src/lib/accessori-ordini/pagamento.test.ts"
 committa "$d" "falsi positivi"
 atteso_pulito "falsi positivi noti" "$d"
 

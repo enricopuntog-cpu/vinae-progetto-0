@@ -4,8 +4,8 @@
 # di ogni altra PR: nessuna regola di merge automatico. Non ricevono i secret degli
 # environment. Limiti bassi e gruppi per non sommergere la coda; attesa di 7 giorni
 # dalla pubblicazione, per non adottare subito una versione compromessa e ritirata.
-# I salti di versione maggiore si fanno a mano: restano esclusi solo dagli
-# aggiornamenti di versione, non dagli eventuali avvisi di sicurezza.
+# I salti di versione maggiore dei pacchetti si fanno a mano. Per le Action sono
+# inclusi: uno SHA fissato non riceve correzioni se non con una nuova PR.
 version: 2
 updates:
   - package-ecosystem: github-actions

@@ -19,8 +19,7 @@ const righeSenzaCommenti = (testo) => testo.split(/\r?\n/).filter((r) => !r.trim
 // Pure, esportate per la prova inversa qui sotto.
 export function usesNonFissati(testo) {
   return righeSenzaCommenti(testo)
-    .map((r) => r.match(/^\s*(?:-\s*)?uses:\s*(\S+)/)?.[1])
-    .filter(Boolean)
+    .flatMap((r) => [...r.matchAll(/(?:^|[\s{,-])uses\s*:\s*["']?([^\s"',}]+)/g)].map((m) => m[1]))
     .filter((u) => !u.startsWith("./") && !/@[0-9a-f]{40}$/.test(u));
 }
 
@@ -28,7 +27,7 @@ export function checkoutSenzaPersistCredentialsFalse(testo) {
   const righe = righeSenzaCommenti(testo);
   const trovati = [];
   righe.forEach((r, i) => {
-    if (!/^\s*(?:-\s*)?uses:\s*actions\/checkout@/.test(r)) return;
+    if (!/^\s*(?:-\s*)?uses\s*:\s*["']?actions\/checkout@/i.test(r)) return;
     const indent = r.search(/\S/);
     let ok = false;
     for (let j = i + 1; j < righe.length; j++) {
@@ -46,6 +45,21 @@ export function haPermessiDiPrimoLivello(testo) {
   return /^permissions:\s*$/m.test(testo);
 }
 
+// Ogni permesso di scrittura, a qualunque livello, piu' le forme larghe.
+export function permessiLarghi(testo) {
+  return righeSenzaCommenti(testo).flatMap((r) => {
+    const scrittura = r.match(/^\s*([a-z-]+)\s*:\s*["']?write["']?\s*$/)?.[1];
+    if (scrittura) return [scrittura];
+    return /\bpermissions\s*:\s*["']?(write-all|read-all)/.test(r) ? ["*"] : [];
+  });
+}
+
+// Elenco chiuso: una nuova scrittura deve passare da qui, con un motivo.
+const SCRITTURE_AMMESSE = {
+  "offsite-backup-freshness.yml": ["issues"], // apre e chiude l'issue di allarme
+  "security-scan.yml": ["security-events"], // carica i risultati di CodeQL
+};
+
 test("ci sono workflow da controllare", () => {
   assert.ok(workflow.length >= 7);
 });
@@ -57,8 +71,7 @@ for (const { nome, testo } of workflow) {
 
   test(`${nome}: permessi espliciti al primo livello, mai larghi`, () => {
     assert.ok(haPermessiDiPrimoLivello(testo), "manca permissions al primo livello");
-    assert.doesNotMatch(testo, /permissions:\s*write-all/);
-    assert.doesNotMatch(testo, /^permissions:\s*\r?\n\s+contents:\s*write/m);
+    assert.deepEqual(permessiLarghi(testo), SCRITTURE_AMMESSE[nome] ?? []);
   });
 
   test(`${nome}: nessun trigger con codice di PR nel contesto di main`, () => {
@@ -67,7 +80,7 @@ for (const { nome, testo } of workflow) {
     // `workflow_run` gira nel contesto di main: ammesso solo dove non esegue codice
     // di una PR (il controllo di freschezza, legato al solo workflow di backup).
     if (nome !== "offsite-backup-freshness.yml") {
-      assert.ok(!righe.some((r) => /^\s*workflow_run:/.test(r)));
+      assert.ok(!righe.some((r) => /\bworkflow_run\b/.test(r)));
     }
   });
 
@@ -76,16 +89,16 @@ for (const { nome, testo } of workflow) {
   });
 }
 
-test("solo il job CodeQL puo' scrivere gli eventi di sicurezza", () => {
-  const conScrittura = workflow.filter((w) => /security-events:\s*write/.test(w.testo)).map((w) => w.nome);
-  assert.deepEqual(conScrittura, ["security-scan.yml"]);
-});
-
 test("le regole rifiutano davvero le forme sbagliate", () => {
   assert.deepEqual(usesNonFissati("    - uses: actions/checkout@v7\n"), ["actions/checkout@v7"]);
   assert.deepEqual(usesNonFissati("    - uses: evil/action@main\n"), ["evil/action@main"]);
   assert.deepEqual(usesNonFissati(`    - uses: a/b@${"a".repeat(40)} # v1\n`), []);
   assert.deepEqual(usesNonFissati("    - uses: ./locale\n"), []);
+  assert.deepEqual(usesNonFissati("    - { uses: a/b@v1 }\n"), ["a/b@v1"]);
+  assert.deepEqual(usesNonFissati("    - uses : 'a/b@v1'\n"), ["a/b@v1"]);
+  assert.deepEqual(permessiLarghi("permissions:\n  id-token: write\n  contents: read\n"), ["id-token"]);
+  assert.deepEqual(permessiLarghi("    permissions: write-all\n"), ["*"]);
+  assert.deepEqual(permessiLarghi('permissions: "read-all"\n'), ["*"]);
   assert.equal(haPermessiDiPrimoLivello("on: push\njobs: {}\n"), false);
   const senza = "      - uses: actions/checkout@abc\n        with:\n          fetch-depth: 0\n      - run: x\n";
   assert.equal(checkoutSenzaPersistCredentialsFalse(senza).length, 1);

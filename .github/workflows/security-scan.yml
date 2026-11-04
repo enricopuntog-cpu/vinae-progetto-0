@@ -25,9 +25,11 @@ on:
 permissions:
   contents: read
 
+# Solo le PR annullano la corsa precedente: su `main` una corsa annullata lascerebbe
+# il suo intervallo di commit non esaminato fino alla scansione settimanale.
 concurrency:
-  group: security-scan-${{ github.ref }}
-  cancel-in-progress: true
+  group: security-scan-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   gitleaks:
@@ -68,6 +70,17 @@ jobs:
           DOPO: ${{ github.event.after }}
         run: |
           nullo=0000000000000000000000000000000000000000
+          config=.gitleaks.toml
+          # Una PR non deve poter indebolire la regola che la esamina: vale la
+          # configurazione della base. Un'eccezione nuova entra con una PR propria.
+          if [ "$EVENTO" = pull_request ] && git cat-file -e "$BASE_PR:.gitleaks.toml" 2>/dev/null; then
+            config="$RUNNER_TEMP/gitleaks-base.toml"
+            git show "$BASE_PR:.gitleaks.toml" > "$config"
+          fi
+          # Niente eccezioni nel testo della PR: `gitleaks:allow` e `.gitleaksignore` ignorati.
+          vuota="$RUNNER_TEMP/gitleaks-vuota"
+          mkdir -p "$vuota"
+          opzioni=(--config "$config" --redact --no-banner --ignore-gitleaks-allow --gitleaks-ignore-path "$vuota")
           case "$EVENTO" in
             pull_request) intervallo="$BASE_PR..$HEAD_PR" ;;
             push)
@@ -77,10 +90,10 @@ jobs:
           esac
           if [ -n "$intervallo" ]; then
             echo "Commit esaminati: $intervallo"
-            "$GITLEAKS_BIN" git . --config .gitleaks.toml --redact --no-banner --log-opts="$intervallo"
+            "$GITLEAKS_BIN" git . "${opzioni[@]}" --log-opts="$intervallo"
           else
             echo "Commit esaminati: intera storia"
-            "$GITLEAKS_BIN" git . --config .gitleaks.toml --redact --no-banner
+            "$GITLEAKS_BIN" git . "${opzioni[@]}"
           fi
 
   codeql:
