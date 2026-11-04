@@ -297,6 +297,9 @@ run_grid "12v QV2 Altro Q7/Q19" 12v_market_validation_qv2_other_options.sql 3
 # finish_post rifiutati sotto 5/5, MV1 invariata, admin con Cantina ed
 # esperienza 5/5. Fixture private, ROLLBACK, prima delle 12g.
 run_grid "12w QV2 cinque aree" 12w_market_validation_qv2_five_areas.sql 3
+# VPM-018-DB-GRID-01: ogni porta anonima di scrittura portata oltre soglia, capability
+# errata su ogni porta di sessione, elenco chiuso delle porte. ROLLBACK, bucket compresi.
+run_grid "12zu superfici anonime" 12zu_vpm_018_superfici_anonime.sql 3
 
 # Vinea Partner Blocco A (migrazione 20261011150000): inviti monouso legati
 # all'email (validi, scaduti, revocati, usati, replay), consegna dei dati,
