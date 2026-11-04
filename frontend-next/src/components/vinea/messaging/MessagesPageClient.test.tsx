@@ -179,10 +179,11 @@ describe("MessagesPageClient — conversazioni", () => {
     await waitFor(() => expect(pagina().getByText("Messaggi non disponibili.")).toBeTruthy());
     expect(stato.markConversationRead).not.toHaveBeenCalled();
 
-    stato.loadMessages.mockImplementation(async () => ({ ok: true, data: [] }));
+    stato.loadMessages.mockImplementation(async () => ({ ok: true, data: [messaggio("m9", "Recuperato")] }));
     fireEvent.click(pagina().getByRole("button", { name: /riprova/i }));
     await waitFor(() => expect(stato.loadMessages).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(pagina().queryByText("Messaggi non disponibili.")).toBeNull());
+    await waitFor(() => expect(stato.markConversationRead).toHaveBeenCalledWith("c1", "m9"));
   });
 });
 

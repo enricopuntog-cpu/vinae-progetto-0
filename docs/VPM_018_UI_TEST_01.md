@@ -5,7 +5,8 @@ spente, servizio di autenticazione. Nessun checkout o pagamento reale attivato.
 
 ## 1. Stato di partenza
 
-Nessun test di componente eseguiva l'interfaccia. Le aree erano coperte da asserzioni sul testo
+Nessun test eseguiva l'interfaccia di queste aree con un DOM: altrove esistono solo render statici
+(`renderToStaticMarkup`), senza interazione. Le aree erano coperte da asserzioni sul testo
 dei sorgenti (`reporting-reclami.test.ts`, `prelaunch-contract.test.ts`) e, da VPM-018-E2E-CRIT-01,
 da casi browser. `auth-service` era già eseguito per recupero, nuova password, OAuth e
 riautenticazione; mancavano registrazione, conferma, accesso, magic link, uscita, utente corrente
@@ -22,11 +23,11 @@ e ruoli.
 - `src/test/dom.ts` apre il DOM nel solo file che lo chiede, mai in un preload: il resto della suite
   continua ad assumere un ambiente server.
 
-## 3. Test aggiunti (58, soglia CI 3399 → 3457)
+## 3. Test aggiunti (59, soglia CI 3399 → 3458)
 
 | File | Casi | Cosa prova |
 |---|---|---|
-| `components/vinea/ReportDialog.test.tsx` | 11 | Apertura, motivo scelto nella richiesta, una sola RPC, doppio clic, assenza di sessione, bersaglio o configurazione, doppione, testo del database mai mostrato, nuovo tentativo, azzeramento alla chiusura, Club per slug |
+| `components/vinea/ReportDialog.test.tsx` | 12 | Apertura, motivo scelto nella richiesta, una sola RPC, doppio clic, Esc durante l'invio, assenza di sessione, bersaglio o configurazione, doppione, testo del database mai mostrato, nuovo tentativo, azzeramento alla chiusura, Club per slug |
 | `components/vinea/messaging/MessagesPageClient.test.tsx` | 14 | Stati vuoto, errore, offline e caricamento, apertura e segna-letto, id altrui ignorato, errore e nuovo tentativo, stessa chiave di idempotenza al nuovo tentativo, nessun doppio invio, sola lettura |
 | `app/checkout/[id]/page-client.test.tsx` | 10 | **Pagamenti spenti**: fino a «Conferma» con i comandi veri, avviso della Beta, nessuna RPC, Edge Function, rete o navigazione; assenza di sessione; validazione; più bottiglie senza logistica |
 | `lib/auth/recupero-comportamento.test.ts` (esteso) | 23 | `registra` nei tre esiti, `verificaEmail`, `login`, `inviaMagicLink`, `logout`, `utenteCorrente`, `ruoliProfilo`; nessun testo del provider fuori dal servizio |
@@ -35,7 +36,10 @@ Le asserzioni statiche esistenti non sono state toccate: quando la modifica non 
 una difesa ulteriore. I casi di autenticazione stanno nel file esistente, l'unico che sostituisce il
 client per quel servizio.
 
-## 4. Difetto trovato e corretto
+## 4. Difetti trovati e corretti
+
+**D-MSG-01 — P3.** In `MessagesPageClient` dopo «Riprova» riuscito i messaggi comparivano ma la
+conversazione non veniva segnata come letta. Corretto come per il primo caricamento.
 
 **D-REPORT-01 — P3.** In `ReportDialog` «Annulla» e «Chiudi» chiudevano il dialogo senza azzerarlo: la
 bozza restava e, dopo un invio riuscito, riaprendo si rivedeva «Segnalazione inviata» invece del
@@ -45,7 +49,7 @@ modulo. Trovato dai nuovi casi. Corretto con una funzione `chiudi` usata dai due
 
 | Prova | Esito |
 |---|---|
-| Suite completa, 5 corse consecutive | 3457 passati, 0 falliti, uscita 0 a ogni corsa |
+| Suite completa, 5 corse consecutive | 3458 passati, 0 falliti, uscita 0 a ogni corsa |
 | Lint e typecheck | 0 errori (12 warning `<img>` già noti) |
 | M1 gate di pagamento forzato acceso | rilevata, 3 rossi |
 | M2 chiusura senza azzeramento | rilevata, 2 rossi |
@@ -56,6 +60,8 @@ modulo. Trovato dai nuovi casi. Corretto con una funzione `chiudi` usata dai due
 | M7 `login` espone il testo del provider | rilevata, 2 rossi |
 | M8 registrazione senza data di nascita | rilevata, 1 rosso |
 | M9 ruoli con `select("*")` | rilevata, 1 rosso |
+| M10 Esc chiude durante l'invio | rilevata, 1 rosso |
+| M11 nessun segna-letto dopo «Riprova» | rilevata, 1 rosso |
 
 ## 6. Limiti
 

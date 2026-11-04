@@ -23,20 +23,18 @@ let sessione: { authUser: { email: string | null; userId: string } | null; authL
   authLoading: false,
 };
 
+// Risponde come il server vero: se il gate si aprisse, il flusso arriverebbe davvero fino
+// all'Edge Function e alla navigazione, e le asserzioni di «Conferma» lo vedrebbero.
 const clientFinto = {
-  rpc: async (nome: string) => {
+  rpc: async (nome: string, argomenti: { p_listing_id?: string; p_destinazione?: string }) => {
     rpc.push(nome);
-    return { data: [], error: null };
+    return { data: { listingId: argomenti.p_listing_id, destinazione: argomenti.p_destinazione }, error: null };
   },
   functions: {
     invoke: async (nome: string) => {
       rpc.push(`functions:${nome}`);
-      return { data: null, error: null };
+      return { data: { checkoutUrl: "https://pagamento.invalid/sessione" }, error: null };
     },
-  },
-  from: (tabella: string) => {
-    rpc.push(`from:${tabella}`);
-    return { select: () => ({ order: async () => ({ data: [], error: null }) }) };
   },
 };
 
@@ -90,7 +88,6 @@ const finoAllaConferma = async () => {
   fireEvent.change(pagina().getByLabelText("Telefono"), { target: { value: "+39 333 1234567" } });
   for (let passo = 0; passo < 5 && !pagina().queryByTestId("checkout-confirm"); passo++) {
     fireEvent.click(pagina().getByTestId("checkout-next"));
-    // Lascia completare gli effetti del passo appena aperto (rubrica degli indirizzi).
     await act(async () => {
       await Promise.resolve();
     });
@@ -155,16 +152,14 @@ describe("checkout con pagamenti spenti", () => {
   it("«Conferma» non parte: avviso della beta, nessuna richiesta, nessuna navigazione", async () => {
     mostra();
     await finoAllaConferma();
-    const richiestePrima = rpc.length;
+    expect(rpc).toEqual([]);
     const retePrima = fetchFinto.mock.calls.length;
 
     fireEvent.click(pagina().getByTestId("checkout-confirm"));
 
     await waitFor(() => expect(pagina().getByText(/I pagamenti non sono ancora attivi/)).toBeTruthy());
     expect(pagina().getByText(/Nessun addebito è stato effettuato/)).toBeTruthy();
-    expect(rpc.length).toBe(richiestePrima);
-    expect(rpc).not.toContain("order_checkout_reserve");
-    expect(rpc.filter((nome) => nome.startsWith("functions:"))).toEqual([]);
+    expect(rpc).toEqual([]);
     expect(fetchFinto.mock.calls.length).toBe(retePrima);
     expect(router.push).not.toHaveBeenCalled();
     expect(window.location.href).toBe("https://vinea.test/");
@@ -177,7 +172,7 @@ describe("checkout con pagamenti spenti", () => {
     await waitFor(() => expect(pagina().getByText(/I pagamenti non sono ancora attivi/)).toBeTruthy());
     fireEvent.click(pagina().getByTestId("checkout-confirm"));
     await waitFor(() => expect(pagina().getAllByText(/I pagamenti non sono ancora attivi/).length).toBe(1));
-    expect(rpc.filter((nome) => nome.startsWith("functions:"))).toEqual([]);
+    expect(rpc).toEqual([]);
   });
 
   it("modificando un dato dopo il blocco l'avviso sparisce", async () => {

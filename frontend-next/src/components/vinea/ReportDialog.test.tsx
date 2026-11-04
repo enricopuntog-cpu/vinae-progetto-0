@@ -3,8 +3,8 @@ import { apriDom, chiudiDom } from "@/test/dom";
 
 /**
  * La segnalazione, eseguita: il dialogo si apre e si percorre con i suoi comandi, la
- * richiesta arriva a un client finto al posto di Supabase. Sostituiscono le asserzioni
- * sul testo dei sorgenti, che non provano quale chiamata parte né cosa vede l'utente.
+ * richiesta arriva a un client finto al posto di Supabase. Affiancano le asserzioni sul
+ * testo dei sorgenti, che non provano quale chiamata parte né cosa vede l'utente.
  */
 apriDom();
 const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
@@ -134,6 +134,23 @@ describe("ReportDialog", () => {
 
     await waitFor(() => expect(pagina().getByRole("heading", { name: "Segnalazione inviata" })).toBeTruthy());
     expect(rpc.length).toBe(1);
+  });
+
+  it("Esc durante l'invio non chiude il dialogo né perde l'esito", async () => {
+    let sblocca: () => void = () => undefined;
+    attesaRpc = new Promise((risolvi) => {
+      sblocca = risolvi;
+    });
+    render(<ReportDialog targetType="annuncio" targetId={ID_ANNUNCIO} targetLabel="Barolo" />);
+    finoAllaDescrizione();
+    invia();
+    await waitFor(() => expect(pagina().getByRole("button", { name: "Invio…" })).toBeTruthy());
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    expect(pagina().queryByRole("dialog")).not.toBeNull();
+
+    sblocca();
+    await waitFor(() => expect(pagina().getByRole("heading", { name: "Segnalazione inviata" })).toBeTruthy());
   });
 
   it("senza sessione non parte alcuna richiesta e chiede di accedere", async () => {
