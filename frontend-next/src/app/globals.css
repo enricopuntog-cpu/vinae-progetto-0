@@ -55,7 +55,8 @@
   --bordeaux: #6b2138;
   --crema: #f7f3ec;
   --antracite: #202020;
-  --salvia: #74806c;
+  /* Verde foglia: accenti botanici, non CTA primarie. Token scuro conservato per testi piccoli. */
+  --salvia: #4c6245;
   /* Salvia scurita a L30%, stessa tinta (H96): e lo sfondo OPACO del badge
      «Pronto ora». Su --crema misura 7,27:1, che passa AA e anche AAA. La
      versione traslucida bg-salvia/25 dava 3,09:1 su foto chiara e 3,96:1 su
@@ -83,7 +84,7 @@
   --secondary-foreground: #202020;
   --muted: #efe9de;
   --muted-foreground: #5a5a5a;
-  --accent: #74806c;
+  --accent: var(--salvia);
   --accent-foreground: #f7f3ec;
   --destructive: #b00020;
   --destructive-foreground: #f7f3ec;
