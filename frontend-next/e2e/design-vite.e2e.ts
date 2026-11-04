@@ -40,7 +40,7 @@ test.describe("Design vite @smoke @cross", () => {
         expect(colore).toBe("rgb(74, 83, 68)");
       }
       if (nome === "cantina" && fase === "dopo") {
-        const titolo = page.getByText("Da attendere", { exact: true }).first();
+        const titolo = page.getByText("Ancora in evoluzione", { exact: true }).locator("..").getByText("Da attendere", { exact: true });
         const suggerimento = page.getByText("Ancora in evoluzione", { exact: true });
         await expect(titolo).toBeVisible();
         for (const testo of [titolo, suggerimento]) {
