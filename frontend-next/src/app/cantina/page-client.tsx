@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
@@ -28,7 +29,6 @@ import { AperturaBottiglia } from "@/components/vinea/AperturaBottiglia";
 import { CantinaAccessori } from "@/components/vinea/cantina-accessori/CantinaAccessori";
 import { DettaglioGruppo, RiepilogoGruppoCantina } from "@/components/vinea/GruppoCantina";
 import { Kpi } from "@/components/vinea/Layout";
-import { ValoreNelTempo } from "@/components/vinea/ValoreNelTempo";
 import type { AnaliticaPortafoglio } from "@/lib/cantina/portfolio";
 import {
   chiaveCantina,
@@ -73,6 +73,7 @@ import {
   type EnvTheme,
   type StorageSlot,
 } from "@/data/cellar";
+import { ConfineOpzionale } from "@/components/vinea/ConfineOpzionale";
 import { FindWineFromCellar } from "@/components/vinea/FoodPairing";
 import { WineMetaProvider } from "@/lib/wine-meta-context";
 import { slotsDaModuli } from "@/services/cellar-service";
@@ -101,12 +102,64 @@ import { useCellarOverview, useEnvironmentConfigurator } from "@/hooks/useCellar
  *   performance, letti da una sola RPC owner-only e mostrati solo per i fatti
  *   che esistono davvero.
  */
-export default function CantinaPageClient() {
+export default function CantinaPageClient({ conSessione = false }: { conSessione?: boolean }) {
   const { metaPerVino } = useVinea();
   return (
     <WineMetaProvider metaPerVino={metaPerVino}>
-      <Cantina />
+      <Cantina conSessione={conSessione} />
     </WineMetaProvider>
+  );
+}
+
+// Il grafico porta con sé recharts: fuori dal bundle iniziale, come la vista 3D.
+const ValoreNelTempo = lazy(() =>
+  import("@/components/vinea/ValoreNelTempo").then((m) => ({ default: m.ValoreNelTempo })),
+);
+
+/**
+ * L'immagine più grande della pagina, presente dal primo HTML per chi ha una sessione: sta
+ * anche nel guscio di caricamento, con gli stessi pulsanti, così non si rimonta e non cambia
+ * altezza all'arrivo dei dati. Con `eager` React la dichiara già in testa al documento: `preload`
+ * darebbe lo stesso HTML e gli stessi tempi (misurato). I valori di `sizes` tengono conto del
+ * gradiente scuro che la copre. `inAttesa` rende `inert` i pulsanti finché l'overlay dell'AgeGate è
+ * presente: li copre alla vista, non alla tastiera.
+ */
+function EroeCantina({ inAttesa = false }: { inAttesa?: boolean }) {
+  return (
+    <section className="relative overflow-hidden rounded-3xl border border-border hero-glow">
+      <Image
+        src={wineImages.cellar}
+        alt=""
+        fill
+        loading="eager"
+        sizes="(max-width: 640px) 50vw, (max-width: 1152px) 100vw, 1152px"
+        className="object-cover animate-ken-burns"
+      />
+      <div className="absolute inset-0 bg-gradient-to-r from-antracite/85 via-antracite/60 to-antracite/30" />
+      <div className="hero-grain" aria-hidden />
+      <div className="relative flex flex-col gap-4 p-6 text-crema md:flex-row md:items-end md:justify-between md:p-8">
+        <div className="animate-fade-up">
+          <p className="text-xs uppercase tracking-[0.3em] text-oro">Vinea Wine Club</p>
+          <h1 className="mt-1 font-serif text-3xl md:text-4xl">
+            La <span className="gold-shimmer">mia cantina</span>
+          </h1>
+          <p className="text-crema/85">Il tuo patrimonio in bottiglia, sempre a portata di mano.</p>
+        </div>
+        <div inert={inAttesa} className="flex flex-wrap gap-2 animate-fade-up" style={{ animationDelay: "120ms" }}>
+          <Button asChild className="bg-oro text-antracite hover:bg-oro/90">
+            <Link href="/vendi?mode=catalog">
+              <PlusCircle className="h-4 w-4" /> Aggiungi bottiglia
+            </Link>
+          </Button>
+          <Button asChild className="bg-bordeaux hover:bg-bordeaux/90">
+            <Link href="/vendi?mode=sell">
+              <Tag className="h-4 w-4" /> Metti in vendita
+            </Link>
+          </Button>
+          <FindWineFromCellar />
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -119,10 +172,11 @@ const LazyCellar3D = dynamic(() => import("@/components/vinea/Cellar3D"), {
   ),
 });
 
-function Cantina() {
+function Cantina({ conSessione }: { conSessione: boolean }) {
   const {
     authUser,
     authLoading,
+    authStatoEta,
     cantinaLoading,
     inVendita,
     prezzoNascosto,
@@ -189,12 +243,28 @@ function Cantina() {
     );
   };
 
+  // Stesse condizioni dell'AgeGate, che segue il profilo e non il caricamento della Cantina.
+  const sottoOverlay = authLoading || (authUser !== null && authStatoEta !== "completo");
+
   if (authLoading || cantinaLoading) {
-    return (
-      <div className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
+    // `key`: il blocco non deve diventare il nodo della griglia che arriva dopo, o la griglia
+    // risulterebbe spostata invece che nuova.
+    const attesa = (
+      <div key="attesa" className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
         <Loader2 className="mx-auto h-6 w-6 animate-spin text-bordeaux" />
         <p className="mt-3">Carico la tua cantina…</p>
       </div>
+    );
+    // Con una sessione la pagina sarà più alta dello schermo: lo spazio si riserva subito, così
+    // il piè di pagina non attraversa la vista quando arrivano i dati. Un ospite non scarica
+    // l'immagine di una pagina che non vedrà.
+    return conSessione ? (
+      <div className="min-h-dvh space-y-8">
+        <EroeCantina inAttesa={sottoOverlay} />
+        {attesa}
+      </div>
+    ) : (
+      attesa
     );
   }
 
@@ -225,40 +295,7 @@ function Cantina() {
   return (
     <div className="space-y-8">
       {/* Header con sfondo */}
-      <section className="relative overflow-hidden rounded-3xl border border-border hero-glow">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={wineImages.cellar}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover animate-ken-burns"
-          fetchPriority="high"
-          decoding="async"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-antracite/85 via-antracite/60 to-antracite/30" />
-        <div className="hero-grain" aria-hidden />
-        <div className="relative flex flex-col gap-4 p-6 text-crema md:flex-row md:items-end md:justify-between md:p-8">
-          <div className="animate-fade-up">
-            <p className="text-xs uppercase tracking-[0.3em] text-oro">Vinea Wine Club</p>
-            <h1 className="mt-1 font-serif text-3xl md:text-4xl">
-              La <span className="gold-shimmer">mia cantina</span>
-            </h1>
-            <p className="text-crema/85">Il tuo patrimonio in bottiglia, sempre a portata di mano.</p>
-          </div>
-          <div className="flex flex-wrap gap-2 animate-fade-up" style={{ animationDelay: "120ms" }}>
-            <Button asChild className="bg-oro text-antracite hover:bg-oro/90">
-              <Link href="/vendi?mode=catalog">
-                <PlusCircle className="h-4 w-4" /> Aggiungi bottiglia
-              </Link>
-            </Button>
-            <Button asChild className="bg-bordeaux hover:bg-bordeaux/90">
-              <Link href="/vendi?mode=sell">
-                <Tag className="h-4 w-4" /> Metti in vendita
-              </Link>
-            </Button>
-            <FindWineFromCellar />
-          </div>
-        </div>
-      </section>
+      <EroeCantina inAttesa={sottoOverlay} />
 
       {/* Cantina: quante bottiglie e quanto spazio. Non dipende dall'analitica. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
@@ -565,7 +602,22 @@ function ContabilitaCantina({
       {/* Il grafico entra nella stessa cornice invece di aprirne una seconda:
           è la stessa contabilità vista nel tempo, non un altro riquadro. */}
       <div className="border-t border-border p-5 md:p-6">
-        <ValoreNelTempo serie={analitica.serieValore} incorniciato={false} />
+        {/* Lo spazio del grafico è riservato solo quando il grafico ci sarà: da due punti in su. */}
+        <ConfineOpzionale
+          fallback={
+            <p className="text-sm text-muted-foreground">
+              Grafico non disponibile. Ricarica la pagina per riprovare.
+            </p>
+          }
+        >
+          <Suspense
+            fallback={
+              <div aria-busy="true" className={analitica.serieValore.length >= 2 ? "aspect-[16/9] w-full" : "h-16"} />
+            }
+          >
+            <ValoreNelTempo serie={analitica.serieValore} incorniciato={false} />
+          </Suspense>
+        </ConfineOpzionale>
       </div>
     </section>
   );

@@ -33,7 +33,6 @@ import {
   unitaVendibiliDelGruppo,
 } from "@/lib/cantina/gruppo";
 import { PARAMETRO_NEXT } from "@/lib/auth/ritorno-auth";
-import { wineImages } from "@/lib/wine-images";
 import { useSellWizard, type Modalita } from "@/hooks/useSellWizard";
 import { confidenzaPercento } from "@/lib/phase10/catalogazione";
 import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
@@ -173,7 +172,8 @@ function WizardVendi() {
 
   if (authLoading) {
     return (
-      <div className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
+      // `key`: non deve diventare il nodo della pagina che arriva dopo, o risulterebbe spostata.
+      <div key="attesa" className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
         <Loader2 className="mx-auto h-6 w-6 animate-spin text-bordeaux" />
         <p className="mt-3">Caricamento…</p>
       </div>
@@ -207,7 +207,7 @@ function WizardVendi() {
   if (initialMode === "vendita" && !bottleUnitId) {
     if (cantinaLoading) {
       return (
-        <div className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
+        <div key="attesa" className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
           <Loader2 className="mx-auto h-6 w-6 animate-spin text-bordeaux" />
           <p className="mt-3">Carico la Cantina…</p>
         </div>
@@ -220,7 +220,7 @@ function WizardVendi() {
   // mostrare "non è tua" a chi la possiede davvero.
   if (daCantina && cantinaLoading) {
     return (
-      <div className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
+      <div key="attesa" className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
         <Loader2 className="mx-auto h-6 w-6 animate-spin text-bordeaux" />
         <p className="mt-3">Carico la bottiglia…</p>
       </div>
@@ -256,17 +256,6 @@ function WizardVendi() {
 
   return (
     <div className="relative mx-auto max-w-2xl space-y-6">
-      {/* Fondale decorativo */}
-      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={wineImages.crate}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover opacity-20"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-background via-background/95 to-background" />
-      </div>
-
       <div>
         <h1 className="font-serif text-3xl md:text-4xl">
           {isVendita ? "Vendi la tua bottiglia" : "Aggiungi una bottiglia"}

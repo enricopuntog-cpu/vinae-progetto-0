@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { CantinaCommerciale } from "@/components/vinea/partner/CantinaCommerciale";
 import { ClasseNonVerificata } from "@/components/vinea/partner/ClasseNonVerificata";
+import { cookieSessionePresente } from "@/lib/auth/sessione-cookie";
 import { classeDelChiamante } from "@/lib/partner/classe-server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { creaScortePartnerService } from "@/services/partner-scorte-service";
@@ -34,7 +35,7 @@ export const metadata: Metadata = {
 export default async function Page() {
   const client = await getSupabaseServerClient();
   const classe = await classeDelChiamante(client);
-  if (classe.tipo === "privato") return <CantinaPageClient />;
+  if (classe.tipo === "privato") return <CantinaPageClient conSessione={await cookieSessionePresente()} />;
   if (classe.tipo === "errore") return <ClasseNonVerificata titolo="La mia cantina" riprova="/cantina" />;
 
   const { partner, titolareId } = classe;

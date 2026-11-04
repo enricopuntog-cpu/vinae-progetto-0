@@ -117,6 +117,8 @@ Ordine: **FIX-E2E-01 → VER-PROD-01 (con autorizzazione) → E2E-CRIT-01 → ER
 
 > Aggiornamento del 4 novembre 2026 (VPM-018-UX-FIX-03, PR dedicata): chiusi UX-B4, UX-B5, UX-B6, UX-B7 e i tre debiti di UX-FIX-02; TEST-B3 senza difetto; UX-B3 misurato e in attesa di decisione del titolare. Dettagli in `docs/VPM_018_UX_FIX_03.md`.
 
+> Aggiornamento del 4 novembre 2026 (VPM-018-PERF-01, PR dedicata): PERF-B1 e PERF-B2 chiusi in laboratorio, con l'attesa reale dietro l'AgeGate ancora aperta; PERF-B3 non affrontato. Numeri prima e dopo in `docs/VPM_018_PERF_01.md`.
+
 ### 0.6 Skill e subagenti (VPM-018-RECOVERY e VPM-018-RECOVERY-CLOSE)
 
 Eseguiti realmente (invocati con gli strumenti):
