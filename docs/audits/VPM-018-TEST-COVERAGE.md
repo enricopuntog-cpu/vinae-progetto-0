@@ -41,6 +41,8 @@ Stati usati: **COMPLETE E VERIFICATE** / **IMPLEMENTATE MA NON COLLAUDATE E2E** 
 
 ## Aree senza alcun test unitario di route/UI
 
+> Aggiornamento del 4 novembre 2026 (VPM-018-UI-TEST-01): `MessagesPageClient`, `ReportDialog`, il checkout a pagamenti spenti e i rami mancanti di `auth-service` ora hanno test di comportamento. L'elenco sotto è la fotografia dell'audit. Per auth, marketplace e messaggi vedi anche `docs/VPM_018_E2E_CRIT_01.md`.
+
 - Route handler `auth/{accesso,callback,confirm,recupero}` e pagine `accedi`/`registrati`/`reimposta-password` (solo helper `lib/auth/*` testati).
 - Messaggistica/notifiche UI (`MessagesPageClient`, `use-phase8-controller`, `/notifiche`); test `phase8/*` coprono solo servizi/mapper/realtime.
 - `Layout.tsx`, `SommelierChat`, `ReportDialog`, page-client di Home, Esplora, Annuncio, Checkout, Cantina (solo helper estratti), `legale/page.tsx`, `robots.ts`, root `layout.tsx`.

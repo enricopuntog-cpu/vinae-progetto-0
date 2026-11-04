@@ -84,6 +84,13 @@ export const ReportDialog = ({
     setErrore(null);
   };
 
+  // Anche i pulsanti azzerano il dialogo, come la chiusura di Radix: alla riapertura si
+  // riparte dal primo passo, non da una bozza o dalla conferma di un invio già fatto.
+  const chiudi = () => {
+    setOpen(false);
+    reset();
+  };
+
   const triggerPredefinito =
     variant === "icon" ? (
       <button
@@ -207,7 +214,7 @@ export const ReportDialog = ({
             <Button
               variant="ghost"
               disabled={loading}
-              onClick={step === 0 ? () => setOpen(false) : () => setStep(0)}
+              onClick={step === 0 ? chiudi : () => setStep(0)}
             >
               {step === 0 ? "Annulla" : "Indietro"}
             </Button>
@@ -226,7 +233,7 @@ export const ReportDialog = ({
               {loading ? "Invio…" : "Invia segnalazione"}
             </Button>
           ) : null}
-          {step === 2 ? <Button onClick={() => setOpen(false)} className="ml-auto">Chiudi</Button> : null}
+          {step === 2 ? <Button onClick={chiudi} className="ml-auto">Chiudi</Button> : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>
