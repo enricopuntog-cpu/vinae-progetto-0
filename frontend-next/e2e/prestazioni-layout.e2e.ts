@@ -28,7 +28,7 @@ const clsDopoIlCaricamento = async (page: Page): Promise<number> => {
   return page.evaluate(() => (window as unknown as { __cls: { cls: number } }).__cls.cls);
 };
 
-test.describe("Stabilità del layout al caricamento @cross", () => {
+test.describe("Stabilità del layout al caricamento @smoke @cross", () => {
   const nome = `Barolo E2E-PERF ${etichettaCorsa()}`;
   let bottigliaId = "";
 
@@ -46,13 +46,47 @@ test.describe("Stabilità del layout al caricamento @cross", () => {
     const risposta = await page.goto("/cantina");
     const html = (await risposta?.text()) ?? "";
     expect(html).toMatch(/<img[^>]*vinea-cellar/);
+    // Il guscio arriva già coperto dall'AgeGate, con i pulsanti esclusi dalla tastiera, e la
+    // risposta non è riutilizzabile: l'HTML cambia in base al cookie di sessione.
+    expect(html).toContain("Verifica dell");
+    expect(html).toMatch(/<div[^>]*\binert\b[^>]*>(?:(?!<\/section>)[\s\S])*\/vendi\?mode=catalog/);
+    expect(risposta?.headers()["cache-control"]).toBe("private, no-store");
     expect(await clsDopoIlCaricamento(page)).toBeLessThanOrEqual(0.1);
+
+    // Finita l'attesa i pulsanti tornano utilizzabili.
+    const aggiungi = page.getByRole("link", { name: "Aggiungi bottiglia" });
+    await expect(aggiungi).toBeVisible();
+    expect(await aggiungi.evaluate((el) => el.closest("[inert]") === null)).toBe(true);
 
     await expect(page.getByRole("heading", { name: /mia cantina/ })).toBeVisible();
     await page.screenshot({ path: info.outputPath("cantina-hero.png") });
     // Un solo hero: niente doppioni fra il guscio di caricamento e la pagina.
     await expect(page.getByRole("heading", { name: /mia cantina/ })).toHaveCount(1);
     expect(await senzaScorrimentoOrizzontale(page)).toBe(true);
+    await contesto.close();
+  });
+
+  test("se il grafico non arriva, la Cantina resta in piedi", async ({ browser, browserName }, info) => {
+    test.skip(browserName !== "chromium", "un solo motore basta: il confine non dipende dal browser");
+    const contesto = await contestoAutenticato(browser, "venditore", opzioniDelProgetto(info));
+    const page = await contesto.newPage();
+    // Si fa fallire solo il pezzo di JavaScript che contiene recharts, riconosciuto dal contenuto
+    // perché il nome del file cambia a ogni build. Niente `diagnostica`: l'errore è voluto.
+    let bloccati = 0;
+    await page.route("**/_next/static/chunks/*.js", async (route) => {
+      const risposta = await route.fetch();
+      if ((await risposta.text()).includes("recharts-")) {
+        bloccati += 1;
+        await route.abort();
+      } else {
+        await route.fulfill({ response: risposta });
+      }
+    });
+    await page.goto("/cantina");
+    await attendiCaricamento(page);
+    await expect(page.getByText("Grafico non disponibile")).toBeVisible();
+    await expect(page.getByRole("heading", { name: /mia cantina/ })).toBeVisible();
+    expect(bloccati).toBeGreaterThan(0);
     await contesto.close();
   });
 

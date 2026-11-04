@@ -73,6 +73,7 @@ import {
   type EnvTheme,
   type StorageSlot,
 } from "@/data/cellar";
+import { ConfineOpzionale } from "@/components/vinea/ConfineOpzionale";
 import { FindWineFromCellar } from "@/components/vinea/FoodPairing";
 import { WineMetaProvider } from "@/lib/wine-meta-context";
 import { slotsDaModuli } from "@/services/cellar-service";
@@ -120,9 +121,10 @@ const ValoreNelTempo = lazy(() =>
  * anche nel guscio di caricamento, con gli stessi pulsanti, così non si rimonta e non cambia
  * altezza all'arrivo dei dati. Con `eager` React la dichiara già in testa al documento: `preload`
  * darebbe lo stesso HTML e gli stessi tempi (misurato). I valori di `sizes` tengono conto del
- * gradiente scuro che la copre: sotto rete lenta un'immagine più grande ritarda la fine dell'attesa.
+ * gradiente scuro che la copre. `inAttesa` rende `inert` i pulsanti finché l'overlay dell'AgeGate è
+ * presente: li copre alla vista, non alla tastiera.
  */
-function EroeCantina() {
+function EroeCantina({ inAttesa = false }: { inAttesa?: boolean }) {
   return (
     <section className="relative overflow-hidden rounded-3xl border border-border hero-glow">
       <Image
@@ -143,7 +145,7 @@ function EroeCantina() {
           </h1>
           <p className="text-crema/85">Il tuo patrimonio in bottiglia, sempre a portata di mano.</p>
         </div>
-        <div className="flex flex-wrap gap-2 animate-fade-up" style={{ animationDelay: "120ms" }}>
+        <div inert={inAttesa} className="flex flex-wrap gap-2 animate-fade-up" style={{ animationDelay: "120ms" }}>
           <Button asChild className="bg-oro text-antracite hover:bg-oro/90">
             <Link href="/vendi?mode=catalog">
               <PlusCircle className="h-4 w-4" /> Aggiungi bottiglia
@@ -174,6 +176,7 @@ function Cantina({ conSessione }: { conSessione: boolean }) {
   const {
     authUser,
     authLoading,
+    authStatoEta,
     cantinaLoading,
     inVendita,
     prezzoNascosto,
@@ -240,6 +243,9 @@ function Cantina({ conSessione }: { conSessione: boolean }) {
     );
   };
 
+  // Stesse condizioni dell'AgeGate, che segue il profilo e non il caricamento della Cantina.
+  const sottoOverlay = authLoading || (authUser !== null && authStatoEta !== "completo");
+
   if (authLoading || cantinaLoading) {
     // `key`: il blocco non deve diventare il nodo della griglia che arriva dopo, o la griglia
     // risulterebbe spostata invece che nuova.
@@ -254,7 +260,7 @@ function Cantina({ conSessione }: { conSessione: boolean }) {
     // l'immagine di una pagina che non vedrà.
     return conSessione ? (
       <div className="min-h-dvh space-y-8">
-        <EroeCantina />
+        <EroeCantina inAttesa={sottoOverlay} />
         {attesa}
       </div>
     ) : (
@@ -289,7 +295,7 @@ function Cantina({ conSessione }: { conSessione: boolean }) {
   return (
     <div className="space-y-8">
       {/* Header con sfondo */}
-      <EroeCantina />
+      <EroeCantina inAttesa={sottoOverlay} />
 
       {/* Cantina: quante bottiglie e quanto spazio. Non dipende dall'analitica. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
@@ -597,13 +603,21 @@ function ContabilitaCantina({
           è la stessa contabilità vista nel tempo, non un altro riquadro. */}
       <div className="border-t border-border p-5 md:p-6">
         {/* Lo spazio del grafico è riservato solo quando il grafico ci sarà: da due punti in su. */}
-        <Suspense
+        <ConfineOpzionale
           fallback={
-            <div aria-busy="true" className={analitica.serieValore.length >= 2 ? "aspect-[16/9] w-full" : "h-16"} />
+            <p className="text-sm text-muted-foreground">
+              Grafico non disponibile. Ricarica la pagina per riprovare.
+            </p>
           }
         >
-          <ValoreNelTempo serie={analitica.serieValore} incorniciato={false} />
-        </Suspense>
+          <Suspense
+            fallback={
+              <div aria-busy="true" className={analitica.serieValore.length >= 2 ? "aspect-[16/9] w-full" : "h-16"} />
+            }
+          >
+            <ValoreNelTempo serie={analitica.serieValore} incorniciato={false} />
+          </Suspense>
+        </ConfineOpzionale>
       </div>
     </section>
   );

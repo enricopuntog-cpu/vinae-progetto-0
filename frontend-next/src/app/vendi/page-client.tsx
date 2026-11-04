@@ -207,7 +207,7 @@ function WizardVendi() {
   if (initialMode === "vendita" && !bottleUnitId) {
     if (cantinaLoading) {
       return (
-        <div className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
+        <div key="attesa" className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
           <Loader2 className="mx-auto h-6 w-6 animate-spin text-bordeaux" />
           <p className="mt-3">Carico la Cantina…</p>
         </div>
@@ -220,7 +220,7 @@ function WizardVendi() {
   // mostrare "non è tua" a chi la possiede davvero.
   if (daCantina && cantinaLoading) {
     return (
-      <div className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
+      <div key="attesa" className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
         <Loader2 className="mx-auto h-6 w-6 animate-spin text-bordeaux" />
         <p className="mt-3">Carico la bottiglia…</p>
       </div>
