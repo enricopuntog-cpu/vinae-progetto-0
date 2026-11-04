@@ -53,7 +53,9 @@ test.describe("Stabilità del layout al caricamento @smoke @cross", () => {
     expect(risposta?.headers()["cache-control"]).toBe("private, no-store");
     expect(await clsDopoIlCaricamento(page)).toBeLessThanOrEqual(0.1);
 
-    // Finita l'attesa i pulsanti tornano utilizzabili.
+    // Finita l'attesa i pulsanti tornano utilizzabili. `attendiCaricamento` non riconosce
+    // «Verifica del profilo…», e questo controllo non ritenta: si aspetta qui.
+    await expect(page.getByText("Verifica del profilo")).toHaveCount(0);
     const aggiungi = page.getByRole("link", { name: "Aggiungi bottiglia" });
     await expect(aggiungi).toBeVisible();
     expect(await aggiungi.evaluate((el) => el.closest("[inert]") === null)).toBe(true);
@@ -87,6 +89,53 @@ test.describe("Stabilità del layout al caricamento @smoke @cross", () => {
     await expect(page.getByText("Grafico non disponibile")).toBeVisible();
     await expect(page.getByRole("heading", { name: /mia cantina/ })).toBeVisible();
     expect(bloccati).toBeGreaterThan(0);
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await contesto.close();
+  });
+
+  test("i pulsanti dell'hero seguono l'overlay dell'AgeGate, non il caricamento della Cantina", async ({ browser, browserName }, info) => {
+    test.skip(browserName !== "chromium", "un solo motore basta: è una condizione dello stato");
+    const contesto = await contestoAutenticato(browser, "venditore", opzioniDelProgetto(info));
+    const page = await contesto.newPage();
+    // La lettura del profilo dell'AgeGate, l'unica che chiede `dob`, resta in sospeso: la Cantina
+    // arriva prima e l'overlay rimane. Anche la Cantina legge `profiles`, ma altre colonne.
+    let rilascia = () => {};
+    const profiloLibero = new Promise<void>((risolvi) => {
+      rilascia = risolvi;
+    });
+    await page.route("**/rest/v1/profiles*", async (route) => {
+      if (route.request().url().includes("dob")) await profiloLibero;
+      await route.fallback();
+    });
+    await page.goto("/cantina");
+    const overlay = page.getByText("Verifica del profilo");
+    await expect(overlay).toBeVisible();
+    await expect(page.getByText("Bottiglie", { exact: true }).first()).toBeAttached();
+    const aggiungi = page.locator('a[href="/vendi?mode=catalog"]').first();
+    expect(await aggiungi.evaluate((el) => el.closest("[inert]") !== null)).toBe(true);
+
+    rilascia();
+    await expect(overlay).toHaveCount(0);
+    expect(await aggiungi.evaluate((el) => el.closest("[inert]") === null)).toBe(true);
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+
+    // Il caso opposto: overlay finito e Cantina ancora in lettura, i pulsanti visibili rispondono.
+    const pagina2 = await contesto.newPage();
+    let rilascia2 = () => {};
+    const cantinaLibera = new Promise<void>((risolvi) => {
+      rilascia2 = risolvi;
+    });
+    await pagina2.route("**/rest/v1/bottle_units*", async (route) => {
+      await cantinaLibera;
+      await route.fallback();
+    });
+    await pagina2.goto("/cantina");
+    await expect(pagina2.getByText("Carico la tua cantina")).toBeVisible();
+    await expect(pagina2.getByText(/^Verifica d/)).toHaveCount(0);
+    const aggiungi2 = pagina2.locator('a[href="/vendi?mode=catalog"]').first();
+    expect(await aggiungi2.evaluate((el) => el.closest("[inert]") === null)).toBe(true);
+    rilascia2();
+    await pagina2.unrouteAll({ behavior: "ignoreErrors" });
     await contesto.close();
   });
 

@@ -27,14 +27,14 @@ Immagini scaricate: `/cantina` mobile da 155 a 106 KB, wizard desktop da 193 a 1
 grafico sono richiesti dopo il primo render e, se arrivano entro la fine della misura, vengono contati. Una corsa precedente li aveva letti ancora
 in arrivo (364 KB): non è un risparmio di byte.
 
-Tabella qui sopra: codice finale, dopo la revisione. Controllo di regressione, stesso banco (desktop e mobile), misurato prima degli ultimi ritocchi
-della revisione, che toccano solo `/cantina` e gli stati di attesa del wizard:
+Tabella qui sopra: codice finale, dopo la revisione. Controllo di regressione, stesso banco (desktop e mobile). Le prime tre righe sono rimisurate sul
+codice finale; le ultime quattro precedono i ritocchi della revisione, che non toccano quelle pagine:
 
 | Pagina | CLS prima | CLS dopo | LCP ms prima | LCP ms dopo |
 |---|---|---|---|---|
-| Ospite `/cantina` | 0,011 e 0,018 | 0,011 e 0,018 | 400 e 3.992 | 336 e 3.544 |
-| Ospite `/vendi` | 0,009 e 0,012 | 0,010 e 0,012 | 384 e 3.492 | 352 e 3.316 |
-| Selettore `/vendi?mode=sell` | 0,006 e 0,013 | 0,003 e 0,006 | 656 e 3.888 | 548 e 3.884 |
+| Ospite `/cantina` | 0,011 e 0,018 | 0,011 e 0,018 | 400 e 3.992 | 320 e 3.448 |
+| Ospite `/vendi` | 0,009 e 0,012 | 0,010 e 0,012 | 384 e 3.492 | 336 e 3.320 |
+| Selettore `/vendi?mode=sell` | 0,006 e 0,013 | 0,004 e 0,007 | 656 e 3.888 | 532 e 3.800 |
 | Home | 0,004 e 0,005 | 0,004 e 0,005 | 404 e 3.128 | 632 e 3.040 |
 | `/accedi` | 0,009 e 0,019 | 0,009 e 0,019 | 392 e 3.204 | 396 e 3.204 |
 | `/esplora` | 0,016 e 0,024 | 0,015 e 0,024 | 412 e 1.496 | 360 e 1.508 |
@@ -87,17 +87,19 @@ scenderebbe senza che l'utente veda nulla prima.
 
 | Prova | Esito |
 |---|---|
-| `e2e/prestazioni-layout.e2e.ts`, guardia di regressione, ora anche nello smoke della CI | 9 passati e 3 saltati su tre progetti (WebKit non espone `layout-shift`) |
-| Suite browser completa | Prima della revisione: 247 passati, 2 rossi per un'asserzione errata sul precaricamento, poi rimossa, 2 saltati. Non ripetuta sugli ultimi ritocchi: la copre lo smoke della CI. Pulizia `0 0 0 0 0 0 0 0 0 false false false false` |
+| `e2e/prestazioni-layout.e2e.ts`, guardia di regressione, ora anche nello smoke della CI | 11 passati e 4 saltati su tre progetti: WebKit non espone `layout-shift`, e due casi di stato girano solo su Chromium |
+| Suite browser completa sul codice finale, tre progetti | 251 passati, 4 saltati, 1 rosso e 1 non eseguito di conseguenza: WebKit, `accessori-pagamento` caso 3, `page.goto` interrotto da un'altra navigazione. Spec non toccata; ripetuta 3 volte su WebKit: 12/12. Instabile, non silenziato. Pulizia `0 0 0 0 0 0 0 0 0 false false false false` |
 | Guardia sul codice originale | la baseline è sopra il limite: `/cantina` 0,759, wizard 0,255 |
 | M1 guscio senza spazio riservato né hero | rilevata |
 | M2 wizard senza spazio riservato | rilevata: CLS 0,252 |
 | M3 hero anche per gli ospiti | rilevata |
 | M5 pulsanti dell'hero senza `inert` | rilevata: manca nel primo HTML |
 | M6 grafico senza `ConfineOpzionale` | rilevata: l'avviso non compare |
+| M7a pagina caricata senza `inert` sotto l'overlay del profilo | rilevata |
+| M7b `inert` legato al caricamento della Cantina | rilevata |
 | `preload` al posto di `eager` | mutazione equivalente: stesso HTML e stessi tempi, nessun test da scrivere |
 | Unit, typecheck, lint | 3463/3463 (soglia CI 3463), nessun errore, 12 warning `<img>` già noti |
-| Audit di sicurezza e code review indipendenti, sola lettura | Nessun bloccante; recepiti `inert`, guardia nello smoke, confine del grafico, `key`, incoerenze del documento. Restano i limiti qui sotto |
+| Audit di sicurezza e code review indipendenti, sola lettura | Due passaggi di code review. Nessun bloccante; recepiti `inert`, guardia nello smoke, confine del grafico, `key`, un caso che prova `inert` con profilo e Cantina ritardati, una frase errata sulla copertura e le incoerenze del documento. Restano i limiti qui sotto |
 
 Limiti: la Cantina di prova ha una sola bottiglia e nessuno snapshot di valore, quindi una Cantina molto piena e lo spazio riservato al grafico non
 sono misurati, e lo spazio riservato è comunque minore del contenuto finale (esclude titolo e tabella); con meno di due punti il grafico viene
