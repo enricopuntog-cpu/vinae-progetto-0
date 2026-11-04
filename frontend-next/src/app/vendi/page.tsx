@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AcquistiPartnerNonDisponibili } from "@/components/vinea/partner/AcquistiPartnerNonDisponibili";
 import { ClasseNonVerificata } from "@/components/vinea/partner/ClasseNonVerificata";
+import { cookieSessionePresente } from "@/lib/auth/sessione-cookie";
 import { classeDelChiamante } from "@/lib/partner/classe-server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import VendiPageClient from "./page-client";
@@ -53,9 +54,13 @@ export default async function Page() {
       </div>
     );
   }
+  // Con una sessione il wizard è più alto dello schermo: lo spazio si riserva dal primo HTML,
+  // così il piè di pagina non attraversa la vista quando la sessione si risolve.
   return (
-    <Suspense fallback={null}>
-      <VendiPageClient />
-    </Suspense>
+    <div className={(await cookieSessionePresente()) ? "min-h-dvh" : undefined}>
+      <Suspense fallback={null}>
+        <VendiPageClient />
+      </Suspense>
+    </div>
   );
 }

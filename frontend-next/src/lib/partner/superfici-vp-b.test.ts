@@ -168,7 +168,7 @@ describe("Cantina del Partner = catalogo commerciale", () => {
   });
 
   it("per i privati la Cantina resta quella di sempre; un errore non la apre", () => {
-    expect(cantina).toInclude('if (classe.tipo === "privato") return <CantinaPageClient />;');
+    expect(cantina).toInclude('if (classe.tipo === "privato") return <CantinaPageClient conSessione=');
     expect(cantina).toInclude('if (classe.tipo === "errore") return <ClasseNonVerificata');
   });
 
