@@ -148,6 +148,8 @@ proprietà di `postgres`:
   `moderation_dispute_queue`, `moderation_dispute_shipping_evidence`,
   `moderation_dispute_tracking`, `moderation_audit_log`.
 
+Aggiornamento del 4 novembre 2026 (GAP-024): le viste sono ora **trentacinque**, elenco imposto dalla griglia `12zv` caso 15 sullo stack costruito dai file. Oltre alle diciannove sopra: club `club_external_links_visible`, `club_management_clubs`, `club_management_events_visible`, `club_management_members`, `club_management_moderators`, `club_membership_request_queue`, `club_rule_versions_visible`, `moderation_club_proposals`, `my_club_membership_requests`, `public_club_external_links`, `visible_club_governance_events`; altre `dispute_case_timeline`, `moderation_dispute_admin_notes`, `public_incident_notice`, `listing_bottle_units` e `order_margine_riconciliazione` (queste due senza grant ai ruoli client). Senza `WHERE`: `order_margine_riconciliazione`, nessun grant client, e `wine_price_history`, osservazioni di prezzo pubbliche senza dati personali. Elenco non verificato in Production (VER-PROD-01).
+
 Regola: una nuova vista `public_*`, `my_*` o `moderation_*` con
 `security_invoker = off` deve avere un `WHERE` di filtro esplicito (stato
 pubblico, `auth.uid()` o ruolo verificato) e un elenco chiuso di colonne, e va
