@@ -64,6 +64,11 @@ type UtenteFinto = { id: string; email: string | null; identities: { provider: s
 let utenteSessione: UtenteFinto | null = null;
 let utenteServer: UtenteFinto | null = null;
 let idDopoLogin: string | null = null;
+let registrazione: {
+  user: { id: string; email_confirmed_at: string | null } | null;
+  session: object | null;
+} = { user: null, session: null };
+let ruoliFinti: { data: { role: unknown }[] | null; error: { message: string } | null } = { data: [], error: null };
 
 const clientBrowser = {
   auth: {
@@ -86,7 +91,23 @@ const clientBrowser = {
       registra("resetPasswordForEmail", email, opzioni),
     updateUser: (attributi: unknown) => registra("updateUser", attributi),
     signInWithOAuth: (parametri: unknown) => registra("signInWithOAuth", parametri),
+    signUp: async (parametri: unknown) => {
+      chiamate.push({ nome: "signUp", argomenti: [parametri] });
+      if (erroreProvider) return { data: { user: null, session: null }, error: erroreProvider };
+      return { data: registrazione, error: null };
+    },
+    verifyOtp: (parametri: unknown) => registra("verifyOtp", parametri),
+    signInWithOtp: (parametri: unknown) => registra("signInWithOtp", parametri),
+    signOut: () => registra("signOut"),
   },
+  from: (tabella: string) => ({
+    select: (colonne: string) => ({
+      eq: async (colonna: string, valore: string) => {
+        chiamate.push({ nome: "from", argomenti: [tabella, colonne, colonna, valore] });
+        return ruoliFinti;
+      },
+    }),
+  }),
 };
 
 mock.module("@/lib/supabase/client", () => ({
@@ -159,6 +180,8 @@ beforeEach(() => {
   utenteSessione = null;
   utenteServer = null;
   idDopoLogin = null;
+  registrazione = { user: null, session: null };
+  ruoliFinti = { data: [], error: null };
 });
 
 const soloNome = (nome: string) => chiamate.filter((c) => c.nome === nome);
@@ -745,5 +768,192 @@ describe("conferma con provider — rientro sul saldo", () => {
   it("la callback, scambiato il code, riporta l'utente sulla pagina del saldo", async () => {
     const risposta = await chiama("?code=valido&next=%2Faccount");
     expect(destinazioneDi(risposta).percorso).toBe("/account");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Il resto del servizio (VPM-018-UI-TEST-01). Qui e non in un file a parte: questo è
+// l'unico file che sostituisce `@/lib/supabase/client` per il servizio di autenticazione.
+// ---------------------------------------------------------------------------
+
+const ERRORE_INTERNO = { message: 'relation "auth.users" violates something at host db.interno', status: 500 };
+const nonEspone = (esito: unknown) => expect(JSON.stringify(esito)).not.toContain("db.interno");
+
+describe("registra — eseguito", () => {
+  const dati = { email: "n@vinea.test", password: "Segreta1!", dataNascita: "1990-01-02", username: "nuovo" };
+
+  it("una sola chiamata, con età e nome nei metadati e il rientro dalla callback", async () => {
+    registrazione = { user: { id: "u-1", email_confirmed_at: null }, session: null };
+    const esito = await supabaseAuthService.registra(dati);
+
+    const inviti = soloNome("signUp");
+    expect(inviti.length).toBe(1);
+    const { options, email, password } = inviti[0]?.argomenti[0] as {
+      email: string;
+      password: string;
+      options: { data: unknown; emailRedirectTo: string };
+    };
+    expect({ email, password }).toEqual({ email: dati.email, password: dati.password });
+    expect(options.data).toEqual({ username: "nuovo", dob: "1990-01-02" });
+    expect(new URL(options.emailRedirectTo).pathname).toBe("/auth/callback");
+    expect(esito).toEqual({
+      ok: true,
+      data: { userId: "u-1", sessioneAttiva: false, confermaEmailRichiesta: true },
+    });
+  });
+
+  it("con l'auto-conferma non chiede di aspettare un'email che non arriverà", async () => {
+    registrazione = { user: { id: "u-2", email_confirmed_at: "2026-11-04T00:00:00Z" }, session: null };
+    const esito = await supabaseAuthService.registra(dati);
+    expect(esito).toEqual({
+      ok: true,
+      data: { userId: "u-2", sessioneAttiva: false, confermaEmailRichiesta: false },
+    });
+  });
+
+  it("con una sessione già aperta l'utente è dentro e non deve confermare", async () => {
+    registrazione = { user: { id: "u-3", email_confirmed_at: null }, session: {} };
+    const esito = await supabaseAuthService.registra(dati);
+    expect(esito).toEqual({
+      ok: true,
+      data: { userId: "u-3", sessioneAttiva: true, confermaEmailRichiesta: false },
+    });
+  });
+
+  it("un rifiuto del provider è un codice, mai il suo testo", async () => {
+    erroreProvider = ERRORE_INTERNO;
+    const esito = await supabaseAuthService.registra(dati);
+    expect(esito.ok).toBe(false);
+    if (!esito.ok) expect(eCodiceDelVocabolario(esito.error)).toBe(true);
+    nonEspone(esito);
+  });
+
+  it("una risposta senza utente non è un successo", async () => {
+    expect(await supabaseAuthService.registra(dati)).toEqual({ ok: false, error: "generico" });
+  });
+
+  it("senza configurazione non parte alcuna chiamata", async () => {
+    clientBrowserAttivo = false;
+    expect(await supabaseAuthService.registra(dati)).toEqual({ ok: false, error: "configurazione-assente" });
+    expect(chiamate).toEqual([]);
+  });
+});
+
+describe("verificaEmail — eseguito", () => {
+  it("verifica il token come conferma di registrazione, e nient'altro", async () => {
+    expect(await supabaseAuthService.verificaEmail("hash-1")).toEqual({ ok: true, data: undefined });
+    expect(soloNome("verifyOtp")[0]?.argomenti[0]).toEqual({ token_hash: "hash-1", type: "signup" });
+  });
+
+  it("un link rifiutato è un codice, mai il testo del provider", async () => {
+    erroreProvider = ERRORE_INTERNO;
+    const esito = await supabaseAuthService.verificaEmail("hash-1");
+    expect(esito.ok).toBe(false);
+    if (!esito.ok) expect(eCodiceDelVocabolario(esito.error)).toBe(true);
+    nonEspone(esito);
+  });
+});
+
+describe("login — eseguito", () => {
+  it("restituisce l'identità della sessione e una chiamata sola", async () => {
+    idDopoLogin = "u-9";
+    expect(await supabaseAuthService.login("a@vinea.test", "Segreta1!")).toEqual({ ok: true, data: { userId: "u-9" } });
+    expect(soloNome("signInWithPassword").length).toBe(1);
+  });
+
+  it("credenziali errate producono il codice dedicato", async () => {
+    erroreProvider = { message: "Invalid login credentials", status: 400, code: "invalid_credentials" };
+    expect(await supabaseAuthService.login("a@vinea.test", "x")).toEqual({
+      ok: false,
+      error: "credenziali-non-valide",
+    });
+  });
+
+  it("un guasto interno non arriva all'utente", async () => {
+    erroreProvider = ERRORE_INTERNO;
+    const esito = await supabaseAuthService.login("a@vinea.test", "x");
+    expect(esito.ok).toBe(false);
+    if (!esito.ok) expect(eCodiceDelVocabolario(esito.error)).toBe(true);
+    nonEspone(esito);
+  });
+
+  it("senza configurazione non parte alcuna chiamata", async () => {
+    clientBrowserAttivo = false;
+    expect(await supabaseAuthService.login("a@vinea.test", "x")).toEqual({
+      ok: false,
+      error: "configurazione-assente",
+    });
+    expect(chiamate).toEqual([]);
+  });
+});
+
+describe("inviaMagicLink — eseguito", () => {
+  it("invia una sola richiesta con il rientro dalla callback", async () => {
+    expect(await supabaseAuthService.inviaMagicLink("a@vinea.test")).toEqual({ ok: true, data: undefined });
+    const invio = soloNome("signInWithOtp");
+    expect(invio.length).toBe(1);
+    const { email, options } = invio[0]?.argomenti[0] as { email: string; options: { emailRedirectTo: string } };
+    expect(email).toBe("a@vinea.test");
+    expect(new URL(options.emailRedirectTo).pathname).toBe("/auth/callback");
+  });
+
+  it("un rifiuto è un codice, mai il testo del provider", async () => {
+    erroreProvider = ERRORE_INTERNO;
+    const esito = await supabaseAuthService.inviaMagicLink("a@vinea.test");
+    expect(esito).toEqual({ ok: false, error: "magic-link-non-inviato" });
+    nonEspone(esito);
+  });
+});
+
+describe("logout e utenteCorrente — eseguiti", () => {
+  it("logout chiude la sessione una volta sola", async () => {
+    await supabaseAuthService.logout();
+    expect(soloNome("signOut").length).toBe(1);
+  });
+
+  it("logout senza configurazione non lancia e non chiama nulla", async () => {
+    clientBrowserAttivo = false;
+    await supabaseAuthService.logout();
+    expect(chiamate).toEqual([]);
+  });
+
+  it("senza sessione non c'è un utente corrente", async () => {
+    expect(await supabaseAuthService.utenteCorrente()).toBeNull();
+  });
+
+  it("con una sessione restituisce solo identificativo ed email", async () => {
+    utenteSessione = { id: "u-5", email: "c@vinea.test", identities: [] };
+    expect(await supabaseAuthService.utenteCorrente()).toEqual({ userId: "u-5", email: "c@vinea.test" });
+  });
+
+  it("un'email assente resta null, non una stringa inventata", async () => {
+    utenteSessione = { id: "u-6", email: null, identities: [] };
+    expect(await supabaseAuthService.utenteCorrente()).toEqual({ userId: "u-6", email: null });
+  });
+});
+
+describe("ruoliProfilo — eseguito", () => {
+  it("legge la sola colonna del ruolo, sulla riga dell'utente richiesto", async () => {
+    ruoliFinti = { data: [{ role: "admin" }, { role: "venditore" }], error: null };
+    expect(await supabaseAuthService.ruoliProfilo("u-7")).toEqual({ ok: true, data: ["admin", "venditore"] });
+    expect(soloNome("from")[0]?.argomenti).toEqual(["user_roles", "role", "user_id", "u-7"]);
+  });
+
+  it("un valore non testuale non diventa mai un ruolo", async () => {
+    ruoliFinti = { data: [{ role: null }, { role: 7 }, { role: "user" }], error: null };
+    expect(await supabaseAuthService.ruoliProfilo("u-7")).toEqual({ ok: true, data: ["user"] });
+  });
+
+  it("una lettura fallita è un codice fisso, senza il testo del database", async () => {
+    ruoliFinti = { data: null, error: { message: "permission denied at db.interno" } };
+    const esito = await supabaseAuthService.ruoliProfilo("u-7");
+    expect(esito).toEqual({ ok: false, error: "ruoli-non-letti" });
+    nonEspone(esito);
+  });
+
+  it("senza configurazione non legge nulla", async () => {
+    clientBrowserAttivo = false;
+    expect(await supabaseAuthService.ruoliProfilo("u-7")).toEqual({ ok: false, error: "configurazione-assente" });
+    expect(chiamate).toEqual([]);
   });
 });

@@ -28,9 +28,10 @@ export const MessagesPageClient = ({ initialConversationId }: { initialConversat
   const selected = conversations.find((row) => row.id === selectedId) ?? null;
   const selectedExists = selected !== null;
   const retryMessages = (conversationId: string) => {
-    void loadMessages(conversationId).then((result) =>
-      setMessageError(result.ok ? null : result.error),
-    );
+    void loadMessages(conversationId).then((result) => {
+      setMessageError(result.ok ? null : result.error);
+      if (result.ok) void markConversationRead(conversationId, result.data[0]?.id);
+    });
   };
 
   useEffect(() => {
