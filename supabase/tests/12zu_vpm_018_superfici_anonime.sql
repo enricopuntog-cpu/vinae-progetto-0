@@ -17,7 +17,7 @@ begin;
 
 do $$
 begin
-  if exists (select 1 from auth.users where email not like '%.test') then
+  if exists (select 1 from auth.users where email is null or email not like '%.test') then
     raise exception 'Guard 12zu: il database contiene utenti reali, griglia rifiutata.';
   end if;
 end $$;
@@ -28,8 +28,6 @@ create temp table esiti_12zu (
   passed boolean not null,
   detail text not null
 ) on commit drop;
-
-grant all on esiti_12zu to anon, authenticated;
 
 create function pg_temp.registra(
   p_id integer, p_descrizione text, p_passed boolean, p_detail text default ''
@@ -62,6 +60,11 @@ create function pg_temp.limitato(p jsonb) returns boolean language sql as $f$
   select coalesce(p ->> 'stato' = 'PGRST'
     and (p ->> 'msg')::jsonb ->> 'code' = 'rate_limit_exceeded'
     and ((p ->> 'detail')::jsonb ->> 'status')::int = 429, false);
+$f$;
+
+-- Vero solo per il rifiuto della porta: un permesso negato ha lo stesso SQLSTATE.
+create function pg_temp.non_autorizzata(p jsonb) returns boolean language sql as $f$
+  select coalesce(p ->> 'stato' = '42501' and p ->> 'msg' = 'Sessione Market Validation non autorizzata.', false);
 $f$;
 
 -- Il limitatore conta per finestre di 60 s allineate all'orologio: una prova a cavallo
@@ -141,11 +144,11 @@ begin
 
   perform pg_temp.semina('market-validation-qv2-finish', c_cap, 30);
   v := pg_temp.anon_esito(format('select public.beta_validation_qv2_finish_pre(%L, %L)', v_sessione, c_cap));
-  perform pg_temp.registra(5, 'qv2_finish_pre oltre 30/min rifiuta con 429 e non chiude',
+  perform pg_temp.registra(5, 'qv2_finish_pre oltre 30/min rifiuta con 429',
     pg_temp.limitato(v) and (select q.pre_finished_at is null from private.beta_validation_qv2 q where q.session_id = v_sessione), v::text);
 
   v := pg_temp.anon_esito(format('select public.beta_validation_qv2_finish_post(%L, %L)', v_sessione, c_cap));
-  perform pg_temp.registra(6, 'qv2_finish_post oltre 30/min rifiuta con 429 e non chiude',
+  perform pg_temp.registra(6, 'qv2_finish_post oltre 30/min rifiuta con 429',
     pg_temp.limitato(v) and (select q.post_finished_at is null from private.beta_validation_qv2 q where q.session_id = v_sessione), v::text);
 
   perform pg_temp.semina('market-validation-event', c_cap, 120);
@@ -224,26 +227,30 @@ begin
   select count(*) into v_eventi from private.beta_validation_events where session_id = v_sessione;
 
   v := pg_temp.anon_esito(format('select public.beta_validation_qv2_read(%L, %L)', v_sessione, c_altra));
-  perform pg_temp.registra(13, 'qv2_read con capability errata: 42501', v ->> 'stato' = '42501', v::text);
+  perform pg_temp.registra(13, 'qv2_read con capability errata: rifiuto della porta', pg_temp.non_autorizzata(v), v::text);
 
   v := pg_temp.anon_esito(format('select public.beta_validation_qv2_answer(%L, %L, %L, %L::jsonb)',
     v_sessione, c_altra, 'q02', '{"choice":"other","other":"intruso"}'));
-  perform pg_temp.registra(14, 'qv2_answer con capability errata: 42501 e nessuna scrittura',
-    v ->> 'stato' = '42501' and (select q.q02 is null from private.beta_validation_qv2 q where q.session_id = v_sessione), v::text);
+  perform pg_temp.registra(14, 'qv2_answer con capability errata: rifiuto della porta e nessuna scrittura',
+    pg_temp.non_autorizzata(v) and (select q.q02 is null from private.beta_validation_qv2 q where q.session_id = v_sessione), v::text);
 
   v := pg_temp.anon_esito(format('select public.beta_validation_qv2_finish_pre(%L, %L)', v_sessione, c_altra));
-  perform pg_temp.registra(15, 'qv2_finish_pre con capability errata: 42501', v ->> 'stato' = '42501', v::text);
+  perform pg_temp.registra(15, 'qv2_finish_pre con capability errata: rifiuto della porta', pg_temp.non_autorizzata(v), v::text);
 
   v := pg_temp.anon_esito(format('select public.beta_validation_qv2_finish_post(%L, %L)', v_sessione, c_altra));
-  perform pg_temp.registra(16, 'qv2_finish_post con capability errata: 42501', v ->> 'stato' = '42501', v::text);
+  perform pg_temp.registra(16, 'qv2_finish_post con capability errata: rifiuto della porta', pg_temp.non_autorizzata(v), v::text);
 
   v := pg_temp.anon_esito(format('select public.beta_validation_event_record(%L, %L, %L, %L, %L::jsonb)',
     v_sessione, v_codice, c_altra, 'cellar_viewed', '{}'));
-  perform pg_temp.registra(17, 'event_record con capability errata: rifiutato e nessun evento',
-    not (v ->> 'ok')::boolean and (select count(*) = v_eventi from private.beta_validation_events where session_id = v_sessione), v::text);
+  perform pg_temp.registra(17, 'event_record con capability errata: rifiuto della porta e nessun evento',
+    pg_temp.non_autorizzata(v) and (select count(*) = v_eventi from private.beta_validation_events where session_id = v_sessione), v::text);
 
   v := pg_temp.anon_esito(format('select * from public.beta_validation_qv2_start(%L)', 'non-una-capability'));
-  perform pg_temp.registra(18, 'capability malformata: 22023', v ->> 'stato' = '22023', v::text);
+  perform pg_temp.registra(18, 'capability malformata rifiutata con 22023 su apertura MV1, apertura QV2 e lettura',
+    v ->> 'stato' = '22023'
+      and pg_temp.anon_esito(format('select * from public.beta_validation_session_start(%L, %L)', 'V780', 'non-una-capability')) ->> 'stato' = '22023'
+      and pg_temp.anon_esito(format('select public.beta_validation_qv2_read(%L, %L)', v_sessione, 'non-una-capability')) ->> 'stato' = '22023',
+    v::text);
 end $$;
 
 -- 19: una capability di sessione MV1 non apre una sessione QV2.
@@ -253,7 +260,8 @@ begin
   perform pg_temp.lontano_dal_bordo();
   v := pg_temp.anon_esito(format('select * from public.beta_validation_session_start(%L, %L)', 'V779', c_mv1));
   v := pg_temp.anon_esito(format('select * from public.beta_validation_qv2_start(%L)', c_mv1));
-  perform pg_temp.registra(19, 'capability MV1 rifiutata sulla porta QV2', v ->> 'stato' = '42501', v::text);
+  perform pg_temp.registra(19, 'capability MV1 rifiutata sulla porta QV2',
+    v ->> 'stato' = '42501' and v ->> 'msg' like 'Capability gia associata%', v::text);
 end $$;
 
 -- 20: limitatore e dati restano fuori dalla portata dei client.
@@ -271,7 +279,8 @@ begin
   perform pg_temp.registra(20, 'limitatore e sessioni chiusi ai client', v_chiuso and v ->> 'stato' = '42501', v::text);
 end $$;
 
--- 21: il tetto globale per IP della richiesta PostgREST (POST su rpc/*: 60/min).
+-- 21: il tetto globale per IP della richiesta PostgREST. Il percorso reale ha la barra
+-- iniziale (misurato via PostgREST, docs/VPM_018_DB_GRID_01.md), quindi vale 120/min.
 do $$
 declare
   v_inizio timestamptz := to_timestamp(floor(extract(epoch from clock_timestamp()) / 60) * 60);
@@ -280,17 +289,17 @@ begin
   perform pg_temp.lontano_dal_bordo();
   v_inizio := to_timestamp(floor(extract(epoch from clock_timestamp()) / 60) * 60);
   perform set_config('request.method', 'POST', true);
-  perform set_config('request.path', 'rpc/prova_12zu', true);
+  perform set_config('request.path', '/rpc/prova_12zu', true);
   perform set_config('request.headers', '{"x-forwarded-for":"203.0.113.7, 10.0.0.1"}', true);
   insert into private.rate_limit_buckets (scope, subject, window_started_at, window_seconds, request_count, expires_at)
-  values ('postgrest:rpc/prova_12zu', 'ip:203.0.113.7', v_inizio, 60, 60, v_inizio + interval '120 seconds');
+  values ('postgrest:/rpc/prova_12zu', 'ip:203.0.113.7', v_inizio, 60, 120, v_inizio + interval '120 seconds');
   begin
     perform private.vinea_check_request();
   exception when others then
     get stacked diagnostics v_stato = returned_sqlstate;
     v_bloccato := v_stato = 'PGRST';
   end;
-  perform pg_temp.registra(21, 'tetto globale: oltre 60 POST/min dallo stesso IP rifiuta', v_bloccato, coalesce(v_stato, 'nessun errore'));
+  perform pg_temp.registra(21, 'tetto globale: oltre 120 POST/min dallo stesso IP rifiuta', v_bloccato, coalesce(v_stato, 'nessun errore'));
 end $$;
 
 -- 22-24: LIMITI NOTI (vedi l'intestazione). Stato attuale, non proprieta' desiderate.
@@ -303,18 +312,18 @@ begin
   perform pg_temp.lontano_dal_bordo();
   -- 22: la capability la sceglie il client: cambiandola il limite per capability riparte.
   select count(*) into v_prima from private.beta_validation_sessions;
-  for i in 1..13 loop
+  for i in 1..40 loop
     v := pg_temp.anon_esito(format('select * from public.beta_validation_qv2_start(%L)',
       format('30000000-0000-4000-8000-%s', lpad(i::text, 12, '0'))));
     if (v ->> 'ok')::boolean then v_ok := v_ok + 1; end if;
   end loop;
   select count(*) into v_dopo from private.beta_validation_sessions;
   perform pg_temp.registra(22, 'LIMITE NOTO: ruotando la capability il limite per capability non vincola le sessioni',
-    v_ok = 13 and v_dopo - v_prima = 13, 'ok=' || v_ok || ' nuove=' || (v_dopo - v_prima));
+    v_ok = 40 and v_dopo - v_prima = 40, 'ok=' || v_ok || ' nuove=' || (v_dopo - v_prima));
 
   -- 23: il tetto globale si fida del primo valore di x-forwarded-for.
   perform set_config('request.method', 'POST', true);
-  perform set_config('request.path', 'rpc/prova_12zu', true);
+  perform set_config('request.path', '/rpc/prova_12zu', true);
   perform set_config('request.headers', '{"x-forwarded-for":"198.51.100.9"}', true);
   begin
     perform private.vinea_check_request();
@@ -322,7 +331,7 @@ begin
     get stacked diagnostics v_stato = returned_sqlstate;
     v_bloccato := true;
   end;
-  perform pg_temp.registra(23, 'LIMITE NOTO: cambiando x-forwarded-for il tetto globale riparte',
+  perform pg_temp.registra(23, 'LIMITE NOTO: il tetto globale conta per il valore di x-forwarded-for ricevuto',
     not v_bloccato, coalesce(v_stato, 'non bloccato'));
   perform set_config('request.method', '', true);
   perform set_config('request.path', '', true);
@@ -337,6 +346,70 @@ begin
       and subject = 'capability:' || private.beta_validation_capability_hash(c_cap);
   perform pg_temp.registra(24, 'LIMITE NOTO: le risposte rifiutate non consumano il limite della porta',
     not (v ->> 'ok')::boolean and v_conteggio = 0, 'esito=' || v::text || ' contatore=' || v_conteggio);
+end $$;
+
+-- 25: un passo sotto la soglia nessuna porta rifiuta: i casi 2-8 provano il limite esatto.
+do $$
+declare
+  c_cap constant text := '20000000-0000-4000-8000-00000000000b';
+  c_mv1 constant text := '20000000-0000-4000-8000-00000000000c';
+  v_sessione uuid; v_codice text; v_limitate text[] := '{}';
+begin
+  perform pg_temp.lontano_dal_bordo();
+  v_sessione := pg_temp.qv2(c_cap);
+  select participant_code into v_codice from private.beta_validation_sessions where id = v_sessione;
+  perform pg_temp.semina('market-validation-qv2-start', c_cap, 11);
+  if pg_temp.limitato(pg_temp.anon_esito(format('select * from public.beta_validation_qv2_start(%L)', c_cap))) then v_limitate := array_append(v_limitate, 'start'); end if;
+  perform pg_temp.semina('market-validation-qv2-read', c_cap, 119);
+  if pg_temp.limitato(pg_temp.anon_esito(format('select public.beta_validation_qv2_read(%L, %L)', v_sessione, c_cap))) then v_limitate := array_append(v_limitate, 'read'); end if;
+  perform pg_temp.semina('market-validation-qv2-answer', c_cap, 119);
+  if pg_temp.limitato(pg_temp.anon_esito(format('select public.beta_validation_qv2_answer(%L, %L, %L, %L::jsonb)', v_sessione, c_cap, 'q02', '{"choice":"other","other":"testo"}'))) then v_limitate := array_append(v_limitate, 'answer'); end if;
+  perform pg_temp.semina('market-validation-qv2-finish', c_cap, 29);
+  if pg_temp.limitato(pg_temp.anon_esito(format('select public.beta_validation_qv2_finish_pre(%L, %L)', v_sessione, c_cap))) then v_limitate := array_append(v_limitate, 'finish_pre'); end if;
+  perform pg_temp.semina('market-validation-qv2-finish', c_cap, 29);
+  if pg_temp.limitato(pg_temp.anon_esito(format('select public.beta_validation_qv2_finish_post(%L, %L)', v_sessione, c_cap))) then v_limitate := array_append(v_limitate, 'finish_post'); end if;
+  perform pg_temp.semina('market-validation-event', c_cap, 119);
+  if pg_temp.limitato(pg_temp.anon_esito(format('select public.beta_validation_event_record(%L, %L, %L, %L, %L::jsonb)', v_sessione, v_codice, c_cap, 'cellar_viewed', '{}'))) then v_limitate := array_append(v_limitate, 'event'); end if;
+  perform pg_temp.semina('market-validation-session-start', c_mv1, 11);
+  if pg_temp.limitato(pg_temp.anon_esito(format('select * from public.beta_validation_session_start(%L, %L)', 'V781', c_mv1))) then v_limitate := array_append(v_limitate, 'session_start'); end if;
+  perform pg_temp.registra(25, 'a soglia meno uno nessuna delle 7 porte rifiuta per limite', v_limitate = '{}', v_limitate::text);
+end $$;
+
+-- 26: il tetto globale e' davvero montato sulle richieste PostgREST.
+do $$
+declare v_montato boolean;
+begin
+  select exists (
+    select 1 from pg_roles r, unnest(r.rolconfig) c
+    where r.rolname = 'authenticator' and c = 'pgrst.db_pre_request=private.vinea_check_request'
+  ) into v_montato;
+  perform pg_temp.registra(26, 'il controllo delle richieste e montato su authenticator', v_montato, coalesce(v_montato::text, 'null'));
+end $$;
+
+-- 27: LIMITE NOTO R-RL-01. Il ramo da 60/min confronta 'rpc/%' ma il percorso reale inizia
+-- con la barra: a 60 richieste una RPC non viene ancora rifiutata.
+do $$
+declare
+  v_inizio timestamptz; v_bloccato boolean := false; v_stato text;
+begin
+  perform pg_temp.lontano_dal_bordo();
+  v_inizio := to_timestamp(floor(extract(epoch from clock_timestamp()) / 60) * 60);
+  perform set_config('request.method', 'POST', true);
+  perform set_config('request.path', '/rpc/prova_12zu_b', true);
+  perform set_config('request.headers', '{"x-forwarded-for":"203.0.113.8"}', true);
+  insert into private.rate_limit_buckets (scope, subject, window_started_at, window_seconds, request_count, expires_at)
+  values ('postgrest:/rpc/prova_12zu_b', 'ip:203.0.113.8', v_inizio, 60, 60, v_inizio + interval '120 seconds');
+  begin
+    perform private.vinea_check_request();
+  exception when others then
+    get stacked diagnostics v_stato = returned_sqlstate;
+    v_bloccato := true;
+  end;
+  perform set_config('request.method', '', true);
+  perform set_config('request.path', '', true);
+  perform set_config('request.headers', '', true);
+  perform pg_temp.registra(27, 'LIMITE NOTO: sul percorso reale il tetto delle RPC e 120/min, non 60',
+    not v_bloccato, coalesce(v_stato, 'non bloccato'));
 end $$;
 
 select id, descrizione, passed, detail from esiti_12zu order by id;

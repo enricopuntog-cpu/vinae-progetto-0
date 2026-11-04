@@ -112,7 +112,7 @@ Ordine: **FIX-E2E-01 → VER-PROD-01 (con autorizzazione) → E2E-CRIT-01 → ER
 
 > Aggiornamento del 4 novembre 2026 (VPM-018-SEC-CI-01, PR dedicata): SEC-CI-01 (GAP-007) è chiuso nel codice con Gitleaks, CodeQL e Dependabot; secret scanning e push protection nativi risultano attivi. I nuovi check non sono obbligatori nel ruleset: decisione del titolare. Prove e limiti in `docs/VPM_018_SEC_CI_01.md`.
 
-> Aggiornamento del 4 novembre 2026 (VPM-018-DB-GRID-01, PR dedicata): DB-GRID-01 (GAP-009) è chiuso sul piano della prova con la griglia `12zu`. Nuovo rischio verificato e non corretto: R-MV-01 (P3), nessun tetto complessivo alle sessioni anonime del Beta Test, in attesa di decisione. Dettagli in `docs/VPM_018_DB_GRID_01.md`.
+> Aggiornamento del 4 novembre 2026 (VPM-018-DB-GRID-01, PR dedicata): DB-GRID-01 (GAP-009) è chiuso sul piano della prova con la griglia `12zu`. Nuovi rischi verificati e non corretti: R-MV-01 (P3 provvisorio), nessun tetto complessivo alle sessioni anonime del Beta Test, in attesa di decisione; R-RL-01 (P3), il tetto di 60 RPC al minuto non scatta mai. La parte di GAP-024 su `x-forwarded-for` è ora misurata sul gateway locale. Dettagli in `docs/VPM_018_DB_GRID_01.md`.
 
 ### 0.6 Skill e subagenti (VPM-018-RECOVERY e VPM-018-RECOVERY-CLOSE)
 
