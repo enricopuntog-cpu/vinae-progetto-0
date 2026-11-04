@@ -1,7 +1,10 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { AnaliticaPortafoglio, PuntoValorePortafoglio } from "@/lib/cantina/portfolio";
 import {
   NON_DISPONIBILE,
+  performanceConfrontabile,
   puntiGrafico,
   righeSerieValore,
   statoSerieValore,
@@ -151,5 +154,129 @@ describe("presentazione — la serie del valore", () => {
     const punti = puntiGrafico([punto("2026-01-01T00:00:00.000Z", 5000, 1, 0)]);
     expect(punti[0]?.valore).toBe(50);
     expect(punti[0]?.t).toBe(Date.parse("2026-01-01T00:00:00.000Z"));
+  });
+});
+
+describe("presentazione — UX-B2: nessuna variazione su un valore che non c'è", () => {
+  // Il caso di `venditore-cantina`: tre posizioni correnti senza riferimento,
+  // un costo noto di 37 €, nessun incasso. Il calcolo dà −37 € / −100%, ma il
+  // valore corrente è sconosciuto, non zero.
+  const senzaValore = analitica({
+    posizioniCorrenti: 3,
+    posizioniConRiferimento: 0,
+    coperturaValore: "non_disponibile",
+    valoreRiferimentoCents: 0,
+    capitaleNotoCents: 3700,
+    posizioniConCosto: 1,
+    posizioniTotali: 3,
+    performanceCents: -3700,
+    performancePercentuale: -100,
+    coperturaPerformance: "parziale",
+  });
+
+  it("con valore non disponibile non mostra né importo né percentuale", () => {
+    const voce = vocePerformance(senzaValore);
+    expect(voce.valore).toBe(NON_DISPONIBILE);
+    expect(voce.nota).not.toContain("%");
+    expect(`${voce.valore} ${voce.nota}`).not.toMatch(/37|100/);
+    expect(performanceConfrontabile(senzaValore)).toBe(false);
+  });
+
+  it("valore zero NOTO (tutto ceduto) resta un conto valido, anche negativo", () => {
+    const ceduto = analitica({
+      posizioniCorrenti: 0,
+      posizioniConRiferimento: 0,
+      capitaleNotoCents: 4000,
+      posizioniConCosto: 1,
+      posizioniTotali: 1,
+      incassiTrasferitiCents: 1000,
+      performanceCents: -3000,
+      performancePercentuale: -75,
+      coperturaPerformance: "completa",
+    });
+    const voce = vocePerformance(ceduto);
+    expect(voce.valore).toContain("30");
+    expect(voce.nota).toContain("-75,0%");
+    expect(performanceConfrontabile(ceduto)).toBe(true);
+  });
+
+  it("un valore zero noto (riferimento a 0 €) con percentuale resta mostrato", () => {
+    const zero = analitica({
+      posizioniCorrenti: 1,
+      posizioniConRiferimento: 1,
+      coperturaValore: "completa",
+      valoreRiferimentoCents: 0,
+      capitaleNotoCents: 1000,
+      posizioniConCosto: 1,
+      posizioniTotali: 1,
+      performanceCents: -1000,
+      performancePercentuale: -100,
+      coperturaPerformance: "completa",
+    });
+    expect(vocePerformance(zero).nota).toContain("-100,0%");
+  });
+
+  it("positivo e negativo con dati confrontabili mostrano segno e percentuale", () => {
+    const base = {
+      posizioniCorrenti: 2,
+      posizioniConRiferimento: 2,
+      coperturaValore: "completa" as const,
+      capitaleNotoCents: 4000,
+      posizioniConCosto: 2,
+      posizioniTotali: 2,
+      coperturaPerformance: "completa" as const,
+    };
+    expect(
+      vocePerformance(analitica({ ...base, performanceCents: 1000, performancePercentuale: 25 })).nota,
+    ).toContain("+25,0%");
+    expect(
+      vocePerformance(analitica({ ...base, performanceCents: -1000, performancePercentuale: -25 })).nota,
+    ).toContain("-25,0%");
+  });
+
+  it("senza costi noti (null) non è confrontabile; percentuale non finita taciuta", () => {
+    expect(performanceConfrontabile(analitica({ performanceCents: null }))).toBe(false);
+    const nan = analitica({
+      posizioniCorrenti: 1,
+      posizioniConRiferimento: 1,
+      performanceCents: 500,
+      performancePercentuale: Number.NaN,
+      coperturaPerformance: "completa",
+    });
+    expect(vocePerformance(nan).nota).not.toContain("NaN");
+    expect(vocePerformance(nan).nota).not.toContain("%");
+  });
+
+  it("la pagina nasconde la tendenza quando la performance non è confrontabile", () => {
+    const pagina = readFileSync(join(import.meta.dir, "../../app/cantina/page-client.tsx"), "utf8");
+    expect(pagina).toInclude("!performanceConfrontabile(analitica)");
+  });
+});
+
+describe("presentazione — UX-B2: casi limite aggiunti dalla revisione", () => {
+  it("una performance non finita non è confrontabile", () => {
+    expect(
+      performanceConfrontabile(
+        analitica({ posizioniCorrenti: 1, posizioniConRiferimento: 1, performanceCents: Number.NaN }),
+      ),
+    ).toBe(false);
+  });
+
+  it("con riferimento solo parziale la performance resta mostrata e dichiara i dati parziali", () => {
+    const voce = vocePerformance(
+      analitica({
+        posizioniCorrenti: 4,
+        posizioniConRiferimento: 1,
+        coperturaValore: "parziale",
+        capitaleNotoCents: 4000,
+        posizioniConCosto: 4,
+        posizioniTotali: 4,
+        performanceCents: -3000,
+        performancePercentuale: -75,
+        coperturaPerformance: "parziale",
+      }),
+    );
+    expect(voce.nota).toContain("-75,0%");
+    expect(voce.nota).toContain("parziali");
   });
 });

@@ -70,16 +70,34 @@ export function voceIncassiTrasferiti(a: AnaliticaPortafoglio): VoceAnalitica {
 }
 
 /**
+ * La performance confronta il valore corrente con ciò che è stato speso: se ci
+ * sono posizioni correnti ma nessuna ha un riferimento, il valore corrente non
+ * è zero, è sconosciuto, e il conto «0 + incassi − capitale» racconterebbe una
+ * perdita (fino al −100%) mai avvenuta (UX-B2). Il calcolo in `portfolio.ts`
+ * non cambia: qui si decide solo se il risultato è presentabile. Senza
+ * posizioni correnti il valore è uno zero noto (tutto ceduto) e il conto
+ * realizzato resta valido.
+ */
+export function performanceConfrontabile(a: AnaliticaPortafoglio): boolean {
+  if (a.performanceCents === null || !Number.isFinite(a.performanceCents)) return false;
+  return !(a.posizioniCorrenti > 0 && a.posizioniConRiferimento === 0);
+}
+
+/**
  * Performance: valore corrente più incassi meno capitale noto. Senza un solo
  * esborso noto non è un pareggio, è un conto che non si può fare; la
- * percentuale in più richiede un capitale maggiore di zero.
+ * percentuale in più richiede un capitale maggiore di zero e un valore
+ * confrontabile.
  */
 export function vocePerformance(a: AnaliticaPortafoglio): VoceAnalitica {
   if (a.performanceCents === null) {
     return { valore: NON_DISPONIBILE, nota: "Serve almeno un costo di acquisto" };
   }
+  if (!performanceConfrontabile(a)) {
+    return { valore: NON_DISPONIBILE, nota: "Serve almeno un riferimento di valore" };
+  }
   const percentuale =
-    a.performancePercentuale === null
+    a.performancePercentuale === null || !Number.isFinite(a.performancePercentuale)
       ? null
       : `${a.performancePercentuale >= 0 ? "+" : ""}${a.performancePercentuale
           .toFixed(1)

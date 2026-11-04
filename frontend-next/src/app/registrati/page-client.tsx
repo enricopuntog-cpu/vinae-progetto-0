@@ -233,7 +233,7 @@ export default function RegistratiPageClient() {
                 autoComplete="email"
               />
             </div>
-            <div>
+            <div className="sm:col-span-2">
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
@@ -246,6 +246,9 @@ export default function RegistratiPageClient() {
                 {...attributiPasswordNuova("requisiti-password-registrazione")}
                 data-testid="password-registrazione"
               />
+              {/* Subito sotto il campo che descrivono (UX-B1): l'`id` è lo stesso
+                  dell'`aria-describedby` di `attributiPasswordNuova`. */}
+              <RequisitiPassword password={password} id="requisiti-password-registrazione" />
             </div>
             <div>
               <Label htmlFor="dob">Data di nascita</Label>
@@ -258,8 +261,6 @@ export default function RegistratiPageClient() {
               {dobError && <p className="mt-1 text-xs text-bordeaux">{dobError}</p>}
             </div>
           </div>
-          <RequisitiPassword password={password} id="requisiti-password-registrazione" />
-
           {/*
             Una sola casella per entrambe le strade. Il consenso è la condizione
             per creare un account su Vinea, non una formalità del form email:
