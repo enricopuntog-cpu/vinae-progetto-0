@@ -250,7 +250,7 @@ export default function RegistratiPageClient() {
                   dell'`aria-describedby` di `attributiPasswordNuova`. */}
               <RequisitiPassword password={password} id="requisiti-password-registrazione" />
             </div>
-            <div>
+            <div className="sm:col-span-2">
               <Label htmlFor="dob">Data di nascita</Label>
               <Input
                 id="dob"

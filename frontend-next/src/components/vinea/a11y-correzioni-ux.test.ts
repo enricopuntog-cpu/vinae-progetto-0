@@ -49,10 +49,11 @@ describe("foto del wizard", () => {
 describe("/messaggi", () => {
   it("ogni stato senza elenco ha il titolo h1 «Messaggi»", () => {
     const f = src("components/vinea/messaging/MessagesPageClient.tsx");
-    expect(f).toContain('<h1 className="sr-only">Messaggi</h1>');
+    // Visibile dal UX-B6: la prova di ciò che si vede è in `e2e/ux-fix-03.e2e.ts`.
+    expect(f).not.toContain("sr-only");
     for (const stato of ["OfflineState", "LoadingBlock", "ErrorState", "EmptyState"]) {
       const i = f.indexOf(`<${stato}`);
-      expect(f.slice(Math.max(0, i - 80), i), stato).toContain("{titoloNascosto}");
+      expect(f.slice(Math.max(0, i - 80), i), stato).toContain("{intestazione}");
     }
   });
 });

@@ -932,11 +932,13 @@ function WizardVendi() {
         )}
       </div>
 
-      <div className="flex flex-wrap justify-between gap-2">
+      {/* A 375 px: «Indietro» e «Salva bozza» affiancati, l'azione principale su una riga
+          propria. Senza bozza le due azioni restano affiancate. Da sm in su, una riga sola. */}
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-between">
         <Button variant="outline" onClick={prev} disabled={step === primoPasso || inviando}>
           <ArrowLeft className="h-4 w-4" /> Indietro
         </Button>
-        <div className="flex flex-wrap gap-2">
+        <div className="contents sm:flex sm:gap-2">
           {isVendita && (
             <Button variant="ghost" onClick={salvaBozza} disabled={inviando}>
               Salva bozza
@@ -944,7 +946,7 @@ function WizardVendi() {
           )}
           {step < steps.length - 1 ? (
             <Button
-              className="bg-bordeaux hover:bg-bordeaux/90"
+              className={`${isVendita ? "col-span-2 " : ""}bg-bordeaux hover:bg-bordeaux/90`}
               onClick={next}
               disabled={suIdentificazione && !regioneValida}
             >
@@ -952,7 +954,7 @@ function WizardVendi() {
             </Button>
           ) : (
             <Button
-              className="bg-bordeaux hover:bg-bordeaux/90"
+              className="col-span-2 bg-bordeaux hover:bg-bordeaux/90"
               onClick={pubblica}
               disabled={inviando}
             >

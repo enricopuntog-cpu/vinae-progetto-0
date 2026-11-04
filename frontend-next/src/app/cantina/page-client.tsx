@@ -543,7 +543,7 @@ function ContabilitaCantina({
               <TrendingDown className="h-4 w-4" aria-hidden />
             )}
             <span className="font-semibold">{performance.valore}</span>
-            <span className="text-xs text-muted-foreground">{performance.nota}</span>
+            <span className="text-xs text-muted-foreground">{performance.notaBreve ?? performance.nota}</span>
           </p>
         )}
       </div>

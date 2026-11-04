@@ -51,52 +51,54 @@ export const MessagesPageClient = ({ initialConversationId }: { initialConversat
     };
   }, [loadMessages, markConversationRead, selectedExists, selectedId]);
 
-  // Stati senza elenco: la pagina ha comunque un titolo, per chi naviga per intestazioni.
-  const titoloNascosto = <h1 className="sr-only">Messaggi</h1>;
+  // Lo stesso titolo in ogni stato: si vede sempre, e la pagina non salta quando l'elenco arriva.
+  const intestazione = (
+    <header>
+      <h1 className="font-serif text-3xl md:text-4xl">Messaggi</h1>
+      <p className="text-sm text-muted-foreground">
+        Conversazioni private collegate ai tuoi annunci e ordini.
+      </p>
+    </header>
+  );
   if (!online && conversations.length === 0) {
     return (
-      <>
-        {titoloNascosto}
+      <div className="space-y-4">
+        {intestazione}
         <OfflineState onRetry={() => void reload()} />
-      </>
+      </div>
     );
   }
   if (loading && conversations.length === 0) {
     return (
-      <>
-        {titoloNascosto}
+      <div className="space-y-4">
+        {intestazione}
         <LoadingBlock label="Caricamento conversazioni" />
-      </>
+      </div>
     );
   }
   if (error && conversations.length === 0) {
     return (
-      <>
-        {titoloNascosto}
+      <div className="space-y-4">
+        {intestazione}
         <ErrorState message={error} onRetry={() => void reload()} />
-      </>
+      </div>
     );
   }
   if (conversations.length === 0) {
     return (
-      <>
-        {titoloNascosto}
+      <div className="space-y-4">
+        {intestazione}
         <EmptyState
           title="Nessuna conversazione"
           message="Apri un annuncio attivo e scrivi al venditore per iniziare."
         />
-      </>
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <header>
-        <h1 className="font-serif text-3xl md:text-4xl">Messaggi</h1>
-        <p className="text-sm text-muted-foreground">
-          Conversazioni private collegate ai tuoi annunci e ordini.
-        </p>
-      </header>
+      {intestazione}
       <RealtimeStatusBanner state={realtimeState} />
       <div className="grid gap-4 md:grid-cols-[300px_1fr]">
         <ConversationList

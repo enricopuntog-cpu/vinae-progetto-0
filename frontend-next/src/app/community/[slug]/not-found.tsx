@@ -1,13 +1,11 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { NotFoundState } from "@/components/vinea/States";
 
 export default function NotFound() {
   return (
-    <div className="rounded-2xl border border-border bg-card p-10 text-center">
-      <h1 className="font-serif text-2xl">Club non trovato</h1>
-      <Button asChild className="mt-4 bg-bordeaux hover:bg-bordeaux/90">
-        <Link href="/">Torna alla home</Link>
-      </Button>
-    </div>
+    <NotFoundState
+      title="Club non trovato"
+      message="Il Club che cercavi non esiste o non è più visibile."
+      ritorno={{ href: "/community", etichetta: "Torna ai Club" }}
+    />
   );
 }

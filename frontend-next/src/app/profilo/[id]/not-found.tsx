@@ -1,15 +1,11 @@
-import Link from "next/link";
+import { NotFoundState } from "@/components/vinea/States";
 
 export default function NotFound() {
   return (
-    <div className="grid place-items-center py-24 text-center">
-      <h1 className="font-serif text-3xl">Profilo non disponibile</h1>
-      <p className="mt-2 max-w-md text-sm text-muted-foreground">
-        Il profilo richiesto non è disponibile.
-      </p>
-      <Link href="/esplora" className="mt-4 text-bordeaux underline">
-        Esplora gli annunci
-      </Link>
-    </div>
+    <NotFoundState
+      title="Profilo non disponibile"
+      message="Il profilo richiesto non è disponibile."
+      ritorno={{ href: "/esplora", etichetta: "Esplora gli annunci" }}
+    />
   );
 }

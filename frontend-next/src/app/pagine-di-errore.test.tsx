@@ -111,7 +111,7 @@ describe("global-error.tsx", () => {
   });
 });
 
-describe("not-found annidati: un titolo di pagina vero", () => {
+describe("not-found annidati: stessa struttura del 404 di root (UX-B5)", () => {
   for (const p of [
     "annuncio/[id]/not-found.tsx",
     "checkout/[id]/not-found.tsx",
@@ -119,7 +119,9 @@ describe("not-found annidati: un titolo di pagina vero", () => {
     "profilo/[id]/not-found.tsx",
   ]) {
     it(p, () => {
-      expect(sorgente(p).match(/<h1\b/g)).toHaveLength(1);
+      expect(sorgente(p)).toInclude("<NotFoundState");
+      // Il titolo h1 è nel componente: un secondo h1 qui sarebbe un doppione.
+      expect(sorgente(p)).not.toMatch(/<h1\b/);
     });
   }
 });
