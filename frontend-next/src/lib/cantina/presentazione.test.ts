@@ -276,7 +276,10 @@ describe("presentazione — UX-B2: casi limite aggiunti dalla revisione", () => 
         coperturaPerformance: "parziale",
       }),
     );
-    expect(voce.nota).toContain("-75,0%");
-    expect(voce.nota).toContain("parziali");
+    expect(voce.nota).toBe(
+      "-75,0% · su dati parziali: mancano costi, riferimenti o incassi di alcune bottiglie",
+    );
+    // La pillola in testa alla card ha spazio per una riga: la spiegazione sta nella tabella.
+    expect(voce.notaBreve).toBe("-75,0% · su dati parziali");
   });
 });

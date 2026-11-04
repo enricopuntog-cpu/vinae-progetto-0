@@ -232,9 +232,12 @@ export function PermissionDeniedState({
 export function NotFoundState({
   title = "Pagina non trovata",
   message = "La pagina che cercavi non esiste o è stata spostata.",
+  ritorno,
 }: {
   title?: string;
   message?: ReactNode;
+  /** Destinazione naturale di questa pagina: diventa l'azione principale, la home la seconda. */
+  ritorno?: { href: string; etichetta: string };
 }) {
   return (
     <div className="mx-auto flex min-h-[50vh] max-w-lg flex-col items-center justify-center px-4 text-center">
@@ -243,12 +246,16 @@ export function NotFoundState({
       <p className="mt-2 text-sm text-muted-foreground">{message}</p>
       <div className="mt-4 flex flex-wrap justify-center gap-2">
         <Button asChild className="bg-bordeaux hover:bg-bordeaux/90">
-          <Link href="/">Torna alla home</Link>
+          {ritorno ? <Link href={ritorno.href}>{ritorno.etichetta}</Link> : <Link href="/">Torna alla home</Link>}
         </Button>
         <Button asChild variant="outline">
-          <Link href="/esplora">
-            <Compass className="h-4 w-4" /> Esplora la ricerca
-          </Link>
+          {ritorno ? (
+            <Link href="/">Torna alla home</Link>
+          ) : (
+            <Link href="/esplora">
+              <Compass className="h-4 w-4" /> Esplora la ricerca
+            </Link>
+          )}
         </Button>
       </div>
     </div>

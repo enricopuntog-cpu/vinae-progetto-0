@@ -1,12 +1,11 @@
-import Link from "next/link";
+import { NotFoundState } from "@/components/vinea/States";
 
 export default function NotFound() {
   return (
-    <div className="grid place-items-center py-24 text-center">
-      <h1 className="font-serif text-3xl">Annuncio non trovato</h1>
-      <Link href="/esplora" className="mt-4 text-bordeaux underline">
-        Torna alla ricerca
-      </Link>
-    </div>
+    <NotFoundState
+      title="Annuncio non trovato"
+      message="L'annuncio potrebbe essere stato venduto o rimosso dal venditore."
+      ritorno={{ href: "/esplora", etichetta: "Torna alla ricerca" }}
+    />
   );
 }

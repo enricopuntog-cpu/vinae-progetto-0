@@ -115,6 +115,8 @@ Ordine: **FIX-E2E-01 → VER-PROD-01 (con autorizzazione) → E2E-CRIT-01 → ER
 > Aggiornamento del 4 novembre 2026 (VPM-018-UI-TEST-01, PR dedicata): UI-TEST-01 (GAP-011) è chiuso per messaggistica, segnalazioni, checkout con pagamenti spenti e `auth-service`; restano senza test di componente `/notifiche`, `Layout.tsx`, `SommelierChat` e i page-client di Home, Esplora, Annuncio e Cantina. Dettagli in `docs/VPM_018_UI_TEST_01.md`.
 > Aggiornamento del 4 novembre 2026 (VPM-018-DB-GRID-01, PR dedicata): DB-GRID-01 (GAP-009) è chiuso sul piano della prova con la griglia `12zu`. Nuovi rischi verificati e non corretti: R-MV-01 (P3 provvisorio), nessun tetto complessivo alle sessioni anonime del Beta Test, in attesa di decisione; R-RL-01 (P3), il tetto di 60 RPC al minuto non scatta mai. La parte di GAP-024 su `x-forwarded-for` è ora misurata sul gateway locale. Dettagli in `docs/VPM_018_DB_GRID_01.md`.
 
+> Aggiornamento del 4 novembre 2026 (VPM-018-UX-FIX-03, PR dedicata): chiusi UX-B4, UX-B5, UX-B6, UX-B7 e i tre debiti di UX-FIX-02; TEST-B3 senza difetto; UX-B3 misurato e in attesa di decisione del titolare. Dettagli in `docs/VPM_018_UX_FIX_03.md`.
+
 ### 0.6 Skill e subagenti (VPM-018-RECOVERY e VPM-018-RECOVERY-CLOSE)
 
 Eseguiti realmente (invocati con gli strumenti):

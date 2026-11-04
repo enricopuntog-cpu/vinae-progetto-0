@@ -29,6 +29,8 @@ export const euro = (cents: number): string => formatEUR(cents / 100);
 export type VoceAnalitica = {
   valore: string;
   nota: string;
+  /** Versione di una riga, per le superfici strette. Assente: vale `nota`. */
+  notaBreve?: string;
 };
 
 const noteCopertura = (
@@ -102,11 +104,15 @@ export function vocePerformance(a: AnaliticaPortafoglio): VoceAnalitica {
       : `${a.performancePercentuale >= 0 ? "+" : ""}${a.performancePercentuale
           .toFixed(1)
           .replace(".", ",")}%`;
-  const copertura =
-    a.coperturaPerformance === "completa" ? "su dati completi" : "su dati parziali";
+  const copertura = a.coperturaPerformance === "completa" ? "su dati completi" : "su dati parziali";
+  const notaBreve = percentuale === null ? `Calcolata ${copertura}` : `${percentuale} · ${copertura}`;
   return {
     valore: euro(a.performanceCents),
-    nota: percentuale === null ? `Calcolata ${copertura}` : `${percentuale} · ${copertura}`,
+    notaBreve,
+    nota:
+      a.coperturaPerformance === "completa"
+        ? notaBreve
+        : `${notaBreve}: mancano costi, riferimenti o incassi di alcune bottiglie`,
   };
 }
 

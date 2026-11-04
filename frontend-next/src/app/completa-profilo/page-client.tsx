@@ -313,7 +313,7 @@ export default function CompletaProfiloPageClient() {
               Puoi continuare ad accedere con Google oppure creare una password Vinea per entrare
               anche con la tua email.
             </p>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-4">
               <div>
                 <Label htmlFor="password-vinea">Password Vinea (facoltativa)</Label>
                 <Input
@@ -325,10 +325,20 @@ export default function CompletaProfiloPageClient() {
                     setErroreSicurezza(null);
                   }}
                   {...attributiPasswordNuova("requisiti-password-vinea")}
+                  // Con la password già impostata i requisiti non ci sono: nessun riferimento a vuoto.
+                  aria-describedby={passwordGiaImpostata ? undefined : "requisiti-password-vinea"}
                   aria-invalid={passwordIncompleta}
                   disabled={passwordGiaImpostata}
                   data-testid="password-vinea"
                 />
+                {/* Subito sotto il campo che descrivono, come in /registrati (UX-B1). */}
+                {!passwordGiaImpostata && (
+                  <RequisitiPassword
+                    password={password}
+                    id="requisiti-password-vinea"
+                    titolo="Se scegli una password, deve contenere:"
+                  />
+                )}
               </div>
               <div>
                 <Label htmlFor="password-vinea-conferma">Conferma password</Label>
@@ -348,13 +358,6 @@ export default function CompletaProfiloPageClient() {
                 />
               </div>
             </div>
-            {!passwordGiaImpostata && (
-              <RequisitiPassword
-                password={password}
-                id="requisiti-password-vinea"
-                titolo="Se scegli una password, deve contenere:"
-              />
-            )}
             {problemaPassword && (
               <p
                 aria-live="polite"
