@@ -110,6 +110,8 @@ Ordine: **FIX-E2E-01 → VER-PROD-01 (con autorizzazione) → E2E-CRIT-01 → ER
 
 > Aggiornamento del 3 novembre 2026 (VPM-018-UX-A11Y-01, PR dedicata): ERR-PAGE-01 (GAP-005) e R-A11Y-01 sono chiusi nel codice; esiti, prove e backlog in `docs/VPM_018_UX_A11Y_01.md`.
 
+> Aggiornamento del 4 novembre 2026 (VPM-018-SEC-CI-01, PR dedicata): SEC-CI-01 (GAP-007) è chiuso nel codice con Gitleaks, CodeQL e Dependabot; secret scanning e push protection nativi risultano attivi. I nuovi check non sono obbligatori nel ruleset: decisione del titolare. Prove e limiti in `docs/VPM_018_SEC_CI_01.md`.
+
 ### 0.6 Skill e subagenti (VPM-018-RECOVERY e VPM-018-RECOVERY-CLOSE)
 
 Eseguiti realmente (invocati con gli strumenti):

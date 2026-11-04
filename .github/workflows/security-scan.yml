@@ -1,0 +1,134 @@
+name: Security scan
+
+# Scansione dei segreti e analisi statica del codice (VPM-018-SEC-CI-01).
+#
+# Non sono check richiesti dal ruleset `main-protection`: la promozione a check
+# obbligatorio e' una decisione del titolare. Nessun secret: i job leggono soltanto
+# il repository e, per CodeQL, caricano i risultati nella scheda Security.
+#
+# Si affianca a secret scanning e push protection nativi di GitHub, gia' attivi, e
+# non li sostituisce: Gitleaks copre anche i formati generici e fallisce sulla PR.
+#
+# Gitleaks si scarica come binario a versione e impronta fissate invece che come
+# Action di terzi: l'esecuzione di codice esterno si riduce a un file verificato.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    # Ogni lunedi': l'intera storia con Gitleaks e le query CodeQL aggiornate.
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Solo le PR annullano la corsa precedente: su `main` una corsa annullata lascerebbe
+# il suo intervallo di commit non esaminato fino alla scansione settimanale.
+concurrency:
+  group: security-scan-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  gitleaks:
+    name: Gitleaks - secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Serve la storia: la scansione e' per commit, non sull'albero finale.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Gitleaks (pinned and verified)
+        run: |
+          archivio="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$archivio" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archivio}"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$archivio" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archivio" -C "$RUNNER_TEMP" gitleaks
+          echo "GITLEAKS_BIN=$RUNNER_TEMP/gitleaks" >> "$GITHUB_ENV"
+
+      # Una configurazione sbagliata darebbe un verde silenzioso: prima si prova che
+      # lo scanner trova segreti sintetici generati a runtime e rispetta le eccezioni.
+      - name: Self-test on synthetic secrets
+        run: bash .github/scripts/secret-scan-selftest.sh
+
+      - name: Scan
+        env:
+          EVENTO: ${{ github.event_name }}
+          BASE_PR: ${{ github.event.pull_request.base.sha }}
+          HEAD_PR: ${{ github.event.pull_request.head.sha }}
+          PRIMA: ${{ github.event.before }}
+          DOPO: ${{ github.event.after }}
+        run: |
+          nullo=0000000000000000000000000000000000000000
+          config=.gitleaks.toml
+          # Una PR non deve poter indebolire la regola che la esamina: vale la
+          # configurazione della base. Un'eccezione nuova entra con una PR propria.
+          if [ "$EVENTO" = pull_request ] && git cat-file -e "$BASE_PR:.gitleaks.toml" 2>/dev/null; then
+            config="$RUNNER_TEMP/gitleaks-base.toml"
+            git show "$BASE_PR:.gitleaks.toml" > "$config"
+          fi
+          # Niente eccezioni nel testo della PR: `gitleaks:allow` e `.gitleaksignore` ignorati.
+          vuota="$RUNNER_TEMP/gitleaks-vuota"
+          mkdir -p "$vuota"
+          opzioni=(--config "$config" --redact --no-banner --ignore-gitleaks-allow --gitleaks-ignore-path "$vuota")
+          case "$EVENTO" in
+            pull_request) intervallo="$BASE_PR..$HEAD_PR" ;;
+            push)
+              if [ -z "$PRIMA" ] || [ "$PRIMA" = "$nullo" ]; then intervallo=""; else intervallo="$PRIMA..$DOPO"; fi
+              ;;
+            *) intervallo="" ;;
+          esac
+          if [ -n "$intervallo" ]; then
+            echo "Commit esaminati: $intervallo"
+            "$GITLEAKS_BIN" git . "${opzioni[@]}" --log-opts="$intervallo"
+          else
+            echo "Commit esaminati: intera storia"
+            "$GITLEAKS_BIN" git . "${opzioni[@]}"
+          fi
+
+  codeql:
+    name: CodeQL - ${{ matrix.language }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - actions
+          - javascript-typescript
+          - python
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          config: |
+            paths-ignore:
+              - docs
+              - CONTESTO_IA
+              - "**/node_modules"
+              - frontend-next/e2e/artifacts
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4
+        with:
+          category: /language:${{ matrix.language }}

@@ -1,0 +1,35 @@
+# Configurazione di Gitleaks (VPM-018-SEC-CI-01). Parte dalle regole predefinite
+# e aggiunge soltanto eccezioni STRETTE, ciascuna verificata sull'intera storia
+# del repository. Una nuova eccezione richiede la prova che il valore sia finto:
+# mai un'eccezione per percorso su una regola di provider senza vincolo sul valore.
+# La prova che le eccezioni non coprano segreti veri e' in
+# `.github/scripts/secret-scan-selftest.sh`, eseguita a ogni corsa.
+
+title = "Vinea"
+
+[extend]
+useDefault = true
+
+# `generic-api-key` scambia per chiavi gli identificativi di dominio: chiavi di
+# idempotenza, `lookup_key` del catalogo e chiavi del vino nei test e nelle griglie.
+# L'eccezione guarda il NOME del campo nella corrispondenza: un `api_key = "..."`
+# continua a essere segnalato.
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Identificativi di dominio, non credenziali"
+regexTarget = "match"
+regexes = ['''(?i)^(?:[a-z]\.)?(idempotency_?key|lookup_key|wine_?key)["']?\s*[:=]''']
+
+# Unico valore noto: il formato non valido di una chiave di prova nel test del
+# parser di pagamento, lettere e cifre in sequenza. Vincolato a percorso E valore esatto.
+[[rules]]
+id = "stripe-access-token"
+
+[[rules.allowlists]]
+description = "Chiave finta in sequenza nel test del parser di pagamento"
+condition = "AND"
+paths = ['''^frontend-next/src/lib/accessori-ordini/pagamento\.test\.ts$''']
+regexTarget = "match"
+regexes = ['''^sk_test_abcdefgh12345678\b''']
