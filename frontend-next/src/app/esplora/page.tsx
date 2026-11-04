@@ -1,3 +1,4 @@
+import { codiceErrore } from "@/lib/errore-per-log";
 import type { Metadata } from "next";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createListingService } from "@/services/listing-service";
@@ -42,7 +43,7 @@ const Page = async ({
   // indisponibile, mentre catalogo e ricerca ordinaria restano utilizzabili.
   const annunciPromise = listingService.elenco();
   const regioniPromise = wineRegionsService.elenco().catch((errore: unknown) => {
-    console.error("[esplora] lettura regioni fallita:", errore);
+    console.error("[esplora] lettura regioni fallita:", codiceErrore(errore));
     return { ok: false as const, error: "Regioni temporaneamente non disponibili." };
   });
 

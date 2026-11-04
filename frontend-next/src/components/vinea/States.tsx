@@ -380,6 +380,7 @@ export function SafeImage({
     );
   }
   return (
+    // eslint-disable-next-line @next/next/no-img-element -- componente generico per indirizzi da database, con gestione dell'errore propria
     <img
       src={src}
       alt={alt ?? ""}

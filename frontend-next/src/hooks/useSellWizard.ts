@@ -1,5 +1,6 @@
 "use client";
 
+import { codiceErrore } from "@/lib/errore-per-log";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { firmaUploadFoto, riusaFotoDellaBottiglia } from "@/app/vendi/actions";
@@ -309,7 +310,7 @@ export function useSellWizard({
         }
       })
       .catch((errore: unknown) => {
-        console.error("[vendi] lettura regioni fallita:", errore);
+        console.error("[vendi] lettura regioni fallita:", codiceErrore(errore));
         if (attivo) {
           setRegioni({
             stato: "errore",
@@ -440,7 +441,7 @@ export function useSellWizard({
       } catch (errore) {
         // Copre errori inattesi del trasporto senza trasformarli in «zero
         // comparabili» e senza impedire l'inserimento manuale.
-        console.error("[vendi] comparabili non disponibili:", errore);
+        console.error("[vendi] comparabili non disponibili:", codiceErrore(errore));
         if (attivo) {
           setSmartPriceLetto({
             chiave: chiaveSmartPrice,
@@ -598,7 +599,7 @@ export function useSellWizard({
         .uploadToSignedUrl(firma.data.percorso, firma.data.token, file);
 
       if (error) {
-        console.error("[vendi] upload fallito:", error);
+        console.error("[vendi] upload fallito:", codiceErrore(error));
         toast.error("Caricamento non riuscito. Riprova.");
         return;
       }
@@ -685,7 +686,7 @@ export function useSellWizard({
       if (error) {
         // Un caricamento fallito non tocca quelle già caricate: l'array
         // cresce solo in caso di successo.
-        console.error("[vendi] upload confezione fallito:", error);
+        console.error("[vendi] upload confezione fallito:", codiceErrore(error));
         toast.error("Caricamento non riuscito. Riprova.");
         return;
       }

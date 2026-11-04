@@ -50,6 +50,19 @@ export const passiCheckout = (imballaggioVisibile: boolean): CheckoutPasso[] =>
  * L'identificativo viene codificato: finisce in una query string, e un valore
  * inatteso non deve poter aggiungere parametri che nessuno ha scritto.
  */
+/**
+ * L'indirizzo della pagina di pagamento arriva da una risposta di rete: si segue solo verso il
+ * dominio di Stripe, mai verso un altro host (GAP-023).
+ */
+export const destinazioneEsternaAmmessa = (indirizzo: string): boolean => {
+  try {
+    const url = new URL(indirizzo);
+    return url.protocol === "https:" && url.hostname === "checkout.stripe.com";
+  } catch {
+    return false;
+  }
+};
+
 export const destinazioneSaldoOnly = (orderId: string): string =>
   `/acquisti?checkout=saldo&orderId=${encodeURIComponent(orderId)}`;
 

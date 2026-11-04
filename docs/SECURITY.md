@@ -152,6 +152,10 @@ Le prove versionate di questi confini sono in `supabase/tests/`.
 - Non fidarsi di prezzo, valuta, proprietario o stato inviati dal client.
 - Non registrare payload completi contenenti dati personali o di pagamento.
 
+## Link `token_hash` e login forzato (rischio documentato, GAP-017)
+
+`/auth/confirm`, `/auth/recupero` e `/auth/accesso` verificano il token lato server con `verifyOtp`, senza un valore legato al browser che ha chiesto il link: è ciò che permette di aprire il link su un altro dispositivo, per esempio da un client di posta. La conseguenza è che chi ottiene un link valido del **proprio** account e lo fa aprire a una vittima la fa entrare in quell'account: la vittima potrebbe inserire lì dati propri. Limiti: token monouso e a scadenza, destinazioni fisse o validate, nessun accesso all'account della vittima. Nessun test specifico: lo scenario è il comportamento previsto del link. Accettazione del rischio da confermare dal titolare; la chiusura richiederebbe un legame col browser di origine e toglierebbe l'apertura da un altro dispositivo.
+
 ## CORS e redirect
 
 - Le origini CORS sono definite tramite ambiente.

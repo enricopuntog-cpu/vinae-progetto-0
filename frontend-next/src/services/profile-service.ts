@@ -1,5 +1,6 @@
 "use client";
 
+import { codiceErrore } from "@/lib/errore-per-log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -139,7 +140,7 @@ async function leggiCertificazioniForti(
     .select(COLONNE_CERTIFICAZIONI)
     .maybeSingle();
   if (error || !data) {
-    if (error) console.error("[profilo] lettura certificazioni fallita:", error);
+    if (error) console.error("[profilo] lettura certificazioni fallita:", codiceErrore(error));
     return { identitaVerificata: false, venditoreVerificato: false };
   }
   const riga = data as RigaProfilo;
@@ -300,7 +301,7 @@ export function creaProfileService(supabase: SupabaseClient): ProfileService {
         upsert: false,
       });
       if (error) {
-        console.error("[profilo] caricamento foto avatar fallito:", error);
+        console.error("[profilo] caricamento foto avatar fallito:", codiceErrore(error));
         return { ok: false, error: "Non è stato possibile caricare la foto. Riprova." };
       }
       return { ok: true, data: percorso };
@@ -316,7 +317,7 @@ export function creaProfileService(supabase: SupabaseClient): ProfileService {
 
       const { error } = await supabase.storage.from(BUCKET_AVATAR_PROFILI).remove([percorso]);
       if (error) {
-        console.error("[profilo] eliminazione foto avatar fallita:", error);
+        console.error("[profilo] eliminazione foto avatar fallita:", codiceErrore(error));
         return { ok: false, error: "Non è stato possibile eliminare la foto." };
       }
       return { ok: true, data: undefined };

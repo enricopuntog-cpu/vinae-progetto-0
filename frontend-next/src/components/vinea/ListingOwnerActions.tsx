@@ -1,5 +1,6 @@
 "use client";
 
+import { codiceErrore } from "@/lib/errore-per-log";
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -128,10 +129,10 @@ export function ListingOwnerActions({ annuncio }: { annuncio: AnnuncioProprietar
       const { error } = await client.storage.from(BUCKET_ANNUNCI).remove(percorsi);
       if (!error) return null;
 
-      console.error("[annuncio] pulizia fotografie di sessione fallita:", error);
+      console.error("[annuncio] pulizia fotografie di sessione fallita:", codiceErrore(error));
       return messaggio;
     } catch (error) {
-      console.error("[annuncio] eccezione durante la pulizia fotografie di sessione:", error);
+      console.error("[annuncio] eccezione durante la pulizia fotografie di sessione:", codiceErrore(error));
       return messaggio;
     }
   };
@@ -168,7 +169,7 @@ export function ListingOwnerActions({ annuncio }: { annuncio: AnnuncioProprietar
       }
     } catch (error) {
       const messaggio = "Non è stato possibile completare la pulizia degli upload temporanei.";
-      console.error("[annuncio] eccezione durante l'annullamento della modifica:", error);
+      console.error("[annuncio] eccezione durante l'annullamento della modifica:", codiceErrore(error));
       setErrorePulizia(messaggio);
       toast.warning(`${messaggio} L'annuncio non è stato modificato.`);
     } finally {
@@ -230,7 +231,7 @@ export function ListingOwnerActions({ annuncio }: { annuncio: AnnuncioProprietar
         .uploadToSignedUrl(firma.data.percorso, firma.data.token, file);
 
       if (error) {
-        console.error("[annuncio] upload fotografia fallito:", error);
+        console.error("[annuncio] upload fotografia fallito:", codiceErrore(error));
         const messaggio = "Caricamento non riuscito. Riprova.";
         setErroreUpload(messaggio);
         toast.error(messaggio);
@@ -248,7 +249,7 @@ export function ListingOwnerActions({ annuncio }: { annuncio: AnnuncioProprietar
       toast.success("Fotografia caricata");
     })().catch((error) => {
       const messaggio = "Caricamento non riuscito. Riprova.";
-      console.error("[annuncio] eccezione durante l'upload fotografia:", error);
+      console.error("[annuncio] eccezione durante l'upload fotografia:", codiceErrore(error));
       setErroreUpload(messaggio);
       toast.error(messaggio);
     });
@@ -344,7 +345,7 @@ export function ListingOwnerActions({ annuncio }: { annuncio: AnnuncioProprietar
       }
     } catch (error) {
       const messaggio = "Non è stato possibile salvare le modifiche. Riprova.";
-      console.error("[annuncio] eccezione durante il salvataggio:", error);
+      console.error("[annuncio] eccezione durante il salvataggio:", codiceErrore(error));
       setErroreSalvataggio(messaggio);
       toast.error(messaggio);
       return;

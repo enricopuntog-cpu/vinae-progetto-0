@@ -1,5 +1,7 @@
 "use server";
 
+import { eUuidValido, fotoDirettaAmmessa } from "@/lib/listing/foto-riusabile";
+import { codiceErrore } from "@/lib/errore-per-log";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { BUCKET_CANTINA } from "@/services/cellar-service";
 import { BUCKET_ANNUNCI } from "@/services/listing-service";
@@ -71,7 +73,7 @@ export async function firmaUploadFoto(
     .createSignedUploadUrl(percorso);
 
   if (error || !data) {
-    console.error("[vendi] firma upload fallita:", error);
+    console.error("[vendi] firma upload fallita:", codiceErrore(error));
     return { ok: false, error: "Non è stato possibile preparare il caricamento. Riprova." };
   }
 
@@ -125,6 +127,8 @@ export type RiusoDaCantina = {
 export async function riusaFotoDellaBottiglia(
   bottleUnitId: string,
 ): Promise<Result<RiusoDaCantina>> {
+  if (!eUuidValido(bottleUnitId)) return { ok: true, data: { foto: [], prezzoCentsPrecedente: null } };
+
   const client = await getSupabaseServerClient();
   if (!client) {
     return { ok: false, error: "Connessione a Supabase non configurata." };
@@ -143,7 +147,7 @@ export async function riusaFotoDellaBottiglia(
     .maybeSingle();
 
   if (erroreBottiglia) {
-    console.error("[vendi] lettura bottiglia per riuso foto fallita:", erroreBottiglia);
+    console.error("[vendi] lettura bottiglia per riuso foto fallita:", codiceErrore(erroreBottiglia));
     return { ok: false, error: "Non è stato possibile leggere la bottiglia. Riprova." };
   }
   // Nessuna riga significa che non è sua: la RLS l'ha filtrata. Non è un
@@ -156,9 +160,11 @@ export async function riusaFotoDellaBottiglia(
   for (const origine of percorsiCantina) {
     // Le illustrazioni dei dati di prova (`/images/...`) non stanno in nessun
     // bucket: si passano così come sono, che è già ciò che `urlImmagine()` fa
-    // con loro.
-    if (origine.startsWith("/") || origine.startsWith("http")) {
-      foto.push({ percorso: origine, anteprima: origine });
+    // con loro. Ogni altro indirizzo assoluto si scarta.
+    if (origine.startsWith("/") || /^[a-z][a-z0-9+.-]*:/i.test(origine)) {
+      if (fotoDirettaAmmessa(origine, process.env.NEXT_PUBLIC_SUPABASE_URL)) {
+        foto.push({ percorso: origine, anteprima: origine });
+      }
       continue;
     }
 
@@ -174,7 +180,7 @@ export async function riusaFotoDellaBottiglia(
       // Una foto che non si copia non ferma le altre: il venditore ne trova
       // qualcuna di meno e può aggiungerne, che è molto meglio di uno step
       // vuoto senza spiegazione.
-      console.error(`[vendi] copia foto ${origine} fallita:`, error);
+      console.error(`[vendi] copia foto ${origine} fallita:`, codiceErrore(error));
       continue;
     }
 

@@ -121,6 +121,8 @@ Ordine: **FIX-E2E-01 → VER-PROD-01 (con autorizzazione) → E2E-CRIT-01 → ER
 
 > Aggiornamento del 4 novembre 2026 (VPM-018-DB-GRID-02, PR dedicata): DB-GRID-02 (GAP-010) è chiuso sul piano della prova con la griglia `12zv`, che impone anche l'elenco delle viste di GAP-024. Nuovo difetto verificato e non corretto: R-DB-01 (P3), 7 funzioni di `private` con EXECUTE a PUBLIC, non raggiungibili da un client finché PostgREST non espone lo schema; correzione in attesa di autorizzazione perché una migrazione arriva a Production. Dettagli in `docs/VPM_018_DB_GRID_02.md`.
 
+> Aggiornamento del 4 novembre 2026 (VPM-018-HYG-01, PR dedicata): chiusi nel codice GAP-014, GAP-016, GAP-018, GAP-022, GAP-023; chiusi in parte GAP-019, GAP-020, GAP-024; GAP-015 e GAP-021 non confermati; GAP-017 rischio documentato da accettare; GAP-003 e GAP-012 restano decisioni del titolare. Dettagli in `docs/VPM_018_HYG_01.md`.
+
 ### 0.6 Skill e subagenti (VPM-018-RECOVERY e VPM-018-RECOVERY-CLOSE)
 
 Eseguiti realmente (invocati con gli strumenti):

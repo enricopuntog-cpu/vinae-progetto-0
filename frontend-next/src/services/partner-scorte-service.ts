@@ -12,6 +12,7 @@
  * Cantina, e ogni quantità è un conteggio di righe.
  */
 
+import { codiceErrore } from "@/lib/errore-per-log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { FORMATO_STANDARD, chiaveGruppo } from "@/lib/cantina/gruppo";
 import type { EsitoLotto, Result } from "@/services/types";
@@ -101,7 +102,7 @@ export function creaScortePartnerService(client: SupabaseClient | null) {
         .is("ceduta_at", null)
         .order("created_at");
       if (error) {
-        console.error("[ScortePartner] elenco fallito:", error);
+        console.error("[ScortePartner] elenco fallito:", codiceErrore(error));
         return { ok: false, error: ERRORE_LETTURA };
       }
       return { ok: true, data: raggruppaScorte((data as unknown as RigaScorta[] | null) ?? []) };
@@ -142,7 +143,7 @@ export function creaScortePartnerService(client: SupabaseClient | null) {
         p_idempotency_key: dati.idempotencyKey,
       });
       if (error) {
-        console.error("[ScortePartner] aggiunta fallita:", error);
+        console.error("[ScortePartner] aggiunta fallita:", codiceErrore(error));
         return {
           ok: false,
           error: error.code && CODICI_LEGGIBILI.has(error.code) && error.message ? error.message : ERRORE_SCRITTURA,

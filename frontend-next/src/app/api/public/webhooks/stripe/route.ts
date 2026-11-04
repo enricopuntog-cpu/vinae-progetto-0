@@ -11,6 +11,9 @@ import {
 } from "@/lib/payments/stripe-event";
 import { verifyStripeSignature } from "@/lib/payments/stripe-signature";
 
+// Gli eventi di Stripe stanno ampiamente sotto questo limite.
+const LIMITE_CORPO_BYTE = 1_048_576;
+
 /** Identificativo del fornitore per la chiave di deduplicazione (provider, event_id). */
 const PROVIDER = "stripe";
 
@@ -35,7 +38,15 @@ export const POST = async (request: Request): Promise<NextResponse> => {
     return NextResponse.json({ error: "Configurazione server incompleta." }, { status: 503 });
   }
 
+  // Il tetto precede la firma: verificarla costa, e il corpo arriva da chiunque (GAP-019).
+  const dichiarati = Number(request.headers.get("content-length") ?? "0");
+  if (dichiarati > LIMITE_CORPO_BYTE) {
+    return NextResponse.json({ error: "Corpo troppo grande." }, { status: 413 });
+  }
   const payload = await request.text();
+  if (new TextEncoder().encode(payload).length > LIMITE_CORPO_BYTE) {
+    return NextResponse.json({ error: "Corpo troppo grande." }, { status: 413 });
+  }
   if (!signature || !(await verifyStripeSignature({ payload, header: signature, secret }))) {
     return NextResponse.json({ error: "Firma non valida." }, { status: 400 });
   }

@@ -491,6 +491,8 @@ describe("Market Validation MV2 UI contract", () => {
       /^@\/lib\/brand\/metadata$/,
       // Solo etichette e tipi della Cantina per l'anteprima statica.
       /^@\/data\/cellar$/,
+      // Funzione pura che riduce un errore al suo codice, senza side effect.
+      /^@\/lib\/errore-per-log$/,
       /^@\/lib\/market-validation\//,
       /^@\/lib\/phase10\/etichette-ia$/,
       /^@\/lib\/supabase\/anon-server$/,

@@ -1,8 +1,10 @@
+import { codiceErrore } from "@/lib/errore-per-log";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import {
   ambienteCorrente,
   percorsoRelativoSicuro,
+  origineDaRifiutare,
   risolviOriginePubblica,
 } from "@/lib/auth/origine-redirect";
 import {
@@ -53,6 +55,12 @@ export async function GET(request: NextRequest) {
     ambienteCorrente(),
     hostAnnunciato,
   );
+  if (origineDaRifiutare(sorgente)) {
+    return new NextResponse("Configurazione incompleta.", {
+      status: 503,
+      headers: { "Cache-Control": "private, no-store" },
+    });
+  }
   const code = searchParams.get("code");
   // `next` permette di tornare da dove si è partiti; accettiamo solo percorsi
   // relativi per non trasformare questa route in un redirect aperto.
@@ -106,7 +114,7 @@ export async function GET(request: NextRequest) {
    */
   const vaiAErrore = (codice: CodiceErroreAuth, dettaglio?: unknown) => {
     if (dettaglio) {
-      console.error("[auth/callback]", codice, dettaglio);
+      console.error("[auth/callback]", codice, codiceErrore(dettaglio));
     }
     const parametri = new URLSearchParams({ errore: codice });
     if (inRecupero) {

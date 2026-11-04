@@ -31,6 +31,7 @@
  * riusabile dal server il giorno in cui servisse.
  */
 
+import { codiceErrore } from "@/lib/errore-per-log";
 import { riferimentoAvatarSicuro } from "@/lib/profilo/avatar";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
@@ -111,7 +112,7 @@ function intero(valore: unknown): number {
 
 /** Il dettaglio tecnico resta nei log; al chiamante arriva una frase in italiano. */
 function segnalaErrore(operazione: string, errore: unknown): void {
-  console.error(`[CellarFollowService] ${operazione} fallita:`, errore);
+  console.error(`[CellarFollowService] ${operazione} fallita:`, codiceErrore(errore));
 }
 
 /**
