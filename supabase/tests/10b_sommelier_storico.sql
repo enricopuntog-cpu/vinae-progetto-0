@@ -3,7 +3,7 @@
 -- 32 casi: 20 comportamentali, 12 strutturali
 -- ===========================================================================
 --
--- DOVE E GIRATA, E CON QUALE ESITO.
+-- PROVA STORICA (fase 10b; non istruzioni per lo stack attuale).
 -- Postgres 17.10 in un container usa e getta (postgres:17), su cui sono state
 -- applicate in ordine TUTTE E VENTICINQUE le migrazioni del progetto - non uno
 -- stub del dominio - sopra 9c_bootstrap_postgres_locale.sql, che fornisce cio
@@ -59,24 +59,34 @@
 --                   della 9c che i pagamenti non devono reagire a stato_utente
 --
 -- CHE COSA NON PROVA
---   * non prova nulla sul progetto reale, dove questa migrazione non e
---     applicata;
+--   * non verifica lo stato del progetto reale;
 --   * non esercita le Edge Function: prova le porte SQL che quelle chiamano,
 --     non il codice Deno che le chiama;
 --   * non prova l'interfaccia: nessuna schermata e stata aperta contro questo
 --     database.
 --
 -- COME SI ESEGUE
---   docker run -d --name vinea-pg10 -e POSTGRES_PASSWORD=vinea -e POSTGRES_DB=vinea postgres:17
---   psql -f supabase/tests/9c_bootstrap_postgres_locale.sql
---   psql -f ogni file di supabase/migrations/ in ordine di nome
---   psql -f supabase/tests/10b_sommelier_storico.sql
+--   Nel gate CI Supabase DB regression, tramite 12g_ci_run.sh, su stack
+--   Supabase effimero con tutte le migration e auth.uid() standard.
+--   Per una prova mirata autorizzata sullo stesso tipo di stack isolato:
+--   psql "$URL_DB_LOCALE_ISOLATO" -v ON_ERROR_STOP=1 -f supabase/tests/10b_sommelier_storico.sql
+--   Non usare il vecchio bootstrap 9c: la sua auth.uid() legge vinea.uid,
+--   mentre questa griglia usa la GUC JWT standard request.jwt.claim.sub.
 
 set client_min_messages = warning;
+\set ON_ERROR_STOP on
 
 -- Tutto in una transazione: la pulizia e garantita anche sul percorso di
 -- errore, che e la ragione per cui non c'e nessun `delete` finale da ricordarsi.
 begin;
+
+-- VPM-022B: questa regressione ora gira nel gate su Supabase reale locale,
+-- con auth.uid() standard e non quello sostituito dal bootstrap storico.
+do $$ begin
+  if exists (select 1 from auth.users where email is null or email not like '%.test') then
+    raise exception 'Guard 10b: database con utenti reali, griglia rifiutata.';
+  end if;
+end $$;
 
 -- La tabella degli esiti nasce DENTRO la transazione, non prima: `on commit
 -- drop` fuori da un blocco esplicito cade nella transazione implicita di psql
@@ -175,7 +185,7 @@ reset role;
 
 -- Il browser: `authenticated` con l'identita nella GUC.
 set role authenticated;
-set vinea.uid = 'aaaaaaaa-0000-0000-0000-000000000001';
+set local request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
 
 insert into esiti (caso, cosa, atteso, visto)
 select '03', 'il proprietario legge la propria conversazione', '4',
@@ -196,7 +206,7 @@ select '05', 'la vista mostra solo le proprie righe, mai quelle di B', '6',
 
 reset role;
 set role authenticated;
-set vinea.uid = 'aaaaaaaa-0000-0000-0000-000000000002';
+set local request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000002';
 
 -- Il cuore della cosa: B chiede lo STESSO session_id di A. Se il filtro fosse
 -- sul solo session_id - che il client sceglie con un Math.random() - B
@@ -219,7 +229,7 @@ update public.sommelier_messaggi
  where owner_id = :uid_a and session_id = 'sess-a-due';
 
 set role authenticated;
-set vinea.uid = 'aaaaaaaa-0000-0000-0000-000000000001';
+set local request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
 
 insert into esiti (caso, cosa, atteso, visto)
 select '07', 'una conversazione scaduta non e piu leggibile', '0',
@@ -327,14 +337,14 @@ reset role;
 update public.profiles set stato_utente = 'rimosso' where id = :uid_r;
 
 set role authenticated;
-set vinea.uid = 'aaaaaaaa-0000-0000-0000-000000000003';
+set local request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000003';
 insert into esiti (caso, cosa, atteso, visto)
 select '15', 'un rimosso non legge nemmeno il proprio storico', '0',
        (select count(*)::text from public.my_sommelier_messages);
 reset role;
 
 set role authenticated;
-set vinea.uid = 'aaaaaaaa-0000-0000-0000-000000000004';
+set local request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000004';
 insert into esiti (caso, cosa, atteso, visto)
 select '16', 'un sospeso continua a leggere: il primo livello non tocca l AI', '2',
        (select count(*)::text from public.my_sommelier_messages);
@@ -464,6 +474,13 @@ select '30', 'nessuna porta della 10b nomina ordini, pagamenti o payout', '0',
 -- Griglia
 -- ---------------------------------------------------------------------------
 select caso, cosa, atteso, visto, esito from esiti order by caso;
+
+-- Un exit code verde non deve mascherare una riga FALLISCE o un caso tolto.
+do $$ begin
+  if (select count(*) from esiti) <> 32 or exists(select 1 from esiti where esito <> 'PASSA') then
+    raise exception 'Griglia 10b fallita: richiesti 32/32 casi PASSA';
+  end if;
+end $$;
 
 select
   count(*) filter (where esito = 'PASSA')    as passa,
