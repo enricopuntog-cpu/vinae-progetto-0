@@ -279,8 +279,7 @@ begin
   perform pg_temp.registra(20, 'limitatore e sessioni chiusi ai client', v_chiuso and v ->> 'stato' = '42501', v::text);
 end $$;
 
--- 21: il tetto globale per IP della richiesta PostgREST. Il percorso reale ha la barra
--- iniziale (misurato via PostgREST, docs/VPM_018_DB_GRID_01.md), quindi vale 120/min.
+-- 21: il tetto globale per IP sui percorsi non RPC resta 120/min.
 do $$
 declare
   v_inizio timestamptz := to_timestamp(floor(extract(epoch from clock_timestamp()) / 60) * 60);
@@ -289,10 +288,10 @@ begin
   perform pg_temp.lontano_dal_bordo();
   v_inizio := to_timestamp(floor(extract(epoch from clock_timestamp()) / 60) * 60);
   perform set_config('request.method', 'POST', true);
-  perform set_config('request.path', '/rpc/prova_12zu', true);
+  perform set_config('request.path', '/prova_12zu', true);
   perform set_config('request.headers', '{"x-forwarded-for":"203.0.113.7, 10.0.0.1"}', true);
   insert into private.rate_limit_buckets (scope, subject, window_started_at, window_seconds, request_count, expires_at)
-  values ('postgrest:/rpc/prova_12zu', 'ip:203.0.113.7', v_inizio, 60, 120, v_inizio + interval '120 seconds');
+  values ('postgrest:/prova_12zu', 'ip:203.0.113.7', v_inizio, 60, 120, v_inizio + interval '120 seconds');
   begin
     perform private.vinea_check_request();
   exception when others then
@@ -386,11 +385,10 @@ begin
   perform pg_temp.registra(26, 'il controllo delle richieste e montato su authenticator', v_montato, coalesce(v_montato::text, 'null'));
 end $$;
 
--- 27: LIMITE NOTO R-RL-01. Il ramo da 60/min confronta 'rpc/%' ma il percorso reale inizia
--- con la barra: a 60 richieste una RPC non viene ancora rifiutata.
+-- 27: R-RL-01 corretto: la 61a RPC sul percorso reale deve essere rifiutata.
 do $$
 declare
-  v_inizio timestamptz; v_bloccato boolean := false; v_stato text;
+  v_inizio timestamptz; v_bloccato boolean := false; v_stato text; v_msg text; v_detail text;
 begin
   perform pg_temp.lontano_dal_bordo();
   v_inizio := to_timestamp(floor(extract(epoch from clock_timestamp()) / 60) * 60);
@@ -402,16 +400,114 @@ begin
   begin
     perform private.vinea_check_request();
   exception when others then
-    get stacked diagnostics v_stato = returned_sqlstate;
-    v_bloccato := true;
+    get stacked diagnostics v_stato = returned_sqlstate, v_msg = message_text, v_detail = pg_exception_detail;
+    v_bloccato := pg_temp.limitato(jsonb_build_object('stato', v_stato, 'msg', v_msg, 'detail', v_detail));
   end;
   perform set_config('request.method', '', true);
   perform set_config('request.path', '', true);
   perform set_config('request.headers', '', true);
-  perform pg_temp.registra(27, 'LIMITE NOTO: sul percorso reale il tetto delle RPC e 120/min, non 60',
-    not v_bloccato, coalesce(v_stato, 'non bloccato'));
+  perform pg_temp.registra(27, 'RPC: oltre 60/min rifiuta con rate_limit_exceeded e HTTP 429',
+    v_bloccato, coalesce(v_stato, 'non bloccato'));
+end $$;
+
+-- Esegue l'hook con i claim e il ruolo della richiesta; il rifiuto annulla il
+-- proprio incremento, come la transazione PostgREST. Nessuna nuova porta pubblica.
+create function pg_temp.hook_esito(p_path text, p_uid uuid default null,
+  p_ip text default '203.0.113.90', p_method text default 'POST')
+returns jsonb language plpgsql as $f$
+declare v_stato text; v_msg text; v_detail text;
+begin
+  perform set_config('request.path', p_path, true);
+  perform set_config('request.method', p_method, true);
+  perform set_config('request.headers', jsonb_build_object('x-forwarded-for', p_ip)::text, true);
+  perform set_config('request.jwt.claim.sub', coalesce(p_uid::text, ''), true);
+  perform set_config('request.jwt.claims', jsonb_build_object('sub', p_uid,
+    'role', case when p_uid is null then 'anon' else 'authenticated' end)::text, true);
+  begin
+    if p_uid is null then set local role anon; else set local role authenticated; end if;
+    perform private.vinea_check_request();
+    reset role;
+    return jsonb_build_object('ok', true);
+  exception when others then
+    get stacked diagnostics v_stato = returned_sqlstate, v_msg = message_text, v_detail = pg_exception_detail;
+    reset role;
+    return jsonb_build_object('ok', false, 'stato', v_stato, 'msg', v_msg, 'detail', v_detail);
+  end;
+end;
+$f$;
+
+do $$
+declare
+  i int; v_ok int := 0; v jsonb; v_ip jsonb; v_unknown jsonb; v_path text; v_tutti boolean := true;
+  c_a constant uuid := '220a0000-0000-4000-8000-000000000001';
+  c_b constant uuid := '220a0000-0000-4000-8000-000000000002';
+begin
+  perform pg_temp.lontano_dal_bordo();
+  for i in 1..60 loop
+    v := pg_temp.hook_esito('/rpc/prova_12zu_60');
+    if (v ->> 'ok')::boolean then v_ok := v_ok + 1; end if;
+  end loop;
+  v := pg_temp.hook_esito('/rpc/prova_12zu_60');
+  perform pg_temp.registra(28, 'RPC: 60 passano, 61a e tentativo ripetuto rifiutati, contatore resta 60',
+    v_ok = 60 and pg_temp.limitato(v)
+      and pg_temp.limitato(pg_temp.hook_esito('/rpc/prova_12zu_60'))
+      and (select sum(request_count) = 60 from private.rate_limit_buckets
+        where scope = 'postgrest:/rpc/prova_12zu_60' and subject = 'ip:203.0.113.90'),
+    'ok=' || v_ok || ' ultima=' || v::text);
+
+  -- Confine del prefisso: nessun match per segmenti simili o RPC annidate.
+  foreach v_path in array array['/profiles', '/rpcish/prova', '/x/rpc/prova', ''] loop
+    perform pg_temp.lontano_dal_bordo();
+    v_ok := 0;
+    for i in 1..120 loop
+      v := pg_temp.hook_esito(v_path);
+      if (v ->> 'ok')::boolean then v_ok := v_ok + 1; end if;
+    end loop;
+    v_tutti := v_tutti and v_ok = 120 and pg_temp.limitato(pg_temp.hook_esito(v_path));
+  end loop;
+  perform pg_temp.registra(29, 'non RPC: 120 passano e 121a rifiuta su quattro percorsi, prefisso esatto', v_tutti);
+
+  perform pg_temp.lontano_dal_bordo();
+  for i in 1..60 loop
+    v := pg_temp.hook_esito('/rpc/prova_12zu_user', c_a);
+  end loop;
+  v := pg_temp.hook_esito('/rpc/prova_12zu_user', c_a, '203.0.113.91');
+  perform pg_temp.registra(30, 'autenticato: il soggetto e user:uid, cambiare IP non rinnova la soglia',
+    pg_temp.limitato(v) and (select sum(request_count) = 60 from private.rate_limit_buckets
+      where scope = 'postgrest:/rpc/prova_12zu_user' and subject = 'user:' || c_a::text)
+      and not exists (select 1 from private.rate_limit_buckets
+        where scope = 'postgrest:/rpc/prova_12zu_user' and subject like 'ip:%'), v::text);
+  perform pg_temp.registra(31, 'utenti e percorsi conservano bucket distinti',
+    (pg_temp.hook_esito('/rpc/prova_12zu_user', c_b) ->> 'ok')::boolean
+    and (pg_temp.hook_esito('/rpc/prova_12zu_user_altra', c_a) ->> 'ok')::boolean);
+
+  -- Il modello XFF esistente resta invariato; non attesta il gateway hosted.
+  v := pg_temp.hook_esito('/rpc/prova_12zu_60', null, '203.0.113.90, 10.0.0.2');
+  v_ip := pg_temp.hook_esito('/rpc/prova_12zu_60', null, '203.0.113.92');
+  v_unknown := pg_temp.hook_esito('/rpc/prova_12zu_unknown', null, '');
+  perform pg_temp.registra(32, 'anonimo: prima voce XFF, IP distinto e fallback unknown invariati',
+    pg_temp.limitato(v)
+    and (v_ip ->> 'ok')::boolean and (v_unknown ->> 'ok')::boolean
+    and exists (select 1 from private.rate_limit_buckets
+      where scope = 'postgrest:/rpc/prova_12zu_unknown' and subject = 'ip:unknown'));
+
+  v_tutti := true;
+  foreach v_path in array array['GET', 'HEAD', 'OPTIONS'] loop
+    v_tutti := v_tutti and (pg_temp.hook_esito('/rpc/prova_12zu_skip', null, '203.0.113.90', v_path) ->> 'ok')::boolean;
+  end loop;
+  perform pg_temp.registra(33, 'GET HEAD OPTIONS non consumano bucket', v_tutti
+    and not exists (select 1 from private.rate_limit_buckets where scope = 'postgrest:/rpc/prova_12zu_skip'));
 end $$;
 
 select id, descrizione, passed, detail from esiti_12zu order by id;
 
+rollback;
+
+-- Transazione separata: riproduce la modalita delle RPC stable chiamate in POST.
+begin read only;
+select set_config('request.method', 'POST', true) as metodo \gset
+select set_config('request.path', '/rpc/prova_12zu_readonly', true) as percorso \gset
+select private.vinea_check_request() as controllo \gset
+select 34, 'POST in transazione read only: hook non scrive e non genera 25006',
+  not exists (select 1 from private.rate_limit_buckets where scope = 'postgrest:/rpc/prova_12zu_readonly'), '';
 rollback;

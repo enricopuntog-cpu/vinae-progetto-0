@@ -300,6 +300,10 @@ run_grid "12w QV2 cinque aree" 12w_market_validation_qv2_five_areas.sql 3
 # VPM-018-DB-GRID-01: ogni porta anonima di scrittura portata oltre soglia, capability
 # errata su ogni porta di sessione, elenco chiuso delle porte. ROLLBACK, bucket compresi.
 run_grid "12zu superfici anonime" 12zu_vpm_018_superfici_anonime.sql 3
+# R-RL-01: la griglia SQL non dimostra il percorso ricevuto via PostgREST.
+# Stack gia verificato e marcato; la sonda usa fixture QV2 e pulisce in EXIT.
+E2E_DB_URL="$E2E_DB_URL" E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_ANON_KEY="$E2E_ANON_KEY" \
+  bash "$TESTS/12zw_vpm_022a_rpc_rate_limit.sh"
 # VPM-018-DB-GRID-02: ogni SECURITY DEFINER con search_path fissato, elenchi chiusi dei ruoli
 # client, controlli negativi. ROLLBACK.
 run_grid "12zv SECURITY DEFINER globale" 12zv_vpm_018_definer_globale.sql 3
