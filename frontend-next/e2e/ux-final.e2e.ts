@@ -131,12 +131,14 @@ test.describe("UX final @smoke @cross", () => {
     await page.goto("/cantina");
     await pronto(page);
     const misure = [];
-    for (const width of [375, 320]) {
+    for (const width of [...new Set([info.project.use.viewport?.width ?? 1280, 375, 320])]) {
       await page.setViewportSize({ width, height: 812 });
       const primaTab = page.getByRole("tab", { name: "Tutte", exact: true });
       const ultima = page.getByRole("tab", { name: "Da attendere", exact: true });
       const lista = primaTab.locator("..");
-      await primaTab.scrollIntoViewIfNeeded();
+      // La bottom-nav fissa può coprire controlli geometricamente dentro il
+      // viewport: centriamo la lista come farebbe uno scroll dell'utente.
+      await lista.evaluate((el) => el.scrollIntoView({ block: "center" }));
       const geometria = await lista.evaluate((el) => ({ client: el.clientWidth, scroll: el.scrollWidth, viewport: innerWidth, rect: el.getBoundingClientRect().toJSON(), tabs: [...el.children].map((t) => ({ testo: t.textContent, rect: t.getBoundingClientRect().toJSON(), client: t.clientWidth, scroll: t.scrollWidth })) }));
       misure.push({ width, ...geometria });
       await page.screenshot({ path: path.join(cartella(info), `cantina-${width}.png`) });
