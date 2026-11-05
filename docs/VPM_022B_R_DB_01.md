@@ -104,7 +104,12 @@ Una review indipendente di codice e una di sicurezza, statiche e in sola
 lettura: nessun rilievo bloccante. Un rilievo basso del revisore codice sulle
 istruzioni manuali obsolete di 10b è stato corretto. I comandi integrati
 `/code-review` e `/security-review` non sono disponibili in questo ambiente;
-non vengono dichiarati eseguiti. Stato CI e PR da completare sulla testa finale.
+non vengono dichiarati eseguiti. PR dedicata [#286](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/286),
+branch `codex/vpm-022b-r-db-01`; commit funzionale `e89db0a` seguito dalla
+documentazione. Gli esiti conclusivi CI sullo SHA di testa sono registrati nei
+check e nella descrizione della PR, senza rilanciare suite manuali già verdi.
+La consegna richiede tutti i sei gate obbligatori verdi, gate DB completo e
+scansioni pertinenti conclusi; la PR resta aperta senza auto-merge.
 
 ## Impatto e verifica dopo un futuro deploy autorizzato
 
