@@ -590,6 +590,7 @@ Procedura in [`E2E_BROWSER.md`](E2E_BROWSER.md).
 | `E2E_SKIP_BUILD` | iterazione locale | solo il valore `1`; mai in CI. Riusa `.next` solo se l'impronta `.next/e2e-bersaglio.json` (BUILD_ID + URL Supabase) coincide, altrimenti ricostruisce. `E2E_REUSE_SERVER` è stato rimosso (un server riusato può puntare a un altro stack) |
 | `E2E_PASSWORD` | password degli utenti di fixture | **generata dalla corsa**, in memoria; non impostarla |
 | `E2E_CORSA` | token di possesso della corsa | **generato dal setup**, che scarta un valore ereditato dalla shell; non impostarlo |
+| `VITE_BASELINE` | sola acquisizione visuale E2E | `1` nelle spec `design-vite` e `ux-final` disattiva le sole asserzioni della correzione per raccogliere il prima; non è una verifica di conformità e non ha effetto nell'app. Il workflow lo imposta soltanto con `suite=ux-prima` |
 
 L'identità dello stack dedicato non è una variabile: è il file
 `frontend-next/e2e/.stack-e2e.json` (ignorato da Git) scritto da
