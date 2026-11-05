@@ -37,7 +37,7 @@ on:
   workflow_dispatch:
     inputs:
       suite:
-        description: "smoke (Chromium desktop, @smoke) oppure completa (tre progetti)"
+        description: "smoke, completa oppure UX final mirata sui tre progetti (ux-prima: sola acquisizione)"
         type: choice
         options:
           - smoke

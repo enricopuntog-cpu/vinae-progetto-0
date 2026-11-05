@@ -315,7 +315,7 @@ function Cantina({ conSessione }: { conSessione: boolean }) {
       {/* Bottiglie: 3 viste */}
       <Tabs defaultValue="tutte">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <TabsList className="bg-secondary">
+          <TabsList className="grid h-auto w-full grid-cols-2 bg-secondary sm:inline-flex sm:h-9 sm:w-auto">
             <TabsTrigger value="tutte">Tutte</TabsTrigger>
             <TabsTrigger value="pronte">Pronte da bere</TabsTrigger>
             <TabsTrigger value="vendita">In vendita</TabsTrigger>

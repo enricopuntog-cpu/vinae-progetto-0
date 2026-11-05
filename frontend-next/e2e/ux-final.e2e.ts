@@ -19,14 +19,29 @@ const cartella = (info: TestInfo) => {
 // Componiamo separatamente pixel del testo e dello sfondo, poi l'opacità di
 // ogni gruppo antenato: non basta leggere il solo token del testo.
 async function contrasto(elemento: Locator) {
+  // Escludiamo solo l'opacità transitoria d'ingresso, senza azzerare le
+  // animazioni né nascondere eventuali opacità permanenti nel componente.
+  await elemento.evaluate(async (el) => {
+    const animazioni: Animation[] = [];
+    for (let nodo: Element | null = el; nodo; nodo = nodo.parentElement) {
+      animazioni.push(...nodo.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity));
+    }
+    await Promise.all(animazioni.map((a) => a.finished.catch(() => {})));
+  });
   return elemento.evaluate((el) => {
     const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
     const colore = (css: string): number[] => {
+      const alpha = css.match(/\/\s*([\d.]+)\s*\)$/)?.[1]
+        ?? css.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/)?.[1];
+      // Risolviamo RGB opaco e alpha separatamente: il canvas a 8 bit
+      // altrimenti quantizza due volte i colori semitrasparenti.
+      const opaco = alpha === undefined ? css : css.replace(/\/\s*[\d.]+\s*\)$/, "/ 1)")
+        .replace(/^(rgba\([^,]+,[^,]+,[^,]+,)\s*[\d.]+\)$/, "$1 1)");
       ctx.clearRect(0, 0, 1, 1);
-      ctx.fillStyle = css;
+      ctx.fillStyle = opaco;
       ctx.fillRect(0, 0, 1, 1);
       const p = [...ctx.getImageData(0, 0, 1, 1).data];
-      return [p[0], p[1], p[2], p[3] / 255];
+      return [p[0], p[1], p[2], alpha === undefined ? p[3] / 255 : Number(alpha)];
     };
     const sopra = (a: number[], b: number[]) => {
       const alpha = a[3] + b[3] * (1 - a[3]);
@@ -63,7 +78,7 @@ async function pronto(page: Page) {
   await page.evaluate(() => document.fonts.ready);
 }
 
-test.describe("UX final @cross", () => {
+test.describe("UX final @smoke @cross", () => {
   let slug = "";
   test.beforeAll(async () => {
     ripristinaFixture(passwordFixture());
@@ -76,11 +91,20 @@ test.describe("UX final @cross", () => {
     const page = await contesto.newPage();
     diagnostica.osserva(page, "venditore");
     const misure: Record<string, Awaited<ReturnType<typeof contrasto>>> = {};
+    // Selettore di stile limitato all'inventario del contrasto; i controlli
+    // interattivi restano selezionati per ruolo/nome accessibile.
+    const campiona = async (pagina: string) => {
+      for (const [i, elemento] of (await page.locator(".text-salvia, .text-salvia-scuro").all()).entries()) {
+        if (!(await elemento.isVisible()) || !(await elemento.textContent())?.trim()) continue;
+        misure[`${pagina}-${i}`] = await contrasto(elemento);
+      }
+    };
     await page.goto(`/annuncio/${slug}`);
     await pronto(page);
     const badge = page.getByText("ottimo", { exact: true }).first();
     await expect(badge).toBeVisible();
     misure.ottimo = await contrasto(badge);
+    await campiona("annuncio");
     await badge.locator("../../..").screenshot({ path: path.join(cartella(info), "food-pairing.png") });
     await page.getByRole("button", { name: "Cosa stai preparando?" }).click();
     await page.getByPlaceholder("es. brasato, ostriche, ragù…").fill("pecorino");
@@ -94,6 +118,7 @@ test.describe("UX final @cross", () => {
     const produttore = page.getByText("Cantina E2E-CRIT", { exact: true }).first();
     await expect(produttore).toBeVisible();
     misure.bottleSelector = await contrasto(produttore);
+    await campiona("bottleSelector");
     writeFileSync(path.join(cartella(info), "contrasti.json"), JSON.stringify(misure, null, 2));
     if (!prima) for (const [nome, misura] of Object.entries(misure)) expect(misura.rapporto, nome).toBeGreaterThanOrEqual(4.5);
     await contesto.close();
@@ -115,6 +140,7 @@ test.describe("UX final @cross", () => {
       const geometria = await lista.evaluate((el) => ({ client: el.clientWidth, scroll: el.scrollWidth, viewport: innerWidth, rect: el.getBoundingClientRect().toJSON(), tabs: [...el.children].map((t) => ({ testo: t.textContent, rect: t.getBoundingClientRect().toJSON(), client: t.clientWidth, scroll: t.scrollWidth })) }));
       misure.push({ width, ...geometria });
       await page.screenshot({ path: path.join(cartella(info), `cantina-${width}.png`) });
+      if (!prima) await lista.screenshot({ path: path.join(cartella(info), `cantina-tabs-${width}.png`) });
       if (!prima) {
         expect(await senzaScorrimentoOrizzontale(page)).toBe(true);
         for (const tab of geometria.tabs) {

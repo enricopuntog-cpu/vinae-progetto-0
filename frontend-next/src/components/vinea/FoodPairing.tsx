@@ -20,7 +20,7 @@ import { chiaveCantina } from "@/lib/cantina/gruppo";
 
 const LEVEL: Record<PairingLevel, string> = {
   ideale: "bg-bordeaux text-crema",
-  ottimo: "bg-salvia/25 text-salvia",
+  ottimo: "bg-salvia/25 text-salvia-scuro",
   possibile: "bg-secondary text-antracite",
 };
 
