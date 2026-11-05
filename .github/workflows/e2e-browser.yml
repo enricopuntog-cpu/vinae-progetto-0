@@ -42,6 +42,8 @@ on:
         options:
           - smoke
           - completa
+          - ux-prima
+          - ux-final
         default: smoke
 
 permissions:
@@ -85,7 +87,7 @@ jobs:
       - name: Install Playwright browsers
         working-directory: frontend-next
         run: |
-          if [ "$SUITE" = "completa" ]; then
+          if [ "$SUITE" = "completa" ] || [[ "$SUITE" == ux-* ]]; then
             bun x playwright install --with-deps chromium webkit
           else
             bun x playwright install --with-deps chromium
@@ -121,7 +123,11 @@ jobs:
         run: |
           set -o pipefail
           log="$RUNNER_TEMP/e2e.log"
-          if [ "$SUITE" = "completa" ]; then
+          if [ "$SUITE" = "ux-prima" ]; then
+            VITE_BASELINE=1 bun run e2e ux-final 2>&1 | tee "$log"
+          elif [ "$SUITE" = "ux-final" ]; then
+            bun run e2e ux-final 2>&1 | tee "$log"
+          elif [ "$SUITE" = "completa" ]; then
             bun run e2e 2>&1 | tee "$log"
           else
             bun run e2e:smoke 2>&1 | tee "$log"
