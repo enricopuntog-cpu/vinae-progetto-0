@@ -82,6 +82,7 @@ ciò che si certifica passa dal browser.
 | `prestazioni-layout` (`@smoke`, `@cross`) | `/cantina` e wizard con sessione: CLS di laboratorio ≤ 0,1 (solo Chromium), hero nel primo HTML con pulsanti `inert` sotto l'overlay, `private, no-store`, grafico che non arriva senza far cadere la pagina, nessun fondale scaricato; un ospite non riceve l'immagine |
 | `ux-fix-03` (`@cross`) | `/completa-profilo` (utente `ux-*@e2e-12zk.test` senza data di nascita, ripulito dal dominio della fixture) e `/registrati`: geometria dei campi e requisiti; barra del wizard a 375 e 640 px e ultimo passo; l'etichetta apre il selettore Radix; 404 annidati; titolo visibile in `/messaggi`; segnaposto dell'abbinamento misurato a 375 px |
 | `ux-fix-02` (`@cross`) | `/registrati`: i requisiti password seguono il campo (geometria), prima della data di nascita, con `aria-describedby` valido e un Tab dal campo alla data; Cantina con costo noto e nessun riferimento: «Non disponibile» senza pillola di tendenza né percentuale (VPM-018-UX-FIX-02) | E2E completo |
+| `ux-final` (`@smoke @cross`) | Contrasto composto dei testi salvia effettivamente montati nell'annuncio e nel selettore bottiglie; tab Cantina interamente leggibili a 375/320 px, Home/End Radix e tap mobile; Home WebKit full-page confrontata con viewport e card dopo scroll | Tre progetti con `suite=ux-final`; `suite=ux-prima` acquisisce la baseline senza pretendere corretti i due difetti. Vedi `VPM_019_UX_FINAL_01.md` |
 
 `problemiAccessibilita` (`support/pagina.ts`) conta solo gli elementi esposti: non
 quelli `hidden`, sotto `aria-hidden` o `display: none` (campo file nascosto, copia
@@ -165,6 +166,7 @@ Gli artefatti stanno in `frontend-next/e2e/artifacts/` (ignorata da Git).
 |---|---|---|---|
 | Smoke | PR e push su `main` che toccano `frontend-next/`, `supabase/migrations/`, `supabase/config.toml`, la griglia 12zk o il workflow | `bun run e2e:smoke`, Chromium desktop, casi `@smoke` (80 al 3 novembre 2026, VPM-018-E2E-CRIT-01) | 3 min 31 s misurati in CI con 17 casi (PR #248); 3,8 min in locale con 80 casi |
 | Completa | `workflow_dispatch` con `suite=completa`; in locale `bun run e2e` prima di chiudere una modifica UI | tre progetti, 188 casi | circa 10 min in locale (VPM-018-E2E-CRIT-01), più build e installazione di WebKit |
+| UX final mirata | `workflow_dispatch` con `suite=ux-final` | sola spec `ux-final`, Chromium desktop/375 px e WebKit, Cantina anche a 320 px | installazione browser, stack effimero e build come il gate normale |
 
 Il workflow `E2E browser` **non** è un check richiesto dal ruleset
 `main-protection`: non cambia le condizioni di merge. Se se ne vuole fare un

@@ -117,6 +117,8 @@ Ordine: **FIX-E2E-01 → VER-PROD-01 (con autorizzazione) → E2E-CRIT-01 → ER
 
 > Aggiornamento del 4 novembre 2026 (VPM-018-UX-FIX-03, PR dedicata): chiusi UX-B4, UX-B5, UX-B6, UX-B7 e i tre debiti di UX-FIX-02; TEST-B3 senza difetto; UX-B3 misurato e in attesa di decisione del titolare. Dettagli in `docs/VPM_018_UX_FIX_03.md`.
 
+> Aggiornamento del 5 novembre 2026 (VPM-019-UX-FINAL-01, PR #284): dopo il restyling #283, UX-B3 chiuso per i residui salvia nello scope. FoodPairing «ottimo» 4,39 → 5,28:1; altri consumer residui esaminati senza ulteriori difetti confermati, OrderTimeline salvia soltanto sull'icona. Corrette le tab Cantina a 375/320 px; Home WebKit classificata come limite della full-page iniziale, senza modifiche al sito. Prove mirate 9/9 sui tre progetti e 6 regressioni originali rilevate; dettagli e limiti in `docs/VPM_019_UX_FINAL_01.md`. Nessuna dichiarazione AA globale dell'app.
+
 > Aggiornamento del 4 novembre 2026 (VPM-018-PERF-01, PR dedicata): PERF-B1 e PERF-B2 chiusi in laboratorio, con l'attesa reale dietro l'AgeGate ancora aperta; PERF-B3 non affrontato. Numeri prima e dopo in `docs/VPM_018_PERF_01.md`.
 
 > Aggiornamento del 4 novembre 2026 (VPM-018-DB-GRID-02, PR dedicata): DB-GRID-02 (GAP-010) è chiuso sul piano della prova con la griglia `12zv`, che impone anche l'elenco delle viste di GAP-024. Nuovo difetto verificato e non corretto: R-DB-01 (P3), 7 funzioni di `private` con EXECUTE a PUBLIC, non raggiungibili da un client finché PostgREST non espone lo schema; correzione in attesa di autorizzazione perché una migrazione arriva a Production. Dettagli in `docs/VPM_018_DB_GRID_02.md`.
