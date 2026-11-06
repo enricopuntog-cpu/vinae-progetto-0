@@ -56,6 +56,7 @@ export function permessiLarghi(testo) {
 
 // Elenco chiuso: una nuova scrittura deve passare da qui, con un motivo.
 const SCRITTURE_AMMESSE = {
+  "technical-heartbeat.yml": ["issues"], // allarme tecnico: soli codici fissi, codice di main
   "offsite-backup-freshness.yml": ["issues"], // apre e chiude l'issue di allarme
   "security-scan.yml": ["security-events"], // carica i risultati di CodeQL
 };

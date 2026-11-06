@@ -20,6 +20,10 @@ Non contiene una seconda costituzione.
 
 Aprire soltanto ciò che serve al task:
 
+- Monitoraggio pre-lancio OBS-01: [`../docs/VPM_022C_OBS_01.md`](../docs/VPM_022C_OBS_01.md)
+  contiene strumenti nativi, log minimizzati, heartbeat, responsabilità e residui
+  pre-Stripe; non equivale a un servizio di allarme su ogni evento.
+
 - [`01_STATO_ATTUALE.md`](01_STATO_ATTUALE.md) — dossier cronologico di misure e
   stati verificati; l'apertura è una fotografia del 9 agosto 2026, non lo stato
   corrente. L'ultima voce è del 23 settembre 2026: backup B2 attivo, readback
