@@ -1,5 +1,13 @@
 # Configurazione degli ambienti
 
+## Monitoraggio tecnico OBS-01
+
+Log Next/browser sullo stesso origin e `/api/health` non richiedono variabili
+o credenziali nuove. Il workflow `technical-heartbeat.yml` usa il token Actions
+effimero con `issues: write` e legge il gate `PAYOUTS_SCHEDULER_ENABLED` già
+esistente; non lo abilita e non invoca funzioni finanziarie. Soglie, privacy,
+retention e interventi in [VPM_022C_OBS_01.md](VPM_022C_OBS_01.md).
+
 ## Regole generali
 
 - Copiare gli esempi locali, senza modificarli con valori reali nel repository.
