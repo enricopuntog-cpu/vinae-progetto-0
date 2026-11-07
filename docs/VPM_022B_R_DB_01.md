@@ -131,5 +131,8 @@ Dopo nuova autorizzazione specifica del founder al merge e alla distribuzione:
    definer postgres; `private` ancora escluso dalla Data API. Nessuna griglia
    mutativa o fixture su Production senza autorizzazione ulteriore.
 
-La PR deve restare **PRONTA, NON MERGIATA**, con auto-merge disattivo.
-La migration VPM-022B non è applicata a Production. OBS-01 e altri task non avviati.
+Il 7 novembre il founder ha autorizzato lo squash merge della sola PR #286 e
+la conseguente applicazione automatica di questa migration. Il riallineamento
+a main dopo #287 ha richiesto di conciliare il solo handoff. La chiusura richiede
+ancora i check verdi sulla testa riallineata e la verifica Production in sola
+lettura. Lo stato precedente resta evidenza della fase di review.
