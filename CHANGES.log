@@ -1,4 +1,5 @@
 ## CURRENT STATE
+- VPM-022D, gate database: inclusa la griglia Sommelier 10b nel filtro dei percorsi. Il caso con la sola 10b prima falliva e ora fa partire il gate. La griglia viene aggiunta al runner dalla #286.
 - VPM-022B-R-DB-01, PR #286: autorizzato il rilascio della sola revoca EXECUTE a PUBLIC su sette funzioni private. Riallineamento a #287 con conflitto limitato a questo handoff. Cinque trigger e due wrapper service_role preservati, con griglie 12zv e 10b nel gate DB. Chiusura subordinata a CI sul nuovo SHA e verifica Production in sola lettura.
 - VPM-022B: rilascio autorizzato e verifica dei privilegi effettivi dopo la distribuzione automatica.
 - VPM-023 WebKit: le verifiche Accessori di ordini distinti dello stesso acquirente usano schede separate per evitare di annullare le letture in corso, mantenendo asserzioni e diagnostica.
