@@ -115,7 +115,7 @@ jobs:
       # che si svuota in silenzio.
       - name: Test
         env:
-          MIN_TESTS: "3484"
+          MIN_TESTS: "3493"
         run: |
           set -o pipefail
           bun run test 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
@@ -220,6 +220,7 @@ jobs:
       - name: Workflow security rules
         run: |
           node --test .github/scripts/workflow-security.test.mjs
+          node --test .github/scripts/technical-heartbeat.test.mjs
           bash -n .github/scripts/secret-scan-selftest.sh
 
   backend:

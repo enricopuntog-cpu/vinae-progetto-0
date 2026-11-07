@@ -1,0 +1,35 @@
+name: Vinea - technical heartbeat
+
+on:
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: vinea-technical-heartbeat
+  cancel-in-progress: false
+
+jobs:
+  heartbeat:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "22"
+      - name: Check liveness and existing payout scheduler
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PAYOUTS_SCHEDULER_ENABLED: ${{ vars.PAYOUTS_SCHEDULER_ENABLED }}
+        run: node .github/scripts/technical-heartbeat.mjs

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { reportClientEvent } from "@/lib/observability/client";
 
 /**
  * Pagina di errore dell'applicazione (VPM-018-UX-A11Y-01, GAP-005): corpo comune
@@ -28,6 +29,7 @@ export function ErroreDiPagina({ errore, onRetry }: { errore: unknown; onRetry?:
   useEffect(() => {
     // Una sola volta per errore: nessun ciclo di rendering.
     console.error("[vinea] errore di pagina, impronta:", impronta(errore));
+    reportClientEvent("client_boundary");
   }, [errore]);
 
   useEffect(() => {
