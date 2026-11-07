@@ -12,13 +12,14 @@
 // produzione con zero trasferimenti.
 import { pathToFileURL } from "node:url";
 
-const COUNTERS = [
+const OPERATION_COUNTERS = [
   "trasferiti",
   "gia_trasferiti",
   "bloccati",
   "falliti",
   "auto_rilasciati",
-  "trattenuti_scaduti_oltre_24h",
+  "prelievi_falliti",
+  "rimborsi_accessori_falliti",
 ];
 
 const required = (env, name) => {
@@ -42,14 +43,14 @@ const validatePayload = (value, expectedBatch) => {
   if (typeof value.payments_enabled !== "boolean" || value.batch_limit !== expectedBatch) {
     throw new Error("Payload inatteso dalla Edge Function");
   }
-  for (const field of COUNTERS) {
+  for (const field of [...OPERATION_COUNTERS, "trattenuti_scaduti_oltre_24h"]) {
     if (!Number.isInteger(value[field]) || value[field] < 0) {
       throw new Error("Payload inatteso dalla Edge Function");
     }
   }
   if (
     !value.payments_enabled &&
-    ["trasferiti", "gia_trasferiti", "bloccati", "falliti", "auto_rilasciati"].some(
+    OPERATION_COUNTERS.some(
       (field) => value[field] !== 0,
     )
   ) {
@@ -117,6 +118,12 @@ export const runPayoutsRelease = async ({ env = process.env, fetchImpl = fetch }
 
   if (payload.falliti > 0) {
     throw new Error(`Rilasci falliti: ${payload.falliti}`);
+  }
+  if (payload.prelievi_falliti > 0) {
+    throw new Error(`Prelievi falliti: ${payload.prelievi_falliti}`);
+  }
+  if (payload.rimborsi_accessori_falliti > 0) {
+    throw new Error(`Rimborsi Accessori falliti: ${payload.rimborsi_accessori_falliti}`);
   }
   if (payload.trattenuti_scaduti_oltre_24h > 0) {
     throw new Error(
