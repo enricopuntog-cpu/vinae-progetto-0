@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { AuthRetryableFetchError, AuthSessionMissingError, type AuthError, type SupabaseClient } from "@supabase/supabase-js";
 import { creaProfileService } from "@/services/profile-service";
 
 // ---------------------------------------------------------------------------
@@ -28,6 +28,7 @@ const fakeClient = (opzioni: {
   sessione?: { id: string; email: string | null } | null;
   riga?: Record<string, unknown> | null;
   errore?: Errore;
+  erroreAuth?: AuthError;
   /**
    * `auth.users.email_confirmed_at` come lo restituisce GoTrue: una stringa
    * quando l'indirizzo è confermato, `null` quando non lo è. Il valore
@@ -92,7 +93,7 @@ const fakeClient = (opzioni: {
     auth: {
       // `getUser()` e non `getSession()`: il servizio legge da qui anche
       // `email_confirmed_at`, e quel campo deve venire dal server.
-      getUser: async () => ({ data: { user: utente } }),
+      getUser: async () => ({ data: { user: utente }, error: opzioni.erroreAuth ?? null }),
       getSession: async () => ({ data: { session: utente ? { user: utente } : null } }),
     },
     from: (tabella: string) => builder(tabella),
@@ -131,10 +132,23 @@ describe("lettura del profilo corrente", () => {
   });
 
   it("senza sessione non interroga nemmeno la tabella", async () => {
-    const { client, letture } = fakeClient({ sessione: null });
+    const { client, letture } = fakeClient({ sessione: null, erroreAuth: new AuthSessionMissingError() });
     const esito = await creaProfileService(client).leggiProfiloCorrente();
 
     expect(esito).toEqual({ ok: true, data: null });
+    expect(letture).toHaveLength(0);
+  });
+
+  it("separa un errore Auth transitorio da un profilo assente", async () => {
+    const { client, letture } = fakeClient({
+      erroreAuth: new AuthRetryableFetchError("dettagli interni", 0),
+    });
+
+    const esito = await creaProfileService(client).leggiProfiloCorrente();
+    expect(esito).toEqual({
+      ok: false,
+      error: "Non è stato possibile completare l'operazione sul profilo. Riprova fra qualche istante.",
+    });
     expect(letture).toHaveLength(0);
   });
 
