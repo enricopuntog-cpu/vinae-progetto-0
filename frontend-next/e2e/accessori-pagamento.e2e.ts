@@ -357,8 +357,11 @@ test.describe.serial("Accessori: Payment Element con provider simulato @smoke @c
     await expect(pa.getByTestId("ordine-stato")).toHaveText("Prenotato, in attesa di pagamento");
     await expect(pa.getByTestId("pagamento-non-disponibile")).toContainText("non è ancora attivo");
     await expect(pa.getByTestId("pagamento-paga")).toHaveCount(0);
-    await pa.goto(`/ordini-accessori/${ordineId}`);
-    await expect(pa.getByTestId("ordine-stato")).toHaveText("Pagamento confermato");
+    // Due visite indipendenti: lascia terminare le letture della prima pagina.
+    const paginaPagato = await acquirente.newPage();
+    diagnostica.osserva(paginaPagato, "acquirente, ordine pagato");
+    await paginaPagato.goto(`/ordini-accessori/${ordineId}`);
+    await expect(paginaPagato.getByTestId("ordine-stato")).toHaveText("Pagamento confermato");
     expect(mockA.aperture).toHaveLength(0);
     expect(mockA.richiesteStripeReali).toEqual([]);
     expect(eseguiSql("select (select count(*) from public.orders) || '/' || (select count(*) from public.payments);")).toBe("0/0");
