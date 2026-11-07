@@ -1,7 +1,7 @@
 "use client";
 
 import { codiceErrore } from "@/lib/errore-per-log";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { isAuthSessionMissingError, type SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
   BUCKET_AVATAR_PROFILI,
@@ -203,7 +203,10 @@ export function creaProfileService(supabase: SupabaseClient): ProfileService {
       // `getUser()` e non `getSession()`: da qui esce anche
       // `email_confirmed_at`, e quel campo va preso dal server. Vedi
       // `emailConfermata()`.
-      const { data: utenteAuth } = await supabase.auth.getUser();
+      const { data: utenteAuth, error: erroreAuth } = await supabase.auth.getUser();
+      if (erroreAuth && !isAuthSessionMissingError(erroreAuth)) {
+        return { ok: false, error: ERRORE_GENERICO_PROFILO };
+      }
       const utente = utenteAuth.user;
       if (!utente) return { ok: true, data: null };
 
