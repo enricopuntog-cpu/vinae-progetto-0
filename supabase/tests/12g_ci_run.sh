@@ -307,6 +307,17 @@ E2E_DB_URL="$E2E_DB_URL" E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_ANON_KEY="$E2E
 # VPM-018-DB-GRID-02: ogni SECURITY DEFINER con search_path fissato, elenchi chiusi dei ruoli
 # client, controlli negativi. ROLLBACK.
 run_grid "12zv SECURITY DEFINER globale" 12zv_vpm_018_definer_globale.sql 3
+# VPM-022B: le helper private restano raggiunte dai wrapper service_role.
+# La griglia esistente verifica ownership, TTL e cap; fallisce in SQL se non 32/32.
+sommelier_log="$(mktemp)"
+if ! "${PSQL[@]}" -At -F '|' -f "$TESTS/10b_sommelier_storico.sql" > "$sommelier_log" 2>&1; then
+  cat "$sommelier_log"
+  rm -f "$sommelier_log"
+  die "10b storico Sommelier: regressione fallita."
+fi
+cat "$sommelier_log"
+rm -f "$sommelier_log"
+summary "- 10b storico Sommelier: 32/32"
 
 # Vinea Partner Blocco A (migrazione 20261011150000): inviti monouso legati
 # all'email (validi, scaduti, revocati, usati, replay), consegna dei dati,
