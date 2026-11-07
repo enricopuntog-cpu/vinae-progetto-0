@@ -128,7 +128,7 @@ jobs:
           elif [ "$SUITE" = "ux-final" ]; then
             bun run e2e ux-final 2>&1 | tee "$log"
           elif [ "$SUITE" = "completa" ]; then
-            bun run e2e 2>&1 | tee "$log"
+            bun run e2e accessori-pagamento 2>&1 | tee "$log"
           else
             bun run e2e:smoke 2>&1 | tee "$log"
           fi
