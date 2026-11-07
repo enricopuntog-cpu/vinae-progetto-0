@@ -293,13 +293,16 @@ test.describe.serial("Accessori: Payment Element con provider simulato @smoke @c
   }, info) => {
     const contesto = await contestoAutenticato(browser, "altro", opzioniDelProgetto(info));
     await installaMock(contesto);
-    const page = await contesto.newPage();
-    diagnostica.osserva(page, "acquirente");
-    // Un `checkout=success` inventato non vale nulla; il ritorno vero invita solo a rileggere.
-    await page.goto(`/ordini-accessori/${ordineId}?checkout=success`);
-    await expect(page.getByTestId("ordine-stato")).toHaveText("Prenotato, in attesa di pagamento");
-    await expect(page.getByTestId("pagamento-paga")).toBeVisible();
+    // Le due visite rappresentano ingressi indipendenti. Su WebKit una seconda
+    // navigazione nella stessa scheda annulla le letture avviate dalla prima.
+    const paginaEsitoInventato = await contesto.newPage();
+    diagnostica.osserva(paginaEsitoInventato, "esito inventato");
+    await paginaEsitoInventato.goto(`/ordini-accessori/${ordineId}?checkout=success`);
+    await expect(paginaEsitoInventato.getByTestId("ordine-stato")).toHaveText("Prenotato, in attesa di pagamento");
+    await expect(paginaEsitoInventato.getByTestId("pagamento-paga")).toBeVisible();
 
+    const page = await contesto.newPage();
+    diagnostica.osserva(page, "ritorno");
     await page.goto(`/ordini-accessori/${ordineId}?checkout=ritorno`);
     await expect(page.getByTestId("pagamento-stato")).toContainText("Pagamento in elaborazione");
     await expect(page.getByTestId("ordine-stato")).toHaveText("Prenotato, in attesa di pagamento");
