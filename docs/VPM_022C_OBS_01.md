@@ -178,3 +178,11 @@ automatici sui singoli eventi/5xx/Auth e controlli su code rimborsi/prelievi da
 chiudere prima di Stripe. Non dichiarare GAP-006 integralmente chiuso solo
 perché esistono console/health. Nessuna decisione commerciale, migrazione
 Production, modifica Stripe/logistica o avanzamento VPM-023 effettuati.
+
+## Verifica operativa del 7 novembre 2026
+
+I run schedulati hanno risposto healthy. I tre run osservati (`42299588588`, `42326856727` e `42357293970`) presentano due intervalli di 4h11 e 6h54. Il cron ogni 30 minuti non garantisce quel tempo di rilevazione. Deduplica, apertura e chiusura sono coperte da un'API finta. Consegna email o push all'owner non verificata.
+
+Il runner adesso valida e segnala `prelievi_falliti` e `rimborsi_accessori_falliti`. Con pagamenti disattivati entrambi devono valere zero. Confermato il contratto nel sorgente della Edge Function distribuita. Prove Node con fetch finta, 63/63 tra runner, heartbeat e controlli workflow. La prima categoria di errore determina il messaggio del run.
+
+L'età delle code di prelievo e rimborso richiede un segnale separato e una soglia concordata. I log 5xx e Auth restano in revisione manuale. Prima di Stripe servono anche la prova test mode, la verifica della consegna degli alert e le notifiche webhook lato provider.

@@ -99,6 +99,7 @@
 3. Chiudere il ciclo tecnico OBS-01 e consegnare i residui senza avviare VPM-023.
 
 ## BLOCKERS / NOTES
+- VPM-022C, osservatore payout: il runner fallisce se la Edge Function riferisce errori di prelievo o di rimborso Accessori. Contratto confermato nel sorgente Edge distribuito. Prove con fetch finta e heartbeat, nessuna modifica a provider, contabilità o flag.
 - Decisioni preesistenti ancora aperte, non avviate da VPM-022A: tetto sessioni anonime R-MV-01; mitigazione provider R-AUTH-01; autorizzazione e credenziali Stripe TEST isolate.
 - Decisioni precedentemente in NEXT STEPS, ancora aperte (scope estraneo a VPM-019):
 1. Titolare: decidere il tetto delle sessioni anonime del Beta Test (R-MV-01, `docs/VPM_018_DB_GRID_01.md` § 3); decidere la mitigazione lato provider di R-AUTH-01 (CAPTCHA, che cambia anche registrazione e accesso; Send Email Hook o SMTP personalizzato; limite per origine). Lettura GoTrue autorizzata per VPM-021 ma versione NON VERIFICATA: health senza chiave 401 e campi versione dei log senza risultato, nessuna chiave letta. Resta il riferimento upstream supabase/auth#2398 (`docs/VPM_018_R_AUTH_01.md` § 6), il cui stato non è stato riletto in VPM-021. La decisione UX-B3 è superata dal restyling VPM-019 e dalla chiusura dei residui in UX-FINAL-01.
