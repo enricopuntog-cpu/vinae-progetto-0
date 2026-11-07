@@ -1,0 +1,55 @@
+{
+  "task": "VPM-022A-CLOSE",
+  "merge_sha": "d2cb03fad618558c539e1cc1701048f440338cb0",
+  "pr_head": "1e32ee622722eb166a1e503cb06ab0418478cb35",
+  "project_ref": "pijnmcllmfgjmgsvtcej",
+  "ledger": {
+    "local_count": 109,
+    "remote_count": 109,
+    "missing_remote": [],
+    "extra_remote": []
+  },
+  "hook": {
+    "owner": true,
+    "acl": true,
+    "security_definer": true,
+    "search_path": true,
+    "only_prefix_changed": true,
+    "body_before": "e408426e01b33c5417c471c83381b3a1",
+    "body_after": "5ff7040482df83dba88398998fb07764"
+  },
+  "netlify": {
+    "attempt": "6aecf648da80a45b5f48305e",
+    "commit": "d2cb03fad618558c539e1cc1701048f440338cb0",
+    "state": "error",
+    "reason": "Canceled build due to no content change",
+    "published_at": null,
+    "live_deploy": "6aecced3e3f6be94800e1016",
+    "live_sha": "f38b40e69b2c4b4dac0981f71297b13f91c27a01",
+    "founder_accepted_skip": true
+  },
+  "hosted_request_path": "NON VERIFICATO",
+  "production_mutations": "automatic integration only; no manual SQL/db push",
+  "main_workflows": [
+    {
+      "name": "CI",
+      "conclusion": "success",
+      "id": 42113803024
+    },
+    {
+      "name": "Supabase DB regression",
+      "conclusion": "success",
+      "id": 42113802725
+    },
+    {
+      "name": "E2E browser",
+      "conclusion": "success",
+      "id": 42113802864
+    },
+    {
+      "name": "Security scan",
+      "conclusion": "success",
+      "id": 42113802766
+    }
+  ]
+}

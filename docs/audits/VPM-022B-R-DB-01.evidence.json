@@ -1,0 +1,209 @@
+{
+  "task": "VPM-022B-R-DB-01",
+  "baseline": "d2cb03fad618558c539e1cc1701048f440338cb0",
+  "migration": "20261105214332_vpm_022b_private_execute_hardening.sql",
+  "lab": {
+    "project_id": "vpm022b_rdb01",
+    "postgres": "17.6",
+    "cli": "2.117.0",
+    "migration_count": 110,
+    "clean_reset": true,
+    "destroyed_without_backup": true
+  },
+  "tests": {
+    "grid_12zv_before": "29/34",
+    "grid_12zv_before_failed": [
+      6,
+      7,
+      8,
+      19,
+      21
+    ],
+    "grid_12zv_after": "34/34",
+    "grid_10b_before": "32/32",
+    "grid_10b_after": "32/32",
+    "public_helper_mutation_failed": [
+      6,
+      7,
+      8,
+      19,
+      21
+    ],
+    "explicit_client_mutation_failed": [
+      7,
+      8,
+      19
+    ],
+    "service_wrapper_mutation_failed": [
+      20,
+      34
+    ],
+    "final_residues": {
+      "auth_users": 0,
+      "sommelier_messaggi": 0,
+      "orders": 0,
+      "seller_payout_accounts": 0,
+      "club_fixture": 0
+    }
+  },
+  "functions_before": [
+    {
+      "signature": "private.seller_enabled_sync()",
+      "owner": "postgres",
+      "body": "dafafee1a7a49f8ccbfc1a4710e92c8a",
+      "definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": null
+    },
+    {
+      "signature": "private.orders_tracking_sync()",
+      "owner": "postgres",
+      "body": "8954f64e18369df5e8cd59afd016a8f2",
+      "definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": null
+    },
+    {
+      "signature": "private.disputes_invariante()",
+      "owner": "postgres",
+      "body": "6385f6758dc75a34b3765e04c00f9205",
+      "definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": null
+    },
+    {
+      "signature": "private.sommelier_contesto_leggi(uuid,text,integer)",
+      "owner": "postgres",
+      "body": "c58ef125f14e0fde1a2083f332bcdcb7",
+      "definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": null
+    },
+    {
+      "signature": "private.sommelier_scambio_registra(uuid,text,text,text)",
+      "owner": "postgres",
+      "body": "2f1ef7e59ddf2bd7f6a45948ab7f52fb",
+      "definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": null
+    },
+    {
+      "signature": "private.club_post_owner_only_guard()",
+      "owner": "postgres",
+      "body": "98d0cb5565e5b4f3fc460c24dd1e7490",
+      "definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": null
+    },
+    {
+      "signature": "private.club_risposta_owner_only_guard()",
+      "owner": "postgres",
+      "body": "83b13587aa7bd6e3cbcceeeb1d2721a0",
+      "definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": null
+    }
+  ],
+  "functions_after": [
+    {
+      "signature": "private.seller_enabled_sync()",
+      "owner": "postgres",
+      "body": "dafafee1a7a49f8ccbfc1a4710e92c8a",
+      "definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "signature": "private.orders_tracking_sync()",
+      "owner": "postgres",
+      "body": "8954f64e18369df5e8cd59afd016a8f2",
+      "definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "signature": "private.disputes_invariante()",
+      "owner": "postgres",
+      "body": "6385f6758dc75a34b3765e04c00f9205",
+      "definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "signature": "private.sommelier_contesto_leggi(uuid,text,integer)",
+      "owner": "postgres",
+      "body": "c58ef125f14e0fde1a2083f332bcdcb7",
+      "definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "signature": "private.sommelier_scambio_registra(uuid,text,text,text)",
+      "owner": "postgres",
+      "body": "2f1ef7e59ddf2bd7f6a45948ab7f52fb",
+      "definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "signature": "private.club_post_owner_only_guard()",
+      "owner": "postgres",
+      "body": "98d0cb5565e5b4f3fc460c24dd1e7490",
+      "definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "signature": "private.club_risposta_owner_only_guard()",
+      "owner": "postgres",
+      "body": "83b13587aa7bd6e3cbcceeeb1d2721a0",
+      "definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "acl": [
+        "postgres=X/postgres"
+      ]
+    }
+  ],
+  "production_applied": false,
+  "auto_merge": false
+}
