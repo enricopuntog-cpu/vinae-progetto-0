@@ -38,6 +38,8 @@ const payload = (overrides = {}) => ({
   gia_trasferiti: 1,
   bloccati: 0,
   falliti: 0,
+  prelievi_falliti: 0,
+  rimborsi_accessori_falliti: 0,
   auto_rilasciati: 3,
   trattenuti_scaduti_oltre_24h: 0,
   ...overrides,
@@ -105,6 +107,49 @@ test("fallisce se un rilascio non riesce", async () => {
     /Rilasci falliti: 1/,
   );
 });
+
+for (const [field, message] of [
+  ["prelievi_falliti", /Prelievi falliti: 1/],
+  ["rimborsi_accessori_falliti", /Rimborsi Accessori falliti: 1/],
+]) {
+  test(`${field}: fallisce il job quando il contatore è positivo`, async () => {
+    await assert.rejects(
+      runPayoutsRelease({
+        env: ENV,
+        fetchImpl: async () => Response.json(payload({ [field]: 1 })),
+      }),
+      message,
+    );
+  });
+
+  test(`${field}: richiede zero con pagamenti disattivati`, async () => {
+    await assert.rejects(
+      runPayoutsRelease({
+        env: ENV,
+        fetchImpl: async () => Response.json(payload({
+          payments_enabled: false,
+          trasferiti: 0,
+          gia_trasferiti: 0,
+          auto_rilasciati: 0,
+          [field]: 1,
+        })),
+      }),
+      /Payload inatteso/,
+    );
+  });
+
+  test(`${field}: rifiuta contatori assenti o invalidi`, async () => {
+    for (const value of [undefined, -1, 1.5, "1"]) {
+      await assert.rejects(
+        runPayoutsRelease({
+          env: ENV,
+          fetchImpl: async () => Response.json(payload({ [field]: value })),
+        }),
+        /Payload inatteso/,
+      );
+    }
+  });
+}
 
 test("fallisce se restano ordini trattenuti e scaduti da oltre 24 ore", async () => {
   await assert.rejects(

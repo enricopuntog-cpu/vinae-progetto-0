@@ -1,4 +1,5 @@
 ## CURRENT STATE
+- VPM-022C, osservatore payout: il runner fallisce se la Edge Function riferisce errori di prelievo o di rimborso Accessori. Contratto confermato nel sorgente Edge distribuito. Prove con fetch finta e heartbeat, nessuna modifica a provider, contabilità o flag.
 - VPM-022D, gate database: inclusa la griglia Sommelier 10b nel filtro dei percorsi. Il caso con la sola 10b prima falliva e ora fa partire il gate. La griglia viene aggiunta al runner dalla #286.
 - VPM-022B-R-DB-01, PR #286: autorizzato il rilascio della sola revoca EXECUTE a PUBLIC su sette funzioni private. Riallineamento a #287 con conflitto limitato a questo handoff. Cinque trigger e due wrapper service_role preservati, con griglie 12zv e 10b nel gate DB. Chiusura subordinata a CI sul nuovo SHA e verifica Production in sola lettura.
 - VPM-022B: rilascio autorizzato e verifica dei privilegi effettivi dopo la distribuzione automatica.
