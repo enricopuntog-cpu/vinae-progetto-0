@@ -179,6 +179,12 @@ export default function SaldoVineaPanel() {
                     <div>
                       <p className="text-sm font-medium">{etichettaStatoPrelievo(p.stato)}</p>
                       <p className="text-xs text-muted-foreground">{formatEUR(p.amountCents / 100)} · {new Date(p.createdAt).toLocaleDateString("it-IT")}</p>
+                      {p.stato === "esito_incerto" && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Stiamo verificando l&apos;esito con il fornitore dei pagamenti. L&apos;importo resta impegnato e il
+                          prelievo non può essere annullato finché la verifica non è chiusa.
+                        </p>
+                      )}
                     </div>
                     {prelievoAnnullabile(p.stato) && (
                       <Button size="sm" variant="outline" onClick={() => annullaPrelievo(p.id)} disabled={prelievoInCorso}>Annulla</Button>

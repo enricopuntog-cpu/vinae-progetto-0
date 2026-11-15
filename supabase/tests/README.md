@@ -851,3 +851,28 @@ prima delle fixture 12g; il runner verifica anche l'audit del delegato
 (`3 1`: tre eventi, un ritiro). Richiede `[auth.mfa.totp]` abilitato in
 `config.toml`. Esito del 23 settembre 2026 su stack locale: 13/13, audit
 `3 1`, residui `0 0 0 0 0 0`; con il corpo precedente della funzione 10/13.
+
+## VPM-FIN-001 — prelievi dall'esito incerto (G-12)
+
+[`12zx_fin_001_prelievi_esito_incerto.sql`](12zx_fin_001_prelievi_esito_incerto.sql) — 46 casi sulle
+migrazioni `20261115100000` (stato `esito_incerto`) e `20261115100100` (logica), nel gate DB
+(`12g_ci_run.sh`). [`12zx_fin_001_concorrenza.sh`](12zx_fin_001_concorrenza.sh) — 6 prove su
+sessioni PostgreSQL realmente separate, con la stessa guardia di identità dello stack effimero di
+12zp.
+
+**Difetto riprodotto.** Un timeout o un 5xx dopo cui Stripe poteva avere già eseguito il Transfer
+veniva registrato come `fallito`; `fallito` era annullabile dal titolare, quindi i centesimi
+tornavano spendibili e una nuova richiesta con chiave diversa poteva farli uscire due volte. La
+stessa griglia, eseguita sulla baseline `223afe2` (senza le due migrazioni), dà **37 casi su 46
+rossi** — fra questi A1-A4 (stato `fallito`, annullamento riuscito, prenotazione sciolta, seconda
+richiesta da 90000 accettata) — e lo script di concorrenza esce con «da_trasferire/da_trasferire»:
+due esecutori ricevevano entrambi il Transfer da inviare. Dopo la correzione: 46/46 e 6/6.
+
+**Non provato qui.** Nessun provider è contattato: l'esito lo registra la griglia. Che Stripe
+risponda davvero con quei codici, e che ricordi una chiave di idempotenza per 24 ore, resta un gate
+separato in Test Mode autorizzato. La procedura di risoluzione è in
+[`docs/PRELIEVI_ESITO_INCERTO_RUNBOOK.md`](../../docs/PRELIEVI_ESITO_INCERTO_RUNBOOK.md).
+
+**Nota sulla griglia D1.** [`d1_vinea_balance.sql`](d1_vinea_balance.sql) non è nel gate e non è più
+eseguibile così com'è: dopo lo step-up auth `balance_prelievo_richiedi` risponde `reauth_required` e
+i prelievi della griglia non vengono creati. 12zx simula la sessione recente (`auth.sessions`).

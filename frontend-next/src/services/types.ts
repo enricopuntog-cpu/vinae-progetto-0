@@ -1556,6 +1556,8 @@ export type MovimentoSaldo = {
 export type PrelievoSaldoStato =
   | "richiesto"
   | "in_corso"
+  /** Il trasferimento può essere già partito senza che il sistema lo sappia: bloccato e in verifica. */
+  | "esito_incerto"
   | "trasferito"
   | "fallito"
   | "annullato";

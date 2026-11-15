@@ -307,6 +307,23 @@ E2E_DB_URL="$E2E_DB_URL" E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_ANON_KEY="$E2E
 # VPM-018-DB-GRID-02: ogni SECURITY DEFINER con search_path fissato, elenchi chiusi dei ruoli
 # client, controlli negativi. ROLLBACK.
 run_grid "12zv SECURITY DEFINER globale" 12zv_vpm_018_definer_globale.sql 3
+# VPM-FIN-001 (G-12, migrazioni 20261115100000/20261115100100): un Transfer dall'esito incerto
+# non libera mai i fondi. Prelievo con timeout, 5xx o risposta illeggibile = `esito_incerto`
+# (non annullabile, non rilasciato), ritentativo con la stessa chiave solo entro la finestra di
+# idempotenza, riconciliazione positiva/negativa verificata, orfani `in_corso`, titolare
+# sospeso/rimosso, altro utente, privilegi e ledger invariato nei rifiuti. Nessun provider:
+# l'esito lo registra la griglia. Fixture `@fin001.test`, ROLLBACK, prima delle fixture 12g.
+run_grid "12zx prelievi: esito incerto" 12zx_fin_001_prelievi_esito_incerto.sql 3
+
+# Stessa famiglia su sessioni PostgreSQL realmente separate: due esecutori sullo stesso
+# prelievo (uno solo riceve il Transfer), annullamento del titolare contro presa in carico e
+# contro un esito incerto (mai liberati i fondi), stessa chiave in parallelo, doppio esito
+# positivo, quadratura del libro. Stessa guardia di identita di 12zp (nonce gia esportato),
+# fixture `@conc-12zx.test` rimosse in trap EXIT, residui = 0. Nessun provider chiamato.
+conc_12zx="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zx_fin_001_concorrenza.sh")" \
+  || { printf '%s\n' "$conc_12zx"; die "12zx concorrenza: fallita."; }
+printf '%s\n' "$conc_12zx"
+summary "- $(printf '%s\n' "$conc_12zx" | tail -n 1)"
 # VPM-022B: le helper private restano raggiunte dai wrapper service_role.
 # La griglia esistente verifica ownership, TTL e cap; fallisce in SQL se non 32/32.
 sommelier_log="$(mktemp)"

@@ -56,9 +56,15 @@ export const importoPrelievoInCentesimi = (
  *
  * `in_corso` è fuori di proposito: il bonifico può essere già in volo, e
  * sciogliere lì la prenotazione aprirebbe la finestra in cui lo stesso importo
- * esce due volte. `fallito` invece rientra, perché è la via d'uscita di un
- * trasferimento che non riesce e continuerebbe altrimenti a tenere impegnati
- * centesimi che nessuno riuscirà a spostare.
+ * esce due volte. Lo stesso vale per `esito_incerto` (VPM-FIN-001): un timeout o
+ * una risposta illeggibile non provano che il trasferimento non sia partito.
+ * `fallito` invece rientra, perché da qui in poi significa solo «il fornitore ha
+ * rifiutato»: è la via d'uscita di un trasferimento che non riesce e
+ * continuerebbe altrimenti a tenere impegnati centesimi che nessuno riuscirà a
+ * spostare.
+ *
+ * È solo la presentazione: il rifiuto vero è nel database
+ * (`balance_prelievo_annulla`), che non si lascia aggirare chiamando l'RPC.
  */
 export const prelievoAnnullabile = (stato: PrelievoSaldoStato | string): boolean =>
   stato === "richiesto" || stato === "fallito";

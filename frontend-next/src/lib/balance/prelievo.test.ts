@@ -59,6 +59,10 @@ describe("prelievoAnnullabile", () => {
     expect(prelievoAnnullabile("in_corso")).toBe(false);
   });
 
+  it("VPM-FIN-001: non offre l'annullamento su un trasferimento dall'esito incerto", () => {
+    expect(prelievoAnnullabile("esito_incerto")).toBe(false);
+  });
+
   it("non offre l'annullamento su ciò che è già concluso", () => {
     expect(prelievoAnnullabile("trasferito")).toBe(false);
     expect(prelievoAnnullabile("annullato")).toBe(false);

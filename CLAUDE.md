@@ -216,6 +216,13 @@ RLS filters rows, never columns:
   written only from signed provider events, never from seller requests.
 - Payment completion paths must not react to moderation state in a way that can
   freeze already-paid funds without an exit.
+- A transfer whose outcome is unknown (timeout, 5xx, unreadable response, executor died mid-call)
+  is `esito_incerto`, never `fallito`: it never frees the reservation and the owner cannot cancel
+  it. Only a retry with the same idempotency key within 20 hours of the first uncertain attempt,
+  or a verified reconciliation (`prelievo_riconcilia`, service_role, after 24 hours for the
+  negative case), closes it. `fallito` means the provider provably rejected the request. A provider
+  adapter that cannot classify an error must not call it a rejection. Runbook:
+  `docs/PRELIEVI_ESITO_INCERTO_RUNBOOK.md`.
 - Every door that moves money out to the user calls
   `perform private.autenticazione_recente_richiedi(900);` as the first
   statement after its idempotent replay branch (today only
