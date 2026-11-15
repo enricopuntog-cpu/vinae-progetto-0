@@ -281,3 +281,58 @@ test("nessun valore di secret finisce nei log, acceso o spento", async () => {
     assert.equal(acceso.log.includes(segreto), false);
   }
 });
+
+test("VPM-FIN-001: fallisce finche esistono prelievi con esito incerto da riconciliare", async () => {
+  await assert.rejects(
+    runPayoutsRelease({
+      env: ENV,
+      fetchImpl: async () => Response.json(payload({ prelievi_incerti_aperti: 2, prelievi_incerti: 1 })),
+    }),
+    /Prelievi con esito incerto da riconciliare: 2/,
+  );
+});
+
+test("VPM-FIN-001: lo stock di incerti si segnala anche con i pagamenti spenti", async () => {
+  await assert.rejects(
+    runPayoutsRelease({
+      env: ENV,
+      fetchImpl: async () =>
+        Response.json(
+          payload({
+            payments_enabled: false,
+            trasferiti: 0,
+            gia_trasferiti: 0,
+            auto_rilasciati: 0,
+            prelievi_incerti_aperti: 1,
+          }),
+        ),
+    }),
+    /Prelievi con esito incerto da riconciliare: 1/,
+  );
+});
+
+test("VPM-FIN-001: i nuovi contatori sono opzionali (Edge Function precedente) ma validati se presenti", async () => {
+  const result = await runPayoutsRelease({
+    env: ENV,
+    fetchImpl: async () => Response.json(payload()),
+  });
+  assert.equal(result.stato, "eseguito");
+
+  for (const valore of [-1, 1.5, "1", null]) {
+    await assert.rejects(
+      runPayoutsRelease({
+        env: ENV,
+        fetchImpl: async () => Response.json(payload({ prelievi_incerti_aperti: valore })),
+      }),
+      /Payload inatteso/,
+    );
+  }
+});
+
+test("VPM-FIN-001: zero incerti aperti non fa fallire il job", async () => {
+  const result = await runPayoutsRelease({
+    env: ENV,
+    fetchImpl: async () => Response.json(payload({ prelievi_incerti_aperti: 0, prelievi_orfani_marcati: 0 })),
+  });
+  assert.equal(result.stato, "eseguito");
+});

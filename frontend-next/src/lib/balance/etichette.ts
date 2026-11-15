@@ -27,6 +27,7 @@ export const ETICHETTE_MOVIMENTO: Record<MovimentoSaldoTipo, string> = {
 export const ETICHETTE_STATO_PRELIEVO: Record<PrelievoSaldoStato, string> = {
   richiesto: "Richiesto",
   in_corso: "In trasferimento",
+  esito_incerto: "In verifica",
   trasferito: "Trasferito",
   fallito: "Non riuscito",
   annullato: "Annullato",

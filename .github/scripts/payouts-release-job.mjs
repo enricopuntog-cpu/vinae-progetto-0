@@ -22,6 +22,16 @@ const OPERATION_COUNTERS = [
   "rimborsi_accessori_falliti",
 ];
 
+// Contatori introdotti da VPM-FIN-001. Opzionali: se la Edge Function in esecuzione e precedente
+// (o il job precede il deploy) il campo manca e vale zero; se c'e deve essere un intero >= 0.
+// `prelievi_incerti_aperti` e uno STOCK: non e nullo con i pagamenti spenti solo se esistono
+// prelievi in attesa di riconciliazione, ed e proprio quello che deve restare visibile.
+const OPTIONAL_COUNTERS = [
+  "prelievi_incerti",
+  "prelievi_orfani_marcati",
+  "prelievi_incerti_aperti",
+];
+
 const required = (env, name) => {
   const value = env[name]?.trim();
   if (!value) throw new Error(`Configurazione mancante: ${name}`);
@@ -45,6 +55,11 @@ const validatePayload = (value, expectedBatch) => {
   }
   for (const field of [...OPERATION_COUNTERS, "trattenuti_scaduti_oltre_24h"]) {
     if (!Number.isInteger(value[field]) || value[field] < 0) {
+      throw new Error("Payload inatteso dalla Edge Function");
+    }
+  }
+  for (const field of OPTIONAL_COUNTERS) {
+    if (value[field] !== undefined && (!Number.isInteger(value[field]) || value[field] < 0)) {
       throw new Error("Payload inatteso dalla Edge Function");
     }
   }
@@ -121,6 +136,14 @@ export const runPayoutsRelease = async ({ env = process.env, fetchImpl = fetch }
   }
   if (payload.prelievi_falliti > 0) {
     throw new Error(`Prelievi falliti: ${payload.prelievi_falliti}`);
+  }
+  // Un trasferimento dall'esito incerto non libera mai i fondi da solo: resta bloccato finche un
+  // operatore non lo riconcilia (docs/PRELIEVI_ESITO_INCERTO_RUNBOOK.md). Il job lo segnala a
+  // ogni giro, anche dopo che il prelievo e uscito dalla coda automatica.
+  if ((payload.prelievi_incerti_aperti ?? 0) > 0) {
+    throw new Error(
+      `Prelievi con esito incerto da riconciliare: ${payload.prelievi_incerti_aperti}`,
+    );
   }
   if (payload.rimborsi_accessori_falliti > 0) {
     throw new Error(`Rimborsi Accessori falliti: ${payload.rimborsi_accessori_falliti}`);

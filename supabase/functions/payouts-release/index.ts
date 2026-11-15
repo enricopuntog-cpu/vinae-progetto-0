@@ -69,6 +69,12 @@ type Esito = {
   prelievi_trasferiti: number;
   prelievi_bloccati: number;
   prelievi_falliti: number;
+  /** Prelievi di questa esecuzione il cui Transfer può essere partito senza che lo sappiamo. */
+  prelievi_incerti: number;
+  /** Prelievi `in_corso` rimasti orfani (esecutore morto) e portati a `esito_incerto`. */
+  prelievi_orfani_marcati: number;
+  /** Stock: prelievi in `esito_incerto` di qualunque età, finché nessuno li riconcilia. */
+  prelievi_incerti_aperti: number;
   ricavi_accessori_rilasciati: number;
   rimborsi_accessori_inviati: number;
   rimborsi_accessori_bloccati: number;
@@ -158,6 +164,25 @@ const contaTrattenutiScaduti = async (supabase: SupabaseClient): Promise<number>
   return count;
 };
 
+/**
+ * Quanti prelievi attendono ancora una riconciliazione. È uno STOCK, non un evento: un incerto esce
+ * dalla coda dopo la finestra di idempotenza e nessuna esecuzione lo tocca più, ma i suoi centesimi
+ * restano impegnati. Contarlo a ogni giro (anche con i pagamenti spenti) è ciò che impedisce che un
+ * blocco di fondi diventi silenzioso.
+ */
+const contaPrelieviIncerti = async (supabase: SupabaseClient): Promise<number> => {
+  const { count, error } = await supabase
+    .from("balance_withdrawals")
+    .select("id", { count: "exact", head: true })
+    .eq("stato", "esito_incerto");
+
+  if (error || count === null) {
+    console.error("[payouts-release] conteggio prelievi incerti fallito", { code: error?.code });
+    throw new Error("sanita_non_disponibile");
+  }
+  return count;
+};
+
 const rilascia = async (
   supabase: SupabaseClient,
   orderId: string,
@@ -218,10 +243,11 @@ const rilascia = async (
  * Esecuzione di un prelievo richiesto. Stessa forma del rilascio di un ordine e
  * stesso provider; cambia soltanto che cosa autorizza l'uscita del denaro.
  *
- * Il fallimento NON restituisce i centesimi allo spendibile: la prenotazione
- * resta aperta perché il trasferimento è ritentabile, e rendere quel denaro di
- * nuovo spendibile aprirebbe la finestra in cui lo stesso importo esce due
- * volte. Solo un annullamento esplicito del titolare la scioglie.
+ * Nessun fallimento restituisce i centesimi allo spendibile. Un timeout, un 5xx o una risposta
+ * illeggibile NON provano che il Transfer non sia partito: il database lo registra come
+ * `esito_incerto` (non annullabile) e lo risolve con un ritentativo con la STESSA chiave entro la
+ * finestra di idempotenza, oppure con una riconciliazione verificata. Solo un rifiuto che il
+ * provider prova (`esito: "rifiutato"`) lascia il prelievo `fallito` e annullabile dal titolare.
  */
 const preleva = async (
   supabase: SupabaseClient,
@@ -261,13 +287,20 @@ const preleva = async (
     idempotencyKey: preparazione.idempotency_key!,
   });
 
-  const { error: registrazioneError } = await supabase.rpc("prelievo_registra_esito", {
-    p_withdrawal_id: preparazione.withdrawal_id,
-    p_ok: transfer.ok,
-    p_provider_transfer_id: transfer.ok ? transfer.data.transferId : null,
-    p_errore: transfer.ok ? null : transfer.error,
-  });
+  const { data: registrazione, error: registrazioneError } = await supabase.rpc(
+    "prelievo_registra_esito",
+    {
+      p_withdrawal_id: preparazione.withdrawal_id,
+      p_ok: transfer.ok,
+      p_provider_transfer_id: transfer.ok ? transfer.data.transferId : null,
+      p_errore: transfer.ok ? null : transfer.error,
+      // Solo un rifiuto PROVATO. L'assenza di classificazione è un'incertezza.
+      p_rifiutato: !transfer.ok && transfer.esito === "rifiutato",
+    },
+  );
   if (registrazioneError) {
+    // Il Transfer può essere partito senza che lo stato lo registri. Il prelievo resta `in_corso`:
+    // non è annullabile, e la marcatura degli orfani lo porta a `esito_incerto`.
     console.error("[payouts-release] registrazione prelievo fallita", {
       withdrawalId,
       code: registrazioneError.code,
@@ -276,8 +309,30 @@ const preleva = async (
     return;
   }
 
-  if (transfer.ok) esito.prelievi_trasferiti += 1;
-  else esito.prelievi_falliti += 1;
+  if (transfer.ok) {
+    if (registrazione === "non_dovuto") {
+      // Un Transfer esiste per un prelievo annullato: non deve poter accadere (l'annullamento è
+      // rifiutato su in_corso e su esito_incerto) e va gestito a mano. Mai in silenzio.
+      console.error("[payouts-release] ANOMALIA: Transfer riuscito su un prelievo non dovuto", {
+        withdrawalId,
+        transferId: transfer.data.transferId,
+      });
+      esito.prelievi_falliti += 1;
+      return;
+    }
+    esito.prelievi_trasferiti += 1;
+    return;
+  }
+
+  if (registrazione === "uncertain") {
+    console.error("[payouts-release] esito del trasferimento incerto: prelievo bloccato", {
+      withdrawalId,
+      errore: transfer.error,
+    });
+    esito.prelievi_incerti += 1;
+    return;
+  }
+  esito.prelievi_falliti += 1;
 };
 
 /**
@@ -381,6 +436,9 @@ Deno.serve(async (request) => {
     prelievi_trasferiti: 0,
     prelievi_bloccati: 0,
     prelievi_falliti: 0,
+    prelievi_incerti: 0,
+    prelievi_orfani_marcati: 0,
+    prelievi_incerti_aperti: 0,
     ricavi_accessori_rilasciati: 0,
     rimborsi_accessori_inviati: 0,
     rimborsi_accessori_bloccati: 0,
@@ -390,6 +448,7 @@ Deno.serve(async (request) => {
   if (!esito.payments_enabled) {
     try {
       esito.trattenuti_scaduti_oltre_24h = await contaTrattenutiScaduti(supabase);
+      esito.prelievi_incerti_aperti = await contaPrelieviIncerti(supabase);
     } catch {
       return json({ error: "Controllo di sanita non disponibile." }, 502);
     }
@@ -420,6 +479,19 @@ Deno.serve(async (request) => {
   for (const orderId of (coda as string[] | null) ?? []) {
     await rilascia(supabase, orderId, esito);
   }
+
+  // Un esecutore morto fra il Transfer e la registrazione lascia un prelievo `in_corso` che nessun
+  // altro percorso tocca. Dopo la soglia lo si porta a `esito_incerto`: non annullabile, non
+  // liberato, e visibile nello stock che il job schedulato segnala.
+  const { data: orfani, error: orfaniError } = await supabase.rpc(
+    "prelievo_in_corso_scaduti_marca",
+    { p_minuti: 15 },
+  );
+  if (orfaniError) {
+    console.error("[payouts-release] marcatura orfani fallita", { code: orfaniError.code });
+    return json({ error: "Rilascio non disponibile." }, 502);
+  }
+  esito.prelievi_orfani_marcati = typeof orfani === "number" ? orfani : 0;
 
   const { data: codaPrelievi, error: prelieviError } = await supabase.rpc("prelievo_coda", {
     p_limit: limite,
@@ -458,6 +530,7 @@ Deno.serve(async (request) => {
 
   try {
     esito.trattenuti_scaduti_oltre_24h = await contaTrattenutiScaduti(supabase);
+    esito.prelievi_incerti_aperti = await contaPrelieviIncerti(supabase);
   } catch {
     return json({ error: "Controllo di sanita non disponibile." }, 502);
   }

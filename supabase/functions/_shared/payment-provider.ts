@@ -201,9 +201,34 @@ export type TransferRequest = {
   idempotencyKey: string;
 };
 
+/**
+ * Che cosa sappiamo di un Transfer che non risulta riuscito (VPM-FIN-001, G-12).
+ *
+ * `rifiutato`: il fornitore ha risposto e la risposta PROVA che nessun Transfer è stato creato per
+ * questa richiesta (o la chiamata non è mai partita). Solo allora un prelievo può diventare
+ * `fallito` e quindi annullabile.
+ *
+ * `incerto`: tutto il resto, e il default. Un timeout non dimostra che il Transfer non sia partito;
+ * un 5xx nemmeno; una risposta illeggibile nemmeno. Il prelievo resta bloccato e riconciliabile e
+ * non libera mai i fondi da solo.
+ *
+ * `rifiutato` descrive SOLO la richiesta che lo ha ricevuto. Il database lo accetta come prova
+ * soltanto quando non esiste un'incertezza aperta sullo stesso prelievo: su un ritentativo un rifiuto
+ * (401/403, chiave assente, validazione) non passa dalla chiave di idempotenza e non dice nulla sul
+ * tentativo originale.
+ *
+ * Un adapter che non sa classificare un errore NON deve dichiararlo `rifiutato`: l'assenza del
+ * campo equivale a `incerto` in ogni chiamante.
+ */
+export type EsitoFallimentoTransfer = "rifiutato" | "incerto";
+
+export type TransferResult =
+  | { ok: true; data: { transferId: string } }
+  | { ok: false; error: string; esito?: EsitoFallimentoTransfer };
+
 export interface TransferProvider {
   readonly id: string;
-  creaTransfer(input: TransferRequest): Promise<Result<{ transferId: string }>>;
+  creaTransfer(input: TransferRequest): Promise<TransferResult>;
 }
 
 /**
