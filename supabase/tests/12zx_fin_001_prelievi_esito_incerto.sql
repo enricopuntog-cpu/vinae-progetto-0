@@ -669,8 +669,13 @@ select pg_temp.registra(
 select pg_temp.fai('g2_prep', pg_temp.prepara('g2'));
 select pg_temp.fai('g2_reg', pg_temp.esito_generico('g2', 'stripe_unreachable'));
 -- Una rettifica di rimborso porta il disponibile sotto l'importo prenotato.
-select private.balance_movimento_applica(
-  pg_temp.u(7), 'eur', 'rettifica_rimborso', 0, -95000, 0, 'fin001-rettifica-g');
+-- perform in un blocco: la funzione torna un booleano e un select stamperebbe una riga che il runner conta come caso.
+do $r$
+begin
+  perform private.balance_movimento_applica(
+    pg_temp.u(7), 'eur', 'rettifica_rimborso', 0, -95000, 0, 'fin001-rettifica-g');
+end
+$r$;
 select pg_temp.fai('g2_rep', pg_temp.prepara('g2'));
 select pg_temp.fai('g2_ann', pg_temp.annulla('g2', 7));
 select pg_temp.registra(
