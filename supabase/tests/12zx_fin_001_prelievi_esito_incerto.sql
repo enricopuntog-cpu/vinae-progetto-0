@@ -65,16 +65,26 @@ $f$;
 
 -- Tabelle di sessione: nello stack Supabase esistono gia (no-op), nel Postgres nudo del bootstrap
 -- 9c no. Servono perche il prelievo nuovo esige un'autenticazione recente (step-up auth).
-create table if not exists auth.sessions (
-  id uuid primary key,
-  user_id uuid not null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz
-);
-create table if not exists auth.mfa_amr_claims (
-  session_id uuid,
-  updated_at timestamptz
-);
+do $boot$
+begin
+  -- Su Supabase lo schema auth non e scrivibile da postgres (nemmeno per un create if not exists):
+  -- si crea solo nel Postgres nudo del bootstrap, dove le tabelle mancano.
+  if to_regclass('auth.sessions') is null then
+    create table auth.sessions (
+      id uuid primary key,
+      user_id uuid not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz
+    );
+  end if;
+  if to_regclass('auth.mfa_amr_claims') is null then
+    create table auth.mfa_amr_claims (
+      session_id uuid,
+      updated_at timestamptz
+    );
+  end if;
+end
+$boot$;
 
 -- Otto venditori distinti: il rate limit del prelievo e 10/ora per titolare e ogni scenario deve
 -- restare indipendente dagli altri.
