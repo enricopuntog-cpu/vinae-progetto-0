@@ -42,23 +42,27 @@ type StripeTransferResponse = {
 const STATUS_RIFIUTO_PROVATO = new Set([400, 401, 402, 403, 404]);
 
 /**
- * Un errore `idempotency_error` risponde a un uso scorretto della chiave (parametri diversi dalla
- * prima richiesta): non dice nulla sull'esecuzione di quella originale. `api_error` è un guasto
- * dalla parte di Stripe.
+ * Tipi di errore che descrivono una richiesta rifiutata PRIMA dell'esecuzione. È una lista
+ * ammessa, non un elenco di esclusi: un tipo assente, sconosciuto o nuovo (`idempotency_error`,
+ * `api_error`, qualunque cosa Stripe aggiunga) non prova nulla sull'esecuzione e resta `incerto`.
  */
-const TIPI_ERRORE_NON_PROBANTI = new Set(["idempotency_error", "api_error"]);
+const TIPI_ERRORE_RIFIUTO = new Set(["invalid_request_error", "card_error"]);
 
 export const classificaFallimentoTransfer = (
   status: number,
   risultato: StripeTransferResponse,
 ): EsitoFallimentoTransfer => {
-  if (risultato.id) return "incerto";
+  if (!risultato || typeof risultato !== "object" || risultato.id) return "incerto";
   const errore = risultato.error;
-  if (!errore || typeof errore !== "object") return "incerto";
+  if (!errore || typeof errore !== "object" || Array.isArray(errore)) return "incerto";
   if (!STATUS_RIFIUTO_PROVATO.has(status)) return "incerto";
-  if (errore.type && TIPI_ERRORE_NON_PROBANTI.has(errore.type)) return "incerto";
+  if (typeof errore.type !== "string" || !TIPI_ERRORE_RIFIUTO.has(errore.type)) return "incerto";
   return "rifiutato";
 };
+
+// Caratteri ammessi in un'intestazione HTTP (ASCII stampabile): fuori da qui `fetch` lancia PRIMA
+// di inviare qualunque cosa.
+const INTESTAZIONE_VALIDA = /^[\x21-\x7e]+$/;
 
 export const creaStripeTransferProvider = (): TransferProvider => ({
   id: "stripe",
@@ -67,6 +71,12 @@ export const creaStripeTransferProvider = (): TransferProvider => ({
     // Nessuna richiesta è partita: è l'unico fallimento locale che prova la non esecuzione.
     const secretKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!secretKey) return { ok: false, error: "stripe_secret_missing", esito: "rifiutato" };
+
+    // Una chiave non ammessa come intestazione farebbe lanciare `fetch` prima di qualunque invio:
+    // nulla è partito, quindi non è un'incertezza (e non resta un blocco permanente da riconciliare).
+    if (!INTESTAZIONE_VALIDA.test(input.idempotencyKey)) {
+      return { ok: false, error: "idempotency_key_invalid", esito: "rifiutato" };
+    }
 
     const form = new URLSearchParams({
       amount: String(input.amountCents),

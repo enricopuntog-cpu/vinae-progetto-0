@@ -20,8 +20,12 @@ annullarlo**: lo farebbe uscire due volte.
 
 ## Come ti accorgi che c'è un incerto
 
-Il job schedulato `Payouts auto release` fallisce a **ogni** giro finché esiste anche un solo
-prelievo `esito_incerto`, anche dopo che è uscito dalla coda automatica:
+Il workflow schedulato «Phase 7 - auto-release payouts» (ogni 6 ore) fallisce a **ogni** giro finché
+esiste anche un solo prelievo `esito_incerto`, anche dopo che è uscito dalla coda automatica. Vale
+solo con `PAYOUTS_SCHEDULER_ENABLED=true`: a scheduler spento il job esce prima di ogni richiesta e
+non segnala nulla, quindi **prima di accenderlo** controlla l'elenco qui sotto. Con `PAYMENTS_ENABLED`
+spento l'esecutore non marca gli orfani `in_corso` (vedi più sotto) e il conteggio riguarda solo
+gli `esito_incerto`:
 
 ```text
 Prelievi con esito incerto da riconciliare: N
@@ -39,6 +43,12 @@ from public.balance_withdrawals w
 where w.stato = 'esito_incerto'
 order by w.esito_incerto_dal;
 ```
+
+> **NON VERIFICATO in Stripe Test Mode.** Tutto ciò che questa procedura afferma sul comportamento di
+> Stripe è tratto dalla sua documentazione e non è mai stato provato contro il fornitore: che la stessa
+> chiave restituisca l'esito originale (anche un 5xx, che quindi può ripresentarsi identico a ogni
+> ritentativo senza mai risolversi), che le chiavi vengano rimosse non prima di 24 ore, che un
+> 401/403 non passi dalla chiave. Le soglie di 20 e 24 ore sono scelte prudenziali, non garanzie.
 
 ## Che cosa fare, per età dell'incertezza
 
@@ -115,8 +125,23 @@ profilo.
 
 La migrazione `20261115100100` ha riclassificato come `esito_incerto` ogni prelievo `fallito` con
 almeno un tentativo (prima ogni errore diventava `fallito`, quindi non provava la non esecuzione).
-Compaiono nell'elenco sopra con un'età già superiore alle 24 ore: si trattano con la stessa
-procedura.
+Compaiono nell'elenco sopra: l'età dell'incertezza parte da `created_at` del prelievo, quindi uno creato
+meno di 20 ore prima della migrazione può essere ancora ritentato con la vecchia chiave, uno più
+vecchio no. Si trattano con la stessa procedura.
+
+Un prelievo che prima della correzione era già `in_corso` e aveva più di un tentativo ha come
+attesa di riferimento l'ultimo aggiornamento, non il primo tentativo: se ne trovi uno, trattalo come
+incerto da verificare su Stripe senza fidarti della finestra di 20 ore.
+
+Audit consigliato: i prelievi passati da `fallito` ad `annullato` PRIMA di questa correzione possono
+aver generato un doppio pagamento. Controlla su Stripe i Transfer per ciascuno, con la stessa
+ricerca di sopra.
+
+## Orfani `in_corso`
+
+Un esecutore che muore a metà lascia il prelievo `in_corso`. Dopo 15 minuti il passo di bonifica
+lo marca `esito_incerto` (solo quando l'esecutore gira, cioè con `PAYMENTS_ENABLED=true`) e da lì
+vale la procedura sopra. Finché non viene marcato è bloccato e non annullabile.
 
 ## Che cosa il sistema NON fa ancora
 

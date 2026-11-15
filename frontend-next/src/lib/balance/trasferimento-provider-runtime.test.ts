@@ -176,6 +176,13 @@ describe("Transfer Stripe: rifiuti PROVATI (sicuramente non eseguito)", () => {
     expect(esito.ok === false && esito.error).toBe("stripe_transfer_failed_balance_insufficient");
   });
 
+  it("chiave di idempotenza non valida come intestazione: nulla è partito → rifiutato, nessuna fetch", async () => {
+    installaFetch(() => Response.json({ id: "tr_1" }));
+    const esito = await (await provider()).creaTransfer({ ...richiesta, idempotencyKey: "wd:è chiave" });
+    expect(esito).toEqual({ ok: false, error: "idempotency_key_invalid", esito: "rifiutato" });
+    expect(chiamate).toHaveLength(0);
+  });
+
   it("chiave segreta assente: nessuna richiesta è partita → rifiutato, nessuna fetch", async () => {
     chiave = undefined;
     installaFetch(() => Response.json({ id: "tr_1" }));
@@ -193,6 +200,19 @@ describe("classificaFallimentoTransfer", () => {
     expect(classificaFallimentoTransfer(500, { error: { type: "invalid_request_error" } })).toBe("incerto");
     expect(classificaFallimentoTransfer(200, { error: { type: "invalid_request_error" } })).toBe("incerto");
     expect(classificaFallimentoTransfer(400, { error: { type: "invalid_request_error" } })).toBe("rifiutato");
+  });
+
+  it("è una lista ammessa: tipo assente, sconosciuto, non stringa o errore non oggetto → incerto", async () => {
+    const { classificaFallimentoTransfer } = await importaAdapter();
+    const c = classificaFallimentoTransfer as (s: number, r: unknown) => string;
+    expect(c(400, { error: {} })).toBe("incerto");
+    expect(c(400, { error: { type: "x" } })).toBe("incerto");
+    expect(c(400, { error: { type: "api_error" } })).toBe("incerto");
+    expect(c(403, { error: { type: 7 } })).toBe("incerto");
+    expect(c(400, { error: [] })).toBe("incerto");
+    expect(c(400, { error: "boom" })).toBe("incerto");
+    expect(c(400, null)).toBe("incerto");
+    expect(c(402, { error: { type: "card_error" } })).toBe("rifiutato");
   });
 });
 
