@@ -223,6 +223,12 @@ jobs:
           node --test .github/scripts/workflow-security.test.mjs
           node --test .github/scripts/technical-heartbeat.test.mjs
           bash -n .github/scripts/secret-scan-selftest.sh
+      # Importatore locale del catalogo LWIN (WI-001A): solo test Node con fixture
+      # sintetiche, nessun file reale, nessuna rete, nessun database.
+      - name: Wine catalog importer
+        run: |
+          node --check tools/wine-catalog/lwin-import.mjs
+          node --test tools/wine-catalog/test/*.test.mjs
 
   backend:
     name: Backend - lint, syntax and tests
