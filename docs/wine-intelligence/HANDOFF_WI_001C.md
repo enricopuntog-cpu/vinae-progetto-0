@@ -15,6 +15,22 @@ Stato al 17 novembre 2026. Branch `feature/wi-001b-catalog-staging` (base `origi
 - Nessuna scheda canonica, nessun `wine_links`, nessuna immagine, nessuna UI, nessun agente AI, nessun job schedulato.
 - Docker/Supabase CLI non erano disponibili sulla macchina: la migration e la griglia sono state provate su PGlite (PostgreSQL in WASM, ruoli `anon/authenticated/service_role` creati a mano, senza PostgREST né Auth). La griglia **non è ancora stata eseguita su uno stack Supabase reale**: lo farà il gate CI al primo push consentito.
 
+## Misure (SINTETICHE, PGlite — non rappresentative di Supabase)
+
+Dataset sintetico di 212.894 righe (19 MB di xlsx; 6.262 Combined, 491 Deleted, 101 paesi / 404 regioni / 2.020 sottoregioni; NON il file reale), caricatore reale + migration reale su PGlite (PostgreSQL in WASM, un solo processo, senza autovacuum), 2.000 righe per lotto:
+
+| Prova | Esito |
+|---|---|
+| Import completo (212.894 record) | 103 s; 212.894 nuovi; 0 scartati; 6.262 collegamenti Combined (6.247 attivi, 15 verso Deleted non attivi); 2.525 territori, 2.424 archi |
+| Seconda esecuzione, stesso file | 116 s; 0 nuovi, 0 aggiornati, 212.894 invariati; digest dei dati identico; 0 eventi |
+| File modificato (998 modificati, 30 riferimenti Combined cambiati, 500 rimossi, 500 nuovi) | dry-run e import concordano; eventi: 998 updated, 30 reference_changed, 500 removed; i 500 rimossi restano nel registro marcati |
+| Ripresa dopo interruzione simulata (takeover) | 132 s; nessun duplicato, digest identico al precedente, storia: 1 abandoned + 4 succeeded |
+| Lookup per LWIN / territorio / paese+regione | 0,8–1,6 ms |
+| Memoria di picco del processo di prova | 3,3–5,6 GB: dominata da PGlite nello stesso processo; il caricatore da solo è in streaming (lotti da 2.000) ma tiene in memoria la mappa lwin→hash; NON misurata su Postgres reale |
+| Dimensione dopo 4 esecuzioni complete | 1,47 GB (`source_records` 1,45 GB, indici 66 MB) |
+
+**Rischio misurato:** ogni esecuzione tocca tutte le righe (`last_seen_run`), quindi ogni import completo scrive ~370 MB di versioni di riga; senza autovacuum (PGlite) restano come bloat. Su Postgres reale l'autovacuum le recupera, ma la scrittura è reale. Mitigazione proposta prima del merge: spostare la presenza (`last_seen_run`, rimozione) in una tabella stretta `catalog.source_record_presence(record_id, last_seen_run)` e riscrivere `source_records` solo quando cambia il contenuto. Da misurare su stack Supabase reale con il file vero.
+
 ## Blocco alla pubblicazione
 
 Un push dei file sotto `supabase/` fa creare all'integrazione GitHub di Supabase un branch Preview che applica le migration (`CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md`, check «Supabase Preview»). L'incarico vieta ogni applicazione remota, quindi **nessun push è stato fatto**. Per pubblicare serve un incarico che decida come gestire la Preview (per esempio PR con la migration dopo la verifica degli effetti di distribuzione).

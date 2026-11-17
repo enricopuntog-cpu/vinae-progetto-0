@@ -186,7 +186,7 @@ Ciclo di vita: `begin_import_run` (autorizzazione della fonte, un solo import vi
 
 **Contratto per i lettori (WI-001C):** un lotto di un tentativo poi fallito resta scritto (ogni lotto è già in commit). `source_records` rispecchia l'ultimo snapshot *completato* solo dopo un `succeeded`: chi legge deve considerare affidabile lo stato solo se l'ultimo `import_runs` della fonte è `succeeded`.
 
-Residui noti (non bloccanti per lo staging): `catalog_loader` ha UPDATE diretto su `import_runs`/`source_records` (necessario alle funzioni invoker; ruolo solo server-side); i rilievi si reinseriscono a ogni tentativo (tabella da potare in WI-001C); una catena Combined oltre 50 passi è etichettata `cycle`.
+Residui noti (non bloccanti per lo staging): `catalog_loader` ha UPDATE diretto su `import_runs`/`source_records` (necessario alle funzioni invoker; ruolo solo server-side); i rilievi si reinseriscono a ogni tentativo (tabella da potare in WI-001C); una catena Combined oltre 50 passi è etichettata `cycle`. Ogni import completo aggiorna `last_seen_run` di tutte le righe (misura in `HANDOFF_WI_001C.md`: ~370 MB di versioni di riga per esecuzione su dati sintetici): valutare una tabella di presenza stretta.
 
 ### Criteri per le schede canoniche (WI-001C, da approvare — nulla creato in WI-001B)
 
