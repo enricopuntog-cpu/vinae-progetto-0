@@ -1245,6 +1245,26 @@ grant select, insert, update on catalog.import_snapshots, catalog.import_runs, c
 -- lo storico è append-only; dei rilievi si aggiorna solo l'esito della revisione
 grant select, insert on catalog.source_record_events, catalog.import_findings to catalog_loader;
 grant update (review_status) on catalog.import_findings to catalog_loader;
+-- DELETE solo sui rilievi APERTI generati dal caricatore di un tentativo fallito/abbandonato (guardia a trigger):
+-- niente altra cancellazione dello storico dei rilievi.
+grant delete on catalog.import_findings to catalog_loader;
+create or replace function catalog.import_findings_delete_guard()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if old.review_status <> 'open' or old.kind not in ('parse_issue', 'divergent_duplicate', 'possible_duplicate')
+     or not exists (select 1 from catalog.import_runs r where r.id = old.run_id and r.status in ('failed', 'abandoned')) then
+    raise exception 'catalog: i rilievi si cancellano solo se aperti, del caricatore e di un tentativo fallito o abbandonato' using errcode = '55000';
+  end if;
+  return old;
+end;
+$$;
+create trigger import_findings_delete_guard
+  before delete on catalog.import_findings
+  for each row execute function catalog.import_findings_delete_guard();
+revoke all on function catalog.import_findings_delete_guard() from public, anon, authenticated, service_role;
 -- derivata/transitoria (nessun dato di fonte): uniche tabelle con DELETE.
 grant select, insert, update, delete on catalog.record_links, catalog.import_stage to catalog_loader;
 grant select on catalog.complete_versions, catalog.wine_candidate_report, catalog.wine_candidate_summary to catalog_loader;

@@ -133,9 +133,9 @@ begin
   perform pg_temp.rec('A08', 'la fonte LIVEX-LWIN7 è registrata, autorizzata e con licenza CC BY 4.0',
     exists (select 1 from catalog.sources where code = 'LIVEX-LWIN7' and authorization_status = 'authorized' and license = 'CC BY 4.0'));
 
-  perform pg_temp.rec('A09', 'solo record_links e import_stage (derivata/transitoria) hanno DELETE per catalog_loader',
+  perform pg_temp.rec('A09', 'DELETE per catalog_loader solo su import_findings (con guardia a trigger), import_stage e record_links',
     (select string_agg(c.relname, ',' order by c.relname) from pg_class c
-      where c.relnamespace = 'catalog'::regnamespace and c.relkind = 'r' and has_table_privilege('catalog_loader', c.oid, 'DELETE')) = 'import_stage,record_links');
+      where c.relnamespace = 'catalog'::regnamespace and c.relkind = 'r' and has_table_privilege('catalog_loader', c.oid, 'DELETE')) = 'import_findings,import_stage,record_links');
 
   perform pg_temp.rec('A10', 'catalog_loader è NOLOGIN, senza BYPASSRLS/SUPERUSER/CREATEROLE/CREATEDB/REPLICATION',
     exists (select 1 from pg_roles where rolname = 'catalog_loader' and not rolcanlogin and not rolbypassrls and not rolsuper
@@ -953,6 +953,19 @@ begin
     (select territory_id from catalog.source_records where external_id = '3000001') is null);
   perform pg_temp.rec('M10', 'la ricerca territoriale non interpreta % e _ come caratteri jolly',
     (select count(*) from catalog.search_territories('%')) = 0 and (select count(*) from catalog.search_territories('_')) = 0);
+
+  -- M11: la cancellazione dei rilievi è limitata (guardia a trigger)
+  declare v_ok2 boolean := false; v_n int;
+  begin
+    set local role catalog_loader;
+    begin
+      delete from catalog.import_findings f using catalog.import_runs r where r.id = f.run_id and r.status = 'succeeded';
+      get diagnostics v_n = row_count;
+      v_ok2 := false;  -- se la cancellazione passa (o non trova nulla da cancellare) la prova non è valida
+    exception when object_not_in_prerequisite_state then v_ok2 := true; end;
+    reset role;
+    perform pg_temp.rec('M11', 'i rilievi di un tentativo riuscito (o già rivisti) non si cancellano, nemmeno dal caricatore', v_ok2);
+  end;
 end $$;
 
 -- ===================================================================================================
