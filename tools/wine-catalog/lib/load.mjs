@@ -3,8 +3,14 @@
 // viaggia come parametro ($n), mai concatenato nell'SQL. Le scritture passano dalle funzioni
 // `catalog.*` della migrazione 20261117120000 (ruolo `catalog_loader`, nessun DELETE sui record).
 //
-// Ogni lotto è una transazione a sé (una chiamata di funzione): un'interruzione lascia il tentativo
-// `running`, e il tentativo successivo riparte dal file intero (l'upsert è idempotente per hash).
+// Protocollo differenziale (migration 20261117120000):
+//   begin_import_run  → identità dello snapshot (sha256); se lo stesso file è già l'ultimo completato la
+//                       risposta è `skipped` e il caricatore NON apre né legge il file;
+//   stage_source_records (a lotti) → ogni lotto entra nello staging transitorio del tentativo: solo l'hash se
+//                       il record è invariato, il contenuto completo se nuovo/modificato. `source_records` non è toccata;
+//   finish_import_run → UNA transazione di promozione (nuovi/modificati/rimossi/eventi/collegamenti/territori).
+// Un'interruzione lascia il tentativo `running` con lo staging parziale: nulla è visibile finché il finish non riesce;
+// il tentativo successivo (con --takeover se quello fermo non è ancora scaduto) riparte dal file intero.
 import { iterateRecords, sha256File, foldKey } from './import.mjs';
 import { classifyImport } from './diff.mjs';
 
@@ -16,7 +22,7 @@ export const DEFAULT_BATCH_SIZE = 2000;
 const FINDING_BATCH = 1000;
 const SAMPLE_LIMIT = 20;
 
-/** Riga di lotto per `catalog.upsert_source_records` (la forma è quella di jsonb_to_recordset). */
+/** Riga di lotto per `catalog.stage_source_records` (la forma è quella di jsonb_to_recordset). */
 export function toBatchRow(record, raw) {
   const { row_hash: contentHash, ...payload } = record;
   return {
@@ -54,9 +60,12 @@ export async function planLoad(db, path, { sourceCode = LWIN_SOURCE_CODE, expect
   checkSha(sha256, expectedSha256);
 
   const state = new Map();
+  let alreadyCurrent = false;
   if (db) {
     const src = await db.query('select id from catalog.sources where code = $1', [sourceCode]);
     if (src.rows.length === 0) throw new Error(`Fonte ${sourceCode} non registrata nel database.`);
+    const cv = await db.query('select complete_sha256 from catalog.complete_versions where code = $1', [sourceCode]);
+    alreadyCurrent = cv.rows.length > 0 && cv.rows[0].complete_sha256 === sha256;
     const cur = await db.query(
       'select external_id, content_hash, removed_from_source_at is not null as removed from catalog.source_records where source_id = $1',
       [src.rows[0].id],
@@ -83,7 +92,7 @@ export async function planLoad(db, path, { sourceCode = LWIN_SOURCE_CODE, expect
     database_writes: 0,
     source: { code: sourceCode, sha256, size_bytes: size },
     rows: { data_rows: dataRows, records: records.length, rejected, distinct_external_ids: inFile.size },
-    database_state: { records: state.size, compared: db !== null },
+    database_state: { records: state.size, compared: db !== null, snapshot_already_current: alreadyCurrent },
     delta: {
       ...c.counts,
       reappeared,
@@ -106,6 +115,7 @@ export async function loadToDatabase(db, path, opts = {}) {
     takeover = false,
     staleMinutes = 10,
     allowMassRemoval = false,
+    force = false,
     batchSize = DEFAULT_BATCH_SIZE,
     importerVersion = IMPORTER_VERSION,
     onProgress = () => {},
@@ -114,10 +124,22 @@ export async function loadToDatabase(db, path, opts = {}) {
   checkSha(sha256, expectedSha256);
   const fileName = path.split(/[\\/]/).pop();
 
-  const begun = await db.query('select catalog.begin_import_run($1, $2, $3, $4, $5, $6, make_interval(mins => $7::int)) as run_id', [
-    sourceCode, sha256, fileName, expectedRows, importerVersion, takeover, staleMinutes,
+  const begun = await db.query('select catalog.begin_import_run($1, $2, $3, $4, $5, $6, make_interval(mins => $7::int), $8) as r', [
+    sourceCode, sha256, fileName, expectedRows, importerVersion, takeover, staleMinutes, force,
   ]);
-  const runId = begun.rows[0].run_id;
+  const begin = typeof begun.rows[0].r === 'string' ? JSON.parse(begun.rows[0].r) : begun.rows[0].r;
+  const runId = begin.run_id;
+  if (begin.mode === 'skipped') {
+    // snapshot già completato e ancora corrente: nessuna lettura del file, nessuna elaborazione
+    return {
+      mode: 'skipped',
+      run_id: runId,
+      reason: 'snapshot_already_current',
+      of_run: begin.of_run,
+      source: { code: sourceCode, sha256, file_name: fileName },
+      database_writes: 'una riga di telemetria (import_runs, status skipped)',
+    };
+  }
 
   const totals = { received: 0, new: 0, updated: 0, unchanged: 0, reappeared: 0 };
   let dataRows = 0;
@@ -131,7 +153,7 @@ export async function loadToDatabase(db, path, opts = {}) {
 
   const flushBatch = async () => {
     if (batch.length === 0) return;
-    const r = await db.query('select catalog.upsert_source_records($1::uuid, $2::jsonb) as r', [runId, JSON.stringify(batch)]);
+    const r = await db.query('select catalog.stage_source_records($1::uuid, ($2::text)::jsonb) as r', [runId, JSON.stringify(batch)]);
     const got = typeof r.rows[0].r === 'string' ? JSON.parse(r.rows[0].r) : r.rows[0].r;
     for (const k of Object.keys(totals)) totals[k] += Number(got[k] ?? 0);
     batch = [];
@@ -139,7 +161,7 @@ export async function loadToDatabase(db, path, opts = {}) {
   };
   const flushFindings = async (force = false) => {
     if (findings.length === 0 || (!force && findings.length < FINDING_BATCH)) return;
-    await db.query('select catalog.record_findings($1::uuid, $2::jsonb) as n', [runId, JSON.stringify(findings)]);
+    await db.query('select catalog.record_findings($1::uuid, ($2::text)::jsonb) as n', [runId, JSON.stringify(findings)]);
     findings = [];
   };
 
@@ -185,10 +207,10 @@ export async function loadToDatabase(db, path, opts = {}) {
       rejected,
       duplicate_rows: duplicates,
       divergent_duplicates: divergent,
-      upsert: totals,
+      staged: totals,
       ...(allowMassRemoval ? { allow_mass_removal: true } : {}),
     };
-    const fin = await db.query('select catalog.finish_import_run($1::uuid, $2::bigint, $3::jsonb) as r', [runId, seen.size, JSON.stringify(summary)]);
+    const fin = await db.query('select catalog.finish_import_run($1::uuid, $2::bigint, ($3::text)::jsonb) as r', [runId, seen.size, JSON.stringify(summary)]);
     const result = typeof fin.rows[0].r === 'string' ? JSON.parse(fin.rows[0].r) : fin.rows[0].r;
     return { mode: 'load', run_id: runId, source: { code: sourceCode, sha256, file_name: fileName }, distinct_external_ids: seen.size, ...summary, result };
   } catch (e) {

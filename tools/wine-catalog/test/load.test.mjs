@@ -30,14 +30,17 @@ async function withFile(rows, fn) {
 }
 
 /** db finto: registra ogni istruzione e imita le risposte delle funzioni catalog.* */
-function fakeDb({ failFinish = false, state = [] } = {}) {
+function fakeDb({ failFinish = false, state = [], skipped = false, currentSha = null } = {}) {
   const calls = [];
   return {
     calls,
     async query(text, params = []) {
       calls.push({ text, params });
-      if (text.includes('begin_import_run')) return { rows: [{ run_id: '00000000-0000-4000-8000-000000000001' }] };
-      if (text.includes('upsert_source_records')) {
+      if (text.includes('begin_import_run')) {
+        const run_id = '00000000-0000-4000-8000-000000000001';
+        return { rows: [{ r: skipped ? { run_id, mode: 'skipped', of_run: '00000000-0000-4000-8000-0000000000aa' } : { run_id, mode: 'import', attempt_no: 1 } }] };
+      }
+      if (text.includes('stage_source_records')) {
         const n = JSON.parse(params[1]).length;
         return { rows: [{ r: { received: n, new: n, updated: 0, unchanged: 0, reappeared: 0 } }] };
       }
@@ -48,6 +51,7 @@ function fakeDb({ failFinish = false, state = [] } = {}) {
       }
       if (text.includes('fail_import_run')) return { rows: [] };
       if (text.includes('from catalog.sources')) return { rows: [{ id: 'src-1' }] };
+      if (text.includes('from catalog.complete_versions')) return { rows: currentSha ? [{ complete_sha256: currentSha }] : [] };
       if (text.includes('from catalog.source_records')) return { rows: state };
       throw new Error(`istruzione non prevista: ${text}`);
     },
@@ -58,16 +62,18 @@ test('il caricamento scrive a lotti, con istruzioni costanti e dati solo come pa
   const rows = ['1000001', '1000002', '1000003', '1000004', '1000005'].map((l) => W(l));
   const db = fakeDb();
   const rep = await withFile(rows, (p) => loadToDatabase(db, p, { batchSize: 2 }));
-  const upserts = db.calls.filter((c) => c.text.includes('upsert_source_records'));
+  const upserts = db.calls.filter((c) => c.text.includes('stage_source_records'));
   assert.deepEqual(upserts.map((c) => JSON.parse(c.params[1]).length), [2, 2, 1]);
   assert.equal(rep.distinct_external_ids, 5);
-  assert.equal(rep.upsert.received, 5);
+  assert.equal(rep.staged.received, 5);
   const finish = db.calls.find((c) => c.text.includes('finish_import_run'));
   assert.equal(finish.params[1], 5);
+  // il riepilogo porta le righe lette (il database le confronta con le attese dello snapshot)
+  assert.equal(JSON.parse(finish.params[2]).data_rows, 5);
   // nessun testo del dataset dentro l'SQL
   for (const c of db.calls) assert.ok(!/Vino|Prod|Piedmont|1000001/.test(c.text), `SQL con dati: ${c.text}`);
   // ogni istruzione è una costante nota
-  for (const c of db.calls) assert.match(c.text, /^select catalog\.(begin_import_run|upsert_source_records|record_findings|finish_import_run|fail_import_run)\(/);
+  for (const c of db.calls) assert.match(c.text, /^select catalog\.(begin_import_run|stage_source_records|record_findings|finish_import_run|fail_import_run)\(/);
 });
 
 test('hash del file diverso dall\'atteso: rifiutato prima di toccare il database', async () => {
@@ -98,7 +104,7 @@ test('duplicati identici ignorati, divergenti segnalati e non scritti; record no
   assert.equal(rep.divergent_duplicates, 1);
   assert.equal(rep.rejected, 1);
   assert.equal(rep.distinct_external_ids, 2);
-  const written = db.calls.filter((c) => c.text.includes('upsert_source_records')).flatMap((c) => JSON.parse(c.params[1]));
+  const written = db.calls.filter((c) => c.text.includes('stage_source_records')).flatMap((c) => JSON.parse(c.params[1]));
   assert.deepEqual(written.map((r) => r.external_id), ['1000001', '1000002']);
   const kinds = db.calls.filter((c) => c.text.includes('record_findings')).flatMap((c) => JSON.parse(c.params[1])).map((f) => f.kind).sort();
   assert.deepEqual(kinds, ['divergent_duplicate', 'parse_issue']);
@@ -114,7 +120,7 @@ test('possibili duplicati (stessa identità normalizzata) segnalati, mai fusi', 
   const dup = f.filter((x) => x.kind === 'possible_duplicate');
   assert.equal(dup.length, 1);
   assert.deepEqual(dup[0].detail.lwins.sort(), ['1000001', '1000002']);
-  const written = db.calls.filter((c) => c.text.includes('upsert_source_records')).flatMap((c) => JSON.parse(c.params[1]));
+  const written = db.calls.filter((c) => c.text.includes('stage_source_records')).flatMap((c) => JSON.parse(c.params[1]));
   assert.equal(written.length, 3);
 });
 
@@ -153,7 +159,7 @@ test('dry-run: anteprima del delta contro lo stato del database, zero scritture'
     // calcolo gli hash reali del file per costruire lo stato "già nel database"
     const probe = fakeDb();
     await loadToDatabase(probe, p);
-    const rows = probe.calls.filter((c) => c.text.includes('upsert_source_records')).flatMap((c) => JSON.parse(c.params[1]));
+    const rows = probe.calls.filter((c) => c.text.includes('stage_source_records')).flatMap((c) => JSON.parse(c.params[1]));
     const h = Object.fromEntries(rows.map((r) => [r.external_id, r.content_hash]));
     const db = fakeDb({
       state: [
@@ -219,17 +225,98 @@ test('migrazione catalog: nessun SECURITY DEFINER, nessun grant a PUBLIC/anon/au
   assert.ok(!/security\s+definer/i.test(code));
   assert.ok(!/grant\s[^;]*\sto\s[^;]*\b(public|anon|authenticated|service_role)\b/i.test(code), 'grant a un ruolo client');
   assert.ok(!/alter\s+default\s+privileges/i.test(code));
-  const tables = [...code.matchAll(/create table catalog\.(\w+)/g)].map((m) => m[1]);
-  assert.ok(tables.length >= 10);
+  const tables = [...code.matchAll(/create (?:unlogged )?table catalog\.(\w+)/g)].map((m) => m[1]);
+  assert.ok(tables.length >= 11);
   for (const t of tables) assert.match(code, new RegExp(`alter table catalog\\.${t} enable row level security`), `RLS mancante su ${t}`);
   // nessuna modifica a tabelle esistenti di public
   assert.ok(!/alter\s+table\s+public\./i.test(code));
   assert.ok(!/(create|alter|drop)\s+(table|view)\s+public\./i.test(code));
   // nessun DELETE concesso sui record di fonte
   assert.ok(!/grant[^;]*delete[^;]*source_records/i.test(code));
+  assert.ok(!/grant[^;]*truncate/i.test(code));
+  // nessun SQL dinamico nelle funzioni del catalogo (solo il blocco DO del ruolo usa format) e search_path fisso
+  const fns = code.match(/create or replace function[\s\S]*?\n\$\$;/g) ?? [];
+  assert.ok(fns.length >= 12, `funzioni trovate: ${fns.length}`);
+  for (const f of fns) {
+    assert.ok(!/\bexecute\b/i.test(f) && !/\bformat\s*\(/i.test(f), 'SQL dinamico in una funzione');
+    assert.match(f, /set search_path = ''/);
+  }
 });
 
 test('lo schema catalog non compare in nessuna migrazione precedente né in altri file della Data API', () => {
   const cfg = readFileSync(join(ROOT, 'supabase', 'config.toml'), 'utf8');
   assert.ok(!/catalog/.test(/\[api\][\s\S]*?(?=\n\[)/.exec(cfg)?.[0] ?? ''));
+});
+
+// --- WI-001B-BUILD: protocollo differenziale ---
+
+test('snapshot già importato e corrente: nessuna lettura del file, nessun lotto, nessun finish', async () => {
+  const db = fakeDb({ skipped: true });
+  const dir = mkdtempSync(join(tmpdir(), 'wi001b-'));
+  try {
+    // un file con intestazioni sbagliate non produce errore: viene saltato PRIMA di essere letto
+    const p = join(dir, 'gia-importato.xlsx');
+    writeFileSync(p, makeXlsx([['A', 'B'], ['1', '2']]));
+    const rep = await loadToDatabase(db, p);
+    assert.equal(rep.mode, 'skipped');
+    assert.equal(rep.reason, 'snapshot_already_current');
+    assert.deepEqual(db.calls.map((c) => c.text.match(/catalog\.(\w+)/)[1]), ['begin_import_run']);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('--force raggiunge begin_import_run (p_force = true); senza opzione è false', async () => {
+  const run = async (opts) => {
+    const db = fakeDb();
+    await withFile([W('1000001')], (p) => loadToDatabase(db, p, opts));
+    return db.calls.find((c) => c.text.includes('begin_import_run')).params;
+  };
+  assert.equal((await run({ force: true }))[7], true);
+  assert.equal((await run({}))[7], false);
+});
+
+test('dry-run: segnala se lo snapshot è già quello completo e corrente', async () => {
+  await withFile([W('1000001')], async (p) => {
+    const sha = createHash('sha256').update(readFileSync(p)).digest('hex');
+    const same = await planLoad(fakeDb({ currentSha: sha }), p);
+    assert.equal(same.database_state.snapshot_already_current, true);
+    const other = await planLoad(fakeDb({ currentSha: 'f'.repeat(64) }), p);
+    assert.equal(other.database_state.snapshot_already_current, false);
+    assert.equal(same.database_writes, 0);
+  });
+});
+
+test('il caricatore non scrive mai direttamente su tabelle catalog.* (solo funzioni)', async () => {
+  const db = fakeDb();
+  await withFile([W('1000001'), W('1000002')], (p) => loadToDatabase(db, p));
+  for (const c of db.calls) assert.ok(!/(insert\s+into|update\s|delete\s+from)\s+catalog\./i.test(c.text), `scrittura diretta: ${c.text}`);
+});
+
+test('riepilogo finale: data_rows e righe scartate passano al database per il controllo di completezza', async () => {
+  const db = fakeDb();
+  await withFile([W('1000001'), W('xx')], (p) => loadToDatabase(db, p, { expectedRows: 2 }));
+  const sum = JSON.parse(db.calls.find((c) => c.text.includes('finish_import_run')).params[2]);
+  assert.equal(sum.data_rows, 2);
+  assert.equal(sum.rejected, 1);
+  assert.equal(db.calls.find((c) => c.text.includes('begin_import_run')).params[3], 2);
+});
+
+test('allow_mass_removal viaggia nel riepilogo solo se richiesto esplicitamente', async () => {
+  const get = async (allowMassRemoval) => {
+    const db = fakeDb();
+    await withFile([W('1000001')], (p) => loadToDatabase(db, p, { allowMassRemoval }));
+    return JSON.parse(db.calls.find((c) => c.text.includes('finish_import_run')).params[2]);
+  };
+  assert.equal((await get(true)).allow_mass_removal, true);
+  assert.ok(!('allow_mass_removal' in (await get(false))));
+});
+
+test('il lotto contiene il contenuto completo (payload/raw) e l\'hash; nessuna colonna di presenza per record', async () => {
+  const db = fakeDb();
+  await withFile([W('1000001')], (p) => loadToDatabase(db, p));
+  const [row] = JSON.parse(db.calls.find((c) => c.text.includes('stage_source_records')).params[1]);
+  assert.match(row.content_hash, /^[0-9a-f]{64}$/);
+  assert.ok(row.payload && row.raw);
+  assert.ok(!('last_seen_run' in row));
 });
