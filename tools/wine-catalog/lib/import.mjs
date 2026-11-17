@@ -1,6 +1,10 @@
 // Orchestratore locale dell'import LWIN: legge, normalizza, classifica e produce
 // un report. Non scrive su nessun database, non apre connessioni di rete.
-import { createReadStream } from 'node:fs';
+import { createReadStream, createWriteStream, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pipeline } from 'node:stream/promises';
+import { Transform } from 'node:stream';
 import { createHash } from 'node:crypto';
 import { basename } from 'node:path';
 import { readXlsxRows } from './xlsx-stream.mjs';
@@ -28,6 +32,37 @@ export async function sha256File(path) {
     size += chunk.length;
   }
   return { sha256: h.digest('hex'), size };
+}
+
+/**
+ * Acquisisce UNA copia privata del file e ne calcola lo sha256 sugli stessi byte che scrive (una sola lettura
+ * della sorgente). Il parsing avviene poi SULLA COPIA: l'hash dichiarato corrisponde ai byte importati anche se
+ * il file originale viene sostituito o modificato dopo. Se l'originale cambia durante la copia (dimensione o
+ * data di modifica diverse prima/dopo) l'acquisizione fallisce. La copia sta in una cartella temporanea di
+ * sistema (mai nel repository) con permessi riservati e va rimossa con dispose().
+ */
+export async function snapshotFile(path) {
+  const before = statSync(path);
+  const dir = mkdtempSync(join(tmpdir(), 'vinea-lwin-'));
+  const copy = join(dir, 'snapshot.xlsx');
+  const h = createHash('sha256');
+  let size = 0;
+  const dispose = () => rmSync(dir, { recursive: true, force: true });
+  try {
+    await pipeline(
+      createReadStream(path),
+      new Transform({ transform(chunk, _enc, cb) { h.update(chunk); size += chunk.length; cb(null, chunk); } }),
+      createWriteStream(copy, { mode: 0o600 }),
+    );
+    const after = statSync(path);
+    if (after.size !== before.size || after.mtimeMs !== before.mtimeMs || size !== before.size) {
+      throw new Error('Il file di input è cambiato durante l acquisizione: import rifiutato (riprovare a file fermo).');
+    }
+  } catch (e) {
+    dispose();
+    throw e;
+  }
+  return { path: copy, sha256: h.digest('hex'), size, dispose };
 }
 
 const bump = (obj, key) => {

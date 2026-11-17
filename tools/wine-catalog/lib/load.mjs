@@ -11,7 +11,7 @@
 //   finish_import_run → UNA transazione di promozione (nuovi/modificati/rimossi/eventi/collegamenti/territori).
 // Un'interruzione lascia il tentativo `running` con lo staging parziale: nulla è visibile finché il finish non riesce;
 // il tentativo successivo (con --takeover se quello fermo non è ancora scaduto) riparte dal file intero.
-import { iterateRecords, sha256File, foldKey } from './import.mjs';
+import { iterateRecords, snapshotFile, foldKey } from './import.mjs';
 import { classifyImport } from './diff.mjs';
 
 export const LWIN_SOURCE_CODE = 'LIVEX-LWIN7';
@@ -39,6 +39,11 @@ export function toBatchRow(record, raw) {
   };
 }
 
+// Ruolo effettivo verificato prima di ogni operazione privilegiata (l'adattatore reale lo espone; i finti dei test no).
+async function checkRole(db) {
+  if (typeof db.assertRole === 'function') await db.assertRole();
+}
+
 function checkSha(actual, expected) {
   if (expected && actual !== expected) {
     throw new Error(`SHA-256 del file diverso dall'atteso (atteso ${expected}, trovato ${actual}): import rifiutato.`);
@@ -56,7 +61,16 @@ function naturalKey(r) {
  * attuale del catalogo per la fonte. Con db = null il confronto è con un catalogo vuoto.
  */
 export async function planLoad(db, path, { sourceCode = LWIN_SOURCE_CODE, expectedSha256 = null } = {}) {
-  const { sha256, size } = await sha256File(path);
+  const snap = await snapshotFile(path);
+  try {
+    return await planFromSnapshot(db, snap, { sourceCode, expectedSha256 });
+  } finally {
+    snap.dispose();
+  }
+}
+
+async function planFromSnapshot(db, snap, { sourceCode, expectedSha256 }) {
+  const { sha256, size } = snap;
   checkSha(sha256, expectedSha256);
 
   const state = new Map();
@@ -76,7 +90,7 @@ export async function planLoad(db, path, { sourceCode = LWIN_SOURCE_CODE, expect
   const records = [];
   let dataRows = 0;
   let rejected = 0;
-  for await (const { record } of iterateRecords(path)) {
+  for await (const { record } of iterateRecords(snap.path)) {
     dataRows += 1;
     if (!record) rejected += 1;
     else records.push(record);
@@ -120,10 +134,25 @@ export async function loadToDatabase(db, path, opts = {}) {
     importerVersion = IMPORTER_VERSION,
     onProgress = () => {},
   } = opts;
-  const { sha256 } = await sha256File(path);
+  // una sola copia privata: l'hash dichiarato e i byte importati sono gli stessi
+  const snap = await snapshotFile(path);
+  try {
+    return await loadFromSnapshot(db, snap, path, {
+      sourceCode, expectedSha256, expectedRows, takeover, staleMinutes, allowMassRemoval, force, batchSize, importerVersion, onProgress,
+    });
+  } finally {
+    snap.dispose();
+  }
+}
+
+async function loadFromSnapshot(db, snap, path, {
+  sourceCode, expectedSha256, expectedRows, takeover, staleMinutes, allowMassRemoval, force, batchSize, importerVersion, onProgress,
+}) {
+  const { sha256 } = snap;
   checkSha(sha256, expectedSha256);
   const fileName = path.split(/[\\/]/).pop();
 
+  await checkRole(db);
   const begun = await db.query('select catalog.begin_import_run($1, $2, $3, $4, $5, $6, make_interval(mins => $7::int), $8) as r', [
     sourceCode, sha256, fileName, expectedRows, importerVersion, takeover, staleMinutes, force,
   ]);
@@ -136,7 +165,7 @@ export async function loadToDatabase(db, path, opts = {}) {
       run_id: runId,
       reason: 'snapshot_already_current',
       of_run: begin.of_run,
-      source: { code: sourceCode, sha256, file_name: fileName },
+      source: { code: sourceCode, sha256, file_name: fileName, size_bytes: snap.size },
       database_writes: 'una riga di telemetria (import_runs, status skipped)',
     };
   }
@@ -153,6 +182,7 @@ export async function loadToDatabase(db, path, opts = {}) {
 
   const flushBatch = async () => {
     if (batch.length === 0) return;
+    await checkRole(db);
     const r = await db.query('select catalog.stage_source_records($1::uuid, ($2::text)::jsonb) as r', [runId, JSON.stringify(batch)]);
     const got = typeof r.rows[0].r === 'string' ? JSON.parse(r.rows[0].r) : r.rows[0].r;
     for (const k of Object.keys(totals)) totals[k] += Number(got[k] ?? 0);
@@ -166,7 +196,7 @@ export async function loadToDatabase(db, path, opts = {}) {
   };
 
   try {
-    for await (const { raw, record, issues } of iterateRecords(path)) {
+    for await (const { raw, record, issues } of iterateRecords(snap.path)) {
       dataRows += 1;
       for (const i of issues) {
         findings.push({ external_id: record?.lwin ?? null, kind: 'parse_issue', detail: { code: i.code, field: i.field, row: i.row, message: i.message } });
@@ -210,9 +240,10 @@ export async function loadToDatabase(db, path, opts = {}) {
       staged: totals,
       ...(allowMassRemoval ? { allow_mass_removal: true } : {}),
     };
+    await checkRole(db);
     const fin = await db.query('select catalog.finish_import_run($1::uuid, $2::bigint, ($3::text)::jsonb) as r', [runId, seen.size, JSON.stringify(summary)]);
     const result = typeof fin.rows[0].r === 'string' ? JSON.parse(fin.rows[0].r) : fin.rows[0].r;
-    return { mode: 'load', run_id: runId, source: { code: sourceCode, sha256, file_name: fileName }, distinct_external_ids: seen.size, ...summary, result };
+    return { mode: 'load', run_id: runId, source: { code: sourceCode, sha256, file_name: fileName, size_bytes: snap.size }, distinct_external_ids: seen.size, ...summary, result };
   } catch (e) {
     try {
       await db.query('select catalog.fail_import_run($1::uuid, $2)', [runId, String(e?.message ?? e)]);

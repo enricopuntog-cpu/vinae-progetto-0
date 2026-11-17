@@ -54,8 +54,12 @@ function parseYear(v, field, row, issues) {
   return Number(t);
 }
 
+// Versione del normalizzatore: entra nell'hash, così un cambio di regole di normalizzazione NON passa per
+// «invariato» (i record sarebbero riletti come cambiati e l'import lo mostra in modo esplicito).
+export const NORMALIZER_VERSION = 'lwin-norm-2';
+
 const HASH_FIELDS = [
-  'lwin', 'status', 'display_name', 'producer_title', 'producer_name', 'wine', 'country',
+  'scope', 'lwin', 'status', 'display_name', 'producer_title', 'producer_name', 'wine', 'country',
   'region', 'sub_region', 'site', 'parcel', 'colour', 'type', 'sub_type', 'designation',
   'classification', 'vintage_config', 'first_vintage', 'final_vintage', 'reference_lwin',
 ];
@@ -141,7 +145,7 @@ export function normalizeLwinRow(raw, row) {
   // altrimenti due testi diversi ma entrambi invalidi (→ null) avrebbero lo stesso hash.
   const hashed = { ...record, first_vintage: cleanText(raw.FIRST_VINTAGE), final_vintage: cleanText(raw.FINAL_VINTAGE), reference_lwin: refText };
   record.row_hash = createHash('sha256')
-    .update(JSON.stringify(HASH_FIELDS.map((f) => hashed[f])))
+    .update(JSON.stringify([NORMALIZER_VERSION, ...HASH_FIELDS.map((f) => hashed[f])]))
     .digest('hex');
   return { record, issues };
 }

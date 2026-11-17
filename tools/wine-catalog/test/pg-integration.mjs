@@ -127,6 +127,28 @@ try {
   check('P10', 'ripresa controllata: tentativo interrotto abandoned, ripresa completa; 1 aggiornato, 1 nuovo, 2 invariati', crashed === 'abandoned' && fin3.updated === 1 && fin3.new === 1 && fin3.unchanged === 2, JSON.stringify(fin3));
   const hist = (await adm(`select string_agg(status, ',' order by seq) as s from catalog.import_runs where source_id = (select id from catalog.sources where code = $1)`, [CODE]))[0].s;
   check('P11', 'storia dei tentativi conservata (abandoned, succeeded, failed, abandoned, succeeded)', hist === 'abandoned,succeeded,failed,abandoned,succeeded', hist);
+
+  // P12 — ruolo effettivo: l'adattatore reale lo imposta come parametro di avvio e lo MANTIENE dopo una riconnessione
+  const { connectLocal } = await import('../lib/db-bun.mjs');
+  const real = await connectLocal(url);
+  await real.assertRole();
+  const pidBefore = (await real.query('select pg_backend_pid() as p')).rows[0].p;
+  await adm('select pg_terminate_backend($1)', [pidBefore]);
+  await sleep(400);
+  let afterKill = null;
+  try { afterKill = (await real.query('select current_user::text as cu, pg_backend_pid() as p')).rows[0]; } catch { afterKill = (await real.query('select current_user::text as cu, pg_backend_pid() as p')).rows[0]; }
+  await real.assertRole();
+  check('P12', 'dopo la terminazione del backend e la riconnessione del client il ruolo effettivo resta catalog_loader (nuovo backend)', afterKill.cu === 'catalog_loader' && afterKill.p !== pidBefore, JSON.stringify(afterKill));
+  await real.close();
+
+  // P13 — una sessione che NON è catalog_loader (es. postgres) è rifiutata dalla verifica prima di ogni operazione privilegiata
+  const wrong = await connectLocal(url, { role: null }).then(() => 'accettata', (e) => String(e.message));
+  check('P13', 'connessione senza il ruolo del caricatore: verifica del ruolo rifiutata', wrong === 'accettata' ? false : true, wrong);
+  const wrongRole = new Bun.SQL({ url, max: 1 });
+  const { assertEffectiveRole } = await import('../lib/role-check.mjs');
+  const msg13 = await assertEffectiveRole(async (t, pr) => ({ rows: Array.from(await wrongRole.unsafe(t, pr)) }), 'catalog_loader').then(() => 'accettata', (e) => String(e.message));
+  check('P13b', 'sessione postgres: rifiutata con motivo "ruolo effettivo"', /ruolo effettivo "postgres"/.test(msg13), msg13);
+  await wrongRole.close();
 } catch (e) {
   check('ERR', 'eccezione non attesa', false, msg(e));
 } finally {

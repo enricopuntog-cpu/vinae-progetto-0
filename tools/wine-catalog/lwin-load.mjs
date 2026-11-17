@@ -17,7 +17,6 @@ import { insideRepo, assertLocalDatabaseUrl } from './lib/paths.mjs';
 import {
   planLoad, loadToDatabase, LWIN_EXPECTED_SHA256, LWIN_EXPECTED_ROWS, DEFAULT_BATCH_SIZE,
 } from './lib/load.mjs';
-import { sha256File } from './lib/import.mjs';
 
 function fail(msg) {
   console.error(msg);
@@ -57,6 +56,7 @@ if (url) {
     fail(e.message);
   }
 }
+if (args['stale-minutes'] !== undefined && !(Number.isInteger(Number(args['stale-minutes'])) && Number(args['stale-minutes']) >= 1)) fail('--stale-minutes deve essere un intero >= 1 (con 0 un caricatore ancora vivo verrebbe scavalcato).');
 const batchSize = args['batch-size'] ? Number(args['batch-size']) : DEFAULT_BATCH_SIZE;
 if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 20000) fail('--batch-size deve essere un intero tra 1 e 20000.');
 if (args['expected-rows'] && !(Number.isInteger(Number(args['expected-rows'])) && Number(args['expected-rows']) >= 0)) fail('--expected-rows deve essere un intero >= 0.');
@@ -92,7 +92,7 @@ try {
   }
   report.elapsed_ms = Math.round(performance.now() - t0);
   report.peak_rss_mb = Math.round(process.memoryUsage().rss / 1048576);
-  report.file_size_bytes = (await sha256File(args.input)).size;
+  report.file_size_bytes = report.source?.size_bytes ?? null;
   writeFileSync(args.report, JSON.stringify(report, null, 2));
   console.log(args['dry-run'] ? 'Anteprima (nessuna scrittura):' : report.mode === 'skipped' ? 'Snapshot già importato e corrente (nessuna elaborazione):' : 'Caricamento completato:', JSON.stringify(report.rows ?? report.result?.territories ?? {}), `| ${report.elapsed_ms} ms | RSS ${report.peak_rss_mb} MB`);
 } catch (e) {
