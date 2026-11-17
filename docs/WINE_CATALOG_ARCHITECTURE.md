@@ -1,6 +1,8 @@
-# Vinea Wine Database — architettura di riferimento (WI-001A)
+# Vinea Wine Database — architettura di riferimento (WI-001A, staging WI-001B)
 
-> **Stato: PROGETTO.** Nessuna parte di questo documento è implementata nel prodotto. Cosa esiste davvero oggi è elencato in `docs/WI_001A_WINE_CATALOG_FOUNDATION.md` §2. Lo SQL qui sotto è una **bozza non applicata**: non è in `supabase/migrations/`, non è stato eseguito su nessun database. Ogni migration reale resta una decisione di WI-001B e rispetta le regole di `CLAUDE.md` (migration-first, RLS, grant mirati, viste a colonne chiuse).
+> **Aggiornamento WI-001B (17 novembre 2026):** lo staging privato di §9–§10 (fonti, snapshot, tentativi, record importati, storico, rilievi, accorpamenti, territori, alias) è IMPLEMENTATO nella migration `supabase/migrations/20261117120000_wi_001b_catalog_staging.sql` e provato in locale — **non applicata a nessun ambiente remoto**. Vedi §11. Tutto il resto (schede canoniche, `wine_links`, claim, media, interrogazione AI) resta PROGETTO.
+>
+> **Stato del progetto originale (WI-001A): PROGETTO.** Nessuna parte di questo documento è implementata nel prodotto. Cosa esiste davvero oggi è elencato in `docs/WI_001A_WINE_CATALOG_FOUNDATION.md` §2. Lo SQL qui sotto è una **bozza non applicata**: non è in `supabase/migrations/`, non è stato eseguito su nessun database. Ogni migration reale resta una decisione di WI-001B e rispetta le regole di `CLAUDE.md` (migration-first, RLS, grant mirati, viste a colonne chiuse).
 
 ## 1. Principio
 
@@ -166,6 +168,32 @@ Altre tabelle del progetto, da definire in WI-001B: `producers`, `wines`, `wine_
 | rimosso dalla fonte | presente nello snapshot precedente, assente ora | marcatura `removed_from_source_at`; **mai** cancellazione di una scheda Vinea |
 
 Possibili duplicati con LWIN diversi (stessa identità normalizzata) sono **segnalati, non fusi**: 73 gruppi nel file.
+
+## 11. WI-001B — staging realizzato (scostamenti dalla bozza §9)
+
+Migration `20261117120000_wi_001b_catalog_staging.sql`, griglia `supabase/tests/12zs_wi_001b_catalog_staging.sql`, caricatore `tools/wine-catalog/lwin-load.mjs` (Bun). Schema `catalog` **non esposto** alla Data API (`config.toml` invariato); nessun grant a PUBLIC/anon/authenticated/service_role; RLS su ogni tabella; ruolo server-side `catalog_loader` (NOLOGIN, NOBYPASSRLS); nessuna funzione `SECURITY DEFINER` (tutte invoker, `search_path` vuoto).
+
+| Bozza §9 | Realizzato | Perché |
+|---|---|---|
+| `import_runs` unico con `unique(source_id, file_sha256)` | `import_snapshots` (identità: fonte + sha256) + `import_runs` (tentativi: `attempt_no`, `running/succeeded/failed/abandoned`) | recuperare un import interrotto senza perdere la storia; un solo `running` per fonte (indice parziale) |
+| `source_records.payload` | `payload` (normalizzato) + `raw` (celle originali) + colonne `country/region/sub_region/territory_id` + `revision`, `changed_in_run` | ricostruzione e ricerca territoriale indicizzata |
+| — | `source_record_events` (solo variazioni dopo la prima osservazione, con `previous_payload`) | confrontare snapshot senza una riga per i 212.894 inserimenti |
+| — | `import_findings` | duplicati divergenti, possibili duplicati, anomalie di parsing, Combined problematici, omonimie territoriali: segnalati, mai risolti |
+| `merged_into_external_id` | `reference_external_id` + `record_links` derivata (stato `active/target_deleted/target_missing/cycle/…`) | catene risolte; un Combined verso Deleted/mancante/rimosso non è mai attivo |
+| `territories`, `territory_edges`, `aliases` | come da §4, nodi per (paese, regione, sottoregione), archi molti-a-molti con trigger anti-ciclo, alias senza traduzione automatica (nessun alias seminato) | dato mancante = nessun nodo |
+
+Ciclo di vita: `begin_import_run` (autorizzazione della fonte, un solo import vivo, takeover solo su heartbeat scaduto) → `upsert_source_records` a lotti (ogni lotto è una transazione; idempotente per `content_hash`; duplicato divergente tra lotti rifiutato) → `finish_import_run` (conteggio atteso obbligatorio e uguale ai record visti; rimozione dalla fonte **solo marcata** e solo a snapshot completo; oltre il 20% di rimozioni serve `allow_mass_removal`; poi catene Combined e territori). Un tentativo che non vede il file intero non diventa mai `succeeded`.
+
+**Contratto per i lettori (WI-001C):** un lotto di un tentativo poi fallito resta scritto (ogni lotto è già in commit). `source_records` rispecchia l'ultimo snapshot *completato* solo dopo un `succeeded`: chi legge deve considerare affidabile lo stato solo se l'ultimo `import_runs` della fonte è `succeeded`.
+
+Residui noti (non bloccanti per lo staging): `catalog_loader` ha UPDATE diretto su `import_runs`/`source_records` (necessario alle funzioni invoker; ruolo solo server-side); i rilievi si reinseriscono a ogni tentativo (tabella da potare in WI-001C); una catena Combined oltre 50 passi è etichettata `cycle`.
+
+### Criteri per le schede canoniche (WI-001C, da approvare — nulla creato in WI-001B)
+
+- `catalog.producers`, `catalog.wines` (LWIN-7), `catalog.wine_vintages` (LWIN-11), `catalog.wine_formats`: ogni riga nasce da una regola di promozione approvata e punta a `source_records` come provenienza; nessuna promozione automatica da un import.
+- Unicità proposta: `wines` per identificativo esterno LWIN-7 (non per testo); i possibili duplicati (findings) si fondono solo per decisione registrata (`reviewed_by`, `reviewed_at`).
+- I Combined diventano alias verso la scheda di destinazione solo se il collegamento è `active`.
+- `wine_links` verso `public.wines`: solo con metodo `manual`/`exact_id`; i fuzzy richiedono revisione.
 
 ## Registri collegati
 

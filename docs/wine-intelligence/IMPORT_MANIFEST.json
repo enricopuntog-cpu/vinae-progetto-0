@@ -1,5 +1,5 @@
 {
-  "manifest_version": 1,
+  "manifest_version": 2,
   "snapshots": [
     {
       "snapshot_id": "LIVEX-LWIN7-2026-11-17-7669ceab",
@@ -12,9 +12,20 @@
       "database_writes": 0,
       "records": 212894,
       "rejected": 0,
-      "status_distribution": { "Live": 206167, "Combined": 6221, "Deleted": 506 },
-      "scope_distribution": { "wine": 190953, "other": 21941 },
-      "territory": { "countries": 101, "regions": 370, "sub_regions": 1577 },
+      "status_distribution": {
+        "Live": 206167,
+        "Combined": 6221,
+        "Deleted": 506
+      },
+      "scope_distribution": {
+        "wine": 190953,
+        "other": 21941
+      },
+      "territory": {
+        "countries": 101,
+        "regions": 370,
+        "sub_regions": 1577
+      },
       "importer": {
         "path": "tools/wine-catalog/lwin-import.mjs",
         "version": "WI-001A",
@@ -26,12 +37,32 @@
         "wine_scope_without_region": 6082,
         "combined_chains": 32,
         "combined_pointing_to_deleted": 2,
-        "type_still_rows": [206396, 206397, 206805, 208802, 210769, 211181],
+        "type_still_rows": [
+          206396,
+          206397,
+          206805,
+          208802,
+          210769,
+          211181
+        ],
         "potential_duplicate_groups": 73,
         "potential_duplicate_records": 148,
         "first_vintage_empty_pct_live_wine": 98.8
       },
-      "not_in_repo": ["the .xlsx file", "full snapshot", "raw report"]
+      "not_in_repo": [
+        "the .xlsx file",
+        "full snapshot",
+        "raw report"
+      ]
+    }
+  ],
+  "local_staging_notes": [
+    {
+      "task": "WI-001B",
+      "verified_on": "2026-11-17",
+      "note": "Nessun import locale del file reale registrato qui: il file LWINdatabase.xlsx non era accessibile in questa sessione (percorso non indicato), quindi la prova sul file reale è NON VERIFICATA. Prove eseguite su dataset sintetico (stesse dimensioni) su PGlite e su griglia SQL 12zs. Nessuna importazione Production; i conteggi di snapshot sopra restano quelli del dry-run WI-001A.",
+      "production_imports": 0,
+      "migrations_applied_remote": 0
     }
   ]
 }

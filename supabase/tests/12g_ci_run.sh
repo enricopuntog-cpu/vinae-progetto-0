@@ -586,6 +586,9 @@ run_grid "12zq Riconciliazione e code Accessori" 12zq_vpm_015b5c_riconciliazione
 # VPM-015C — Accessori nuovi dei Partner: scorte commerciali, classe per
 # articolo, margine 15%, checkout, sospensione e revoca. Transazione con ROLLBACK.
 run_grid "12zr Accessori Partner" 12zr_vpm_015c_accessori_partner.sql 3
+# WI-001B: staging privato del catalogo enologico (schema catalog). Transazione chiusa da ROLLBACK,
+# dati sintetici, nessun accesso a database remoti.
+run_grid "12zs Catalogo enologico staging" 12zs_wi_001b_catalog_staging.sql 3
 
 # VPM-015QA-FINAL-A — annullamento contro pagamento aperto (apertura, processing,
 # failed/expired, incasso tardivo, replay) e ULTIMA unita del Partner contesa da

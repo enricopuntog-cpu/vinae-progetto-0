@@ -20,7 +20,7 @@ export function foldKey(s) {
     .trim();
 }
 
-async function sha256File(path) {
+export async function sha256File(path) {
   const h = createHash('sha256');
   let size = 0;
   for await (const chunk of createReadStream(path)) {
@@ -36,6 +36,27 @@ const bump = (obj, key) => {
 };
 const sorted = (obj) => Object.fromEntries(Object.entries(obj).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])));
 const top = (obj, n) => Object.fromEntries(Object.entries(sorted(obj)).slice(0, n));
+
+/**
+ * Flusso riga per riga (WI-001B): ogni elemento porta la riga originale (`raw`, testo come nel file),
+ * il record normalizzato (null se il LWIN non è utilizzabile) e i rilievi. Non accumula nulla.
+ * @param {string} path file .xlsx LWIN
+ */
+export async function* iterateRecords(path) {
+  let header = null;
+  for await (const { rowNumber, cells } of readXlsxRows(path)) {
+    if (header === null) {
+      header = cells;
+      rowToRaw(header, []);
+      continue;
+    }
+    if (cells.every((c) => c.trim() === '')) continue;
+    const raw = rowToRaw(header, cells);
+    const { record, issues } = normalizeLwinRow(raw, rowNumber);
+    yield { rowNumber, raw, record, issues };
+  }
+  if (header === null) throw new Error('File vuoto: nessuna intestazione trovata');
+}
 
 /**
  * @param {string} path file .xlsx LWIN

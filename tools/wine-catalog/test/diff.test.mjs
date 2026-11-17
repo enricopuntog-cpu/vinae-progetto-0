@@ -6,7 +6,7 @@ const rec = (lwin, hash, extra = {}) => ({ lwin, row_hash: hash, status: 'Live',
 
 test('primo import: tutto nuovo', () => {
   const r = classifyImport([rec('1', 'a'), rec('2', 'b')], null);
-  assert.deepEqual(r.counts, { new: 2, updated: 0, unchanged: 0, duplicate: 0, conflict: 0, merged: 0, removed_from_source: 0 });
+  assert.deepEqual(r.counts, { new: 2, updated: 0, unchanged: 0, duplicate: 0, conflict: 0, merged: 0, merged_new: 0, merged_updated: 0, merged_unchanged: 0, removed_from_source: 0 });
 });
 
 test('confronto con snapshot precedente: nuovo, aggiornato, invariato, rimosso dalla fonte', () => {
