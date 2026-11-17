@@ -1,0 +1,37 @@
+{
+  "manifest_version": 1,
+  "snapshots": [
+    {
+      "snapshot_id": "LIVEX-LWIN7-2026-11-17-7669ceab",
+      "source_id": "LIVEX-LWIN7",
+      "source_file_name": "LWINdatabase.xlsx",
+      "sha256": "7669ceab4e815716aa6c90643c117f3da7c7daeaa202ecd3f7cfbc4db7fd488e",
+      "verified_on": "2026-11-17",
+      "dataset_date": "non dichiarata dal file; ultima verifica locale 2026-11-17",
+      "mode": "local_dry_run",
+      "database_writes": 0,
+      "records": 212894,
+      "rejected": 0,
+      "status_distribution": { "Live": 206167, "Combined": 6221, "Deleted": 506 },
+      "scope_distribution": { "wine": 190953, "other": 21941 },
+      "territory": { "countries": 101, "regions": 370, "sub_regions": 1577 },
+      "importer": {
+        "path": "tools/wine-catalog/lwin-import.mjs",
+        "version": "WI-001A",
+        "tests": 42
+      },
+      "report": "docs/WI_001A_WINE_CATALOG_FOUNDATION.md",
+      "anomalies": {
+        "records_without_region": 12582,
+        "wine_scope_without_region": 6082,
+        "combined_chains": 32,
+        "combined_pointing_to_deleted": 2,
+        "type_still_rows": [206396, 206397, 206805, 208802, 210769, 211181],
+        "potential_duplicate_groups": 73,
+        "potential_duplicate_records": 148,
+        "first_vintage_empty_pct_live_wine": 98.8
+      },
+      "not_in_repo": ["the .xlsx file", "full snapshot", "raw report"]
+    }
+  ]
+}

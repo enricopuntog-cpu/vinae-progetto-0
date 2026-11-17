@@ -20,6 +20,10 @@ Non contiene una seconda costituzione.
 
 Aprire soltanto ciò che serve al task:
 
+- Catalogo vini (WI-001A, fonti, licenza LWIN, handoff WI-001B):
+  [`../docs/wine-intelligence/HANDOFF_WI_001B.md`](../docs/wine-intelligence/HANDOFF_WI_001B.md),
+  [`SOURCE_REGISTRY.md`](../docs/wine-intelligence/SOURCE_REGISTRY.md) e
+  [`IMPORT_MANIFEST.json`](../docs/wine-intelligence/IMPORT_MANIFEST.json).
 - Monitoraggio pre-lancio OBS-01: [`../docs/VPM_022C_OBS_01.md`](../docs/VPM_022C_OBS_01.md)
   contiene strumenti nativi, log minimizzati, heartbeat, responsabilità e residui
   pre-Stripe; non equivale a un servizio di allarme su ogni evento.

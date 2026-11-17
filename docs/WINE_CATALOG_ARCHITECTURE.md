@@ -166,3 +166,9 @@ Altre tabelle del progetto, da definire in WI-001B: `producers`, `wines`, `wine_
 | rimosso dalla fonte | presente nello snapshot precedente, assente ora | marcatura `removed_from_source_at`; **mai** cancellazione di una scheda Vinea |
 
 Possibili duplicati con LWIN diversi (stessa identità normalizzata) sono **segnalati, non fusi**: 73 gruppi nel file.
+
+## Registri collegati
+
+- Fonti e licenza (CC BY 4.0): [`wine-intelligence/SOURCE_REGISTRY.md`](wine-intelligence/SOURCE_REGISTRY.md)
+- Snapshot importato: [`wine-intelligence/IMPORT_MANIFEST.json`](wine-intelligence/IMPORT_MANIFEST.json)
+- Handoff per WI-001B: [`wine-intelligence/HANDOFF_WI_001B.md`](wine-intelligence/HANDOFF_WI_001B.md)

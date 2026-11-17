@@ -142,3 +142,9 @@ Revisione statica in sola lettura (agente `vinea-code-reviewer`). **Corretti con
 - "NA" è sempre assenza di dato; le annate non-vintage (`0`/`0000`) darebbero `invalid_vintage_year` ma nel file reale non compaiono (zero rilievi di quel tipo). Zip64 per singola entry non rilevato esplicitamente.
 - Nessun test sui collegamenti simbolici (richiede privilegi su Windows).
 - I record sono tenuti in memoria (~213k): misurato in pratica, il run sul file reale completa in ~11 s.
+
+## Registri collegati
+
+- Fonti e licenza (CC BY 4.0): [`wine-intelligence/SOURCE_REGISTRY.md`](wine-intelligence/SOURCE_REGISTRY.md)
+- Snapshot importato: [`wine-intelligence/IMPORT_MANIFEST.json`](wine-intelligence/IMPORT_MANIFEST.json)
+- Handoff per WI-001B: [`wine-intelligence/HANDOFF_WI_001B.md`](wine-intelligence/HANDOFF_WI_001B.md)
