@@ -865,7 +865,7 @@ begin
       from catalog.territories where source_id = v_source and kind <> 'country'
      group by kind, name_key
     having count(*) > 1
-       and count(distinct (select e.parent_id from catalog.territory_edges e where e.child_id = territories.id order by e.parent_id limit 1)) > 1
+       and count(distinct (select min(e.parent_id) from catalog.territory_edges e where e.child_id = territories.id)) > 1
   ),
   var as (
     select t.kind, t.name_key, e.parent_id, array_agg(t.id order by t.id) as ids, array_agg(t.name order by t.id) as names

@@ -150,10 +150,11 @@ try {
   check('P13b', 'sessione postgres: rifiutata con motivo "ruolo effettivo"', /ruolo effettivo "postgres"/.test(msg13), msg13);
   await wrongRole.close();
 
-  // P14 — costo del finish su fixture piccola (5.000 record): base e poi 10% modificato SUBITO dopo, senza ANALYZE
-  // intermedio (statistiche del planner non ancora aggiornate). Non è un benchmark: è una guardia contro regressioni
-  // evidenti (piano quadratico, scansioni ripetute). Tetto largo (30 s) e statement_timeout di 60 s.
-  const N14 = 5000;
+  // P14 — smoke di scala del finish (10.000 record): base e poi 10% modificato subito dopo, con tetto di tempo e
+  // statement_timeout di 60 s. NON è la guardia contro il piano quadratico: su un database vuoto passa anche con il
+  // nestloop ripristinato (controllo negativo eseguito); il difetto compare solo con tabelle già popolate e senza
+  // statistiche (misurato con EXPLAIN ANALYZE, vedi architettura §11). La guardia è il caso 12zs A12b.
+  const N14 = 10000;
   const rows14 = (changed) => Array.from({ length: N14 }, (_, i) => row(String(9500001 + i), changed && i % 10 === 3 ? 'v2' : 'v1'));
   const D = await open();
   try {
@@ -168,8 +169,8 @@ try {
     const base14 = await timeFinish(sha('p14-base'), rows14(false));
     const mod14 = await timeFinish(sha('p14-mod'), rows14(true));
     console.log(`    (finish ${N14} record: base ${Math.round(base14.ms)} ms, modificato ${Math.round(mod14.ms)} ms)`);
-    check('P14', `finish su ${N14} record entro 30 s (base e modificato subito dopo); ${mod14.f.updated} aggiornati, ${mod14.f.unchanged} invariati`,
-      base14.ms < 30000 && mod14.ms < 30000 && base14.f.new === N14 && mod14.f.updated === N14 / 10 && mod14.f.unchanged === N14 - N14 / 10, JSON.stringify([base14.f.new, mod14.f.updated, mod14.f.unchanged]));
+    check('P14', `finish su ${N14} record (smoke di scala: base < 30 s, modificato < 8 s); ${mod14.f.updated} aggiornati, ${mod14.f.unchanged} invariati`,
+      base14.ms < 30000 && mod14.ms < 8000 && base14.f.new === N14 && mod14.f.updated === N14 / 10 && mod14.f.unchanged === N14 - N14 / 10, JSON.stringify([base14.f.new, mod14.f.updated, mod14.f.unchanged]));
   } finally {
     await D.c.close();
   }
