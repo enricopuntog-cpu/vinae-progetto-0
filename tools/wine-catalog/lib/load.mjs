@@ -170,6 +170,7 @@ async function loadFromSnapshot(db, snap, path, {
     };
   }
 
+  const timings = { stage_ms: 0, finish_ms: 0, findings_ms: 0 };
   const totals = { received: 0, new: 0, updated: 0, unchanged: 0, reappeared: 0 };
   let dataRows = 0;
   let rejected = 0;
@@ -183,7 +184,9 @@ async function loadFromSnapshot(db, snap, path, {
   const flushBatch = async () => {
     if (batch.length === 0) return;
     await checkRole(db);
+    const t0 = performance.now();
     const r = await db.query('select catalog.stage_source_records($1::uuid, ($2::text)::jsonb) as r', [runId, JSON.stringify(batch)]);
+    timings.stage_ms += performance.now() - t0;
     const got = typeof r.rows[0].r === 'string' ? JSON.parse(r.rows[0].r) : r.rows[0].r;
     for (const k of Object.keys(totals)) totals[k] += Number(got[k] ?? 0);
     batch = [];
@@ -191,7 +194,9 @@ async function loadFromSnapshot(db, snap, path, {
   };
   const flushFindings = async (force = false) => {
     if (findings.length === 0 || (!force && findings.length < FINDING_BATCH)) return;
+    const t0 = performance.now();
     await db.query('select catalog.record_findings($1::uuid, ($2::text)::jsonb) as n', [runId, JSON.stringify(findings)]);
+    timings.findings_ms += performance.now() - t0;
     findings = [];
   };
 
@@ -241,9 +246,11 @@ async function loadFromSnapshot(db, snap, path, {
       ...(allowMassRemoval ? { allow_mass_removal: true } : {}),
     };
     await checkRole(db);
+    const tf = performance.now();
     const fin = await db.query('select catalog.finish_import_run($1::uuid, $2::bigint, ($3::text)::jsonb) as r', [runId, seen.size, JSON.stringify(summary)]);
+    timings.finish_ms = performance.now() - tf;
     const result = typeof fin.rows[0].r === 'string' ? JSON.parse(fin.rows[0].r) : fin.rows[0].r;
-    return { mode: 'load', run_id: runId, source: { code: sourceCode, sha256, file_name: fileName, size_bytes: snap.size }, distinct_external_ids: seen.size, ...summary, result };
+    return { mode: 'load', timings_ms: Object.fromEntries(Object.entries(timings).map(([k, v]) => [k, Math.round(v)])), run_id: runId, source: { code: sourceCode, sha256, file_name: fileName, size_bytes: snap.size }, distinct_external_ids: seen.size, ...summary, result };
   } catch (e) {
     try {
       await db.query('select catalog.fail_import_run($1::uuid, $2)', [runId, String(e?.message ?? e)]);
