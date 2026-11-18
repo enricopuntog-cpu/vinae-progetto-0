@@ -149,6 +149,30 @@ try {
   const msg13 = await assertEffectiveRole(async (t, pr) => ({ rows: Array.from(await wrongRole.unsafe(t, pr)) }), 'catalog_loader').then(() => 'accettata', (e) => String(e.message));
   check('P13b', 'sessione postgres: rifiutata con motivo "ruolo effettivo"', /ruolo effettivo "postgres"/.test(msg13), msg13);
   await wrongRole.close();
+
+  // P14 — costo del finish su fixture piccola (5.000 record): base e poi 10% modificato SUBITO dopo, senza ANALYZE
+  // intermedio (statistiche del planner non ancora aggiornate). Non è un benchmark: è una guardia contro regressioni
+  // evidenti (piano quadratico, scansioni ripetute). Tetto largo (30 s) e statement_timeout di 60 s.
+  const N14 = 5000;
+  const rows14 = (changed) => Array.from({ length: N14 }, (_, i) => row(String(9500001 + i), changed && i % 10 === 3 ? 'v2' : 'v1'));
+  const D = await open();
+  try {
+    await D.q("set statement_timeout = '60s'");
+    const timeFinish = async (shaHex, rows) => {
+      const b = await begin(D, shaHex);
+      for (let i = 0; i < rows.length; i += 1000) await stage(D, b.run_id, rows.slice(i, i + 1000));
+      const t = performance.now();
+      const f = await finish(D, b.run_id, rows.length, { allow_mass_removal: true });
+      return { ms: performance.now() - t, f };
+    };
+    const base14 = await timeFinish(sha('p14-base'), rows14(false));
+    const mod14 = await timeFinish(sha('p14-mod'), rows14(true));
+    console.log(`    (finish ${N14} record: base ${Math.round(base14.ms)} ms, modificato ${Math.round(mod14.ms)} ms)`);
+    check('P14', `finish su ${N14} record entro 30 s (base e modificato subito dopo); ${mod14.f.updated} aggiornati, ${mod14.f.unchanged} invariati`,
+      base14.ms < 30000 && mod14.ms < 30000 && base14.f.new === N14 && mod14.f.updated === N14 / 10 && mod14.f.unchanged === N14 - N14 / 10, JSON.stringify([base14.f.new, mod14.f.updated, mod14.f.unchanged]));
+  } finally {
+    await D.c.close();
+  }
 } catch (e) {
   check('ERR', 'eccezione non attesa', false, msg(e));
 } finally {

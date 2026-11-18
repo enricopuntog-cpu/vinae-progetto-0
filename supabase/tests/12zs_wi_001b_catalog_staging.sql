@@ -149,6 +149,10 @@ begin
     not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace
                   and not (coalesce(p.proconfig, '{}'::text[]) @> array['search_path=""'])));
 
+  perform pg_temp.rec('A12b', 'finish_import_run ha enable_nestloop = off (piano lineare anche senza statistiche; regressione stalli del finish)',
+    exists (select 1 from pg_proc p where p.oid = 'catalog.finish_import_run(uuid,bigint,jsonb)'::regprocedure
+              and coalesce(p.proconfig, '{}'::text[]) @> array['enable_nestloop=off']));
+
   perform pg_temp.rec('A13', 'import_stage è UNLOGGED (nessun WAL per lo staging); le altre tabelle sono permanenti',
     (select relpersistence from pg_class where oid = 'catalog.import_stage'::regclass) = 'u'
     and not exists (select 1 from pg_class c where c.relnamespace = 'catalog'::regnamespace and c.relkind = 'r'

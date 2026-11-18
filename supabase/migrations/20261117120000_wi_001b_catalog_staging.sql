@@ -898,10 +898,17 @@ $$;
 -- Promozione atomica: tutto o niente. Un controllo che fallisce lascia `source_records` identica alla
 -- versione completa precedente (la transazione della funzione si annulla; il tentativo resta `running`
 -- e il caricatore lo marca `failed`).
+--
+-- `enable_nestloop = off`: subito dopo il caricamento a lotti `import_stage` e `source_records` non hanno ancora
+-- statistiche (l'autoanalyze arriva dopo). Il planner stima allora 1 riga per lato e sceglie un Nested Loop con la
+-- condizione di join come filtro: 5.000 record = 12,5 milioni di confronti, 212.894 = decine di miliardi (stalli di
+-- minuti con poco WAL, misurati con EXPLAIN ANALYZE). Hash/merge join hanno costo lineare qualunque sia la stima.
+-- L'impostazione vale solo durante questa funzione (e le due che chiama) e non richiede privilegi speciali.
 create or replace function catalog.finish_import_run(p_run_id uuid, p_expected_distinct bigint, p_summary jsonb default '{}'::jsonb)
 returns jsonb
 language plpgsql
 set search_path = ''
+set enable_nestloop = off
 as $$
 declare
   v_source uuid;
