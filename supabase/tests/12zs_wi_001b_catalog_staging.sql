@@ -787,6 +787,7 @@ end $$;
 -- ===================================================================================================
 set local role catalog_loader;
 insert into ctx select 'run13', pg_temp.run_of(catalog.begin_import_run('LIVEX-LWIN7', repeat('e', 64), 's13.xlsx', null, 'test'))::text;
+\o /dev/null
 select catalog.stage_source_records((select v::uuid from ctx where k = 'run13'), jsonb_build_array(
   pg_temp.fx('2000001', 'Live', 'wine', null, 'Italy', null, null, 'a'),
   pg_temp.fx2('3000001', 'Live', 'wine', 'Ch. A', 'Rouge', 'France', 'Bordeaux', 'Red'),
@@ -797,6 +798,7 @@ select catalog.stage_source_records((select v::uuid from ctx where k = 'run13'),
   pg_temp.fx2('3000006', 'Combined', 'wine', 'Ch. A', 'Ancien', 'France', 'Bordeaux', 'Red'),
   pg_temp.fx2('3000007', 'Live', 'wine', 'Bod. C', 'Tinto', 'Spain', null, null),
   pg_temp.fx2('3000008', 'Live', 'wine', 'Bod. D', 'Sin pais', null, null, 'Red')));
+\o
 insert into ctx select 'fin13', catalog.finish_import_run((select v::uuid from ctx where k = 'run13'), 9)::text;
 reset role;
 
@@ -929,6 +931,7 @@ end $$;
 -- catena Combined di 52 passi, chiave naturale posizionale, record che perde il paese
 set local role catalog_loader;
 insert into ctx select 'run16', pg_temp.run_of(catalog.begin_import_run('LIVEX-LWIN7', repeat('a', 63) || 'b', 's16.xlsx', null, 'test'))::text;
+\o /dev/null
 select catalog.stage_source_records((select v::uuid from ctx where k = 'run16'),
   (select jsonb_agg(pg_temp.fx(to_char(5000000 + g, 'FM0000000'), 'Combined', 'wine', to_char(5000000 + g + 1, 'FM0000000'), 'Italy', null, null))
      from generate_series(0, 51) g)
@@ -941,6 +944,7 @@ select catalog.stage_source_records((select v::uuid from ctx where k = 'run16'),
          'payload', jsonb_build_object('producer_name', 'P', 'wine', 'W', 'classification', 'AOC'), 'raw', '{}'::jsonb, 'content_hash', repeat('6', 63) || '2'),
        -- 3000001 perde il paese
        pg_temp.fx2('3000001', 'Live', 'wine', 'Ch. A', 'Rouge', null, 'Bordeaux', 'Red')));
+\o
 insert into ctx select 'fin16', catalog.finish_import_run((select v::uuid from ctx where k = 'run16'), 56, '{"allow_mass_removal":true}')::text;
 reset role;
 
