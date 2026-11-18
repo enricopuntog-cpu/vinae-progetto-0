@@ -228,6 +228,7 @@ jobs:
       - name: Wine catalog importer
         run: |
           node --check tools/wine-catalog/lwin-import.mjs
+          node --check tools/wine-catalog/lwin-load.mjs
           node --test tools/wine-catalog/test/*.test.mjs
 
   backend:

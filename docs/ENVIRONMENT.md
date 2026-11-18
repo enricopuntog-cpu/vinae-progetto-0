@@ -609,6 +609,17 @@ Nel processo di prova le flag Accessori sono accese (`NEXT_PUBLIC_ACCESSORI_ENAB
 `ACCESSORI_ENABLED`), mentre pagamenti e IA restano spenti; il valore di queste
 flag in produzione non cambia.
 
+### Catalogo enologico WI-001B (strumenti locali, nessuna variabile di runtime)
+
+Lo staging del catalogo LWIN (`tools/wine-catalog/`, schema `catalog`) non ha variabili per frontend, Edge Function o backend e non è raggiungibile dalla Data API. Gli strumenti da riga di comando leggono:
+
+| Variabile | Dove | Significato |
+|---|---|---|
+| `CATALOG_DATABASE_URL` | solo shell locale, mai in repo né CI | URL del PostgreSQL **locale** (loopback) per `lwin-load.mjs`, `test/pg-integration.mjs`, `test/pg-crash.mjs`, `bench/measure.mjs`. Gli strumenti rifiutano qualunque host non loopback. L'import completo di Production richiede un'autorizzazione separata. |
+| `VINEA_CRASH_CONTAINER` / `VINEA_CRASH_CONFIRM` | solo shell locale | Il test di crash reale esegue `docker kill` sul contenitore indicato: serve il nome `supabase_db_vinea_wi001b_*` e `VINEA_CRASH_CONFIRM=distruggi-questo-database-locale`. |
+
+Il file `LWINdatabase.xlsx` (CC BY 4.0, `docs/wine-intelligence/SOURCE_REGISTRY.md`) non entra mai nel repository; si passa con `--input`. Test con fixture piccole: non attivare `auto_explain` con `log_min_duration = 0` né generare dataset sintetici da 200.000 righe sul PC (log e WAL riempiono il disco).
+
 ## Backend
 
 File di esempio: `backend/.env.example`.

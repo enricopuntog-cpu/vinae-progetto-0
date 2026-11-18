@@ -4,7 +4,13 @@
 // farne in Vinea spetta a una revisione, non all'importatore.
 
 export function classifyImport(records, previous) {
-  const counts = { new: 0, updated: 0, unchanged: 0, duplicate: 0, conflict: 0, merged: 0, removed_from_source: 0 };
+  const counts = {
+    new: 0, updated: 0, unchanged: 0, duplicate: 0, conflict: 0, merged: 0,
+    // Combined confrontati con lo snapshot precedente (WI-001B, chiude il limite G1 di WI-001A):
+    // il riferimento di destinazione è nel row_hash, quindi una sua modifica è un «aggiornato».
+    merged_new: 0, merged_updated: 0, merged_unchanged: 0,
+    removed_from_source: 0,
+  };
   const seen = new Map(); // lwin -> primo record
   const conflicting = new Set();
   for (const r of records) {
@@ -25,6 +31,9 @@ export function classifyImport(records, previous) {
     if (r.status === 'Combined') {
       counts.merged += 1;
       mergedPairs.push({ from: lwin, into: r.reference_lwin });
+      if (!previous || !previous.has(lwin)) counts.merged_new += 1;
+      else if (previous.get(lwin) === r.row_hash) counts.merged_unchanged += 1;
+      else counts.merged_updated += 1;
       continue;
     }
     if (!previous || !previous.has(lwin)) counts.new += 1;
