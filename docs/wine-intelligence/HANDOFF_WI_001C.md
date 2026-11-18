@@ -1,51 +1,34 @@
 # Handoff — da WI-001B a WI-001C
 
-Stato al 17 novembre 2026. Branch `feature/wi-001b-catalog-staging` (base `origin/main` `127cec2`), **non pubblicato, non mergiato**.
+Stato al 18 novembre 2026. Branch `feature/wi-001b-catalog-staging` (base `origin/main` `127cec2`).
 
-## Cosa esiste (solo nel repository e su database LOCALE effimero)
+## Cosa consegna WI-001B (infrastruttura, NON il catalogo)
 
-- Migration `supabase/migrations/20261117120000_wi_001b_catalog_staging.sql`: schema privato `catalog` (fonti, snapshot, tentativi, record importati, storico, rilievi, accorpamenti, territori, alias), ruolo `catalog_loader`, nove funzioni invoker. Modello e scostamenti dalla bozza: `docs/WINE_CATALOG_ARCHITECTURE.md` §11.
-- Caricatore `tools/wine-catalog/lwin-load.mjs` (Bun; client PostgreSQL integrato; solo database loopback; dry-run con anteprima del delta; `--takeover`, `--allow-mass-removal`). Il parser e i normalizzatori di WI-001A sono riusati; chiuso il limite G1 (i Combined sono confrontati con lo snapshot precedente: `merged_new/updated/unchanged`).
-- Griglia SQL `supabase/tests/12zs_wi_001b_catalog_staging.sql` (81 casi), agganciata a `supabase/tests/12g_ci_run.sh` (gate «Supabase DB regression», stack locale effimero). 15 nuovi test Node in `tools/wine-catalog/test/load.test.mjs` (57 totali).
+- Migration `supabase/migrations/20261117120000_wi_001b_catalog_staging.sql`: schema privato `catalog` (fonti, snapshot, tentativi, `source_records`, storico eventi, rilievi, accorpamenti Combined, territori, alias, staging UNLOGGED), ruolo `catalog_loader`, 19 funzioni invoker con `search_path` vuoto, nessuna SECURITY DEFINER, RLS ovunque, nessun grant a PUBLIC/anon/authenticated/service_role. Additiva: nessun oggetto di `public` toccato. Modello: `docs/WINE_CATALOG_ARCHITECTURE.md` §11.
+- Caricatore `tools/wine-catalog/lwin-load.mjs` (Bun, solo loopback, dry-run, ripresa con `--takeover`, rimozioni solo marcate).
+- Prove: Node 73, griglia `supabase/tests/12zs_wi_001b_catalog_staging.sql` 152/152 (agganciata a `12g_ci_run.sh`), concorrenza reale `test/pg-integration.mjs` 18/18, crash reale `test/pg-crash.mjs` 13/13. Revisione indipendente Opus 5.5 HIGH: nessun P0/P1.
 
-## Cosa NON esiste / non è stato distribuito
+## Stato dei dati (leggere prima di fare qualsiasi cosa)
 
-- La migration **non è applicata a nessun database remoto** (Production, Preview, staging): migration applicate = 0. Il ledger resta a 104+ migration senza questa.
-- **Nessun import del file reale**: `LWINdatabase.xlsx` non è stato indicato né letto in questa sessione. Conteggi 212.894 / 206.167 / 6.221 / 506 sul database: NON VERIFICATI. Resta da eseguire, in locale: `bun tools/wine-catalog/lwin-load.mjs --input <percorso> --database-url postgresql://…127.0.0.1… --report <fuori dal repo>`.
-- Nessuna scheda canonica, nessun `wine_links`, nessuna immagine, nessuna UI, nessun agente AI, nessun job schedulato.
-- Docker/Supabase CLI non erano disponibili sulla macchina: la migration e la griglia sono state provate su PGlite (PostgreSQL in WASM, ruoli `anon/authenticated/service_role` creati a mano, senza PostgREST né Auth). La griglia **non è ancora stata eseguita su uno stack Supabase reale**: lo farà il gate CI al primo push consentito.
+- **Il catalogo è vuoto.** Nessun import del file reale `LWINdatabase.xlsx` (non fornito al task; SHA-256 atteso `7669ceab…fd488e`, 212.894 righe). I conteggi in `IMPORT_MANIFEST.json` sono quelli del dry-run WI-001A.
+- Decisione del founder: **cloud-first**. L'import completo gira solo in cloud, dopo verifica di destinazione, costi, autorizzazioni e sicurezza; mai sul PC (log e WAL hanno già riempito il disco una volta). Nessun benchmark massivo locale.
+- Misure su dati sintetici (PostgreSQL 17.6 locale, poi eliminate): import completo 189–199 s, ~1 GB di WAL; ripetizione `skipped`; modificato a caldo 31–39 s. Il file reale non è mai stato misurato.
 
-## Misure (SINTETICHE, PGlite — non rappresentative di Supabase)
+## Limiti e debiti aperti
 
-Dataset sintetico di 212.894 righe (19 MB di xlsx; 6.262 Combined, 491 Deleted, 101 paesi / 404 regioni / 2.020 sottoregioni; NON il file reale), caricatore reale + migration reale su PGlite (PostgreSQL in WASM, un solo processo, senza autovacuum), 2.000 righe per lotto:
-
-| Prova | Esito |
-|---|---|
-| Import completo (212.894 record) | 103 s; 212.894 nuovi; 0 scartati; 6.262 collegamenti Combined (6.247 attivi, 15 verso Deleted non attivi); 2.525 territori, 2.424 archi |
-| Seconda esecuzione, stesso file | 116 s; 0 nuovi, 0 aggiornati, 212.894 invariati; digest dei dati identico; 0 eventi |
-| File modificato (998 modificati, 30 riferimenti Combined cambiati, 500 rimossi, 500 nuovi) | dry-run e import concordano; eventi: 998 updated, 30 reference_changed, 500 removed; i 500 rimossi restano nel registro marcati |
-| Ripresa dopo interruzione simulata (takeover) | 132 s; nessun duplicato, digest identico al precedente, storia: 1 abandoned + 4 succeeded |
-| Lookup per LWIN / territorio / paese+regione | 0,8–1,6 ms |
-| Memoria di picco del processo di prova | 3,3–5,6 GB: dominata da PGlite nello stesso processo; il caricatore da solo è in streaming (lotti da 2.000) ma tiene in memoria la mappa lwin→hash; NON misurata su Postgres reale |
-| Dimensione dopo 4 esecuzioni complete | 1,47 GB (`source_records` 1,45 GB, indici 66 MB) |
-
-**Rischio misurato:** ogni esecuzione tocca tutte le righe (`last_seen_run`), quindi ogni import completo scrive ~370 MB di versioni di riga; senza autovacuum (PGlite) restano come bloat. Su Postgres reale l'autovacuum le recupera, ma la scrittura è reale. Mitigazione proposta prima del merge: spostare la presenza (`last_seen_run`, rimozione) in una tabella stretta `catalog.source_record_presence(record_id, last_seen_run)` e riscrivere `source_records` solo quando cambia il contenuto. Da misurare su stack Supabase reale con il file vero.
-
-## Blocco alla pubblicazione
-
-Un push dei file sotto `supabase/` fa creare all'integrazione GitHub di Supabase un branch Preview che applica le migration (`CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md`, check «Supabase Preview»). L'incarico vieta ogni applicazione remota, quindi **nessun push è stato fatto**. Per pubblicare serve un incarico che decida come gestire la Preview (per esempio PR con la migration dopo la verifica degli effetti di distribuzione).
-
-## Prima del merge (incarico successivo)
-
-1. Esecuzione della griglia 12zs su stack Supabase locale reale (CLI 2.117.0 come in CI); verifica che `postgres` possa fare `SET ROLE catalog_loader` (la migration prova `grant catalog_loader to current_user`).
-2. Import locale del file reale con dry-run e confronto con `IMPORT_MANIFEST.json`.
-3. Decidere come gestire la Supabase Preview e verificare, dopo il merge, ledger e oggetti (`catalog.*`) su Production.
-4. Rivedere i residui: tabella `import_findings` che cresce a ogni tentativo; contratto «leggere solo se l'ultimo tentativo è succeeded».
-
-## Proposta WI-001C — schede canoniche
-
-Definire e approvare (founder) le regole di promozione e deduplicazione (LWIN-7 ↔ `catalog.wines`, LWIN-11 ↔ annata, formato), poi creare `catalog.producers/wines/wine_vintages/wine_formats` con provenienza verso `source_records`, `catalog.wine_links` verso `public.wines` solo `manual`/`exact_id`, alias territoriali con mappatura attendibile, viste pubbliche a colonne chiuse. Criteri in `docs/WINE_CATALOG_ARCHITECTURE.md` §11.
+1. **`finish_import_run` a 212.894 record non rimisurato dopo la correzione** (`enable_nestloop = off`, causa: Nested Loop quadratico senza statistiche). Verificato a 5.000 (< 1 s, prima 14–21 s) e 40.000 record (1,8 s). Da confermare nell'import cloud autorizzato, con `statement_timeout` e monitoraggio.
+2. P14 è uno smoke di scala, non una guardia di regressione (passa anche senza la correzione su DB vuoto); la guardia è il caso 12zs A12b.
+3. Al primo import ogni record è scritto due volte (INSERT con `territory_id` null, poi UPDATE in `sync_territories`): creare i territori prima e valorizzare `territory_id` nell'INSERT (WAL ≈ 2×).
+4. Trigger `territory_edges_no_cycle` O(E²): trascurabile a ~2.000 archi (LWIN reale), da rivedere se i territori crescono.
+5. Le funzioni create in WI-001C nascono eseguibili da PUBLIC: aggiungere `alter default privileges in schema catalog revoke execute on functions from public` o revocare esplicitamente.
+6. `expected_rows` di uno snapshot non è correggibile; `p_stale_after` è validato solo dalla CLI; l'allowlist loopback è un guard-rail, non un confine di sicurezza (un tunnel su localhost la supera); `grant catalog_loader to current_user` in migration ignora l'errore con una notice.
+7. Un test Node è fallito una volta su sei esecuzioni (non identificato, non riprodotto in cinque successive).
+8. Rilievi `import_findings` che non si ripresentano restano `open`; la tabella va potata.
 
 ## Vietato senza nuova autorizzazione
 
-Applicare migration o importare su ambienti remoti; mergiare la PR; scaricare immagini; creare UI, agenti AI o job; estendere la licenza LWIN a immagini/prezzi/API; fondere duplicati automaticamente; cancellare record; WI-003, nuove ricerche di cataloghi, Vinea Sentinel.
+Import completo su Production o su qualunque DB cloud; benchmark massivi locali; scaricare immagini; UI, agenti AI, job schedulati; estendere la licenza LWIN (CC BY 4.0, `SOURCE_REGISTRY.md`) a immagini/prezzi/API; fondere duplicati automaticamente; cancellare record; mettere il file xlsx in un repository.
+
+## Proposta WI-001C — catalogo canonico
+
+Con approvazione del founder delle regole di promozione/deduplicazione: `catalog.producers`, `wines` (LWIN-7), `wine_vintages` (LWIN-11), `wine_formats` con provenienza verso `source_records`; `wine_links` verso `public.wines` solo `manual`/`exact_id`; gerarchie e denominazioni; alias multilingua senza traduzione automatica; schede enologiche e attributi con provenienza; viste pubbliche a colonne chiuse; predisposizione a ricerca e uso AI (solo contratto, nessun agente). Criteri in `docs/WINE_CATALOG_ARCHITECTURE.md` §11. Prerequisito: import cloud autorizzato e verificato del file reale (o decisione di partire da un sottoinsieme).

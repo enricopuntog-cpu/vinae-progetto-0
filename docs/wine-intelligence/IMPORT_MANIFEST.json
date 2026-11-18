@@ -59,8 +59,8 @@
   "local_staging_notes": [
     {
       "task": "WI-001B",
-      "verified_on": "2026-11-17",
-      "note": "Nessun import locale del file reale registrato qui: il file LWINdatabase.xlsx non era accessibile in questa sessione (percorso non indicato), quindi la prova sul file reale è NON VERIFICATA. Prove eseguite su dataset sintetico (stesse dimensioni) su PGlite e su griglia SQL 12zs. Nessuna importazione Production; i conteggi di snapshot sopra restano quelli del dry-run WI-001A.",
+      "verified_on": "2026-11-18",
+      "note": "Nessun import del file reale LWINdatabase.xlsx nel database (il file non è stato fornito a questo task: i conteggi di snapshot sopra restano quelli del dry-run WI-001A). Misure su dataset SINTETICO (212.894 righe) su PostgreSQL 17.6 locale Supabase, poi eliminate: import completo 189-199 s e ~0,95-1,0 GB di WAL, ripetizione skipped (~3 MB di WAL), file modificato a caldo 31-39 s. Stallo del finish a freddo diagnosticato (piano Nested Loop senza statistiche) e corretto con enable_nestloop=off; verifica a 5.000 e 40.000 record, NON rimisurato a 212.894. Test: Node 73/73, griglia 12zs 152/152, concorrenza 18/18, crash reale 13/13.",
       "production_imports": 0,
       "migrations_applied_remote": 0
     }
