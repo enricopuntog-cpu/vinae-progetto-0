@@ -20,6 +20,7 @@ import { assertCloudAuthorized, resolveCloudLimits, redactUrl } from './lib/clou
 import { createLogger, sanitizeError } from './lib/safe-log.mjs';
 import {
   assertCloudSession, assertLoaderPrivileges, createWalGuard, applySessionLimits, verifyFinish, planFinishWal, createWalMonitor,
+  concludeFinish, buildFinishOutcome,
 } from './lib/cloud-guards.mjs';
 import { loadCaPem } from './lib/cloud-tls.mjs';
 import {
@@ -108,6 +109,11 @@ const logger = createLogger({ secrets: logSecrets });
 let walGuard = null;
 let monitorDb = null;
 let walMonitor = null;
+let committedRun = false; // vero dopo un finish confermato: da qui in poi ogni errore NON è un rollback
+let finishConclusion = null; // misura conclusiva e stato del monitor, raccolti subito dopo il finish (anche se fallito)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// SQLSTATE dell'errore del server (Bun lo espone come errno/code a seconda della versione): 57014 = istruzione interrotta
+const sqlStateOf = (e) => { const c = [e?.errno, e?.code, e?.sqlState].filter(Boolean).map(String); return c.includes('57014') ? '57014' : c[0]; };
 const cloudInfo = cloudTarget
   ? { target: { kind: cloudTarget.kind, ref: cloudTarget.ref, host: cloudTarget.host, database: cloudTarget.database, production: cloudTarget.production, url: redactUrl(process.env.CATALOG_DATABASE_URL) }, limits: cloudLimits }
   : null;
@@ -121,7 +127,7 @@ try {
     const q = (t, p) => db.query(t, p);
     cloudInfo.session = await assertCloudSession(q);
     cloudInfo.loader_privileges = await assertLoaderPrivileges(q);
-    await applySessionLimits(q, {
+    await applySessionLimits(db, {
       statementTimeoutMs: cloudLimits.batchTimeoutSec * 1000,
       lockTimeoutMs: cloudLimits.lockTimeoutSec * 1000,
       idleTxTimeoutMs: cloudLimits.idleTxTimeoutSec * 1000,
@@ -137,6 +143,7 @@ try {
       });
       await walMonitor.sample();
       if (walMonitor.status().samples < 1) throw new Error('Monitor WAL non operativo: importazione rifiutata (fail-closed).');
+      // la connessione principale è riservata e NON si ricollega: se cade durante il finish l'esito è «sconosciuto» (finalizeWal)
     }
     logger.log(`destinazione cloud identificata: ${cloudTarget.kind} ${cloudTarget.ref} (${cloudTarget.database}), TLS verificato, privilegi conformi`);
   } else if (url) {
@@ -171,32 +178,42 @@ try {
           throw new Error(`Finish non avviato: WAL già usato ${Math.round(used / 1048576)} MB + stima del finish ${Math.round(cloudInfo.finish_estimate.projectedFinishBytes / 1048576)} MB superano il budget ${cloudLimits.maxWalMb} MB.`);
         }
         // il finish è UNA transazione di promozione: timeout dedicato (più lungo di quello dei lotti) e monitor separato che può annullarla
-        await applySessionLimits((t, p) => db.query(t, p), {
+        await applySessionLimits(db, {
           statementTimeoutMs: cloudLimits.finishTimeoutMin * 60000,
           lockTimeoutMs: cloudLimits.lockTimeoutSec * 1000,
           idleTxTimeoutMs: cloudLimits.idleTxTimeoutSec * 1000,
         });
         walMonitor.start();
       },
-      afterFinish: async () => {
-        if (!walMonitor) return;
-        cloudInfo.wal_monitor = walMonitor.stop();
-        const m = cloudInfo.wal_monitor;
-        // budget superato o monitor senza visibilità: l'import NON è «riuscito» anche se il finish è terminato (annullamento tardivo o fallito)
-        if (m.exceeded || m.lost || (m.cancelAttempts > 0 && m.cancelOk !== true)) {
-          process.exitCode = 1;
-          logger.log(`ATTENZIONE: monitor WAL — budget superato=${m.exceeded}, annullamento riuscito=${m.cancelOk}, perso=${m.lost}`);
-        }
+      afterFinish: async ({ status }) => {
+        if (!walMonitor) return null;
+        // ferma il monitor (attende un campione in volo), riconcilia se la connessione principale è caduta e MISURA il WAL a fine finish:
+        // un finish più rapido del timer non lascia mai l'esito al solo campionamento periodico
+        finishConclusion = await concludeFinish({
+          monitor: walMonitor, status,
+          mainQuery: (t, p) => db.query(t, p), monitorQuery: (t, p) => monitorDb.query(t, p),
+          startLsn: walGuard.start, backendPid: db.backendPid, sleep,
+        });
+        cloudInfo.wal_monitor = finishConclusion.monitor;
+        return finishConclusion;
       },
     });
     if (cloudTarget && report.mode === 'load') {
+      committedRun = true;
       cloudInfo.verification = await verifyFinish((t, p) => db.query(t, p), { runId: report.run_id, sourceCode: 'LIVEX-LWIN7', expectedSha256: expectedSha });
       if (!cloudInfo.verification.ok) process.exitCode = 1;
+      // esito conclusivo del WAL: SOLO `within_budget` senza altre anomalie vale come successo (exit 0)
+      if (walMonitor) {
+        cloudInfo.finish_outcome = buildFinishOutcome({
+          finishStatus: 'committed', conclusion: finishConclusion, verification: cloudInfo.verification, budgetBytes: cloudLimits.maxWalMb * 1048576,
+        });
+        if (!cloudInfo.finish_outcome.ok) process.exitCode = 1;
+      }
     }
   }
   if (cloudInfo) {
     if (walGuard) cloudInfo.wal = await walGuard.report();
-    if (walMonitor && !cloudInfo.wal_monitor) cloudInfo.wal_monitor = walMonitor.stop();
+    if (walMonitor && !cloudInfo.wal_monitor) cloudInfo.wal_monitor = await walMonitor.stop();
     cloudInfo.log = logger.summary();
     report.cloud = cloudInfo;
   }
@@ -204,7 +221,12 @@ try {
   report.peak_rss_mb = Math.round(process.memoryUsage().rss / 1048576);
   report.file_size_bytes = report.source?.size_bytes ?? null;
   writeFileSync(args.report, JSON.stringify(report, null, 2), { mode: 0o600 });
-  console.log(args['dry-run'] ? 'Anteprima (nessuna scrittura):' : report.mode === 'skipped' ? 'Snapshot già importato e corrente (nessuna elaborazione):' : 'Caricamento completato:', JSON.stringify(report.rows ?? report.result?.territories ?? {}), `| ${report.elapsed_ms} ms | RSS ${report.peak_rss_mb} MB`);
+  const anomalous = (report.cloud?.finish_outcome && !report.cloud.finish_outcome.ok) || process.exitCode === 1;
+  if (anomalous) {
+    const fo = report.cloud?.finish_outcome;
+    console.error(fo ? `ESITO ANOMALO (${fo.outcome}): importazione NON confermata come riuscita. ${fo.known_db_state}. ${fo.next_action}` : 'ESITO ANOMALO: verifica post-finish non superata; importazione NON confermata come riuscita.');
+  }
+  console.log(args['dry-run'] ? 'Anteprima (nessuna scrittura):' : report.mode === 'skipped' ? 'Snapshot già importato e corrente (nessuna elaborazione):' : anomalous ? 'Caricamento NON confermato (vedi esito):' : 'Caricamento completato:', JSON.stringify(report.rows ?? report.result?.territories ?? {}), `| ${report.elapsed_ms} ms | RSS ${report.peak_rss_mb} MB`);
 } catch (e) {
   console.error(`Errore: ${sanitizeError(e, logSecrets)}`);
   process.exitCode = 1;
@@ -212,7 +234,15 @@ try {
     // report anche in caso di errore: destinazione, limiti, WAL e log aiutano la diagnosi (nessun segreto)
     try {
       if (walGuard) cloudInfo.wal = await walGuard.report();
-      if (walMonitor && !cloudInfo.wal_monitor) cloudInfo.wal_monitor = walMonitor.stop();
+      if (walMonitor && !cloudInfo.wal_monitor) cloudInfo.wal_monitor = await walMonitor.stop();
+      // finish fallito o dall'esito sconosciuto: l'esito conclusivo dice cosa si sa dello stato remoto e cosa no
+      const st = e?.finish?.status ?? (committedRun ? 'committed' : null);
+      if (st && walMonitor) {
+        cloudInfo.finish_outcome = buildFinishOutcome({
+          finishStatus: st, conclusion: finishConclusion, budgetBytes: cloudLimits.maxWalMb * 1048576, errorCode: sqlStateOf(e),
+        });
+        console.error(`ESITO (${cloudInfo.finish_outcome.outcome}): ${cloudInfo.finish_outcome.known_db_state}. ${cloudInfo.finish_outcome.next_action}`);
+      }
       cloudInfo.log = logger.summary();
       writeFileSync(args.report, JSON.stringify({ mode: 'error', error: sanitizeError(e, logSecrets), cloud: cloudInfo }, null, 2), { mode: 0o600 });
     } catch {
@@ -220,7 +250,7 @@ try {
     }
   }
 } finally {
-  if (walMonitor) walMonitor.stop();
+  if (walMonitor) await walMonitor.stop();
   if (monitorDb) await monitorDb.close();
   if (db) await db.close();
 }

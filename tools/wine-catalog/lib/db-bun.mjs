@@ -5,6 +5,8 @@
 import { assertLocalDatabaseUrl } from './paths.mjs';
 import { assertEffectiveRole } from './role-check.mjs';
 import { assertVerifiedTlsUrl, tlsOptions, describeConnectError, isConnectionLost } from './cloud-tls.mjs';
+import { MONITOR_SQL_ALLOWED, SESSION_LIMITS_SQL } from './cloud-guards.mjs';
+import { sanitizeSqlForFilter } from './sql-scan.mjs';
 
 export async function connectLocal(url, { role = 'catalog_loader' } = {}) {
   assertLocalDatabaseUrl(url);
@@ -43,20 +45,29 @@ export async function connectLocal(url, { role = 'catalog_loader' } = {}) {
 //    pooler Supavisor non garantisce di inoltrarlo) e si riverifica con `assertRole()`; il login è verificato da
 //    `assertCloudSession`: dal login è raggiungibile SOLO catalog_loader, quindi `RESET ROLE` non porta a privilegi maggiori.
 // ---------------------------------------------------------------------------------------------------------------------
+// CONFINE DI FIDUCIA (WI-001C-FIX-02). Tre livelli, nessuno basato SOLO su espressioni regolari:
+//  1. `raw()` = SQL interno fidato (SET ROLE, impostazioni iniziali, `setLimits`): testi costanti scritti in questo file o in
+//     cloud-guards.mjs, mai costruiti con input esterno; non è raggiungibile dall'API `query()`.
+//  2. monitor: ELENCO CHIUSO di testi esatti (MONITOR_SQL_ALLOWED): qualunque altro testo è rifiutato, senza interpretazione.
+//  3. sessione del caricatore: il chiamante può inviare solo SELECT/WITH/VALUES in un solo statement, senza DML diretto e senza
+//     `set_config` (i timeout si impostano solo con `setLimits`). Questi filtri sono DIFESA IN PROFONDITÀ: la barriera vera è il database
+//     (login senza privilegi propri, ruolo `catalog_loader` con soli privilegi di import, audit transitivo in assertCloudSession).
 // I filtri lavorano sul testo SENZA commenti (un commento vale come spazio: PostgreSQL accetta \`SET/**/ROLE\`).
 const stripComments = (t) => String(t).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\n]*(?:\n|$)/g, ' ');
 const READ_ONLY_START = /^\s*(?:select|show|values|with)\b/i;
-const DML_ANYWHERE = /\b(?:insert\s+into|update\s+\S+\s+set|delete\s+from|truncate|merge\s+into)\b/i;
+const DML_ANYWHERE = /\b(?:insert\b|update\b[^;]*\bset\b|delete\b|truncate\b|merge\b|into\b|copy\b|call\b|do\b)/i;
 // Cambi di ruolo e controllo di transazione NON ammessi al chiamante: ovunque nel testo e con un solo statement (un \`;\` interno
-// permetterebbe di accodare un RESET ROLE). \`set_config(\` è ammesso solo con i nomi letterali dei timeout. I nostri testi SQL non contengono mai \`;\`.
+// permetterebbe di accodare un RESET ROLE). \`set_config\` non è ammesso al chiamante (si usa \`setLimits\`). I nostri testi SQL non contengono mai \`;\`.
 const ROLE_SWITCH = new RegExp([
   '\\breset\\s+(?:role|session\\s+authorization|all)\\b',
   '\\bset\\s+(?:local\\s+|session\\s+)?(?:role|session\\s+authorization)\\b',
   '\\bsession_authorization\\b',
   '\\b(?:default_)?transaction_read_only\\b',
-  "\\bset_config\\s*\\((?!\\s*'(?:statement_timeout|lock_timeout|idle_in_transaction_session_timeout)')",
+  '\\bset_config\\b',
   '^\\s*(?:begin|start\\s+transaction|commit|rollback|end|abort|savepoint|release)\\b',
 ].join('|'), 'i');
+const WRITE_START = /^\s*(?:select|with|values)\b/i;
+const normalizeSql = (t) => String(t).trim().replace(/\s+/g, ' ');
 const multiStatement = (text) => /;\s*\S/.test(String(text).replace(/'(?:[^']|'')*'/g, "''"));
 
 async function closeQuietly(fn, ms = 3000) {
@@ -67,7 +78,7 @@ async function closeQuietly(fn, ms = 3000) {
   }
 }
 
-function wrapReserved({ sql, conn, redact, readOnly }) {
+function wrapReserved({ sql, conn, redact, readOnly, allow = null }) {
   const state = { broken: false, why: null };
   const guard = () => {
     if (state.broken) throw new Error('Sessione cloud interrotta: la connessione è caduta e non viene riaperta (fail-closed).');
@@ -76,9 +87,21 @@ function wrapReserved({ sql, conn, redact, readOnly }) {
     state,
     async query(text, params = []) {
       guard();
-      const clean = stripComments(text);
+      if (allow) {
+        // monitor: solo i testi esatti dell'elenco chiuso
+        if (!allow.has(normalizeSql(text))) throw new Error('Istruzione non ammessa sulla connessione di monitoraggio.');
+        return db.raw(text, params);
+      }
+      const clean = sanitizeSqlForFilter(text);
       if (ROLE_SWITCH.test(clean) || multiStatement(clean)) throw new Error('Cambio di ruolo, controllo di transazione o più istruzioni: non ammesso al chiamante.');
       if (readOnly && (!READ_ONLY_START.test(clean) || DML_ANYWHERE.test(clean))) throw new Error('Sessione di sola lettura: ammesse solo SELECT/SHOW/WITH.');
+      // il chiamante legge e invoca le funzioni catalog.*; nessuna scrittura diretta (le scritture stanno nelle funzioni del database)
+      if (!WRITE_START.test(clean) || DML_ANYWHERE.test(clean)) throw new Error('Istruzione non ammessa al chiamante: solo SELECT/WITH/VALUES senza scritture dirette.');
+      return db.raw(text, params);
+    },
+    /** Timeout di sessione: SQL interno fidato e costante (passato da cloud-guards), valori solo come parametri. */
+    async setLimits(text, params) {
+      if (normalizeSql(text) !== normalizeSql(SESSION_LIMITS_SQL)) throw new Error('setLimits accetta solo il testo costante dei timeout di sessione.');
       return db.raw(text, params);
     },
     async raw(text, params = []) {
@@ -101,6 +124,8 @@ function wrapReserved({ sql, conn, redact, readOnly }) {
       await closeQuietly(() => sql.close());
     },
   };
+  // il monitor espone SOLO query/close/state: niente `raw` né `setLimits` (SQL arbitrario) a chi tiene l'oggetto
+  if (allow) return { state, query: db.query, close: db.close };
   return db;
 }
 
@@ -165,5 +190,5 @@ export async function connectCloud(url, { role = 'catalog_loader', caPem = null,
 export async function connectCloudMonitor(url, { caPem = null, connectTimeoutSec = 20 } = {}) {
   if (typeof Bun === 'undefined' || typeof Bun.SQL !== 'function') throw new Error('Serve Bun.');
   const { sql, conn, redact } = await openReserved(url, { caPem, connectTimeoutSec, applicationName: 'vinea-wi-catalog-monitor' });
-  return wrapReserved({ sql, conn, redact, readOnly: false });
+  return wrapReserved({ sql, conn, redact, readOnly: false, allow: MONITOR_SQL_ALLOWED });
 }

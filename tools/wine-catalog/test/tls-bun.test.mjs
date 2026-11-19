@@ -154,6 +154,12 @@ test('filtri del chiamante: RESET ROLE, SET ROLE, BEGIN/COMMIT non arrivano mai 
     'select 1; reset role', 'select 1;reset role', "select set_config('role', 'postgres', false)", 'select 1; select 2', '/* x */ begin']) {
       await assert.rejects(() => d.query(q), /non ammesso/, q);
     }
+    // FIX-02: il chiamante invia solo SELECT/WITH/VALUES senza scritture dirette; set_config è vietato ovunque (nome qualificato, tra virgolette, in sottoquery)
+    for (const q of ['insert into catalog.sources values (1)', 'update catalog.sources set name = 1', 'delete from catalog.sources', 'truncate catalog.sources', 'do $ begin end $', 'create table x (a int)',
+      'select pg_catalog.set_config($1, $2, false)', 'select "set_config"($1, $2, false)', 'select (select set_config($1, $2, false))',
+      'with x as (delete from catalog.sources returning 1) select count(*) from x']) {
+      await assert.rejects(() => d.query(q), /non ammess/, q);
+    }
     await d.close();
     const log = await m.log();
     assert.ok(!log.queries.some((q) => /^\s*(reset|begin|commit|rollback)\b/i.test(q) || /set role postgres/i.test(q)));
@@ -185,7 +191,9 @@ test('sessione di SOLA LETTURA (dry-run): default_transaction_read_only attivato
 test('monitor: stessa verifica TLS, nessun SET ROLE (resta il login), non scrive', { skip }, async () => {
   await withMock({}, async (m) => {
     const mon = await connectCloudMonitor(urlFor(m.port), { caPem: fix.ca, connectTimeoutSec: 5 });
-    assert.equal((await mon.query('select 1')).rows.length, 1);
+    assert.equal((await mon.query('select 1 as ok')).rows.length, 1);
+    await assert.rejects(() => mon.query('select 1'), /non ammessa sulla connessione di monitoraggio/, 'elenco chiuso: solo i testi esatti del monitor');
+    await assert.rejects(() => mon.query("select set_config('role', 'postgres', false)"), /non ammessa/);
     await mon.close();
     const log = await m.log();
     assert.ok(!log.queries.some((q) => /set role/i.test(q)));
