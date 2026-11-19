@@ -14,7 +14,11 @@
 --   G  duplicati, revisione, fusione NON distruttiva e reversibile;
 --   H  collegamenti a public.wines (nessuna FK, revisione, riconciliazione);
 --   I  ricerca strutturata (max 10) e scheda con stati verified/estimated/missing;
---   J  non distruttività e compatibilità (record di fonte e public.wines intatti).
+--   J  non distruttività e compatibilità (record di fonte e public.wines intatti);
+--   K  porte non aggirabili (revisione di sicurezza);
+--   L  FIX-01 D-1: regole legate alla logica eseguibile; M  D-2: manuale ≠ promozione; N  D-3: fusioni esatte e reversibili;
+--   O  D-4: produttori ritirati e starvation dei lotti; P  D-5: LWIN-16/18 (specifica Liv-ex); Q  D-6: audit e privilegi;
+--   Z  manomissione della logica dopo l'approvazione (ultima: sostituisce una funzione, tutto sparisce con ROLLBACK).
 begin;
 
 \set ON_ERROR_STOP on
@@ -82,14 +86,20 @@ declare
   v_missing text;
   v_tables text[] := array['promotion_rules', 'promotion_settings', 'producers', 'wines', 'wine_vintages', 'wine_formats',
                            'entity_aliases', 'attribute_definitions', 'attribute_claims', 'duplicate_candidates',
-                           'entity_merges', 'wine_links', 'canonical_events'];
+                           'entity_merges', 'wine_links', 'canonical_events', 'promotion_exceptions'];
 begin
   select string_agg(t, ',') into v_missing from unnest(v_tables) t where to_regclass('catalog.' || t) is null;
   perform pg_temp.rec('A01', 'tutte le tabelle canoniche esistono', v_missing is null, coalesce(v_missing, ''));
   perform pg_temp.rec('A02', 'RLS attiva su ogni tabella canonica e su ogni tabella dello schema',
     not exists (select 1 from pg_class c where c.relnamespace = 'catalog'::regnamespace and c.relkind = 'r' and not c.relrowsecurity));
-  perform pg_temp.rec('A03', 'nessuna funzione SECURITY DEFINER nello schema catalog',
-    not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.prosecdef));
+  -- FIX-01 D-6: le uniche funzioni SECURITY DEFINER sono le porte di scrittura (elenco CHIUSO), tutte con search_path vuoto
+  perform pg_temp.rec('A03', 'SECURITY DEFINER solo per le 16 porte di scrittura (elenco chiuso), nessun''altra funzione dello schema catalog',
+    (select array_agg(p.proname::text) from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.prosecdef)
+      <@ array['add_entity_alias', 'add_manual_producer', 'add_manual_wine', 'add_wine_format', 'add_wine_vintage', 'detect_duplicate_candidates',
+               'merge_canonical_entity', 'open_duplicate_candidate', 'promote_wine_candidates', 'propose_attribute_claim', 'propose_wine_link',
+               'retire_canonical_entity', 'review_attribute_claim', 'review_duplicate_candidate', 'review_wine_link', 'revert_canonical_merge']
+    and (select count(*) from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.prosecdef) = 16,
+    (select string_agg(p.proname, ',') from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.prosecdef));
   perform pg_temp.rec('A04', 'nessuna funzione del catalogo con EXECUTE a PUBLIC (le funzioni WI-001C non nascono eseguibili da PUBLIC)',
     not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace
                   and (p.proacl is null or exists (select 1 from aclexplode(p.proacl) a where a.grantee = 0))));
@@ -119,6 +129,11 @@ begin
   perform pg_temp.rec('A10', 'nessun DELETE né TRUNCATE al curatore su alcuna tabella del catalogo',
     not exists (select 1 from pg_class c where c.relnamespace = 'catalog'::regnamespace and c.relkind = 'r'
                   and (has_table_privilege('catalog_curator', c.oid, 'DELETE') or has_table_privilege('catalog_curator', c.oid, 'TRUNCATE'))));
+  perform pg_temp.rec('A10b', 'D-6: il curatore non ha INSERT/UPDATE diretti (nemmeno a colonna) su alcuna tabella canonica: scrive solo tramite le porte',
+    not exists (select 1 from unnest(array['producers', 'wines', 'wine_vintages', 'wine_formats', 'entity_aliases', 'attribute_claims', 'duplicate_candidates',
+                                           'entity_merges', 'wine_links', 'canonical_events', 'promotion_exceptions']) t
+                 where has_any_column_privilege('catalog_curator', ('catalog.' || t)::regclass, 'INSERT')
+                    or has_any_column_privilege('catalog_curator', ('catalog.' || t)::regclass, 'UPDATE')));
   perform pg_temp.rec('A11', 'il caricatore non vede né scrive alcuna tabella canonica',
     not exists (select 1 from unnest(v_tables) t
                  where has_table_privilege('catalog_loader', ('catalog.' || t)::regclass, 'SELECT')
@@ -176,6 +191,7 @@ end $$;
 do $$
 declare
   v_ok boolean;
+  v_msg text;
   v_prev jsonb;
   v_dry jsonb;
 begin
@@ -202,7 +218,27 @@ begin
   begin perform catalog.promote_wine_candidates(p_dry_run => false, p_actor => 'qa'); v_ok := false;
   exception when insufficient_privilege then v_ok := true; end;
   reset role;
-  perform pg_temp.rec('C05', 'promozione reale rifiutata finché la regola è in bozza', v_ok and (select count(*) from catalog.wines) = 0);
+  perform pg_temp.rec('C05', 'promozione reale rifiutata finché la regola è in bozza (interruttore spento)', v_ok and (select count(*) from catalog.wines) = 0);
+
+  -- C05b: interruttore ACCESO e regola ancora in BOZZA: la promozione resta rifiutata, per il motivo giusto (regola non approvata)
+  update catalog.promotion_settings set enabled = true, max_batch = 10;
+  set local role catalog_curator;
+  begin perform catalog.promote_wine_candidates(p_dry_run => false, p_actor => 'qa'); v_ok := false; v_msg := null;
+  exception when insufficient_privilege then v_ok := true; v_msg := sqlerrm; end;
+  reset role;
+  perform pg_temp.rec('C05b', 'interruttore acceso + regola in bozza: promozione rifiutata (42501) con motivo «regola non approvata», nulla creato',
+    v_ok and v_msg like '%non approvata%' and (select count(*) from catalog.wines) = 0 and (select count(*) from catalog.producers) = 0, v_msg);
+  begin insert into catalog.producers (name, name_key, natural_key, origin, source_id, source_record_id)
+        values ('X', 'x', 'x' || chr(31) || 'y', 'promotion', (select id from catalog.sources limit 1), (select id from catalog.source_records limit 1));
+        v_ok := false; v_msg := null;
+  exception when insufficient_privilege then v_ok := true; v_msg := sqlerrm; end;
+  perform pg_temp.rec('C05c', 'interruttore acceso + regola in bozza: nemmeno un INSERT diretto origin=promotion è consentito (nemmeno al proprietario)',
+    v_ok and v_msg like '%regola non approvata%', v_msg);
+  update catalog.promotion_settings set enabled = false;
+
+  begin update catalog.promotion_rules set status = 'approved', approved_by = null where version = 'lwin-conservative-v1'; v_ok := false;
+  exception when check_violation then v_ok := true; end;
+  perform pg_temp.rec('C07', 'una regola approvata richiede approvatore e data (vincolo)', v_ok and (select status from catalog.promotion_rules where version = 'lwin-conservative-v1') = 'draft');
 
   -- il founder approva la regola (solo il proprietario può scriverla)
   update catalog.promotion_rules set status = 'approved', approved_by = 'founder-test', approved_at = now() where version = 'lwin-conservative-v1';
@@ -211,10 +247,6 @@ begin
   exception when insufficient_privilege then v_ok := true; end;
   reset role;
   perform pg_temp.rec('C06', 'promozione reale rifiutata con regola approvata ma interruttore spento', v_ok and (select count(*) from catalog.wines) = 0);
-
-  begin update catalog.promotion_rules set status = 'approved', approved_by = null where version = 'lwin-conservative-v1'; v_ok := false;
-  exception when check_violation then v_ok := true; end;
-  perform pg_temp.rec('C07', 'una regola approvata richiede approvatore e data (vincolo)', v_ok);
 
   update catalog.promotion_settings set enabled = true, max_batch = 10;
   set local role catalog_curator;
@@ -282,60 +314,65 @@ begin
 end $$;
 
 -- ===================================================================================================
--- D. Identità: LWIN-7 / 11 / 16 / 18, annate e formati documentati
+-- D. Identità: LWIN-7 / 11 / 16 / 18, annate e formati documentati (scrittura tramite le porte; vincoli provati dal proprietario)
 -- ===================================================================================================
 do $$
 declare
   v_ok boolean;
   v_wine uuid := (select id from catalog.wines where lwin7 = '2000001');
   v_src uuid := (select id from catalog.sources where code = 'LIVEX-LWIN7');
+  v_sr1 bigint := (select id from catalog.source_records where external_id = '2000001');
   v_vint uuid;
   v_vint2 uuid;
 begin
-  set local role catalog_curator;
-  begin insert into catalog.wines (lwin7, producer_id, name, name_key, origin) values ('12345', (select id from catalog.producers limit 1), 'X', 'x', 'manual');
+  -- vincoli di identità (come proprietario: il curatore non scrive più direttamente)
+  begin insert into catalog.wines (lwin7, producer_id, name, name_key, origin, provenance_note) values ('12345', (select id from catalog.producers limit 1), 'X', 'x', 'manual', 'n');
         v_ok := false; exception when check_violation then v_ok := true; end;
   perform pg_temp.rec('D01', 'LWIN-7 deve avere 7 cifre', v_ok);
-  begin insert into catalog.wines (lwin7, producer_id, name, name_key, origin) values ('2000001', (select id from catalog.producers limit 1), 'X', 'x', 'manual');
+  begin insert into catalog.wines (lwin7, producer_id, name, name_key, origin, source_id, source_record_id)
+        values ('2000001', (select id from catalog.producers limit 1), 'X', 'x', 'promotion', v_src, v_sr1);
         v_ok := false; exception when unique_violation then v_ok := true; end;
   perform pg_temp.rec('D02', 'LWIN-7 duplicato rifiutato (un identificativo = un vino)', v_ok);
   begin insert into catalog.wines (lwin7, producer_id, name, name_key, origin) values ('2999999', (select id from catalog.producers limit 1), 'Y', 'y', 'promotion');
-        v_ok := false; exception when check_violation then v_ok := true; end;
+        v_ok := false; exception when check_violation or insufficient_privilege then v_ok := true; end;
   perform pg_temp.rec('D03', 'un vino promosso richiede il record di fonte (provenienza obbligatoria)', v_ok);
 
-  begin perform catalog.add_wine_vintage(v_wine, 2015); v_ok := false; exception when check_violation then v_ok := true; end;
+  set local role catalog_curator;
+  begin perform catalog.add_wine_vintage(v_wine, 2015, p_actor => 'qa'); v_ok := false; exception when check_violation then v_ok := true; end;
   perform pg_temp.rec('D04', 'un''annata senza fonte né nota di provenienza è rifiutata (nessuna annata inventata)', v_ok);
-  v_vint := catalog.add_wine_vintage(v_wine, 2015, false, '20000012015', v_src, null, 'annata documentata dal listino del produttore (test)');
+  v_vint := catalog.add_wine_vintage(v_wine, 2015, false, '20000012015', v_src, null, 'annata documentata dal listino del produttore (test)', 'qa');
   perform pg_temp.rec('D05', 'annata documentata con LWIN-11 coerente accettata', v_vint is not null);
-  begin perform catalog.add_wine_vintage(v_wine, 2016, false, '20000012015', v_src, null, 'x'); v_ok := false; exception when check_violation then v_ok := true; end;
+  begin perform catalog.add_wine_vintage(v_wine, 2016, false, '20000012015', v_src, null, 'x', 'qa'); v_ok := false; exception when check_violation then v_ok := true; end;
   perform pg_temp.rec('D06', 'LWIN-11 incoerente con l''annata rifiutato', v_ok);
-  begin perform catalog.add_wine_vintage(v_wine, 2017, false, '30000012017', v_src, null, 'x'); v_ok := false; exception when check_violation then v_ok := true; end;
+  begin perform catalog.add_wine_vintage(v_wine, 2017, false, '30000012017', v_src, null, 'x', 'qa'); v_ok := false; exception when check_violation then v_ok := true; end;
   perform pg_temp.rec('D07', 'LWIN-11 con prefisso diverso da LWIN-7 rifiutato', v_ok);
-  begin perform catalog.add_wine_vintage(v_wine, 2015, false, null, v_src, null, 'doppione'); v_ok := false; exception when unique_violation then v_ok := true; end;
+  begin perform catalog.add_wine_vintage(v_wine, 2015, false, null, v_src, null, 'doppione', 'qa'); v_ok := false; exception when unique_violation then v_ok := true; end;
   perform pg_temp.rec('D08', 'la stessa annata dello stesso vino non si duplica', v_ok);
-  v_vint2 := catalog.add_wine_vintage(v_wine, null, true, null, v_src, null, 'non millesimato, dichiarato dal produttore (test)');
-  begin perform catalog.add_wine_vintage(v_wine, null, true, null, v_src, null, 'altro NV'); v_ok := false; exception when unique_violation then v_ok := true; end;
+  v_vint2 := catalog.add_wine_vintage(v_wine, null, true, null, v_src, null, 'non millesimato, dichiarato dal produttore (test)', 'qa');
+  begin perform catalog.add_wine_vintage(v_wine, null, true, null, v_src, null, 'altro NV', 'qa'); v_ok := false; exception when unique_violation then v_ok := true; end;
   perform pg_temp.rec('D09', 'un solo non-millesimato per vino', v_vint2 is not null and v_ok);
-  begin perform catalog.add_wine_vintage(v_wine, 2020, true, null, v_src, null, 'x'); v_ok := false; exception when check_violation then v_ok := true; end;
+  begin perform catalog.add_wine_vintage(v_wine, 2020, true, null, v_src, null, 'x', 'qa'); v_ok := false; exception when check_violation then v_ok := true; end;
   perform pg_temp.rec('D10', 'annata e non-millesimato sono mutuamente esclusivi', v_ok);
   begin update catalog.wine_vintages set vintage_year = 2014 where id = v_vint; v_ok := false;
   exception when insufficient_privilege then v_ok := true; when object_not_in_prerequisite_state then v_ok := true; end;
   perform pg_temp.rec('D11', 'un''annata registrata non si modifica', v_ok);
 
-  perform catalog.add_wine_format(v_vint, 750, 1, '2000001201500750', null, v_src, null, 'formato documentato (test)');
-  perform pg_temp.rec('D12', 'formato documentato con LWIN-16 coerente accettato', true);
-  begin perform catalog.add_wine_format(v_vint, 1500, 1, '9999999201500750', null, v_src, null, 'x'); v_ok := false; exception when check_violation then v_ok := true; end;
+  -- LWIN-16 = LWIN-11 + volume (5 cifre, ml); esempio ufficiale Liv-ex: 1234567 2012 00750 → qui 2000001 2015 00750
+  perform catalog.add_wine_format(v_vint, 750, 1, '2000001201500750', null, v_src, null, 'formato documentato (test)', 'qa');
+  perform pg_temp.rec('D12', 'formato documentato con LWIN-16 = LWIN-11 + volume (2000001 2015 00750) accettato', true);
+  begin perform catalog.add_wine_format(v_vint, 1500, 1, '9999999201501500', null, v_src, null, 'x', 'qa'); v_ok := false; exception when check_violation then v_ok := true; end;
   perform pg_temp.rec('D13', 'LWIN-16 incoerente con LWIN-11 rifiutato', v_ok);
-  begin perform catalog.add_wine_format(v_vint, 750, 1, null, null, v_src, null, 'doppione'); v_ok := false; exception when unique_violation then v_ok := true; end;
+  begin perform catalog.add_wine_format(v_vint, 750, 1, null, null, v_src, null, 'doppione', 'qa'); v_ok := false; exception when unique_violation then v_ok := true; end;
   perform pg_temp.rec('D14', 'lo stesso formato della stessa annata non si duplica', v_ok);
-  begin perform catalog.add_wine_format(v_vint, 20, 1, null, null, v_src, null, 'x'); v_ok := false; exception when check_violation then v_ok := true; end;
+  begin perform catalog.add_wine_format(v_vint, 20, 1, null, null, v_src, null, 'x', 'qa'); v_ok := false; exception when check_violation then v_ok := true; end;
   perform pg_temp.rec('D15', 'volume implausibile rifiutato', v_ok);
-  begin perform catalog.add_wine_format(v_vint, 375, 1, null, '200000120150003750', v_src, null, 'x'); v_ok := false; exception when check_violation then v_ok := true; end;
-  perform pg_temp.rec('D16', 'LWIN-18 senza LWIN-16 coerente rifiutato', v_ok);
+  -- LWIN-18 = LWIN-11 + confezione (2 cifre) + volume (5 cifre): 6 × 75 cl = 2000001 2015 06 00750. NON ha LWIN-16 come prefisso.
+  perform catalog.add_wine_format(v_vint, 750, 6, null, '200000120150600750', v_src, null, 'cartone da 6 (test)', 'qa');
+  perform pg_temp.rec('D16', 'LWIN-18 = LWIN-11 + confezione 06 + volume 00750 accettato senza LWIN-16 (nessuna dipendenza dal prefisso a 16 cifre)', true);
   begin update catalog.wines set name = 'Altro' where id = v_wine; v_ok := false; exception when insufficient_privilege then v_ok := true; end;
   perform pg_temp.rec('D17', 'il curatore non può riscrivere il nome o l''identità di un vino (solo stato)', v_ok);
   reset role;
-  insert into ctx values ('vint', v_vint::text), ('wine1', v_wine::text);
+  insert into ctx values ('vint', v_vint::text), ('vint_nv', v_vint2::text), ('wine1', v_wine::text);
 end $$;
 
 -- ===================================================================================================
@@ -351,49 +388,54 @@ declare
   v_c1 bigint; v_c2 bigint; v_bad bigint;
 begin
   set local role catalog_curator;
-  perform catalog.add_entity_alias('wine', v_wine, 'fr', 'Le Grand Vin', 'translation', null, null, 'nome francese da etichetta (test)');
+  perform catalog.add_entity_alias('wine', v_wine, 'fr', 'Le Grand Vin', 'translation', null, null, 'nome francese da etichetta (test)', p_actor => 'qa');
   perform pg_temp.rec('E01', 'alias multilingua con nota di provenienza accettato', true);
-  begin perform catalog.add_entity_alias('wine', v_wine, 'it', 'Altro Nome', 'variant'); v_ok := false; exception when check_violation then v_ok := true; end;
+  begin perform catalog.add_entity_alias('wine', v_wine, 'it', 'Altro Nome', 'variant', p_actor => 'qa'); v_ok := false; exception when check_violation then v_ok := true; end;
   perform pg_temp.rec('E02', 'alias senza fonte né nota rifiutato', v_ok);
-  begin perform catalog.add_entity_alias('wine', v_wine, 'en', 'GRAND VIN', 'variant', null, null, 'x'); v_ok := false; exception when check_violation then v_ok := true; end;
+  begin perform catalog.add_entity_alias('wine', v_wine, 'en', 'GRAND VIN', 'variant', null, null, 'x', p_actor => 'qa'); v_ok := false; exception when check_violation then v_ok := true; end;
   perform pg_temp.rec('E03', 'alias uguale al nome originale (senza accenti/maiuscole) rifiutato', v_ok);
-  begin perform catalog.add_entity_alias('wine', v_wine, 'fr', 'le grand vin', 'variant', null, null, 'x'); v_ok := false; exception when unique_violation then v_ok := true; end;
+  begin perform catalog.add_entity_alias('wine', v_wine, 'fr', 'le grand vin', 'variant', null, null, 'x', p_actor => 'qa'); v_ok := false; exception when unique_violation then v_ok := true; end;
   perform pg_temp.rec('E04', 'lo stesso alias nella stessa lingua non si duplica', v_ok);
-  begin perform catalog.add_entity_alias('producer', v_prod, 'en', 'Leoville Estate', 'variant', v_src); v_ok := true; exception when others then v_ok := false; end;
+  begin perform catalog.add_entity_alias('producer', v_prod, 'en', 'Leoville Estate', 'variant', v_src, p_actor => 'qa'); v_ok := true; exception when others then v_ok := false; end;
   perform pg_temp.rec('E05', 'alias di produttore con fonte accettato', v_ok);
   begin update catalog.entity_aliases set alias = 'x'; v_ok := false; exception when insufficient_privilege then v_ok := true; end;
   perform pg_temp.rec('E06', 'un alias non si modifica (nessun UPDATE al curatore)', v_ok);
-  begin perform catalog.add_entity_alias('wine', gen_random_uuid(), 'en', 'Z', 'variant', null, null, 'x'); v_ok := false; exception when no_data_found then v_ok := true; when others then v_ok := sqlstate = 'P0002'; end;
+  begin perform catalog.add_entity_alias('wine', gen_random_uuid(), 'en', 'Z', 'variant', null, null, 'x', p_actor => 'qa'); v_ok := false; exception when no_data_found then v_ok := true; when others then v_ok := sqlstate = 'P0002'; end;
   perform pg_temp.rec('E07', 'alias su entità inesistente rifiutato', v_ok);
 
   -- F. attributi
-  begin perform catalog.propose_attribute_claim('nonexistent_attr', 'wine', v_wine, '"x"', v_src, null, 'n'); v_ok := false; exception when foreign_key_violation or check_violation then v_ok := true; end;
+  begin perform catalog.propose_attribute_claim('nonexistent_attr', 'wine', v_wine, '"x"', v_src, null, 'n', p_actor => 'qa'); v_ok := false; exception when foreign_key_violation or check_violation then v_ok := true; end;
   perform pg_temp.rec('F01', 'attributo fuori vocabolario rifiutato', v_ok);
-  begin perform catalog.propose_attribute_claim('alcohol_pct', 'wine', v_wine, '13.5', v_src, null, 'n'); v_ok := false; exception when check_violation then v_ok := true; end;
+  begin perform catalog.propose_attribute_claim('alcohol_pct', 'wine', v_wine, '13.5', v_src, null, 'n', p_actor => 'qa'); v_ok := false; exception when check_violation then v_ok := true; end;
   perform pg_temp.rec('F02', 'attributo per un tipo di soggetto diverso da quello definito rifiutato', v_ok);
-  begin perform catalog.propose_attribute_claim('grapes', 'wine', v_wine, '["cabernet"]', v_src); v_ok := false; exception when check_violation then v_ok := true; end;
+  begin perform catalog.propose_attribute_claim('grapes', 'wine', v_wine, '["cabernet"]', v_src, p_actor => 'qa'); v_ok := false; exception when check_violation then v_ok := true; end;
   perform pg_temp.rec('F03', 'rivendicazione senza record di fonte né nota rifiutata', v_ok);
-  v_c1 := catalog.propose_attribute_claim('alcohol_pct', 'vintage', v_vint, '13.5', v_src, null, 'dichiarata in etichetta (test)');
+  v_c1 := catalog.propose_attribute_claim('alcohol_pct', 'vintage', v_vint, '13.5', v_src, null, 'dichiarata in etichetta (test)', p_actor => 'qa');
   perform pg_temp.rec('F04', 'rivendicazione proposta (non ancora verificata)', (select status from catalog.attribute_claims where id = v_c1) = 'proposed');
   begin perform catalog.review_attribute_claim(v_c1, 'accepted', ''); v_ok := false; exception when invalid_parameter_value then v_ok := true; end;
   perform pg_temp.rec('F05', 'la revisione richiede un revisore identificato', v_ok);
-  begin update catalog.attribute_claims set status = 'accepted' where id = v_c1; v_ok := false; exception when check_violation then v_ok := true; end;
+  begin update catalog.attribute_claims set status = 'accepted' where id = v_c1; v_ok := false; exception when check_violation or insufficient_privilege then v_ok := true; end;
   perform pg_temp.rec('F06', 'accettare una rivendicazione senza revisore/data è impossibile anche per UPDATE diretto', v_ok);
   perform catalog.review_attribute_claim(v_c1, 'accepted', 'revisore-test');
-  v_c2 := catalog.propose_attribute_claim('alcohol_pct', 'vintage', v_vint, '14.0', v_src, null, 'nuova misura (test)');
+  v_c2 := catalog.propose_attribute_claim('alcohol_pct', 'vintage', v_vint, '14.0', v_src, null, 'nuova misura (test)', p_actor => 'qa');
   perform catalog.review_attribute_claim(v_c2, 'accepted', 'revisore-test');
   perform pg_temp.rec('F07', 'una sola rivendicazione accettata per soggetto e attributo: la precedente è superata, non cancellata',
     (select status from catalog.attribute_claims where id = v_c1) = 'superseded' and (select status from catalog.attribute_claims where id = v_c2) = 'accepted'
     and (select count(*) from catalog.attribute_claims) = 2);
-  begin update catalog.attribute_claims set status = 'accepted', reviewed_by = 'x', reviewed_at = now() where id = v_c1; v_ok := false; exception when object_not_in_prerequisite_state then v_ok := true; end;
+  begin update catalog.attribute_claims set status = 'accepted', reviewed_by = 'x', reviewed_at = now() where id = v_c1; v_ok := false; exception when object_not_in_prerequisite_state or insufficient_privilege then v_ok := true; end;
   perform pg_temp.rec('F08', 'una rivendicazione superata è definitiva', v_ok);
-  v_bad := catalog.propose_attribute_claim('tasting_notes', 'vintage', v_vint, '"note"', v_src, null, 'n');
+  v_bad := catalog.propose_attribute_claim('tasting_notes', 'vintage', v_vint, '"note"', v_src, null, 'n', p_actor => 'qa');
   perform catalog.review_attribute_claim(v_bad, 'rejected', 'revisore-test');
   begin perform catalog.review_attribute_claim(v_bad, 'accepted', 'revisore-test'); v_ok := false; exception when no_data_found then v_ok := true; when others then v_ok := sqlstate = 'P0002'; end;
   perform pg_temp.rec('F09', 'una rivendicazione rifiutata non si riapre', v_ok);
   begin update catalog.attribute_claims set value = '99' where id = v_c2; v_ok := false; exception when insufficient_privilege then v_ok := true; end;
   perform pg_temp.rec('F10', 'il valore di una rivendicazione non si modifica', v_ok);
   reset role;
+  -- come proprietario (le porte non bastano ai trigger: valgono anche per chi ha i privilegi)
+  begin update catalog.attribute_claims set status = 'accepted' where id = v_bad; v_ok := false; exception when check_violation or object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('F06b', 'UPDATE diretto del proprietario: una rivendicazione rifiutata non si riapre né si accetta senza revisore', v_ok);
+  begin update catalog.attribute_claims set status = 'accepted', reviewed_by = 'x', reviewed_at = now() where id = v_c1; v_ok := false; exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('F08b', 'UPDATE diretto del proprietario: una rivendicazione superata è definitiva', v_ok);
 end $$;
 
 -- ===================================================================================================
@@ -410,8 +452,8 @@ begin
   set local role catalog_curator;
   begin perform catalog.merge_canonical_entity(v_cand, 'a', 'rev', 'motivo'); v_ok := false; exception when object_not_in_prerequisite_state then v_ok := true; end;
   perform pg_temp.rec('G01', 'nessuna fusione senza una revisione "same" registrata', v_ok);
-  begin update catalog.wines set status = 'merged', merged_into = v_wb where id = v_wa; v_ok := false; exception when object_not_in_prerequisite_state then v_ok := true; end;
-  perform pg_temp.rec('G02', 'lo stato "merged" non si imposta con un UPDATE diretto (solo tramite la funzione)', v_ok);
+  begin update catalog.wines set status = 'merged', merged_into = v_wb where id = v_wa; v_ok := false; exception when insufficient_privilege then v_ok := true; end;
+  perform pg_temp.rec('G02', 'lo stato "merged" non si imposta con un UPDATE diretto del curatore (nessun UPDATE: solo tramite la funzione)', v_ok);
   begin perform catalog.review_duplicate_candidate(v_cand, 'same', '', 'n'); v_ok := false; exception when invalid_parameter_value then v_ok := true; end;
   perform pg_temp.rec('G03', 'la revisione richiede un revisore identificato', v_ok);
   perform catalog.review_duplicate_candidate(v_cand, 'same', 'revisore-test', 'stesso vino (test)');
@@ -419,6 +461,10 @@ begin
   perform pg_temp.rec('G04', 'una revisione chiusa non si riscrive', v_ok);
   begin perform catalog.merge_canonical_entity(v_cand, 'x', 'rev', 'motivo'); v_ok := false; exception when invalid_parameter_value then v_ok := true; end;
   perform pg_temp.rec('G05', 'lato conservato non valido rifiutato', v_ok);
+  reset role;
+  begin update catalog.wines set status = 'merged', merged_into = v_wb, merge_id = 1 where id = v_wa; v_ok := false; exception when object_not_in_prerequisite_state or foreign_key_violation then v_ok := true; end;
+  perform pg_temp.rec('G02b', 'nemmeno il proprietario marca un vino «merged» con un UPDATE diretto senza una fusione registrata', v_ok and (select status from catalog.wines where id = v_wa) = 'active');
+  set local role catalog_curator;
   v_merge := catalog.merge_canonical_entity(v_cand, 'a', 'revisore-test', 'stesso vino, due regioni (test)');
   reset role;
   perform pg_temp.rec('G06', 'fusione: l''entità scartata è marcata merged con puntatore al conservato; NESSUNA riga cancellata',
@@ -472,8 +518,12 @@ begin
   perform pg_temp.rec('H02', 'collegamento manuale nasce proposto', (select status from catalog.wine_links where id = v_l1) = 'proposed');
   perform pg_temp.rec('H03', 'un collegamento proposto non compare nel ponte verso Cantina/annunci',
     not exists (select 1 from catalog.public_wine_bridge where public_wine_id = v_pw));
-  begin update catalog.wine_links set status = 'active' where id = v_l1; v_ok := false; exception when check_violation then v_ok := true; end;
+  begin update catalog.wine_links set status = 'active' where id = v_l1; v_ok := false; exception when check_violation or insufficient_privilege then v_ok := true; end;
   perform pg_temp.rec('H04', 'un collegamento non diventa attivo senza revisore e data (UPDATE diretto rifiutato)', v_ok);
+  reset role;
+  begin update catalog.wine_links set status = 'active' where id = v_l1; v_ok := false; exception when check_violation then v_ok := true; end;
+  perform pg_temp.rec('H04b', 'anche per il proprietario: nessun collegamento attivo senza revisore e data (vincolo)', v_ok);
+  set local role catalog_curator;
   perform catalog.review_wine_link(v_l1, 'activate', 'revisore-test');
   perform pg_temp.rec('H05', 'collegamento attivato dalla revisione compare nel ponte',
     exists (select 1 from catalog.public_wine_bridge where public_wine_id = v_pw and lwin7 = '2000001'));
@@ -567,32 +617,42 @@ begin
 end $$;
 
 -- ===================================================================================================
--- K. Porte non aggirabili (revisione di sicurezza): INSERT diretti, variabili di sessione, catene, starvation, tetto 10
+-- K. Porte non aggirabili (revisione di sicurezza): INSERT/UPDATE diretti, variabili di sessione, catene, starvation, tetto 10
 -- ===================================================================================================
 do $$
 declare
   v_ok boolean;
+  v_ok2 boolean;
+  v_msg text;
   v_prod uuid := (select producer_id from catalog.wines where lwin7 = '2000001');
+  v_src uuid := (select id from catalog.sources where code = 'LIVEX-LWIN7');
+  v_sr1 bigint := (select id from catalog.source_records where external_id = '2000001');
   v_wa uuid; v_wb uuid;
   x uuid; y uuid; z uuid;
   v_c1 bigint; v_c2 bigint; v_m1 bigint; v_m2 bigint;
   p1 uuid; p2 uuid; p3 uuid; v_pc bigint; v_pm bigint;
-  v_n integer;
+  v_n integer; v_open bigint; a1 uuid; a2 uuid;
 begin
   select id into v_wa from catalog.wines where lwin7 = '2000002';
   select id into v_wb from catalog.wines where lwin7 = '2000003';
-  -- K01: il GUC di sessione non autorizza più la fusione
+  -- K01: il GUC di sessione non autorizza la fusione né al curatore (nessun UPDATE) né al proprietario (trigger)
   set local role catalog_curator;
   begin
     perform set_config('catalog.merging', v_wa::text, true);
     update catalog.wines set status = 'merged', merged_into = v_wb where id = v_wa;
     v_ok := false;
-  exception when object_not_in_prerequisite_state then v_ok := true; end;
+  exception when insufficient_privilege then v_ok := true; end;
   reset role;
-  perform pg_temp.rec('K01', 'impostare catalog.merging non permette di marcare un vino «merged» senza fusione registrata', v_ok and (select status from catalog.wines where id = v_wa) = 'active');
-  -- K02..K06: INSERT diretti che aggirerebbero le funzioni
-  set local role catalog_curator;
-  begin insert into catalog.wines (lwin7, producer_id, name, name_key, origin, status, merged_into) values (null, v_prod, 'M', 'm', 'manual', 'merged', v_wb); v_ok := false;
+  begin
+    perform set_config('catalog.merging', v_wa::text, true);
+    update catalog.wines set status = 'merged', merged_into = v_wb where id = v_wa;
+    v_ok2 := false;
+  exception when object_not_in_prerequisite_state then v_ok2 := true; end;
+  perform pg_temp.rec('K01', 'impostare catalog.merging non permette di marcare un vino «merged» senza fusione registrata (curatore: privilegio; proprietario: trigger)',
+    v_ok and v_ok2 and (select status from catalog.wines where id = v_wa) = 'active');
+  -- K02..K06: INSERT diretti che aggirerebbero le porte (provati col proprietario: i trigger valgono anche per chi ha i privilegi)
+  begin insert into catalog.wines (lwin7, producer_id, name, name_key, origin, status, merged_into, provenance_note)
+        values (null, v_prod, 'M', 'm', 'manual', 'merged', v_wb, 'n'); v_ok := false;
   exception when object_not_in_prerequisite_state then v_ok := true; end;
   perform pg_temp.rec('K02', 'INSERT diretto di un vino già «merged» rifiutato', v_ok);
   begin insert into catalog.duplicate_candidates (wine_a, wine_b, reason, review_status, reviewed_by, reviewed_at)
@@ -603,21 +663,29 @@ begin
         values (gen_random_uuid(), 's', (select v::uuid from ctx where k = 'vint'), 'manual', 'x', 'active', 'x', now()); v_ok := false;
   exception when object_not_in_prerequisite_state then v_ok := true; end;
   perform pg_temp.rec('K04', 'INSERT diretto di un collegamento già «active» rifiutato', v_ok);
-  begin insert into catalog.entity_merges (candidate_id, kept_side, decided_by, reason)
-        values ((select id from catalog.duplicate_candidates where review_status = 'open' limit 1), 'a', 'x', 'y'); v_ok := false;
-  exception when object_not_in_prerequisite_state then v_ok := true; when not_null_violation then v_ok := true; end;
-  perform pg_temp.rec('K05', 'INSERT diretto di una fusione senza candidato «same» rifiutato', v_ok);
-  reset role;
-  update catalog.promotion_settings set enabled = false;
+  -- K05 (corretto): un candidato APERTO esiste davvero e la fusione diretta è rifiutata per MANCANZA DI AUTORIZZAZIONE, non per un null generico
   set local role catalog_curator;
-  begin insert into catalog.wines (lwin7, producer_id, name, name_key, origin, source_id, source_record_id)
-        values ('2999998', v_prod, 'P', 'p', 'promotion', (select id from catalog.sources limit 1), (select id from catalog.source_records limit 1)); v_ok := false;
-  exception when insufficient_privilege then v_ok := true; end;
+  a1 := catalog.add_manual_wine(v_prod, 'K05 a', null, null, null, null, null, null, 'nota k05', 'qa');
+  a2 := catalog.add_manual_wine(v_prod, 'K05 b', null, null, null, null, null, null, 'nota k05', 'qa');
+  v_open := catalog.open_duplicate_candidate('wine', a1, a2, 'k05', 'qa');
+  begin insert into catalog.entity_merges (candidate_id, kept_side, decided_by, reason) values (v_open, 'a', 'x', 'y'); v_ok := false; v_msg := 'nessun errore';
+  exception when insufficient_privilege then v_ok := true; v_msg := sqlerrm; end;
   reset role;
+  perform pg_temp.rec('K05a', 'curatore: INSERT diretto in entity_merges negato dal privilegio (42501), con un candidato aperto reale',
+    v_open is not null and v_ok and v_msg like 'permission denied%', v_msg);
+  begin insert into catalog.entity_merges (candidate_id, kept_side, decided_by, reason) values (v_open, 'a', 'x', 'y'); v_ok := false; v_msg := 'nessun errore';
+  exception when object_not_in_prerequisite_state then v_ok := true; v_msg := sqlerrm;
+            when not_null_violation then v_ok := false; v_msg := 'NOT NULL (errore generico, non di autorizzazione): ' || sqlerrm; end;
+  perform pg_temp.rec('K05', 'proprietario: INSERT diretto di una fusione senza candidato «same» rifiutato per autorizzazione (55000, «richiede un candidato rivisto same»), non per un not_null generico',
+    v_ok and v_msg like '%candidato rivisto%same%', v_msg);
+  update catalog.promotion_settings set enabled = false;
+  begin insert into catalog.wines (lwin7, producer_id, name, name_key, origin, source_id, source_record_id)
+        values ('2000001', v_prod, 'P', 'p', 'promotion', v_src, v_sr1); v_ok := false; v_msg := 'nessun errore';
+  exception when insufficient_privilege then v_ok := true; v_msg := sqlerrm; end;
   update catalog.promotion_settings set enabled = true;
-  perform pg_temp.rec('K06', 'INSERT diretto con origin «promotion» a interruttore spento rifiutato (la promozione non si aggira)', v_ok);
+  perform pg_temp.rec('K06', 'INSERT diretto con origin «promotion» a interruttore spento rifiutato (la promozione non si aggira)', v_ok and v_msg like '%non consentita%', v_msg);
 
-  -- K07..K10: i trigger bloccano anche il proprietario (non solo i grant a colonna)
+  -- K07..K10: i trigger bloccano anche il proprietario (non solo i grant)
   begin update catalog.wines set name = 'x' where id = v_wa; v_ok := false; exception when object_not_in_prerequisite_state then v_ok := true; end;
   perform pg_temp.rec('K07', 'trigger: nome di un vino non modificabile nemmeno dal proprietario', v_ok);
   begin update catalog.wine_vintages set vintage_year = 2001 where id = (select v::uuid from ctx where k = 'vint'); v_ok := false; exception when object_not_in_prerequisite_state then v_ok := true; end;
@@ -628,14 +696,14 @@ begin
   perform pg_temp.rec('K10', 'trigger: il valore di una rivendicazione non è modificabile nemmeno dal proprietario', v_ok);
 
   -- K11/K12: catena di fusioni X → Y → Z risolta, la ricerca segue la risoluzione
-  insert into catalog.wines (producer_id, name, name_key, origin) values (v_prod, 'Catena X', 'catena x', 'manual') returning id into x;
-  insert into catalog.wines (producer_id, name, name_key, origin) values (v_prod, 'Catena Y', 'catena y', 'manual') returning id into y;
-  insert into catalog.wines (producer_id, name, name_key, origin) values (v_prod, 'Catena Z', 'catena z', 'manual') returning id into z;
   set local role catalog_curator;
-  insert into catalog.duplicate_candidates (wine_a, wine_b, reason) values (least(x, y), greatest(x, y), 'manual') returning id into v_c1;
+  x := catalog.add_manual_wine(v_prod, 'Catena X', null, null, null, null, null, null, 'k11', 'qa');
+  y := catalog.add_manual_wine(v_prod, 'Catena Y', null, null, null, null, null, null, 'k11', 'qa');
+  z := catalog.add_manual_wine(v_prod, 'Catena Z', null, null, null, null, null, null, 'k11', 'qa');
+  v_c1 := catalog.open_duplicate_candidate('wine', x, y, 'k11', 'qa');
   perform catalog.review_duplicate_candidate(v_c1, 'same', 'rev', 'n');
   v_m1 := catalog.merge_canonical_entity(v_c1, case when x < y then 'b' else 'a' end, 'rev', 'X in Y');
-  insert into catalog.duplicate_candidates (wine_a, wine_b, reason) values (least(y, z), greatest(y, z), 'manual') returning id into v_c2;
+  v_c2 := catalog.open_duplicate_candidate('wine', y, z, 'k11', 'qa');
   perform catalog.review_duplicate_candidate(v_c2, 'same', 'rev', 'n');
   v_m2 := catalog.merge_canonical_entity(v_c2, case when y < z then 'b' else 'a' end, 'rev', 'Y in Z');
   reset role;
@@ -647,14 +715,16 @@ begin
   perform pg_temp.rec('K12', 'la ricerca per il nome di un vino fuso (Catena X) restituisce il vino conservato (Catena Z)', v_ok);
 
   -- K13..K15: fusione/annullamento di PRODUTTORI; rilevazione senza starvation (limite 1, tre coppie)
-  insert into catalog.producers (name, name_key, origin) values ('Dup Prod', 'dup prod', 'manual') returning id into p1;
-  insert into catalog.producers (name, name_key, origin) values ('Dup Prod', 'dup prod', 'manual') returning id into p2;
-  insert into catalog.producers (name, name_key, origin) values ('Dup Prod', 'dup prod', 'manual') returning id into p3;
+  set local role catalog_curator;
+  p1 := catalog.add_manual_producer('Dup Prod', null, 'k13', 'qa');
+  p2 := catalog.add_manual_producer('Dup Prod', null, 'k13', 'qa');
+  p3 := catalog.add_manual_producer('Dup Prod', null, 'k13', 'qa');
   v_n := (catalog.detect_duplicate_candidates(1) ->> 'producer_pairs_opened')::int
        + (catalog.detect_duplicate_candidates(1) ->> 'producer_pairs_opened')::int
        + (catalog.detect_duplicate_candidates(1) ->> 'producer_pairs_opened')::int;
   perform pg_temp.rec('K13', 'rilevazione duplicati senza starvation: con limite 1 tre chiamate aprono le tre coppie e la quarta nessuna',
     v_n = 3 and (catalog.detect_duplicate_candidates(1) ->> 'producer_pairs_opened')::int = 0, v_n::text);
+  reset role;
   select id into v_pc from catalog.duplicate_candidates where producer_a is not null order by id limit 1;
   set local role catalog_curator;
   perform catalog.review_duplicate_candidate(v_pc, 'same', 'rev', 'n');
@@ -668,16 +738,423 @@ begin
   perform pg_temp.rec('K15', 'annullamento della fusione di produttori: tutti di nuovo attivi', (select count(*) from catalog.producers where status = 'merged') = 0);
 
   -- K16: tetto di 10 con più di 10 vini
-  insert into catalog.wines (producer_id, name, name_key, origin)
-    select v_prod, 'ZzCap ' || g, 'zzcap ' || g, 'manual' from generate_series(1, 12) g;
+  insert into catalog.wines (producer_id, name, name_key, origin, provenance_note)
+    select v_prod, 'ZzCap ' || g, 'zzcap ' || g, 'manual', 'k16' from generate_series(1, 12) g;
   set local role catalog_curator;
   v_n := (select count(*) from catalog.search_wines('zzcap', 500));
   reset role;
   perform pg_temp.rec('K16', 'search_wines: con 12 vini corrispondenti restituisce al massimo 10 (limite richiesto 500)', v_n = 10, v_n::text);
 
-  -- K17: il registro eventi registra il ruolo di database
-  perform pg_temp.rec('K17', 'canonical_events.db_user valorizzato dal database (non dal testo del chiamante)',
-    not exists (select 1 from catalog.canonical_events where db_user is null or db_user = ''));
+  -- K17: il registro eventi registra il ruolo di database e il ruolo effettivo
+  perform pg_temp.rec('K17', 'canonical_events.db_user valorizzato dal database (non dal testo del chiamante); acting_role = catalog_curator per le porte chiamate dal curatore',
+    not exists (select 1 from catalog.canonical_events where db_user is null or db_user = '')
+    and exists (select 1 from catalog.canonical_events where action = 'add_manual_wine' and acting_role = 'catalog_curator'));
+end $$;
+
+-- ===================================================================================================
+-- L. D-1: l'approvazione di una regola è legata alla logica eseguibile e alla versione esatta
+-- ===================================================================================================
+do $$
+declare
+  v_ok boolean;
+  v_msg text;
+  v_rule catalog.promotion_rules%rowtype;
+begin
+  select * into v_rule from catalog.promotion_rules where version = 'lwin-conservative-v1';
+  perform pg_temp.rec('L01', 'l''approvazione ha registrato l''impronta della logica eseguibile (funzioni e vista) e la promozione risulta autorizzata',
+    v_rule.status = 'approved' and v_rule.approved_fingerprint = catalog.promotion_logic_fingerprint('lwin-conservative-v1')
+    and v_rule.approved_view_digest = catalog.promotion_view_digest() and catalog.promotion_authorized());
+  begin update catalog.promotion_rules set description = description || ' (modificata)' where version = 'lwin-conservative-v1'; v_ok := false;
+  exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('L02', 'una regola approvata è immutabile: la descrizione non si riscrive', v_ok);
+  begin update catalog.promotion_rules set approved_by = 'altro-founder' where version = 'lwin-conservative-v1'; v_ok := false;
+  exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('L03', 'una regola approvata è immutabile: l''approvatore non si riscrive', v_ok);
+  begin update catalog.promotion_rules set approved_fingerprint = repeat('0', 32) where version = 'lwin-conservative-v1'; v_ok := false;
+  exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('L04', 'una regola approvata è immutabile: l''impronta non si riscrive', v_ok);
+  begin update catalog.promotion_rules set status = 'draft' where version = 'lwin-conservative-v1'; v_ok := false;
+  exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('L05', 'una regola approvata non torna in bozza', v_ok);
+  begin delete from catalog.promotion_rules where version = 'lwin-conservative-v1'; v_ok := false;
+  exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('L06', 'le regole non si cancellano', v_ok);
+  insert into catalog.promotion_rules (version, description) values ('permissive-v2', 'altra logica, mai realizzata');
+  begin update catalog.promotion_rules set status = 'approved', approved_by = 'founder-test', approved_at = now() where version = 'permissive-v2'; v_ok := false; v_msg := null;
+  exception when object_not_in_prerequisite_state then v_ok := true; v_msg := sqlerrm; end;
+  perform pg_temp.rec('L07', 'una regola senza logica eseguibile corrispondente non si può approvare', v_ok and v_msg like '%nessuna logica%', v_msg);
+  begin insert into catalog.promotion_rules (version, description, status, approved_by, approved_at) values ('permissive-v3', 'x', 'approved', 'f', now()); v_ok := false;
+  exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('L08', 'una regola non nasce già approvata (l''approvazione registra l''impronta)', v_ok);
+  set local role catalog_curator;
+  begin perform catalog.promote_wine_candidates(p_rule_version => 'permissive-v2', p_dry_run => false, p_actor => 'qa', p_limit => 5); v_ok := false; v_msg := null;
+  exception when insufficient_privilege then v_ok := true; v_msg := sqlerrm; end;
+  reset role;
+  perform pg_temp.rec('L09', 'un''altra regola non abilita il comportamento v1: la promozione richiede la versione esatta lwin-conservative-v1',
+    v_ok and v_msg like '%non corrisponde alla logica%', v_msg);
+  set local role catalog_curator;
+  begin perform catalog.promote_wine_candidates(p_rule_version => 'lwin-conservative-v1-bis', p_dry_run => false, p_actor => 'qa', p_limit => 5); v_ok := false;
+  exception when insufficient_privilege then v_ok := true; end;
+  reset role;
+  perform pg_temp.rec('L10', 'una versione simile ma diversa (lwin-conservative-v1-bis) non abilita nulla', v_ok);
+  perform pg_temp.rec('L11', 'la regola reale lwin-conservative-v1 NON è stata approvata dalla migration: solo questo test la approva, in una transazione annullata',
+    (select count(*) from catalog.promotion_rules where status = 'approved') = 1);
+end $$;
+
+-- ===================================================================================================
+-- M. D-2: manuale ≠ promozione
+-- ===================================================================================================
+do $$
+declare
+  v_ok boolean;
+  v_msg text;
+  v_prod uuid := (select producer_id from catalog.wines where lwin7 = '2000001');
+  v_src uuid := (select id from catalog.sources where code = 'LIVEX-LWIN7');
+  v_sr1 bigint := (select id from catalog.source_records where external_id = '2000001');
+  v_sr2 bigint := (select id from catalog.source_records where external_id = '2000002');
+  v_mp uuid; v_mw uuid;
+begin
+  begin insert into catalog.wines (lwin7, producer_id, name, name_key, origin, provenance_note) values ('2999991', v_prod, 'M1', 'm1', 'manual', 'n'); v_ok := false;
+  exception when check_violation then v_ok := true; end;
+  perform pg_temp.rec('M01', 'un vino origin=manual non può portare un LWIN-7 (identificativo riservato alla promozione)', v_ok);
+  begin insert into catalog.wines (producer_id, name, name_key, origin, provenance_note, source_id, source_record_id) values (v_prod, 'M2', 'm2', 'manual', 'n', v_src, v_sr1); v_ok := false;
+  exception when check_violation then v_ok := true; end;
+  perform pg_temp.rec('M02', 'un vino origin=manual non può dichiarare provenienza da source_records', v_ok);
+  begin insert into catalog.wines (lwin7, producer_id, name, name_key, origin, provenance_note, source_id, source_record_id) values ('2999992', v_prod, 'M3', 'm3', 'manual', 'n', v_src, v_sr1); v_ok := false;
+  exception when check_violation then v_ok := true; end;
+  perform pg_temp.rec('M03', 'manuale con LWIN e record di fonte insieme (finta promozione a interruttore spento o acceso) rifiutato dal vincolo', v_ok);
+  begin insert into catalog.producers (name, name_key, natural_key, origin, provenance_note, source_id, source_record_id) values ('M4', 'm4', 'm4' || chr(31) || 'x', 'manual', 'n', v_src, v_sr1); v_ok := false;
+  exception when check_violation then v_ok := true; end;
+  perform pg_temp.rec('M04', 'un produttore origin=manual non può avere chiave naturale di promozione né record di fonte', v_ok);
+  begin insert into catalog.wines (producer_id, name, name_key, origin) values (v_prod, 'M5', 'm5', 'manual'); v_ok := false;
+  exception when check_violation then v_ok := true; end;
+  perform pg_temp.rec('M05', 'un inserimento manuale senza nota di provenienza è rifiutato', v_ok);
+  begin insert into catalog.wines (producer_id, name, name_key, origin, provenance_note) values (v_prod, 'M6', 'm6', 'manual', '   '); v_ok := false;
+  exception when check_violation then v_ok := true; end;
+  perform pg_temp.rec('M06', 'la nota di provenienza manuale non può essere vuota', v_ok);
+  set local role catalog_curator;
+  v_mp := catalog.add_manual_producer('Produttore Manuale', null, 'inserito dal catalogo cartaceo del produttore (test)', 'qa');
+  v_mw := catalog.add_manual_wine(v_mp, 'Vino Manuale', 'Red', 'Wine', null, null, null, null, 'etichetta fotografata (test)', 'qa');
+  reset role;
+  perform pg_temp.rec('M07', 'distinzione: i dati manuali legittimi (senza LWIN, senza fonte, con nota e attore) si inseriscono dalla porta e restano manuali',
+    (select origin = 'manual' and natural_key is null and source_record_id is null and provenance_note is not null from catalog.producers where id = v_mp)
+    and (select origin = 'manual' and lwin7 is null and source_record_id is null and provenance_note like 'etichetta%' from catalog.wines where id = v_mw)
+    and exists (select 1 from catalog.canonical_events where action = 'add_manual_wine' and entity_ref = v_mw::text and actor = 'qa'));
+  begin insert into catalog.wines (lwin7, producer_id, name, name_key, origin, source_id, source_record_id)
+        values ('2999993', v_prod, 'M8', 'm8', 'promotion', v_src, v_sr2); v_ok := false; v_msg := null;
+  exception when check_violation then v_ok := true; v_msg := sqlerrm; end;
+  perform pg_temp.rec('M08', 'una promozione con LWIN diverso dall''identificativo del record di fonte è rifiutata', v_ok, v_msg);
+  begin insert into catalog.producers (name, name_key, natural_key, origin, source_id, source_record_id)
+        values ('Foo', 'foo', 'bar' || chr(31) || 'x', 'promotion', v_src, v_sr1); v_ok := false;
+  exception when check_violation then v_ok := true; end;
+  perform pg_temp.rec('M09', 'un produttore promosso con chiave naturale incoerente con il nome è rifiutato', v_ok);
+  begin perform catalog.add_manual_wine(v_mp, 'Altro', null, null, null, null, null, null, 'n', null); v_ok := false; exception when others then v_ok := sqlstate in ('22023', '42501'); end;
+  perform pg_temp.rec('M10', 'add_manual_wine senza esecutore identificato rifiutata', v_ok);
+end $$;
+
+-- ===================================================================================================
+-- N. D-3: fusioni esatte, reversibili, senza cicli
+-- ===================================================================================================
+do $$
+declare
+  v_ok boolean;
+  v_msg text;
+  v_pr uuid; v_pr2 uuid;
+  wa uuid; wb uuid; wc uuid; wd uuid; we uuid;
+  v_lo uuid; v_hi uuid; v_keep uuid;
+  v_cand bigint; v_cand2 bigint; v_cand3 bigint; v_cand4 bigint;
+  v_m1 bigint; v_m2 bigint; v_m3 bigint;
+  v_lock boolean;
+begin
+  set local role catalog_curator;
+  v_pr := catalog.add_manual_producer('N Prod', null, 'n', 'qa');
+  v_pr2 := catalog.add_manual_producer('N Prod 2', null, 'n', 'qa');
+  wa := catalog.add_manual_wine(v_pr, 'N Alpha', null, null, null, null, null, null, 'n', 'qa');
+  wb := catalog.add_manual_wine(v_pr, 'N Beta', null, null, null, null, null, null, 'n', 'qa');
+  wc := catalog.add_manual_wine(v_pr, 'N Gamma', null, null, null, null, null, null, 'n', 'qa');
+  wd := catalog.add_manual_wine(v_pr, 'N Delta', null, null, null, null, null, null, 'n', 'qa');
+  we := catalog.add_manual_wine(v_pr2, 'N Epsilon', null, null, null, null, null, null, 'n', 'qa');
+  v_lo := least(wa, wb);
+  v_hi := greatest(wa, wb);
+  v_cand := catalog.open_duplicate_candidate('wine', wa, wb, 'n', 'qa');
+  perform catalog.review_duplicate_candidate(v_cand, 'same', 'rev', 'stesso vino');
+  -- lato 'b' = il maggiore: si conserva v_hi e si scarta v_lo
+  v_m1 := catalog.merge_canonical_entity(v_cand, 'b', 'rev', 'conservo b');
+  v_lock := exists (select 1 from pg_locks where locktype = 'advisory' and pid = pg_backend_pid() and granted
+                      and objid::bigint = (hashtext('catalog.merge:wine')::bigint & 4294967295));
+  reset role;
+  perform pg_temp.rec('N01', 'kept_side = b: si conserva il lato b, si scarta il lato a (puntatore e stato corretti)',
+    (select status from catalog.wines where id = v_lo) = 'merged' and (select merged_into from catalog.wines where id = v_lo) = v_hi
+    and (select status from catalog.wines where id = v_hi) = 'active' and (select merge_id from catalog.wines where id = v_lo) = v_m1);
+  perform pg_temp.rec('N02', 'la fusione serializza per tipo (advisory lock «catalog.merge:wine» tenuto fino a fine transazione)', v_lock);
+  begin update catalog.wines set status = 'merged', merged_into = v_lo, merge_id = v_m1 where id = v_hi; v_ok := false;
+  exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('N03', 'direzione esatta: l''entità conservata non si marca «merged» verso la scartata (anche con il merge_id giusto)', v_ok and (select status from catalog.wines where id = v_hi) = 'active');
+  begin update catalog.wines set merged_into = wc where id = v_lo; v_ok := false;
+  exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('N04', 'un vino già fuso non si ripunta verso un altro bersaglio', v_ok and (select merged_into from catalog.wines where id = v_lo) = v_hi);
+  perform pg_temp.rec('N05', 'merge_authorized/revert_authorized valutano coppia e direzione: la direzione inversa non è autorizzata',
+    catalog.merge_authorized('wine', v_lo, v_hi, v_m1) and not catalog.merge_authorized('wine', v_hi, v_lo, v_m1)
+    and not catalog.merge_authorized('wine', v_lo, v_hi, v_m1 + 1000) and not catalog.revert_authorized('wine', v_lo, v_hi, v_m1));
+  -- annullamento e nuova fusione sulla stessa coppia (direzione opposta)
+  set local role catalog_curator;
+  perform catalog.revert_canonical_merge(v_m1, 'rev');
+  v_m2 := catalog.merge_canonical_entity(v_cand, 'a', 'rev', 'ora conservo a');
+  begin perform catalog.revert_canonical_merge(v_m1, 'rev'); v_ok := false; exception when no_data_found then v_ok := true; when others then v_ok := sqlstate = 'P0002'; end;
+  reset role;
+  perform pg_temp.rec('N06', 'una fusione annullata non si annulla di nuovo (P0002) e non tocca la nuova fusione della stessa coppia',
+    v_ok and (select status from catalog.wines where id = v_hi) = 'merged' and (select merge_id from catalog.wines where id = v_hi) = v_m2
+    and (select status from catalog.wines where id = v_lo) = 'active');
+  begin update catalog.wines set status = 'active', merged_into = null, merge_id = null where id = v_hi; v_ok := false;
+  exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('N07', 'una fusione annullata in passato (m1) NON autorizza l''annullamento di una fusione successiva (m2): il merge_id governa',
+    v_ok and (select status from catalog.wines where id = v_hi) = 'merged');
+  perform pg_temp.rec('N08', 'revert_authorized: vale solo per la fusione annullata e la sua direzione',
+    catalog.revert_authorized('wine', v_lo, v_hi, v_m1) and not catalog.revert_authorized('wine', v_hi, v_lo, v_m1)
+    and not catalog.revert_authorized('wine', v_hi, v_lo, v_m2));
+  -- target non attivo / ciclo
+  set local role catalog_curator;
+  begin perform catalog.open_duplicate_candidate('wine', v_hi, wc, 'n', 'qa'); v_ok := false; exception when no_data_found then v_ok := true; when others then v_ok := sqlstate = 'P0002'; end;
+  perform pg_temp.rec('N09', 'un candidato non si apre su un''entità già fusa', v_ok);
+  v_cand2 := catalog.open_duplicate_candidate('wine', wc, wd, 'n', 'qa');
+  v_cand3 := catalog.open_duplicate_candidate('wine', wd, v_lo, 'n', 'qa');
+  perform catalog.review_duplicate_candidate(v_cand2, 'same', 'rev', 'n');
+  perform catalog.review_duplicate_candidate(v_cand3, 'same', 'rev', 'n');
+  -- wd confluisce in v_lo (attivo)
+  v_m3 := catalog.merge_canonical_entity(v_cand3, case when v_lo < wd then 'a' else 'b' end, 'rev', 'wd in lo');
+  -- ora wd è fuso: non può essere il bersaglio di una fusione (wc → wd) né originare un ciclo wd → wc
+  begin perform catalog.merge_canonical_entity(v_cand2, case when wc < wd then 'b' else 'a' end, 'rev', 'wc in wd (wd è fuso)'); v_ok := false;
+  exception when object_not_in_prerequisite_state then v_ok := true; end;
+  begin perform catalog.merge_canonical_entity(v_cand2, case when wc < wd then 'a' else 'b' end, 'rev', 'wd in wc (wd è già fuso)'); v_ok := v_ok and false;
+  exception when object_not_in_prerequisite_state then v_ok := v_ok and true; end;
+  reset role;
+  perform pg_temp.rec('N10', 'nessuna fusione verso (o da) un''entità non attiva: nessun ciclo possibile (wd fuso in lo non diventa bersaglio né origine)',
+    v_ok and (select status from catalog.wines where id = wc) = 'active' and (select merged_into from catalog.wines where id = wd) = v_lo);
+  -- vini di produttori diversi
+  set local role catalog_curator;
+  v_cand4 := catalog.open_duplicate_candidate('wine', wc, we, 'n', 'qa');
+  perform catalog.review_duplicate_candidate(v_cand4, 'same', 'rev', 'n');
+  begin perform catalog.merge_canonical_entity(v_cand4, 'a', 'rev', 'produttori diversi'); v_ok := false; v_msg := null;
+  exception when object_not_in_prerequisite_state then v_ok := true; v_msg := sqlerrm; end;
+  perform pg_temp.rec('N11', 'due vini di produttori diversi non si fondono (si fondono prima i produttori)', v_ok and v_msg like '%produttori diversi%', v_msg);
+  -- ritiro
+  begin perform catalog.retire_canonical_entity('wine', v_lo, 'tentativo', 'qa'); v_ok := false; v_msg := null;
+  exception when object_not_in_prerequisite_state then v_ok := true; v_msg := sqlerrm; end;
+  perform pg_temp.rec('N12', 'un vino con fusioni attive verso di sé non si ritira (nessun puntatore pendente)', v_ok and v_msg like '%fusioni attive%', v_msg);
+  perform catalog.retire_canonical_entity('wine', we, 'ritirato per test', 'qa');
+  reset role;
+  begin update catalog.wines set status = 'active' where id = we; v_ok := false; exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('N13', 'retired è definitivo (transizioni ammesse: active→merged, merged→active, active→retired)', v_ok and (select status from catalog.wines where id = we) = 'retired');
+  begin perform catalog.merge_canonical_entity(v_cand4, 'b', 'rev', 'verso retired'); v_ok := false; exception when others then v_ok := sqlstate in ('42501', '55000'); end;
+  perform pg_temp.rec('N14', 'nulla si fonde con un''entità ritirata', v_ok);
+  perform pg_temp.rec('N15', 'nessuna riga cancellata dalle fusioni; il registro eventi traccia kept_side e coppia',
+    exists (select 1 from catalog.canonical_events where action = 'merge_canonical_entity' and entity_ref = v_m1::text and detail ->> 'kept_side' = 'b'
+              and detail ->> 'into' = v_hi::text and acting_role = 'catalog_curator'));
+end $$;
+
+-- ===================================================================================================
+-- P. D-5: LWIN-16 e LWIN-18 secondo la specifica Liv-ex (https://web.liv-ex.com/staticPageContent.do?pageKey=LWIN)
+--    LWIN-16 = LWIN-11 + volume (5 cifre, ml); LWIN-18 = LWIN-11 + confezione (2 cifre) + volume (5 cifre, ml)
+-- ===================================================================================================
+do $$
+declare
+  v_msg text;
+  v_ok boolean;
+  v_vint uuid := (select v::uuid from ctx where k = 'vint');
+  v_nv uuid := (select v::uuid from ctx where k = 'vint_nv');
+  v_src uuid := (select id from catalog.sources where code = 'LIVEX-LWIN7');
+begin
+  set local role catalog_curator;
+  perform catalog.add_wine_format(v_vint, 1500, 1, '2000001201501500', null, v_src, null, 'magnum (test)', 'qa');
+  perform pg_temp.rec('P01', 'LWIN-16 reale: 2000001 2015 01500 (magnum, 1 bottiglia) accettato', true);
+  perform catalog.add_wine_format(v_vint, 750, 12, null, '200000120151200750', v_src, null, 'cassa da 12 (test)', 'qa');
+  perform pg_temp.rec('P02', 'LWIN-18 reale (come l''esempio Liv-ex: 12 × 750 ml): 2000001 2015 12 00750 accettato', true);
+  perform catalog.add_wine_format(v_vint, 375, 1, '2000001201500375', '200000120150100375', v_src, null, 'mezza (test)', 'qa');
+  perform pg_temp.rec('P03', 'LWIN-16 e LWIN-18 della stessa riga coerenti tra loro e con volume/confezione accettati', true);
+  begin perform catalog.add_wine_format(v_vint, 750, 24, null, '200000120150075024', v_src, null, 'x', 'qa'); v_ok := false; v_msg := null;
+  exception when check_violation then v_ok := true; v_msg := sqlerrm; end;
+  perform pg_temp.rec('P04', 'un LWIN-18 costruito come LWIN-16 + 2 cifre (vecchia interpretazione errata) è rifiutato', v_ok and v_msg like '%LWIN-18%', v_msg);
+  begin perform catalog.add_wine_format(v_vint, 750, 6, null, '200000120151200750', v_src, null, 'x', 'qa'); v_ok := false; v_msg := null;
+  exception when check_violation then v_ok := true; v_msg := sqlerrm; end;
+  perform pg_temp.rec('P05', 'LWIN-18 con confezione diversa da units_per_pack rifiutato', v_ok and v_msg like '%units_per_pack%', v_msg);
+  begin perform catalog.add_wine_format(v_vint, 1000, 12, null, '200000120151200750', v_src, null, 'x', 'qa'); v_ok := false; v_msg := null;
+  exception when check_violation then v_ok := true; v_msg := sqlerrm; end;
+  perform pg_temp.rec('P06', 'LWIN-18 con volume diverso da volume_ml rifiutato', v_ok and v_msg like '%volume_ml%', v_msg);
+  begin perform catalog.add_wine_format(v_vint, 3000, 1, '2000001201501500', null, v_src, null, 'x', 'qa'); v_ok := false; v_msg := null;
+  exception when check_violation then v_ok := true; v_msg := sqlerrm; end;
+  perform pg_temp.rec('P07', 'LWIN-16 con volume diverso da volume_ml rifiutato', v_ok and v_msg like '%volume_ml%', v_msg);
+  begin perform catalog.add_wine_format(v_vint, 750, 6, '2000001201500750', null, v_src, null, 'x', 'qa'); v_ok := false; v_msg := null;
+  exception when check_violation then v_ok := true; v_msg := sqlerrm; end;
+  perform pg_temp.rec('P08', 'LWIN-16 su una confezione (units_per_pack > 1) rifiutato: la confezione è LWIN-18', v_ok and v_msg like '%units_per_pack%', v_msg);
+  begin perform catalog.add_wine_format(v_vint, 750, 100, null, '200000120151000750', v_src, null, 'x', 'qa'); v_ok := false; v_msg := null;
+  exception when check_violation then v_ok := true; v_msg := sqlerrm; end;
+  perform pg_temp.rec('P09', 'confezione da 100 non esprimibile in 2 cifre: LWIN-18 rifiutato', v_ok, v_msg);
+  begin perform catalog.add_wine_format(v_vint, 100000, 1, '2000001201500000', null, v_src, null, 'x', 'qa'); v_ok := false; v_msg := null;
+  exception when check_violation then v_ok := true; v_msg := sqlerrm; end;
+  perform pg_temp.rec('P10', 'volume non esprimibile in 5 cifre (100000 ml) con LWIN-16 rifiutato', v_ok, v_msg);
+  begin perform catalog.add_wine_format(v_nv, 750, 1, '2000001100000750', null, v_src, null, 'x', 'qa'); v_ok := false; v_msg := null;
+  exception when check_violation then v_ok := true; v_msg := sqlerrm; end;
+  perform pg_temp.rec('P11', 'LWIN-16/18 su un''annata senza LWIN-11 rifiutato (nessun identificativo inventato)', v_ok and v_msg like '%LWIN-11%', v_msg);
+  begin perform catalog.add_wine_format(v_vint, 500, 1, '20000012015abcde', null, v_src, null, 'x', 'qa'); v_ok := false; exception when check_violation then v_ok := true; end;
+  perform pg_temp.rec('P12', 'LWIN-16 non numerico rifiutato', v_ok);
+  begin perform catalog.add_wine_format(v_vint, 500, 1, null, '2000001201500100500x', v_src, null, 'x', 'qa'); v_ok := false; exception when check_violation then v_ok := true; end;
+  perform pg_temp.rec('P13', 'LWIN-18 di lunghezza errata rifiutato', v_ok);
+  begin perform catalog.add_wine_format(v_vint, 5000, 1, null, '200000120150100750', v_src, null, 'x', 'qa'); v_ok := false; v_msg := null;
+  exception when check_violation then v_ok := true; v_msg := sqlerrm; end;
+  perform pg_temp.rec('P14', 'LWIN-18 duplicato non nasce da un volume diverso: confezione/volume incoerenti rifiutati', v_ok, v_msg);
+  reset role;
+end $$;
+
+-- ===================================================================================================
+-- O. D-4: produttori ritirati e starvation dei lotti
+-- ===================================================================================================
+insert into fx_batches
+select 's2', batch || jsonb_build_array(
+  pg_temp.fx('2000020', 'Live', 'wine', null, 'Domaine Rossi', 'Bianco Uno', 'Italy', 'Piedmont', 'White'),
+  pg_temp.fx('2000021', 'Live', 'wine', null, 'Domaine Rossi', 'Bianco Due', 'Italy', 'Piedmont', 'White'),
+  pg_temp.fx('2000022', 'Live', 'wine', null, 'Nuova Cantina', 'Rosso Uno', 'Italy', 'Tuscany', 'Red'),
+  pg_temp.fx('2000023', 'Live', 'wine', null, 'Nuova Cantina', 'Rosso Due', 'Italy', 'Tuscany', 'Red'))
+  from fx_batches where name = 's1';
+
+set local role catalog_loader;
+insert into ctx select 'run2', (catalog.begin_import_run('LIVEX-LWIN7', repeat('d', 64), 'sintetico-wi001c-2.xlsx', null, 'wi-001c-test') ->> 'run_id');
+insert into ctx select 'up2', catalog.stage_source_records((select v::uuid from ctx where k = 'run2'), batch)::text from fx_batches where name = 's2';
+insert into ctx select 'fin2', catalog.finish_import_run((select v::uuid from ctx where k = 'run2'), 16)::text;
+reset role;
+
+do $$
+declare
+  v_ok boolean;
+  v_rossi uuid := (select id from catalog.producers where natural_key = 'domaine rossi' || chr(31) || 'italy');
+  v_prev jsonb; v_r1 jsonb; v_r2 jsonb; v_r3 jsonb;
+  v_merged_before bigint := (select count(*) from catalog.wines where status = 'merged');
+begin
+  set local role catalog_curator;
+  perform catalog.retire_canonical_entity('producer', v_rossi, 'produttore ritirato (test starvation)', 'qa');
+  v_prev := catalog.promotion_preview();
+  v_r1 := catalog.promote_wine_candidates(p_dry_run => false, p_actor => 'qa-o', p_limit => 1);
+  v_r2 := catalog.promote_wine_candidates(p_dry_run => false, p_actor => 'qa-o', p_limit => 1);
+  v_r3 := catalog.promote_wine_candidates(p_dry_run => false, p_actor => 'qa-o', p_limit => 1);
+  reset role;
+  perform pg_temp.rec('O01', 'anteprima: 4 nuovi record idonei, 2 bloccati dal produttore ritirato (eligible = 2) senza scritture',
+    (v_prev ->> 'blocked_producer_retired')::int = 2 and (v_prev ->> 'eligible')::int = 2 and (v_prev ->> 'database_writes')::int = 0, v_prev::text);
+  perform pg_temp.rec('O02', 'nessuna starvation: con limite 1 il primo lotto promuove 2000022 (non resta fermo sui record del produttore ritirato 2000020/21)',
+    (v_r1 ->> 'wines_created')::int = 1 and exists (select 1 from catalog.wines where lwin7 = '2000022'), v_r1::text);
+  perform pg_temp.rec('O03', 'il secondo lotto promuove 2000023; il terzo non trova nulla da fare (nessun ciclo infinito sugli stessi record)',
+    (v_r2 ->> 'wines_created')::int = 1 and exists (select 1 from catalog.wines where lwin7 = '2000023') and (v_r3 ->> 'wines_created')::int = 0, v_r2::text || v_r3::text);
+  perform pg_temp.rec('O04', 'i record del produttore ritirato non sono promossi né scartati: restano fuori e sono tracciati come eccezioni (2, una sola volta)',
+    not exists (select 1 from catalog.wines where lwin7 in ('2000020', '2000021'))
+    and (select count(*) from catalog.promotion_exceptions where reason = 'producer_retired' and producer_id = v_rossi) = 2
+    and (v_r1 ->> 'exceptions_recorded')::int = 2 and (v_r2 ->> 'exceptions_recorded')::int = 0 and (v_r3 ->> 'exceptions_recorded')::int = 0);
+  perform pg_temp.rec('O05', 'nessuna fusione né cancellazione automatica dalla promozione',
+    (select count(*) from catalog.wines where status = 'merged') = v_merged_before and exists (select 1 from catalog.source_records where external_id = '2000020'));
+  begin update catalog.promotion_exceptions set reason = 'producer_retired'; v_ok := false; exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('O06', 'le eccezioni sono append-only (nemmeno il proprietario le riscrive)', v_ok);
+  begin delete from catalog.promotion_exceptions; v_ok := false; exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('O07', 'le eccezioni non si cancellano', v_ok);
+  set local role catalog_curator;
+  begin insert into catalog.promotion_exceptions (source_id, source_record_id, lwin, reason, rule_version) values ((select id from catalog.sources limit 1), 1, 'x', 'producer_retired', 'v'); v_ok := false;
+  exception when insufficient_privilege then v_ok := true; end;
+  reset role;
+  perform pg_temp.rec('O08', 'il curatore non scrive le eccezioni direttamente', v_ok);
+  begin insert into catalog.wines (lwin7, producer_id, name, name_key, origin, source_id, source_record_id)
+        select '2000020', v_rossi, 'Bianco Uno', 'bianco uno', 'promotion', sr.source_id, sr.id from catalog.source_records sr where sr.external_id = '2000020';
+        v_ok := false;
+  exception when check_violation then v_ok := true; end;
+  perform pg_temp.rec('O10', 'nessun vino promosso su un produttore ritirato (nemmeno con un INSERT diretto del proprietario): serve un produttore attivo',
+    v_ok and not exists (select 1 from catalog.wines where lwin7 = '2000020'));
+  perform pg_temp.rec('O09', 'la promozione non ha lasciato produttori duplicati: Nuova Cantina è un solo produttore con 2 vini',
+    (select count(*) from catalog.producers where natural_key = 'nuova cantina' || chr(31) || 'italy') = 1
+    and (select count(distinct producer_id) from catalog.wines where lwin7 in ('2000022', '2000023')) = 1);
+end $$;
+
+-- ===================================================================================================
+-- Q. D-6: audit, identità dell'attore e privilegi
+-- ===================================================================================================
+do $$
+declare
+  v_ok boolean;
+  v_doors text[] := array['add_entity_alias', 'add_manual_producer', 'add_manual_wine', 'add_wine_format', 'add_wine_vintage',
+                          'merge_canonical_entity', 'open_duplicate_candidate', 'promote_wine_candidates', 'propose_attribute_claim',
+                          'propose_wine_link', 'retire_canonical_entity', 'review_attribute_claim', 'review_duplicate_candidate',
+                          'review_wine_link', 'revert_canonical_merge'];
+begin
+  perform pg_temp.rec('Q01', 'ogni porta di scrittura è SECURITY DEFINER con search_path vuoto ed eseguibile solo dal curatore (né PUBLIC né anon/authenticated/service_role)',
+    not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.proname = any (v_doors)
+                  and (not p.prosecdef or not exists (select 1 from unnest(p.proconfig) c where c in ('search_path=""', 'search_path='))
+                       or not has_function_privilege('catalog_curator', p.oid, 'EXECUTE')
+                       or has_function_privilege('anon', p.oid, 'EXECUTE') or has_function_privilege('authenticated', p.oid, 'EXECUTE')
+                       or has_function_privilege('service_role', p.oid, 'EXECUTE') or has_function_privilege('catalog_loader', p.oid, 'EXECUTE'))));
+  perform pg_temp.rec('Q02', 'il curatore non può registrare eventi da sé né falsificare l''audit (nessun INSERT né record_canonical_event)',
+    not has_function_privilege('catalog_curator', 'catalog.record_canonical_event(text,text,text,text,jsonb)'::regprocedure, 'EXECUTE')
+    and not has_table_privilege('catalog_curator', 'catalog.canonical_events', 'INSERT'));
+  set local role catalog_curator;
+  begin perform catalog.record_canonical_event('forged', 'x', 'y', 'qa', '{}'); v_ok := false; exception when insufficient_privilege then v_ok := true; end;
+  perform pg_temp.rec('Q03', 'il curatore non può scrivere un evento falso chiamando la funzione interna', v_ok);
+  begin insert into catalog.canonical_events (action, entity_type, actor) values ('forged', 'x', 'qa'); v_ok := false; exception when insufficient_privilege then v_ok := true; end;
+  perform pg_temp.rec('Q04', 'il curatore non può scrivere un evento falso con INSERT', v_ok);
+  begin perform catalog.add_manual_producer('Senza Attore', null, 'n', null); v_ok := false; exception when invalid_parameter_value then v_ok := true; end;
+  perform pg_temp.rec('Q05', 'esecutore nullo rifiutato (identità dell''attore obbligatoria)', v_ok);
+  begin perform catalog.add_manual_producer('Con Controllo', null, 'n', E'qa\nfalso'); v_ok := false; exception when invalid_parameter_value then v_ok := true; end;
+  perform pg_temp.rec('Q06', 'esecutore con caratteri di controllo rifiutato (nessuna riga di log falsificabile)', v_ok);
+  begin perform catalog.add_manual_producer('Troppo Lungo', null, 'n', repeat('x', 201)); v_ok := false; exception when invalid_parameter_value then v_ok := true; end;
+  perform pg_temp.rec('Q07', 'esecutore oltre 200 caratteri rifiutato', v_ok);
+  reset role;
+  perform pg_temp.rec('Q08', 'ogni porta lascia un evento con attore e ruolo effettivo (add_*, propose_*, review_*, merge, revert, open, retire, promote)',
+    (select count(distinct action) from catalog.canonical_events
+      where action = any (array['add_entity_alias', 'add_manual_producer', 'add_manual_wine', 'add_wine_format', 'add_wine_vintage', 'merge_canonical_entity',
+                                'open_duplicate_candidate', 'promote_wine_candidates', 'propose_attribute_claim', 'propose_wine_link', 'retire_canonical_entity',
+                                'review_attribute_claim', 'review_duplicate_candidate', 'review_wine_link', 'revert_canonical_merge'])) = 15
+    and not exists (select 1 from catalog.canonical_events where actor is null or length(btrim(actor)) = 0));
+  perform pg_temp.rec('Q09', 'RLS: sulle tabelle canoniche il curatore ha solo policy di lettura (nessuna policy di scrittura)',
+    not exists (select 1 from pg_policy p join pg_class c on c.oid = p.polrelid
+                 where c.relnamespace = 'catalog'::regnamespace and 'catalog_curator'::regrole::oid = any (p.polroles) and p.polcmd <> 'r'));
+  perform pg_temp.rec('Q10', 'nessun login diretto: catalog_curator e catalog_loader restano NOLOGIN, senza poteri amministrativi',
+    not exists (select 1 from pg_roles r where r.rolname in ('catalog_curator', 'catalog_loader')
+                  and (r.rolcanlogin or r.rolsuper or r.rolbypassrls or r.rolcreaterole or r.rolcreatedb or r.rolreplication)));
+  perform pg_temp.rec('Q11', 'le funzioni di sola lettura (search_wines, wine_sheet, anteprima) restano SECURITY INVOKER',
+    not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace
+                  and p.proname in ('search_wines', 'wine_sheet', 'promotion_preview', 'promotion_batch', 'promotion_candidates', 'promotion_blocked') and p.prosecdef));
+end $$;
+
+-- ===================================================================================================
+-- Z. Manomissione della logica DOPO l'approvazione (ultima: tutto sparisce con ROLLBACK)
+-- ===================================================================================================
+do $$
+declare
+  v_ok boolean;
+  v_msg text;
+  v_src uuid := (select id from catalog.sources where code = 'LIVEX-LWIN7');
+  v_sr1 bigint := (select id from catalog.source_records where external_id = '2000001');
+  v_fp_before text := catalog.promotion_logic_fingerprint('lwin-conservative-v1');
+begin
+  perform pg_temp.rec('Z01', 'prima della manomissione la regola approvata abilita la promozione (interruttore acceso, impronta uguale)', catalog.promotion_authorized());
+  -- il proprietario sostituisce il corpo di promotion_batch (stessa firma, logica diversa)
+  create or replace function catalog.promotion_batch(p_source_id uuid, p_limit integer)
+  returns table (source_record_id bigint, lwin text, producer_name text, wine text, colour text, wine_type text, sub_type text,
+                 designation text, classification text, territory_id bigint, country text, producer_key text)
+  language sql stable set search_path = '' as $f$
+    select b.source_record_id, b.lwin, b.producer_name, b.wine, b.colour, b.wine_type, b.sub_type, b.designation, b.classification,
+           b.territory_id, b.country, b.producer_key
+      from catalog.promotion_candidates(p_source_id) b order by b.lwin limit 1
+  $f$;
+  perform pg_temp.rec('Z02', 'cambiare il corpo di una funzione di promozione cambia l''impronta e invalida l''autorizzazione',
+    catalog.promotion_logic_fingerprint('lwin-conservative-v1') is distinct from v_fp_before and not catalog.promotion_authorized());
+  set local role catalog_curator;
+  begin perform catalog.promote_wine_candidates(p_dry_run => false, p_actor => 'qa-z', p_limit => 5); v_ok := false; v_msg := null;
+  exception when insufficient_privilege then v_ok := true; v_msg := sqlerrm; end;
+  reset role;
+  perform pg_temp.rec('Z03', 'la promozione rifiuta la logica cambiata dopo l''approvazione (serve una nuova approvazione)', v_ok and v_msg like '%cambiata dopo l''approvazione%', v_msg);
+  begin insert into catalog.producers (name, name_key, natural_key, origin, source_id, source_record_id)
+        values ('Zeta', 'zeta', 'zeta' || chr(31) || 'x', 'promotion', v_src, v_sr1); v_ok := false; v_msg := null;
+  exception when insufficient_privilege then v_ok := true; v_msg := sqlerrm; end;
+  perform pg_temp.rec('Z04', 'anche l''INSERT diretto origin=promotion è rifiutato con la logica manomessa', v_ok, v_msg);
+  perform pg_temp.rec('Z05', 'la regola approvata resta registrata con l''impronta originale (non si riscrive per «ricoprire» la modifica)',
+    (select approved_fingerprint from catalog.promotion_rules where version = 'lwin-conservative-v1') = v_fp_before);
+  set local role catalog_curator;
+  perform catalog.promotion_preview();
+  reset role;
+  perform pg_temp.rec('Z06', 'l''anteprima di sola lettura resta disponibile anche con la logica manomessa', true);
 end $$;
 
 select id, descrizione, passed, detail from esiti_12zy order by id;

@@ -202,6 +202,8 @@ Residui noti (non bloccanti per lo staging): `catalog_loader` ha UPDATE diretto 
 
 ## 12. WI-001C — catalogo canonico (realizzato, NON popolato)
 
+> **FIX-01 (19 novembre 2026)**: la migration `20261119120000_wi_001c_fix01_canonical_hardening.sql` sostituisce il modello «funzioni invoker + UPDATE/INSERT diretti del curatore» con **porte `SECURITY DEFINER`** (16, elenco chiuso, `search_path` vuoto) e curatore a sola lettura; lega l'approvazione della regola all'impronta della logica; separa manuale e promozione; rende le fusioni esatte per coppia/direzione (`merge_id`) e serializzate; traccia come eccezioni i record con produttore ritirato; corregge LWIN-16/18 secondo Liv-ex. Dettagli: `docs/wine-intelligence/HANDOFF_WI_001C_FIX01.md`. Dove il testo seguente parla di funzioni invoker o di grant a colonna al curatore, vale FIX-01.
+
 Migration `20261119100000_wi_001c_canonical_catalog.sql`, griglia `supabase/tests/12zy_wi_001c_canonical_catalog.sql`; dettagli, prove e limiti in `docs/wine-intelligence/HANDOFF_WI_001C_BUILD.md`. Scostamenti dalla bozza: i collegamenti a `public.wines` sono **per valore** (`catalog.wine_links.public_wine_id`, nessuna FK, riconciliazione con `dangling_wine_links`); `wine_territories` e `catalog.media` NON sono realizzate; le rivendicazioni sono `attribute_claims` con vocabolario `attribute_definitions`; nessuna vista pubblica. I record LWIN si promuovono solo con una regola approvata dal founder, interruttore acceso e `p_dry_run => false`: oggi tutto è spento e le tabelle canoniche sono vuote. Procedura di import cloud: `docs/wine-intelligence/CLOUD_IMPORT_RUNBOOK.md`.
 
 ## Registri collegati

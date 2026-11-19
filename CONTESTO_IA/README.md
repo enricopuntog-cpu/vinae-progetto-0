@@ -27,6 +27,8 @@ Aprire soltanto ciò che serve al task:
 - Catalogo canonico WI-001C e import cloud (predisposti, spenti):
   [`../docs/wine-intelligence/HANDOFF_WI_001C_BUILD.md`](../docs/wine-intelligence/HANDOFF_WI_001C_BUILD.md) e
   [`CLOUD_IMPORT_RUNBOOK.md`](../docs/wine-intelligence/CLOUD_IMPORT_RUNBOOK.md).
+  Correzioni FIX-01 (QA Opus): [`../docs/wine-intelligence/HANDOFF_WI_001C_FIX01.md`](../docs/wine-intelligence/HANDOFF_WI_001C_FIX01.md);
+  rilascio in due tempi (runner / migration): [`../docs/wine-intelligence/RELEASE_STRATEGY_WI_001C.md`](../docs/wine-intelligence/RELEASE_STRATEGY_WI_001C.md).
 - Monitoraggio pre-lancio OBS-01: [`../docs/VPM_022C_OBS_01.md`](../docs/VPM_022C_OBS_01.md)
   contiene strumenti nativi, log minimizzati, heartbeat, responsabilità e residui
   pre-Stripe; non equivale a un servizio di allarme su ogni evento.

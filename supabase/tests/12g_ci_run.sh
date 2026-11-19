@@ -592,6 +592,16 @@ run_grid "12zs Catalogo enologico staging" 12zs_wi_001b_catalog_staging.sql 3
 # WI-001C: catalogo canonico (produttori, vini LWIN-7, annate, formati, alias, claim, duplicati, collegamenti).
 # Transazione chiusa da ROLLBACK, dati sintetici; promozione LWIN disattivata di default.
 run_grid "12zy Catalogo enologico canonico" 12zy_wi_001c_canonical_catalog.sql 3
+# WI-001C-FIX-01: audit del login dell'importatore (grafo transitivo delle appartenenze, grant diretti, proprieta) su ruoli reali
+# creati nella transazione; il testo della query e identico a LOGIN_AUDIT_SQL (tools/wine-catalog/lib/cloud-guards.mjs).
+run_grid "12zz Audit del login dell'importatore" 12zz_wi_001c_fix01_login_audit.sql 3
+# WI-001C-FIX-01 (D-3): serializzazione delle fusioni su DUE sessioni reali (barriera su pg_locks, nessuna fixture committata).
+conc_12zzf="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/12zz_wi_001c_fix01_concorrenza.sh")"   || { printf '%s
+' "$conc_12zzf"; die "12zz concorrenza fusioni: fallita."; }
+printf '%s
+' "$conc_12zzf"
+summary "- $(printf '%s
+' "$conc_12zzf" | tail -n 1)"
 
 # VPM-015QA-FINAL-A — annullamento contro pagamento aperto (apertura, processing,
 # failed/expired, incasso tardivo, replay) e ULTIMA unita del Partner contesa da
