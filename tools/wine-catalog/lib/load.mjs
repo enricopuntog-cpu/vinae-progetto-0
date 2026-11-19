@@ -13,6 +13,7 @@
 // il tentativo successivo (con --takeover se quello fermo non è ancora scaduto) riparte dal file intero.
 import { iterateRecords, snapshotFile, foldKey } from './import.mjs';
 import { classifyImport } from './diff.mjs';
+import { isConnectionLost } from './cloud-tls.mjs';
 
 export const LWIN_SOURCE_CODE = 'LIVEX-LWIN7';
 export const LWIN_EXPECTED_SHA256 = '7669ceab4e815716aa6c90643c117f3da7c7daeaa202ecd3f7cfbc4db7fd488e';
@@ -251,16 +252,40 @@ async function loadFromSnapshot(db, snap, path, {
     await beforeFinish({ rows: dataRows, distinct: seen.size, staged: { ...totals } });
     const tf = performance.now();
     let fin;
+    let finishStatus = 'committed';
+    let finishError = null;
     try {
       fin = await db.query('select catalog.finish_import_run($1::uuid, $2::bigint, ($3::text)::jsonb) as r', [runId, seen.size, JSON.stringify(summary)]);
-    } finally {
-      // il monitor del finish si ferma SEMPRE subito dopo (altrimenti potrebbe annullare un'istruzione successiva)
-      await afterFinish();
+    } catch (e) {
+      finishError = e instanceof Error ? e : new Error(String(e));
+      // connessione persa: il backend remoto potrebbe aver confermato o annullato la promozione → esito SCONOSCIUTO (non «fallito»).
+      // La classificazione per messaggio vale solo per la sessione cloud riservata (`db.state`): in locale un errore SQL resta «fallito».
+      finishStatus = db.state !== undefined && (isConnectionLost(e) || db.state.broken === true) ? 'unknown' : 'failed';
+    }
+    // il monitor del finish si ferma SEMPRE subito dopo (altrimenti potrebbe annullare un'istruzione successiva); la conclusione è
+    // limitata nel tempo e non lancia: un suo problema non può trasformare un commit riuscito in un errore
+    let post = null;
+    try {
+      post = await afterFinish({ status: finishStatus, error: finishError });
+    } catch (x) {
+      post = { hook_error: true, hook_error_code: String(x?.code ?? 'errore').slice(0, 40) }; // nessun testo d'errore nel report: potrebbe contenere segreti
+    }
+    if (finishError) {
+      finishError.finish = { status: finishStatus, post };
+      throw finishError;
     }
     timings.finish_ms = performance.now() - tf;
-    const result = typeof fin.rows[0].r === 'string' ? JSON.parse(fin.rows[0].r) : fin.rows[0].r;
-    return { mode: 'load', timings_ms: Object.fromEntries(Object.entries(timings).map(([k, v]) => [k, Math.round(v)])), run_id: runId, source: { code: sourceCode, sha256, file_name: fileName, size_bytes: snap.size }, distinct_external_ids: seen.size, ...summary, result };
+    // dopo il commit NIENTE può più finire nel catch (fail_import_run su un tentativo terminale sarebbe improprio)
+    let result;
+    try {
+      result = typeof fin.rows[0].r === 'string' ? JSON.parse(fin.rows[0].r) : fin.rows[0].r;
+    } catch {
+      result = { unreadable_result: true };
+    }
+    return { mode: 'load', timings_ms: Object.fromEntries(Object.entries(timings).map(([k, v]) => [k, Math.round(v)])), run_id: runId, source: { code: sourceCode, sha256, file_name: fileName, size_bytes: snap.size }, distinct_external_ids: seen.size, ...summary, result, finish: { status: finishStatus, post } };
   } catch (e) {
+    // esito del finish sconosciuto: il tentativo potrebbe essere già terminale (succeeded) → niente fail_import_run; si riconcilia da fuori
+    if (e?.finish?.status === 'unknown') throw e;
     try {
       await db.query('select catalog.fail_import_run($1::uuid, $2)', [runId, String(e?.message ?? e)]);
     } catch {

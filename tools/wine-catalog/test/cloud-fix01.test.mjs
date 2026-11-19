@@ -135,7 +135,7 @@ test('monitor WAL: sotto il budget non annulla nulla; oltre il budget chiama pg_
   const cancels = f.calls.filter(([t]) => t.includes('pg_cancel_backend'));
   assert.equal(cancels.length, 1, 'un solo annullamento');
   assert.deepEqual(cancels[0][1], [4321]);
-  const final = f.mon.stop();
+  const final = await f.mon.stop();
   assert.equal(final.peak_mb, 101);
   assert.equal(final.cancelOk, true);
 });
@@ -171,9 +171,10 @@ test('monitor WAL: il ciclo temporizzato campiona, si ferma con stop() e non si 
     query: async () => { readings += 1; return { rows: [{ bytes: 1 * MB }] }; },
     backendPid: 9, startLsn: '0/1', maxWalMb: 100, intervalMs: 5,
   });
+  await monitor.sample(); // il monitor deve aver già misurato una volta prima di partire
   monitor.start();
   await new Promise((r) => setTimeout(r, 60));
-  const final = monitor.stop();
+  const final = await monitor.stop();
   const seen = readings;
   await new Promise((r) => setTimeout(r, 30));
   assert.ok(seen >= 2, `campioni raccolti: ${seen}`);
