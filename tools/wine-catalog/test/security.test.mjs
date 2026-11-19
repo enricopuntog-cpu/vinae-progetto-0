@@ -131,9 +131,19 @@ test('snapshotFile: lo sha256 è quello dei byte della copia; modificare l\'orig
 });
 
 test('snapshotFile: file assente o non leggibile → errore e nessuna copia residua', async () => {
-  const before = readdirSync(tmpdir()).filter((n) => n.startsWith('vinea-lwin-')).length;
-  await assert.rejects(() => snapshotFile(join(tmpdir(), 'wi001b-inesistente-xyz.xlsx')));
-  assert.equal(readdirSync(tmpdir()).filter((n) => n.startsWith('vinea-lwin-')).length, before);
+  // cartella temporanea PRIVATA di questo test: altri file di test girano in parallelo (processi separati) e creano cartelle
+  // `vinea-lwin-` nella temp condivisa, il che rendeva il conteggio intermittente
+  const priv = mkdtempSync(join(tmpdir(), 'wi001b-priv-'));
+  const saved = { TMPDIR: process.env.TMPDIR, TMP: process.env.TMP, TEMP: process.env.TEMP };
+  process.env.TMPDIR = process.env.TMP = process.env.TEMP = priv;
+  try {
+    const before = readdirSync(tmpdir()).filter((n) => n.startsWith('vinea-lwin-')).length;
+    await assert.rejects(() => snapshotFile(join(priv, 'wi001b-inesistente-xyz.xlsx')));
+    assert.equal(readdirSync(tmpdir()).filter((n) => n.startsWith('vinea-lwin-')).length, before);
+  } finally {
+    for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    rmSync(priv, { recursive: true, force: true });
+  }
 });
 
 // --- hash: scope e versione del normalizzatore -----------------------------------------------------

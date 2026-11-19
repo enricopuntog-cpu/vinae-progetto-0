@@ -10,6 +10,11 @@
 # deployment branch policy limitata a `main` (il job gira comunque solo da refs/heads/main). Un login PostgreSQL
 # dedicato (membro del solo catalog_loader) è imposto dal caricatore.
 #
+# TLS: la connessione verifica catena e hostname (sslmode=verify-full). La CA del progetto arriva dal segreto `CATALOG_DB_CA_PEM`
+# (certificato PUBBLICO, solo PEM di certificati: una chiave privata è rifiutata) e passa al processo come variabile d'ambiente, mai come
+# file né come argomento. Senza CA l'import non parte. `mode = dry-run` apre una sessione di SOLA LETTURA (default_transaction_read_only);
+# `mode = import` usa in più un monitor separato del WAL del finish (vedi docs/wine-intelligence/CLOUD_IMPORT_RUNBOOK.md).
+#
 # Il file LWIN non sta nel repository: arriva da un URL firmato a breve scadenza (segreto dell'environment) e viene
 # verificato per SHA-256 PRIMA di essere letto dal caricatore. Il report (solo conteggi, nessun dato di fonte) è
 # l'unico artefatto caricato.
@@ -81,6 +86,7 @@ jobs:
         env:
           CATALOG_CLOUD_IMPORT: enabled
           CATALOG_DATABASE_URL: ${{ secrets.CATALOG_DATABASE_URL }}
+          CATALOG_DB_CA_PEM: ${{ secrets.CATALOG_DB_CA_PEM }}
         run: |
           set -euo pipefail
           echo "::add-mask::$CATALOG_DATABASE_URL"

@@ -230,6 +230,16 @@ jobs:
           node --check tools/wine-catalog/lwin-import.mjs
           node --check tools/wine-catalog/lwin-load.mjs
           node --test tools/wine-catalog/test/*.test.mjs
+      # WI-001C-FIX-01 / I-1: TLS reale di Bun.SQL contro un server PostgreSQL FINTO su loopback (certificati generati al volo con openssl,
+      # nessuna rete esterna, nessun segreto): CA giusta/errata, hostname errato, TLS disabilitato, riconnessione silenziosa, sola lettura.
+      - name: Setup Bun (wine catalog TLS tests)
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.14
+      - name: Wine catalog cloud TLS tests (Bun)
+        env:
+          WI_TLS_REQUIRE_BUN: "true"
+        run: bun test --timeout 60000 tools/wine-catalog/test/tls-bun.test.mjs
 
   backend:
     name: Backend - lint, syntax and tests

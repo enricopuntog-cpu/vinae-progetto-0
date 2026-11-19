@@ -19,8 +19,9 @@ import { insideRepo, assertLocalDatabaseUrl } from './lib/paths.mjs';
 import { assertCloudAuthorized, resolveCloudLimits, redactUrl } from './lib/cloud-target.mjs';
 import { createLogger, sanitizeError } from './lib/safe-log.mjs';
 import {
-  assertCloudSession, assertLoaderPrivileges, createWalGuard, applySessionLimits, verifyFinish,
+  assertCloudSession, assertLoaderPrivileges, createWalGuard, applySessionLimits, verifyFinish, planFinishWal, createWalMonitor,
 } from './lib/cloud-guards.mjs';
+import { loadCaPem } from './lib/cloud-tls.mjs';
 import {
   planLoad, loadToDatabase, LWIN_EXPECTED_SHA256, LWIN_EXPECTED_ROWS, DEFAULT_BATCH_SIZE,
 } from './lib/load.mjs';
@@ -105,14 +106,18 @@ const urlPassword = (() => { try { return new URL(process.env.CATALOG_DATABASE_U
 const logSecrets = [process.env.CATALOG_DATABASE_URL, url, urlPassword ? decodeURIComponent(urlPassword) : '', urlPassword];
 const logger = createLogger({ secrets: logSecrets });
 let walGuard = null;
+let monitorDb = null;
+let walMonitor = null;
 const cloudInfo = cloudTarget
   ? { target: { kind: cloudTarget.kind, ref: cloudTarget.ref, host: cloudTarget.host, database: cloudTarget.database, production: cloudTarget.production, url: redactUrl(process.env.CATALOG_DATABASE_URL) }, limits: cloudLimits }
   : null;
 try {
   if (cloudTarget) {
-    const { connectCloud } = await import('./lib/db-bun.mjs');
-    const caPem = args['ca-file'] ? readFileSync(args['ca-file'], 'utf8') : null;
-    db = await connectCloud(process.env.CATALOG_DATABASE_URL, { role: 'catalog_loader', caPem });
+    const { connectCloud, connectCloudMonitor } = await import('./lib/db-bun.mjs');
+    // CA: variabile d'ambiente (preferita, nessun file su disco) oppure --ca-file; il TLS non verificato è rifiutato
+    const caPem = loadCaPem({ caFile: args['ca-file'] ?? null, envPem: process.env.CATALOG_DB_CA_PEM ?? null, readFile: (p) => readFileSync(p, 'utf8') });
+    // dry-run: sessione di SOLA LETTURA (default_transaction_read_only + solo SELECT lato client); l'import usa il ruolo caricatore
+    db = await connectCloud(process.env.CATALOG_DATABASE_URL, { role: 'catalog_loader', caPem, readOnly: args['dry-run'] });
     const q = (t, p) => db.query(t, p);
     cloudInfo.session = await assertCloudSession(q);
     cloudInfo.loader_privileges = await assertLoaderPrivileges(q);
@@ -122,6 +127,17 @@ try {
       idleTxTimeoutMs: cloudLimits.idleTxTimeoutSec * 1000,
     });
     walGuard = await createWalGuard(q, { maxWalMb: cloudLimits.maxWalMb });
+    if (!args['dry-run']) {
+      // monitor del finish su una seconda connessione (stesso login): deve funzionare PRIMA di iniziare, altrimenti l'import non parte
+      monitorDb = await connectCloudMonitor(process.env.CATALOG_DATABASE_URL, { caPem });
+      walMonitor = createWalMonitor({
+        query: (t, p) => monitorDb.query(t, p), backendPid: db.backendPid, startLsn: walGuard.start, maxWalMb: cloudLimits.maxWalMb,
+        // connessione del monitor caduta durante il finish: se ne apre una nuova solo per annullare (sessione dedicata, stesso login)
+        reopen: async () => { try { await monitorDb.close(); } catch { /* già chiusa */ } monitorDb = await connectCloudMonitor(process.env.CATALOG_DATABASE_URL, { caPem }); return (t, p) => monitorDb.query(t, p); },
+      });
+      await walMonitor.sample();
+      if (walMonitor.status().samples < 1) throw new Error('Monitor WAL non operativo: importazione rifiutata (fail-closed).');
+    }
     logger.log(`destinazione cloud identificata: ${cloudTarget.kind} ${cloudTarget.ref} (${cloudTarget.database}), TLS verificato, privilegi conformi`);
   } else if (url) {
     const { connectLocal } = await import('./lib/db-bun.mjs');
@@ -142,17 +158,35 @@ try {
       batchSize,
       onProgress: async ({ rows, written }) => {
         if (walGuard) await walGuard.check();
+        if (cloudTarget) await db.assertIntact();
         if (written % 20000 < batchSize) logger.log(`… ${rows} righe lette, ${written} scritte`);
       },
-      beforeFinish: async () => {
+      beforeFinish: async ({ staged }) => {
         if (!cloudTarget) return;
-        // il finish è UNA transazione di promozione: timeout dedicato (più lungo di quello dei lotti)
-        await walGuard.check();
+        await db.assertIntact();
+        // controllo PREVENTIVO (euristico, non un limite rigido): WAL già usato + stima prudente del finish entro il budget
+        const used = await walGuard.check();
+        cloudInfo.finish_estimate = planFinishWal({ usedBytes: used, budgetBytes: cloudLimits.maxWalMb * 1048576, writtenRows: Number(staged?.new ?? 0) + Number(staged?.updated ?? 0) + Number(staged?.reappeared ?? 0) });
+        if (!cloudInfo.finish_estimate.ok) {
+          throw new Error(`Finish non avviato: WAL già usato ${Math.round(used / 1048576)} MB + stima del finish ${Math.round(cloudInfo.finish_estimate.projectedFinishBytes / 1048576)} MB superano il budget ${cloudLimits.maxWalMb} MB.`);
+        }
+        // il finish è UNA transazione di promozione: timeout dedicato (più lungo di quello dei lotti) e monitor separato che può annullarla
         await applySessionLimits((t, p) => db.query(t, p), {
           statementTimeoutMs: cloudLimits.finishTimeoutMin * 60000,
           lockTimeoutMs: cloudLimits.lockTimeoutSec * 1000,
           idleTxTimeoutMs: cloudLimits.idleTxTimeoutSec * 1000,
         });
+        walMonitor.start();
+      },
+      afterFinish: async () => {
+        if (!walMonitor) return;
+        cloudInfo.wal_monitor = walMonitor.stop();
+        const m = cloudInfo.wal_monitor;
+        // budget superato o monitor senza visibilità: l'import NON è «riuscito» anche se il finish è terminato (annullamento tardivo o fallito)
+        if (m.exceeded || m.lost || (m.cancelAttempts > 0 && m.cancelOk !== true)) {
+          process.exitCode = 1;
+          logger.log(`ATTENZIONE: monitor WAL — budget superato=${m.exceeded}, annullamento riuscito=${m.cancelOk}, perso=${m.lost}`);
+        }
       },
     });
     if (cloudTarget && report.mode === 'load') {
@@ -162,6 +196,7 @@ try {
   }
   if (cloudInfo) {
     if (walGuard) cloudInfo.wal = await walGuard.report();
+    if (walMonitor && !cloudInfo.wal_monitor) cloudInfo.wal_monitor = walMonitor.stop();
     cloudInfo.log = logger.summary();
     report.cloud = cloudInfo;
   }
@@ -177,6 +212,7 @@ try {
     // report anche in caso di errore: destinazione, limiti, WAL e log aiutano la diagnosi (nessun segreto)
     try {
       if (walGuard) cloudInfo.wal = await walGuard.report();
+      if (walMonitor && !cloudInfo.wal_monitor) cloudInfo.wal_monitor = walMonitor.stop();
       cloudInfo.log = logger.summary();
       writeFileSync(args.report, JSON.stringify({ mode: 'error', error: sanitizeError(e, logSecrets), cloud: cloudInfo }, null, 2), { mode: 0o600 });
     } catch {
@@ -184,6 +220,8 @@ try {
     }
   }
 } finally {
+  if (walMonitor) walMonitor.stop();
+  if (monitorDb) await monitorDb.close();
   if (db) await db.close();
 }
 // riferimento per i test statici

@@ -41,7 +41,74 @@ export async function assertCloudSession(query) {
   if (row.session_curator) fail('l\x27utente di connessione è membro di catalog_curator');
   if (!row.has_begin || !row.has_stage || !row.has_finish) fail('la migration WI-001B non risulta applicata');
   if (!row.stage_unlogged) fail('import_stage non è UNLOGGED');
-  return { server_version: row.version, database: row.db, session_user: row.session_user, ssl: true };
+  // I-2: grafo TRANSITIVO delle appartenenze e privilegi effettivi del login (non solo i flag del ruolo)
+  const audit = parseAudit((await query(LOGIN_AUDIT_SQL, [row.session_user])).rows[0]?.audit);
+  const violations = evaluateLoginAudit(audit, { loader: 'catalog_loader' });
+  if (violations.length > 0) fail(`login non dedicato: ${violations.join('; ')}`);
+  return { server_version: row.version, database: row.db, session_user: row.session_user, ssl: true, login_audit: 'conforme' };
+}
+
+/**
+ * Audit del LOGIN di connessione (WI-001C-FIX-01 / I-2). Un solo parametro: il nome del login (`session_user`). SOLA LETTURA del
+ * catalogo di sistema; lo stesso testo è eseguito dalla griglia SQL 12zz su ruoli reali (grafo di appartenenze, grant, proprietà).
+ * Il login deve raggiungere, direttamente o per via transitiva (a prescindere dal flag INHERIT: `SET ROLE` basta), SOLO `catalog_loader`.
+ */
+export const LOGIN_AUDIT_SQL = `with recursive me as (
+  select oid, rolname, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb, rolreplication, rolcanlogin from pg_roles where rolname = $1::name
+), reach(roleid, admin, depth) as (
+  select m.roleid, m.admin_option, 1 from pg_auth_members m join me on m.member = me.oid
+  union
+  select m.roleid, m.admin_option or r.admin, r.depth + 1 from reach r join pg_auth_members m on m.member = r.roleid where r.depth < 20
+)
+select jsonb_build_object(
+  'login_found', exists (select 1 from me),
+  'login_can_login', coalesce((select rolcanlogin from me), false),
+  'login_powers', coalesce((select rolsuper or rolbypassrls or rolcreaterole or rolcreatedb or rolreplication from me), false),
+  'reachable', coalesce((select jsonb_agg(distinct x.rolname order by x.rolname) from reach r join pg_roles x on x.oid = r.roleid), '[]'::jsonb),
+  'powerful', coalesce((select jsonb_agg(distinct x.rolname order by x.rolname) from reach r join pg_roles x on x.oid = r.roleid
+                         where x.rolsuper or x.rolbypassrls or x.rolcreaterole or x.rolcreatedb or x.rolreplication), '[]'::jsonb),
+  'admin_over', coalesce((select jsonb_agg(distinct x.rolname order by x.rolname) from reach r join pg_roles x on x.oid = r.roleid where r.admin), '[]'::jsonb),
+  'direct_grants',
+    (select count(*) from pg_class c cross join lateral aclexplode(c.relacl) a, me where a.grantee = me.oid)
+  + (select count(*) from pg_proc p cross join lateral aclexplode(p.proacl) a, me where a.grantee = me.oid)
+  + (select count(*) from pg_namespace n cross join lateral aclexplode(n.nspacl) a, me where a.grantee = me.oid)
+  + (select count(*) from pg_attribute t cross join lateral aclexplode(t.attacl) a, me where t.attacl is not null and a.grantee = me.oid)
+  + (select count(*) from pg_database d cross join lateral aclexplode(d.datacl) a, me where a.grantee = me.oid and a.privilege_type <> 'CONNECT'),
+  'owned_objects',
+    (select count(*) from pg_class c, me where c.relowner = me.oid)
+  + (select count(*) from pg_proc p, me where p.proowner = me.oid)
+  + (select count(*) from pg_namespace n, me where n.nspowner = me.oid)
+  + (select count(*) from pg_database d, me where d.datdba = me.oid),
+  'db_create', coalesce(case when exists (select 1 from me) then has_database_privilege($1::name, current_database(), 'CREATE') end, false),
+  'public_create', coalesce(case when exists (select 1 from me) then has_schema_privilege($1::name, 'public', 'CREATE') end, false),
+  'catalog_create', coalesce(case when exists (select 1 from me) then has_schema_privilege($1::name, 'catalog', 'CREATE') end, false)
+) as audit`;
+
+function parseAudit(raw) {
+  if (raw === undefined || raw === null) throw new Error('Controllo del login: nessuna risposta dal database.');
+  return typeof raw === 'string' ? JSON.parse(raw) : raw;
+}
+
+/**
+ * Valuta l'esito di LOGIN_AUDIT_SQL. Restituisce l'elenco (vuoto = conforme) dei motivi per cui il login NON è dedicato al caricatore.
+ */
+export function evaluateLoginAudit(audit, { loader = 'catalog_loader' } = {}) {
+  const v = [];
+  if (!audit || audit.login_found !== true) return ['login non trovato nel catalogo dei ruoli'];
+  const list = (x) => (Array.isArray(x) ? x : []);
+  const reachable = list(audit.reachable);
+  const extra = reachable.filter((r) => r !== loader);
+  if (extra.length > 0) v.push(`ruoli raggiungibili oltre a ${loader}: ${extra.slice(0, 8).join(', ')}`);
+  if (!reachable.includes(loader)) v.push(`${loader} non è raggiungibile dal login`);
+  if (audit.login_powers) v.push('il login ha SUPERUSER/BYPASSRLS/CREATEROLE/CREATEDB/REPLICATION');
+  if (list(audit.powerful).length > 0) v.push(`ruoli con poteri amministrativi raggiungibili: ${list(audit.powerful).slice(0, 8).join(', ')}`);
+  if (list(audit.admin_over).length > 0) v.push(`il login può amministrare appartenenze (ADMIN OPTION): ${list(audit.admin_over).slice(0, 8).join(', ')}`);
+  if (Number(audit.direct_grants) > 0) v.push(`${audit.direct_grants} privilegi concessi direttamente al login (oltre a CONNECT)`);
+  if (Number(audit.owned_objects) > 0) v.push(`il login possiede ${audit.owned_objects} oggetti`);
+  if (audit.db_create) v.push('il login può creare schemi nel database');
+  if (audit.public_create) v.push('il login può creare oggetti in public');
+  if (audit.catalog_create) v.push('il login può creare oggetti in catalog');
+  return v;
 }
 
 /**
@@ -114,6 +181,129 @@ export async function createWalGuard(query, { maxWalMb }) {
       try { await measure(); } catch { /* ultimo valore noto */ }
       return { start_lsn: start, wal_mb: Math.round(last / 1048576), budget_mb: maxWalMb };
     },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// WAL durante il finish (WI-001C-FIX-01 / I-3)
+//
+// COSA È GARANTITO:
+//  - un controllo PREVENTIVO prima del finish: se il WAL già prodotto più la stima prudente del finish supera il budget, il finish
+//    NON parte (stima = costante per riga scritta, derivata dalla misura sintetica WI-001B di ≈1 GB per 212.894 record, con margine);
+//  - un monitor SEPARATO (seconda connessione) che, mentre il finish gira, misura il WAL ogni `intervalMs` e, se il budget è
+//    superato, chiama `pg_cancel_backend` sul backend dell'import: il finish è UNA transazione, quindi l'annullamento ne fa il
+//    rollback completo (nessun dato parziale visibile); se il monitor perde la visibilità (errori ripetuti) annulla comunque (fail-closed);
+//  - `statement_timeout` dedicato al finish (--finish-timeout-min) come limite di tempo indipendente dal monitor.
+// COSA NON È GARANTITO:
+//  - NON è un limite rigido: tra due campioni (`intervalMs`) il WAL può crescere oltre il budget, e il rollback NON restituisce il WAL
+//    già scritto (resta nel log/archivio e nei costi); il picco è «budget + velocità × (intervallo + latenza di annullamento)»;
+//  - la stima preventiva è euristica (file reale mai misurato); la misura include anche il WAL di altri client (limite prudente);
+//  - se il monitor E la connessione principale cadono, resta solo `statement_timeout`; un crash del server è fuori da questo controllo.
+// ---------------------------------------------------------------------------------------------------------------------
+export const FINISH_WAL_BYTES_PER_ROW = 8192;
+export const FINISH_WAL_BASE_BYTES = 64 * 1048576;
+
+/** Stima prudente del WAL del finish e decisione: `ok` solo se WAL già usato + stima ≤ budget. Non è un limite rigido. */
+export function planFinishWal({ usedBytes, budgetBytes, writtenRows }) {
+  const used = Number(usedBytes);
+  const budget = Number(budgetBytes);
+  const rows = Number(writtenRows);
+  if (![used, budget, rows].every(Number.isFinite) || used < 0 || budget <= 0 || rows < 0) throw new Error('Stima WAL del finish: valori non validi.');
+  const projected = FINISH_WAL_BASE_BYTES + rows * FINISH_WAL_BYTES_PER_ROW;
+  return { ok: used + projected <= budget, usedBytes: used, projectedFinishBytes: projected, budgetBytes: budget };
+}
+
+/**
+ * Monitor del WAL del finish su una SECONDA connessione. `query` è quella del monitor (login, nessun SET ROLE: vedi db-bun.mjs);
+ * `backendPid` è il backend da annullare. Timer iniettabili per i test.
+ */
+export function createWalMonitor({
+  query, backendPid, startLsn, maxWalMb, intervalMs = 2000, failuresBeforeCancel = 2, reopen = null,
+  setTimer = setInterval, clearTimer = clearInterval,
+}) {
+  if (!Number.isInteger(backendPid) || backendPid < 1) throw new Error('Monitor WAL: pid del backend non valido.');
+  if (!startLsn || !LSN_RE.test(startLsn)) throw new Error('Monitor WAL: posizione iniziale non valida.');
+  if (!Number.isInteger(maxWalMb) || maxWalMb < 1) throw new Error('Monitor WAL: budget non valido.');
+  const budgetBytes = maxWalMb * 1048576;
+  const state = { samples: 0, peakBytes: 0, failures: 0, exceeded: false, cancelRequested: false, cancelOk: null, cancelAttempts: 0, lost: false, running: false };
+  let activeQuery = query;
+  let stopped = false;
+  let timer = null;
+  let busy = false;
+
+  // L'annullamento NON si considera fatto finché non riesce: se la connessione del monitor è rotta si tenta di riaprirne una nuova
+  // (`reopen`), e a ogni campione successivo si riprova. Esito finale in `cancelOk`; `lost` = nessuna via per annullare.
+  const cancel = async (reason) => {
+    // dopo stop() (finish terminato) nessun annullamento tardivo: colpirebbe la verifica o fail_import_run sullo stesso backend
+    if (state.cancelOk === true || stopped) return;
+    state.cancelReason ??= reason;
+    state.cancelAttempts += 1;
+    const attempt = async (q) => {
+      const r = await q('select pg_cancel_backend($1::int) as ok', [backendPid]);
+      return r.rows[0]?.ok === true;
+    };
+    try {
+      state.cancelOk = await attempt(activeQuery);
+      state.cancelRequested = true;
+      return;
+    } catch {
+      state.cancelOk = false;
+    }
+    if (typeof reopen === 'function') {
+      try {
+        activeQuery = await reopen();
+        state.cancelOk = await attempt(activeQuery);
+        state.cancelRequested = true;
+        return;
+      } catch {
+        state.cancelOk = false;
+      }
+    }
+    state.lost = true;
+  };
+  const sample = async () => {
+    if (busy || state.cancelOk === true) return;
+    busy = true;
+    if (state.exceeded || state.lost || state.cancelAttempts > 0) {
+      // un annullamento già deciso ma non riuscito: si ritenta
+      try { await cancel(state.cancelReason); } finally { busy = false; }
+      return;
+    }
+    try {
+      const r = await activeQuery('select pg_wal_lsn_diff(pg_current_wal_lsn(), $1::pg_lsn)::bigint as bytes', [startLsn]);
+      const bytes = Number(r.rows[0]?.bytes);
+      if (!Number.isFinite(bytes)) throw new Error('lettura WAL non numerica');
+      state.samples += 1;
+      state.failures = 0;
+      state.peakBytes = Math.max(state.peakBytes, bytes);
+      if (bytes > budgetBytes) {
+        state.exceeded = true;
+        await cancel('budget WAL superato');
+      }
+    } catch {
+      state.failures += 1;
+      // fail-closed: senza visibilità sul WAL il finish non prosegue
+      if (state.failures >= failuresBeforeCancel) await cancel('monitor WAL senza visibilità');
+    } finally {
+      busy = false;
+    }
+  };
+  return {
+    sample,
+    start() {
+      if (timer) return;
+      state.running = true;
+      timer = setTimer(() => { void sample(); }, intervalMs);
+      if (timer && typeof timer.unref === 'function') timer.unref();
+    },
+    stop() {
+      stopped = true;
+      if (timer) clearTimer(timer);
+      timer = null;
+      state.running = false;
+      return { ...state, peak_mb: Math.round(state.peakBytes / 1048576), budget_mb: maxWalMb, interval_ms: intervalMs };
+    },
+    status: () => ({ ...state, peak_mb: Math.round(state.peakBytes / 1048576), budget_mb: maxWalMb }),
   };
 }
 

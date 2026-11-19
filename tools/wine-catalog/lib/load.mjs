@@ -134,12 +134,13 @@ export async function loadToDatabase(db, path, opts = {}) {
     importerVersion = IMPORTER_VERSION,
     onProgress = () => {},
     beforeFinish = async () => {},
+    afterFinish = async () => {},
   } = opts;
   // una sola copia privata: l'hash dichiarato e i byte importati sono gli stessi
   const snap = await snapshotFile(path);
   try {
     return await loadFromSnapshot(db, snap, path, {
-      sourceCode, expectedSha256, expectedRows, takeover, staleMinutes, allowMassRemoval, force, batchSize, importerVersion, onProgress, beforeFinish,
+      sourceCode, expectedSha256, expectedRows, takeover, staleMinutes, allowMassRemoval, force, batchSize, importerVersion, onProgress, beforeFinish, afterFinish,
     });
   } finally {
     snap.dispose();
@@ -147,7 +148,7 @@ export async function loadToDatabase(db, path, opts = {}) {
 }
 
 async function loadFromSnapshot(db, snap, path, {
-  sourceCode, expectedSha256, expectedRows, takeover, staleMinutes, allowMassRemoval, force, batchSize, importerVersion, onProgress, beforeFinish,
+  sourceCode, expectedSha256, expectedRows, takeover, staleMinutes, allowMassRemoval, force, batchSize, importerVersion, onProgress, beforeFinish, afterFinish,
 }) {
   const { sha256 } = snap;
   checkSha(sha256, expectedSha256);
@@ -247,9 +248,15 @@ async function loadFromSnapshot(db, snap, path, {
       ...(allowMassRemoval ? { allow_mass_removal: true } : {}),
     };
     await checkRole(db);
-    await beforeFinish({ rows: dataRows, distinct: seen.size });
+    await beforeFinish({ rows: dataRows, distinct: seen.size, staged: { ...totals } });
     const tf = performance.now();
-    const fin = await db.query('select catalog.finish_import_run($1::uuid, $2::bigint, ($3::text)::jsonb) as r', [runId, seen.size, JSON.stringify(summary)]);
+    let fin;
+    try {
+      fin = await db.query('select catalog.finish_import_run($1::uuid, $2::bigint, ($3::text)::jsonb) as r', [runId, seen.size, JSON.stringify(summary)]);
+    } finally {
+      // il monitor del finish si ferma SEMPRE subito dopo (altrimenti potrebbe annullare un'istruzione successiva)
+      await afterFinish();
+    }
     timings.finish_ms = performance.now() - tf;
     const result = typeof fin.rows[0].r === 'string' ? JSON.parse(fin.rows[0].r) : fin.rows[0].r;
     return { mode: 'load', timings_ms: Object.fromEntries(Object.entries(timings).map(([k, v]) => [k, Math.round(v)])), run_id: runId, source: { code: sourceCode, sha256, file_name: fileName, size_bytes: snap.size }, distinct_external_ids: seen.size, ...summary, result };

@@ -127,10 +127,16 @@ const goodSession = {
   ssl: true, has_finish: true, has_begin: true, has_stage: true, stage_unlogged: true,
 };
 const fakeQuery = (row) => async () => ({ rows: [row] });
+// login conforme (I-2): raggiunge SOLO catalog_loader, nessun potere, nessun grant diretto, nessuna proprietà
+const goodAudit = {
+  login_found: true, login_can_login: true, login_powers: false, reachable: ['catalog_loader'], powerful: [], admin_over: [],
+  direct_grants: 0, owned_objects: 0, db_create: false, public_create: false, catalog_create: false,
+};
+const sessionQuery = (row, audit = goodAudit) => async (text) => (text.includes('server_version_num') ? { rows: [row] } : { rows: [{ audit }] });
 
-test('sessione cloud: accettata se cifrata, non in recovery, PostgreSQL ≥ 15, non superuser, migration presente', async () => {
-  const r = await assertCloudSession(fakeQuery(goodSession));
-  assert.deepEqual([r.ssl, r.server_version], [true, '17.6']);
+test('sessione cloud: accettata se cifrata, non in recovery, PostgreSQL ≥ 15, non superuser, migration presente, login dedicato', async () => {
+  const r = await assertCloudSession(sessionQuery(goodSession));
+  assert.deepEqual([r.ssl, r.server_version, r.login_audit], [true, '17.6', 'conforme']);
 });
 
 test('sessione cloud: ogni requisito mancante è rifiutato con il motivo', async () => {
@@ -139,7 +145,7 @@ test('sessione cloud: ogni requisito mancante è rifiutato con il motivo', async
     [{ session_superuser: true }, /superuser/], [{ session_powers: true }, /login dedicato/], [{ session_owns_catalog: true }, /proprietario/],
     [{ session_curator: true }, /catalog_curator/], [{ has_finish: false }, /WI-001B/], [{ stage_unlogged: false }, /UNLOGGED/],
   ];
-  for (const [patch, re] of cases) await assert.rejects(() => assertCloudSession(fakeQuery({ ...goodSession, ...patch })), re);
+  for (const [patch, re] of cases) await assert.rejects(() => assertCloudSession(sessionQuery({ ...goodSession, ...patch })), re);
 });
 
 const goodPriv = {
@@ -279,6 +285,10 @@ test('workflow cloud: solo manuale, disabilitato di default, environment protett
   for (const m of code.matchAll(/uses:\s*(\S+)/g)) assert.match(m[1], /@[0-9a-f]{40}$/, m[1]);
   assert.match(code, /persist-credentials: false/);
   assert.match(code, /sha256sum --check/);
+  // FIX-01 I-1: la CA arriva come segreto in variabile d'ambiente (non su file, non come argomento) e solo allo step del caricatore
+  assert.match(code, /CATALOG_DB_CA_PEM: \$\{\{ secrets\.CATALOG_DB_CA_PEM \}\}/);
+  assert.ok(!/--ca-file/.test(code), 'la CA non passa da file/argomenti');
+  assert.ok(!/sslmode=(?!verify-full)/.test(code));
   // nessun input interpolato dentro uno script `run:` (iniezione): solo variabili d'ambiente
   const runBlocks = code.split(/\n\s+run:\s*[|>]?\s*/).slice(1).map((b) => b.split(/\n\s+- name:/)[0]);
   for (const b of runBlocks) assert.ok(!/\$\{\{/.test(b), `interpolazione in run: ${b.slice(0, 60)}`);
