@@ -1156,7 +1156,7 @@ begin
     insert into catalog.duplicate_candidates (producer_a, producer_b, reason) select null, null, 'manual' where false;
   end;
   $f$;
-  revoke all on function catalog.zz_bad_door() from public;
+  revoke all on function catalog.zz_bad_door() from public, anon, authenticated, service_role;
   grant execute on function catalog.zz_bad_door() to catalog_curator;
   perform pg_temp.rec('R05', 'B2: una porta SECURITY DEFINER eseguibile dal curatore senza esecutore né evento di audit è RIFIUTATA da surface_audit (il difetto originale di detect_duplicate_candidates)',
     exists (select 1 from catalog.surface_audit() a where a.fn like '%zz_bad_door%' and a.kind = 'curator_door' and not a.ok and a.why like '%esecutore%' and a.why like '%evento%'),
@@ -1256,10 +1256,10 @@ begin
   begin truncate catalog.promotion_exceptions; v_ok := false; exception when object_not_in_prerequisite_state then v_ok := true; end;
   perform pg_temp.rec('R24', 'B4: TRUNCATE delle eccezioni di promozione rifiutato', v_ok);
   perform pg_temp.rec('R25', 'B4: nessun ruolo applicativo ha TRUNCATE su alcuna tabella del catalogo',
-    not exists (select 1 from pg_class c where c.relnamespace = 'catalog'::regnamespace and c.relkind = 'r'
-                  and (has_table_privilege('catalog_curator', c.oid, 'TRUNCATE') or has_table_privilege('catalog_loader', c.oid, 'TRUNCATE')
-                       or has_table_privilege('anon', c.oid, 'TRUNCATE') or has_table_privilege('authenticated', c.oid, 'TRUNCATE')
-                       or has_table_privilege('service_role', c.oid, 'TRUNCATE'))));
+    not exists (select 1 from pg_class t where t.relnamespace = 'catalog'::regnamespace and t.relkind = 'r'
+                  and (has_table_privilege('catalog_curator', t.oid, 'TRUNCATE') or has_table_privilege('catalog_loader', t.oid, 'TRUNCATE')
+                       or has_table_privilege('anon', t.oid, 'TRUNCATE') or has_table_privilege('authenticated', t.oid, 'TRUNCATE')
+                       or has_table_privilege('service_role', t.oid, 'TRUNCATE'))));
 end $$;
 
 -- ===================================================================================================
