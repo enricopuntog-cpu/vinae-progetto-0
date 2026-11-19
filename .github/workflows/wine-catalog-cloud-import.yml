@@ -1,0 +1,110 @@
+# Importazione cloud del catalogo LWIN (WI-001C) — PREDISPOSTA, DISABILITATA.
+#
+# Non gira mai da sola: solo `workflow_dispatch` manuale, e il job si salta se la variabile di repository
+# CATALOG_CLOUD_IMPORT_ENABLED non vale esattamente `true` (oggi non esiste). Il job usa l'environment protetto
+# `catalog-cloud-import` (revisori obbligatori e segreti dedicati vanno configurati su GitHub: vedi
+# docs/wine-intelligence/CLOUD_IMPORT_RUNBOOK.md). Nessuna approvazione per Production esiste: il caricatore rifiuta
+# il ref di Production senza CATALOG_PRODUCTION_APPROVAL, che questo workflow NON imposta.
+#
+# Prerequisiti dell'environment (configurazione GitHub, NON verificabile dal codice): revisori obbligatori e
+# deployment branch policy limitata a `main` (il job gira comunque solo da refs/heads/main). Un login PostgreSQL
+# dedicato (membro del solo catalog_loader) è imposto dal caricatore.
+#
+# TLS: la connessione verifica catena e hostname (sslmode=verify-full). La CA del progetto arriva dal segreto `CATALOG_DB_CA_PEM`
+# (certificato PUBBLICO, solo PEM di certificati: una chiave privata è rifiutata) e passa al processo come variabile d'ambiente, mai come
+# file né come argomento. Senza CA l'import non parte. `mode = dry-run` apre una sessione di SOLA LETTURA (default_transaction_read_only);
+# `mode = import` usa in più un monitor separato del WAL del finish (vedi docs/wine-intelligence/CLOUD_IMPORT_RUNBOOK.md).
+#
+# Il file LWIN non sta nel repository: arriva da un URL firmato a breve scadenza (segreto dell'environment) e viene
+# verificato per SHA-256 PRIMA di essere letto dal caricatore. Il report (solo conteggi, nessun dato di fonte) è
+# l'unico artefatto caricato.
+name: Wine catalog cloud import (disabled)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: Ref del progetto Supabase di destinazione (20 caratteri)
+        required: true
+        type: string
+      confirm_target_ref:
+        description: Ripetere il ref per confermare la destinazione
+        required: true
+        type: string
+      mode:
+        description: dry-run (nessuna scrittura) oppure import
+        required: true
+        type: choice
+        options:
+          - dry-run
+          - import
+        default: dry-run
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wine-catalog-cloud-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    name: LWIN import (cloud)
+    if: ${{ github.ref == 'refs/heads/main' && vars.CATALOG_CLOUD_IMPORT_ENABLED == 'true' && inputs.target_ref == inputs.confirm_target_ref }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment: catalog-cloud-import
+    env:
+      TARGET_REF: ${{ inputs.target_ref }}
+      IMPORT_MODE: ${{ inputs.mode }}
+      # SHA-256 atteso del file LWIN (docs/wine-intelligence/IMPORT_MANIFEST.json)
+      LWIN_EXPECTED_SHA256: 7669ceab4e815716aa6c90643c117f3da7c7daeaa202ecd3f7cfbc4db7fd488e
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Fetch the LWIN file (untrusted until verified)
+        env:
+          CATALOG_INPUT_URL: ${{ secrets.CATALOG_INPUT_URL }}
+        run: |
+          echo "::add-mask::$CATALOG_INPUT_URL"
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/lwin-input"
+          curl --fail --silent --show-error --proto '=https' --tlsv1.2 --max-time 300 --max-filesize 200000000 \
+            --output "$RUNNER_TEMP/lwin-input/LWINdatabase.xlsx" "$CATALOG_INPUT_URL"
+          echo "${LWIN_EXPECTED_SHA256}  $RUNNER_TEMP/lwin-input/LWINdatabase.xlsx" | sha256sum --check --status
+          echo "SHA-256 verificato"
+
+      - name: Run the loader
+        env:
+          CATALOG_CLOUD_IMPORT: enabled
+          CATALOG_DATABASE_URL: ${{ secrets.CATALOG_DATABASE_URL }}
+          CATALOG_DB_CA_PEM: ${{ secrets.CATALOG_DB_CA_PEM }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$CATALOG_DATABASE_URL"
+          mkdir -p "$RUNNER_TEMP/report"
+          args=(--cloud --target-ref "$TARGET_REF" --input "$RUNNER_TEMP/lwin-input/LWINdatabase.xlsx" \
+                --report "$RUNNER_TEMP/report/report.json")
+          if [ "$IMPORT_MODE" = "dry-run" ]; then args+=(--dry-run); fi
+          bun tools/wine-catalog/lwin-load.mjs "${args[@]}"
+
+      - name: Upload the structured report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: wine-catalog-import-report
+          path: ${{ runner.temp }}/report/report.json
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Remove the input file
+        if: ${{ always() }}
+        run: rm -rf "$RUNNER_TEMP/lwin-input"
