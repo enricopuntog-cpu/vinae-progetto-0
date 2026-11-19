@@ -70,6 +70,18 @@ const WRITE_START = /^\s*(?:select|with|values)\b/i;
 const normalizeSql = (t) => String(t).trim().replace(/\s+/g, ' ');
 const multiStatement = (text) => /;\s*\S/.test(String(text).replace(/'(?:[^']|'')*'/g, "''"));
 
+/**
+ * Filtro del testo SQL del CHIAMANTE sulla sessione cloud (livello 3 sopra). Lancia se il testo non è ammesso. Difesa in profondità: non è un
+ * parser SQL e non sostituisce i privilegi del database. Esportata per le prove di regressione del filtro (nessuna connessione richiesta).
+ */
+export function assertCallerSql(text, { readOnly = false } = {}) {
+  const clean = sanitizeSqlForFilter(text);
+  if (ROLE_SWITCH.test(clean) || multiStatement(clean)) throw new Error('Cambio di ruolo, controllo di transazione o più istruzioni: non ammesso al chiamante.');
+  if (readOnly && (!READ_ONLY_START.test(clean) || DML_ANYWHERE.test(clean))) throw new Error('Sessione di sola lettura: ammesse solo SELECT/SHOW/WITH.');
+  // il chiamante legge e invoca le funzioni catalog.*; nessuna scrittura diretta (le scritture stanno nelle funzioni del database)
+  if (!WRITE_START.test(clean) || DML_ANYWHERE.test(clean)) throw new Error('Istruzione non ammessa al chiamante: solo SELECT/WITH/VALUES senza scritture dirette.');
+}
+
 async function closeQuietly(fn, ms = 3000) {
   try {
     await Promise.race([Promise.resolve().then(fn), new Promise((r) => setTimeout(r, ms))]);
@@ -92,11 +104,7 @@ function wrapReserved({ sql, conn, redact, readOnly, allow = null }) {
         if (!allow.has(normalizeSql(text))) throw new Error('Istruzione non ammessa sulla connessione di monitoraggio.');
         return db.raw(text, params);
       }
-      const clean = sanitizeSqlForFilter(text);
-      if (ROLE_SWITCH.test(clean) || multiStatement(clean)) throw new Error('Cambio di ruolo, controllo di transazione o più istruzioni: non ammesso al chiamante.');
-      if (readOnly && (!READ_ONLY_START.test(clean) || DML_ANYWHERE.test(clean))) throw new Error('Sessione di sola lettura: ammesse solo SELECT/SHOW/WITH.');
-      // il chiamante legge e invoca le funzioni catalog.*; nessuna scrittura diretta (le scritture stanno nelle funzioni del database)
-      if (!WRITE_START.test(clean) || DML_ANYWHERE.test(clean)) throw new Error('Istruzione non ammessa al chiamante: solo SELECT/WITH/VALUES senza scritture dirette.');
+      assertCallerSql(text, { readOnly });
       return db.raw(text, params);
     },
     /** Timeout di sessione: SQL interno fidato e costante (passato da cloud-guards), valori solo come parametri. */

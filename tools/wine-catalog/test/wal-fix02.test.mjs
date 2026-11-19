@@ -404,11 +404,14 @@ test('withDeadline: una promessa che non si risolve scade; una che si risolve li
 test('CLI: il cablaggio usa la misura conclusiva e l\'esito strutturato; il successo si stampa solo se l\'esito è conforme; nessun fail_import_run su esito sconosciuto', () => {
   const cli = readFileSync(join(HERE, '..', 'lwin-load.mjs'), 'utf8');
   assert.match(cli, /concludeFinish\(\{/);
-  assert.ok(cli.includes('buildFinishOutcome({'));
-  assert.match(cli, /finish_outcome/);
+  assert.match(cli, /settleCloudRun\(\{/);
+  assert.match(cli, /postCommitChecks\(\{/);
+  const outcomeLib = readFileSync(join(HERE, '..', 'lib', 'cloud-outcome.mjs'), 'utf8');
+  assert.ok(outcomeLib.includes('buildFinishOutcome({'));
+  assert.match(outcomeLib, /finish_outcome/);
   assert.match(cli, /Caricamento NON confermato/);
   assert.match(cli, /applySessionLimits\(db,/, 'i timeout passano dal metodo interno della sessione');
-  assert.match(cli, /await walMonitor\.stop\(\)/);
+  assert.match(cli, /safeStopMonitor\(walMonitor\)/, 'stop() del monitor mai senza protezione');
   const load = readFileSync(join(HERE, '..', 'lib', 'load.mjs'), 'utf8');
   assert.match(load, /e\?\.finish\?\.status === 'unknown'/);
 });
@@ -456,6 +459,7 @@ test('classificazione del finish: in locale (senza db.state) un errore dal testo
     await assert.rejects(() => loadToDatabase(sim.db, file, {}), (e) => e.finish.status === 'failed');
     assert.equal(sim.w.failCalls, 1);
     const sim2 = world({ onFinish: async () => { throw 'stringa nuda'; } });
+    delete sim2.db.state;
     await assert.rejects(() => loadToDatabase(sim2.db, file, {}), (e) => e instanceof Error && e.finish.status === 'failed');
   });
 });
