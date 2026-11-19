@@ -75,10 +75,19 @@ describe("fondamenta operative fail-closed", () => {
       "offsite-backup-freshness.yml",
       "offsite-backup.yml",
       "payouts-auto-release.yml",
+      "wine-catalog-cloud-import.yml",
     ]);
     for (const f of conSecret) {
-      expect(read(`.github/workflows/${f}`)).toMatch(/\n {4}environment: production-(backup|payouts)\r?\n/);
+      expect(read(`.github/workflows/${f}`)).toMatch(
+        /\n {4}environment: (production-(backup|payouts)|catalog-cloud-import)\r?\n/,
+      );
     }
+    // Il workflow del catalogo resta inerte: solo dispatch manuale, solo da main, solo con la variabile esatta.
+    const catalogo = read(".github/workflows/wine-catalog-cloud-import.yml");
+    expect(catalogo).toInclude("workflow_dispatch:");
+    expect(catalogo).not.toMatch(/\n {2}(push|pull_request|schedule):/);
+    expect(catalogo).toInclude("github.ref == 'refs/heads/main'");
+    expect(catalogo).toInclude("vars.CATALOG_CLOUD_IMPORT_ENABLED == 'true'");
     // Nessun trigger che esegua codice di una PR nel contesto di main.
     for (const f of workflow) expect(read(`.github/workflows/${f}`)).not.toInclude("pull_request_target");
   });
