@@ -18,6 +18,8 @@
 --   K  porte non aggirabili (revisione di sicurezza);
 --   L  FIX-01 D-1: regole legate alla logica eseguibile; M  D-2: manuale ≠ promozione; N  D-3: fusioni esatte e reversibili;
 --   O  D-4: produttori ritirati e starvation dei lotti; P  D-5: LWIN-16/18 (specifica Liv-ex); Q  D-6: audit e privilegi;
+--   R  FIX-02: rilevazione duplicati interna con audit, superficie derivata dal catalogo (surface_audit), produttori fusi,
+--      bersagli attivi, alias Combined verificati, TRUNCATE;
 --   Z  manomissione della logica dopo l'approvazione (ultima: sostituisce una funzione, tutto sparisce con ROLLBACK).
 begin;
 
@@ -93,13 +95,11 @@ begin
   perform pg_temp.rec('A02', 'RLS attiva su ogni tabella canonica e su ogni tabella dello schema',
     not exists (select 1 from pg_class c where c.relnamespace = 'catalog'::regnamespace and c.relkind = 'r' and not c.relrowsecurity));
   -- FIX-01 D-6: le uniche funzioni SECURITY DEFINER sono le porte di scrittura (elenco CHIUSO), tutte con search_path vuoto
-  perform pg_temp.rec('A03', 'SECURITY DEFINER solo per le 16 porte di scrittura (elenco chiuso), nessun''altra funzione dello schema catalog',
-    (select array_agg(p.proname::text) from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.prosecdef)
-      <@ array['add_entity_alias', 'add_manual_producer', 'add_manual_wine', 'add_wine_format', 'add_wine_vintage', 'detect_duplicate_candidates',
-               'merge_canonical_entity', 'open_duplicate_candidate', 'promote_wine_candidates', 'propose_attribute_claim', 'propose_wine_link',
-               'retire_canonical_entity', 'review_attribute_claim', 'review_duplicate_candidate', 'review_wine_link', 'revert_canonical_merge']
-    and (select count(*) from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.prosecdef) = 16,
-    (select string_agg(p.proname, ',') from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.prosecdef));
+  perform pg_temp.rec('A03', 'FIX-02: la superficie dello schema, derivata dal catalogo di sistema (surface_audit), è conforme e le uniche SECURITY DEFINER sono le 15 porte di scrittura del curatore',
+    not exists (select 1 from catalog.surface_audit() where not ok)
+    and (select count(*) from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.prosecdef) = 15
+    and (select count(*) from catalog.surface_audit() where kind = 'curator_door') = 15,
+    (select string_agg(fn || ': ' || why, ' | ') from catalog.surface_audit() where not ok));
   perform pg_temp.rec('A04', 'nessuna funzione del catalogo con EXECUTE a PUBLIC (le funzioni WI-001C non nascono eseguibili da PUBLIC)',
     not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace
                   and (p.proacl is null or exists (select 1 from aclexplode(p.proacl) a where a.grantee = 0))));
@@ -490,7 +490,7 @@ begin
   perform pg_temp.rec('G12', 'nessuna cancellazione di vini (DELETE negato)', v_ok);
   reset role;
   perform pg_temp.rec('G13', 'rilevazione deterministica idempotente: rieseguita non riapre né duplica la coppia già rivista',
-    (catalog.detect_duplicate_candidates() ->> 'wine_pairs_opened')::int = 0
+    (catalog.detect_duplicate_candidates_internal(500, 'qa-g13') ->> 'wine_pairs_opened')::int = 0
     and (select review_status from catalog.duplicate_candidates where id = v_cand) = 'same');
   perform pg_temp.rec('G14', 'produttori: nessun candidato duplicato tra Léoville e Leoville (stesso produttore già unificato dalla chiave esatta)',
     (select count(*) from catalog.duplicate_candidates where producer_a is not null) = 0);
@@ -719,11 +719,12 @@ begin
   p1 := catalog.add_manual_producer('Dup Prod', null, 'k13', 'qa');
   p2 := catalog.add_manual_producer('Dup Prod', null, 'k13', 'qa');
   p3 := catalog.add_manual_producer('Dup Prod', null, 'k13', 'qa');
-  v_n := (catalog.detect_duplicate_candidates(1) ->> 'producer_pairs_opened')::int
-       + (catalog.detect_duplicate_candidates(1) ->> 'producer_pairs_opened')::int
-       + (catalog.detect_duplicate_candidates(1) ->> 'producer_pairs_opened')::int;
+  reset role;
+  v_n := (catalog.detect_duplicate_candidates_internal(1, 'qa-k13') ->> 'producer_pairs_opened')::int
+       + (catalog.detect_duplicate_candidates_internal(1, 'qa-k13') ->> 'producer_pairs_opened')::int
+       + (catalog.detect_duplicate_candidates_internal(1, 'qa-k13') ->> 'producer_pairs_opened')::int;
   perform pg_temp.rec('K13', 'rilevazione duplicati senza starvation: con limite 1 tre chiamate aprono le tre coppie e la quarta nessuna',
-    v_n = 3 and (catalog.detect_duplicate_candidates(1) ->> 'producer_pairs_opened')::int = 0, v_n::text);
+    v_n = 3 and (catalog.detect_duplicate_candidates_internal(1, 'qa-k13') ->> 'producer_pairs_opened')::int = 0, v_n::text);
   reset role;
   select id into v_pc from catalog.duplicate_candidates where producer_a is not null order by id limit 1;
   set local role catalog_curator;
@@ -1079,12 +1080,9 @@ declare
                           'propose_wine_link', 'retire_canonical_entity', 'review_attribute_claim', 'review_duplicate_candidate',
                           'review_wine_link', 'revert_canonical_merge'];
 begin
-  perform pg_temp.rec('Q01', 'ogni porta di scrittura è SECURITY DEFINER con search_path vuoto ed eseguibile solo dal curatore (né PUBLIC né anon/authenticated/service_role)',
-    not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.proname = any (v_doors)
-                  and (not p.prosecdef or not exists (select 1 from unnest(p.proconfig) c where c in ('search_path=""', 'search_path='))
-                       or not has_function_privilege('catalog_curator', p.oid, 'EXECUTE')
-                       or has_function_privilege('anon', p.oid, 'EXECUTE') or has_function_privilege('authenticated', p.oid, 'EXECUTE')
-                       or has_function_privilege('service_role', p.oid, 'EXECUTE') or has_function_privilege('catalog_loader', p.oid, 'EXECUTE'))));
+  perform pg_temp.rec('Q01', 'FIX-02: ogni funzione dello schema (derivata dal catalogo di sistema, NON da un elenco fisso) rispetta le regole della sua classe: porte del curatore definer con esecutore ed evento, letture invoker non volatili, interne non eseguibili, nessun accesso a PUBLIC/anon/authenticated/service_role',
+    not exists (select 1 from catalog.surface_audit() where not ok),
+    (select string_agg(fn || ': ' || why, ' | ') from catalog.surface_audit() where not ok));
   perform pg_temp.rec('Q02', 'il curatore non può registrare eventi da sé né falsificare l''audit (nessun INSERT né record_canonical_event)',
     not has_function_privilege('catalog_curator', 'catalog.record_canonical_event(text,text,text,text,jsonb)'::regprocedure, 'EXECUTE')
     and not has_table_privilege('catalog_curator', 'catalog.canonical_events', 'INSERT'));
@@ -1100,12 +1098,13 @@ begin
   begin perform catalog.add_manual_producer('Troppo Lungo', null, 'n', repeat('x', 201)); v_ok := false; exception when invalid_parameter_value then v_ok := true; end;
   perform pg_temp.rec('Q07', 'esecutore oltre 200 caratteri rifiutato', v_ok);
   reset role;
-  perform pg_temp.rec('Q08', 'ogni porta lascia un evento con attore e ruolo effettivo (add_*, propose_*, review_*, merge, revert, open, retire, promote)',
-    (select count(distinct action) from catalog.canonical_events
-      where action = any (array['add_entity_alias', 'add_manual_producer', 'add_manual_wine', 'add_wine_format', 'add_wine_vintage', 'merge_canonical_entity',
-                                'open_duplicate_candidate', 'promote_wine_candidates', 'propose_attribute_claim', 'propose_wine_link', 'retire_canonical_entity',
-                                'review_attribute_claim', 'review_duplicate_candidate', 'review_wine_link', 'revert_canonical_merge'])) = 15
-    and not exists (select 1 from catalog.canonical_events where actor is null or length(btrim(actor)) = 0));
+  perform pg_temp.rec('Q08', 'FIX-02: OGNI porta del curatore ricavata dal catalogo ha lasciato almeno un evento proprio (stessa azione), con attore e login; nessun elenco fisso, nessun conteggio complessivo di tipi di evento',
+    not exists (select 1 from catalog.surface_audit() a
+                 where a.kind = 'curator_door'
+                   and not exists (select 1 from catalog.canonical_events e where e.action = split_part(split_part(a.fn, '(', 1), '.', 2)))
+    and not exists (select 1 from catalog.canonical_events where actor is null or length(btrim(actor)) = 0 or db_user is null),
+    (select string_agg(a.fn, ',') from catalog.surface_audit() a
+      where a.kind = 'curator_door' and not exists (select 1 from catalog.canonical_events e where e.action = split_part(split_part(a.fn, '(', 1), '.', 2))));
   perform pg_temp.rec('Q09', 'RLS: sulle tabelle canoniche il curatore ha solo policy di lettura (nessuna policy di scrittura)',
     not exists (select 1 from pg_policy p join pg_class c on c.oid = p.polrelid
                  where c.relnamespace = 'catalog'::regnamespace and 'catalog_curator'::regrole::oid = any (p.polroles) and p.polcmd <> 'r'));
@@ -1115,6 +1114,152 @@ begin
   perform pg_temp.rec('Q11', 'le funzioni di sola lettura (search_wines, wine_sheet, anteprima) restano SECURITY INVOKER',
     not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace
                   and p.proname in ('search_wines', 'wine_sheet', 'promotion_preview', 'promotion_batch', 'promotion_candidates', 'promotion_blocked') and p.prosecdef));
+end $$;
+
+-- ===================================================================================================
+-- R. FIX-02: audit della rilevazione duplicati, superficie derivata dal catalogo, produttori fusi, bersagli attivi,
+--    alias Combined verificati, TRUNCATE
+-- ===================================================================================================
+do $$
+declare
+  v_ok boolean;
+  v_src uuid := (select id from catalog.sources where code = 'LIVEX-LWIN7');
+  v_sr_nolink bigint := (select id from catalog.source_records where external_id = '2000004');
+  p1 uuid; p2 uuid; p3 uuid; p4 uuid;
+  w1 uuid; w2 uuid; w3 uuid; w4 uuid;
+  c bigint; v_vint uuid; v_vint_ok uuid; v_n integer; v_cw bigint; v_err text;
+  v_detail jsonb;
+begin
+  -- B1 --------------------------------------------------------------------------------------------------
+  perform pg_temp.rec('R01', 'B1: la vecchia detect_duplicate_candidates non esiste più (nessuna firma residua) e la funzione interna non è eseguibile da nessun ruolo applicativo',
+    to_regprocedure('catalog.detect_duplicate_candidates(integer)') is null
+    and not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.proname = 'detect_duplicate_candidates')
+    and not has_function_privilege('catalog_curator', 'catalog.detect_duplicate_candidates_internal(integer,text)'::regprocedure, 'EXECUTE')
+    and not has_function_privilege('catalog_loader', 'catalog.detect_duplicate_candidates_internal(integer,text)'::regprocedure, 'EXECUTE')
+    and not has_function_privilege('anon', 'catalog.detect_duplicate_candidates_internal(integer,text)'::regprocedure, 'EXECUTE')
+    and not has_function_privilege('authenticated', 'catalog.detect_duplicate_candidates_internal(integer,text)'::regprocedure, 'EXECUTE')
+    and not has_function_privilege('service_role', 'catalog.detect_duplicate_candidates_internal(integer,text)'::regprocedure, 'EXECUTE'));
+  set local role catalog_curator;
+  begin perform catalog.detect_duplicate_candidates_internal(10, 'qa'); v_ok := false; exception when insufficient_privilege then v_ok := true; end;
+  reset role;
+  perform pg_temp.rec('R02', 'B1: il curatore non può rilevare duplicati direttamente (nessuna scrittura senza esecutore ed evento)', v_ok);
+  begin perform catalog.detect_duplicate_candidates_internal(10, null); v_ok := false; exception when invalid_parameter_value then v_ok := true; end;
+  perform pg_temp.rec('R03', 'B1: anche il proprietario deve identificare l''esecutore (require_actor)', v_ok);
+  perform pg_temp.rec('R04', 'B1: ogni evento di promozione riporta l''esito della rilevazione (duplicates) e ogni candidato rilevato riporta chi l''ha avviata',
+    (select count(*) from catalog.canonical_events where action = 'promote_wine_candidates') > 0
+    and (select bool_and(detail ? 'duplicates') from catalog.canonical_events where action = 'promote_wine_candidates')
+    and (select bool_and(detected_by like 'promotion:%') from catalog.duplicate_candidates where reason = 'same_name_key'));
+
+  -- B2: il controllo del catalogo avrebbe rilevato il difetto originale (porta di scrittura senza esecutore né evento) ---------------------
+  create function catalog.zz_bad_door() returns void language plpgsql security definer set search_path = '' as $f$
+  begin
+    insert into catalog.duplicate_candidates (producer_a, producer_b, reason) select null, null, 'manual' where false;
+  end;
+  $f$;
+  revoke all on function catalog.zz_bad_door() from public;
+  grant execute on function catalog.zz_bad_door() to catalog_curator;
+  perform pg_temp.rec('R05', 'B2: una porta SECURITY DEFINER eseguibile dal curatore senza esecutore né evento di audit è RIFIUTATA da surface_audit (il difetto originale di detect_duplicate_candidates)',
+    exists (select 1 from catalog.surface_audit() a where a.fn like '%zz_bad_door%' and a.kind = 'curator_door' and not a.ok and a.why like '%esecutore%' and a.why like '%evento%'),
+    (select why from catalog.surface_audit() where fn like '%zz_bad_door%'));
+  grant execute on function catalog.zz_bad_door() to anon;
+  perform pg_temp.rec('R06', 'B2: l''accesso di anon a una funzione dello schema è rilevato da surface_audit',
+    exists (select 1 from catalog.surface_audit() a where a.fn like '%zz_bad_door%' and not a.ok and a.why like '%PUBLIC/anon%'));
+  revoke execute on function catalog.zz_bad_door() from anon, catalog_curator;
+  perform pg_temp.rec('R07', 'B2: senza EXECUTE al curatore la funzione è «interna» (conforme)',
+    exists (select 1 from catalog.surface_audit() a where a.fn like '%zz_bad_door%' and a.kind = 'internal' and a.ok));
+  drop function catalog.zz_bad_door();
+  perform pg_temp.rec('R08', 'B2: la superficie torna conforme e le porte del curatore sono 15',
+    not exists (select 1 from catalog.surface_audit() where not ok) and (select count(*) from catalog.surface_audit() where kind = 'curator_door') = 15);
+
+  -- B3: produttori già fusi --------------------------------------------------------------------------------------------------------
+  set local role catalog_curator;
+  p1 := catalog.add_manual_producer('Fusa Alfa', null, 'r09', 'qa');
+  p2 := catalog.add_manual_producer('Fusa Beta', null, 'r09', 'qa');
+  w1 := catalog.add_manual_wine(p1, 'Cuvée R09', null, null, null, null, null, null, 'r09', 'qa');
+  w2 := catalog.add_manual_wine(p2, 'Cuvee R09', null, null, null, null, null, null, 'r09', 'qa');
+  v_vint := catalog.add_wine_vintage(w2, 2018, false, null, v_src, null, 'annata R09 (test)', 'qa');
+  v_vint_ok := catalog.add_wine_vintage(w1, 2018, false, null, v_src, null, 'annata R09 attiva (test)', 'qa');
+  reset role;
+  v_n := (catalog.detect_duplicate_candidates_internal(500, 'qa-r09') ->> 'wine_pairs_opened')::int;
+  perform pg_temp.rec('R09', 'B3: due vini con lo stesso nome di due produttori DISTINTI non sono candidati duplicati',
+    (select count(*) from catalog.duplicate_candidates where wine_a in (w1, w2) or wine_b in (w1, w2)) = 0, v_n::text);
+  set local role catalog_curator;
+  c := catalog.open_duplicate_candidate('producer', p1, p2, 'r09 produttori', 'qa');
+  perform catalog.review_duplicate_candidate(c, 'same', 'rev', 'r09');
+  perform catalog.merge_canonical_entity(c, case when p1 < p2 then 'a' else 'b' end, 'rev', 'r09 Beta in Alfa');
+  reset role;
+  perform pg_temp.rec('R10', 'B3: il produttore Beta è fuso in Alfa; i vini conservano il produttore ORIGINALE (nessuna riscrittura della storia)',
+    (select merged_into from catalog.producers where id = p2) = p1 and (select producer_id from catalog.wines where id = w2) = p2
+    and (select producer_id from catalog.wines where id = w1) = p1);
+  v_n := (catalog.detect_duplicate_candidates_internal(500, 'qa-r09') ->> 'wine_pairs_opened')::int;
+  select detail into v_detail from catalog.duplicate_candidates where wine_a in (w1, w2) and wine_b in (w1, w2);
+  perform pg_temp.rec('R11', 'B3: dopo la fusione dei produttori i due vini diventano candidati duplicati (produttore effettivo), con i produttori originali nel dettaglio; nessuna fusione automatica',
+    (select count(*) from catalog.duplicate_candidates where wine_a in (w1, w2) and wine_b in (w1, w2)) = 1
+    and (v_detail ->> 'via_merged_producer') = 'true' and (v_detail ->> 'producer_a') in (p1::text, p2::text) and (v_detail ->> 'producer_b') in (p1::text, p2::text)
+    and (select count(*) from catalog.wines where id in (w1, w2) and status = 'active') = 2
+    and (select review_status from catalog.duplicate_candidates where wine_a in (w1, w2) and wine_b in (w1, w2)) = 'open', v_detail::text);
+  perform pg_temp.rec('R12', 'B3: la rilevazione è idempotente (non riapre la coppia)',
+    (catalog.detect_duplicate_candidates_internal(500, 'qa-r09') ->> 'wine_pairs_opened')::int = 0);
+  select id into v_cw from catalog.duplicate_candidates where wine_a in (w1, w2) and wine_b in (w1, w2);
+  set local role catalog_curator;
+  perform catalog.review_duplicate_candidate(v_cw, 'same', 'rev', 'r09 vini');
+  begin
+    perform catalog.merge_canonical_entity(v_cw, case when w1 < w2 then 'a' else 'b' end, 'rev', 'r09 Beta-vino in Alfa-vino');
+    v_ok := true;
+  exception when others then v_ok := false; v_err := sqlerrm; end;
+  reset role;
+  perform pg_temp.rec('R13', 'B3: la fusione dei due vini è CONVALIDATA perché il produttore effettivo coincide (prima era rifiutata); il vino scartato è marcato, non cancellato',
+    v_ok and (select status from catalog.wines where id = w2) = 'merged' and (select merged_into from catalog.wines where id = w2) = w1, v_err);
+
+  -- B3 controllo negativo: produttori distinti non fusi -----------------------------------------------------------------------
+  set local role catalog_curator;
+  p3 := catalog.add_manual_producer('Distinto Gamma', null, 'r14', 'qa');
+  p4 := catalog.add_manual_producer('Distinto Delta', null, 'r14', 'qa');
+  w3 := catalog.add_manual_wine(p3, 'Cuvée R14', null, null, null, null, null, null, 'r14', 'qa');
+  w4 := catalog.add_manual_wine(p4, 'Cuvee R14', null, null, null, null, null, null, 'r14', 'qa');
+  c := catalog.open_duplicate_candidate('wine', w3, w4, 'r14 manuale', 'qa');
+  perform catalog.review_duplicate_candidate(c, 'same', 'rev', 'r14');
+  begin perform catalog.merge_canonical_entity(c, 'a', 'rev', 'r14'); v_ok := false; exception when object_not_in_prerequisite_state then v_ok := true; end;
+  reset role;
+  perform pg_temp.rec('R14', 'B3: due vini di produttori distinti (non fusi) continuano a NON potersi fondere', v_ok);
+
+  -- B4: bersagli attivi ---------------------------------------------------------------------------------------------------------
+  set local role catalog_curator;
+  begin perform catalog.add_wine_vintage(w2, 2019, false, null, v_src, null, 'annata su vino fuso', 'qa'); v_ok := false; exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('R15', 'B4: una nuova annata su un vino fuso è rifiutata', v_ok);
+  begin perform catalog.add_wine_format(v_vint, 750, 1, null, null, v_src, null, 'formato su annata di vino fuso', 'qa'); v_ok := false; exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('R16', 'B4: un nuovo formato su un''annata di un vino fuso è rifiutato', v_ok);
+  begin perform catalog.propose_attribute_claim('grapes', 'wine', w2, '["cabernet"]', v_src, null, 'claim su vino fuso', p_actor => 'qa'); v_ok := false; exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('R17', 'B4: una nuova rivendicazione su un vino fuso è rifiutata', v_ok);
+  begin perform catalog.add_wine_format(v_vint_ok, 750, 1, null, null, v_src, null, 'formato su vino attivo', 'qa'); v_ok := true; exception when others then v_ok := false; end;
+  reset role;
+  perform pg_temp.rec('R18', 'B4: controllo positivo — formato su un''annata di un vino ATTIVO accettato', v_ok);
+  begin
+    insert into catalog.wine_links (public_wine_id, public_wine_slug, vintage_id, method, proposed_by) values (gen_random_uuid(), 'r09-fuso', v_vint, 'manual', 'qa');
+    v_ok := false;
+  exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('R19', 'B4: un nuovo collegamento verso un''annata di un vino fuso è rifiutato (anche per INSERT del proprietario)', v_ok);
+
+  -- B4: alias combined_lwin -----------------------------------------------------------------------------------------------------
+  set local role catalog_curator;
+  begin perform catalog.add_entity_alias('wine', w1, null, '9999999', 'combined_lwin', null, null, 'tentativo manuale', 'qa'); v_ok := false; exception when check_violation then v_ok := true; end;
+  perform pg_temp.rec('R20', 'B4: alias combined_lwin manuale senza fonte rifiutato', v_ok);
+  begin perform catalog.add_entity_alias('wine', w1, null, '2000004', 'combined_lwin', v_src, v_sr_nolink, 'senza collegamento', 'qa'); v_ok := false; exception when insufficient_privilege then v_ok := true; end;
+  perform pg_temp.rec('R21', 'B4: alias combined_lwin con un record di fonte SENZA collegamento Combined attivo rifiutato (non verificato)', v_ok);
+  reset role;
+  perform pg_temp.rec('R22', 'B4: l''alias combined_lwin creato dalla promozione (collegamento verificato) esiste ancora: la guardia non blocca la promozione',
+    exists (select 1 from catalog.entity_aliases a where a.kind = 'combined_lwin' and a.alias = '2000009'));
+
+  -- B4: TRUNCATE ----------------------------------------------------------------------------------------------------------------
+  begin truncate catalog.canonical_events; v_ok := false; exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('R23', 'B4: TRUNCATE del registro eventi rifiutato (anche al proprietario: il trigger non impedisce un DROP TRIGGER né un superuser)', v_ok);
+  begin truncate catalog.promotion_exceptions; v_ok := false; exception when object_not_in_prerequisite_state then v_ok := true; end;
+  perform pg_temp.rec('R24', 'B4: TRUNCATE delle eccezioni di promozione rifiutato', v_ok);
+  perform pg_temp.rec('R25', 'B4: nessun ruolo applicativo ha TRUNCATE su alcuna tabella del catalogo',
+    not exists (select 1 from pg_class c where c.relnamespace = 'catalog'::regnamespace and c.relkind = 'r'
+                  and (has_table_privilege('catalog_curator', c.oid, 'TRUNCATE') or has_table_privilege('catalog_loader', c.oid, 'TRUNCATE')
+                       or has_table_privilege('anon', c.oid, 'TRUNCATE') or has_table_privilege('authenticated', c.oid, 'TRUNCATE')
+                       or has_table_privilege('service_role', c.oid, 'TRUNCATE'))));
 end $$;
 
 -- ===================================================================================================
