@@ -200,6 +200,10 @@ Residui noti (non bloccanti per lo staging): `catalog_loader` ha UPDATE diretto 
 - I Combined diventano alias verso la scheda di destinazione solo se il collegamento è `active`.
 - `wine_links` verso `public.wines`: solo con metodo `manual`/`exact_id`; i fuzzy richiedono revisione.
 
+## 12. WI-001C — catalogo canonico (realizzato, NON popolato)
+
+Migration `20261119100000_wi_001c_canonical_catalog.sql`, griglia `supabase/tests/12zy_wi_001c_canonical_catalog.sql`; dettagli, prove e limiti in `docs/wine-intelligence/HANDOFF_WI_001C_BUILD.md`. Scostamenti dalla bozza: i collegamenti a `public.wines` sono **per valore** (`catalog.wine_links.public_wine_id`, nessuna FK, riconciliazione con `dangling_wine_links`); `wine_territories` e `catalog.media` NON sono realizzate; le rivendicazioni sono `attribute_claims` con vocabolario `attribute_definitions`; nessuna vista pubblica. I record LWIN si promuovono solo con una regola approvata dal founder, interruttore acceso e `p_dry_run => false`: oggi tutto è spento e le tabelle canoniche sono vuote. Procedura di import cloud: `docs/wine-intelligence/CLOUD_IMPORT_RUNBOOK.md`.
+
 ## Registri collegati
 
 - Fonti e licenza (CC BY 4.0): [`wine-intelligence/SOURCE_REGISTRY.md`](wine-intelligence/SOURCE_REGISTRY.md)
