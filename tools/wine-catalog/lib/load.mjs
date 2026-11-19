@@ -133,12 +133,13 @@ export async function loadToDatabase(db, path, opts = {}) {
     batchSize = DEFAULT_BATCH_SIZE,
     importerVersion = IMPORTER_VERSION,
     onProgress = () => {},
+    beforeFinish = async () => {},
   } = opts;
   // una sola copia privata: l'hash dichiarato e i byte importati sono gli stessi
   const snap = await snapshotFile(path);
   try {
     return await loadFromSnapshot(db, snap, path, {
-      sourceCode, expectedSha256, expectedRows, takeover, staleMinutes, allowMassRemoval, force, batchSize, importerVersion, onProgress,
+      sourceCode, expectedSha256, expectedRows, takeover, staleMinutes, allowMassRemoval, force, batchSize, importerVersion, onProgress, beforeFinish,
     });
   } finally {
     snap.dispose();
@@ -146,7 +147,7 @@ export async function loadToDatabase(db, path, opts = {}) {
 }
 
 async function loadFromSnapshot(db, snap, path, {
-  sourceCode, expectedSha256, expectedRows, takeover, staleMinutes, allowMassRemoval, force, batchSize, importerVersion, onProgress,
+  sourceCode, expectedSha256, expectedRows, takeover, staleMinutes, allowMassRemoval, force, batchSize, importerVersion, onProgress, beforeFinish,
 }) {
   const { sha256 } = snap;
   checkSha(sha256, expectedSha256);
@@ -190,7 +191,7 @@ async function loadFromSnapshot(db, snap, path, {
     const got = typeof r.rows[0].r === 'string' ? JSON.parse(r.rows[0].r) : r.rows[0].r;
     for (const k of Object.keys(totals)) totals[k] += Number(got[k] ?? 0);
     batch = [];
-    onProgress({ rows: dataRows, written: totals.received });
+    await onProgress({ rows: dataRows, written: totals.received });
   };
   const flushFindings = async (force = false) => {
     if (findings.length === 0 || (!force && findings.length < FINDING_BATCH)) return;
@@ -246,6 +247,7 @@ async function loadFromSnapshot(db, snap, path, {
       ...(allowMassRemoval ? { allow_mass_removal: true } : {}),
     };
     await checkRole(db);
+    await beforeFinish({ rows: dataRows, distinct: seen.size });
     const tf = performance.now();
     const fin = await db.query('select catalog.finish_import_run($1::uuid, $2::bigint, ($3::text)::jsonb) as r', [runId, seen.size, JSON.stringify(summary)]);
     timings.finish_ms = performance.now() - tf;

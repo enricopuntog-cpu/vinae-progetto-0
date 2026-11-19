@@ -1,8 +1,10 @@
 #!/usr/bin/env bun
 // Caricatore persistente LWIN → PostgreSQL LOCALE (WI-001B).
 //
-// Solo database loopback (localhost/127.0.0.1/::1): nessun override, nessuna rete esterna. Il report
-// va scritto FUORI dal repository. Il file Excel è indicato esplicitamente con --input e non viene mai cercato.
+// Per DEFAULT solo database loopback (localhost/127.0.0.1/::1): nessun override, nessuna rete esterna. La modalità
+// `--cloud` (WI-001C) è DISABILITATA salvo CATALOG_CLOUD_IMPORT=enabled e una destinazione identificata con
+// --target-ref (vedi lib/cloud-target.mjs e docs/wine-intelligence/CLOUD_IMPORT_RUNBOOK.md); non è mai stata
+// eseguita su un database reale. Il report va scritto FUORI dal repository. Il file Excel è indicato esplicitamente con --input e non viene mai cercato.
 //
 // Uso (Bun, client PostgreSQL integrato):
 //   bun tools/wine-catalog/lwin-load.mjs --input <LWINdatabase.xlsx> --database-url postgresql://… \
@@ -10,10 +12,15 @@
 // Lo stesso file (sha256) già importato e ancora corrente non viene rielaborato (tentativo `skipped`);
 // --force lo rielabora comunque (verifica dello stato: i record invariati non vengono comunque riscritti).
 // La URL può venire da CATALOG_DATABASE_URL (preferibile: non resta nella cronologia della shell).
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { insideRepo, assertLocalDatabaseUrl } from './lib/paths.mjs';
+import { assertCloudAuthorized, resolveCloudLimits, redactUrl } from './lib/cloud-target.mjs';
+import { createLogger, sanitizeError } from './lib/safe-log.mjs';
+import {
+  assertCloudSession, assertLoaderPrivileges, createWalGuard, applySessionLimits, verifyFinish,
+} from './lib/cloud-guards.mjs';
 import {
   planLoad, loadToDatabase, LWIN_EXPECTED_SHA256, LWIN_EXPECTED_ROWS, DEFAULT_BATCH_SIZE,
 } from './lib/load.mjs';
@@ -38,6 +45,13 @@ try {
       'expected-sha256': { type: 'string' },
       'batch-size': { type: 'string' },
       'expected-rows': { type: 'string' },
+      cloud: { type: 'boolean', default: false },
+      'target-ref': { type: 'string' },
+      'allow-production': { type: 'boolean', default: false },
+      'ca-file': { type: 'string' },
+      'max-wal-mb': { type: 'string' },
+      'batch-timeout-sec': { type: 'string' },
+      'finish-timeout-min': { type: 'string' },
     },
     strict: true,
   }).values;
@@ -48,16 +62,36 @@ if (!args.input) fail('Manca --input <file.xlsx> (percorso esplicito: il file no
 if (!args.report) fail('Manca --report <out.json> (fuori dal repository).');
 if (insideRepo(args.report)) fail(`Rifiuto di scrivere dentro il repository: ${args.report}.`);
 const url = args['database-url'] ?? process.env.CATALOG_DATABASE_URL ?? null;
-if (!url && !args['dry-run']) fail('Manca --database-url (o CATALOG_DATABASE_URL): solo database locale.');
-if (url) {
+let cloudTarget = null;
+let cloudLimits = null;
+if (args.cloud) {
   try {
-    assertLocalDatabaseUrl(url);
+    cloudTarget = assertCloudAuthorized({
+      url: process.env.CATALOG_DATABASE_URL ?? null,
+      env: process.env,
+      flags: { cloud: true, targetRef: args['target-ref'], allowProduction: args['allow-production'], databaseUrlOnCommandLine: args['database-url'] !== undefined },
+    });
+    cloudLimits = resolveCloudLimits({
+      batchSize: args['batch-size'], maxWalMb: args['max-wal-mb'], batchTimeoutSec: args['batch-timeout-sec'], finishTimeoutMin: args['finish-timeout-min'],
+    });
   } catch (e) {
-    fail(e.message);
+    fail(sanitizeError(e, [process.env.CATALOG_DATABASE_URL]));
+  }
+} else {
+  for (const f of ['target-ref', 'allow-production', 'ca-file', 'max-wal-mb', 'batch-timeout-sec', 'finish-timeout-min']) {
+    if (args[f] !== undefined && args[f] !== false) fail(`--${f} ha senso solo con --cloud.`);
+  }
+  if (!url && !args['dry-run']) fail('Manca --database-url (o CATALOG_DATABASE_URL): solo database locale.');
+  if (url) {
+    try {
+      assertLocalDatabaseUrl(url);
+    } catch (e) {
+      fail(e.message);
+    }
   }
 }
 if (args['stale-minutes'] !== undefined && !(Number.isInteger(Number(args['stale-minutes'])) && Number(args['stale-minutes']) >= 1)) fail('--stale-minutes deve essere un intero >= 1 (con 0 un caricatore ancora vivo verrebbe scavalcato).');
-const batchSize = args['batch-size'] ? Number(args['batch-size']) : DEFAULT_BATCH_SIZE;
+const batchSize = cloudLimits ? cloudLimits.batchSize : (args['batch-size'] ? Number(args['batch-size']) : DEFAULT_BATCH_SIZE);
 if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 20000) fail('--batch-size deve essere un intero tra 1 e 20000.');
 if (args['expected-rows'] && !(Number.isInteger(Number(args['expected-rows'])) && Number(args['expected-rows']) >= 0)) fail('--expected-rows deve essere un intero >= 0.');
 
@@ -67,8 +101,29 @@ const expectedSha = args['expected-sha256'] ?? LWIN_EXPECTED_SHA256;
 const known = expectedSha === LWIN_EXPECTED_SHA256;
 
 let db = null;
+const urlPassword = (() => { try { return new URL(process.env.CATALOG_DATABASE_URL ?? url ?? '').password; } catch { return ''; } })();
+const logSecrets = [process.env.CATALOG_DATABASE_URL, url, urlPassword ? decodeURIComponent(urlPassword) : '', urlPassword];
+const logger = createLogger({ secrets: logSecrets });
+let walGuard = null;
+const cloudInfo = cloudTarget
+  ? { target: { kind: cloudTarget.kind, ref: cloudTarget.ref, host: cloudTarget.host, database: cloudTarget.database, production: cloudTarget.production, url: redactUrl(process.env.CATALOG_DATABASE_URL) }, limits: cloudLimits }
+  : null;
 try {
-  if (url) {
+  if (cloudTarget) {
+    const { connectCloud } = await import('./lib/db-bun.mjs');
+    const caPem = args['ca-file'] ? readFileSync(args['ca-file'], 'utf8') : null;
+    db = await connectCloud(process.env.CATALOG_DATABASE_URL, { role: 'catalog_loader', caPem });
+    const q = (t, p) => db.query(t, p);
+    cloudInfo.session = await assertCloudSession(q);
+    cloudInfo.loader_privileges = await assertLoaderPrivileges(q);
+    await applySessionLimits(q, {
+      statementTimeoutMs: cloudLimits.batchTimeoutSec * 1000,
+      lockTimeoutMs: cloudLimits.lockTimeoutSec * 1000,
+      idleTxTimeoutMs: cloudLimits.idleTxTimeoutSec * 1000,
+    });
+    walGuard = await createWalGuard(q, { maxWalMb: cloudLimits.maxWalMb });
+    logger.log(`destinazione cloud identificata: ${cloudTarget.kind} ${cloudTarget.ref} (${cloudTarget.database}), TLS verificato, privilegi conformi`);
+  } else if (url) {
     const { connectLocal } = await import('./lib/db-bun.mjs');
     db = await connectLocal(url, { role: 'catalog_loader' });
   }
@@ -85,19 +140,49 @@ try {
       allowMassRemoval: args['allow-mass-removal'],
       force: args.force,
       batchSize,
-      onProgress: ({ rows, written }) => {
-        if (written % 20000 < batchSize) console.error(`… ${rows} righe lette, ${written} scritte`);
+      onProgress: async ({ rows, written }) => {
+        if (walGuard) await walGuard.check();
+        if (written % 20000 < batchSize) logger.log(`… ${rows} righe lette, ${written} scritte`);
+      },
+      beforeFinish: async () => {
+        if (!cloudTarget) return;
+        // il finish è UNA transazione di promozione: timeout dedicato (più lungo di quello dei lotti)
+        await walGuard.check();
+        await applySessionLimits((t, p) => db.query(t, p), {
+          statementTimeoutMs: cloudLimits.finishTimeoutMin * 60000,
+          lockTimeoutMs: cloudLimits.lockTimeoutSec * 1000,
+          idleTxTimeoutMs: cloudLimits.idleTxTimeoutSec * 1000,
+        });
       },
     });
+    if (cloudTarget && report.mode === 'load') {
+      cloudInfo.verification = await verifyFinish((t, p) => db.query(t, p), { runId: report.run_id, sourceCode: 'LIVEX-LWIN7', expectedSha256: expectedSha });
+      if (!cloudInfo.verification.ok) process.exitCode = 1;
+    }
+  }
+  if (cloudInfo) {
+    if (walGuard) cloudInfo.wal = await walGuard.report();
+    cloudInfo.log = logger.summary();
+    report.cloud = cloudInfo;
   }
   report.elapsed_ms = Math.round(performance.now() - t0);
   report.peak_rss_mb = Math.round(process.memoryUsage().rss / 1048576);
   report.file_size_bytes = report.source?.size_bytes ?? null;
-  writeFileSync(args.report, JSON.stringify(report, null, 2));
+  writeFileSync(args.report, JSON.stringify(report, null, 2), { mode: 0o600 });
   console.log(args['dry-run'] ? 'Anteprima (nessuna scrittura):' : report.mode === 'skipped' ? 'Snapshot già importato e corrente (nessuna elaborazione):' : 'Caricamento completato:', JSON.stringify(report.rows ?? report.result?.territories ?? {}), `| ${report.elapsed_ms} ms | RSS ${report.peak_rss_mb} MB`);
 } catch (e) {
-  console.error(`Errore: ${e.message}`);
+  console.error(`Errore: ${sanitizeError(e, logSecrets)}`);
   process.exitCode = 1;
+  if (cloudInfo) {
+    // report anche in caso di errore: destinazione, limiti, WAL e log aiutano la diagnosi (nessun segreto)
+    try {
+      if (walGuard) cloudInfo.wal = await walGuard.report();
+      cloudInfo.log = logger.summary();
+      writeFileSync(args.report, JSON.stringify({ mode: 'error', error: sanitizeError(e, logSecrets), cloud: cloudInfo }, null, 2), { mode: 0o600 });
+    } catch {
+      // il report di errore è best effort
+    }
+  }
 } finally {
   if (db) await db.close();
 }

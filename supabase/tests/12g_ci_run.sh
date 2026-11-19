@@ -589,6 +589,9 @@ run_grid "12zr Accessori Partner" 12zr_vpm_015c_accessori_partner.sql 3
 # WI-001B: staging privato del catalogo enologico (schema catalog). Transazione chiusa da ROLLBACK,
 # dati sintetici, nessun accesso a database remoti.
 run_grid "12zs Catalogo enologico staging" 12zs_wi_001b_catalog_staging.sql 3
+# WI-001C: catalogo canonico (produttori, vini LWIN-7, annate, formati, alias, claim, duplicati, collegamenti).
+# Transazione chiusa da ROLLBACK, dati sintetici; promozione LWIN disattivata di default.
+run_grid "12zy Catalogo enologico canonico" 12zy_wi_001c_canonical_catalog.sql 3
 
 # VPM-015QA-FINAL-A — annullamento contro pagamento aperto (apertura, processing,
 # failed/expired, incasso tardivo, replay) e ULTIMA unita del Partner contesa da
