@@ -19,9 +19,11 @@ import { insideRepo, assertLocalDatabaseUrl } from './lib/paths.mjs';
 import { assertCloudAuthorized, resolveCloudLimits, redactUrl } from './lib/cloud-target.mjs';
 import { createLogger, sanitizeError } from './lib/safe-log.mjs';
 import {
-  assertCloudSession, assertLoaderPrivileges, createWalGuard, applySessionLimits, verifyFinish, planFinishWal, createWalMonitor,
-  concludeFinish, buildFinishOutcome,
+  assertCloudSession, assertLoaderPrivileges, createWalGuard, applySessionLimits, planFinishWal, createWalMonitor,
+  concludeFinish, safeStopMonitor, finishDeadlineMs,
 } from './lib/cloud-guards.mjs';
+import { extractSqlState } from './lib/finish-error.mjs';
+import { postCommitChecks, settleCloudRun, writeReportFile } from './lib/cloud-outcome.mjs';
 import { loadCaPem } from './lib/cloud-tls.mjs';
 import {
   planLoad, loadToDatabase, LWIN_EXPECTED_SHA256, LWIN_EXPECTED_ROWS, DEFAULT_BATCH_SIZE,
@@ -111,9 +113,9 @@ let monitorDb = null;
 let walMonitor = null;
 let committedRun = false; // vero dopo un finish confermato: da qui in poi ogni errore NON è un rollback
 let finishConclusion = null; // misura conclusiva e stato del monitor, raccolti subito dopo il finish (anche se fallito)
+let runIdentity = null; // run_id, source_code, file_sha256, file_name, backend_pid: aggiornata da loadToDatabase (R1), mai persa dopo un errore
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-// SQLSTATE dell'errore del server (Bun lo espone come errno/code a seconda della versione): 57014 = istruzione interrotta
-const sqlStateOf = (e) => { const c = [e?.errno, e?.code, e?.sqlState].filter(Boolean).map(String); return c.includes('57014') ? '57014' : c[0]; };
+const currentIdentity = (e) => ({ ...(e?.runIdentity ?? {}), ...(runIdentity ?? {}), backend_pid: db?.backendPid ?? runIdentity?.backend_pid ?? null });
 const cloudInfo = cloudTarget
   ? { target: { kind: cloudTarget.kind, ref: cloudTarget.ref, host: cloudTarget.host, database: cloudTarget.database, production: cloudTarget.production, url: redactUrl(process.env.CATALOG_DATABASE_URL) }, limits: cloudLimits }
   : null;
@@ -163,6 +165,9 @@ try {
       allowMassRemoval: args['allow-mass-removal'],
       force: args.force,
       batchSize,
+      onIdentity: (i) => { runIdentity = i; },
+      // scadenza lato client del finish = statement_timeout del finish + margine (R3); interrompe l'attesa, NON la query
+      finishDeadlineMs: cloudTarget ? finishDeadlineMs(cloudLimits.finishTimeoutMin) : null,
       onProgress: async ({ rows, written }) => {
         if (walGuard) await walGuard.check();
         if (cloudTarget) await db.assertIntact();
@@ -200,59 +205,64 @@ try {
     });
     if (cloudTarget && report.mode === 'load') {
       committedRun = true;
-      cloudInfo.verification = await verifyFinish((t, p) => db.query(t, p), { runId: report.run_id, sourceCode: 'LIVEX-LWIN7', expectedSha256: expectedSha });
-      if (!cloudInfo.verification.ok) process.exitCode = 1;
-      // esito conclusivo del WAL: SOLO `within_budget` senza altre anomalie vale come successo (exit 0)
-      if (walMonitor) {
-        cloudInfo.finish_outcome = buildFinishOutcome({
-          finishStatus: 'committed', conclusion: finishConclusion, verification: cloudInfo.verification, budgetBytes: cloudLimits.maxWalMb * 1048576,
-        });
-        if (!cloudInfo.finish_outcome.ok) process.exitCode = 1;
-      }
+      // dopo il commit: limiti dei lotti ripristinati SOLO se la sessione è integra, poi verifica OBBLIGATORIA con scadenza (R3/R5).
+      // Se la verifica non parte, scade, lancia o restituisce un risultato non valido, l'esito NON è un successo (exit 1).
+      const post = await postCommitChecks({
+        db,
+        batchLimits: { statementTimeoutMs: cloudLimits.batchTimeoutSec * 1000, lockTimeoutMs: cloudLimits.lockTimeoutSec * 1000, idleTxTimeoutMs: cloudLimits.idleTxTimeoutSec * 1000 },
+        verifyArgs: { runId: report.run_id, sourceCode: 'LIVEX-LWIN7', expectedSha256: expectedSha },
+      });
+      cloudInfo.session_limits = post.session_limits;
+      cloudInfo.verification = post.verification;
     }
   }
   if (cloudInfo) {
-    if (walGuard) cloudInfo.wal = await walGuard.report();
-    if (walMonitor && !cloudInfo.wal_monitor) cloudInfo.wal_monitor = await walMonitor.stop();
+    // esito conclusivo: SOLO `within_budget` con verifica completata e monitor affidabile vale come successo (exit 0)
+    const settled = await settleCloudRun({
+      cloudInfo, walGuard, walMonitor, finishConclusion, finishStatus: committedRun ? 'committed' : null, verification: cloudInfo.verification,
+      budgetBytes: cloudLimits.maxWalMb * 1048576, identity: currentIdentity(null),
+    });
+    if (settled.exitCode) process.exitCode = 1;
     cloudInfo.log = logger.summary();
     report.cloud = cloudInfo;
   }
   report.elapsed_ms = Math.round(performance.now() - t0);
   report.peak_rss_mb = Math.round(process.memoryUsage().rss / 1048576);
   report.file_size_bytes = report.source?.size_bytes ?? null;
-  writeFileSync(args.report, JSON.stringify(report, null, 2), { mode: 0o600 });
+  if (!writeReportFile(args.report, report)) { console.error('Report NON scritto (percorso non scrivibile): esito da ricostruire dai log.'); process.exitCode = 1; }
   const anomalous = (report.cloud?.finish_outcome && !report.cloud.finish_outcome.ok) || process.exitCode === 1;
   if (anomalous) {
     const fo = report.cloud?.finish_outcome;
-    console.error(fo ? `ESITO ANOMALO (${fo.outcome}): importazione NON confermata come riuscita. ${fo.known_db_state}. ${fo.next_action}` : 'ESITO ANOMALO: verifica post-finish non superata; importazione NON confermata come riuscita.');
+    console.error(fo ? `ESITO ANOMALO (${fo.outcome}): importazione NON confermata come riuscita. ${fo.known_db_state}. ${fo.next_action}` : 'ESITO ANOMALO: importazione NON confermata come riuscita (verifica non superata, report non scritto o altro esito ≠ 0: vedere i messaggi sopra e il report).');
   }
   console.log(args['dry-run'] ? 'Anteprima (nessuna scrittura):' : report.mode === 'skipped' ? 'Snapshot già importato e corrente (nessuna elaborazione):' : anomalous ? 'Caricamento NON confermato (vedi esito):' : 'Caricamento completato:', JSON.stringify(report.rows ?? report.result?.territories ?? {}), `| ${report.elapsed_ms} ms | RSS ${report.peak_rss_mb} MB`);
 } catch (e) {
   console.error(`Errore: ${sanitizeError(e, logSecrets)}`);
   process.exitCode = 1;
   if (cloudInfo) {
-    // report anche in caso di errore: destinazione, limiti, WAL e log aiutano la diagnosi (nessun segreto)
+    // report anche in caso di errore: destinazione, limiti, WAL, identificativi del run e log aiutano la diagnosi/riconciliazione (nessun segreto).
+    // Ogni passo è protetto: un secondo errore (stop del monitor, lettura del WAL, verifica) non impedisce di scrivere il report.
     try {
-      if (walGuard) cloudInfo.wal = await walGuard.report();
-      if (walMonitor && !cloudInfo.wal_monitor) cloudInfo.wal_monitor = await walMonitor.stop();
       // finish fallito o dall'esito sconosciuto: l'esito conclusivo dice cosa si sa dello stato remoto e cosa no
       const st = e?.finish?.status ?? (committedRun ? 'committed' : null);
-      if (st && walMonitor) {
-        cloudInfo.finish_outcome = buildFinishOutcome({
-          finishStatus: st, conclusion: finishConclusion, budgetBytes: cloudLimits.maxWalMb * 1048576, errorCode: sqlStateOf(e),
-        });
-        console.error(`ESITO (${cloudInfo.finish_outcome.outcome}): ${cloudInfo.finish_outcome.known_db_state}. ${cloudInfo.finish_outcome.next_action}`);
-      }
+      const settled = await settleCloudRun({
+        cloudInfo, walGuard, walMonitor, finishConclusion, finishStatus: st, verification: cloudInfo.verification,
+        budgetBytes: cloudLimits.maxWalMb * 1048576, identity: currentIdentity(e), errorCode: extractSqlState(e), uncertainReason: e?.finish?.reason, failMarked: e?.failMarked, failed: true,
+      });
+      if (settled.outcome) console.error(`ESITO (${settled.outcome.outcome}): ${settled.outcome.known_db_state}. ${settled.outcome.next_action}`);
       cloudInfo.log = logger.summary();
-      writeFileSync(args.report, JSON.stringify({ mode: 'error', error: sanitizeError(e, logSecrets), cloud: cloudInfo }, null, 2), { mode: 0o600 });
     } catch {
-      // il report di errore è best effort
+      // l'assemblaggio dell'esito non può impedire la scrittura del report
+    }
+    if (!writeReportFile(args.report, { mode: 'error', error: sanitizeError(e, logSecrets), run_identity: cloudInfo.run_identity ?? null, cloud: cloudInfo })) {
+      console.error('Report di errore NON scritto (percorso non scrivibile).');
     }
   }
 } finally {
-  if (walMonitor) await walMonitor.stop();
-  if (monitorDb) await monitorDb.close();
-  if (db) await db.close();
+  // stop() idempotente e SENZA eccezioni: un secondo errore non nasconde l'esito già registrato
+  if (walMonitor) await safeStopMonitor(walMonitor);
+  try { if (monitorDb) await monitorDb.close(); } catch { /* connessione già chiusa */ }
+  try { if (db) await db.close(); } catch { /* connessione già chiusa */ }
 }
 // riferimento per i test statici
 export const CLI_PATH = fileURLToPath(import.meta.url);

@@ -13,7 +13,8 @@
 // il tentativo successivo (con --takeover se quello fermo non è ancora scaduto) riparte dal file intero.
 import { iterateRecords, snapshotFile, foldKey } from './import.mjs';
 import { classifyImport } from './diff.mjs';
-import { isConnectionLost } from './cloud-tls.mjs';
+import { classifyFinishError, extractSqlState } from './finish-error.mjs';
+import { withDeadline } from './cloud-guards.mjs';
 
 export const LWIN_SOURCE_CODE = 'LIVEX-LWIN7';
 export const LWIN_EXPECTED_SHA256 = '7669ceab4e815716aa6c90643c117f3da7c7daeaa202ecd3f7cfbc4db7fd488e';
@@ -136,12 +137,15 @@ export async function loadToDatabase(db, path, opts = {}) {
     onProgress = () => {},
     beforeFinish = async () => {},
     afterFinish = async () => {},
+    onIdentity = () => {},
+    finishDeadlineMs = null,
+    timers,
   } = opts;
   // una sola copia privata: l'hash dichiarato e i byte importati sono gli stessi
   const snap = await snapshotFile(path);
   try {
     return await loadFromSnapshot(db, snap, path, {
-      sourceCode, expectedSha256, expectedRows, takeover, staleMinutes, allowMassRemoval, force, batchSize, importerVersion, onProgress, beforeFinish, afterFinish,
+      sourceCode, expectedSha256, expectedRows, takeover, staleMinutes, allowMassRemoval, force, batchSize, importerVersion, onProgress, beforeFinish, afterFinish, onIdentity, finishDeadlineMs, timers,
     });
   } finally {
     snap.dispose();
@@ -149,18 +153,26 @@ export async function loadToDatabase(db, path, opts = {}) {
 }
 
 async function loadFromSnapshot(db, snap, path, {
-  sourceCode, expectedSha256, expectedRows, takeover, staleMinutes, allowMassRemoval, force, batchSize, importerVersion, onProgress, beforeFinish, afterFinish,
+  sourceCode, expectedSha256, expectedRows, takeover, staleMinutes, allowMassRemoval, force, batchSize, importerVersion, onProgress, beforeFinish, afterFinish, onIdentity, finishDeadlineMs, timers,
 }) {
   const { sha256 } = snap;
-  checkSha(sha256, expectedSha256);
   const fileName = path.split(/[\\/]/).pop();
+  // identità del tentativo (R1): disponibile PRIMA di begin_import_run (run_id ancora null) e completata appena il server risponde.
+  // Viaggia sull'errore (`runIdentity`) e nell'hook `onIdentity`: serve a riconciliare un tentativo il cui esito non è noto. Nessun segreto.
+  const identity = { run_id: null, source_code: sourceCode, file_sha256: sha256, file_name: fileName, backend_pid: Number.isInteger(db.backendPid) ? db.backendPid : null };
+  const announce = () => { try { onIdentity({ ...identity }); } catch { /* un hook non può rompere l'import */ } };
+  const tagged = (e) => { try { if (e && typeof e === 'object') e.runIdentity = { ...identity }; } catch { /* errore congelato */ } return e; };
+  announce();
+  try { checkSha(sha256, expectedSha256); } catch (e) { throw tagged(e); }
 
-  await checkRole(db);
+  await checkRole(db).catch((e) => { throw tagged(e); });
   const begun = await db.query('select catalog.begin_import_run($1, $2, $3, $4, $5, $6, make_interval(mins => $7::int), $8) as r', [
     sourceCode, sha256, fileName, expectedRows, importerVersion, takeover, staleMinutes, force,
-  ]);
+  ]).catch((e) => { throw tagged(e); });
   const begin = typeof begun.rows[0].r === 'string' ? JSON.parse(begun.rows[0].r) : begun.rows[0].r;
   const runId = begin.run_id;
+  identity.run_id = runId;
+  announce();
   if (begin.mode === 'skipped') {
     // snapshot già completato e ancora corrente: nessuna lettura del file, nessuna elaborazione
     return {
@@ -254,13 +266,20 @@ async function loadFromSnapshot(db, snap, path, {
     let fin;
     let finishStatus = 'committed';
     let finishError = null;
+    let finishClass = null;
     try {
-      fin = await db.query('select catalog.finish_import_run($1::uuid, $2::bigint, ($3::text)::jsonb) as r', [runId, seen.size, JSON.stringify(summary)]);
+      const call = db.query('select catalog.finish_import_run($1::uuid, $2::bigint, ($3::text)::jsonb) as r', [runId, seen.size, JSON.stringify(summary)]);
+      // R3: scadenza LATO CLIENT (statement_timeout del finish + margine). Interrompe l'attesa, NON la query: se scade l'esito è sconosciuto.
+      fin = finishDeadlineMs ? await withDeadline(call, finishDeadlineMs, 'finish_import_run', timers) : await call;
     } catch (e) {
       finishError = e instanceof Error ? e : new Error(String(e));
-      // connessione persa: il backend remoto potrebbe aver confermato o annullato la promozione → esito SCONOSCIUTO (non «fallito»).
-      // La classificazione per messaggio vale solo per la sessione cloud riservata (`db.state`): in locale un errore SQL resta «fallito».
-      finishStatus = db.state !== undefined && (isConnectionLost(e) || db.state.broken === true) ? 'unknown' : 'failed';
+      // R2: classificazione CONSERVATIVA. «fallito» (rollback noto) solo con un errore del server dotato di SQLSTATE affidabile su una
+      // sessione integra; rete, driver, decodifica, scadenza e ogni errore senza SQLSTATE affidabile → SCONOSCIUTO.
+      // In locale (senza `db.state`) un errore SQL resta «fallito» (database di prova).
+      finishClass = classifyFinishError(e, { cloud: db.state !== undefined, sessionBroken: db.state?.broken === true });
+      finishStatus = finishClass.status;
+      // sessione cloud con esito incerto: non è più quella verificata e NON si riusa (nessun secondo finish, nessuna query sul backend forse ancora attivo)
+      if (finishStatus === 'unknown' && db.state) { db.state.broken = true; db.state.why ??= finishClass.reason; }
     }
     // il monitor del finish si ferma SEMPRE subito dopo (altrimenti potrebbe annullare un'istruzione successiva); la conclusione è
     // limitata nel tempo e non lancia: un suo problema non può trasformare un commit riuscito in un errore
@@ -271,8 +290,8 @@ async function loadFromSnapshot(db, snap, path, {
       post = { hook_error: true, hook_error_code: String(x?.code ?? 'errore').slice(0, 40) }; // nessun testo d'errore nel report: potrebbe contenere segreti
     }
     if (finishError) {
-      finishError.finish = { status: finishStatus, post };
-      throw finishError;
+      finishError.finish = { status: finishStatus, post, sqlstate: finishClass?.sqlstate ?? null, reason: finishClass?.reason ?? null };
+      throw tagged(finishError);
     }
     timings.finish_ms = performance.now() - tf;
     // dopo il commit NIENTE può più finire nel catch (fail_import_run su un tentativo terminale sarebbe improprio)
@@ -285,12 +304,17 @@ async function loadFromSnapshot(db, snap, path, {
     return { mode: 'load', timings_ms: Object.fromEntries(Object.entries(timings).map(([k, v]) => [k, Math.round(v)])), run_id: runId, source: { code: sourceCode, sha256, file_name: fileName, size_bytes: snap.size }, distinct_external_ids: seen.size, ...summary, result, finish: { status: finishStatus, post } };
   } catch (e) {
     // esito del finish sconosciuto: il tentativo potrebbe essere già terminale (succeeded) → niente fail_import_run; si riconcilia da fuori
-    if (e?.finish?.status === 'unknown') throw e;
+    // (fail_import_run della migration WI-001B cancella i finding a prescindere dallo stato terminale: non va mai chiamata nel dubbio)
+    if (e?.finish?.status === 'unknown') throw tagged(e);
+    let failMarked = false;
     try {
-      await db.query('select catalog.fail_import_run($1::uuid, $2)', [runId, String(e?.message ?? e)]);
+      // testo FISSO + SQLSTATE: il messaggio del driver (può contenere host o DETAIL con dati di riga) non viene persistito nel catalogo
+      await db.query('select catalog.fail_import_run($1::uuid, $2)', [runId, `import interrotto (${extractSqlState(e) ?? 'errore client'})`]);
+      failMarked = true;
     } catch {
       // il tentativo resta `running`: sarà rilevato e ripreso con --takeover
     }
-    throw e;
+    try { if (e && typeof e === 'object') e.failMarked = failMarked; } catch { /* errore congelato */ }
+    throw tagged(e);
   }
 }

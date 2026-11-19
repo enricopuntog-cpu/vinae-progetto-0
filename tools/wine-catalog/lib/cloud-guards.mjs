@@ -178,7 +178,7 @@ export async function createWalGuard(query, { maxWalMb }) {
       return bytes;
     },
     async report() {
-      try { await measure(); } catch { /* ultimo valore noto */ }
+      try { await measure(); } catch { return { start_lsn: start, wal_mb: Math.round(last / 1048576), budget_mb: maxWalMb, unavailable: true, stale: true }; } // ultimo valore noto, dichiarato non aggiornato
       return { start_lsn: start, wal_mb: Math.round(last / 1048576), budget_mb: maxWalMb };
     },
   };
@@ -228,12 +228,31 @@ export const MONITOR_SQL_ALLOWED = new Set(Object.values(MONITOR_SQL));
 
 const defaultTimers = { setTimeout: (...a) => setTimeout(...a), clearTimeout: (...a) => clearTimeout(...a) };
 
-/** Promise con scadenza: una query bloccata non tiene mai ferma l'esecuzione (nessuna attesa indefinita). */
+/**
+ * Promise con scadenza: una query bloccata non tiene mai ferma l'esecuzione (nessuna attesa indefinita).
+ * ATTENZIONE: la scadenza interrompe l'ATTESA JavaScript, NON la query PostgreSQL, che può restare in esecuzione sul server (e
+ * confermare dopo la scadenza). L'errore ha `code = 'WI_DEADLINE'` perché il chiamante lo tratti come esito incerto, mai come annullamento.
+ */
 export function withDeadline(promise, ms, what, timers = defaultTimers) {
   let t;
-  const timeout = new Promise((_, reject) => { t = timers.setTimeout(() => reject(new Error(`${what}: nessuna risposta entro ${ms} ms`)), ms); });
+  const timeout = new Promise((_, reject) => {
+    t = timers.setTimeout(() => reject(Object.assign(new Error(`${what}: nessuna risposta entro ${ms} ms`), { code: 'WI_DEADLINE' })), ms);
+  });
   return Promise.race([Promise.resolve(promise), timeout]).finally(() => timers.clearTimeout(t));
 }
+
+/** Margine (ms) tra lo `statement_timeout` del finish (lato server) e la scadenza lato client: il server deve poter scadere per primo. */
+export const FINISH_DEADLINE_MARGIN_MS = 60_000;
+/** Scadenza lato client della chiamata `finish_import_run`: `finishTimeoutMin` + margine documentato. */
+export function finishDeadlineMs(finishTimeoutMin) {
+  const min = Number(finishTimeoutMin);
+  if (!Number.isFinite(min) || min <= 0) throw new Error('Scadenza del finish: finishTimeoutMin non valido.');
+  return Math.round(min * 60_000) + FINISH_DEADLINE_MARGIN_MS;
+}
+/** Scadenza complessiva della verifica post-commit (somma di query indipendenti: nessuna attesa illimitata). */
+export const VERIFY_DEADLINE_MS = 120_000;
+/** Scadenza complessiva della conclusione del finish (stop del monitor, riconciliazione, misura del WAL). */
+export const CONCLUDE_DEADLINE_MS = 90_000;
 
 /**
  * Monitor del WAL del finish su una SECONDA connessione. `query` è quella del monitor (login, nessun SET ROLE: vedi db-bun.mjs);
@@ -430,24 +449,110 @@ export async function reconcileLostFinish({ query, backendPid, sleep, maxProbes 
   return out;
 }
 
-/** Orchestrazione fine-finish: ferma il monitor (attendendo un campione in volo), riconcilia se serve, misura il WAL. Non lancia. */
-export async function concludeFinish({ monitor, status, mainQuery, monitorQuery, startLsn, backendPid, sleep, timers = defaultTimers }) {
-  let monitorState = null;
-  try { monitorState = await monitor.stop(); } catch { /* resta null: sarà trattato come monitor non affidabile */ }
-  let remote = null;
-  if (status === 'unknown') remote = await reconcileLostFinish({ query: monitorQuery, backendPid, sleep, timers });
-  const finalWal = await measureFinalWal({ sources: [{ name: 'principale', query: mainQuery }, { name: 'monitor', query: monitorQuery }], startLsn, timers });
-  return { monitor: monitorState, remote, finalWal };
+/**
+ * Ferma il monitor SENZA mai lanciare (R4). Se `stop()` lancia lo stato è registrato come perso con `stop_failed: true` (il monitor non
+ * è affidabile: non si sa se un campione tardivo o un annullamento siano ancora in corso) e si conserva quanto noto con `status()`.
+ */
+export async function safeStopMonitor(monitor) {
+  if (!monitor) return null;
+  try {
+    return await monitor.stop();
+  } catch {
+    let known = {};
+    try { known = typeof monitor.status === 'function' ? monitor.status() : {}; } catch { /* stato non leggibile */ }
+    return {
+      samples: 0, peakBytes: 0, cancelAttempts: 0, cancelOk: null, exceeded: false, cancelRequested: false, lateSamples: 0, timeouts: 0,
+      ...known, running: false, lost: true, stop_failed: true,
+    };
+  }
 }
 
 /**
- * Esito conclusivo per il CLI: come finalizeWal, ma una conclusione ASSENTE (hook fallito) dopo un commit vale «WAL non verificabile»
- * (monitor_lost, exit 1): l'invariante «solo within_budget vale successo» non dipende dal fatto che la conclusione esista.
+ * Orchestrazione fine-finish: ferma il monitor (attendendo un campione in volo), riconcilia se serve, misura il WAL. Non lancia e NON
+ * attende oltre `deadlineMs` (CONCLUDE_DEADLINE_MS): ogni suo passo ha già una scadenza propria, quella complessiva è la rete di sicurezza.
+ * Se scade, ciò che manca è assente (WAL finale non misurato = esito non verificabile), mai assunto.
  */
-export function buildFinishOutcome({ finishStatus, conclusion, verification, budgetBytes, errorCode }) {
+export async function concludeFinish({ monitor, status, mainQuery, monitorQuery, startLsn, backendPid, sleep, timers = defaultTimers, deadlineMs = CONCLUDE_DEADLINE_MS }) {
+  const acc = { monitor: null, remote: null, finalWal: { ok: false, bytes: null, via: null, errors: ['conclusione non completata'] }, deadline_expired: false };
+  const body = async () => {
+    acc.monitor = await safeStopMonitor(monitor);
+    if (status === 'unknown') acc.remote = await reconcileLostFinish({ query: monitorQuery, backendPid, sleep, timers });
+    acc.finalWal = await measureFinalWal({ sources: [{ name: 'principale', query: mainQuery }, { name: 'monitor', query: monitorQuery }], startLsn, timers });
+  };
+  try {
+    await withDeadline(body(), deadlineMs, 'conclusione del finish', timers);
+  } catch (e) {
+    if (e?.code === 'WI_DEADLINE') acc.deadline_expired = true; // le operazioni in corso non sono annullate: esito non confermato
+    else acc.finalWal = { ok: false, bytes: null, via: null, errors: ['conclusione fallita'] };
+  }
+  return acc;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Identità del run e riconciliazione (WI-001C-FIX-03 / R1). Nessuna credenziale: solo identificativi pubblici del tentativo.
+// ---------------------------------------------------------------------------------------------------------------------
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const RECONCILE_RUNBOOK_SECTION = 'Esito incerto del finish';
+
+/** Ripulisce l'identità del run: valori solo nella forma attesa, altrimenti null (mai testo libero del driver). */
+export function sanitizeRunIdentity(id) {
+  const x = id && typeof id === 'object' ? id : {};
+  const fileName = typeof x.file_name === 'string' ? x.file_name.split(/[\\/]/).pop().replace(/[\u0000-\u001f]/g, '').slice(0, 200) : '';
+  return {
+    run_id: typeof x.run_id === 'string' && UUID_RE.test(x.run_id) ? x.run_id.toLowerCase() : null,
+    source_code: typeof x.source_code === 'string' && /^[A-Za-z0-9._-]{1,64}$/.test(x.source_code) ? x.source_code : null,
+    file_sha256: typeof x.file_sha256 === 'string' && /^[0-9a-f]{64}$/i.test(x.file_sha256) ? x.file_sha256.toLowerCase() : null,
+    file_name: fileName || null,
+    backend_pid: Number.isInteger(x.backend_pid) && x.backend_pid > 0 ? x.backend_pid : null,
+  };
+}
+
+/** Blocco `reconcile` del report: gli identificativi con cui un operatore, da una sessione NUOVA, ritrova il tentativo. */
+export function buildReconcile(identity) {
+  const id = sanitizeRunIdentity(identity);
+  return {
+    ...id,
+    runbook_section: RECONCILE_RUNBOOK_SECTION,
+    lookup: id.run_id
+      ? 'catalog.import_runs where id = run_id (status, finished_at, counts)'
+      : 'run_id sconosciuto (la risposta di begin_import_run non è arrivata): catalog.import_runs della fonte source_code con snapshot file_sha256, il più recente',
+    backend_pid_note: id.backend_pid ? 'valido solo per la sessione terminata: non riusarlo per una sessione nuova' : null,
+  };
+}
+
+/**
+ * Verifica post-commit con scadenza complessiva e risultato SEMPRE normalizzato (R5). Non lancia.
+ *  status: 'completed' (la verifica è finita: `ok` dice se i controlli sono superati) | 'failed' (lanciata, scaduta o risultato non valido)
+ *          | 'not_run' (non avviata: sessione non integra).
+ * Un risultato non valido o assente NON è mai `ok: true`.
+ */
+export const VERIFICATION_NOT_RUN = Object.freeze({ status: 'not_run', ok: false, reason: 'verification_not_run', checks: [] });
+export async function runVerification(query, args, { deadlineMs = VERIFY_DEADLINE_MS, timers = defaultTimers, verify = verifyFinish, notRunReason = null } = {}) {
+  if (notRunReason) return { ...VERIFICATION_NOT_RUN, detail: String(notRunReason).slice(0, 120) };
+  let res;
+  try {
+    res = await withDeadline(verify(query, args), deadlineMs, 'verifica post-commit', timers);
+  } catch (e) {
+    return { status: 'failed', ok: false, reason: e?.code === 'WI_DEADLINE' ? 'verification_deadline' : 'verification_error', checks: [] };
+  }
+  if (!res || typeof res !== 'object' || typeof res.ok !== 'boolean' || !Array.isArray(res.checks)) {
+    return { status: 'failed', ok: false, reason: 'verification_invalid_result', checks: [] };
+  }
+  return { status: 'completed', ...res, ok: res.ok === true };
+}
+
+/**
+ * Esito conclusivo per il CLI: come finalizeWal, ma (a) una conclusione ASSENTE (hook fallito) dopo un commit vale «WAL non verificabile»
+ * (monitor_lost, exit 1), (b) un monitor assente nella conclusione vale non affidabile, (c) dopo un commit la verifica è OBBLIGATORIA:
+ * se manca vale `verification_not_run`. L'invariante «solo within_budget vale successo» non dipende dal fatto che questi pezzi esistano.
+ */
+export function buildFinishOutcome({ finishStatus, conclusion, verification, budgetBytes, errorCode, identity, uncertainReason, failMarked }) {
+  const monitor = conclusion?.monitor ?? { samples: 0, peakBytes: 0, cancelAttempts: 0, cancelOk: null, lost: true, missing: true };
   return finalizeWal({
-    finish: finishStatus, monitor: conclusion?.monitor ?? null, finalWal: conclusion?.finalWal ?? { ok: false, bytes: null, via: null },
-    remote: conclusion?.remote ?? null, budgetBytes, verification, errorCode,
+    finish: finishStatus, monitor, finalWal: conclusion?.finalWal ?? { ok: false, bytes: null, via: null },
+    remote: conclusion?.remote ?? null, budgetBytes, errorCode, identity, uncertainReason, failMarked,
+    verification: finishStatus === 'committed' ? (verification ?? VERIFICATION_NOT_RUN) : verification,
+    concludeDeadlineExpired: conclusion?.deadline_expired === true,
   });
 }
 
@@ -468,7 +573,7 @@ export const WAL_OUTCOMES = Object.freeze({
  * `ok` è true SOLO per within_budget senza altre anomalie; l'exit code del processo è 0 solo allora.
  * Se il commit è avvenuto NON si parla di rollback e NON si tocca nulla: si segnala e si chiede riconciliazione.
  */
-export function finalizeWal({ finish, monitor = null, finalWal = null, budgetBytes, remote = null, verification, errorCode } = {}) {
+export function finalizeWal({ finish, monitor = null, finalWal = null, budgetBytes, remote = null, verification, errorCode, identity, uncertainReason, concludeDeadlineExpired = false, failMarked } = {}) {
   if (!['committed', 'failed', 'unknown'].includes(finish)) throw new Error('Esito del finish non valido.');
   if (!Number.isFinite(Number(budgetBytes)) || Number(budgetBytes) <= 0) throw new Error('Budget WAL non valido.');
   const budget = Number(budgetBytes);
@@ -476,7 +581,8 @@ export function finalizeWal({ finish, monitor = null, finalWal = null, budgetByt
   const measured = finalWal?.ok === true ? Number(finalWal.bytes) : null;
   const peak = Math.max(Number(monitor?.peakBytes ?? 0), measured ?? 0);
   const overBudget = monitor?.exceeded === true || (measured !== null && measured > budget);
-  const monitorUnreliable = monitor !== null && (monitor.lost === true || (Number(monitor.cancelAttempts) > 0 && monitor.cancelOk !== true) || monitor.stopTimedOut === true);
+  const stopFailed = monitor?.stop_failed === true;
+  const monitorUnreliable = monitor !== null && (monitor.lost === true || stopFailed || monitor.missing === true || (Number(monitor.cancelAttempts) > 0 && monitor.cancelOk !== true) || monitor.stopTimedOut === true);
   const reasons = [];
   let outcome;
   let dbState;
@@ -488,9 +594,12 @@ export function finalizeWal({ finish, monitor = null, finalWal = null, budgetByt
     dbState = 'sconosciuto';
     reasons.push('finish_result_unknown');
     if (remote) reasons.push(`remote_backend_${remote.backend}`);
+    if (uncertainReason) reasons.push(`finish_unknown_${String(uncertainReason).replace(/[^a-z0-9_]/gi, '_').slice(0, 60)}`);
     if (overBudget) reasons.push('wal_budget_exceeded_observed');
-    uncertainty = 'Non si sa se la promozione sia stata confermata o annullata: la connessione principale è caduta durante il finish.';
-    nextAction = 'NON ripetere l\'import. Da una sessione nuova leggere catalog.import_runs per questo run (status, finished_at) e riconciliare come da runbook (sezione «Esito incerto del finish»).';
+    uncertainty = uncertainReason === 'deadline_expired'
+      ? 'La scadenza lato client è trascorsa: la query PostgreSQL potrebbe essere ancora in esecuzione o aver confermato dopo la scadenza. La scadenza NON annulla nulla e non prova né il commit né il rollback.'
+      : 'Non si sa se la promozione sia stata confermata o annullata: l\'esito del finish non è dimostrato (connessione caduta, errore senza SQLSTATE affidabile o risposta illeggibile).';
+    nextAction = `NON ripetere l'import e NON chiamare fail_import_run (cancellerebbe finding e staging di un run forse già confermato). Da una sessione nuova leggere catalog.import_runs per il run indicato in \`reconcile\` (status, finished_at) e riconciliare come da runbook (sezione «${RECONCILE_RUNBOOK_SECTION}»).`;
   } else if (finish === 'failed') {
     // «annullato dal monitor» solo se il server ha davvero interrotto l'istruzione (57014); un altro errore non si attribuisce al monitor
     const byMonitor = monitor?.cancelRequested === true && monitor?.cancelOk === true && (errorCode === undefined || errorCode === '57014');
@@ -499,7 +608,11 @@ export function finalizeWal({ finish, monitor = null, finalWal = null, budgetByt
     reasons.push(byMonitor ? (overBudget ? 'wal_budget_exceeded_cancelled' : 'monitor_visibility_lost_cancelled') : 'finish_failed');
     if (overBudget && !byMonitor) reasons.push('wal_budget_exceeded_observed');
     if (monitorUnreliable) reasons.push('monitor_unreliable');
-    uncertainty = 'Il WAL già scritto dal finish annullato non si recupera (costo/log). Il tentativo è marcato failed; lo staging è svuotato.';
+    uncertainty = failMarked === true
+      ? 'Il WAL già scritto dal finish annullato non si recupera (costo/log). fail_import_run è riuscito: il tentativo è marcato failed.'
+      : failMarked === false
+        ? 'Il WAL già scritto non si recupera. fail_import_run NON è riuscito: il tentativo può essere ancora `running` con lo staging pieno (riprendere con --takeover dopo il timeout di heartbeat).'
+        : 'Il WAL già scritto dal finish annullato non si recupera (costo/log). Lo stato del tentativo (failed/running) non è stato rilevato: verificarlo in catalog.import_runs.';
     nextAction = byMonitor
       ? 'Aumentare il budget o ridurre il carico solo con una decisione esplicita; poi ripetere il tentativo (il file intero riparte).'
       : 'Leggere il messaggio d\'errore del report e il tentativo failed; correggere la causa prima di ripetere.';
@@ -524,11 +637,29 @@ export function finalizeWal({ finish, monitor = null, finalWal = null, budgetByt
     uncertainty = 'Il WAL include l\'attività di altri client (limite superiore prudente).';
     nextAction = 'Nessuna azione sul WAL.';
   }
-  if (finish === 'committed' && verification && verification.ok === false) {
-    reasons.push('verification_failed');
-    nextAction = `${nextAction} Verifica post-finish NON superata: ${(verification.checks ?? []).filter((c) => !c.ok).map((c) => c.id).slice(0, 6).join(', ') || 'dettaglio nel report'}.`;
+  if (stopFailed) reasons.push('monitor_stop_failed');
+  if (concludeDeadlineExpired) reasons.push('conclusion_deadline_expired');
+  // verifica post-commit (R5): obbligatoria dopo un commit. `undefined` = non richiesta (solo prove unitarie di finalizeWal: il CLI passa
+  // sempre da buildFinishOutcome, che la rende obbligatoria). Assente, non eseguita, fallita o con risultato non valido NON è mai un successo.
+  let verificationState = 'not_applicable';
+  if (finish === 'committed') {
+    if (verification === undefined) verificationState = 'not_requested';
+    else if (verification?.status === 'not_run') {
+      verificationState = 'not_run';
+      reasons.push('verification_not_run');
+      nextAction = `${nextAction} Verifica post-finish NON eseguita: va eseguita da una sessione nuova (runbook).`;
+    } else if (!verification || typeof verification !== 'object' || typeof verification.ok !== 'boolean' || verification.status === 'failed') {
+      verificationState = 'failed';
+      reasons.push('verification_failed');
+      nextAction = `${nextAction} Verifica post-finish NON completata (${verification?.reason ?? 'risultato non valido'}): va ripetuta da una sessione nuova.`;
+    } else if (verification.ok === false) {
+      verificationState = 'failed_checks';
+      reasons.push('verification_failed');
+      nextAction = `${nextAction} Verifica post-finish NON superata: ${(verification.checks ?? []).filter((c) => !c.ok).map((c) => c.id).slice(0, 6).join(', ') || 'dettaglio nel report'}.`;
+    } else verificationState = 'passed';
   }
-  const ok = outcome === WAL_OUTCOMES.WITHIN_BUDGET && reasons.length === 0;
+  const monitorStatus = monitor === null ? 'absent' : stopFailed ? 'stop_failed' : monitor.missing === true ? 'missing' : monitor.lost === true ? 'lost' : monitorUnreliable ? 'unreliable' : 'reliable';
+  const ok = outcome ===WAL_OUTCOMES.WITHIN_BUDGET && reasons.length === 0;
   return {
     outcome,
     ok,
@@ -536,10 +667,13 @@ export function finalizeWal({ finish, monitor = null, finalWal = null, budgetByt
     failure_reasons: reasons,
     finish_status: finish,
     wal: { measured_mb: measured === null ? null : mb(measured), measured_bytes: measured, peak_mb: mb(peak), budget_mb: mb(budget), measured_via: finalWal?.via ?? null },
-    monitor: monitor ? { samples: monitor.samples, late_samples: monitor.lateSamples ?? 0, exceeded: monitor.exceeded === true, cancel_requested: monitor.cancelRequested === true, cancel_ok: monitor.cancelOk ?? null, cancel_attempts: monitor.cancelAttempts ?? 0, lost: monitor.lost === true, timeouts: monitor.timeouts ?? 0 } : null,
+    monitor: monitor ? { samples: monitor.samples, late_samples: monitor.lateSamples ?? 0, exceeded: monitor.exceeded === true, cancel_requested: monitor.cancelRequested === true, cancel_ok: monitor.cancelOk ?? null, cancel_attempts: monitor.cancelAttempts ?? 0, lost: monitor.lost === true, stop_failed: stopFailed, timeouts: monitor.timeouts ?? 0 } : null,
+    // stati DISTINTI: database, verifica post-commit, monitor, esito globale (un commit confermato non diventa mai un rollback immaginario)
+    states: { database: finish === 'committed' ? 'committed' : finish === 'failed' ? 'rolled_back_known' : 'unknown', verification: verificationState, monitor: monitorStatus, overall: outcome },
     known_db_state: dbState,
     residual_uncertainty: uncertainty,
     next_action: nextAction,
+    ...(identity !== undefined ? { reconcile: buildReconcile(identity) } : {}),
     ...(remote ? { remote_backend: remote } : {}),
   };
 }
