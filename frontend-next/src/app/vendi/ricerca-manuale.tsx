@@ -39,7 +39,9 @@ export function RicercaManuale({ sorgente, valori, applica }: Props) {
 
   const chiave = chiaveDi(valori);
   // Cambiare i campi dopo una ricerca rende superato l'elenco: non va usato.
-  const superata = ricerca.fase !== "ferma" && chiaveCercata !== chiave;
+  // Dopo «Usa questo vino» sono i campi stessi a cambiare (ortografia del vino
+  // scelto, annata): non è una modifica dell'utente e la conferma resta visibile.
+  const superata = ricerca.fase !== "ferma" && chiaveCercata !== chiave && !applicato;
   const puoCercare = Boolean(valori.produttore.trim() || valori.nome.trim());
   const scelto = ricerca.candidati.find((c) => c.id === ricerca.selezionato) ?? null;
 

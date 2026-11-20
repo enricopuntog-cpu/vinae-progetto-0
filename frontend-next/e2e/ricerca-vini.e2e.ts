@@ -105,6 +105,11 @@ test.describe.serial("Ricerca dei vini nel wizard: dati accessibili, scelta espl
     await info.attach(`ricerca-confermata-${info.project.name}.png`, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
 
     // «Nessuno di questi» lascia i campi com'erano e permette di continuare a mano.
+    await cerca(page, PRODUTTORE_E2E, nomePrivato);
+    await ricerca.getByTestId("ricerca-manuale-candidati").locator("label", { hasText: nomePrivato }).locator("input").check();
+    await page.getByTestId("ricerca-manuale-nessuno").click();
+    await expect(page.getByTestId("ricerca-manuale-usa-btn")).toBeDisabled();
+    await expect(page.getByLabel("Nome / Etichetta", { exact: true })).toHaveValue(nomePrivato);
     await page.getByLabel("Nome / Etichetta", { exact: true }).fill(`Nuovo ${corsa}`);
     await cerca(page, PRODUTTORE_E2E, `Nuovo ${corsa}`);
     await expect(page.getByTestId("ricerca-manuale-nessuno-trovato")).toBeVisible();

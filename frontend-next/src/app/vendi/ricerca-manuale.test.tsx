@@ -127,6 +127,22 @@ describe("RicercaManuale", () => {
     expect(screen.queryByTestId("ricerca-manuale-usa-btn")).toBeNull();
   });
 
+  it("dopo «Usa questo vino» i campi riscritti dal wizard non cancellano la conferma", async () => {
+    const sorgente: SorgenteCandidati = { codice: "t", cerca: async () => ({ ok: true, data: [VINO] }) };
+    const applica = () => undefined;
+    const { rerender } = render(
+      <RicercaManuale sorgente={sorgente} valori={{ ...valori, produttore: "antinori", annata: "" }} applica={applica as never} />,
+    );
+    fireEvent.click(screen.getByTestId("ricerca-manuale-cerca-btn"));
+    await waitFor(() => screen.getByTestId("ricerca-manuale-candidati"));
+    fireEvent.click(screen.getByTestId("ricerca-manuale-candidato-solaia-2018").querySelector("input") as HTMLInputElement);
+    fireEvent.click(screen.getByTestId("ricerca-manuale-usa-btn"));
+    // Il wizard adotta ortografia e annata del vino scelto: i campi cambiano.
+    rerender(<RicercaManuale sorgente={sorgente} valori={valori} applica={applica as never} />);
+    expect(screen.getByTestId("ricerca-manuale-applicato")).toBeTruthy();
+    expect(screen.queryByTestId("ricerca-manuale-superata")).toBeNull();
+  });
+
   it("nessuna chiamata di rete dal componente", async () => {
     monta({ ok: true, data: [VINO] });
     fireEvent.click(screen.getByTestId("ricerca-manuale-cerca-btn"));
