@@ -213,6 +213,30 @@ token o header sensibili.
 - Lo storico ha ownership, limite massimo e TTL.
 - Le risposte non certificano autenticità o valore.
 
+### Sommelier contestuale (WI-004)
+
+- Il contesto (vino consultato, Cantina) lo costruisce SOLO il server, nell'Edge Function `ai-sommelier`
+  (`supabase/functions/_shared/sommelier-contesto.ts`): il browser manda una richiesta
+  (`contesto: { tipo: "vino", annuncio_id }` oppure `{ tipo: "cantina", consenso: true }`), mai attributi,
+  inventari o un proprietario. Qualunque `owner_id`/`user_id` nel corpo è ignorato: il proprietario è l'utente del
+  token.
+- La Cantina è privata di default. Il consenso vale per UNA richiesta (il server pretende `consenso === true` ogni
+  volta e senza consenso risponde 400, mai un ripiego silenzioso sul Sommelier generale); il client lo tiene solo in
+  memoria, legato a utente e sessione, e lo azzera a chiusura del pannello, logout, cambio account, nuova richiesta
+  dalla pagina e «Cancella conversazione».
+- La lettura usa il client `service_role` (che aggira l'RLS): il filtro `owner_id = userId` è esplicito, l'elenco
+  colonne è chiuso (niente id, note, costi, foto, posizioni, prezzi, date, ordini, dati dell'account) e la griglia
+  `supabase/tests/wi004_sommelier_cantina_lettura.sql` prova sul database che il filtro è l'unica barriera e funziona.
+  Debito: una porta `SECURITY DEFINER` con colonne chiuse sarebbe più forte (richiede una migrazione).
+- I valori del database sono contenuto non fidato: ripuliti da caratteri di controllo, `<`, `>` e dal delimitatore,
+  troncati, serializzati come JSON su una riga dentro un blocco separato da istruzioni, storico e domanda; lo storico
+  reinserito accanto a dati è ripulito allo stesso modo. Limiti: 1000 righe lette, 12 gruppi, 8000 caratteri.
+- Il contesto non entra nei log né nello storico (si salvano solo domanda e risposta). Le risposte che citano le
+  bottiglie restano nello storico finché l'utente non cancella la conversazione: revocare ferma le letture future.
+- Il modello non ha strumenti: nessuna modifica alla Cantina, nessun annuncio, nessuna operazione commerciale.
+- Il booleano `consenso` inviato dal client è un'autorizzazione per la richiesta corrente, non una prova persistente e indipendente del gesto dell'utente: il server non può distinguere un clic reale da un client modificato dello stesso utente. Il rischio è confinato ai dati dell'utente stesso (il proprietario resta quello del token). Un registro del consenso lato server richiederebbe una migrazione ed è un debito dichiarato.
+- La prova a due utenti su PostgREST/Auth reali dello stack effimero (`supabase/tests/wi004_sommelier_postgrest.sh`, eseguita dal gate DB) usa la vera function e un fornitore finto.
+
 ## Database asincrono
 
 Gli handler asincroni non devono usare client database sincroni. I repository

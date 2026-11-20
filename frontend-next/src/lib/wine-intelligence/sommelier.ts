@@ -33,7 +33,17 @@ export type AttributoPerSommelier = {
   valore: string | number | { inizio: number; fine: number; apiceInizio?: number; apiceFine?: number };
   stato: Exclude<StatoConoscenza, "mancante">;
   origine: Exclude<OrigineInfo, "mancante">;
-  /** `false` per `stimato`: indicazione generica o non verificata. */
+  /**
+   * Quanto il dato si può dire. «registrato» = presente nel database Vinea, non
+   * certificato; «dichiarato» = scritto da un utente; «non_verificata» = stima.
+   */
+  affidabilita: "documentata" | "registrata" | "dichiarata" | "non_verificata";
+  /**
+   * WI-004: vero SOLO con una fonte documentata verificabile (`fonte_documentata`).
+   * Un dato registrato o dichiarato NON è un fatto verificato e non va presentato
+   * come tale; uno stimato ancora meno. Oggi nessun attributo ha una fonte
+   * documentata, quindi nessuno è `true`.
+   */
   usabileComeFatto: boolean;
 };
 
@@ -74,6 +84,22 @@ function voci(i: IntelligenzaVino): [ChiaveAttributo, Attributo<unknown>][] {
   ];
 }
 
+function affidabilitaDi(
+  stato: Exclude<StatoConoscenza, "mancante">,
+  origine: Exclude<OrigineInfo, "mancante">,
+): AttributoPerSommelier["affidabilita"] {
+  if (stato === "stimato") return "non_verificata";
+  if (stato === "dichiarato") return "dichiarata";
+  return origine === "fonte_documentata" ? "documentata" : "registrata";
+}
+
+/**
+ * Contratto di FORMA del contesto (WI-003). Dal WI-004 il contesto che arriva al
+ * provider lo costruisce il SERVER (`supabase/functions/_shared/sommelier-contesto.ts`,
+ * stesso vocabolario, esteso con elenco delle bottiglie, quantità, abbinamenti
+ * reali): il browser non è un'autorità sui dati. Questa funzione resta per
+ * anteprime e prove del contratto e NON alimenta il provider.
+ */
 export function costruisciContestoSommelier(ingresso: IngressoSommelier): ContestoSommelier {
   const { intelligenza, annuncio, cantina, consenso } = ingresso;
   const attributi: AttributoPerSommelier[] = [];
@@ -89,7 +115,8 @@ export function costruisciContestoSommelier(ingresso: IngressoSommelier): Contes
       valore: a.valore as AttributoPerSommelier["valore"],
       stato: a.stato,
       origine: a.origine,
-      usabileComeFatto: a.stato !== "stimato",
+      affidabilita: affidabilitaDi(a.stato, a.origine),
+      usabileComeFatto: a.stato === "registrato" && a.origine === "fonte_documentata",
     });
   }
 

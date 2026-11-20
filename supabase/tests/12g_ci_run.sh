@@ -315,6 +315,20 @@ run_grid "12zv SECURITY DEFINER globale" 12zv_vpm_018_definer_globale.sql 3
 # l'esito lo registra la griglia. Fixture `@fin001.test`, ROLLBACK, prima delle fixture 12g.
 run_grid "12zx prelievi: esito incerto" 12zx_fin_001_prelievi_esito_incerto.sql 3
 
+# WI-004: la lettura della Cantina del Sommelier contestuale come service_role (che aggira l'RLS):
+# colonne e privilegi dell'elenco chiuso, isolamento fra utenti, consumate/eliminate escluse e prova
+# che il filtro esplicito sul proprietario è l'unica barriera. Fixture `@wi004.test`, ROLLBACK.
+run_grid "wi004 Sommelier: lettura Cantina" wi004_sommelier_cantina_lettura.sql 3
+# WI-004: la stessa lettura attraverso PostgREST, Auth e la vera Edge Function (fornitore AI finto),
+# con due utenti reali: consenso, isolamento, storico, AI spenta. Richiede la chiave di servizio
+# dello stack effimero (E2E_SERVICE_KEY); fail-closed se manca. Fixture `@wi004-e2e.test`, trap.
+[ -n "${E2E_SERVICE_KEY:-}" ] || die "E2E_SERVICE_KEY mancante: la prova wi004 a due utenti non puo girare." 2
+wi004_pg="$(E2E_DB_URL="$E2E_DB_URL" E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_ANON_KEY="$E2E_ANON_KEY" \
+  E2E_SERVICE_KEY="$E2E_SERVICE_KEY" bash "$TESTS/wi004_sommelier_postgrest.sh")" \
+  || { printf '%s\n' "$wi004_pg" | tail -n 40; die "wi004 PostgREST a due utenti: fallita."; }
+printf '%s\n' "$wi004_pg"
+summary "- $(printf '%s\n' "$wi004_pg" | grep 'due utenti:' | tail -n 1)"
+
 # Stessa famiglia su sessioni PostgreSQL realmente separate: due esecutori sullo stesso
 # prelievo (uno solo riceve il Transfer), annullamento del titolare contro presa in carico e
 # contro un esito incerto (mai liberati i fondi), stessa chiave in parallelo, doppio esito

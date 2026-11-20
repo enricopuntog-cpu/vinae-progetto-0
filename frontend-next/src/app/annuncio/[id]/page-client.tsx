@@ -37,6 +37,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DrinkWindowSection } from "@/components/vinea/DrinkWindow";
 import { FoodPairingSection } from "@/components/vinea/FoodPairing";
 import { WineIntelligenceCard } from "@/components/vinea/WineIntelligenceCard";
+import { ChiediAlSommelier } from "@/components/vinea/ChiediAlSommelier";
+import { contestoVinoDaAnnuncio } from "@/lib/phase10/sommelier-contesto-ui";
 import { TrustBadge, TrustLegend } from "@/components/vinea/TrustBadge";
 import { ReportDialog } from "@/components/vinea/ReportDialog";
 import { ListingContactActions } from "@/components/vinea/ListingContactActions";
@@ -108,6 +110,10 @@ export default function AnnuncioDetailPageClient({
 }) {
   const router = useRouter();
   const listingId = wine.listingId ?? wine.id;
+  const contestoSommelier = contestoVinoDaAnnuncio(
+    wine.listingId,
+    [wine.produttore, wine.nome, wine.annata > 0 ? String(wine.annata) : ""].filter(Boolean).join(" "),
+  );
   const sonoIlVenditore = Boolean(proprio);
   // VP-C: bottiglie da acquistare da questo annuncio. Resta 1 finché il
   // database non ammette ordini di più bottiglie.
@@ -330,6 +336,22 @@ export default function AnnuncioDetailPageClient({
           alle sezioni sotto. Sta prima di «quando berlo» perché le introduce;
           non le sostituisce. */}
       <WineIntelligenceCard wine={wine} wineId={wine.wineSlug ?? wine.id} ancore />
+
+      {/* WI-004: il Sommelier riceve questo vino, riletto dal server. Il pulsante
+          esiste solo per un annuncio reale (identificativo uuid): un id
+          dimostrativo non ha un vino che il server possa leggere. */}
+      {contestoSommelier ? (
+        <div className="flex flex-wrap items-center gap-2" data-testid="sommelier-vino-azione">
+          <ChiediAlSommelier
+            contesto={contestoSommelier}
+            etichetta="Chiedi al Sommelier di questo vino"
+            testId="sommelier-chiedi-vino"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Usa solo la scheda del vino: nessun dato tuo e nessun prezzo.
+          </p>
+        </div>
+      ) : null}
 
       {/* Quando berlo + abbinamenti. Indicizzati per vino, non per annuncio:
           su dati reali `id` è lo slug dell'annuncio e non troverebbe nulla. */}

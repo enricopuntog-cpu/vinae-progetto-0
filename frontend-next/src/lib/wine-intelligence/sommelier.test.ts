@@ -61,8 +61,25 @@ describe("contesto per il Sommelier (WI-004)", () => {
     const i = costruisciIntelligenzaVino({ wine: VINO, meta: getWineMeta("sconosciuto") });
     const c = costruisciContestoSommelier({ intelligenza: i });
     const abb = c.pubblico.attributi.find((a) => a.chiave === "abbinamenti");
-    expect(abb).toMatchObject({ stato: "stimato", usabileComeFatto: false });
-    expect(c.pubblico.attributi.find((a) => a.chiave === "nome")?.usabileComeFatto).toBe(true);
+    expect(abb).toMatchObject({ stato: "stimato", usabileComeFatto: false, affidabilita: "non_verificata" });
+  });
+
+  it("WI-004: «registrato» e «dichiarato» non sono «verificato»: usabileComeFatto richiede una fonte documentata", () => {
+    const c = costruisciContestoSommelier({ intelligenza });
+    const nome = c.pubblico.attributi.find((a) => a.chiave === "nome");
+    expect(nome).toMatchObject({ stato: "registrato", origine: "database_vinea", affidabilita: "registrata", usabileComeFatto: false });
+    // Nessun attributo oggi ha una fonte documentata: nessuno è usabile come fatto.
+    expect(c.pubblico.attributi.filter((a) => a.usabileComeFatto)).toEqual([]);
+
+    const dichiarata = costruisciIntelligenzaVino({ wine: { ...VINO, catalogSource: "utente" }, meta: getWineMeta("monfortino-2015") });
+    const d = costruisciContestoSommelier({ intelligenza: dichiarata }).pubblico.attributi.find((a) => a.chiave === "nome");
+    expect(d).toMatchObject({ stato: "dichiarato", affidabilita: "dichiarata", usabileComeFatto: false });
+
+    // Solo una fonte documentata verificabile (catalogo canonico, futuro) è usabile come fatto.
+    const documentata = structuredClone(intelligenza);
+    documentata.identita.nome = { stato: "registrato", origine: "fonte_documentata", valore: "Monfortino" };
+    const doc = costruisciContestoSommelier({ intelligenza: documentata }).pubblico.attributi.find((a) => a.chiave === "nome");
+    expect(doc).toMatchObject({ affidabilita: "documentata", usabileComeFatto: true });
   });
 
   it("è serializzabile e versionato", () => {

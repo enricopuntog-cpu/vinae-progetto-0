@@ -1,8 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, MessageSquareText } from "lucide-react";
+import { ascoltaRichiesteSommelier, type ContestoUi } from "@/lib/phase10/sommelier-contesto-ui";
 
 function Pulsante({ onClick, caricamento = false }: { onClick?: () => void; caricamento?: boolean }) {
   return (
@@ -31,6 +32,24 @@ const Pannello = dynamic(() => import("@/components/vinea/SommelierChat"), {
 
 export default function SommelierLauncher() {
   const [richiesto, setRichiesto] = useState(false);
+  // WI-004: una pagina (scheda del vino, Cantina) può aprire il pannello su un
+  // contesto. Il launcher lo carica al primo evento e glielo passa; da lì in poi
+  // il pannello ascolta da solo. Il contesto non porta nessun consenso.
+  const [contestoIniziale, setContestoIniziale] = useState<ContestoUi | null>(null);
+
+  useEffect(
+    () =>
+      ascoltaRichiesteSommelier((contesto) => {
+        setContestoIniziale(contesto);
+        setRichiesto(true);
+      }),
+    [],
+  );
+
   // Dopo il primo click conserviamo lo stato della conversazione anche chiudendo.
-  return richiesto ? <Pannello inizialmenteAperto /> : <Pulsante onClick={() => setRichiesto(true)} />;
+  return richiesto ? (
+    <Pannello inizialmenteAperto contestoIniziale={contestoIniziale} />
+  ) : (
+    <Pulsante onClick={() => setRichiesto(true)} />
+  );
 }

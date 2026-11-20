@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MessageSquareText, Send, Sparkles, X, Trash2, Loader2 } from "lucide-react";
+import { MessageSquareText, Send, Sparkles, X, Trash2, Loader2, ShieldCheck } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
 import { BetaActionNotice } from "@/components/vinea/BetaActionNotice";
@@ -10,6 +10,14 @@ import {
   depositoBrowser,
   sessionIdPersistente,
 } from "@/lib/phase10/sommelier-session";
+import {
+  ascoltaRichiesteSommelier,
+  concediConsenso,
+  consensoAttivo,
+  richiestaContestoServer,
+  type Consenso,
+  type ContestoUi,
+} from "@/lib/phase10/sommelier-contesto-ui";
 import { useVinea } from "@/lib/vinea-store";
 import { AZIONI_IA_ABILITATE } from "@/config/features";
 
@@ -51,7 +59,25 @@ const SUGGERIMENTI = [
   "Che differenza c'è tra Brunello e Rosso di Montalcino?",
 ];
 
-export default function SommelierChat({ inizialmenteAperto = false }: { inizialmenteAperto?: boolean }) {
+// WI-004: domande di partenza coerenti con il contesto attivo.
+const SUGGERIMENTI_VINO = [
+  "Quando è il momento migliore per berlo?",
+  "Con quali piatti lo abbino?",
+  "Cosa non sai di questo vino?",
+];
+const SUGGERIMENTI_CANTINA = [
+  "Quali vini della mia Cantina potrei aprire questa sera?",
+  "Ho qualche bottiglia adatta a una cena di pesce?",
+  "Quali bottiglie hanno una finestra di consumo documentata?",
+];
+
+export default function SommelierChat({
+  inizialmenteAperto = false,
+  contestoIniziale = null,
+}: {
+  inizialmenteAperto?: boolean;
+  contestoIniziale?: ContestoUi | null;
+}) {
   const { authUser } = useVinea();
   const [aperto, setAperto] = useState(inizialmenteAperto);
   const [montato, setMontato] = useState(false);
@@ -60,16 +86,71 @@ export default function SommelierChat({ inizialmenteAperto = false }: { inizialm
   const [inCorso, setInCorso] = useState(false);
   const [azioneBloccata, setAzioneBloccata] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  // WI-004: contesto scelto dalla pagina e consenso alla Cantina. Il consenso nasce
+  // spento, vive solo in memoria (mai in localStorage) ed è legato a utente e
+  // sessione: logout, cambio account o nuova conversazione lo rendono inerte.
+  const [contesto, setContesto] = useState<ContestoUi | null>(contestoIniziale);
+  const [consenso, setConsenso] = useState<Consenso | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const storicoRichiesto = useRef<string | null>(null);
+  // Generazione della risposta in corso. Ogni invio ne apre una nuova; cambio di utente, revoca del
+  // consenso, chiusura del pannello e «Cancella conversazione» la invalidano: i frammenti tardivi di
+  // un flusso partito per un altro utente (o con un consenso poi revocato) vengono scartati.
+  const generazione = useRef(0);
+  const inVolo = useRef(false);
 
   const aiService = useMemo(
     () => (AZIONI_IA_ABILITATE ? createSupabaseAiService(getSupabaseClient()) : null),
     [],
   );
   const utenteCorrente = authUser?.userId ?? null;
+  const invalidaRisposta = useCallback(() => {
+    generazione.current += 1;
+    if (inVolo.current) {
+      inVolo.current = false;
+      // La bolla in attesa non resta vuota: dice che la risposta è stata interrotta.
+      setBattute((precedenti) =>
+        precedenti.length > 0 && precedenti[precedenti.length - 1].ruolo === "sommelier"
+          ? [...precedenti.slice(0, -1), { ruolo: "sommelier", contenuto: "⚠️ Risposta interrotta." }]
+          : precedenti,
+      );
+    }
+    setInCorso(false);
+  }, []);
+  const consensoCantina = consensoAttivo(consenso, utenteCorrente, sessionId);
+
+  // Una richiesta dalla pagina cambia il contesto e NON porta con sé il consenso.
+  useEffect(
+    () =>
+      ascoltaRichiesteSommelier((nuovo) => {
+        setContesto(nuovo);
+        setConsenso(null);
+        setAperto(true);
+      }),
+    [],
+  );
+
+  // Chiudere il pannello revoca il consenso: la lettura della Cantina non
+  // sopravvive a una conversazione che l'utente ha chiuso.
+  useEffect(() => {
+    if (!aperto) {
+      setConsenso(null);
+      invalidaRisposta();
+    }
+  }, [aperto, invalidaRisposta]);
+
+  // Logout o cambio di account: si porta via anche il contesto e il consenso.
+  const utentePrecedente = useRef(utenteCorrente);
+  useEffect(() => {
+    if (utentePrecedente.current !== null && utentePrecedente.current !== utenteCorrente) {
+      setContesto(null);
+      setConsenso(null);
+    }
+    if (utentePrecedente.current !== utenteCorrente) invalidaRisposta();
+    utentePrecedente.current = utenteCorrente;
+  }, [utenteCorrente, invalidaRisposta]);
 
   // Il montaggio controlla soltanto l'animazione del pannello.
   useEffect(() => {
@@ -150,11 +231,14 @@ export default function SommelierChat({ inizialmenteAperto = false }: { inizialm
   const invia = useCallback(
     async (grezzo: string) => {
       const messaggio = grezzo.trim();
-      if (!messaggio || inCorso || !sessionId) return;
+      if (!messaggio || inCorso) return;
+      // Prima del controllo sulla sessione: con le azioni spente la sessione non
+      // viene mai creata, e un invio senza risposta né avviso sarebbe un pulsante muto.
       if (!AZIONI_IA_ABILITATE || !aiService) {
         setAzioneBloccata(true);
         return;
       }
+      if (!sessionId) return;
 
       setAzioneBloccata(false);
       setBattute((precedenti) => [
@@ -169,16 +253,26 @@ export default function SommelierChat({ inizialmenteAperto = false }: { inizialm
       // arrivano più fitti di quanto React ridisegni, e ricostruirlo dallo
       // stato a ogni delta significherebbe leggere un valore già vecchio.
       let accumulato = "";
-      const scriviUltima = (contenuto: string, troncato?: boolean) =>
+      const mia = ++generazione.current;
+      inVolo.current = true;
+      const scriviUltima = (contenuto: string, troncato?: boolean) => {
+        if (generazione.current !== mia) return;
         setBattute((precedenti) => {
           const copia = [...precedenti];
           copia[copia.length - 1] = { ruolo: "sommelier", contenuto, troncato };
           return copia;
         });
+      };
 
       try {
         const esito = await aiService.sommelierChat(
-          { sessionId, messaggio },
+          {
+            sessionId,
+            messaggio,
+            // Solo una RICHIESTA di contesto: il server rilegge e decide. Senza
+            // consenso attivo la Cantina non viene chiesta affatto.
+            contesto: richiestaContestoServer(contesto, consensoCantina),
+          },
           (delta) => {
             accumulato += delta;
             scriviUltima(accumulato);
@@ -190,18 +284,32 @@ export default function SommelierChat({ inizialmenteAperto = false }: { inizialm
           scriviUltima(accumulato ? `${accumulato}\n\n⚠️ ${esito.error}` : `⚠️ ${esito.error}`);
         }
       } finally {
-        setInCorso(false);
+        if (generazione.current === mia) {
+          inVolo.current = false;
+          setInCorso(false);
+        }
       }
     },
-    [aiService, inCorso, sessionId],
+    [aiService, inCorso, sessionId, contesto, consensoCantina],
   );
 
   const azzera = useCallback(async () => {
-    if (sessionId && aiService) await aiService.sommelierCancella(sessionId);
+    invalidaRisposta();
+    // Prima lo stato locale, poi la rete: un invio fatto durante l'attesa non viene cancellato.
     setBattute([]);
     setAzioneBloccata(false);
-  }, [aiService, sessionId]);
+    // Una conversazione nuova riparte generale: né contesto né consenso restano.
+    setContesto(null);
+    setConsenso(null);
+    if (sessionId && aiService) await aiService.sommelierCancella(sessionId);
+  }, [aiService, sessionId, invalidaRisposta]);
 
+  const suggerimenti =
+    contesto?.tipo === "vino"
+      ? SUGGERIMENTI_VINO
+      : contesto?.tipo === "cantina" && consensoCantina && !contesto.vuota
+        ? SUGGERIMENTI_CANTINA
+        : SUGGERIMENTI;
   const conversazioneAperta = battute.length > 0;
   const vuoto = !conversazioneAperta && !inCorso;
 
@@ -287,6 +395,25 @@ export default function SommelierChat({ inizialmenteAperto = false }: { inizialm
           </div>
         </header>
 
+        {contesto ? (
+          <ContestoAttivo
+            contesto={contesto}
+            consensoAttivo={consensoCantina}
+            autenticato={utenteCorrente !== null}
+            iaAttiva={AZIONI_IA_ABILITATE}
+            onConsenti={() => setConsenso(concediConsenso(utenteCorrente, sessionId))}
+            onRevoca={() => {
+              setConsenso(null);
+              invalidaRisposta();
+            }}
+            onTogli={() => {
+              setContesto(null);
+              setConsenso(null);
+              invalidaRisposta();
+            }}
+          />
+        ) : null}
+
         <div
           ref={scrollerRef}
           className="flex-1 overflow-y-auto px-3 py-3"
@@ -299,7 +426,7 @@ export default function SommelierChat({ inizialmenteAperto = false }: { inizialm
                 sulle denominazioni o dubbi sul servizio.
               </p>
               <div className="grid gap-2">
-                {SUGGERIMENTI.map((s) => (
+                {suggerimenti.map((s) => (
                   <button
                     key={s}
                     onClick={() => void invia(s)}
@@ -384,5 +511,105 @@ export default function SommelierChat({ inizialmenteAperto = false }: { inizialm
       </aside>
       </>}
     </>
+  );
+}
+
+/**
+ * Dice, sempre, quale contesto sta usando il Sommelier e perché: per la scheda di
+ * un vino sono dati pubblici; per la Cantina serve il consenso esplicito
+ * dell'utente, revocabile in ogni momento.
+ */
+function ContestoAttivo({
+  contesto,
+  consensoAttivo: consenso,
+  autenticato,
+  iaAttiva,
+  onConsenti,
+  onRevoca,
+  onTogli,
+}: {
+  contesto: ContestoUi;
+  consensoAttivo: boolean;
+  autenticato: boolean;
+  /** Azioni AI accese: in Beta spente il consenso non ha niente da autorizzare. */
+  iaAttiva: boolean;
+  onConsenti: () => void;
+  onRevoca: () => void;
+  onTogli: () => void;
+}) {
+  const bottone =
+    "rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-medium text-antracite transition hover:border-bordeaux focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bordeaux/40";
+  return (
+    <div
+      role="region"
+      aria-label="Contesto del Sommelier"
+      data-testid="sommelier-contesto"
+      data-tipo={contesto.tipo}
+      data-consenso={contesto.tipo === "cantina" ? String(consenso) : undefined}
+      className="space-y-2 border-b border-border bg-secondary/50 px-3 py-2.5 text-xs text-antracite"
+    >
+      {contesto.tipo === "vino" ? (
+        <p>
+          <span className="font-semibold">Stai chiedendo di: {contesto.etichetta || "questo vino"}.</span>{" "}
+          Il Sommelier usa la scheda Vinea di questo vino, senza prezzo né dati del venditore, e distingue ciò che è
+          registrato da ciò che è dichiarato o stimato.
+        </p>
+      ) : contesto.vuota ? (
+        <p data-testid="sommelier-cantina-vuota">
+          <span className="font-semibold">La tua Cantina è vuota.</span> Non c&apos;è nulla da condividere: il
+          Sommelier risponderà in generale.
+        </p>
+      ) : !autenticato ? (
+        <p>
+          <span className="font-semibold">Accedi per usare la tua Cantina.</span> Senza sessione il Sommelier non può
+          leggerla.
+        </p>
+      ) : !iaAttiva ? (
+        <p data-testid="sommelier-beta-ia-spenta">
+          <span className="font-semibold">La funzione IA sarà attivata in un prossimo aggiornamento.</span> Per ora il
+          Sommelier non legge la tua Cantina e nessun dato viene inviato a un provider esterno.
+        </p>
+      ) : consenso ? (
+        <p data-testid="sommelier-consenso-attivo" className="flex items-start gap-1.5">
+          <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-bordeaux" aria-hidden />
+          <span>
+            <span className="font-semibold">Il Sommelier vede la tua Cantina.</span> Usa vini, annate, formati,
+            quantità, finestre di consumo (comprese le tue), preferenze e abbinamenti delle tue bottiglie, solo per
+            questa conversazione. Non condivide prezzi d&apos;acquisto, note, posizioni, foto né dati
+            dell&apos;account. Se il campione è parziale, te lo dirà. Le risposte restano nella cronologia finché non
+            la cancelli; revocare ferma le letture future.
+          </span>
+        </p>
+      ) : (
+        <p data-testid="sommelier-consenso-richiesto">
+          <span className="font-semibold">Il Sommelier non vede la tua Cantina.</span> Se vuoi che risponda sulle
+          bottiglie che possiedi, autorizzalo: leggerà vini, annate, formati, quantità, finestre di consumo (comprese
+          le tue), preferenze e abbinamenti; non prezzi d&apos;acquisto, note, posizioni, foto né dati
+          dell&apos;account. Le risposte restano nella cronologia finché non la cancelli. Puoi revocare in qualsiasi
+          momento.
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {contesto.tipo === "cantina" && autenticato && iaAttiva && !contesto.vuota ? (
+          consenso ? (
+            <button type="button" className={bottone} onClick={onRevoca} data-testid="sommelier-consenso-revoca">
+              Revoca l&apos;accesso alla Cantina
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={`${bottone} border-bordeaux/40 bg-bordeaux text-crema hover:bg-bordeaux/90`}
+              onClick={onConsenti}
+              data-testid="sommelier-consenso-concedi"
+            >
+              Autorizza il Sommelier a usare la mia Cantina
+            </button>
+          )
+        ) : null}
+        <button type="button" className={bottone} onClick={onTogli} data-testid="sommelier-contesto-rimuovi">
+          Torna al Sommelier generale
+        </button>
+      </div>
+    </div>
   );
 }

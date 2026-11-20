@@ -26,6 +26,7 @@ import {
 import type { Wine } from "@/data/wines";
 import { WineCard } from "@/components/vinea/WineCard";
 import { WineIntelligenceCard } from "@/components/vinea/WineIntelligenceCard";
+import { ChiediAlSommelier } from "@/components/vinea/ChiediAlSommelier";
 import { chiaveVino } from "@/lib/price-intelligence/insights";
 import { AperturaBottiglia } from "@/components/vinea/AperturaBottiglia";
 import { CantinaAccessori } from "@/components/vinea/cantina-accessori/CantinaAccessori";
@@ -311,6 +312,23 @@ function Cantina({ conSessione }: { conSessione: boolean }) {
           label="Salute cantina"
           value={saluteCantina(usoPct, nonCollocate.length)}
           hint="Indicatore orientativo locale"
+        />
+      </div>
+
+      {/* WI-004: il Sommelier può rispondere sulle bottiglie che possiedi, ma solo
+          se lo autorizzi dentro il pannello. Aprire non concede nulla. */}
+      <div
+        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3"
+        data-testid="sommelier-cantina-azione"
+      >
+        <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+          <span className="font-medium text-antracite">Sommelier della tua Cantina.</span> Chiedi cosa aprire
+          stasera o cosa abbinare: la tua Cantina resta privata finché non lo autorizzi.
+        </p>
+        <ChiediAlSommelier
+          contesto={{ tipo: "cantina", vuota: totBottiglie === 0 }}
+          etichetta="Chiedi al Sommelier della mia Cantina"
+          testId="sommelier-chiedi-cantina"
         />
       </div>
 
