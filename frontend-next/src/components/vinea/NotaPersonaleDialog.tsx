@@ -477,7 +477,14 @@ export function NotaPersonaleDialog({
 }) {
   return (
     <Dialog open={open && vino !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] max-w-xl overflow-y-auto">
+      <DialogContent
+        className="max-h-[90dvh] max-w-xl overflow-y-auto"
+        // Una notifica (toast) che prende il focus o riceve un clic non deve chiudere l'editor e far
+        // perdere quanto scritto.
+        onInteractOutside={(e) => {
+          if ((e.target as HTMLElement | null)?.closest?.("[data-sonner-toaster]")) e.preventDefault();
+        }}
+      >
         {open && vino ? (
           <Corpo
             // Stato nuovo a ogni apertura e a ogni vino: i campi partono dalla nota salvata.

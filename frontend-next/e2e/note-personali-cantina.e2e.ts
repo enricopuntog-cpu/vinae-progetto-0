@@ -170,6 +170,7 @@ test.describe.serial("Note personali sul vino: salvate, private e senza toccare 
     expect(leggiDalDatabase("select abbinamenti::text from public.wine_personal_notes;").trim()).toBe("{\"Risotto ai funghi\"}");
 
     // Cancellazione, con seconda conferma.
+    await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 15_000 });
     await schedaDelVino(page).getByTestId("cantina-completa-info").click();
     await dialogo.getByTestId("nota-elimina").click();
     await dialogo.getByTestId("nota-elimina-conferma").click();
