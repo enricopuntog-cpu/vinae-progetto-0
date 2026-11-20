@@ -17,6 +17,7 @@ import type {
   Abbinamento,
   AiService,
   CatalogazioneSuggerimento,
+  RichiestaContestoSommelier,
   SommelierEsito,
   SommelierMessaggio,
   SommelierRuolo,
@@ -89,6 +90,12 @@ export const mapStorico = (righe: RigaStorico[] | null): SommelierMessaggio[] =>
     }));
 
 // ---------------------------------------------------------------------------
+
+/** Copia campo per campo: un oggetto più ricco non porta con sé niente di più. */
+const contestoPerServer = (c: RichiestaContestoSommelier) =>
+  c.tipo === "vino"
+    ? { tipo: "vino" as const, annuncio_id: c.annuncioId }
+    : { tipo: "cantina" as const, consenso: true as const };
 
 const urlFunzione = (nome: string): string | null => {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -171,7 +178,13 @@ export const createSupabaseAiService = (client: SupabaseClient | null): AiServic
           apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ session_id: input.sessionId, message: input.messaggio }),
+        // Il contesto è una richiesta (WI-004), con i nomi del contratto del server.
+        // Senza contesto il corpo è identico a quello di prima.
+        body: JSON.stringify({
+          session_id: input.sessionId,
+          message: input.messaggio,
+          ...(input.contesto ? { contesto: contestoPerServer(input.contesto) } : {}),
+        }),
       });
     } catch {
       return { ok: false, error: "Il Sommelier non è al momento raggiungibile." };

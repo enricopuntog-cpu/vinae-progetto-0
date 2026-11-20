@@ -315,6 +315,11 @@ run_grid "12zv SECURITY DEFINER globale" 12zv_vpm_018_definer_globale.sql 3
 # l'esito lo registra la griglia. Fixture `@fin001.test`, ROLLBACK, prima delle fixture 12g.
 run_grid "12zx prelievi: esito incerto" 12zx_fin_001_prelievi_esito_incerto.sql 3
 
+# WI-004: la lettura della Cantina del Sommelier contestuale come service_role (che aggira l'RLS):
+# colonne e privilegi dell'elenco chiuso, isolamento fra utenti, consumate/eliminate escluse e prova
+# che il filtro esplicito sul proprietario è l'unica barriera. Fixture `@wi004.test`, ROLLBACK.
+run_grid "wi004 Sommelier: lettura Cantina" wi004_sommelier_cantina_lettura.sql 3
+
 # Stessa famiglia su sessioni PostgreSQL realmente separate: due esecutori sullo stesso
 # prelievo (uno solo riceve il Transfer), annullamento del titolare contro presa in carico e
 # contro un esito incerto (mai liberati i fondi), stessa chiave in parallelo, doppio esito

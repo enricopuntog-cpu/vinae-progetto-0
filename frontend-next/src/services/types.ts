@@ -2483,6 +2483,17 @@ export type SommelierEsito = {
   troncato: boolean;
 };
 
+/**
+ * WI-004 — il contesto che il client chiede al Sommelier. È una RICHIESTA, non un
+ * dato: il browser non porta attributi, inventari né il proprietario; il server
+ * rilegge tutto e ricava l'identità dal token.
+ * - `vino`: l'annuncio realmente consultato (identificativo, dato pubblico);
+ * - `cantina`: `consenso` è letteralmente `true`, per quella richiesta soltanto.
+ */
+export type RichiestaContestoSommelier =
+  | { tipo: "vino"; annuncioId: string }
+  | { tipo: "cantina"; consenso: true };
+
 export interface AiService {
   /** Abbinamento cibo-vino. Il catalogo lo risolve il server (7.8). */
   abbinamento(query: string): Promise<Result<Abbinamento>>;
@@ -2498,7 +2509,7 @@ export interface AiService {
    * l'esito finale dice se lo stream è arrivato in fondo.
    */
   sommelierChat(
-    input: { sessionId: string; messaggio: string },
+    input: { sessionId: string; messaggio: string; contesto?: RichiestaContestoSommelier },
     onDelta: (delta: string) => void,
   ): Promise<Result<SommelierEsito>>;
 }
