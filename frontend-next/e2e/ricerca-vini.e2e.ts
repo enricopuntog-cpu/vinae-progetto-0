@@ -64,6 +64,16 @@ test.describe.serial("Ricerca dei vini nel wizard: dati accessibili, scelta espl
     await page.getByTestId("ricerca-manuale-cerca-btn").click();
   }
 
+  /**
+   * La ricerca ha risposto (elenco o «nessun vino») senza errore e il vino cercato NON è tra i candidati.
+   * Il token della corsa è condiviso dai vini sintetici, quindi un elenco di altri vini è legittimo.
+   */
+  async function esitoSenza(page: Page, nome: string) {
+    await expect(page.getByTestId("ricerca-manuale-candidati").or(page.getByTestId("ricerca-manuale-nessuno-trovato"))).toBeVisible();
+    await expect(page.getByTestId("ricerca-manuale-errore")).toHaveCount(0);
+    await expect(page.getByTestId("ricerca-manuale-candidati")).not.toContainText(nome);
+  }
+
   test("il venditore ritrova i propri vini, sceglie e conferma; l'altro privato non compare; nessuna scrittura", async ({ browser, diagnostica }, info) => {
     const viniPrima = contaVini();
     const { contesto, page, richieste } = await apriIdentificazione(browser, "venditore", info, diagnostica);
@@ -93,7 +103,7 @@ test.describe.serial("Ricerca dei vini nel wizard: dati accessibili, scelta espl
 
     // Un altro vino privato (dell'altro utente) cercato per nome esatto: nessun risultato, non un errore.
     await cerca(page, PRODUTTORE_E2E, nomeAltro);
-    await expect(page.getByTestId("ricerca-manuale-nessuno-trovato")).toBeVisible();
+    await esitoSenza(page, nomeAltro);
     await expect(page.getByTestId("ricerca-manuale-errore")).toHaveCount(0);
 
     // Scelta esplicita: i campi si riempiono solo con «Usa questo vino».
@@ -112,7 +122,7 @@ test.describe.serial("Ricerca dei vini nel wizard: dati accessibili, scelta espl
     await expect(page.getByLabel("Nome / Etichetta", { exact: true })).toHaveValue(nomePrivato);
     await page.getByLabel("Nome / Etichetta", { exact: true }).fill(`Nuovo ${corsa}`);
     await cerca(page, PRODUTTORE_E2E, `Nuovo ${corsa}`);
-    await expect(page.getByTestId("ricerca-manuale-nessuno-trovato")).toBeVisible();
+    await esitoSenza(page, `Nuovo ${corsa}`);
     await expect(page.getByLabel("Nome / Etichetta", { exact: true })).toHaveValue(`Nuovo ${corsa}`);
 
     // La ricerca non scrive: solo GET verso le due viste, nessuna scrittura, nessuna Edge Function (AI), nessun vino nuovo.
@@ -138,8 +148,7 @@ test.describe.serial("Ricerca dei vini nel wizard: dati accessibili, scelta espl
     await expect(page.getByTestId("ricerca-manuale-candidati")).toContainText(nomePubblico);
 
     await cerca(page, PRODUTTORE_E2E, nomePrivato);
-    await expect(page.getByTestId("ricerca-manuale-nessuno-trovato")).toBeVisible();
-    await expect(page.getByTestId("ricerca-manuale-candidati")).toHaveCount(0);
+    await esitoSenza(page, nomePrivato);
 
     await cerca(page, PRODUTTORE_E2E, nomeAltro);
     await expect(page.getByTestId("ricerca-manuale-candidati")).toContainText(nomeAltro);

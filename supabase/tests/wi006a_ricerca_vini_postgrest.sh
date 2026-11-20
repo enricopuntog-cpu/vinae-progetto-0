@@ -101,9 +101,10 @@ sql "analyze public.wines;" >/dev/null
 BASE_VINI="$(sql "select count(*) from public.wines")"
 
 # Piano di esecuzione, come authenticated (RLS attiva), sulla stessa forma di query del client.
+UID_A="$(sql "select id from auth.users where email='$EMAIL_A'")"
 for q in "produttore ilike '%cant%' and nome ilike '%etic%'" "(produttore ilike '%sint%' or nome ilike '%sint%') and (produttore ilike '%etic%' or nome ilike '%etic%')"; do
   plan="$(sql "begin; set local role authenticated;
-    select set_config('request.jwt.claims', json_build_object('sub', (select id from auth.users where email='$EMAIL_A'), 'role','authenticated')::text, true);
+    select set_config('request.jwt.claims', json_build_object('sub', '$UID_A', 'role','authenticated')::text, true);
     explain (analyze, format text) select id, slug, produttore, nome, annata from public.wines where $q
       order by produttore, nome, annata, slug limit 60; rollback;")"
   echo "EXPLAIN [$q]"; printf '%s\n' "$plan" | { grep -E 'Scan|Index|Execution Time|Limit|Sort' || true; } | head -8
