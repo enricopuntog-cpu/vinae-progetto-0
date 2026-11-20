@@ -27,6 +27,8 @@ import type { Wine } from "@/data/wines";
 import { WineCard } from "@/components/vinea/WineCard";
 import { WineIntelligenceCard } from "@/components/vinea/WineIntelligenceCard";
 import { ChiediAlSommelier } from "@/components/vinea/ChiediAlSommelier";
+import { ConsigliCantina } from "@/components/vinea/ConsigliCantina";
+import { ancoraGruppo } from "@/lib/cantina/consigli";
 import { chiaveVino } from "@/lib/price-intelligence/insights";
 import { AperturaBottiglia } from "@/components/vinea/AperturaBottiglia";
 import { CantinaAccessori } from "@/components/vinea/cantina-accessori/CantinaAccessori";
@@ -331,6 +333,10 @@ function Cantina({ conSessione }: { conSessione: boolean }) {
           testId="sommelier-chiedi-cantina"
         />
       </div>
+
+      {/* WI-005: una bottiglia da aprire, motivata, sui dati già caricati. Non ripete i
+          contatori di questa pagina e non scrive nulla. */}
+      <ConsigliCantina bottiglie={bottiglieCantina} vini={viniCantina} />
 
       {/* Bottiglie: 3 viste */}
       <Tabs defaultValue="tutte">
@@ -1177,7 +1183,7 @@ function BottiglieView({
         const esposta = esposizioneCantina[slug] ?? "nessuna";
         const bottiglia = bottigliaDelVino(w);
         return (
-          <div key={w.id} className="space-y-2">
+          <div key={w.id} id={ancoraGruppo(slug)} className="scroll-mt-24 space-y-2">
             {/* Lo stato viene dalla stessa bottiglia che i comandi qui sotto
                 usano, e non da un aggregato sulle bottiglie di quel vino: se
                 il badge dicesse «Aperta» guardando una bottiglia e il pulsante
