@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 import type { Wine } from "@/data/wines";
 import { WineCard } from "@/components/vinea/WineCard";
+import { WineIntelligenceCard } from "@/components/vinea/WineIntelligenceCard";
+import { chiaveVino } from "@/lib/price-intelligence/insights";
 import { AperturaBottiglia } from "@/components/vinea/AperturaBottiglia";
 import { CantinaAccessori } from "@/components/vinea/cantina-accessori/CantinaAccessori";
 import { DettaglioGruppo, RiepilogoGruppoCantina } from "@/components/vinea/GruppoCantina";
@@ -1176,6 +1178,15 @@ function BottiglieView({
               riepilogo={riepilogo}
               formato={w.formato}
               libere={libere}
+            />
+            {/* WI-003: stesso modello della scheda annuncio, in forma compatta.
+                Legge i metadati dal WineMetaProvider già montato su questa
+                pagina e la finestra personale dell'utente. */}
+            <WineIntelligenceCard
+              wine={w}
+              wineId={chiaveVino(w)}
+              compatta
+              schedaHref={w.detailHref}
             />
             <div className="flex flex-wrap gap-2">
               {/* Nel mock questo era un interruttore su un insieme in memoria.

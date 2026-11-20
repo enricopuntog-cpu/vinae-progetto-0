@@ -36,6 +36,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DrinkWindowSection } from "@/components/vinea/DrinkWindow";
 import { FoodPairingSection } from "@/components/vinea/FoodPairing";
+import { WineIntelligenceCard } from "@/components/vinea/WineIntelligenceCard";
 import { TrustBadge, TrustLegend } from "@/components/vinea/TrustBadge";
 import { ReportDialog } from "@/components/vinea/ReportDialog";
 import { ListingContactActions } from "@/components/vinea/ListingContactActions";
@@ -324,6 +325,11 @@ export default function AnnuncioDetailPageClient({
           )}
         </div>
       </div>
+
+      {/* WI-003: la scheda intelligente riassume cosa si sa del vino e rimanda
+          alle sezioni sotto. Sta prima di «quando berlo» perché le introduce;
+          non le sostituisce. */}
+      <WineIntelligenceCard wine={wine} wineId={wine.wineSlug ?? wine.id} ancore />
 
       {/* Quando berlo + abbinamenti. Indicizzati per vino, non per annuncio:
           su dati reali `id` è lo slug dell'annuncio e non troverebbe nulla. */}

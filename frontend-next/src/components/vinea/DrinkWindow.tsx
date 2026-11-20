@@ -52,7 +52,7 @@ export function DrinkWindowSection({ wineId }: { wineId: string }) {
   const year = new Date().getFullYear();
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-5">
+    <section id="quando-berlo" className="scroll-mt-20 rounded-2xl border border-border bg-card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Quando berlo</p>
