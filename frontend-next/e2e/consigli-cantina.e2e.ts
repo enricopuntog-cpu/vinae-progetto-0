@@ -72,7 +72,7 @@ test.describe.serial("Consigli dalla tua Cantina: bottiglie reali, stato aggiorn
     await expect(sezione).not.toContainText(aperto);
     // B senza finestra: non è «pronta» per stasera, lo si dichiara.
     await expect(sezione).not.toContainText(senzaFinestra);
-    await expect(sezione.getByTestId("consigli-note-stasera")).toContainText("non hanno");
+    await expect(sezione.getByTestId("consigli-note-stasera")).toContainText("non ha una finestra di bevuta");
 
     // Collegamento alla scheda della bottiglia in pagina.
     const href = await consigli.first().getByRole("link", { name: "Vai alla bottiglia" }).getAttribute("href");
