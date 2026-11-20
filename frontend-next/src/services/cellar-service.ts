@@ -37,6 +37,7 @@ import { rigaAMeta, type RigaMetaVino } from "@/services/wine-meta";
 import { urlImmagine } from "@/services/listing-service";
 import { STATI_BLOCCANTI_APERTURA } from "@/lib/cantina/apertura";
 import { FORMATO_STANDARD, chiaveGruppo } from "@/lib/cantina/gruppo";
+import { validaNotaPersonale, type NotaPersonaleVino } from "@/lib/cantina/note-personali";
 import type {
   CellarService,
   DatiCantina,
@@ -57,6 +58,7 @@ const CANTINA_VUOTA: DatiCantina = {
   metaPerVino: {},
   ambienti: [],
   moduli: [],
+  notePerVino: {},
 };
 
 // -- Righe come arrivano da PostgREST ---------------------------------------
@@ -140,6 +142,43 @@ type RigaBottiglia = {
   cellar_slots: RigaSlot | RigaSlot[] | null;
   listings: RigaAnnuncio[] | null;
 };
+
+/** WI-005B: riga di `wine_personal_notes` con lo slug del vino (relazione verso `wines`). */
+type RigaNotaPersonale = {
+  abbinamenti: string[] | null;
+  temperatura_servizio_c: number | null;
+  decantazione_minuti: number | null;
+  calice: string;
+  annata_dichiarata: number | null;
+  non_millesimato: boolean;
+  denominazione_dichiarata: string;
+  regione_dichiarata: string;
+  osservazioni: string;
+  updated_at: string;
+  wines: { slug: string } | { slug: string }[] | null;
+};
+
+const COLONNE_NOTE = `
+  abbinamenti, temperatura_servizio_c, decantazione_minuti, calice,
+  annata_dichiarata, non_millesimato, denominazione_dichiarata,
+  regione_dichiarata, osservazioni, updated_at,
+  wines!inner ( slug )
+`;
+
+function rigaANota(riga: RigaNotaPersonale): NotaPersonaleVino {
+  return {
+    abbinamenti: riga.abbinamenti ?? [],
+    temperaturaC: riga.temperatura_servizio_c,
+    decantazioneMinuti: riga.decantazione_minuti,
+    calice: riga.calice,
+    annataDichiarata: riga.annata_dichiarata,
+    nonMillesimato: riga.non_millesimato,
+    denominazione: riga.denominazione_dichiarata,
+    regione: riga.regione_dichiarata,
+    osservazioni: riga.osservazioni,
+    aggiornataAt: riga.updated_at,
+  };
+}
 
 const COLONNE_AMBIENTI = `
   id, nome, forma, tema, materiale, illuminazione,
@@ -602,7 +641,7 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
     async carica(): Promise<DatiCantina> {
       if (!client) return CANTINA_VUOTA;
 
-      const [ambientiRes, bottiglieRes, venditore, unitaAnnunci] = await Promise.all([
+      const [ambientiRes, bottiglieRes, venditore, unitaAnnunci, noteRes] = await Promise.all([
         client.from("cellar_environments").select(COLONNE_AMBIENTI).order("created_at"),
         client
           .from("bottle_units")
@@ -614,7 +653,17 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
           .order("created_at"),
         venditoreCorrente(),
         leggiUnitaAnnunci(),
+        // WI-005B: la RLS limita la lettura alle sole righe del proprietario; un errore non
+        // deve nascondere le bottiglie (le note restano allora vuote).
+        client.from("wine_personal_notes").select(COLONNE_NOTE),
       ]);
+
+      if (noteRes.error) segnalaErrore("note personali", noteRes.error);
+      const notePerVino: Record<string, NotaPersonaleVino> = {};
+      for (const r of (noteRes.data ?? []) as unknown as RigaNotaPersonale[]) {
+        const vinoNota = primo(r.wines);
+        if (vinoNota) notePerVino[vinoNota.slug] = rigaANota(r);
+      }
 
       if (ambientiRes.error) segnalaErrore("ambienti", ambientiRes.error);
       if (bottiglieRes.error) segnalaErrore("bottiglie", bottiglieRes.error);
@@ -697,7 +746,7 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
         ),
       );
 
-      return { bottiglie, vini, metaPerVino, ambienti, moduli };
+      return { bottiglie, vini, metaPerVino, ambienti, moduli, notePerVino };
     },
 
     async aggiungiBottiglia(
@@ -878,6 +927,37 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
 
       return scrittura("impostaVisibilitaCantina", async () =>
         client.from("bottle_units").update({ visibilita }).in("id", bottleUnitIds),
+      );
+    },
+
+    async salvaNotaVino(wineSlug: string, nota: NotaPersonaleVino): Promise<Result<void>> {
+      if (!client) return NESSUN_CLIENT;
+      // Stessa validazione del modulo: il database è la barriera, qui si evita il giro inutile.
+      const verifica = validaNotaPersonale(nota);
+      if (!verifica.ok) {
+        return { ok: false, error: Object.values(verifica.errori)[0] ?? "Le informazioni non sono valide." };
+      }
+      const n = verifica.nota;
+      return scrittura("salvaNotaVino", async () =>
+        client.rpc("cellar_nota_vino_salva", {
+          p_wine_slug: wineSlug,
+          p_abbinamenti: n.abbinamenti,
+          p_temperatura: n.temperaturaC,
+          p_decantazione: n.decantazioneMinuti,
+          p_calice: n.calice,
+          p_annata: n.annataDichiarata,
+          p_non_millesimato: n.nonMillesimato,
+          p_denominazione: n.denominazione,
+          p_regione: n.regione,
+          p_osservazioni: n.osservazioni,
+        }),
+      );
+    },
+
+    async eliminaNotaVino(wineSlug: string): Promise<Result<void>> {
+      if (!client) return NESSUN_CLIENT;
+      return scrittura("eliminaNotaVino", async () =>
+        client.rpc("cellar_nota_vino_elimina", { p_wine_slug: wineSlug }),
       );
     },
 

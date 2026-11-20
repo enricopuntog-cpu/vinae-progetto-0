@@ -24,9 +24,10 @@ is_relevant_path() {
       | supabase/tests/12q_* | supabase/tests/12r_* | supabase/tests/12s_* | supabase/tests/12t_* \
       | supabase/tests/12u_* | supabase/tests/12v_* | supabase/tests/12w_* \
       | supabase/tests/12x_* | supabase/tests/12y_* | supabase/tests/12z* \
-      | supabase/tests/wi004_* | supabase/functions/ai-sommelier/* \
+      | supabase/tests/wi004_* | supabase/tests/wi005b_* | supabase/functions/ai-sommelier/* \
       | supabase/functions/_shared/sommelier-contesto.ts | supabase/functions/_shared/ai-* \
       | frontend-next/src/lib/wine-intelligence/sommelier-postgrest.stack.ts \
+      | frontend-next/src/lib/cantina/note-vino-postgrest.stack.ts \
       | .github/workflows/supabase-db-regression.yml \
       | .github/scripts/supabase-db-gate-scope.sh)
       return 0 ;;

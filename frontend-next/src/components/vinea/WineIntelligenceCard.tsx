@@ -101,6 +101,7 @@ export function WineIntelligenceCard({
   compatta = false,
   ancore = false,
   schedaHref,
+  conNotePersonali = false,
 }: {
   wine: VinoPerIntelligenza;
   wineId: string;
@@ -109,18 +110,23 @@ export function WineIntelligenceCard({
   ancore?: boolean;
   /** Collegamento alla scheda completa, per la versione compatta. */
   schedaHref?: string | null;
+  /** WI-005B: mostra le dichiarazioni private del proprietario (solo dalla sua Cantina, non sugli annunci). */
+  conNotePersonali?: boolean;
 }) {
-  const { drinkWindowOverrides } = useVinea();
+  const { drinkWindowOverrides, notePersonaliVino } = useVinea();
   const base = useWineMeta(wineId);
   const override = drinkWindowOverrides[wineId];
+  // WI-005B: la dichiarazione personale dell'utente su QUESTO vino (private, non certificate).
+  const nota = conNotePersonali && wine.wineSlug ? notePersonaliVino?.[wine.wineSlug] : undefined;
   const i = useMemo(
     () =>
       costruisciIntelligenzaVino({
         wine,
         meta: mergeMeta(base, override),
         base,
+        personale: nota,
       }),
-    [wine, base, override],
+    [wine, base, override, nota],
   );
   const { identita: id, enologia: en, qualita: q } = i;
 
@@ -173,6 +179,44 @@ export function WineIntelligenceCard({
         <Riga etichetta="Occasione" valore={en.occasione.valore} attributo={en.occasione} />
       </section>
 
+      {i.personale ? (
+        <section
+          aria-label="Le tue dichiarazioni"
+          className="mt-3 rounded-xl border border-oro/40 bg-oro/5 p-3"
+          data-testid="wi-personale"
+        >
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Le tue dichiarazioni · private
+          </p>
+          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+            Le hai scritte tu: valgono solo per te, non sono certificate e non cambiano i dati condivisi qui sopra.
+          </p>
+          <dl className="mt-2 divide-y divide-border">
+            {i.personale.dichiarazioni.map((d) => (
+              <div key={d.chiave} className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1 py-1.5">
+                <div className="min-w-0">
+                  <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">{d.etichetta}</dt>
+                  <dd className="text-sm">{d.testo}</dd>
+                </div>
+                <span
+                  className="inline-flex shrink-0 items-center rounded-full bg-oro/20 px-2 py-0.5 text-[10px] font-semibold text-antracite"
+                  data-origine={d.origine}
+                  data-stato={d.stato}
+                >
+                  Dichiarato da te
+                </span>
+              </div>
+            ))}
+          </dl>
+          {i.personale.osservazioni ? (
+            <p className="mt-2 whitespace-pre-line text-sm" data-testid="wi-personale-osservazioni">
+              <span className="block text-[11px] uppercase tracking-wide text-muted-foreground">Osservazioni</span>
+              {i.personale.osservazioni}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
       {q.segnalazioni.length > 0 ? (
         <ul
           className="mt-3 space-y-1.5"
@@ -224,8 +268,13 @@ export function WineIntelligenceCard({
     </div>
   );
 
+  const completatiDaTe = i.personale?.completati.length ?? 0;
   const riepilogo = `${q.conosciuti} su ${q.totale} campi noti${q.stimati ? ` · ${q.stimati} stimati` : ""}${
-    q.mancanti.length ? ` · ${q.mancanti.length} mancanti` : ""
+    q.mancantiPersonali.length ? ` · ${q.mancantiPersonali.length} mancanti` : ""
+  }${
+    completatiDaTe
+      ? ` · ${completatiDaTe} ${completatiDaTe === 1 ? "completato" : "completati"} da te`
+      : ""
   }`;
 
   if (compatta) {

@@ -22,12 +22,14 @@ import {
   TrendingDown,
   TrendingUp,
   UserRound,
+  Pencil,
 } from "lucide-react";
 import type { Wine } from "@/data/wines";
 import { WineCard } from "@/components/vinea/WineCard";
 import { WineIntelligenceCard } from "@/components/vinea/WineIntelligenceCard";
 import { ChiediAlSommelier } from "@/components/vinea/ChiediAlSommelier";
 import { ConsigliCantina } from "@/components/vinea/ConsigliCantina";
+import { NotaPersonaleDialog } from "@/components/vinea/NotaPersonaleDialog";
 import { ancoraGruppo } from "@/lib/cantina/consigli";
 import { chiaveVino } from "@/lib/price-intelligence/insights";
 import { AperturaBottiglia } from "@/components/vinea/AperturaBottiglia";
@@ -193,6 +195,9 @@ function Cantina({ conSessione }: { conSessione: boolean }) {
     ambienti,
     moduli,
     drinkWindowOverrides,
+    notePersonaliVino,
+    salvaNotaVino,
+    eliminaNotaVino,
     reduceMotion,
     setReduceMotion,
     analitica,
@@ -226,6 +231,11 @@ function Cantina({ conSessione }: { conSessione: boolean }) {
 
   const [view, setView] = useState<"grid" | "list" | "3d">("grid");
   const [threeDRequested, setThreeDRequested] = useState(false);
+  // Filtro delle bottiglie: controllato dalla pagina perché «Vai alla bottiglia» dei consigli deve
+  // poter mostrare «Tutte» quando la scheda non è nella vista attuale.
+  const [filtro, setFiltro] = useState("tutte");
+  // WI-005B: gruppo (chiave) il cui editor «Completa le informazioni» è aperto.
+  const [chiaveInModifica, setChiaveInModifica] = useState<string | null>(null);
 
   const selectView = (nextView: "grid" | "list" | "3d") => {
     if (nextView === "3d") setThreeDRequested(true);
@@ -336,10 +346,34 @@ function Cantina({ conSessione }: { conSessione: boolean }) {
 
       {/* WI-005: una bottiglia da aprire, motivata, sui dati già caricati. Non ripete i
           contatori di questa pagina e non scrive nulla. */}
-      <ConsigliCantina bottiglie={bottiglieCantina} vini={viniCantina} />
+      <ConsigliCantina
+        bottiglie={bottiglieCantina}
+        vini={viniCantina}
+        note={notePersonaliVino}
+        onCompleta={setChiaveInModifica}
+        onVaiAlGruppo={() => {
+          setFiltro("tutte");
+          if (view === "3d") setView("grid");
+        }}
+      />
+
+      {/* WI-005B: un solo editor per tutta la pagina, aperto dalla scheda o da «Completa i dati».
+          Salvare riscrive le sole annotazioni PRIVATE del proprietario: il catalogo non cambia. */}
+      <NotaPersonaleDialog
+        vino={viniCantina.find((w) => chiaveCantina(w) === chiaveInModifica) ?? null}
+        nota={
+          notePersonaliVino[viniCantina.find((w) => chiaveCantina(w) === chiaveInModifica)?.wineSlug ?? ""]
+        }
+        open={chiaveInModifica !== null}
+        onOpenChange={(aperto) => {
+          if (!aperto) setChiaveInModifica(null);
+        }}
+        onSalva={salvaNotaVino}
+        onElimina={eliminaNotaVino}
+      />
 
       {/* Bottiglie: 3 viste */}
-      <Tabs defaultValue="tutte">
+      <Tabs value={filtro} onValueChange={setFiltro}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <TabsList className="grid h-auto w-full grid-cols-2 bg-secondary sm:inline-flex sm:h-9 sm:w-auto">
             <TabsTrigger value="tutte">Tutte</TabsTrigger>
@@ -380,6 +414,7 @@ function Cantina({ conSessione }: { conSessione: boolean }) {
               esposizioneCantina={esposizioneCantina}
               toggleCantinaPubblica={toggleCantinaPubblica}
               bottigliaDelVino={bottigliaDelVino}
+              onModificaInfo={setChiaveInModifica}
             />
           )}
         </TabsContent>
@@ -393,6 +428,7 @@ function Cantina({ conSessione }: { conSessione: boolean }) {
             esposizioneCantina={esposizioneCantina}
             toggleCantinaPubblica={toggleCantinaPubblica}
             bottigliaDelVino={bottigliaDelVino}
+            onModificaInfo={setChiaveInModifica}
           />
         </TabsContent>
         <TabsContent value="vendita" className="mt-4">
@@ -405,6 +441,7 @@ function Cantina({ conSessione }: { conSessione: boolean }) {
             esposizioneCantina={esposizioneCantina}
             toggleCantinaPubblica={toggleCantinaPubblica}
             bottigliaDelVino={bottigliaDelVino}
+            onModificaInfo={setChiaveInModifica}
           />
         </TabsContent>
         <TabsContent value="attesa" className="mt-4">
@@ -417,6 +454,7 @@ function Cantina({ conSessione }: { conSessione: boolean }) {
             esposizioneCantina={esposizioneCantina}
             toggleCantinaPubblica={toggleCantinaPubblica}
             bottigliaDelVino={bottigliaDelVino}
+            onModificaInfo={setChiaveInModifica}
           />
         </TabsContent>
       </Tabs>
@@ -1143,6 +1181,7 @@ function BottiglieView({
   esposizioneCantina,
   toggleCantinaPubblica,
   bottigliaDelVino,
+  onModificaInfo,
 }: {
   wines: Wine[];
   view: "grid" | "list";
@@ -1157,8 +1196,10 @@ function BottiglieView({
   // Il comando di apertura ha bisogno della bottiglia intera — stato e annuncio
   // che la blocca — e restringere qui significava solo nasconderli.
   bottigliaDelVino: (w: Wine) => CellarBottle | undefined;
+  /** WI-005B: apre «Completa le informazioni» per il gruppo (chiave). */
+  onModificaInfo: (chiave: string) => void;
 }) {
-  const { bottiglieCantina } = useVinea();
+  const { bottiglieCantina, notePersonaliVino } = useVinea();
   if (list.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center text-sm text-muted-foreground">
@@ -1182,8 +1223,9 @@ function BottiglieView({
         const libere = unitaVendibiliDelGruppo(delGruppo, slug).length;
         const esposta = esposizioneCantina[slug] ?? "nessuna";
         const bottiglia = bottigliaDelVino(w);
+        const haNota = Boolean(w.wineSlug && notePersonaliVino[w.wineSlug]);
         return (
-          <div key={w.id} id={ancoraGruppo(slug)} className="scroll-mt-24 space-y-2">
+          <div key={w.id} id={ancoraGruppo(slug)} tabIndex={-1} className="scroll-mt-24 space-y-2 outline-none">
             {/* Lo stato viene dalla stessa bottiglia che i comandi qui sotto
                 usano, e non da un aggregato sulle bottiglie di quel vino: se
                 il badge dicesse «Aperta» guardando una bottiglia e il pulsante
@@ -1209,6 +1251,7 @@ function BottiglieView({
             <WineIntelligenceCard
               wine={w}
               wineId={chiaveVino(w)}
+              conNotePersonali
               compatta
               schedaHref={w.detailHref}
             />
@@ -1285,6 +1328,23 @@ function BottiglieView({
                     ? "Alcune bottiglie nel profilo"
                     : "Mostra nel mio profilo"}
               </button>
+              {/* WI-005B: le informazioni che solo il proprietario conosce (abbinamenti
+                  provati, servizio, annata o regione dichiarate). Private e non
+                  certificate: il pulsante lo dice anche nel dialogo. */}
+              {w.wineSlug ? (
+              <button
+                type="button"
+                onClick={() => onModificaInfo(slug)}
+                data-testid="cantina-completa-info"
+                data-chiave={slug}
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bordeaux/40 ${
+                  haNota ? "border-oro bg-oro/15" : "border-border bg-card"
+                }`}
+              >
+                <Pencil className="h-3 w-3" aria-hidden />
+                {haNota ? "Modifica le mie informazioni" : "Completa le informazioni"}
+              </button>
+              ) : null}
               {/* Da qui si apre una bottiglia, e da qui si torna a rileggere la
                   degustazione di una già aperta. Il comando esisteva solo sulla
                   scheda dell'annuncio, cioè nel posto dove si va per vendere e

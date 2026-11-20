@@ -33,6 +33,7 @@ import { computeDrinkPhase, type DrinkPhase, type FoodPairing, type PairingLevel
 import type { CellarBottle } from "@/data/cellar";
 import { costruisciIntelligenzaVino, type VinoPerIntelligenza } from "@/lib/wine-intelligence/costruisci";
 import type { StatoConoscenza } from "@/lib/wine-intelligence/types";
+import type { NotaPersonaleVino } from "@/lib/cantina/note-personali";
 
 /** Id dell'ancora di una scheda di gruppo: solo caratteri sicuri in un fragment. */
 export const ancoraGruppo = (chiave: string): string => `gruppo-${chiave.replace(/[^A-Za-z0-9_-]/g, "_")}`;
@@ -48,6 +49,12 @@ export type VinoConsigli = {
   meta: WineVintageMeta;
   /** Vero se i metadati sono quelli generici di ripiego (`eMetaDiRipiego`). */
   ripiego: boolean;
+  /**
+   * WI-005B: dichiarazioni personali del proprietario su questo vino. Private e non certificate:
+   * completano il SUO contesto (dati mancanti, abbinamenti per la cena) e non sostituiscono mai
+   * i dati registrati. Non influenzano «cosa apro stasera», che dipende dalla sola finestra.
+   */
+  nota?: NotaPersonaleVino;
 };
 
 export type IngressoConsigli = {
@@ -74,7 +81,7 @@ export type Consiglio = {
   fase: DrinkPhase;
   motivi: Motivo[];
   limiti: string[];
-  tipoAbbinamento?: "registrato" | "ripiego";
+  tipoAbbinamento?: "registrato" | "dichiarato" | "ripiego";
 };
 
 // ---------------------------------------------------------------------------
@@ -380,6 +387,15 @@ function corrisponde(p: FoodPairing, c: CriterioAbbinamento): boolean {
   return p.keywords.some((k) => q.includes(norm(k))) || norm(p.piatto).includes(q);
 }
 
+/** Un abbinamento scritto dall'utente corrisponde al piatto cercato (solo ricerca libera, mai per categoria). */
+function personaleCorrisponde(piatto: string, c: CriterioAbbinamento): boolean {
+  if (c.tipo !== "testo") return false;
+  const q = norm(c.valore);
+  if (q.length < MIN_TESTO) return false;
+  const p = norm(piatto);
+  return p.includes(q) || (p.length >= MIN_TESTO && q.includes(p));
+}
+
 /** Categorie documentate negli abbinamenti REGISTRATI dei vini apribili: mai dal ripiego. */
 export function categorieAbbinamento(ing: IngressoConsigli): string[] {
   const set = new Set<string>();
@@ -405,36 +421,53 @@ export function consigliAbbinamento(
 ): RisultatoAbbinamento {
   const max = opzioni.max ?? 5;
   const gruppi = gruppiApribili(ing);
-  type Trovato = { g: Gruppo; pairing: FoodPairing; tipo: "registrato" | "ripiego" };
+  type Tipo = "registrato" | "dichiarato" | "ripiego";
+  type Trovato = { g: Gruppo; pairing?: FoodPairing; personale?: string; tipo: Tipo };
+  const RANGO_TIPO: Record<Tipo, number> = { registrato: 0, dichiarato: 1, ripiego: 2 };
   const trovati: Trovato[] = [];
   let senzaAbbinamenti = 0;
   for (const g of gruppi) {
-    if (g.vino.ripiego || g.vino.meta.foodPairings.length === 0) senzaAbbinamenti += 1;
+    const personali = g.vino.nota?.abbinamenti ?? [];
+    const haRegistrati = !g.vino.ripiego && g.vino.meta.foodPairings.length > 0;
+    if (!haRegistrati && personali.length === 0) senzaAbbinamenti += 1;
     const corrispondenti = g.vino.meta.foodPairings
       .filter((p) => corrisponde(p, criterio))
       .sort((a, b) => ORDINE_LIVELLO[a.livello] - ORDINE_LIVELLO[b.livello] || a.piatto.localeCompare(b.piatto, "it"));
-    if (corrispondenti.length === 0) continue;
-    trovati.push({ g, pairing: corrispondenti[0], tipo: g.vino.ripiego ? "ripiego" : "registrato" });
+    if (corrispondenti.length > 0 && !g.vino.ripiego) {
+      trovati.push({ g, pairing: corrispondenti[0], tipo: "registrato" });
+      continue;
+    }
+    // Un'indicazione dell'utente vale più di un ripiego generico, mai più di un dato registrato.
+    const personale = personali.find((x) => personaleCorrisponde(x, criterio));
+    if (personale !== undefined) {
+      trovati.push({ g, personale, tipo: "dichiarato" });
+      continue;
+    }
+    if (corrispondenti.length > 0) trovati.push({ g, pairing: corrispondenti[0], tipo: "ripiego" });
   }
   const pronta = (f: DrinkPhase) => (TIER_STASERA[f] && f !== "oltre" ? 0 : f === "attesa" || f === "quasi" ? 2 : 1);
   trovati.sort(
     (a, b) =>
-      (a.tipo === b.tipo ? 0 : a.tipo === "registrato" ? -1 : 1) ||
-      ORDINE_LIVELLO[a.pairing.livello] - ORDINE_LIVELLO[b.pairing.livello] ||
+      RANGO_TIPO[a.tipo] - RANGO_TIPO[b.tipo] ||
+      (a.pairing ? ORDINE_LIVELLO[a.pairing.livello] : 1) - (b.pairing ? ORDINE_LIVELLO[b.pairing.livello] : 1) ||
       pronta(a.g.migliore.fase) - pronta(b.g.migliore.fase) ||
       a.g.vino.chiave.localeCompare(b.g.vino.chiave),
   );
-  const consigli = trovati.slice(0, max).map(({ g, pairing, tipo }) => {
+  const consigli = trovati.slice(0, max).map(({ g, pairing, personale, tipo }) => {
     const base = costruisciConsiglio(g, { tipoAbbinamento: tipo });
     const motivoPiatto: Motivo =
-      tipo === "registrato"
+      tipo === "registrato" && pairing
         ? { testo: `Abbinamento registrato per questo vino: ${pairing.piatto} (${pairing.livello}). ${pairing.note}`, origine: "registrato" }
-        : { testo: `Abbinamento generico di ripiego: ${pairing.piatto}. Non è specifico per questo vino.`, origine: "stimato" };
-    return {
-      ...base,
-      motivi: [motivoPiatto, ...base.motivi],
-      limiti: tipo === "ripiego" ? ["Abbinamento generico, non verificato: il vino non ha abbinamenti propri registrati.", ...base.limiti] : base.limiti,
-    };
+        : tipo === "dichiarato"
+          ? { testo: `Hai indicato tu questo abbinamento: «${personale}». È una tua dichiarazione, non una verifica.`, origine: "dichiarato" }
+          : { testo: `Abbinamento generico di ripiego: ${pairing?.piatto}. Non è specifico per questo vino.`, origine: "stimato" };
+    const limiteTipo =
+      tipo === "ripiego"
+        ? ["Abbinamento generico, non verificato: il vino non ha abbinamenti propri registrati."]
+        : tipo === "dichiarato"
+          ? ["Abbinamento dichiarato da te, non verificato e visibile solo a te."]
+          : [];
+    return { ...base, motivi: [motivoPiatto, ...base.motivi], limiti: [...limiteTipo, ...base.limiti] };
   });
   return {
     consigli,
@@ -462,9 +495,13 @@ export type VinoDaCompletare = Pick<Consiglio, "chiave" | "produttore" | "nome" 
   /** Bottiglie ancora in Cantina (né consumate né vendute) di quel gruppo. */
   bottiglie: number;
   voci: VoceMancante[];
+  /** Vero se almeno una voce si può completare con l'editor «Completa le informazioni» (WI-005B). */
+  modificabile: boolean;
   /** Solo se esiste davvero un comando per completare: oggi, la finestra personale sulla scheda. */
   azione: { testo: string; href: string } | null;
 };
+
+const CAMPI_DA_EDITOR = new Set<CampoMancante>(["annata", "regione", "denominazione", "abbinamenti"]);
 
 export function datiMancanti(ing: IngressoConsigli): VinoDaCompletare[] {
   const conteggio = new Map<string, number>();
@@ -476,9 +513,12 @@ export function datiMancanti(ing: IngressoConsigli): VinoDaCompletare[] {
   for (const v of ing.vini) {
     const bottiglie = conteggio.get(v.chiave) ?? 0;
     if (bottiglie === 0) continue;
-    const intel = costruisciIntelligenzaVino({ wine: v.wine, meta: v.meta, annoCorrente: ing.anno });
+    const intel = costruisciIntelligenzaVino({ wine: v.wine, meta: v.meta, personale: v.nota, annoCorrente: ing.anno });
+    const completatiDaTe = new Set<string>(intel.personale?.completati ?? []);
     const voci: VoceMancante[] = [];
     const daAttr = (campo: CampoMancante, etichetta: string, stato: StatoConoscenza, nota: string) => {
+      // Completato con una tua dichiarazione: per il tuo contesto non è più mancante.
+      if (completatiDaTe.has(campo)) return;
       if (stato === "mancante") voci.push({ campo, etichetta, stato: "mancante", nota });
       else if (stato === "stimato") voci.push({ campo, etichetta, stato: "ripiego", nota });
     };
@@ -493,7 +533,9 @@ export function datiMancanti(ing: IngressoConsigli): VinoDaCompletare[] {
         ? "La finestra è solo stimata e non verificata."
         : "Nessuna finestra di bevuta disponibile: non si può dire se sia pronta.",
     );
-    if (v.meta.foodPairings.length === 0) {
+    if (completatiDaTe.has("abbinamenti") || (v.nota?.abbinamenti.length ?? 0) > 0) {
+      // Abbinamenti dichiarati dall'utente: completano il suo contesto.
+    } else if (v.meta.foodPairings.length === 0) {
       voci.push({ campo: "abbinamenti", etichetta: "Abbinamenti", stato: "mancante", nota: "Nessun abbinamento registrato per questo vino." });
     } else if (v.ripiego) {
       voci.push({ campo: "abbinamenti", etichetta: "Abbinamenti", stato: "ripiego", nota: "Solo abbinamenti generici di ripiego, non specifici per questo vino." });
@@ -505,6 +547,7 @@ export function datiMancanti(ing: IngressoConsigli): VinoDaCompletare[] {
       ...identita(v),
       bottiglie,
       voci,
+      modificabile: Boolean(v.wine.wineSlug) && voci.some((x) => CAMPI_DA_EDITOR.has(x.campo)),
       azione:
         manca && v.wine.detailHref
           ? { testo: "Imposta la tua finestra di bevuta", href: `${v.wine.detailHref}#quando-berlo` }

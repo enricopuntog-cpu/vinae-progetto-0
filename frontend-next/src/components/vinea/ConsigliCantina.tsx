@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Info, Moon, Search, UtensilsCrossed, ClipboardList } from "lucide-react";
+import { Info, Moon, Pencil, Search, UtensilsCrossed, ClipboardList } from "lucide-react";
 import { eMetaDiRipiego, phaseShort } from "@/data/cellar";
 import type { CellarBottle } from "@/data/cellar";
 import type { Wine } from "@/data/wines";
 import { useCercaMeta } from "@/lib/wine-meta-context";
 import { chiaveCantina } from "@/lib/cantina/gruppo";
+import type { NotaPersonaleVino } from "@/lib/cantina/note-personali";
 import {
   ancoraGruppo,
   categorieAbbinamento,
@@ -38,18 +39,63 @@ function titolo(c: Pick<Consiglio, "produttore" | "nome" | "annata" | "formato">
   return [c.produttore, c.nome, c.annata ?? "senza annata"].filter(Boolean).join(" · ");
 }
 
-/** Porta alla scheda del gruppo; se nella vista attuale non c'è, lo dice invece di tacere. */
-function vaiAlGruppo(e: React.MouseEvent<HTMLAnchorElement>, chiave: string, avvisa: (m: string) => void) {
-  const el = document.getElementById(ancoraGruppo(chiave));
-  if (!el) {
-    e.preventDefault();
-    avvisa("Questa bottiglia non è nella vista attuale della Cantina: scegli «Tutte» e togli i filtri.");
+const AVVISO_NON_RAGGIUNGIBILE =
+  "Non riesco a mostrare questa bottiglia nella vista attuale della Cantina: scegli «Tutte» e togli i filtri.";
+
+/**
+ * Porta alla scheda del gruppo. Se l'elemento non è nella vista attuale (un altro filtro, la vista
+ * 3D) chiede prima alla pagina di mostrare «Tutte» (onVaiAlGruppo) e lo cerca per un breve
+ * tempo, perché compare dopo il rendering; se non compare, lo dice invece di tacere.
+ */
+function vaiAlGruppo(
+  e: React.MouseEvent<HTMLAnchorElement>,
+  chiave: string,
+  avvisa: (m: string) => void,
+  onVaiAlGruppo: ((chiave: string) => void) | undefined,
+  annulla: React.MutableRefObject<(() => void) | null>,
+) {
+  e.preventDefault();
+  annulla.current?.();
+  const id = ancoraGruppo(chiave);
+  const raggiungi = (el: HTMLElement) => {
+    avvisa("");
+    el.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    el.focus?.({ preventScroll: true });
+  };
+  const subito = document.getElementById(id);
+  if (subito) {
+    raggiungi(subito);
     return;
   }
-  avvisa("");
+  if (!onVaiAlGruppo) {
+    avvisa(AVVISO_NON_RAGGIUNGIBILE);
+    return;
+  }
+  onVaiAlGruppo(chiave);
+  let tentativi = 0;
+  const timer = setInterval(() => {
+    const el = document.getElementById(id);
+    tentativi += 1;
+    if (el) {
+      clearInterval(timer);
+      annulla.current = null;
+      raggiungi(el);
+    } else if (tentativi >= 20) {
+      clearInterval(timer);
+      annulla.current = null;
+      avvisa(AVVISO_NON_RAGGIUNGIBILE);
+    }
+  }, 50);
+  annulla.current = () => clearInterval(timer);
 }
 
-function CartaConsiglio({ c, posizione, avvisa }: { c: Consiglio; posizione: number; avvisa: (m: string) => void }) {
+type Navigazione = {
+  avvisa: (m: string) => void;
+  onVaiAlGruppo?: (chiave: string) => void;
+  annulla: React.MutableRefObject<(() => void) | null>;
+};
+
+function CartaConsiglio({ c, posizione, nav }: { c: Consiglio; posizione: number; nav: Navigazione }) {
   return (
     <li
       className="rounded-2xl border border-border bg-card p-4"
@@ -80,6 +126,11 @@ function CartaConsiglio({ c, posizione, avvisa }: { c: Consiglio; posizione: num
             {c.tipoAbbinamento === "ripiego" ? (
               <span className="rounded-full bg-bordeaux/10 px-2 py-0.5 text-[10px] font-semibold text-bordeaux">
                 Abbinamento generico
+              </span>
+            ) : null}
+            {c.tipoAbbinamento === "dichiarato" ? (
+              <span className="rounded-full bg-oro/20 px-2 py-0.5 text-[10px] font-semibold text-antracite">
+                Abbinamento dichiarato da te
               </span>
             ) : null}
           </p>
@@ -115,7 +166,7 @@ function CartaConsiglio({ c, posizione, avvisa }: { c: Consiglio; posizione: num
       <div className="mt-3 flex flex-wrap gap-2">
         <a
           href={`#${ancoraGruppo(c.chiave)}`}
-          onClick={(e) => vaiAlGruppo(e, c.chiave, avvisa)}
+          onClick={(e) => vaiAlGruppo(e, c.chiave, nav.avvisa, nav.onVaiAlGruppo, nav.annulla)}
           className="inline-flex min-h-9 items-center rounded-full border border-border px-3 text-xs font-medium hover:border-bordeaux hover:text-bordeaux"
         >
           Vai alla bottiglia
@@ -138,9 +189,9 @@ function ListaConsigli({
   altri,
   espanso,
   onEspandi,
-  avvisa,
+  nav,
 }: {
-  avvisa: (m: string) => void;
+  nav: Navigazione;
   consigli: Consiglio[];
   altri: number;
   espanso: boolean;
@@ -150,7 +201,7 @@ function ListaConsigli({
     <>
       <ol className="space-y-3" data-testid="consigli-lista">
         {consigli.map((c, i) => (
-          <CartaConsiglio key={c.chiave} c={c} posizione={i + 1} avvisa={avvisa} />
+          <CartaConsiglio key={c.chiave} c={c} posizione={i + 1} nav={nav} />
         ))}
       </ol>
       {altri > 0 && !espanso ? (
@@ -173,7 +224,15 @@ function Vuoto({ children, testId }: { children: React.ReactNode; testId: string
   );
 }
 
-function CartaDati({ v, avvisa }: { v: VinoDaCompletare; avvisa: (m: string) => void }) {
+function CartaDati({
+  v,
+  nav,
+  onCompleta,
+}: {
+  v: VinoDaCompletare;
+  nav: Navigazione;
+  onCompleta?: (chiave: string) => void;
+}) {
   return (
     <li className="rounded-2xl border border-border bg-card p-4" data-testid="dati-mancanti-vino" data-chiave={v.chiave}>
       <p className="font-serif text-lg leading-snug">{titolo(v)}</p>
@@ -200,11 +259,22 @@ function CartaDati({ v, avvisa }: { v: VinoDaCompletare; avvisa: (m: string) => 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <a
           href={`#${ancoraGruppo(v.chiave)}`}
-          onClick={(e) => vaiAlGruppo(e, v.chiave, avvisa)}
+          onClick={(e) => vaiAlGruppo(e, v.chiave, nav.avvisa, nav.onVaiAlGruppo, nav.annulla)}
           className="inline-flex min-h-9 items-center rounded-full border border-border px-3 text-xs font-medium hover:border-bordeaux hover:text-bordeaux"
         >
           Vai alla bottiglia
         </a>
+        {v.modificabile && onCompleta ? (
+          <button
+            type="button"
+            onClick={() => onCompleta(v.chiave)}
+            data-testid="dati-completa-info"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-bordeaux px-3 text-xs font-medium text-crema hover:bg-bordeaux/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bordeaux/40"
+          >
+            <Pencil className="h-3 w-3" aria-hidden />
+            Completa le informazioni
+          </button>
+        ) : null}
         {v.azione ? (
           <Link
             href={v.azione.href}
@@ -212,11 +282,11 @@ function CartaDati({ v, avvisa }: { v: VinoDaCompletare; avvisa: (m: string) => 
           >
             {v.azione.testo}
           </Link>
-        ) : (
+        ) : !(v.modificabile && onCompleta) ? (
           <span className="text-xs italic text-muted-foreground">
             Da qui non c'è ancora un comando per completare questi dati.
           </span>
-        )}
+        ) : null}
       </div>
     </li>
   );
@@ -234,9 +304,18 @@ function CartaDati({ v, avvisa }: { v: VinoDaCompletare; avvisa: (m: string) => 
 export function ConsigliCantina({
   bottiglie,
   vini,
+  note,
+  onCompleta,
+  onVaiAlGruppo,
 }: {
   bottiglie: readonly CellarBottle[];
   vini: readonly Wine[];
+  /** WI-005B: dichiarazioni personali per slug del vino. Private, non certificate. */
+  note?: Record<string, NotaPersonaleVino>;
+  /** WI-005B: apre l'editor «Completa le informazioni» del gruppo indicato. */
+  onCompleta?: (chiave: string) => void;
+  /** Chiede alla pagina di mostrare la scheda del gruppo (vista «Tutte», senza filtri). */
+  onVaiAlGruppo?: (chiave: string) => void;
 }) {
   const cercaMeta = useCercaMeta();
   const [scheda, setScheda] = useState<Scheda>("stasera");
@@ -244,6 +323,9 @@ export function ConsigliCantina({
   const [testo, setTesto] = useState("");
   const [espanso, setEspanso] = useState(false);
   const [avviso, setAvviso] = useState("");
+  const annulla = useRef<(() => void) | null>(null);
+  useEffect(() => () => annulla.current?.(), []);
+  const nav: Navigazione = { avvisa: setAvviso, onVaiAlGruppo, annulla };
 
   const ingresso = useMemo<IngressoConsigli>(
     () => ({
@@ -252,10 +334,16 @@ export function ConsigliCantina({
       vini: vini.map((w) => {
         const chiave = chiaveCantina(w);
         const meta = cercaMeta(chiave);
-        return { chiave, wine: w, meta, ripiego: eMetaDiRipiego(meta) };
+        return {
+          chiave,
+          wine: w,
+          meta,
+          ripiego: eMetaDiRipiego(meta),
+          nota: w.wineSlug ? note?.[w.wineSlug] : undefined,
+        };
       }),
     }),
-    [bottiglie, vini, cercaMeta],
+    [bottiglie, vini, cercaMeta, note],
   );
 
   const max = espanso ? MOSTRATI_ESPANSI : MOSTRATI_INIZIALI;
@@ -341,7 +429,7 @@ export function ConsigliCantina({
               <div className="space-y-3">
                 {stasera.consigli.length > 0 ? (
                   <ListaConsigli
-                    avvisa={setAvviso}
+                    nav={nav}
                     consigli={stasera.consigli}
                     altri={stasera.altriCandidati}
                     espanso={espanso}
@@ -422,7 +510,7 @@ export function ConsigliCantina({
                   <p className="text-xs text-muted-foreground">Nessun piatto scelto.</p>
                 ) : cena.consigli.length > 0 ? (
                   <ListaConsigli
-                    avvisa={setAvviso}
+                    nav={nav}
                     consigli={cena.consigli}
                     altri={cena.altriCandidati}
                     espanso={espanso}
@@ -456,7 +544,7 @@ export function ConsigliCantina({
                     </p>
                     <ul className="space-y-3">
                       {mancanti.slice(0, espanso ? MOSTRATI_ESPANSI : MOSTRATI_INIZIALI).map((v) => (
-                        <CartaDati key={v.chiave} v={v} avvisa={setAvviso} />
+                        <CartaDati key={v.chiave} v={v} nav={nav} onCompleta={onCompleta} />
                       ))}
                     </ul>
                     {!espanso && mancanti.length > MOSTRATI_INIZIALI ? (
