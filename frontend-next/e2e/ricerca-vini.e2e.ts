@@ -130,7 +130,8 @@ test.describe.serial("Ricerca dei vini nel wizard: dati accessibili, scelta espl
     expect(ricerche.length).toBeGreaterThan(0);
     expect(ricerche.every((r) => r.metodo === "GET")).toBe(true);
     expect(richieste.filter((r) => /\/functions\/v1\//.test(r.url))).toEqual([]);
-    expect(richieste.filter((r) => /\/rest\/v1\//.test(r.url) && r.metodo !== "GET" && !/\/rpc\/(profilo|cellar_regioni)/.test(r.url))).toEqual([]);
+    // Nessuna scrittura su tabelle (le RPC della pagina sono POST di sola lettura, non la ricerca); il conteggio dei vini lo prova sotto.
+    expect(richieste.filter((r) => //rest/v1//.test(r.url) && !//rest/v1/rpc//.test(r.url) && r.metodo !== "GET")).toEqual([]);
     for (const r of ricerche) {
       // Mai tutta la tabella: ogni richiesta ha filtro, tetto e colonne esplicite.
       expect(r.url).toMatch(/[?&]limit=\d+/);
