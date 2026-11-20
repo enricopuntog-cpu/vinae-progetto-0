@@ -68,6 +68,10 @@ Il motore lato server estende il contratto con: elenco delle bottiglie, quantit�
 - Difetto preesistente trovato e corretto: con le azioni AI spente `invia` usciva prima di mostrare l'avviso Beta perché la
   sessione non veniva mai creata.
 
+## Prova a due utenti su PostgREST reale
+
+`supabase/tests/wi004_sommelier_postgrest.sh` (agganciata a `12g_ci_run.sh`, stack effimero della CI) crea due utenti con la vera API Auth, esegue la vera Edge Function con il vero client Supabase e un fornitore finto, e prova: rifiuto senza consenso (nessuna lettura), query `wines!inner` + `count` + `owner_id` + `limit` accettata da PostgREST, quantità reali (consumate/eliminate escluse), nessun dato di B nel contesto di A neanche con `owner_id` falsificato, revoca, Sommelier generale invariato, AI spenta senza chiamate, storico non condiviso fra account, errore generico, nessuna rete fuori dallo stack. Browser reale e cambio utente/logout lato client restano coperti dai test del pannello (DOM simulato).
+
 ## Non verificato
 
 - Prova nel browser reale con due account su stack isolato e comportamento reale di PostgREST (embedding `wines!inner`, `count`,
@@ -81,7 +85,8 @@ Il motore lato server estende il contratto con: elenco delle bottiglie, quantit�
 2. Registro del consenso lato server, se si vorrà un consenso persistente e revocabile da altri dispositivi.
 3. Le risposte che citano la Cantina restano nello storico (TTL 30 giorni) finché non si cancella la conversazione.
 4. Ricerca degli abbinamenti lessicale (nessun sinonimo); campione per `created_at` crescente oltre 1000 righe.
-5. `supabase-db-gate-scope.sh` non elenca `supabase/tests/wi004_*`: una modifica alla sola griglia non fa partire il gate.
+5. (chiuso) Il gate DB ora parte anche per `wi004_*`, `ai-sommelier`, il motore del contesto e la prova PostgREST.
+6. Il consenso è un booleano del client valido per la singola richiesta, non una prova persistente del gesto dell'utente.
 
 ## Handoff per WI-005
 

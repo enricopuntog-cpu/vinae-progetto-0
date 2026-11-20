@@ -319,6 +319,16 @@ run_grid "12zx prelievi: esito incerto" 12zx_fin_001_prelievi_esito_incerto.sql 
 # colonne e privilegi dell'elenco chiuso, isolamento fra utenti, consumate/eliminate escluse e prova
 # che il filtro esplicito sul proprietario è l'unica barriera. Fixture `@wi004.test`, ROLLBACK.
 run_grid "wi004 Sommelier: lettura Cantina" wi004_sommelier_cantina_lettura.sql 3
+# WI-004: la stessa lettura attraverso PostgREST, Auth e la vera Edge Function (fornitore AI finto),
+# con due utenti reali: consenso, isolamento, storico, AI spenta. Richiede la chiave di servizio
+# dello stack effimero (E2E_SERVICE_KEY); fail-closed se manca. Fixture `@wi004-e2e.test`, trap.
+[ -n "${E2E_SERVICE_KEY:-}" ] || die "E2E_SERVICE_KEY mancante: la prova wi004 a due utenti non puo girare." 2
+wi004_pg="$(E2E_DB_URL="$E2E_DB_URL" E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_ANON_KEY="$E2E_ANON_KEY"   E2E_SERVICE_KEY="$E2E_SERVICE_KEY" bash "$TESTS/wi004_sommelier_postgrest.sh")"   || { printf '%s
+' "$wi004_pg" | grep -v -i -E 'key|secret|jwt|token|password' ; die "wi004 PostgREST a due utenti: fallita."; }
+printf '%s
+' "$wi004_pg"
+summary "- $(printf '%s
+' "$wi004_pg" | grep 'due utenti:' | tail -n 1)"
 
 # Stessa famiglia su sessioni PostgreSQL realmente separate: due esecutori sullo stesso
 # prelievo (uno solo riceve il Transfer), annullamento del titolare contro presa in carico e

@@ -92,10 +92,34 @@ check "scope: griglia 12w QV2 cinque aree pertinente" true "$(scope_for supabase
 check "scope: griglia 10b Sommelier pertinente" true "$(scope_for supabase/tests/10b_sommelier_storico.sql)"
 check "scope: griglia 7c consegna e imballaggio pertinente" true "$(scope_for supabase/tests/7c_consegna_imballaggio.sql)"
 check "scope: config Supabase pertinente" true "$(scope_for supabase/config.toml)"
+check "scope: griglia wi004 Sommelier pertinente" true "$(scope_for supabase/tests/wi004_sommelier_cantina_lettura.sql)"
+check "scope: altra griglia wi004 pertinente" true "$(scope_for supabase/tests/wi004_altra.sql)"
+check "scope: Edge Function ai-sommelier pertinente" true "$(scope_for supabase/functions/ai-sommelier/index.ts)"
+check "scope: motore del contesto Sommelier pertinente" true "$(scope_for supabase/functions/_shared/sommelier-contesto.ts)"
+check "scope: prova PostgREST a due utenti pertinente" true "$(scope_for frontend-next/src/lib/wine-intelligence/sommelier-postgrest.stack.ts)"
+check "scope: documento WI-004 saltato" false "$(scope_for docs/wine-intelligence/WI_004_SOMMELIER_CONTESTUALE.md)"
+check "scope: test del Sommelier nel frontend saltato" false "$(scope_for frontend-next/src/lib/wine-intelligence/sommelier-edge.test.ts)"
 check "scope: README saltato" false "$(scope_for README.md)"
 check "scope: frontend saltato" false "$(scope_for frontend-next/src/app/page.tsx)"
 check "scope: Edge Function saltata" false "$(scope_for supabase/functions/ai-pairing/index.ts)"
 check "scope: griglia di altra fase saltata" false "$(scope_for supabase/tests/11a_x.sql)"
+
+# Fail-closed: senza genitore (diff non calcolabile) il gate gira anche per un file non pertinente.
+single_commit_scope() {
+  local dir rc=0 out
+  dir="$(mktemp -d)"
+  git -C "$dir" init -q
+  printf 'x
+' > "$dir/README.md"
+  git -C "$dir" add -A 2>/dev/null
+  git -C "$dir" -c user.email=t@t -c user.name=t commit -q -m only
+  out="$(cd "$dir" && env -u GITHUB_OUTPUT -u GITHUB_STEP_SUMMARY EVENT_NAME=pull_request bash "$SCOPE" 2>/dev/null)" || rc=$?
+  rm -rf "$dir"
+  [ "$rc" = "0" ] || { echo "error"; return; }
+  printf '%s
+' "$out" | sed -n 's/^relevant=//p'
+}
+check "scope: diff non calcolabile fa girare il gate" true "$(single_commit_scope)"
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures controlli falliti."

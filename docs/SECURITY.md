@@ -234,6 +234,8 @@ token o header sensibili.
 - Il contesto non entra nei log né nello storico (si salvano solo domanda e risposta). Le risposte che citano le
   bottiglie restano nello storico finché l'utente non cancella la conversazione: revocare ferma le letture future.
 - Il modello non ha strumenti: nessuna modifica alla Cantina, nessun annuncio, nessuna operazione commerciale.
+- Il booleano `consenso` inviato dal client è un'autorizzazione per la richiesta corrente, non una prova persistente e indipendente del gesto dell'utente: il server non può distinguere un clic reale da un client modificato dello stesso utente. Il rischio è confinato ai dati dell'utente stesso (il proprietario resta quello del token). Un registro del consenso lato server richiederebbe una migrazione ed è un debito dichiarato.
+- La prova a due utenti su PostgREST/Auth reali dello stack effimero (`supabase/tests/wi004_sommelier_postgrest.sh`, eseguita dal gate DB) usa la vera function e un fornitore finto.
 
 ## Database asincrono
 
