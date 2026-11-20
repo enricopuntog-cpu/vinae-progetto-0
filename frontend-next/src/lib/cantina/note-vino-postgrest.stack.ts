@@ -179,8 +179,8 @@ await prova("B non può annotare un vino che non possiede", async () => {
 await prova("INSERT, PATCH e DELETE diretti sono negati e non cambiano nulla", async () => {
   const idVino = (await righe(tokenA))[0].wine_id;
   const ins = await chiama(tokenA, "POST", "/rest/v1/wine_personal_notes", { wine_id: idVino });
-  const upd = await chiama(tokenA, "PATCH", "/rest/v1/wine_personal_notes", { osservazioni: "manomessa" });
-  const del = await chiama(tokenB, "DELETE", "/rest/v1/wine_personal_notes");
+  const upd = await chiama(tokenA, "PATCH", `/rest/v1/wine_personal_notes?wine_id=eq.${idVino}`, { osservazioni: "manomessa" });
+  const del = await chiama(tokenB, "DELETE", `/rest/v1/wine_personal_notes?wine_id=eq.${idVino}`);
   for (const [nome, e] of [["INSERT", ins], ["PATCH", upd], ["DELETE", del]] as const) {
     if (![401, 403].includes(e.status)) throw new Error(`${nome}: HTTP ${e.status} ${JSON.stringify(e.corpo)}`);
   }

@@ -60,6 +60,10 @@ test.describe.serial("Note personali sul vino: salvate, private e senza toccare 
     await expect(carta).toContainText("Denominazione");
     await expect(carta).toContainText("Abbinamenti");
 
+    // Il controllo di accessibilità della pagina gira prima del dialogo: a modale aperta il resto
+    // è nascosto agli ausili (aria-hidden) e il controllo dell'h1 non avrebbe senso.
+    expect(await problemiAccessibilita(page)).toEqual([]);
+
     // 2. Il comando reale apre l'editor di QUEL vino.
     await carta.getByTestId("dati-completa-info").click();
     const dialogo = page.getByRole("dialog", { name: "Completa le informazioni" });
@@ -67,7 +71,6 @@ test.describe.serial("Note personali sul vino: salvate, private e senza toccare 
     await expect(dialogo.getByTestId("nota-privacy")).toContainText("private");
     await expect(dialogo.getByTestId("nota-catalogo")).toContainText("Piemonte");
     expect(await senzaScorrimentoOrizzontale(page), "scorrimento orizzontale con l'editor aperto").toBe(true);
-    expect(await problemiAccessibilita(page)).toEqual([]);
     await info.attach(`nota-modifica-${info.project.name}.png`, { body: await dialogo.screenshot(), contentType: "image/png" });
 
     // 3. Modifica: una dichiarazione che contraddice il catalogo, abbinamenti e osservazioni.
