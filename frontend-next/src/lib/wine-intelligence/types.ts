@@ -72,6 +72,7 @@ export type Segnalazione = {
     | "finestra_precedente_annata"
     | "finestra_personale_diversa"
     | "finestra_stimata_ia"
+    | "dichiarazione_personale_diversa"
     | "provenienza_scheda_sconosciuta"
     | "scheda_utente"
     | "dati_di_ripiego";
@@ -89,9 +90,33 @@ export type QualitaScheda = {
   /** `stimato`: presenti ma non verificati, non contano come conosciuti. */
   stimati: number;
   mancanti: ChiaveAttributo[];
+  /**
+   * WI-005B: i campi mancanti nei dati condivisi MENO quelli che l'utente ha completato con una
+   * propria dichiarazione. Vale solo per il suo contesto personale: i dati condivisi (`mancanti`)
+   * non cambiano. Senza dichiarazioni coincide con `mancanti`.
+   */
+  mancantiPersonali: ChiaveAttributo[];
   segnalazioni: Segnalazione[];
   /** Presente solo se la riga documenta una data di aggiornamento. */
   ultimoAggiornamento?: string;
+};
+
+export type DichiarazionePersonale = {
+  chiave: ChiaveAttributo;
+  etichetta: string;
+  testo: string;
+  stato: "dichiarato";
+  origine: "dichiarato_utente";
+};
+
+export type PersonaleIntelligenza = {
+  /** Campi che i dati condivisi lasciano mancanti o di ripiego e che l'utente ha dichiarato. */
+  completati: ChiaveAttributo[];
+  dichiarazioni: DichiarazionePersonale[];
+  abbinamenti: string[];
+  osservazioni: string;
+  /** Dove la dichiarazione dice altro dal catalogo. Il catalogo non cambia. */
+  conflitti: { campo: "annata" | "regione" | "denominazione"; personale: string; catalogo: string }[];
 };
 
 export type RiferimentiCatalogo = {
@@ -121,6 +146,13 @@ export type IntelligenzaVino = {
     occasione: Attributo<string>;
   };
   qualita: QualitaScheda;
+  /**
+   * WI-005B — dichiarazioni PERSONALI dell'utente su questo vino, tenute fuori da `identita` e
+   * `enologia` (che restano i dati condivisi) e quindi fuori dal contratto del Sommelier. Presente
+   * solo se l'utente ha annotato qualcosa. Sono sempre `dichiarato`/`dichiarato_utente`: private,
+   * mai certificate, mai pubblicate.
+   */
+  personale?: PersonaleIntelligenza;
   /**
    * Compatibilità con il catalogo futuro. Oggi sempre `non_collegato`: la scheda
    * funziona interamente sul database Vinea, senza LWIN.

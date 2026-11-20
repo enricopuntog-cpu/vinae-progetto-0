@@ -21,7 +21,7 @@ describe("ordine delle sezioni di Cantina", () => {
   const codice = senzaCommenti(PAGINA);
 
   it("mette il valore dopo l'elenco bottiglie e prima di «Cosa bere adesso»", () => {
-    const elenco = codice.indexOf('<Tabs defaultValue="tutte">');
+    const elenco = codice.indexOf('<Tabs value={filtro} onValueChange={setFiltro}>');
     const valore = codice.indexOf("<ContabilitaCantina");
     const cosaBere = codice.indexOf("Cosa bere adesso");
     expect(elenco).toBeGreaterThan(-1);

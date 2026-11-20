@@ -1,11 +1,13 @@
 import { eMetaDiRipiego, type WineVintageMeta } from "@/data/cellar";
 import type { Wine } from "@/data/wines";
+import { confrontaConCatalogo, eNotaVuota, type NotaPersonaleVino } from "@/lib/cantina/note-personali";
 import type {
   Attributo,
   ChiaveAttributo,
   DatiAnnuncioPubblici,
   DatiCantinaPrivati,
   IntelligenzaVino,
+  PersonaleIntelligenza,
   RiferimentiCatalogo,
   Segnalazione,
   StatoConoscenza,
@@ -26,6 +28,12 @@ export type IngressoIntelligenza = {
   base?: WineVintageMeta;
   riferimentiCatalogo?: RiferimentiCatalogo;
   annoCorrente?: number;
+  /**
+   * WI-005B: dichiarazioni personali del proprietario. Restano in un blocco separato
+   * (`IntelligenzaVino.personale`) e non modificano `identita` né `enologia`, che sono i dati
+   * condivisi e l'unico ingresso del contratto del Sommelier.
+   */
+  personale?: NotaPersonaleVino;
 };
 
 const mancante = <T,>(nota?: string): Attributo<T> => ({
@@ -193,6 +201,19 @@ export function costruisciIntelligenzaVino(ingresso: IngressoIntelligenza): Inte
   const conta = (s: StatoConoscenza[]) => voci.filter(([, a]) => s.includes(a.stato)).length;
 
   const segnalazioni = trovaSegnalazioni({ wine, meta, base, anno, generico, identita });
+  const nota = ingresso.personale && !eNotaVuota(ingresso.personale) ? ingresso.personale : undefined;
+  const personale = nota ? costruisciPersonale(nota, wine, identita, enologia) : undefined;
+  if (personale) {
+    for (const c of personale.conflitti) {
+      segnalazioni.push({
+        codice: "dichiarazione_personale_diversa",
+        gravita: "info",
+        testo: `Hai dichiarato ${NOME_CAMPO[c.campo]} «${c.personale}»; il database Vinea riporta «${c.catalogo}». Il database non cambia: la tua dichiarazione resta privata e vale solo per te.`,
+        campi: [c.campo],
+      });
+    }
+  }
+  const mancanti = voci.filter(([, a]) => a.stato === "mancante").map(([k]) => k);
 
   return {
     vinoSlug: wine.wineSlug ?? null,
@@ -202,14 +223,65 @@ export function costruisciIntelligenzaVino(ingresso: IngressoIntelligenza): Inte
       totale: voci.length,
       conosciuti: conta(["registrato", "dichiarato"]),
       stimati: conta(["stimato"]),
-      mancanti: voci.filter(([, a]) => a.stato === "mancante").map(([k]) => k),
+      mancanti,
+      mancantiPersonali: mancanti.filter((k) => !personale?.completati.includes(k)),
       segnalazioni,
       ...(meta.lastUpdatedAt && !generico ? { ultimoAggiornamento: meta.lastUpdatedAt } : {}),
     },
+    ...(personale ? { personale } : {}),
     catalogo: {
       collegamento: riferimentiCatalogo?.catalogWineId ? "collegato" : "non_collegato",
       ...riferimentiCatalogo,
     },
+  };
+}
+
+const NOME_CAMPO = { annata: "l'annata", regione: "la regione", denominazione: "la denominazione" } as const;
+
+/**
+ * Le dichiarazioni dell'utente, lette contro i dati condivisi. «Completati» sono i campi che il
+ * catalogo lascia mancanti (o dà solo di ripiego) e che l'utente ha dichiarato: servono a non
+ * ripresentarli come mancanti nel SUO contesto, senza mai scrivere nel catalogo.
+ */
+function costruisciPersonale(
+  nota: NotaPersonaleVino,
+  wine: VinoPerIntelligenza,
+  identita: IntelligenzaVino["identita"],
+  enologia: IntelligenzaVino["enologia"],
+): PersonaleIntelligenza {
+  const completati: ChiaveAttributo[] = [];
+  const dichiarazioni: PersonaleIntelligenza["dichiarazioni"] = [];
+  const mancaOStimato = (a: Attributo<unknown>) => a.stato === "mancante" || a.stato === "stimato";
+  const voce = (chiave: ChiaveAttributo, etichetta: string, testo: string, completa: boolean) => {
+    dichiarazioni.push({ chiave, etichetta, testo, stato: "dichiarato", origine: "dichiarato_utente" });
+    if (completa) completati.push(chiave);
+  };
+
+  if (nota.nonMillesimato) voce("annata", "Annata", "Non millesimato", identita.annata.stato === "mancante");
+  else if (nota.annataDichiarata !== null) {
+    voce("annata", "Annata", String(nota.annataDichiarata), identita.annata.stato === "mancante");
+  }
+  if (nota.regione) voce("regione", "Regione", nota.regione, identita.regione.stato === "mancante");
+  if (nota.denominazione) {
+    voce("denominazione", "Denominazione", nota.denominazione, identita.denominazione.stato === "mancante");
+  }
+  if (nota.temperaturaC !== null) {
+    voce("temperatura_servizio", "Temperatura di servizio", `${nota.temperaturaC} °C`, mancaOStimato(enologia.temperaturaServizio));
+  }
+  if (nota.calice) voce("calice", "Calice", nota.calice, mancaOStimato(enologia.calice));
+  if (nota.decantazioneMinuti !== null) {
+    voce("decantazione", "Decantazione", `${nota.decantazioneMinuti} minuti`, mancaOStimato(enologia.decantazione));
+  }
+  if (nota.abbinamenti.length > 0) {
+    voce("abbinamenti", "Abbinamenti", nota.abbinamenti.join(" · "), mancaOStimato(enologia.abbinamenti));
+  }
+
+  return {
+    completati,
+    dichiarazioni,
+    abbinamenti: nota.abbinamenti,
+    osservazioni: nota.osservazioni,
+    conflitti: confrontaConCatalogo(nota, wine),
   };
 }
 

@@ -47,10 +47,10 @@ Legge solo `bottiglieCantina`/`viniCantina` dell'utente autenticato, già filtra
 
 ## Limiti
 
-- «Vai alla bottiglia» è un'àncora: se la scheda non è nella vista attuale (filtro diverso da «Tutte») la sezione lo dice con un avviso invece di non fare nulla.
+- «Vai alla bottiglia» era un'àncora (se la scheda non era nella vista attuale lo diceva con un avviso). Con WI-005B mostra «Tutte» e raggiunge la scheda anche con un altro filtro attivo.
 - La finestra personale oggi viene scritta dal pulsante della scheda su tutte le unità del vino al momento del salvataggio; il motore la legge comunque unità per unità (le unità aggiunte dopo non la ereditano) e lo dichiara con un limite neutro.
 - Una finestra personale parziale (solo apice o un estremo) non diventa «tua»: mantiene la fonte di base.
-- Solo la finestra di bevuta ha un comando reale per essere completata (`Personalizza finestra` nella scheda annuncio, quindi solo con un annuncio collegato). Annata, regione, denominazione e abbinamenti non hanno una via di modifica da qui: la sezione lo dice.
+- Con WI-005B annata, regione, denominazione e abbinamenti si completano con «Completa le informazioni» (dichiarazioni private, non certificate: `WI_005B_DATI_PERSONALI.md`); la finestra di bevuta resta sul comando `Personalizza finestra` della scheda annuncio.
 - I dati registrati sono quelli del database Vinea, non certificati. Finché LWIN non è importato l'identità resta `database_vinea`.
 - Il consiglio per stasera non tiene conto di occasione, numero di ospiti o gusti: usa finestra, fonte e disponibilità.
 

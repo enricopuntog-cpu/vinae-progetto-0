@@ -915,6 +915,11 @@ export interface DatiCantina {
   metaPerVino: Record<string, WineVintageMeta>;
   ambienti: StorageEnvironment[];
   moduli: StorageModule[];
+  /**
+   * WI-005B: annotazioni PERSONALI del proprietario, indicizzate per slug del vino. Private
+   * (RLS del solo proprietario) e dichiarate, non certificate: non toccano mai i dati del catalogo.
+   */
+  notePerVino: Record<string, import("@/lib/cantina/note-personali").NotaPersonaleVino>;
 }
 
 /**
@@ -982,6 +987,16 @@ export interface CellarService {
     bottleUnitIds: string[],
     visibilita: "privata" | "cantina_pubblica",
   ): Promise<Result<void>>;
+  /**
+   * WI-005B: salva (o sostituisce) le annotazioni personali sul vino indicato. Una nota senza
+   * contenuto cancella la riga. Passa dalla sola funzione `cellar_nota_vino_salva`.
+   */
+  salvaNotaVino(
+    wineSlug: string,
+    nota: import("@/lib/cantina/note-personali").NotaPersonaleVino,
+  ): Promise<Result<void>>;
+  /** WI-005B: cancella le annotazioni personali sul vino indicato (idempotente). */
+  eliminaNotaVino(wineSlug: string): Promise<Result<void>>;
   impostaOverrideFinestra(
     bottleUnitIds: string[],
     override: OverrideFinestra,

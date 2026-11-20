@@ -1,5 +1,6 @@
 "use client";
 
+import { eNotaVuota, type NotaPersonaleVino } from "@/lib/cantina/note-personali";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -82,6 +83,7 @@ const VUOTO = {
   metaPerVino: {} as Record<string, WineVintageMeta>,
   ambienti: [] as StorageEnvironment[],
   moduli: [] as StorageModule[],
+  notePerVino: {} as Record<string, NotaPersonaleVino>,
 };
 
 /**
@@ -215,7 +217,14 @@ export function useCellarDomain() {
     };
   }, [caricaCantina]);
 
-  const { bottiglie: bottiglieCantina, vini: viniCantina, metaPerVino, ambienti, moduli } = dati;
+  const {
+    bottiglie: bottiglieCantina,
+    vini: viniCantina,
+    metaPerVino,
+    ambienti,
+    moduli,
+    notePerVino: notePersonaliVino,
+  } = dati;
 
   /**
    * `inVendita` e `prezzoNascosto` erano due `Set` indipendenti dai dati, con
@@ -335,6 +344,27 @@ export function useCellarDomain() {
     [applica, servizio, unitaDelVino],
   );
 
+  /**
+   * WI-005B: annotazioni personali sul vino (private, dichiarate, non certificate). Salvare o
+   * cancellare passa dalle sole funzioni controllate del database e poi rilegge la Cantina, così
+   * scheda, consigli e «Completa i dati» mostrano lo stato effettivamente salvato.
+   */
+  const salvaNotaVino = useCallback(
+    async (wineSlug: string, nota: NotaPersonaleVino) => {
+      const esito = await servizio.salvaNotaVino(wineSlug, nota);
+      return applica(esito, eNotaVuota(nota) ? "Annotazioni rimosse" : "Informazioni salvate: restano private");
+    },
+    [applica, servizio],
+  );
+
+  const eliminaNotaVino = useCallback(
+    async (wineSlug: string) => {
+      const esito = await servizio.eliminaNotaVino(wineSlug);
+      return applica(esito, "Annotazioni rimosse");
+    },
+    [applica, servizio],
+  );
+
   const openBottle = useCallback(
     async (bottleId: string, nota?: string) => {
       const esito = await servizio.apri(bottleId, nota);
@@ -449,6 +479,9 @@ export function useCellarDomain() {
     moduli,
     drinkWindowOverrides,
     setDrinkWindowOverride,
+    notePersonaliVino,
+    salvaNotaVino,
+    eliminaNotaVino,
     openBottle,
     scheduleOpen,
     moveBottle,

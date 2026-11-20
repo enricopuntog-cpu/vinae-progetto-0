@@ -1,5 +1,6 @@
 "use client";
 
+import type { NotaPersonaleVino } from "@/lib/cantina/note-personali";
 import { createContext, useContext, type ReactNode } from "react";
 import {
   type CellarBottle,
@@ -139,6 +140,10 @@ type StoreState = {
   moduli: StorageModule[];
   drinkWindowOverrides: Record<string, DrinkOverride>;
   setDrinkWindowOverride: (wineId: string, override: DrinkOverride) => Promise<Result<void>>;
+  /** WI-005B: annotazioni personali, per slug del vino. Private e non certificate. */
+  notePersonaliVino: Record<string, NotaPersonaleVino>;
+  salvaNotaVino: (wineSlug: string, nota: NotaPersonaleVino) => Promise<Result<void>>;
+  eliminaNotaVino: (wineSlug: string) => Promise<Result<void>>;
   openBottle: (bottleId: string, nota?: string) => Promise<Result<void>>;
   scheduleOpen: (bottleId: string, date: string) => Promise<Result<void>>;
   moveBottle: (bottleId: string, newSlotId: string) => Promise<Result<void>>;
