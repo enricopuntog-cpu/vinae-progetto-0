@@ -119,7 +119,7 @@ test.describe.serial("Consigli dalla tua Cantina: bottiglie reali, stato aggiorn
     await page.reload();
     await attendiCaricamento(page);
     await expect(page.getByTestId("consigli-cantina").getByTestId("consiglio-cantina")).toHaveCount(0);
-    await expect(page.getByTestId("consigli-nessuna-apribile")).toBeVisible();
+    await expect(page.getByTestId("consigli-nessun-consiglio")).toBeVisible();
     await contesto.close();
   });
 
