@@ -72,6 +72,8 @@ Il motore lato server estende il contratto con: elenco delle bottiglie, quantit�
 
 `supabase/tests/wi004_sommelier_postgrest.sh` (agganciata a `12g_ci_run.sh`, stack effimero della CI) crea due utenti con la vera API Auth, esegue la vera Edge Function con il vero client Supabase e un fornitore finto, e prova: rifiuto senza consenso (nessuna lettura), query `wines!inner` + `count` + `owner_id` + `limit` accettata da PostgREST, quantità reali (consumate/eliminate escluse), nessun dato di B nel contesto di A neanche con `owner_id` falsificato, revoca, Sommelier generale invariato, AI spenta senza chiamate, storico non condiviso fra account, errore generico, nessuna rete fuori dallo stack. Browser reale e cambio utente/logout lato client restano coperti dai test del pannello (DOM simulato).
 
+- Risposta in volo (audit finale): un token di generazione nel pannello scarta i frammenti tardivi dopo cambio utente, revoca, rimozione del contesto, chiusura e «Cancella conversazione» (`SommelierChat.inflight.test.tsx`). La risposta già generata dal server resta nello storico fino alla cancellazione: lo dice il testo del consenso.
+
 ## Non verificato
 
 - Prova nel browser reale con due account su stack isolato e comportamento reale di PostgREST (embedding `wines!inner`, `count`,

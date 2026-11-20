@@ -95,12 +95,20 @@ export default function SommelierChat({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const storicoRichiesto = useRef<string | null>(null);
+  // Generazione della risposta in corso. Ogni invio ne apre una nuova; cambio di utente, revoca del
+  // consenso, chiusura del pannello e «Cancella conversazione» la invalidano: i frammenti tardivi di
+  // un flusso partito per un altro utente (o con un consenso poi revocato) vengono scartati.
+  const generazione = useRef(0);
 
   const aiService = useMemo(
     () => (AZIONI_IA_ABILITATE ? createSupabaseAiService(getSupabaseClient()) : null),
     [],
   );
   const utenteCorrente = authUser?.userId ?? null;
+  const invalidaRisposta = useCallback(() => {
+    generazione.current += 1;
+    setInCorso(false);
+  }, []);
   const consensoCantina = consensoAttivo(consenso, utenteCorrente, sessionId);
 
   // Una richiesta dalla pagina cambia il contesto e NON porta con sé il consenso.
@@ -117,8 +125,11 @@ export default function SommelierChat({
   // Chiudere il pannello revoca il consenso: la lettura della Cantina non
   // sopravvive a una conversazione che l'utente ha chiuso.
   useEffect(() => {
-    if (!aperto) setConsenso(null);
-  }, [aperto]);
+    if (!aperto) {
+      setConsenso(null);
+      invalidaRisposta();
+    }
+  }, [aperto, invalidaRisposta]);
 
   // Logout o cambio di account: si porta via anche il contesto e il consenso.
   const utentePrecedente = useRef(utenteCorrente);
@@ -127,8 +138,9 @@ export default function SommelierChat({
       setContesto(null);
       setConsenso(null);
     }
+    if (utentePrecedente.current !== utenteCorrente) invalidaRisposta();
     utentePrecedente.current = utenteCorrente;
-  }, [utenteCorrente]);
+  }, [utenteCorrente, invalidaRisposta]);
 
   // Il montaggio controlla soltanto l'animazione del pannello.
   useEffect(() => {
@@ -231,12 +243,15 @@ export default function SommelierChat({
       // arrivano più fitti di quanto React ridisegni, e ricostruirlo dallo
       // stato a ogni delta significherebbe leggere un valore già vecchio.
       let accumulato = "";
-      const scriviUltima = (contenuto: string, troncato?: boolean) =>
+      const mia = ++generazione.current;
+      const scriviUltima = (contenuto: string, troncato?: boolean) => {
+        if (generazione.current !== mia) return;
         setBattute((precedenti) => {
           const copia = [...precedenti];
           copia[copia.length - 1] = { ruolo: "sommelier", contenuto, troncato };
           return copia;
         });
+      };
 
       try {
         const esito = await aiService.sommelierChat(
@@ -258,20 +273,21 @@ export default function SommelierChat({
           scriviUltima(accumulato ? `${accumulato}\n\n⚠️ ${esito.error}` : `⚠️ ${esito.error}`);
         }
       } finally {
-        setInCorso(false);
+        if (generazione.current === mia) setInCorso(false);
       }
     },
     [aiService, inCorso, sessionId, contesto, consensoCantina],
   );
 
   const azzera = useCallback(async () => {
+    invalidaRisposta();
     if (sessionId && aiService) await aiService.sommelierCancella(sessionId);
     setBattute([]);
     setAzioneBloccata(false);
     // Una conversazione nuova riparte generale: né contesto né consenso restano.
     setContesto(null);
     setConsenso(null);
-  }, [aiService, sessionId]);
+  }, [aiService, sessionId, invalidaRisposta]);
 
   const suggerimenti =
     contesto?.tipo === "vino"
@@ -371,10 +387,14 @@ export default function SommelierChat({
             autenticato={utenteCorrente !== null}
             iaAttiva={AZIONI_IA_ABILITATE}
             onConsenti={() => setConsenso(concediConsenso(utenteCorrente, sessionId))}
-            onRevoca={() => setConsenso(null)}
+            onRevoca={() => {
+              setConsenso(null);
+              invalidaRisposta();
+            }}
             onTogli={() => {
               setContesto(null);
               setConsenso(null);
+              invalidaRisposta();
             }}
           />
         ) : null}

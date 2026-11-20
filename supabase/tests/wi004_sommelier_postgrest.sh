@@ -40,6 +40,7 @@ sql() { "${PSQL[@]}" -c "$1"; }
   || { echo 'Fixture wi004 gia presente: serve stack nuovo.' >&2; exit 3; }
 
 PASSWORD="$(node -e 'console.log(require("node:crypto").randomBytes(18).toString("hex") + "Aa1!")')"
+echo "::add-mask::$PASSWORD"
 EMAIL_A="a@wi004-e2e.test"
 EMAIL_B="b@wi004-e2e.test"
 
