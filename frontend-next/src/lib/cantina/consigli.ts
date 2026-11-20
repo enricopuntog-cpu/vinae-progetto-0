@@ -34,6 +34,9 @@ import type { CellarBottle } from "@/data/cellar";
 import { costruisciIntelligenzaVino, type VinoPerIntelligenza } from "@/lib/wine-intelligence/costruisci";
 import type { StatoConoscenza } from "@/lib/wine-intelligence/types";
 
+/** Id dell'ancora di una scheda di gruppo: solo caratteri sicuri in un fragment. */
+export const ancoraGruppo = (chiave: string): string => `gruppo-${chiave.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+
 export type UnitaConsigli = Pick<CellarBottle, "bottleId" | "wineVintageId" | "quantita" | "saleStatus"> &
   Partial<Pick<CellarBottle, "stato" | "statoAnnuncio" | "annuncioBloccante" | "override" | "plannedOpenDate">>;
 
@@ -123,10 +126,14 @@ function metaDellUnita(base: WineVintageMeta, u: UnitaConsigli): FineMeta {
     base.peakStart && base.peakEnd && inizio && fine && base.peakStart >= inizio && base.peakEnd <= fine
       ? { s: base.peakStart, e: base.peakEnd }
       : null;
+  // «Personale» solo se l'override porta l'intera finestra: con un solo estremo o
+  // il solo apice la finestra resta di chi l'ha scritta (fonte di base), e non si
+  // ri-etichetta come tua.
+  const completa = o.drinkWindowStart !== undefined && o.drinkWindowEnd !== undefined;
   return {
     ...base,
-    source: "personal",
-    confidence: "alta",
+    source: completa ? "personal" : base.source,
+    confidence: completa ? "alta" : base.confidence,
     drinkWindowStart: inizio,
     drinkWindowEnd: fine,
     peakStart: o.peakStart ?? apiceBase?.s,
@@ -293,8 +300,8 @@ function motiviComuni(g: Gruppo, v: Valutata): { motivi: Motivo[]; limiti: strin
     const altre = g.apribili.length - 1;
     limiti.push(
       altre === 1
-        ? "Hai un'altra bottiglia dello stesso vino: la sua finestra è quella generale, non quella personale di questa."
-        : `Hai altre ${altre} bottiglie dello stesso vino: la finestra personale vale solo per la bottiglia che la porta.`,
+        ? "Hai un'altra bottiglia dello stesso vino: viene valutata con la finestra che ha lei."
+        : `Hai altre ${altre} bottiglie dello stesso vino: ognuna è valutata con la finestra che ha lei.`,
     );
   }
   return { motivi, limiti };

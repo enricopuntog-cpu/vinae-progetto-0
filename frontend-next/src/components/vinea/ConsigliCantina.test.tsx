@@ -128,6 +128,19 @@ describe("ConsigliCantina", () => {
     expect(carta.textContent).toContain("non c'è ancora un comando");
   });
 
+  it("«Vai alla bottiglia» senza la scheda in pagina lo dice, e con la scheda no", () => {
+    monta([bottiglia("u1", "barolo")], [vino("barolo")]);
+    const link = screen.getByRole("link", { name: "Vai alla bottiglia" });
+    fireEvent.click(link);
+    expect(screen.getByTestId("consigli-avviso").textContent).toContain("vista attuale");
+    const scheda = document.createElement("div");
+    scheda.id = "gruppo-barolo";
+    document.body.appendChild(scheda);
+    fireEvent.click(link);
+    expect(screen.queryByTestId("consigli-avviso")).toBeNull();
+    scheda.remove();
+  });
+
   it("non usa la rete: nessuna chiamata a fetch durante rendering e interazioni", () => {
     const originale = globalThis.fetch;
     let chiamate = 0;

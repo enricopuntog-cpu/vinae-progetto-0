@@ -145,6 +145,14 @@ describe("A · cosa apro stasera", () => {
     expect(r.consigli[0].motivi.some((m) => m.origine === "dichiarato" && /tua/i.test(m.testo))).toBe(true);
   });
 
+  it("un override parziale (solo apice) non ri-etichetta come «tua» una finestra stimata dall'IA", () => {
+    const parziale = unita("a", { override: { peakStart: 2027, peakEnd: 2029 } });
+    const r = consigliStasera(ingresso([vino("a", {}, { source: "ai", confidence: "bassa" })], [parziale]));
+    expect(r.consigli[0].motivi[0].origine).toBe("stimato");
+    expect(r.consigli[0].motivi.some((m) => /tua finestra/i.test(m.testo))).toBe(false);
+    expect(r.consigli[0].limiti.join(" ")).toMatch(/non verificat/i);
+  });
+
   it("senza finestra non si afferma che sia pronta: resta fuori dalla shortlist e conta come senza finestra", () => {
     const r = consigliStasera(
       ingresso([vino("a", {}, { drinkWindowStart: undefined, drinkWindowEnd: undefined, peakStart: undefined, peakEnd: undefined, source: "unavailable" })], [unita("a")]),

@@ -9,6 +9,7 @@ import type { Wine } from "@/data/wines";
 import { useCercaMeta } from "@/lib/wine-meta-context";
 import { chiaveCantina } from "@/lib/cantina/gruppo";
 import {
+  ancoraGruppo,
   categorieAbbinamento,
   consigliAbbinamento,
   consigliStasera,
@@ -37,11 +38,18 @@ function titolo(c: Pick<Consiglio, "produttore" | "nome" | "annata" | "formato">
   return [c.produttore, c.nome, c.annata ?? "senza annata"].filter(Boolean).join(" · ");
 }
 
-function ancoraGruppo(chiave: string): string {
-  return `gruppo-${chiave}`;
+/** Porta alla scheda del gruppo; se nella vista attuale non c'è, lo dice invece di tacere. */
+function vaiAlGruppo(e: React.MouseEvent<HTMLAnchorElement>, chiave: string, avvisa: (m: string) => void) {
+  const el = document.getElementById(ancoraGruppo(chiave));
+  if (!el) {
+    e.preventDefault();
+    avvisa("Questa bottiglia non è nella vista attuale della Cantina: scegli «Tutte» e togli i filtri.");
+    return;
+  }
+  avvisa("");
 }
 
-function CartaConsiglio({ c, posizione }: { c: Consiglio; posizione: number }) {
+function CartaConsiglio({ c, posizione, avvisa }: { c: Consiglio; posizione: number; avvisa: (m: string) => void }) {
   return (
     <li
       className="rounded-2xl border border-border bg-card p-4"
@@ -81,7 +89,7 @@ function CartaConsiglio({ c, posizione }: { c: Consiglio; posizione: number }) {
       <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Perché</p>
       <ul className="mt-1 space-y-1.5">
         {c.motivi.map((m) => (
-          <li key={m.testo} className="flex flex-wrap items-start gap-x-2 gap-y-1 text-sm">
+          <li key={`${m.origine}-${m.testo}`} className="flex flex-wrap items-start gap-x-2 gap-y-1 text-sm">
             <span className="min-w-0 flex-1">{m.testo}</span>
             <span
               className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${ORIGINE[m.origine].classe}`}
@@ -107,6 +115,7 @@ function CartaConsiglio({ c, posizione }: { c: Consiglio; posizione: number }) {
       <div className="mt-3 flex flex-wrap gap-2">
         <a
           href={`#${ancoraGruppo(c.chiave)}`}
+          onClick={(e) => vaiAlGruppo(e, c.chiave, avvisa)}
           className="inline-flex min-h-9 items-center rounded-full border border-border px-3 text-xs font-medium hover:border-bordeaux hover:text-bordeaux"
         >
           Vai alla bottiglia
@@ -129,7 +138,9 @@ function ListaConsigli({
   altri,
   espanso,
   onEspandi,
+  avvisa,
 }: {
+  avvisa: (m: string) => void;
   consigli: Consiglio[];
   altri: number;
   espanso: boolean;
@@ -139,7 +150,7 @@ function ListaConsigli({
     <>
       <ol className="space-y-3" data-testid="consigli-lista">
         {consigli.map((c, i) => (
-          <CartaConsiglio key={c.chiave} c={c} posizione={i + 1} />
+          <CartaConsiglio key={c.chiave} c={c} posizione={i + 1} avvisa={avvisa} />
         ))}
       </ol>
       {altri > 0 && !espanso ? (
@@ -162,7 +173,7 @@ function Vuoto({ children, testId }: { children: React.ReactNode; testId: string
   );
 }
 
-function CartaDati({ v }: { v: VinoDaCompletare }) {
+function CartaDati({ v, avvisa }: { v: VinoDaCompletare; avvisa: (m: string) => void }) {
   return (
     <li className="rounded-2xl border border-border bg-card p-4" data-testid="dati-mancanti-vino" data-chiave={v.chiave}>
       <p className="font-serif text-lg leading-snug">{titolo(v)}</p>
@@ -189,6 +200,7 @@ function CartaDati({ v }: { v: VinoDaCompletare }) {
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <a
           href={`#${ancoraGruppo(v.chiave)}`}
+          onClick={(e) => vaiAlGruppo(e, v.chiave, avvisa)}
           className="inline-flex min-h-9 items-center rounded-full border border-border px-3 text-xs font-medium hover:border-bordeaux hover:text-bordeaux"
         >
           Vai alla bottiglia
@@ -231,6 +243,7 @@ export function ConsigliCantina({
   const [categoria, setCategoria] = useState<string | null>(null);
   const [testo, setTesto] = useState("");
   const [espanso, setEspanso] = useState(false);
+  const [avviso, setAvviso] = useState("");
 
   const ingresso = useMemo<IngressoConsigli>(
     () => ({
@@ -248,18 +261,20 @@ export function ConsigliCantina({
   const max = espanso ? MOSTRATI_ESPANSI : MOSTRATI_INIZIALI;
   const stasera = useMemo(() => consigliStasera(ingresso, { max }), [ingresso, max]);
   const categorie = useMemo(() => categorieAbbinamento(ingresso), [ingresso]);
-  const criterio: CriterioAbbinamento | null =
-    testo.trim().length > 0 ? { tipo: "testo", valore: testo } : categoria ? { tipo: "categoria", valore: categoria } : null;
+  const criterio = useMemo<CriterioAbbinamento | null>(
+    () =>
+      testo.trim().length > 0 ? { tipo: "testo", valore: testo } : categoria ? { tipo: "categoria", valore: categoria } : null,
+    [testo, categoria],
+  );
   const cena = useMemo(
     () => (criterio ? consigliAbbinamento(ingresso, criterio, { max }) : null),
-    // `criterio` è derivato da `testo` e `categoria`
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ingresso, max, testo, categoria],
+    [ingresso, max, criterio],
   );
   const mancanti = useMemo(() => datiMancanti(ingresso), [ingresso]);
 
   const vuota = bottiglie.length === 0;
   const cambia = (s: Scheda) => {
+    setAvviso("");
     setScheda(s);
     setEspanso(false);
   };
@@ -295,13 +310,12 @@ export function ConsigliCantina({
         </div>
       ) : (
         <>
-          <div role="tablist" aria-label="Criterio dei consigli" className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div role="group" aria-label="Criterio dei consigli" className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
             {schede.map(({ id, etichetta, Icona }) => (
               <button
                 key={id}
                 type="button"
-                role="tab"
-                aria-selected={scheda === id}
+                aria-pressed={scheda === id}
                 data-testid={`consigli-tab-${id}`}
                 onClick={() => cambia(id)}
                 className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-full border px-4 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bordeaux/40 ${
@@ -316,11 +330,18 @@ export function ConsigliCantina({
             ))}
           </div>
 
-          <div className="mt-4" role="tabpanel">
+          {avviso ? (
+            <p role="status" className="mt-3 text-xs italic text-bordeaux" data-testid="consigli-avviso">
+              {avviso}
+            </p>
+          ) : null}
+
+          <div className="mt-4" data-testid="consigli-pannello">
             {scheda === "stasera" ? (
               <div className="space-y-3">
                 {stasera.consigli.length > 0 ? (
                   <ListaConsigli
+                    avvisa={setAvviso}
                     consigli={stasera.consigli}
                     altri={stasera.altriCandidati}
                     espanso={espanso}
@@ -401,6 +422,7 @@ export function ConsigliCantina({
                   <p className="text-xs text-muted-foreground">Nessun piatto scelto.</p>
                 ) : cena.consigli.length > 0 ? (
                   <ListaConsigli
+                    avvisa={setAvviso}
                     consigli={cena.consigli}
                     altri={cena.altriCandidati}
                     espanso={espanso}
@@ -434,7 +456,7 @@ export function ConsigliCantina({
                     </p>
                     <ul className="space-y-3">
                       {mancanti.slice(0, espanso ? MOSTRATI_ESPANSI : MOSTRATI_INIZIALI).map((v) => (
-                        <CartaDati key={v.chiave} v={v} />
+                        <CartaDati key={v.chiave} v={v} avvisa={setAvviso} />
                       ))}
                     </ul>
                     {!espanso && mancanti.length > MOSTRATI_INIZIALI ? (
