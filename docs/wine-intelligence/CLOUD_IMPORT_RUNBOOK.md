@@ -49,7 +49,7 @@ Manuale, a cura di chi ha il ruolo proprietario (il caricatore non vede `pg_stat
 1. Durante il finish: `select pid, state, wait_event_type, wait_event, now()-query_start from pg_stat_activity where query like '%finish_import_run%';` — un finish è lineare: se supera ~10 minuti senza consumo di WAL, sospetto Nested Loop (la funzione ha `enable_nestloop = off`).
 2. Annotare `import_runs.finished_at - started_at`, `counts`, dimensione WAL (report `cloud.wal`) e dimensione di `catalog.source_records`.
 3. Ripetere con lo stesso file: deve risultare `skipped` (≈ nessun WAL). Con `--force`: nessuna riga riscritta.
-4. Non lanciare mai la promozione canonica subito dopo: è disattivata (vedi `HANDOFF_WI_001C_BUILD.md`, nel Rilascio B).
+4. Non lanciare mai la promozione canonica subito dopo: è disattivata (vedi `HANDOFF_WI_001C_BUILD.md`).
 
 ## Esito incerto del finish
 
