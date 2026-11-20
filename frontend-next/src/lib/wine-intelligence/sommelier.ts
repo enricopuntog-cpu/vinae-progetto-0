@@ -125,7 +125,10 @@ export function costruisciContestoSommelier(ingresso: IngressoSommelier): Contes
     vinoSlug: intelligenza.vinoSlug,
     pubblico: { attributi },
     lacune,
-    segnalazioni: intelligenza.qualita.segnalazioni.map(({ codice, testo }) => ({ codice, testo })),
+    // WI-005B: le segnalazioni che citano dichiarazioni personali non entrano nel contratto.
+    segnalazioni: intelligenza.qualita.segnalazioni
+      .filter((s) => s.codice !== "dichiarazione_personale_diversa")
+      .map(({ codice, testo }) => ({ codice, testo })),
     catalogo: intelligenza.catalogo,
   };
 

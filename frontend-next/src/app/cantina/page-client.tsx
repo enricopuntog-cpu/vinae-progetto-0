@@ -1251,6 +1251,7 @@ function BottiglieView({
             <WineIntelligenceCard
               wine={w}
               wineId={chiaveVino(w)}
+              conNotePersonali
               compatta
               schedaHref={w.detailHref}
             />
@@ -1330,6 +1331,7 @@ function BottiglieView({
               {/* WI-005B: le informazioni che solo il proprietario conosce (abbinamenti
                   provati, servizio, annata o regione dichiarate). Private e non
                   certificate: il pulsante lo dice anche nel dialogo. */}
+              {w.wineSlug ? (
               <button
                 type="button"
                 onClick={() => onModificaInfo(slug)}
@@ -1342,6 +1344,7 @@ function BottiglieView({
                 <Pencil className="h-3 w-3" aria-hidden />
                 {haNota ? "Modifica le mie informazioni" : "Completa le informazioni"}
               </button>
+              ) : null}
               {/* Da qui si apre una bottiglia, e da qui si torna a rileggere la
                   degustazione di una già aperta. Il comando esisteva solo sulla
                   scheda dell'annuncio, cioè nel posto dove si va per vendere e

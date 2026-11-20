@@ -47,7 +47,7 @@ const nota = (extra: Partial<NotaPersonaleVino>): NotaPersonaleVino => ({ ...not
 const monta = (compatta = false) =>
   render(
     <WineMetaProvider metaPerVino={{ "rosso-prova-2019": META }}>
-      <WineIntelligenceCard wine={VINO} wineId="rosso-prova-2019" compatta={compatta} />
+      <WineIntelligenceCard wine={VINO} wineId="rosso-prova-2019" compatta={compatta} conNotePersonali />
     </WineMetaProvider>,
   );
 
@@ -112,6 +112,18 @@ describe("WineIntelligenceCard con dichiarazioni personali", () => {
   it("la nota di un altro vino non compare", () => {
     note = { "altro-vino": nota({ osservazioni: "Non mia" }) };
     monta();
+    expect(screen.queryByTestId("wi-personale")).toBeNull();
+  });
+});
+
+describe("sugli annunci le dichiarazioni private non compaiono", () => {
+  it("senza conNotePersonali il blocco personale non c'è", () => {
+    note = { "rosso-prova-2019": nota({ osservazioni: "Solo mia" }) };
+    render(
+      <WineMetaProvider metaPerVino={{ "rosso-prova-2019": META }}>
+        <WineIntelligenceCard wine={VINO} wineId="rosso-prova-2019" />
+      </WineMetaProvider>,
+    );
     expect(screen.queryByTestId("wi-personale")).toBeNull();
   });
 });

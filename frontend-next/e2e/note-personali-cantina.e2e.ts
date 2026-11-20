@@ -186,7 +186,7 @@ test.describe.serial("Note personali sul vino: salvate, private e senza toccare 
     await attendiCaricamento(pagina);
     await schedaDelVino(pagina).getByTestId("cantina-completa-info").click();
     const d1 = pagina.getByRole("dialog", { name: "Completa le informazioni" });
-    await d1.getByTestId("nota-osservazioni").fill("SEGRETO-DEL-VENDITORE");
+    await d1.getByTestId("nota-osservazioni").fill("RISERVATA-DEL-VENDITORE");
     await d1.getByTestId("nota-rivedi").click();
     await d1.getByTestId("nota-salva").click();
     await expect(d1).toBeHidden();
@@ -199,7 +199,7 @@ test.describe.serial("Note personali sul vino: salvate, private e senza toccare 
     await page.goto("/cantina");
     await attendiCaricamento(page);
     await expect(schedaDelVino(page)).toBeVisible();
-    await expect(page.locator("body")).not.toContainText("SEGRETO-DEL-VENDITORE");
+    await expect(page.locator("body")).not.toContainText("RISERVATA-DEL-VENDITORE");
     await expect(schedaDelVino(page).getByTestId("wi-personale")).toHaveCount(0);
     await expect(schedaDelVino(page).getByTestId("cantina-completa-info")).toContainText("Completa le informazioni");
 
@@ -221,7 +221,7 @@ test.describe.serial("Note personali sul vino: salvate, private e senza toccare 
     await p3.goto("/cantina");
     await attendiCaricamento(p3);
     await schedaDelVino(p3).getByTestId("wine-intelligence").locator("summary").click();
-    await expect(schedaDelVino(p3).getByTestId("wi-personale")).toContainText("SEGRETO-DEL-VENDITORE");
+    await expect(schedaDelVino(p3).getByTestId("wi-personale")).toContainText("RISERVATA-DEL-VENDITORE");
     await expect(p3.locator("body")).not.toContainText("Nota dell'altro");
     await rientro.close();
   });

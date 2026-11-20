@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Info, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -132,6 +132,7 @@ function Corpo({
   const [inCorso, setInCorso] = useState(false);
   const [erroreSalvataggio, setErroreSalvataggio] = useState("");
   const [confermaElimina, setConfermaElimina] = useState(false);
+  const inVolo = useRef(false);
 
   const slug = vino.wineSlug ?? "";
   const imposta = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -151,6 +152,8 @@ function Corpo({
     });
     if (!esito.ok) {
       setErrori(esito.errori);
+      const primo = Object.keys(esito.errori)[0];
+      if (primo) setTimeout(() => document.getElementById(primo)?.focus(), 0);
       return;
     }
     setErrori({});
@@ -160,20 +163,24 @@ function Corpo({
   };
 
   const salva = async () => {
-    if (!validata || inCorso) return;
+    if (!validata || inVolo.current) return;
+    inVolo.current = true;
     setInCorso(true);
     setErroreSalvataggio("");
     const esito = await onSalva(slug, validata);
+    inVolo.current = false;
     setInCorso(false);
     if (esito.ok) onChiudi();
     else setErroreSalvataggio(esito.error);
   };
 
   const elimina = async () => {
-    if (inCorso) return;
+    if (inVolo.current) return;
+    inVolo.current = true;
     setInCorso(true);
     setErroreSalvataggio("");
     const esito = await onElimina(slug);
+    inVolo.current = false;
     setInCorso(false);
     if (esito.ok) onChiudi();
     else {
@@ -474,7 +481,7 @@ export function NotaPersonaleDialog({
         {open && vino ? (
           <Corpo
             // Stato nuovo a ogni apertura e a ogni vino: i campi partono dalla nota salvata.
-            key={`${vino.wineSlug ?? vino.nome}:${nota?.aggiornataAt ?? "nuova"}`}
+            key={vino.wineSlug ?? vino.nome}
             vino={vino}
             nota={nota}
             onChiudi={() => onOpenChange(false)}

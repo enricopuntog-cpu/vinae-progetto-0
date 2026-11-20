@@ -101,6 +101,7 @@ export function WineIntelligenceCard({
   compatta = false,
   ancore = false,
   schedaHref,
+  conNotePersonali = false,
 }: {
   wine: VinoPerIntelligenza;
   wineId: string;
@@ -109,12 +110,14 @@ export function WineIntelligenceCard({
   ancore?: boolean;
   /** Collegamento alla scheda completa, per la versione compatta. */
   schedaHref?: string | null;
+  /** WI-005B: mostra le dichiarazioni private del proprietario (solo dalla sua Cantina, non sugli annunci). */
+  conNotePersonali?: boolean;
 }) {
   const { drinkWindowOverrides, notePersonaliVino } = useVinea();
   const base = useWineMeta(wineId);
   const override = drinkWindowOverrides[wineId];
   // WI-005B: la dichiarazione personale dell'utente su QUESTO vino (private, non certificate).
-  const nota = wine.wineSlug ? notePersonaliVino?.[wine.wineSlug] : undefined;
+  const nota = conNotePersonali && wine.wineSlug ? notePersonaliVino?.[wine.wineSlug] : undefined;
   const i = useMemo(
     () =>
       costruisciIntelligenzaVino({

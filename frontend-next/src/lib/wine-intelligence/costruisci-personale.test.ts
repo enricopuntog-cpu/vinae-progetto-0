@@ -178,3 +178,19 @@ describe("contratto del Sommelier: le dichiarazioni personali non passano da sol
     expect(ctx.lacune).toContain("annata");
   });
 });
+
+describe("contratto del Sommelier: nemmeno le segnalazioni citano le dichiarazioni", () => {
+  it("il conflitto con il catalogo resta nella scheda dell'utente e non entra nel contesto", () => {
+    const i = costruisciIntelligenzaVino({
+      wine: VINO,
+      meta: getWineMeta("monfortino-2015"),
+      personale: nota({ regione: "REGIONE-SEGRETA", annataDichiarata: 2001 }),
+      annoCorrente: 2026,
+    });
+    expect(i.qualita.segnalazioni.some((s) => s.codice === "dichiarazione_personale_diversa")).toBe(true);
+    const testo = JSON.stringify(costruisciContestoSommelier({ intelligenza: i }));
+    expect(testo).not.toContain("REGIONE-SEGRETA");
+    expect(testo).not.toContain("2001");
+    expect(testo).not.toContain("dichiarazione_personale_diversa");
+  });
+});

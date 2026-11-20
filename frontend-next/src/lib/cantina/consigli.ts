@@ -547,7 +547,7 @@ export function datiMancanti(ing: IngressoConsigli): VinoDaCompletare[] {
       ...identita(v),
       bottiglie,
       voci,
-      modificabile: voci.some((x) => CAMPI_DA_EDITOR.has(x.campo)),
+      modificabile: Boolean(v.wine.wineSlug) && voci.some((x) => CAMPI_DA_EDITOR.has(x.campo)),
       azione:
         manca && v.wine.detailHref
           ? { testo: "Imposta la tua finestra di bevuta", href: `${v.wine.detailHref}#quando-berlo` }

@@ -106,8 +106,8 @@ export function righeAbbinamenti(testo: string): string[] {
     .filter((r) => r !== "");
 }
 
-const CONTROLLO = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
-const CONTROLLO_ANCHE_A_CAPO = /[\u0000-\u001F\u007F]/;
+const CONTROLLO = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u0080-\u009F\u200B-\u200F\u202A-\u202E\u2066-\u2069]/;
+const CONTROLLO_ANCHE_A_CAPO = /[\u0000-\u001F\u007F\u0080-\u009F\u200B-\u200F\u202A-\u202E\u2066-\u2069]/;
 
 const compatta = (s: string) => s.replace(/\s+/g, " ").trim();
 const norm = (s: string) => compatta(s).toLocaleLowerCase("it-IT");

@@ -109,10 +109,10 @@ declare
   v_abb text[] := '{}';
   v_voce text;
   v_chiavi text[] := '{}';
-  v_calice text := btrim(coalesce(p_calice, ''));
-  v_den text := btrim(coalesce(p_denominazione, ''));
-  v_reg text := btrim(coalesce(p_regione, ''));
-  v_oss text := btrim(coalesce(p_osservazioni, ''));
+  v_calice text := btrim(coalesce(p_calice, ''), E' \t\r\n');
+  v_den text := btrim(coalesce(p_denominazione, ''), E' \t\r\n');
+  v_reg text := btrim(coalesce(p_regione, ''), E' \t\r\n');
+  v_oss text := btrim(coalesce(p_osservazioni, ''), E' \t\r\n');
   v_nv boolean := coalesce(p_non_millesimato, false);
 begin
   if v_uid is null then
@@ -138,7 +138,7 @@ begin
   foreach v_voce in array coalesce(p_abbinamenti, '{}') loop
     v_voce := btrim(regexp_replace(coalesce(v_voce, ''), '\s+', ' ', 'g'));
     if v_voce = '' then continue; end if;
-    if v_voce ~ '[[:cntrl:]]' then
+    if v_voce ~ '[[:cntrl:]\u0080-\u009F\u200B-\u200F\u202A-\u202E\u2066-\u2069]' then
       raise exception 'Un abbinamento contiene caratteri non ammessi.' using errcode = 'P0001';
     end if;
     if char_length(v_voce) < 2 or char_length(v_voce) > 60 then
@@ -152,11 +152,11 @@ begin
     raise exception 'Indica al massimo 8 abbinamenti.' using errcode = 'P0001';
   end if;
 
-  if v_calice ~ '[[:cntrl:]]' or v_den ~ '[[:cntrl:]]' or v_reg ~ '[[:cntrl:]]' then
+  if v_calice ~ '[[:cntrl:]\u0080-\u009F\u200B-\u200F\u202A-\u202E\u2066-\u2069]' or v_den ~ '[[:cntrl:]\u0080-\u009F\u200B-\u200F\u202A-\u202E\u2066-\u2069]' or v_reg ~ '[[:cntrl:]\u0080-\u009F\u200B-\u200F\u202A-\u202E\u2066-\u2069]' then
     raise exception 'Il testo contiene caratteri non ammessi.' using errcode = 'P0001';
   end if;
   -- Le osservazioni ammettono a capo e tab, non gli altri caratteri di controllo.
-  if v_oss ~ '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]' then
+  if v_oss ~ '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\u0080-\u009F\u200B-\u200F\u202A-\u202E\u2066-\u2069]' then
     raise exception 'Il testo contiene caratteri non ammessi.' using errcode = 'P0001';
   end if;
   if char_length(v_calice) > 40 or char_length(v_den) > 120

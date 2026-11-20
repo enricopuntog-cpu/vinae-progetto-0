@@ -247,21 +247,31 @@ select pg_temp.registra(23, 'caratteri di controllo e testi troppo lunghi: rifiu
   and pg_temp.esegui('authenticated', '00000000-0000-4000-8000-0000000005a1',
     pg_temp.salva('wi005b-solo-a', null, null, null, '', null, false, '', '', repeat('x', 1001))) like 'P0001:%');
 
-select pg_temp.registra(24, 'un rifiuto non lascia righe: A ha ancora solo la nota sul vino condiviso',
+select pg_temp.registra(24, 'controllo nelle osservazioni, Unicode di formattazione e sole righe vuote: gestiti',
+  pg_temp.esegui('authenticated', '00000000-0000-4000-8000-0000000005a1',
+    pg_temp.salva('wi005b-solo-a', null, null, null, '', null, false, '', '', E'ab')) like 'P0001:%'
+  and pg_temp.esegui('authenticated', '00000000-0000-4000-8000-0000000005a1',
+    pg_temp.salva('wi005b-solo-a', null, null, null, '', null, false, '', '', E'a‮b')) like 'P0001:%'
+  and pg_temp.esegui('authenticated', '00000000-0000-4000-8000-0000000005a1',
+    pg_temp.salva('wi005b-solo-a', null, null, null, '', null, false, '', '', E'
+ 
+')) = 'ok'
+  and not exists (select 1 from public.wine_personal_notes n join public.wines w on w.id = n.wine_id where w.slug = 'wi005b-solo-a'));
+select pg_temp.registra(25, 'un rifiuto non lascia righe: A ha ancora solo la nota sul vino condiviso',
   (select count(*) from public.wine_personal_notes where owner_id = '00000000-0000-4000-8000-0000000005a1') = 1);
 
 -- Non millesimato dichiarato: non e un errore.
 insert into azioni_wi005b values ('nv',
   pg_temp.esegui('authenticated', '00000000-0000-4000-8000-0000000005a1',
     pg_temp.salva('wi005b-nv', null, null, null, '', null, true)));
-select pg_temp.registra(25, 'vino non millesimato: dichiarazione accettata e conservata',
+select pg_temp.registra(26, 'vino non millesimato: dichiarazione accettata e conservata',
   (select esito from azioni_wi005b where k = 'nv') = 'ok'
   and (select non_millesimato and annata_dichiarata is null from public.wine_personal_notes n
         join public.wines w on w.id = n.wine_id where w.slug = 'wi005b-nv'),
   (select esito from azioni_wi005b where k = 'nv'));
 
 -- Catalogo intatto: tutte le scritture di sopra non hanno toccato `wines`.
-select pg_temp.registra(26, 'public.wines non e cambiata: nessuna riga con la dichiarazione di A o B',
+select pg_temp.registra(27, 'public.wines non e cambiata: nessuna riga con la dichiarazione di A o B',
   (select count(*) from public.wines
     where slug = 'wi005b-condiviso' and annata = 2015 and regione = 'Piemonte' and denominazione = 'DOCG') = 1
   and not exists (select 1 from public.wines where slug like 'wi005b-%'
@@ -271,7 +281,7 @@ select pg_temp.registra(26, 'public.wines non e cambiata: nessuna riga con la di
 insert into azioni_wi005b values ('agg',
   pg_temp.esegui('authenticated', '00000000-0000-4000-8000-0000000005a1',
     pg_temp.salva('wi005b-condiviso', '{"Risotto"}', null, null, '', null, false, '', '', 'Aggiornata')));
-select pg_temp.registra(27, 'un secondo salvataggio sostituisce la nota (nessun duplicato)',
+select pg_temp.registra(28, 'un secondo salvataggio sostituisce la nota (nessun duplicato)',
   (select esito from azioni_wi005b where k = 'agg') = 'ok'
   and (select count(*) from public.wine_personal_notes where owner_id = '00000000-0000-4000-8000-0000000005a1'
         and wine_id = (select id from public.wines where slug = 'wi005b-condiviso')) = 1
@@ -281,7 +291,7 @@ select pg_temp.registra(27, 'un secondo salvataggio sostituisce la nota (nessun 
 
 insert into azioni_wi005b values ('vuota',
   pg_temp.esegui('authenticated', '00000000-0000-4000-8000-0000000005a1', pg_temp.salva('wi005b-nv', null, null, null, '', null, false)));
-select pg_temp.registra(28, 'una nota senza contenuto cancella la riga',
+select pg_temp.registra(29, 'una nota senza contenuto cancella la riga',
   (select esito from azioni_wi005b where k = 'vuota') = 'ok'
   and not exists (select 1 from public.wine_personal_notes n join public.wines w on w.id = n.wine_id
                    where w.slug = 'wi005b-nv'));
@@ -290,28 +300,28 @@ insert into azioni_wi005b values ('el1',
   pg_temp.esegui('authenticated', '00000000-0000-4000-8000-0000000005a1', 'select public.cellar_nota_vino_elimina(''wi005b-condiviso'')'));
 insert into azioni_wi005b values ('el2',
   pg_temp.esegui('authenticated', '00000000-0000-4000-8000-0000000005a1', 'select public.cellar_nota_vino_elimina(''wi005b-condiviso'')'));
-select pg_temp.registra(29, 'elimina cancella solo la nota del chiamante e la ripetizione e innocua',
+select pg_temp.registra(30, 'elimina cancella solo la nota del chiamante e la ripetizione e innocua',
   (select esito from azioni_wi005b where k = 'el1') = 'ok'
   and (select esito from azioni_wi005b where k = 'el2') = 'ok'
   and not exists (select 1 from public.wine_personal_notes where owner_id = '00000000-0000-4000-8000-0000000005a1')
   and (select osservazioni from public.wine_personal_notes
         where owner_id = '00000000-0000-4000-8000-0000000005b1') = 'Nota di B');
 
-select pg_temp.registra(30, 'anon non puo eliminare (42501)',
+select pg_temp.registra(31, 'anon non puo eliminare (42501)',
   pg_temp.esegui('anon', null, 'select public.cellar_nota_vino_elimina(''wi005b-condiviso'')') like '42501:%');
 
 -- Esposizione pubblica invariata.
-select pg_temp.registra(31, 'le bottiglie non sono esposte a terzi e anon non legge le note personali per unita',
+select pg_temp.registra(32, 'le bottiglie non sono esposte a terzi e anon non legge le note personali per unita',
   to_regclass('public.public_bottle_units') is null
   and not has_column_privilege('anon', 'public.bottle_units', 'note_personali', 'SELECT'));
 
-select pg_temp.registra(32, 'nessuna vista di public dipende dalla tabella delle note',
+select pg_temp.registra(33, 'nessuna vista di public dipende dalla tabella delle note',
   not exists (select 1 from pg_depend d join pg_rewrite r on r.oid = d.objid
                where d.refobjid = 'public.wine_personal_notes'::regclass and d.classid = 'pg_rewrite'::regclass));
 
 -- Il numero dei casi: togliere un caso non deve lasciare il gate verde.
-select pg_temp.registra(33, 'la griglia ha esattamente 32 casi',
-  (select count(*) from esiti_wi005b) = 32, (select count(*)::text from esiti_wi005b));
+select pg_temp.registra(34, 'la griglia ha esattamente 33 casi',
+  (select count(*) from esiti_wi005b) = 33, (select count(*)::text from esiti_wi005b));
 
 select id, descrizione, passed, detail from esiti_wi005b order by id;
 
