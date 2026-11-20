@@ -99,6 +99,7 @@ export default function SommelierChat({
   // consenso, chiusura del pannello e «Cancella conversazione» la invalidano: i frammenti tardivi di
   // un flusso partito per un altro utente (o con un consenso poi revocato) vengono scartati.
   const generazione = useRef(0);
+  const inVolo = useRef(false);
 
   const aiService = useMemo(
     () => (AZIONI_IA_ABILITATE ? createSupabaseAiService(getSupabaseClient()) : null),
@@ -107,6 +108,15 @@ export default function SommelierChat({
   const utenteCorrente = authUser?.userId ?? null;
   const invalidaRisposta = useCallback(() => {
     generazione.current += 1;
+    if (inVolo.current) {
+      inVolo.current = false;
+      // La bolla in attesa non resta vuota: dice che la risposta è stata interrotta.
+      setBattute((precedenti) =>
+        precedenti.length > 0 && precedenti[precedenti.length - 1].ruolo === "sommelier"
+          ? [...precedenti.slice(0, -1), { ruolo: "sommelier", contenuto: "⚠️ Risposta interrotta." }]
+          : precedenti,
+      );
+    }
     setInCorso(false);
   }, []);
   const consensoCantina = consensoAttivo(consenso, utenteCorrente, sessionId);
@@ -244,6 +254,7 @@ export default function SommelierChat({
       // stato a ogni delta significherebbe leggere un valore già vecchio.
       let accumulato = "";
       const mia = ++generazione.current;
+      inVolo.current = true;
       const scriviUltima = (contenuto: string, troncato?: boolean) => {
         if (generazione.current !== mia) return;
         setBattute((precedenti) => {
@@ -273,7 +284,10 @@ export default function SommelierChat({
           scriviUltima(accumulato ? `${accumulato}\n\n⚠️ ${esito.error}` : `⚠️ ${esito.error}`);
         }
       } finally {
-        if (generazione.current === mia) setInCorso(false);
+        if (generazione.current === mia) {
+          inVolo.current = false;
+          setInCorso(false);
+        }
       }
     },
     [aiService, inCorso, sessionId, contesto, consensoCantina],
@@ -281,12 +295,13 @@ export default function SommelierChat({
 
   const azzera = useCallback(async () => {
     invalidaRisposta();
-    if (sessionId && aiService) await aiService.sommelierCancella(sessionId);
+    // Prima lo stato locale, poi la rete: un invio fatto durante l'attesa non viene cancellato.
     setBattute([]);
     setAzioneBloccata(false);
     // Una conversazione nuova riparte generale: né contesto né consenso restano.
     setContesto(null);
     setConsenso(null);
+    if (sessionId && aiService) await aiService.sommelierCancella(sessionId);
   }, [aiService, sessionId, invalidaRisposta]);
 
   const suggerimenti =

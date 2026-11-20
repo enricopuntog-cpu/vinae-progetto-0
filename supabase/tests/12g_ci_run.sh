@@ -323,12 +323,11 @@ run_grid "wi004 Sommelier: lettura Cantina" wi004_sommelier_cantina_lettura.sql 
 # con due utenti reali: consenso, isolamento, storico, AI spenta. Richiede la chiave di servizio
 # dello stack effimero (E2E_SERVICE_KEY); fail-closed se manca. Fixture `@wi004-e2e.test`, trap.
 [ -n "${E2E_SERVICE_KEY:-}" ] || die "E2E_SERVICE_KEY mancante: la prova wi004 a due utenti non puo girare." 2
-wi004_pg="$(E2E_DB_URL="$E2E_DB_URL" E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_ANON_KEY="$E2E_ANON_KEY"   E2E_SERVICE_KEY="$E2E_SERVICE_KEY" bash "$TESTS/wi004_sommelier_postgrest.sh")"   || { printf '%s
-' "$wi004_pg" | grep -v -i -E 'key|secret|jwt|token|password' ; die "wi004 PostgREST a due utenti: fallita."; }
-printf '%s
-' "$wi004_pg"
-summary "- $(printf '%s
-' "$wi004_pg" | grep 'due utenti:' | tail -n 1)"
+wi004_pg="$(E2E_DB_URL="$E2E_DB_URL" E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_ANON_KEY="$E2E_ANON_KEY" \
+  E2E_SERVICE_KEY="$E2E_SERVICE_KEY" bash "$TESTS/wi004_sommelier_postgrest.sh")" \
+  || { printf '%s\n' "$wi004_pg" | tail -n 40; die "wi004 PostgREST a due utenti: fallita."; }
+printf '%s\n' "$wi004_pg"
+summary "- $(printf '%s\n' "$wi004_pg" | grep 'due utenti:' | tail -n 1)"
 
 # Stessa famiglia su sessioni PostgreSQL realmente separate: due esecutori sullo stesso
 # prelievo (uno solo riceve il Transfer), annullamento del titolare contro presa in carico e

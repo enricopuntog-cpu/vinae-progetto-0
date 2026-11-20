@@ -281,7 +281,7 @@ await prova("storico: la risposta di A non entra nel contesto di B nemmeno con l
   const r = await chiama({ message: "Domanda-privata-di-A-XYZ" }, A.token, sessione);
   await r.text();
   // La persistenza avviene a stream concluso: breve attesa del salvataggio.
-  await new Promise((ok) => setTimeout(ok, 800));
+  await new Promise((ok) => setTimeout(ok, 2500));
   azzera();
   testoRisposta = "Risposta di prova.";
   const stessoUtente = await chiama({ message: "Seconda domanda" }, A.token, sessione);

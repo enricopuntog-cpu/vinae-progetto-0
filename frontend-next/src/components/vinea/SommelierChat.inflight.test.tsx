@@ -112,6 +112,13 @@ describe("risposta in volo", () => {
     await waitFor(() => expect((screen.getByTestId("sommelier-input") as HTMLInputElement).disabled).toBe(false));
   });
 
+  it("revoca a risposta in volo: la bolla in attesa dice che è stata interrotta, non resta vuota", async () => {
+    await apriConCantina();
+    await invia("Cosa apro stasera?");
+    await click("sommelier-consenso-revoca");
+    expect(document.body.textContent ?? "").toContain("Risposta interrotta");
+  });
+
   it("senza cambi la risposta si vede normalmente", async () => {
     await apriConCantina();
     await invia("Ciao");

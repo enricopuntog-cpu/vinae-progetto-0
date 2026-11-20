@@ -97,6 +97,7 @@ check "scope: altra griglia wi004 pertinente" true "$(scope_for supabase/tests/w
 check "scope: Edge Function ai-sommelier pertinente" true "$(scope_for supabase/functions/ai-sommelier/index.ts)"
 check "scope: motore del contesto Sommelier pertinente" true "$(scope_for supabase/functions/_shared/sommelier-contesto.ts)"
 check "scope: prova PostgREST a due utenti pertinente" true "$(scope_for frontend-next/src/lib/wine-intelligence/sommelier-postgrest.stack.ts)"
+check "scope: gate e provider AI condivisi pertinenti" true "$(scope_for supabase/functions/_shared/ai-gate.ts)"
 check "scope: documento WI-004 saltato" false "$(scope_for docs/wine-intelligence/WI_004_SOMMELIER_CONTESTUALE.md)"
 check "scope: test del Sommelier nel frontend saltato" false "$(scope_for frontend-next/src/lib/wine-intelligence/sommelier-edge.test.ts)"
 check "scope: README saltato" false "$(scope_for README.md)"
