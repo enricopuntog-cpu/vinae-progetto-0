@@ -42,8 +42,8 @@ Legge solo `bottiglieCantina`/`viniCantina` dell'utente autenticato, già filtra
 | Unitari motore (30) + DOM sezione (8) | passano; suite completa `frontend-next` 3746/3746; soglia CI 3708 → 3746 (e i due test che la citano) |
 | typecheck, lint, build | puliti (lint: 5 warning preesistenti) |
 | Browser su stack locale | NON ESEGUITO: lo stack `vinea_e2e` locale è bloccato dalla guardia (ledger indietro di 5 migrazioni); la guardia non è stata aggirata |
-| Browser in CI (`e2e-browser`, `@smoke`, Chromium desktop) | vedi `CHANGES.log` per l'esito sulla testa della PR |
-| 375 px e WebKit | solo se eseguita la suite `completa` (workflow_dispatch); altrimenti NON VERIFICATO |
+| Browser in CI (`e2e-browser`, @smoke, Chromium desktop) | PR #307: 3 casi nuovi passati sulla testa `2ff008c`; residui 0. Due rossi precedenti erano asserzioni sbagliate del test (plurale dell'avviso; bottiglia senza finestra ancora apribile), non difetti dell'app |
+| Suite `completa` (workflow_dispatch, stessa testa) | 280 passati, 0 inattesi, 0 instabili, 4 saltati: Chromium desktop, Chromium 375 px, WebKit; nessuno scorrimento orizzontale, controlli a11y, pulizia a zero residui |
 
 ## Limiti
 
