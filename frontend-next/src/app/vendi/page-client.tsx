@@ -38,6 +38,7 @@ import { confidenzaPercento } from "@/lib/phase10/catalogazione";
 import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
 import { FotoGriglia } from "@/components/vinea/FotoGriglia";
 import { FotoEtichettaPanel } from "./foto-etichetta-panel";
+import { RicercaManuale } from "./ricerca-manuale";
 import { BetaActionNotice } from "@/components/vinea/BetaActionNotice";
 import { BottleSelector } from "@/app/vendi/bottle-selector";
 import { CAMPO_ID, Field } from "@/app/vendi/field";
@@ -160,6 +161,7 @@ function WizardVendi() {
     aiBloccata,
     sorgenteEtichetta,
     applicaEtichetta,
+    applicaRicercaManuale,
     assistenzaAiEtichetta,
     chiediSuggerimento,
     applicaSuggerimento,
@@ -522,6 +524,12 @@ function WizardVendi() {
               )}
               </div>
             )}
+
+            <RicercaManuale
+              sorgente={sorgenteEtichetta}
+              valori={{ produttore: d.produttore, nome: d.nome, annata: d.annata, formato: d.formato }}
+              applica={applicaRicercaManuale}
+            />
 
             <div className="grid gap-3 md:grid-cols-2">
               <Field label="Produttore" htmlFor={CAMPO_ID.produttore}>

@@ -14,8 +14,8 @@ import { Camera, ImagePlus, Loader2, ScanText, Search, Sparkles, X } from "lucid
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useFotoEtichetta, type CampiConfermati, type OpzioniFotoEtichetta } from "@/hooks/useFotoEtichetta";
-import type { EsitoCorrispondenza } from "@/lib/vendi/foto-etichetta/candidati";
 import type { CatalogazioneSuggerimento, Result } from "@/services/types";
+import { ElencoCandidati } from "./elenco-candidati";
 import { Field } from "./field";
 
 export type AssistenzaAi = {
@@ -27,14 +27,6 @@ type Props = OpzioniFotoEtichetta & {
   ai?: AssistenzaAi | null;
   /** Carica la foto come foto della bottiglia: parte solo da un gesto esplicito. */
   conservaFoto?: ((file: File) => Promise<boolean>) | null;
-};
-
-const ETICHETTA_ESITO: Record<EsitoCorrispondenza, string> = {
-  esatta: "Stesso vino e stessa annata",
-  probabile: "Vino molto simile",
-  annata_diversa: "Stesso vino, annata diversa",
-  formato_diverso: "Stesso vino, formato diverso",
-  possibile: "Possibile corrispondenza",
 };
 
 const INTESTAZIONE_QUALITA = {
@@ -304,51 +296,14 @@ export function FotoEtichettaPanel({ ai = null, conservaFoto = null, ...opzioni 
               </p>
             )}
             {stato.faseRicerca === "fatta" && stato.candidati.length > 0 && (
-              <fieldset className="mt-2 space-y-2" data-testid="foto-etichetta-candidati">
-                <legend className="text-[11px] text-muted-foreground">
-                  {stato.sintesi === "unica"
-                    ? "Un vino corrisponde. Sceglilo solo se è davvero il tuo."
-                    : "Più vini possibili: scegli quello giusto oppure nessuno."}
-                </legend>
-                {stato.candidati.map((c) => (
-                  <label
-                    key={c.id + (c.formato ?? "") + (c.annata ?? "")}
-                    className="flex cursor-pointer items-start gap-2 rounded-xl border border-border p-2 text-xs has-[:checked]:border-bordeaux"
-                    data-testid={`foto-etichetta-candidato-${c.id}`}
-                  >
-                    <input
-                      type="radio"
-                      name={ID(base, "candidato")}
-                      className="mt-0.5"
-                      checked={stato.selezionato === c.id}
-                      onChange={() => stato.seleziona(c.id)}
-                    />
-                    <span>
-                      <b>{c.produttore}</b> — {c.nome}
-                      {c.annata ? ` ${c.annata}` : ""}
-                      {c.formato ? ` · ${c.formato}` : ""}
-                      <br />
-                      <span className="text-muted-foreground">
-                        {ETICHETTA_ESITO[c.esito]}
-                        {[c.regione, c.denominazione].filter(Boolean).length > 0
-                          ? ` · ${[c.regione, c.denominazione].filter(Boolean).join(", ")}`
-                          : ""}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-                <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-border p-2 text-xs has-[:checked]:border-bordeaux">
-                  <input
-                    type="radio"
-                    name={ID(base, "candidato")}
-                    className="mt-0.5"
-                    checked={stato.selezionato === null}
-                    onChange={() => stato.seleziona(null)}
-                    data-testid="foto-etichetta-nessuno"
-                  />
-                  <span>Nessuno di questi: continuo con i dati letti</span>
-                </label>
-              </fieldset>
+              <ElencoCandidati
+                candidati={stato.candidati}
+                sintesi={stato.sintesi}
+                selezionato={stato.selezionato}
+                onSeleziona={stato.seleziona}
+                nomeGruppo={ID(base, "candidato")}
+                prefissoTest="foto-etichetta"
+              />
             )}
           </div>
 

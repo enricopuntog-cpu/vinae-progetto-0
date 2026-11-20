@@ -10,7 +10,7 @@ import { createListingService } from "@/services/listing-service";
 import { creaWineRegionsService } from "@/services/wine-regions-service";
 import { createSupabaseAiService } from "@/services/phase10/supabase-ai-service";
 import { campiDaSuggerimento } from "@/lib/phase10/catalogazione";
-import { sorgenteDaAnnunci } from "@/lib/vendi/foto-etichetta/candidati";
+import { creaSorgenteRicerca } from "@/lib/vendi/ricerca-vini/sorgenti";
 import { campiWizardDaConferma } from "@/lib/vendi/foto-etichetta/applica";
 import type { CampiConfermati } from "@/hooks/useFotoEtichetta";
 import type { CandidatoVino } from "@/lib/vendi/foto-etichetta/candidati";
@@ -395,14 +395,24 @@ export function useSellWizard({
   // -- Fotografa l'etichetta (WI-002) -----------------------------------------
   //
   // Il percorso vive in `useFotoEtichetta`; qui ci sono solo i tre punti di
-  // contatto con il wizard. I candidati arrivano dagli annunci pubblici reali
-  // (stesso read-model del catalogo); la sorgente è sostituibile.
-  const sorgenteEtichetta = useMemo(() => sorgenteDaAnnunci(listingService), [listingService]);
+  // contatto con il wizard. I candidati arrivano dalla ricerca limitata lato
+  // database (WI-006A: catalogo visibile all'utente + annunci pubblici), la
+  // stessa che serve la ricerca manuale; la sorgente è sostituibile.
+  const sorgenteEtichetta = useMemo(() => creaSorgenteRicerca(supabase), [supabase]);
 
   const applicaEtichetta = useCallback(
     (confermati: CampiConfermati, candidato: CandidatoVino | null) => {
       setD((s) => ({ ...s, ...campiWizardDaConferma(confermati, candidato, s, regioniCanoniche) }));
       toast.success("Dati dell'etichetta applicati ai campi");
+    },
+    [regioniCanoniche],
+  );
+
+  // Ricerca manuale (WI-006A): stessi dati confermati, stesso adattamento ai campi.
+  const applicaRicercaManuale = useCallback(
+    (confermati: CampiConfermati, candidato: CandidatoVino) => {
+      setD((s) => ({ ...s, ...campiWizardDaConferma(confermati, candidato, s, regioniCanoniche) }));
+      toast.success("Dati del vino applicati ai campi");
     },
     [regioniCanoniche],
   );
@@ -1010,6 +1020,7 @@ export function useSellWizard({
     applicaSuggerimento,
     sorgenteEtichetta,
     applicaEtichetta,
+    applicaRicercaManuale,
     assistenzaAiEtichetta,
   };
 }

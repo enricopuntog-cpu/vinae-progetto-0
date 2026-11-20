@@ -1,10 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import type { Wine } from "@/data/wines";
 import {
   type CandidatoVino,
   normalizzaTesto,
   sintesiRicerca,
-  sorgenteDaAnnunci,
   tokenNormalizzati,
   valutaCandidati,
 } from "./candidati";
@@ -117,58 +115,5 @@ describe("valutaCandidati", () => {
     expect(performance.now() - t).toBeLessThan(5000);
     expect(r.length).toBeLessThanOrEqual(5);
     expect(r[0].id).toBe("giusto");
-  });
-});
-
-describe("sorgenteDaAnnunci", () => {
-  const wine = (o: Partial<Wine>): Wine =>
-    ({
-      id: "slug-annuncio",
-      wineSlug: "slug-vino",
-      produttore: "Tenuta Borgo Antico",
-      nome: "Rosso di Prova",
-      annata: 2019,
-      regione: "Toscana",
-      denominazione: "",
-      tipo: "Rosso",
-      formato: "0,75 L",
-      ...o,
-    }) as Wine;
-
-  it("legge gli annunci reali una volta sola e restituisce solo i pertinenti", async () => {
-    let letture = 0;
-    const s = sorgenteDaAnnunci({
-      elencoConEsito: async () => {
-        letture++;
-        return {
-          ok: true,
-          data: [
-            wine({}),
-            wine({ id: "x", wineSlug: "altro", produttore: "Cantina Lontana", nome: "Bianco" }),
-          ],
-        };
-      },
-    });
-    const a = await s.cerca(domanda);
-    await s.cerca(domanda);
-    expect(letture).toBe(1);
-    expect(a.ok && a.data.map((c) => c.id)).toEqual(["slug-vino"]);
-  });
-
-  it("un errore di lettura è un errore, non «nessuna corrispondenza», e non resta in cache", async () => {
-    let n = 0;
-    const s = sorgenteDaAnnunci({
-      elencoConEsito: async () =>
-        ++n === 1
-          ? { ok: false, error: "Annunci attivi non disponibili." }
-          : { ok: true, data: [wine({})] },
-    });
-    expect((await s.cerca(domanda)).ok).toBe(false);
-    expect((await s.cerca(domanda)).ok).toBe(true);
-  });
-
-  it("un catalogo vuoto (pochi vini) degrada: nessun risultato, nessun errore", async () => {
-    const s = sorgenteDaAnnunci({ elencoConEsito: async () => ({ ok: true, data: [] }) });
-    expect(await s.cerca(domanda)).toEqual({ ok: true, data: [] });
   });
 });
