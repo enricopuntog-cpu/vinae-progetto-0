@@ -33,6 +33,13 @@ export type WineVintageMeta = {
   glassType: string;
   occasione?: string;
   lastUpdatedAt: string;
+  /**
+   * Campi che NON vengono dalla riga del vino ma da un ripiego generico
+   * (temperatura e calice di `DEFAULT_META`). Assente = nessun ripiego parziale.
+   * Serve alla scheda Wine Intelligence per non presentare come registrato ciò
+   * che è solo un valore di cortesia.
+   */
+  ripiego?: { temperatura?: boolean; calice?: boolean };
 };
 
 export type PairingLevel = "ideale" | "ottimo" | "possibile";
@@ -486,6 +493,15 @@ export const wineMeta: Record<string, WineVintageMeta> = {
 
 export function getWineMeta(wineId: string): WineVintageMeta {
   return wineMeta[wineId] ?? DEFAULT_META;
+}
+
+/**
+ * Vero quando i metadati sono quelli generici di `DEFAULT_META` (vino
+ * sconosciuto alla tabella): abbinamenti, temperatura e calice sono allora un
+ * ripiego orientativo, non un'informazione sul vino.
+ */
+export function eMetaDiRipiego(meta: WineVintageMeta): boolean {
+  return meta === DEFAULT_META;
 }
 
 // ============================================================

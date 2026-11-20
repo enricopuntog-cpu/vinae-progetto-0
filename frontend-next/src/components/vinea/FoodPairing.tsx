@@ -28,7 +28,7 @@ export function FoodPairingSection({ wineId }: { wineId: string }) {
   const meta = useWineMeta(wineId);
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-5">
+    <section id="abbinamenti" className="scroll-mt-20 rounded-2xl border border-border bg-card p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Cosa abbinare</p>

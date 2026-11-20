@@ -70,6 +70,8 @@ export function rigaAMeta(riga: RigaMetaVino): WineVintageMeta {
   if (rigaVuota(riga)) return getWineMeta(riga.slug);
 
   const ripiego = getWineMeta(riga.slug);
+  const ripiegoTemperatura = riga.temperatura_servizio === "";
+  const ripiegoCalice = riga.calice === "";
 
   return {
     drinkWindowStart: riga.finestra_inizio ?? undefined,
@@ -87,6 +89,10 @@ export function rigaAMeta(riga: RigaMetaVino): WineVintageMeta {
     glassType: riga.calice || ripiego.glassType,
     occasione: riga.occasione || undefined,
     lastUpdatedAt: riga.finestra_aggiornata_at ?? "",
+    // Solo quando serve: per una riga completa l'oggetto resta identico a prima.
+    ...(ripiegoTemperatura || ripiegoCalice
+      ? { ripiego: { temperatura: ripiegoTemperatura, calice: ripiegoCalice } }
+      : {}),
   };
 }
 
