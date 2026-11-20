@@ -12,11 +12,12 @@
 // l'utente deve chiedere con un gesto a parte.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CandidatoValutato, SintesiRicerca, SorgenteCandidati } from "@/lib/vendi/foto-etichetta/candidati";
+import type { CandidatoValutato, SorgenteCandidati } from "@/lib/vendi/foto-etichetta/candidati";
+import { type FaseRicerca, useRicercaCandidati } from "./useRicercaCandidati";
 import type { CampiEstratti, QualitaLettura } from "@/lib/vendi/foto-etichetta/estrazione";
 import { validaFileImmagine } from "@/lib/vendi/foto-etichetta/immagine";
 import { type MotoreOcr, creaMotoreTesseract } from "@/lib/vendi/foto-etichetta/ocr";
-import { cercaCorrispondenze, leggiEtichetta } from "@/lib/vendi/foto-etichetta/pipeline";
+import { leggiEtichetta } from "@/lib/vendi/foto-etichetta/pipeline";
 
 export type CampiConfermati = {
   produttore: string;
@@ -27,7 +28,7 @@ export type CampiConfermati = {
 };
 
 export type FaseLettura = "vuota" | "anteprima" | "in_corso" | "letta" | "errore";
-export type FaseRicerca = "ferma" | "in_corso" | "fatta" | "errore";
+export type { FaseRicerca };
 
 export type OpzioniFotoEtichetta = {
   sorgente: SorgenteCandidati;
@@ -62,11 +63,16 @@ export function useFotoEtichetta({
   const [qualita, setQualita] = useState<Exclude<QualitaLettura, "nessuna"> | null>(null);
   const [campi, setCampi] = useState<CampiConfermati>(CAMPI_VUOTI);
   const [annateAlternative, setAnnateAlternative] = useState<number[]>([]);
-  const [faseRicerca, setFaseRicerca] = useState<FaseRicerca>("ferma");
-  const [candidati, setCandidati] = useState<CandidatoValutato[]>([]);
-  const [sintesi, setSintesi] = useState<SintesiRicerca | null>(null);
-  const [messaggioRicerca, setMessaggioRicerca] = useState<string | null>(null);
-  const [selezionato, setSelezionato] = useState<string | null>(null);
+  const ricerca = useRicercaCandidati(sorgente);
+  const {
+    fase: faseRicerca,
+    candidati,
+    sintesi,
+    messaggio: messaggioRicerca,
+    selezionato,
+    azzera: azzeraRicerca,
+    seleziona: selezionaCandidato,
+  } = ricerca;
   const [applicato, setApplicato] = useState(false);
 
   const abort = useRef<AbortController | null>(null);
@@ -79,11 +85,12 @@ export function useFotoEtichetta({
     abort.current?.abort();
     abort.current = null;
     generazione.current++;
+    azzeraRicerca();
     if (urlCorrente.current) {
       URL.revokeObjectURL(urlCorrente.current);
       urlCorrente.current = null;
     }
-  }, []);
+  }, [azzeraRicerca]);
 
   // Alla chiusura del passo l'anteprima e l'eventuale lettura in corso si liberano.
   useEffect(() => rilascia, [rilascia]);
@@ -93,14 +100,10 @@ export function useFotoEtichetta({
     setQualita(null);
     setCampi(CAMPI_VUOTI);
     setAnnateAlternative([]);
-    setFaseRicerca("ferma");
-    setCandidati([]);
-    setSintesi(null);
-    setMessaggioRicerca(null);
-    setSelezionato(null);
+    azzeraRicerca();
     setApplicato(false);
     setProgresso(0);
-  }, []);
+  }, [azzeraRicerca]);
 
   const scegliFile = useCallback(
     (nuovo: File | null) => {
@@ -132,33 +135,16 @@ export function useFotoEtichetta({
 
   const cerca = useCallback(
     async (daCampi: CampiConfermati) => {
-      const mia = ++generazione.current;
-      setFaseRicerca("in_corso");
-      setMessaggioRicerca(null);
-      setSelezionato(null);
       const annata = Number.parseInt(daCampi.annata, 10);
-      const esito = await cercaCorrispondenze(
-        {
-          produttore: daCampi.produttore,
-          nome: daCampi.nome,
-          annata: Number.isInteger(annata) ? annata : null,
-          formato: daCampi.formato || null,
-        },
-        sorgente,
-      ).catch(() => ({ ok: false as const, messaggio: "Ricerca non riuscita." }));
-      if (mia !== generazione.current) return;
-      if (!esito.ok) {
-        setFaseRicerca("errore");
-        setCandidati([]);
-        setSintesi(null);
-        setMessaggioRicerca(esito.messaggio);
-        return;
-      }
-      setCandidati(esito.candidati);
-      setSintesi(esito.sintesi);
-      setFaseRicerca("fatta");
+      await ricerca.cerca({
+        produttore: daCampi.produttore,
+        nome: daCampi.nome,
+        annata: Number.isInteger(annata) ? annata : null,
+        formato: daCampi.formato || null,
+      });
     },
-    [sorgente],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `ricerca.cerca` cambia solo con la sorgente
+    [ricerca.cerca],
   );
 
   const leggi = useCallback(async () => {
@@ -210,14 +196,17 @@ export function useFotoEtichetta({
     setCampi((c) => ({ ...c, [chiave]: valore }));
     // Correggere produttore o nome rende superata la scelta di un vino trovato:
     // al wizard devono arrivare i campi che l'utente vede, non quelli del candidato.
-    if (chiave === "produttore" || chiave === "nome") setSelezionato(null);
+    if (chiave === "produttore" || chiave === "nome") selezionaCandidato(null);
     setApplicato(false);
-  }, []);
+  }, [selezionaCandidato]);
 
-  const seleziona = useCallback((id: string | null) => {
-    setSelezionato(id);
-    setApplicato(false);
-  }, []);
+  const seleziona = useCallback(
+    (id: string | null) => {
+      selezionaCandidato(id);
+      setApplicato(false);
+    },
+    [selezionaCandidato],
+  );
 
   /** L'unico punto in cui il percorso scrive nel wizard, e solo su richiesta. */
   const conferma = useCallback(() => {

@@ -100,6 +100,8 @@ check "scope: prova PostgREST a due utenti pertinente" true "$(scope_for fronten
 check "scope: gate e provider AI condivisi pertinenti" true "$(scope_for supabase/functions/_shared/ai-gate.ts)"
 check "scope: griglia wi005b note del vino pertinente" true "$(scope_for supabase/tests/wi005b_note_vino_isolamento.sql)"
 check "scope: prova PostgREST wi005b pertinente" true "$(scope_for frontend-next/src/lib/cantina/note-vino-postgrest.stack.ts)"
+check "scope: script PostgREST wi006a pertinente" true "$(scope_for supabase/tests/wi006a_ricerca_vini_postgrest.sh)"
+check "scope: prova PostgREST ricerca vini wi006a pertinente" true "$(scope_for frontend-next/src/lib/vendi/ricerca-vini/ricerca-postgrest.stack.ts)"
 check "scope: documento WI-004 saltato" false "$(scope_for docs/wine-intelligence/WI_004_SOMMELIER_CONTESTUALE.md)"
 check "scope: test del Sommelier nel frontend saltato" false "$(scope_for frontend-next/src/lib/wine-intelligence/sommelier-edge.test.ts)"
 check "scope: README saltato" false "$(scope_for README.md)"

@@ -3,9 +3,10 @@
 // Tre cose separate, perché il catalogo crescerà e le prime due devono poter
 // cambiare senza toccare la terza:
 //
-//   1. `SorgenteCandidati` — da dove arrivano i candidati. Oggi sono gli
-//      annunci pubblici reali (`sorgenteDaAnnunci`); domani può essere il
-//      catalogo canonico LWIN o un'altra fonte, dietro la stessa interfaccia e
+//   1. `SorgenteCandidati` — da dove arrivano i candidati. Oggi sono il
+//      catalogo e gli annunci pubblici, con ricerca limitata lato database
+//      (`@/lib/vendi/ricerca-vini`); domani può essere il catalogo canonico
+//      LWIN o un'altra fonte, dietro la stessa interfaccia e
 //      con la ricerca lato server. Una fonte restituisce già un sottoinsieme.
 //   2. `valutaCandidati` — normalizzazione, punteggio, ordinamento. Funzione
 //      pura e deterministica: stesso input, stesso ordine, sempre.
@@ -14,7 +15,6 @@
 // Nessuna fusione automatica di vini e nessuna creazione di dati di catalogo:
 // questo modulo legge e ordina, mai scrive.
 
-import type { Wine } from "@/data/wines";
 import type { Result } from "@/services/types";
 
 export type CandidatoVino = {
@@ -254,75 +254,4 @@ export function sintesiRicerca(valutati: readonly CandidatoValutato[]): SintesiR
     return "unica";
   }
   return "ambigua";
-}
-
-// -- Fonte attuale: annunci pubblici reali -----------------------------------
-
-export const CODICE_FONTE_ANNUNCI = "annunci_vinea";
-
-export type LetturaAnnunci = { elencoConEsito(): Promise<Result<Wine[]>> };
-
-const candidatoDaWine = (w: Wine): CandidatoVino => ({
-  fonte: CODICE_FONTE_ANNUNCI,
-  id: w.wineSlug ?? w.id,
-  produttore: w.produttore,
-  nome: w.nome,
-  annata: Number.isInteger(w.annata) && w.annata > 0 ? w.annata : null,
-  formato: w.formato || null,
-  regione: w.regione || null,
-  denominazione: w.denominazione || null,
-  tipo: w.tipo || null,
-});
-
-/**
- * Gli annunci attivi e pubblici (`public_listings`, lo stesso read-model del
- * catalogo e di Price Intelligence), letti una volta per istanza. La ricerca
- * restituisce solo le righe che condividono almeno una parola significativa con
- * la domanda: il punteggio lo calcola `valutaCandidati`.
- *
- * Non serve ad altro: i dati dimostrativi di `@/data/wines` non passano di qui.
- */
-export function sorgenteDaAnnunci(lettura: LetturaAnnunci, durataCacheMs = 60_000): SorgenteCandidati {
-  let elenco: Promise<Result<CandidatoVino[]>> | null = null;
-  let letto = 0;
-  const leggi = (): Promise<Result<CandidatoVino[]>> => {
-    // L'elenco si rilegge dopo un minuto: «Cerca di nuovo» non deve restare
-    // ferma sui dati del primo caricamento.
-    if (elenco && Date.now() - letto > durataCacheMs) elenco = null;
-    if (!elenco) letto = Date.now();
-    elenco ??= lettura
-      .elencoConEsito()
-      .then((esito): Result<CandidatoVino[]> =>
-        esito.ok ? { ok: true, data: esito.data.map(candidatoDaWine) } : esito,
-      )
-      .catch((): Result<CandidatoVino[]> => ({
-        ok: false,
-        error: "Non è stato possibile consultare i vini già presenti su Vinea.",
-      }));
-    return elenco;
-  };
-
-  return {
-    codice: CODICE_FONTE_ANNUNCI,
-    async cerca(domanda) {
-      const esito = await leggi();
-      if (!esito.ok) {
-        elenco = null; // un errore non va ricordato: il prossimo tentativo rilegge
-        return esito;
-      }
-      const parole = new Set([
-        ...tokenNormalizzati(domanda.produttore, true),
-        ...tokenNormalizzati(domanda.nome),
-      ]);
-      if (parole.size === 0) return { ok: true, data: [] };
-      return {
-        ok: true,
-        data: esito.data.filter((c) => {
-          const t = [...tokenNormalizzati(c.produttore, true), ...tokenNormalizzati(c.nome)];
-          // Anche con un refuso da OCR: la parola vicina basta a restare in gioco.
-          return t.some((x) => [...parole].some((q) => similitudineToken(x, q) > 0));
-        }),
-      };
-    },
-  };
 }

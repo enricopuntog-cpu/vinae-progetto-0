@@ -339,6 +339,15 @@ wi005b_pg="$(E2E_DB_URL="$E2E_DB_URL" E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_A
 printf '%s\n' "$wi005b_pg"
 summary "- $(printf '%s\n' "$wi005b_pg" | grep 'due utenti:' | tail -n 1)"
 
+# WI-006A: ricerca dei vini a due utenti su PostgREST e Auth reali (token veri, mai service_role
+# nella ricerca, nessun provider AI), con dataset sintetico di 20000 vini e EXPLAIN come authenticated.
+# Fixture `@wi006a-e2e.test` e `wi006a-e2e-%` rimosse in trap, residui = 0.
+wi006a_pg="$(E2E_DB_URL="$E2E_DB_URL" E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_ANON_KEY="$E2E_ANON_KEY" \
+  E2E_SERVICE_KEY="$E2E_SERVICE_KEY" bash "$TESTS/wi006a_ricerca_vini_postgrest.sh")" \
+  || { printf '%s\n' "$wi006a_pg" | tail -n 60; die "wi006a PostgREST ricerca vini a due utenti: fallita."; }
+printf '%s\n' "$wi006a_pg"
+summary "- $(printf '%s\n' "$wi006a_pg" | grep 'due utenti:' | tail -n 1)"
+
 # Stessa famiglia su sessioni PostgreSQL realmente separate: due esecutori sullo stesso
 # prelievo (uno solo riceve il Transfer), annullamento del titolare contro presa in carico e
 # contro un esito incerto (mai liberati i fondi), stessa chiave in parallelo, doppio esito
