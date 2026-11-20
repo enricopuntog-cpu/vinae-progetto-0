@@ -329,6 +329,16 @@ wi004_pg="$(E2E_DB_URL="$E2E_DB_URL" E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_AN
 printf '%s\n' "$wi004_pg"
 summary "- $(printf '%s\n' "$wi004_pg" | grep 'due utenti:' | tail -n 1)"
 
+# WI-005B: annotazioni personali sui vini. Griglia SQL (isolamento fra utenti, scritture dirette
+# negate, catalogo intatto) e prova a due utenti su PostgREST e Auth reali (token veri, nessun
+# provider AI). Fixture `@wi005b.test` (ROLLBACK) e `@wi005b-e2e.test` (trap, residui = 0).
+run_grid "wi005b note personali: isolamento" wi005b_note_vino_isolamento.sql 3
+wi005b_pg="$(E2E_DB_URL="$E2E_DB_URL" E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_ANON_KEY="$E2E_ANON_KEY" \
+  E2E_SERVICE_KEY="$E2E_SERVICE_KEY" bash "$TESTS/wi005b_note_vino_postgrest.sh")" \
+  || { printf '%s\n' "$wi005b_pg" | tail -n 40; die "wi005b PostgREST a due utenti: fallita."; }
+printf '%s\n' "$wi005b_pg"
+summary "- $(printf '%s\n' "$wi005b_pg" | grep 'due utenti:' | tail -n 1)"
+
 # Stessa famiglia su sessioni PostgreSQL realmente separate: due esecutori sullo stesso
 # prelievo (uno solo riceve il Transfer), annullamento del titolare contro presa in carico e
 # contro un esito incerto (mai liberati i fondi), stessa chiave in parallelo, doppio esito
