@@ -9,7 +9,7 @@ Documento di chiusura senza costi. Nessun branch Supabase, environment GitHub, s
 | WI-001A, importatore locale LWIN | **Completato** (PR #298) |
 | WI-001B, schema `catalog` di staging | **Distribuito** in Production (PR #300, ledger `20261117120000`), nessun dato |
 | WI-001C Rilascio A, runner cloud | **Mergiato** (PR #301, `f579203`), CI verde; handoff PR #302 (`2d92790`), CI verde |
-| WI-001C Rilascio B, catalogo canonico | **Sviluppato e testato, non mergiato né distribuito** (branch `feature/wi-001c-canonical-catalog`) |
+| WI-001C Rilascio B, catalogo canonico | **Integrato su `origin/main` `2ad23f7` nel branch `feature/wi-001c-unified-completion`** (4 migration invariate, griglie `12zy`/`12zz`, allow-list `12zs`); non ancora mergiato né distribuito. Applicazione fuori ordine verificata in locale: vedi `CLOUD_IMPORT_RUNBOOK.md` |
 | Importazione LWIN reale | **Rinviata** |
 | Validazione Supavisor/TLS reale | **Rinviata** (il runner non è provato su un pooler né su una CA reali) |
 | Risorse a pagamento | **Nessuna autorizzata** |
@@ -29,3 +29,7 @@ Verifiche in sola lettura del 20 novembre 2026: `origin/main` `2d92790`, check v
 1. **Staging (Rilascio A).** Il founder autorizza per iscritto un branch Supabase temporaneo con tetto di costo e data di cancellazione. Quotazione del 20 novembre 2026: $0,01344/ora, da riverificare con `get_cost`. Poi eseguire `STAGING_HANDOFF_WI_001C.md`: environment `catalog-cloud-import` con revisore e policy solo `main`, login dedicato, CA e URL `verify-full`, prove Supavisor e `pg_cancel_backend`, dry-run, import, V01-V09, seconda esecuzione, chiusura e controllo del costo.
 2. **Rilascio B.** Solo dopo un import verificato e con approvazione del founder: rebase di `feature/wi-001c-canonical-catalog` su `origin/main`, nuova CI e DB regression, merge in una PR dedicata, poi rilettura del ledger Production. Le regole canoniche non sono approvate.
 3. Il workflow resta disabilitato finché i punti dell'handoff non sono tutti soddisfatti.
+
+## Verifica post-applicazione (Production, dopo il merge)
+
+In sola lettura. Attesi: le 4 versioni `20261119100000`, `20261119120000`, `20261119140000`, `20261119150000` nel ledger con il nome del file; nessun grant su schema `catalog` ai ruoli `anon`/`authenticated`/`service_role`; RLS attiva su ogni tabella `catalog`; le 15 funzioni `SECURITY DEFINER` del catalogo senza `EXECUTE` per i ruoli API e con `search_path` vuoto; regola `lwin-conservative-v1` ancora in stato `draft` (nessuna promozione); `catalog.promotion_logic_fingerprint('lwin-conservative-v1')` valorizzata.

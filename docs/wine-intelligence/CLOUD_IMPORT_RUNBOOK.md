@@ -40,6 +40,43 @@ del founder su destinazione, costi e sicurezza.
 6. **Import** (`mode = import`) con revisore presente. Per un ref di Production serve in più un'approvazione scritta: è una decisione separata (CLAUDE.md), fuori dal workflow.
 7. **Verifica** (sotto) e annotazione dell'esito in `CHANGES.log`.
 
+## Sorgente: `LWINdatabase.xlsx` (non un CSV)
+
+Il manifest (`IMPORT_MANIFEST.json`) verifica **solo** il file XLSX originale, SHA-256 `7669ceab…fd488e`, 212.894 righe. Un CSV esportato **non** è equivalente e il workflow lo rifiuta (controllo SHA-256 prima della lettura). Il file non è nel repository e non va mai committato. Per renderlo disponibile al workflow: caricarlo su un archivio **privato** a scelta del founder (non il bucket dei backup) e generare un URL firmato a breve scadenza (poche ore), da salvare come segreto `CATALOG_INPUT_URL` dell'environment `catalog-cloud-import`. Alla fine rimuovere il segreto e l'oggetto.
+
+## Applicare le migration WI-001C a Production: ordine cronologico (verificato in locale)
+
+Le 4 migration canoniche hanno versione `20261119…` mentre Production ha già `20261120120000` (WI-005B). Sono congelate (già pubblicate): niente rinomina, niente modifica. Prova eseguita su uno stack Supabase locale isolato con la CLI **2.117.0** (la stessa del gate DB regression), stato di partenza = migration di `main` fino a `20261120120000`:
+
+| Comando | Esito |
+|---|---|
+| `supabase db push --local --dry-run` | **rifiutato**: «Found local migration files to be inserted before the last migration on remote database» (`LegacyDbPushMissingRemoteError`), elenca le 4 migration |
+| `supabase db push --local --include-all --dry-run` | elenca esattamente le 4 migration |
+| `supabase db push --local --include-all` | le applica in ordine; ledger con versione e nome **identici ai file** (`20261119100000 … 20261119150000`); nessun `migration repair` necessario |
+
+Dopo l'applicazione: griglie `12zs` 153/153, `12zy` 246/246, `12zz` (audit login) 13/13, concorrenza `12zz` 6/6 (residui 0). Quindi l'ordine «fuori timestamp» è equivalente a quello da zero.
+
+Procedura per Production (dopo l'autorizzazione al rilascio):
+1. Dopo il merge attendere il check «Supabase» sul commit di `main`, poi rileggere `supabase_migrations.schema_migrations` e confrontarlo con `supabase/migrations/` di `origin/main`.
+2. Se le 4 versioni ci sono: verificare funzioni, privilegi e policy (sezione «Verifica post-applicazione» in `CLOSEOUT_WI_001C.md`) e finire.
+3. Se mancano (l'integrazione si comporta come `db push` senza `--include-all`): `supabase db push --include-all --dry-run` e poi senza `--dry-run` con la CLI **2.117.0** collegata al ref `pijnmcllmfgjmgsvtcej`, da chi detiene le credenziali. Non usare `migration repair --status applied` (segnerebbe come applicate migration non eseguite) e non applicare le migration una alla volta via API (versione assegnata dal server, da riconciliare a mano).
+
+## Import LWIN su Production (separato dallo schema; richiede autorizzazione esplicita)
+
+Il workflow **non** può importare su Production per costruzione (non imposta mai `--allow-production` né `CATALOG_PRODUCTION_APPROVAL`) e non va modificato. Dopo l'autorizzazione scritta del founder l'import si esegue **senza nuova PR**, con lo stesso `lwin-load.mjs` già su `main`, da una macchina dell'operatore autorizzato:
+
+```bash
+export CATALOG_CLOUD_IMPORT=enabled
+export CATALOG_PRODUCTION_APPROVAL="approved:pijnmcllmfgjmgsvtcej:<riferimento-autorizzazione>"
+export CATALOG_DATABASE_URL='<url pooler sessione, login dedicato, sslmode=verify-full>'   # mai nella cronologia
+export CATALOG_DB_CA_PEM="$(cat <ca-progetto.pem>)"
+bun tools/wine-catalog/lwin-load.mjs --cloud --target-ref pijnmcllmfgjmgsvtcej --allow-production \
+  --input <LWINdatabase.xlsx> --expected-sha256 7669ceab4e815716aa6c90643c117f3da7c7daeaa202ecd3f7cfbc4db7fd488e \
+  --report <fuori-dal-repository>/report.json --dry-run     # prima; poi senza --dry-run
+```
+
+Prerequisiti: staging già provato con esito completo (212.894, V01–V09, seconda esecuzione `skipped`), login dedicato creato su Production con l'audit superato, finestra e budget WAL approvati. Tutte le protezioni del runner restano attive.
+
 ## Verifica di `finish_import_run` (debito aperto: mai misurato a 212.894 record)
 
 Automatica nel caricatore (`verifyFinish`, nel report `cloud.verification`; exit code 1 se un controllo fallisce):
@@ -55,7 +92,7 @@ Manuale, a cura di chi ha il ruolo proprietario (il caricatore non vede `pg_stat
 
 Quando si applica: il report cloud ha `finish_outcome.outcome = finish_unknown` (oppure il programma è uscito con errore dopo `begin_import_run` senza esito del finish). Il caricatore NON sa se `finish_import_run` abbia confermato o annullato la promozione.
 
-**Perché il caricatore non decide.** Un errore lato client non prova un rollback: la connessione può cadere mentre il server conferma, il driver può non decodificare una risposta di successo, una scadenza JavaScript interrompe solo l'attesa e **non annulla la query PostgreSQL**. Si dichiara «fallito» solo con un errore del server dotato di SQLSTATE affidabile su una sessione integra; classe `08`, `57P01-05`, `58`, `XX`, errori senza SQLSTATE, errori del driver e scadenze sono sempre «sconosciuto». In quel caso il caricatore **non chiama `fail_import_run`** (la funzione della migration WI-001B cancella i finding a prescindere dallo stato terminale), non cancella staging né finding, non dichiara un rollback e non ripete l'import.
+**Perché il caricatore non decide.** Un errore lato client non prova un rollback: la connessione può cadere mentre il server conferma, il driver può non decodificare una risposta di successo, una scadenza JavaScript interrompe solo l'attesa e **non annulla la query PostgreSQL**. Si dichiara «fallito» solo con un errore del server dotato di SQLSTATE affidabile su una sessione integra; classe `08`, `57P01-05`, `58`, `XX`, errori senza SQLSTATE, errori del driver e scadenze sono sempre «sconosciuto». In quel caso il caricatore **non chiama `fail_import_run`** (su un run già terminale la funzione WI-001B non lo marca `failed`: il tentativo di cancellare staging e finding è fermato dal trigger `import_findings_delete_guard`, che rifiuta con SQLSTATE `55000` la cancellazione dei finding di un run non `failed`/`abandoned` — verificato in locale, nessun dato perso; il caricatore evita comunque la chiamata nel dubbio), non cancella staging né finding, non dichiara un rollback e non ripete l'import.
 
 **Identificativi.** Il report (anche quello di errore, `mode: error`) contiene `run_identity` e, in `finish_outcome.reconcile` (oppure in `cloud.reconcile` se il finish non è stato concluso: errore prima del finish, dry-run, `skipped`), `run_id`, `source_code`, `file_sha256`, `file_name`, `backend_pid` (se noto). Nessuna credenziale. `backend_pid` vale solo per la sessione terminata. Se `run_id` è `null` la risposta di `begin_import_run` non è arrivata: cercare il tentativo più recente della fonte con lo stesso `file_sha256`.
 
