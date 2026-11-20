@@ -2,6 +2,8 @@
 
 Stato: Rilascio A in `main` (merge `f579203`). Nessuna risorsa creata, nessun segreto, nessun import. Ogni voce sotto richiede l'autorizzazione specifica del founder. Il test iniziale usa solo WI-001B (già in Production): il runner non richiede le migration del catalogo canonico (Rilascio B).
 
+> **Aggiornamento del 20 novembre 2026:** i passi di questo documento sono differiti, nessuna risorsa è stata creata. Stato e ripresa in `CLOSEOUT_WI_001C.md`.
+
 1. **Environment GitHub `catalog-cloud-import`**: revisori obbligatori, deployment branch policy limitata a `main`, nessun bypass. Segreti solo qui: `CATALOG_DATABASE_URL`, `CATALOG_DB_CA_PEM`, `CATALOG_INPUT_URL`.
 2. **Supabase temporaneo**: preferire un branch (non un progetto separato) salvo limite tecnico dimostrato; prima di crearlo `get_cost` e `confirm_cost`, tetto di costo e data di cancellazione approvati. Il branch parte con le migration di `main` fino a WI-001B. Nessuna migration WI-001C.
 3. **Login dedicato**: login PostgreSQL membro del solo ruolo `catalog_loader`, nessun privilegio su `catalog.wines` né su `public`; il caricatore lo verifica e rifiuta altrimenti.
