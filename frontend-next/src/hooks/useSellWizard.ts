@@ -10,6 +10,10 @@ import { createListingService } from "@/services/listing-service";
 import { creaWineRegionsService } from "@/services/wine-regions-service";
 import { createSupabaseAiService } from "@/services/phase10/supabase-ai-service";
 import { campiDaSuggerimento } from "@/lib/phase10/catalogazione";
+import { sorgenteDaAnnunci } from "@/lib/vendi/foto-etichetta/candidati";
+import { campiWizardDaConferma } from "@/lib/vendi/foto-etichetta/applica";
+import type { CampiConfermati } from "@/hooks/useFotoEtichetta";
+import type { CandidatoVino } from "@/lib/vendi/foto-etichetta/candidati";
 import {
   smartSellPriceDaLettura,
   type SmartSellPrice,
@@ -28,6 +32,7 @@ import {
   type HandoffVenditore,
   type StatoLogisticaWizard,
 } from "@/lib/vendi/logistica-annuncio";
+import { MAX_FOTO } from "@/lib/annunci/foto-modifica";
 import { AI_UI, AZIONI_IA_ABILITATE } from "@/config/features";
 import {
   FORMATO_STANDARD,
@@ -387,6 +392,28 @@ export function useSellWizard({
     toast.success("Suggerimenti AI applicati");
   }, [aiSuggerimento, regioniCanoniche]);
 
+  // -- Fotografa l'etichetta (WI-002) -----------------------------------------
+  //
+  // Il percorso vive in `useFotoEtichetta`; qui ci sono solo i tre punti di
+  // contatto con il wizard. I candidati arrivano dagli annunci pubblici reali
+  // (stesso read-model del catalogo); la sorgente è sostituibile.
+  const sorgenteEtichetta = useMemo(() => sorgenteDaAnnunci(listingService), [listingService]);
+
+  const applicaEtichetta = useCallback(
+    (confermati: CampiConfermati, candidato: CandidatoVino | null) => {
+      setD((s) => ({ ...s, ...campiWizardDaConferma(confermati, candidato, s, regioniCanoniche) }));
+      toast.success("Dati dell'etichetta applicati ai campi");
+    },
+    [regioniCanoniche],
+  );
+
+  // Riusa l'interfaccia di `ai-catalogo`; esiste solo con le azioni AI accese e
+  // parte solo da un gesto esplicito dell'utente nel pannello.
+  const assistenzaAiEtichetta = useMemo(
+    () => (aiService ? { chiedi: (ocrText: string) => aiService.catalogazione({ ocrText }) } : null),
+    [aiService],
+  );
+
   const isVendita = modalita === "vendita";
 
   // -- Smart Sell Price -------------------------------------------------------
@@ -573,13 +600,18 @@ export function useSellWizard({
   ]);
   const prev = useCallback(() => setStep((s) => Math.max(primoPasso, s - 1)), [primoPasso]);
 
-  const caricaFoto = useCallback(async (file: File) => {
+  const caricaFoto = useCallback(async (file: File): Promise<boolean> => {
+    // Stesso tetto e stessa guardia della griglia: vale anche per chi chiama da fuori (WI-002).
+    if (fotoInCorso || foto.length >= MAX_FOTO) {
+      toast.error("Hai già raggiunto il numero massimo di foto.");
+      return false;
+    }
     const client = getSupabaseClient();
     if (!client) {
       // Il nome del provider non aiuta chi sta caricando una foto: la sola cosa
       // vera e utile è che adesso non si può, e che non dipende dalla foto.
       toast.error("Il caricamento delle foto non è disponibile in questo momento.");
-      return;
+      return false;
     }
 
     setFotoInCorso(true);
@@ -591,7 +623,7 @@ export function useSellWizard({
       );
       if (!firma.ok) {
         toast.error(firma.error);
-        return;
+        return false;
       }
 
       const { error } = await client.storage
@@ -601,15 +633,16 @@ export function useSellWizard({
       if (error) {
         console.error("[vendi] upload fallito:", codiceErrore(error));
         toast.error("Caricamento non riuscito. Riprova.");
-        return;
+        return false;
       }
 
       setFoto((f) => [...f, { percorso: firma.data.percorso, anteprima: URL.createObjectURL(file) }]);
       toast.success("Fotografia caricata");
+      return true;
     } finally {
       setFotoInCorso(false);
     }
-  }, [daCantina]);
+  }, [daCantina, foto.length, fotoInCorso]);
 
   const rimuoviFoto = useCallback((indice: number) => {
     setFoto((f) => {
@@ -975,5 +1008,8 @@ export function useSellWizard({
     aiBloccata,
     chiediSuggerimento,
     applicaSuggerimento,
+    sorgenteEtichetta,
+    applicaEtichetta,
+    assistenzaAiEtichetta,
   };
 }

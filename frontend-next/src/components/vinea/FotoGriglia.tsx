@@ -13,7 +13,7 @@ export type FotoGrigliaItem = {
 type FotoGrigliaProps = {
   foto: FotoGrigliaItem[];
   inCorso: boolean;
-  onCarica: (file: File) => void | Promise<void>;
+  onCarica: (file: File) => void | Promise<unknown>;
   onRimuovi: (indice: number) => void | Promise<void>;
   onSostituisci?: (indice: number, file: File) => void | Promise<void>;
   onSposta?: (indice: number, direzione: -1 | 1) => void;

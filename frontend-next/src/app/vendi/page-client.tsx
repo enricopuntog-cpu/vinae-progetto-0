@@ -37,6 +37,7 @@ import { useSellWizard, type Modalita } from "@/hooks/useSellWizard";
 import { confidenzaPercento } from "@/lib/phase10/catalogazione";
 import { AiTransparencyLabel } from "@/components/vinea/AiTransparencyLabel";
 import { FotoGriglia } from "@/components/vinea/FotoGriglia";
+import { FotoEtichettaPanel } from "./foto-etichetta-panel";
 import { BetaActionNotice } from "@/components/vinea/BetaActionNotice";
 import { BottleSelector } from "@/app/vendi/bottle-selector";
 import { CAMPO_ID, Field } from "@/app/vendi/field";
@@ -157,6 +158,9 @@ function WizardVendi() {
     aiInCorso,
     aiErrore,
     aiBloccata,
+    sorgenteEtichetta,
+    applicaEtichetta,
+    assistenzaAiEtichetta,
     chiediSuggerimento,
     applicaSuggerimento,
   } = useSellWizard({
@@ -400,6 +404,13 @@ function WizardVendi() {
             <p className="text-sm text-muted-foreground">
               Compila i campi che descrivono la bottiglia. Puoi modificare manualmente ogni campo.
             </p>
+
+            <FotoEtichettaPanel
+              sorgente={sorgenteEtichetta}
+              applica={applicaEtichetta}
+              ai={assistenzaAiEtichetta}
+              conservaFoto={caricaFoto}
+            />
 
             {AI_UI.catalogazione && (
               <div

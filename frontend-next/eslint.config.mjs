@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Asset OCR copiati da node_modules (WI-002): codice di terzi minificato.
+    "public/ocr/**",
   ]),
   {
     // The app's content is Italian, which uses apostrophes constantly

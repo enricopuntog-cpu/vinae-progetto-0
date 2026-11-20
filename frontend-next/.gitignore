@@ -18,6 +18,9 @@
 # spec esplorativi temporanei (vedi e2e/support/esplora.ts): mai committati
 /e2e/esplora*.e2e.ts
 
+# asset OCR copiati da node_modules (scripts/copia-asset-ocr.mjs)
+/public/ocr/
+
 # next.js
 /.next/
 /out/

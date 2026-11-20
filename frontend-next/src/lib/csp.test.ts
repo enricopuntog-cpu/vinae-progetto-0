@@ -48,6 +48,10 @@ describe("CSP enforcing delle pagine", () => {
     const coperto = (percorso: string) => config.matcher.some((m) => new RegExp(`^${m}$`).test(percorso));
     expect(coperto("/brand/vinea-email-logo-240-v1.png")).toBe(false);
     expect(coperto("/images/vinea-logo-scelto.png")).toBe(false);
+    // Gli asset dell'OCR locale (WI-002) non portano la CSP di pagina: un worker con
+    // quella policy non potrebbe compilare WebAssembly.
+    expect(coperto("/ocr/worker.min.js")).toBe(false);
+    expect(coperto("/ocr/core/tesseract-core-simd-lstm.wasm.js")).toBe(false);
     expect(coperto("/accedi")).toBe(true);
     expect(coperto("/auth/confirm")).toBe(true);
     expect(coperto("/brandizzato")).toBe(true);
