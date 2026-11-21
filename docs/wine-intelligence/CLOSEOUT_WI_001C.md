@@ -29,7 +29,7 @@ Verifiche in sola lettura del 20 novembre 2026: `origin/main` `2d92790`, check v
 
 ## Cosa è conservato
 
-- Rami remoti, da non eliminare: `release/wi-001c-runner-a` (`84f444c`, già in `main`) e `feature/wi-001c-canonical-catalog` (`7ff54be`, 11 commit sopra la base `d66a01e`).
+- *Storico:* rami remoti, da non eliminare (il riferimento operativo corrente è la PR #310): `release/wi-001c-runner-a` (`84f444c`, già in `main`) e `feature/wi-001c-canonical-catalog` (`7ff54be`, 11 commit sopra la base `d66a01e`).
 - Migration del Rilascio B, **solo sul ramo**: `20261119100000_wi_001c_canonical_catalog`, `20261119120000_wi_001c_fix01_canonical_hardening`, `20261119140000_wi_001c_fix02_audit_hardening`, `20261119150000_wi_001c_fix02_fingerprint_guards`, con le griglie `supabase/tests/12zs`, `12zy`, `12zz`.
 - Documenti in `main`: `CLOUD_IMPORT_RUNBOOK.md`, `RELEASE_STRATEGY_WI_001C.md`, `STAGING_HANDOFF_WI_001C.md`, `IMPORT_MANIFEST.json`, `SOURCE_REGISTRY.md`. Handoff FIX-02 e FIX-03 sono sul ramo del Rilascio B.
 - File LWIN originale (SHA-256 `7669ceab4e815716aa6c90643c117f3da7c7daeaa202ecd3f7cfbc4db7fd488e`, 212.894 record): **non è nel repository**; il founder deve conservarlo.
@@ -37,7 +37,7 @@ Verifiche in sola lettura del 20 novembre 2026: `origin/main` `2d92790`, check v
 ## Come riprendere
 
 1. **Staging (Rilascio A).** *Eseguito il 21 novembre 2026 (vedi sopra); non ripetere una Preview identica: serve prima il gate disco del runbook.* Procedura originale: il founder autorizza per iscritto un branch Supabase temporaneo con tetto di costo e data di cancellazione. Quotazione del 20 novembre 2026: $0,01344/ora, da riverificare con `get_cost`. Poi eseguire `STAGING_HANDOFF_WI_001C.md`: environment `catalog-cloud-import` con revisore e policy solo `main`, login dedicato, CA e URL `verify-full`, prove Supavisor e `pg_cancel_backend`, dry-run, import, V01-V09, seconda esecuzione, chiusura e controllo del costo.
-2. **Rilascio B.** Solo dopo un import verificato e con approvazione del founder: rebase di `feature/wi-001c-canonical-catalog` su `origin/main`, nuova CI e DB regression, merge in una PR dedicata, poi rilettura del ledger Production. Le regole canoniche non sono approvate.
+2. **Rilascio B.** *(Storico: superato dalla PR #310, che integra le 4 migration su `origin/main`; restano il gate di merge e quello di import.)* Procedura originale: solo dopo un import verificato e con approvazione del founder: rebase di `feature/wi-001c-canonical-catalog` su `origin/main`, nuova CI e DB regression, merge in una PR dedicata, poi rilettura del ledger Production. Le regole canoniche non sono approvate.
 3. Il workflow resta disabilitato finché i punti dell'handoff non sono tutti soddisfatti.
 
 ## Verifica post-applicazione (Production, dopo il merge)

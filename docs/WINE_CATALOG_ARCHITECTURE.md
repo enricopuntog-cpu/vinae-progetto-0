@@ -2,6 +2,8 @@
 
 > **Aggiornamento WI-001B (17 novembre 2026):** lo staging privato di §9–§10 (fonti, snapshot, tentativi, record importati, storico, rilievi, accorpamenti, territori, alias) è IMPLEMENTATO nella migration `supabase/migrations/20261117120000_wi_001b_catalog_staging.sql` e provato in locale — **non applicata a nessun ambiente remoto**. Vedi §11. Tutto il resto (schede canoniche, `wine_links`, claim, media, interrogazione AI) resta PROGETTO.
 >
+> **Stato al 21 novembre 2026 (WI-001C, PR #310):** *Sviluppato*: staging WI-001B + catalogo canonico (`producers`, `wines`, `wine_vintages`, `wine_formats`, `entity_aliases`, `attribute_claims`, `duplicate_candidates`, `entity_merges`, `wine_links`) nelle 4 migration `20261119*` (congelate, CI verde). *Distribuito in Production*: solo lo staging WI-001B (ledger `20261120120000`); le 4 migration canoniche **non ancora**. *Record importati*: 0 in Production (212.894 solo in una prova locale). *Vini canonici promossi*: 0 (regola `lwin-conservative-v1` in `draft`). *Esposto al prodotto*: nulla di `catalog.*`. Piano di crescita: `docs/wine-intelligence/CATALOG_SCALE_PLAN.md`.
+>
 > **Stato del progetto originale (WI-001A): PROGETTO.** Nessuna parte di questo documento è implementata nel prodotto. Cosa esiste davvero oggi è elencato in `docs/WI_001A_WINE_CATALOG_FOUNDATION.md` §2. Lo SQL qui sotto è una **bozza non applicata**: non è in `supabase/migrations/`, non è stato eseguito su nessun database. Ogni migration reale resta una decisione di WI-001B e rispetta le regole di `CLAUDE.md` (migration-first, RLS, grant mirati, viste a colonne chiuse).
 
 ## 1. Principio

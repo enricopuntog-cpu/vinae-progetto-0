@@ -1,5 +1,7 @@
 # Handoff — WI-001C-FIX-01 (per la QA indipendente Opus HIGH)
 
+> **STORICO (21 novembre 2026).** Il ramo `feature/wi-001c-canonical-catalog` citato qui è stato superato: il riferimento operativo corrente è la **PR #310** (`feature/wi-001c-unified-completion`, 4 migration congelate integrate su `origin/main`). Il vecchio ramo resta solo come archivio; non è la prossima strada operativa. Stato aggiornato in `CLOSEOUT_WI_001C.md`.
+
 Stato al 19 novembre 2026. Branch `feature/wi-001c-canonical-catalog`, base della correzione `9254c93` (BUILD-01), `origin/main` `d66a01e`.
 Questo documento è autosufficiente: la QA verifica il codice direttamente da GitHub senza la cronologia della conversazione.
 **Nulla è stato eseguito su Supabase Production o su altri ambienti cloud**: nessun import, nessuna promozione, nessuna migration applicata, nessun branch/progetto creato, nessuna PR aperta.
