@@ -162,6 +162,9 @@ export async function connectCloud(url, { role = 'catalog_loader', caPem = null,
   if (!role || !/^[a-z_][a-z0-9_]*$/.test(role)) throw new Error('Ruolo mancante o non valido.');
   const { sql, conn, redact } = await openReserved(url, { caPem, connectTimeoutSec, applicationName: 'vinea-wi-catalog-import' });
   const db = wrapReserved({ sql, conn, redact, readOnly });
+  // La connessione è riuscita SOLO con `tlsOptions(caPem)` (CA data, rejectUnauthorized true) e `assertVerifiedTlsUrl` (sslmode=verify-full):
+  // non esiste un percorso senza verifica (test/tls-bun.test.mjs). Attestazione usata da assertCloudSession per il pooler.
+  Object.defineProperty(db, 'clientTlsVerified', { value: true, writable: false, enumerable: true });
   try {
     await db.raw(`set role "${role}"`);
     if (readOnly) {

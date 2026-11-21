@@ -148,6 +148,73 @@ test('sessione cloud: ogni requisito mancante è rifiutato con il motivo', async
   for (const [patch, re] of cases) await assert.rejects(() => assertCloudSession(sessionQuery({ ...goodSession, ...patch })), re);
 });
 
+// --- Pooler (Supavisor, sessione): pg_stat_ssl descrive il tratto pooler → PostgreSQL, non client → pooler ---------------
+
+const POOLER_OPTS = { kind: 'pooler', clientTlsVerified: true, expectedLogin: 'postgres' };
+
+test('pooler: ssl del backend false ma TLS client attestato → accettato, tratto pooler→PostgreSQL dichiarato NON provato (mai «cifrato»)', async () => {
+  const r = await assertCloudSession(sessionQuery({ ...goodSession, ssl: false }), POOLER_OPTS);
+  assert.deepEqual([r.ssl, r.backend_ssl], [undefined, false]);
+  assert.deepEqual(r.transport, { kind: 'pooler', client_to_pooler: 'tls_verify_full_driver', pooler_to_postgres: 'not_proven' });
+});
+
+test('pooler: ssl del backend true → tratto pooler→PostgreSQL dichiarato cifrato (con prova pg_stat_ssl)', async () => {
+  const r = await assertCloudSession(sessionQuery(goodSession), POOLER_OPTS);
+  assert.deepEqual([r.backend_ssl, r.transport.pooler_to_postgres], [true, 'encrypted_pg_stat_ssl']);
+});
+
+test('pooler: informazione SSL non disponibile (null/assente) → non dichiarata cifrata', async () => {
+  for (const ssl of [null, undefined]) {
+    const r = await assertCloudSession(sessionQuery({ ...goodSession, ssl }), POOLER_OPTS);
+    assert.deepEqual([r.backend_ssl, r.transport.pooler_to_postgres], [false, 'not_proven']);
+  }
+});
+
+test('pooler: senza attestazione del TLS verificato lato client → rifiutato (fail-closed), qualunque sia pg_stat_ssl', async () => {
+  for (const ssl of [true, false]) {
+    for (const clientTlsVerified of [false, undefined, 'true', 1]) {
+      await assert.rejects(() => assertCloudSession(sessionQuery({ ...goodSession, ssl }), { ...POOLER_OPTS, clientTlsVerified }), /TLS verificato client → pooler non attestato/);
+    }
+  }
+});
+
+test('pooler: login effettivo diverso da quello della URL (o non dichiarato) → rifiutato', async () => {
+  await assert.rejects(() => assertCloudSession(sessionQuery(goodSession), { ...POOLER_OPTS, expectedLogin: 'altro_login' }), /login effettivo/);
+  for (const expectedLogin of [null, undefined, '']) {
+    await assert.rejects(() => assertCloudSession(sessionQuery(goodSession), { ...POOLER_OPTS, expectedLogin }), /login effettivo/);
+  }
+});
+
+test('pooler: gli altri controlli di sessione restano in vigore (recovery, superuser, login non dedicato, migration)', async () => {
+  const cases = [[{ in_recovery: true }, /recovery/], [{ session_superuser: true }, /superuser/], [{ has_finish: false }, /WI-001B/]];
+  for (const [patch, re] of cases) await assert.rejects(() => assertCloudSession(sessionQuery({ ...goodSession, ssl: false, ...patch }), POOLER_OPTS), re);
+  await assert.rejects(() => assertCloudSession(sessionQuery({ ...goodSession, ssl: false }, { ...goodAudit, reachable: ['catalog_loader', 'authenticated'] }), POOLER_OPTS), /login non dedicato/);
+});
+
+test('connessione diretta: il controllo pg_stat_ssl resta obbligatorio e l\'attestazione client NON lo sostituisce', async () => {
+  await assert.rejects(() => assertCloudSession(sessionQuery({ ...goodSession, ssl: false }), { kind: 'direct', clientTlsVerified: true }), /non è cifrata/);
+  await assert.rejects(() => assertCloudSession(sessionQuery({ ...goodSession, ssl: null })), /non è cifrata/);
+  const r = await assertCloudSession(sessionQuery(goodSession), { kind: 'direct' });
+  assert.deepEqual([r.ssl, r.transport.kind], [true, 'direct']);
+});
+
+test('tipo di connessione sconosciuto → rifiutato prima di qualunque query', async () => {
+  let called = false;
+  for (const kind of ['transaction', 'POOLER', '', null, 'proxy']) {
+    await assert.rejects(() => assertCloudSession(async () => { called = true; return { rows: [goodSession] }; }, { kind, clientTlsVerified: true, expectedLogin: 'postgres' }), /tipo di connessione sconosciuto/);
+  }
+  assert.equal(called, false);
+});
+
+test('destinazione pooler: porta 6543 vietata, ref dell\'utente diverso da --target-ref rifiutato, host non Supabase rifiutato', () => {
+  assert.throws(() => parseCloudUrl(`postgresql://postgres.${REF}:p@aws-1-eu-west-1.pooler.supabase.com:6543/postgres?sslmode=verify-full`), /6543/);
+  const otherRef = 'zzzzzzzzzzzzzzzzzzzz';
+  assert.throws(() => assertCloudAuthorized({ url: POOLER, env: ENABLED, flags: { cloud: true, targetRef: otherRef } }), /non coincide/);
+  assert.throws(() => parseCloudUrl(`postgresql://postgres.${REF}:p@aws-1-eu-west-1.pooler.evil.com:5432/postgres?sslmode=verify-full`), /non ammesso/);
+  assert.throws(() => parseCloudUrl(POOLER.replace('verify-full', 'require')), /sslmode=verify-full/);
+  assert.equal(assertCloudAuthorized({ url: POOLER, env: ENABLED, flags: { cloud: true, targetRef: REF } }).kind, 'pooler');
+});
+
 const goodPriv = {
   sr_insert: true, sr_update: true, sr_delete: false, sr_truncate: false, stage_insert: true, sources_insert: false, sources_update: false,
   canonical_select: false, canonical_insert: false, curator_member: false, public_create: false, can_finish: true,

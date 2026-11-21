@@ -10,8 +10,20 @@ const MIN_SERVER_VERSION_NUM = 150000;
  *  - l'utente di connessione non è superuser (un superuser potrebbe uscire dal ruolo con RESET ROLE);
  *  - lo schema `catalog` della migration WI-001B è presente e completo (funzioni del protocollo, staging UNLOGGED).
  * Restituisce un riepilogo senza segreti; lancia al primo controllo fallito.
+ *
+ * Cifratura (WI-001C, sblocco Supavisor). `pg_stat_ssl` descrive la connessione vista dal BACKEND PostgreSQL. Dietro il pooler
+ * condiviso (Supavisor, sessione) quel backend è raggiunto da Supavisor, non dal client: `ssl` riguarda il tratto
+ * Supavisor → PostgreSQL, che dipende dall'impostazione «SSL enforcement» del progetto, NON il tratto client → Supavisor.
+ *  - `kind: 'direct'`: il backend vede il client; `pg_stat_ssl.ssl` DEVE essere true (controllo invariato).
+ *  - `kind: 'pooler'`: il tratto client → pooler è protetto dal TLS del driver (verify-full + CA + hostname, `rejectUnauthorized`),
+ *    che il chiamante attesta con `clientTlsVerified: true` (impostato da db-bun SOLO dopo una connessione riuscita con quelle
+ *    opzioni); senza attestazione l'import è rifiutato. L'identità è controllata dal login effettivo (`expectedLogin`, il ruolo
+ *    della URL `<ruolo>.<ref>`: il ref seleziona il tenant Supavisor). Il tratto Supavisor → PostgreSQL è riportato come
+ *    `encrypted` SOLO se `pg_stat_ssl.ssl` è true; altrimenti `not_proven` (mai dichiarato cifrato senza prova).
+ * Un `kind` sconosciuto è rifiutato (fail-closed).
  */
-export async function assertCloudSession(query) {
+export async function assertCloudSession(query, { kind = 'direct', clientTlsVerified = false, expectedLogin = null } = {}) {
+  if (kind !== 'direct' && kind !== 'pooler') throw new Error('Controllo di sessione cloud fallito (tipo di connessione sconosciuto): importazione rifiutata.');
   const r = await query(
     `select current_setting('server_version_num')::int as version_num,
             current_setting('server_version') as version,
@@ -31,7 +43,12 @@ export async function assertCloudSession(query) {
   const row = r.rows[0];
   if (!row) throw new Error('Controllo di sessione: nessuna risposta dal database.');
   const fail = (why) => { throw new Error(`Controllo di sessione cloud fallito (${why}): importazione rifiutata.`); };
-  if (!row.ssl) fail('la connessione non è cifrata');
+  if (kind === 'direct') {
+    if (row.ssl !== true) fail('la connessione non è cifrata');
+  } else {
+    if (clientTlsVerified !== true) fail('TLS verificato client → pooler non attestato');
+    if (typeof expectedLogin !== 'string' || expectedLogin === '' || row.session_user !== expectedLogin) fail('il login effettivo non corrisponde a quello della URL');
+  }
   if (row.in_recovery) fail('il server è in recovery (replica di sola lettura)');
   if (Number(row.version_num) < MIN_SERVER_VERSION_NUM) fail(`PostgreSQL ${row.version} < 15`);
   if (row.session_superuser) fail('l\x27utente di connessione è superuser');
@@ -45,7 +62,11 @@ export async function assertCloudSession(query) {
   const audit = parseAudit((await query(LOGIN_AUDIT_SQL, [row.session_user])).rows[0]?.audit);
   const violations = evaluateLoginAudit(audit, { loader: 'catalog_loader' });
   if (violations.length > 0) fail(`login non dedicato: ${violations.join('; ')}`);
-  return { server_version: row.version, database: row.db, session_user: row.session_user, ssl: true, login_audit: 'conforme' };
+  const backendSsl = row.ssl === true;
+  const transport = kind === 'direct'
+    ? { kind, client_to_server: 'tls_verify_full_pg_stat_ssl' }
+    : { kind, client_to_pooler: 'tls_verify_full_driver', pooler_to_postgres: backendSsl ? 'encrypted_pg_stat_ssl' : 'not_proven' };
+  return { server_version: row.version, database: row.db, session_user: row.session_user, ...(kind === 'direct' ? { ssl: true } : { backend_ssl: backendSsl }), transport, login_audit: 'conforme' };
 }
 
 /**
