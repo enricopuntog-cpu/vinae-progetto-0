@@ -1,6 +1,6 @@
 # WI-001C — chiusura della fase di sviluppo (20 novembre 2026)
 
-Documento di chiusura senza costi. Nessun branch Supabase, environment GitHub, segreto o variabile creati; nessun import LWIN; nessuna migration; Production invariata. Il lavoro è sospeso, non abbandonato: tutto ciò che serve per riprendere è conservato.
+Documento nato il 20 novembre 2026 come chiusura senza costi: in quel momento nessun branch Supabase, environment GitHub, segreto o variabile erano stati creati, nessun import LWIN eseguito, nessuna migration applicata, Production invariata. **Il 21 novembre 2026 è stato poi eseguito e distrutto un unico staging** (vedi la sezione seguente, che prevale sulle frasi dello stato iniziale); Production è rimasta invariata. Le sezioni «Stato effettivo» e «Come riprendere» descrivono lo stato del 20 novembre, aggiornato dove indicato.
 
 ## Aggiornamento del 21 novembre 2026 (staging reale e prova locale)
 
@@ -36,7 +36,7 @@ Verifiche in sola lettura del 20 novembre 2026: `origin/main` `2d92790`, check v
 
 ## Come riprendere
 
-1. **Staging (Rilascio A).** Il founder autorizza per iscritto un branch Supabase temporaneo con tetto di costo e data di cancellazione. Quotazione del 20 novembre 2026: $0,01344/ora, da riverificare con `get_cost`. Poi eseguire `STAGING_HANDOFF_WI_001C.md`: environment `catalog-cloud-import` con revisore e policy solo `main`, login dedicato, CA e URL `verify-full`, prove Supavisor e `pg_cancel_backend`, dry-run, import, V01-V09, seconda esecuzione, chiusura e controllo del costo.
+1. **Staging (Rilascio A).** *Eseguito il 21 novembre 2026 (vedi sopra); non ripetere una Preview identica: serve prima il gate disco del runbook.* Procedura originale: il founder autorizza per iscritto un branch Supabase temporaneo con tetto di costo e data di cancellazione. Quotazione del 20 novembre 2026: $0,01344/ora, da riverificare con `get_cost`. Poi eseguire `STAGING_HANDOFF_WI_001C.md`: environment `catalog-cloud-import` con revisore e policy solo `main`, login dedicato, CA e URL `verify-full`, prove Supavisor e `pg_cancel_backend`, dry-run, import, V01-V09, seconda esecuzione, chiusura e controllo del costo.
 2. **Rilascio B.** Solo dopo un import verificato e con approvazione del founder: rebase di `feature/wi-001c-canonical-catalog` su `origin/main`, nuova CI e DB regression, merge in una PR dedicata, poi rilettura del ledger Production. Le regole canoniche non sono approvate.
 3. Il workflow resta disabilitato finché i punti dell'handoff non sono tutti soddisfatti.
 

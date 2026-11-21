@@ -77,7 +77,15 @@ bun tools/wine-catalog/lwin-load.mjs --cloud --target-ref pijnmcllmfgjmgsvtcej -
   --report <fuori-dal-repository>/report.json --dry-run     # prima; poi senza --dry-run
 ```
 
-Prerequisiti: staging già provato con esito completo (212.894, V01–V09, seconda esecuzione `skipped`), login dedicato creato su Production con l'audit superato, finestra e budget WAL approvati. Tutte le protezioni del runner restano attive.
+Prerequisiti: prova completa (212.894, V01–V09, seconda esecuzione `skipped`) eseguita in locale con lo stesso runner (il 21 novembre 2026 la Preview cloud è fallita per disco esaurito, vedi sotto), login dedicato creato su Production con l'audit superato, finestra e budget WAL approvati, **gate disco superato**. Tutte le protezioni del runner restano attive.
+
+### Gate disco Production (obbligatorio prima di ogni import; verificato in sola lettura il 21 novembre 2026)
+
+- **Non misurabile via SQL**: la capienza del disco e lo spazio libero non sono esposti da `pg_database_size` né da `pg_ls_waldir`. Lettura manuale nel dashboard Supabase del progetto `pijnmcllmfgjmgsvtcej`: *Database → Settings → Disk size* (capienza provvisionata) e *Observability → Database → Disk size distribution* (Database / WAL / System). Spazio libero = capienza − (Database + WAL + System).
+- **Stato Production osservato**: piano Pro, compute piccolo (`max_connections` 60, `shared_buffers` 224 MB), database 29 MB, WAL 128 MB, `max_wal_size` 1024 MB, `archive_mode` on, `max_slot_wal_keep_size` 512 MB. Il disco di default di un progetto Pro è 8 GB; l'espansione automatica scatta al 90 % e aggiunge il 50 %, ma un caricamento che scrive più di 1,5× la dimensione corrente la supera e porta il database in sola lettura (documentazione Supabase *Understanding Database and Disk Size*).
+- **Fabbisogno prudenziale**: misurato sulla Preview al momento del crash `source_records` 640 MB (con tuple morte), staging UNLOGGED di dimensione comparabile, WAL ≈ 1 GB, database 670 MB: ≈ 2,5–3 GB di picco. Con margine del 50 % si richiedono **≥ 5 GB liberi prima dell'avvio**. Sotto questa soglia non si lancia il finish.
+- **Costo di un aumento** (gp3, per GB oltre gli 8 GB inclusi): $0,125/GB/mese, cioè $0,50/mese per 12 GB e $1,00/mese per 16 GB; si paga solo il provvisionato. Si imposta nel dashboard (*Database → Settings → Disk size*), azione del founder.
+- **SSL Enforcement**: non leggibile da qui (serve un token Management API). Il pooler condiviso impone entrambi i tratti solo se l'opzione è attiva; senza, il tratto Supavisor→PostgreSQL resta `not_proven` e il runner lo riporta così. Attivarla riavvia il database (pochi secondi su un progetto piccolo): non farlo senza approvazione e fuori da una finestra di import.
 
 ## Verifica di `finish_import_run` (debito aperto: mai misurato a 212.894 record)
 
