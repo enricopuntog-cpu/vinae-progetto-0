@@ -2,6 +2,8 @@
 
 > **Aggiornamento WI-001B (17 novembre 2026):** lo staging privato di §9–§10 (fonti, snapshot, tentativi, record importati, storico, rilievi, accorpamenti, territori, alias) è IMPLEMENTATO nella migration `supabase/migrations/20261117120000_wi_001b_catalog_staging.sql` e provato in locale — **non applicata a nessun ambiente remoto**. Vedi §11. Tutto il resto (schede canoniche, `wine_links`, claim, media, interrogazione AI) resta PROGETTO.
 >
+> **Stato al 21 novembre 2026 (WI-001C, PR #310):** *Sviluppato*: staging WI-001B + catalogo canonico (`producers`, `wines`, `wine_vintages`, `wine_formats`, `entity_aliases`, `attribute_claims`, `duplicate_candidates`, `entity_merges`, `wine_links`) nelle 4 migration `20261119*` (congelate, CI verde). *Distribuito in Production*: solo lo staging WI-001B (ledger `20261120120000`); le 4 migration canoniche **non ancora**. *Record importati*: 0 in Production (212.894 solo in una prova locale). *Vini canonici promossi*: 0 (regola `lwin-conservative-v1` in `draft`). *Esposto al prodotto*: nulla di `catalog.*`. Piano di crescita: `docs/wine-intelligence/CATALOG_SCALE_PLAN.md`.
+>
 > **Stato del progetto originale (WI-001A): PROGETTO.** Nessuna parte di questo documento è implementata nel prodotto. Cosa esiste davvero oggi è elencato in `docs/WI_001A_WINE_CATALOG_FOUNDATION.md` §2. Lo SQL qui sotto è una **bozza non applicata**: non è in `supabase/migrations/`, non è stato eseguito su nessun database. Ogni migration reale resta una decisione di WI-001B e rispetta le regole di `CLAUDE.md` (migration-first, RLS, grant mirati, viste a colonne chiuse).
 
 ## 1. Principio
@@ -199,6 +201,12 @@ Residui noti (non bloccanti per lo staging): `catalog_loader` ha UPDATE diretto 
 - Unicità proposta: `wines` per identificativo esterno LWIN-7 (non per testo); i possibili duplicati (findings) si fondono solo per decisione registrata (`reviewed_by`, `reviewed_at`).
 - I Combined diventano alias verso la scheda di destinazione solo se il collegamento è `active`.
 - `wine_links` verso `public.wines`: solo con metodo `manual`/`exact_id`; i fuzzy richiedono revisione.
+
+## 12. WI-001C — catalogo canonico (realizzato, NON popolato)
+
+> **FIX-01 (19 novembre 2026)**: la migration `20261119120000_wi_001c_fix01_canonical_hardening.sql` sostituisce il modello «funzioni invoker + UPDATE/INSERT diretti del curatore» con **porte `SECURITY DEFINER`** (16, elenco chiuso, `search_path` vuoto) e curatore a sola lettura; lega l'approvazione della regola all'impronta della logica; separa manuale e promozione; rende le fusioni esatte per coppia/direzione (`merge_id`) e serializzate; traccia come eccezioni i record con produttore ritirato; corregge LWIN-16/18 secondo Liv-ex. Dettagli: `docs/wine-intelligence/HANDOFF_WI_001C_FIX01.md`. Dove il testo seguente parla di funzioni invoker o di grant a colonna al curatore, vale FIX-01.
+
+Migration `20261119100000_wi_001c_canonical_catalog.sql`, griglia `supabase/tests/12zy_wi_001c_canonical_catalog.sql`; dettagli, prove e limiti in `docs/wine-intelligence/HANDOFF_WI_001C_BUILD.md`. Scostamenti dalla bozza: i collegamenti a `public.wines` sono **per valore** (`catalog.wine_links.public_wine_id`, nessuna FK, riconciliazione con `dangling_wine_links`); `wine_territories` e `catalog.media` NON sono realizzate; le rivendicazioni sono `attribute_claims` con vocabolario `attribute_definitions`; nessuna vista pubblica. I record LWIN si promuovono solo con una regola approvata dal founder, interruttore acceso e `p_dry_run => false`: oggi tutto è spento e le tabelle canoniche sono vuote. Procedura di import cloud: `docs/wine-intelligence/CLOUD_IMPORT_RUNBOOK.md`.
 
 ## Registri collegati
 

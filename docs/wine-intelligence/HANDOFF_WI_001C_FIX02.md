@@ -1,5 +1,7 @@
 # WI-001C-FIX-02 — handoff (19 novembre 2026)
 
+> **STORICO (21 novembre 2026).** Il ramo `feature/wi-001c-canonical-catalog` citato qui è stato superato: il riferimento operativo corrente è la **PR #310** (`feature/wi-001c-unified-completion`, 4 migration congelate integrate su `origin/main`). Il vecchio ramo resta solo come archivio; non è la prossima strada operativa. Stato aggiornato in `CLOSEOUT_WI_001C.md`.
+
 Documento autosufficiente. Non contiene segreti. Nessun import LWIN reale, nessuna PR, nessun merge, nessun progetto/branch Supabase creato, nessuna migration in Production, nessuna spesa.
 
 ## 1. Stato

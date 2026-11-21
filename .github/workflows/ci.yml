@@ -197,6 +197,7 @@ jobs:
           bash -n supabase/tests/12zs_vpm_qa_final_a_concorrenza.sh
           bash -n supabase/tests/12zt_vpm_qa_final_b1_intenti_orfani.sh
           bash -n supabase/tests/12zx_fin_001_concorrenza.sh
+          bash -n supabase/tests/12zz_wi_001c_fix01_concorrenza.sh
           bash -n supabase/tests/12z_vp_c_concorrenza.sh
           bash -n supabase/tests/12zb_vp_d_concorrenza.sh
           node --check supabase/tests/12g_club_dispute_e2e.mjs
