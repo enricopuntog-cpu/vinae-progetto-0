@@ -141,7 +141,8 @@ select pg_temp.confronta(9, 'public eseguibile da anon: elenco chiuso',
         'cantina_pubblica_valore(uuid)', 'inventario_capacita()', 'listing_logistica_preventivo(uuid,integer,integer)',
         'listing_preventivo(uuid,integer,integer)', 'mercato_configurazione()', 'profilo_pubblico(uuid)',
         'recensioni_pubbliche_elenco(uuid,integer,integer)', 'reputazione_pubblica(uuid)',
-        'vetrina_partner_catalogo(uuid)', 'vetrina_partner_pubblica(uuid)']);
+        'vetrina_partner_catalogo(uuid)', 'vetrina_partner_pubblica(uuid)',
+        'vini_cerca(text,text,integer,text,integer,text)']);
 
 -- 14. Porte per i ruoli client con un parametro che indica un utente: elenco chiuso. Sono letture
 -- pubbliche di un profilo o gesti verso un altro utente. Il sospetto da fermare e' una porta che

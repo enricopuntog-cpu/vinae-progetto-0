@@ -83,7 +83,7 @@ test.describe.serial("Ricerca dei vini nel wizard: dati accessibili, scelta espl
     expect(await problemiAccessibilita(page)).toEqual([]);
 
     // Senza gesto non parte nessuna ricerca sui vini.
-    expect(richieste.filter((r) => /\/rest\/v1\/wines|public_listings/.test(r.url))).toEqual([]);
+    expect(richieste.filter((r) => /\/rest\/v1\/wines|public_listings|rpc\/vini_cerca/.test(r.url))).toEqual([]);
 
     // Ricerca per nome parziale: il proprio vino privato c'è, quello dell'altro no.
     await cerca(page, PRODUTTORE_E2E, nomePrivato);
@@ -125,19 +125,15 @@ test.describe.serial("Ricerca dei vini nel wizard: dati accessibili, scelta espl
     await esitoSenza(page, `Nuovo ${corsa}`);
     await expect(page.getByLabel("Nome / Etichetta", { exact: true })).toHaveValue(`Nuovo ${corsa}`);
 
-    // La ricerca non scrive: solo GET verso le due viste, nessuna scrittura, nessuna Edge Function (AI), nessun vino nuovo.
-    const ricerche = richieste.filter((r) => /\/rest\/v1\/(wines|public_listings)\?/.test(r.url));
+    // La ricerca passa dal motore sul server (RPC `vini_cerca`, WI-006B): ogni richiesta è un POST di sola
+    // lettura, nessun ripiego sulle tabelle (il motore ha risposto), nessuna Edge Function (AI), nessun vino nuovo.
+    const ricerche = richieste.filter((r) => /\/rest\/v1\/rpc\/vini_cerca/.test(r.url));
     expect(ricerche.length).toBeGreaterThan(0);
-    expect(ricerche.every((r) => r.metodo === "GET")).toBe(true);
+    expect(ricerche.every((r) => r.metodo === "POST")).toBe(true);
+    expect(richieste.filter((r) => /\/rest\/v1\/(wines|public_listings)\?/.test(r.url))).toEqual([]);
     expect(richieste.filter((r) => /\/functions\/v1\//.test(r.url))).toEqual([]);
     // Nessuna scrittura su tabelle (le RPC della pagina sono POST di sola lettura, non la ricerca); il conteggio dei vini lo prova sotto.
     expect(richieste.filter((r) => /\/rest\/v1\//.test(r.url) && !/\/rest\/v1\/rpc\//.test(r.url) && r.metodo !== "GET")).toEqual([]);
-    for (const r of ricerche) {
-      // Mai tutta la tabella: ogni richiesta ha filtro, tetto e colonne esplicite.
-      expect(r.url).toMatch(/[?&]limit=\d+/);
-      expect(r.url).toMatch(/[?&]or=/);
-      expect(r.url).not.toMatch(/select=\*/);
-    }
     expect(contaVini()).toBe(viniPrima);
     await contesto.close();
   });

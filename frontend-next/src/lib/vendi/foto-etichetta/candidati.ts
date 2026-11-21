@@ -28,6 +28,17 @@ export type CandidatoVino = {
   regione: string | null;
   denominazione: string | null;
   tipo: string | null;
+  /**
+   * WI-006B — solo se la fonte ordina per pertinenza sul server (`vini_cerca`).
+   * Le sorgenti senza ranking lasciano il campo assente; `valutaCandidati`
+   * non lo usa per il punteggio (resta deterministico su produttore e nome).
+   */
+  corrispondenzaServer?: {
+    livello: "identificativo" | "esatto" | "prefisso" | "testo" | "simile";
+    punteggio: number;
+  };
+  /** Annunci pubblici attivi che descrivono questo vino (0 = solo catalogo). */
+  annunci?: number;
 };
 
 export type DomandaCandidati = {

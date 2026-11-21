@@ -10,7 +10,7 @@ import { createListingService } from "@/services/listing-service";
 import { creaWineRegionsService } from "@/services/wine-regions-service";
 import { createSupabaseAiService } from "@/services/phase10/supabase-ai-service";
 import { campiDaSuggerimento } from "@/lib/phase10/catalogazione";
-import { creaSorgenteRicerca } from "@/lib/vendi/ricerca-vini/sorgenti";
+import { creaMotoreRicerca } from "@/lib/vendi/ricerca-vini/rpc";
 import { campiWizardDaConferma } from "@/lib/vendi/foto-etichetta/applica";
 import type { CampiConfermati } from "@/hooks/useFotoEtichetta";
 import type { CandidatoVino } from "@/lib/vendi/foto-etichetta/candidati";
@@ -395,10 +395,10 @@ export function useSellWizard({
   // -- Fotografa l'etichetta (WI-002) -----------------------------------------
   //
   // Il percorso vive in `useFotoEtichetta`; qui ci sono solo i tre punti di
-  // contatto con il wizard. I candidati arrivano dalla ricerca limitata lato
+  // contatto con il wizard. I candidati arrivano dal motore di ricerca (WI-006B: RPC `vini_cerca`, ordinata per pertinenza sul server, con ripiego sulla ricerca limitata lato
   // database (WI-006A: catalogo visibile all'utente + annunci pubblici), la
   // stessa che serve la ricerca manuale; la sorgente è sostituibile.
-  const sorgenteEtichetta = useMemo(() => creaSorgenteRicerca(supabase), [supabase]);
+  const sorgenteEtichetta = useMemo(() => creaMotoreRicerca(supabase), [supabase]);
 
   const applicaEtichetta = useCallback(
     (confermati: CampiConfermati, candidato: CandidatoVino | null) => {
