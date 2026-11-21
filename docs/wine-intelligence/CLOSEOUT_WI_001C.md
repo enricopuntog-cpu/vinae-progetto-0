@@ -2,6 +2,16 @@
 
 Documento di chiusura senza costi. Nessun branch Supabase, environment GitHub, segreto o variabile creati; nessun import LWIN; nessuna migration; Production invariata. Il lavoro è sospeso, non abbandonato: tutto ciò che serve per riprendere è conservato.
 
+## Aggiornamento del 21 novembre 2026 (staging reale e prova locale)
+
+Un'unica Preview (`qhdvnkqwqggnkwhvczeo`, ≈12 minuti, ≈$0,003, **eliminata e verificata**; Production invariata a `20261120120000`).
+
+- **Provato sul cloud reale, via Session Pooler**: migration applicate in ordine dall'integrazione; login dedicato con audit conforme; TLS `verify-full` con CA; dry-run del file reale (212.894 record, 0 scartati); `pg_cancel_backend` dal pooler con SQLSTATE `57014`; RLS 25/25, nessun grant né EXECUTE ai ruoli API, 15 SECURITY DEFINER con `search_path` vuoto, regola in `draft`, 0 vini canonici.
+- **Difetti reali trovati e corretti nella PR #310**: (1) `assertCloudSession` leggeva `pg_stat_ssl` che dietro Supavisor descrive il tratto pooler→PostgreSQL: ora la diretta è invariata e il pooler richiede il TLS verificato attestato dal driver più il login effettivo, con il tratto interno `not_proven` quando non provato; (2) la sonda `pg_stat_activity` filtrava per `application_name`, che Supavisor riscrive in `Supavisor`: ora pid + login. Il cluster del pooler cambia per progetto (`aws-0` o `aws-1`): provare entrambi prima dell'import.
+- **Import cloud NON completato**: nel finish il disco della Preview si è esaurito (`No space left on device` su `pg_wal`), con crash recovery e rollback completo; nulla è stato promosso, il run è rimasto `running` e la Preview è stata eliminata. Il runner non controlla la capienza del disco: prima di Production verificare lo spazio libero (peso osservato: `source_records` 640 MB, WAL ≈1 GB, più lo staging).
+- **Prova sostitutiva locale** (stesse migration, stesso runner, file reale): 212.894 record in 517 s, V01–V09 tutte OK, seconda esecuzione `skipped`, `catalog.wines` 0, `public.wines` invariata, regola `draft`, 130 rilievi aperti e nessuna fusione.
+- **Non provato**: import completo sul cloud, workflow GitHub (gira solo da `main`), cifratura interna Supavisor→PostgreSQL (SSL enforcement non impostabile da qui), fabbisogno di disco in Production.
+
 ## Stato effettivo
 
 | Componente | Stato |
@@ -10,8 +20,8 @@ Documento di chiusura senza costi. Nessun branch Supabase, environment GitHub, s
 | WI-001B, schema `catalog` di staging | **Distribuito** in Production (PR #300, ledger `20261117120000`), nessun dato |
 | WI-001C Rilascio A, runner cloud | **Mergiato** (PR #301, `f579203`), CI verde; handoff PR #302 (`2d92790`), CI verde |
 | WI-001C Rilascio B, catalogo canonico | **Integrato su `origin/main` `2ad23f7` nel branch `feature/wi-001c-unified-completion`** (4 migration invariate, griglie `12zy`/`12zz`, allow-list `12zs`); non ancora mergiato né distribuito. Applicazione fuori ordine verificata in locale: vedi `CLOUD_IMPORT_RUNBOOK.md` |
-| Importazione LWIN reale | **Rinviata** |
-| Validazione Supavisor/TLS reale | **Rinviata** (il runner non è provato su un pooler né su una CA reali) |
+| Importazione LWIN reale | **Provata in locale** (212.894 record, V01–V09 OK, idempotente); sul cloud **non completata** (disco); Production **non eseguita** |
+| Validazione Supavisor/TLS reale | **Eseguita** il 21 novembre 2026 su Preview (pooler, CA, dry-run, annullamento); import completo non riuscito per disco esaurito (vedi sopra) |
 | Risorse a pagamento | **Nessuna autorizzata** |
 | Workflow `wine-catalog-cloud-import.yml` | **Disabilitato** (variabile `CATALOG_CLOUD_IMPORT_ENABLED` assente, environment assente, nessuna esecuzione) |
 

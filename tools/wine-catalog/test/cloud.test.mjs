@@ -215,6 +215,12 @@ test('destinazione pooler: porta 6543 vietata, ref dell\'utente diverso da --tar
   assert.equal(assertCloudAuthorized({ url: POOLER, env: ENABLED, flags: { cloud: true, targetRef: REF } }).kind, 'pooler');
 });
 
+test('sonda del backend: identificato per pid e login, non per application_name (Supavisor lo riscrive in «Supavisor»)', async () => {
+  const { MONITOR_SQL } = await import('../lib/cloud-guards.mjs');
+  assert.match(MONITOR_SQL.activity, /pid = \$1::int and usename = session_user/);
+  assert.ok(!/application_name/.test(MONITOR_SQL.activity));
+});
+
 const goodPriv = {
   sr_insert: true, sr_update: true, sr_delete: false, sr_truncate: false, stage_insert: true, sources_insert: false, sources_update: false,
   canonical_select: false, canonical_insert: false, curator_member: false, public_create: false, can_finish: true,

@@ -242,7 +242,9 @@ export function planFinishWal({ usedBytes, budgetBytes, writtenRows }) {
 export const MONITOR_SQL = Object.freeze({
   wal: 'select pg_wal_lsn_diff(pg_current_wal_lsn(), $1::pg_lsn)::bigint as bytes',
   cancel: 'select pg_cancel_backend($1::int) as ok',
-  activity: "select state::text as state from pg_stat_activity where pid = $1::int and application_name = 'vinea-wi-catalog-import'",
+  // Si identifica il backend per pid + login (non per application_name): Supavisor riscrive application_name in 'Supavisor' (misurato su
+  // Preview reale), quindi un filtro sul nome darebbe un falso «gone» dietro il pooler. Stesso login = stessa identità del processo.
+  activity: 'select state::text as state from pg_stat_activity where pid = $1::int and usename = session_user and pid <> pg_backend_pid()',
   ping: 'select 1 as ok',
 });
 export const MONITOR_SQL_ALLOWED = new Set(Object.values(MONITOR_SQL));
