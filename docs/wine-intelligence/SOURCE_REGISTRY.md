@@ -16,7 +16,7 @@ Registro leggero delle fonti dati del catalogo vini. Non duplica
 | URL licenza Liv-ex | https://www.liv-ex.com/lwin-creative-commons-licence/ |
 | URL licenza ufficiale | https://creativecommons.org/licenses/by/4.0/ |
 | Verifica | 17 novembre 2026, lettura delle pagine Liv-ex indicate. La pagina Liv-ex rinvia al testo CC BY 4.0 e dichiara il database libero da scaricare. Il testo CC completo non è stato riletto riga per riga: gli obblighi sotto sono quelli standard di CC BY 4.0. Il file reale è stato fornito localmente dal titolare |
-| Stato | Licenza verificata. Fonte registrata come riga seme nella migration WI-001B (`catalog.sources`, codice `LIVEX-LWIN7`, `authorization_status = authorized`) — **migration non applicata a nessun ambiente remoto, nessun import in Production**. Import completo provato solo su dati sintetici e su database locale effimero |
+| Stato | Licenza verificata. Fonte registrata come riga seme nella migration WI-001B (`catalog.sources`, codice `LIVEX-LWIN7`, `authorization_status = authorized`) — **al 21 novembre 2026 lo schema `catalog` di staging (WI-001B) è distribuito in Production, ma `catalog.source_records` è vuota: nessun import LWIN in Production** (da autorizzare a parte, dopo il gate disco del runbook). Import completo del file reale provato solo su database locale (212.894 record, V01–V09 OK); su Preview cloud fallito per disco esaurito. Le 4 migration del catalogo canonico sono nella PR #310, non ancora distribuite |
 | Copertura | 212.894 record (Live 206.167, Combined 6.221, Deleted 506); 190.953 in ambito vino, 21.941 altri; 101 paesi, 370 regioni, 1.577 sottoregioni |
 | Manifest | `docs/wine-intelligence/IMPORT_MANIFEST.json` |
 

@@ -1,5 +1,7 @@
 # WI-001C-FIX-03 — handoff (19 novembre 2026)
 
+> **STORICO (21 novembre 2026).** Il ramo `feature/wi-001c-canonical-catalog` citato qui è stato superato: il riferimento operativo corrente è la **PR #310** (`feature/wi-001c-unified-completion`, 4 migration congelate integrate su `origin/main`). Il vecchio ramo resta solo come archivio; non è la prossima strada operativa. Stato aggiornato in `CLOSEOUT_WI_001C.md`.
+
 Documento autosufficiente. Nessun segreto. Nessun import LWIN reale, nessuna PR, nessun merge, nessun progetto/branch Supabase creato, nessuna migration (nessun file in `supabase/` nel runner), nessuna scrittura in Production, nessuna spesa. Il runner **non è verificato su Supavisor reale**: quelle prove sono successive e richiedono lo staging autorizzato.
 
 ## 1. Stato

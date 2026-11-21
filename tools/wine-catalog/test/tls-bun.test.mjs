@@ -77,6 +77,7 @@ test('CA corretta + hostname corretto: accettato; ruolo con SET ROLE esplicito (
   await withMock({}, async (m) => {
     db = await connectCloud(urlFor(m.port), { caPem: fix.ca, connectTimeoutSec: 5 });
     assert.equal(db.backendPid, 777);
+    assert.equal(db.clientTlsVerified, true, 'attestazione TLS client usata da assertCloudSession per il pooler');
     await db.assertIntact();
     await db.close();
     const log = await m.log();

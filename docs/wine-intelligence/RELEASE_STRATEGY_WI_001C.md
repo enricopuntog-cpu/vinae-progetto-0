@@ -1,5 +1,7 @@
 # Strategia di rilascio WI-001C in due tempi (Rilascio A runner, Rilascio B migration)
 
+> **STORICO (21 novembre 2026).** Il ramo `feature/wi-001c-canonical-catalog` citato qui è stato superato: il riferimento operativo corrente è la **PR #310** (`feature/wi-001c-unified-completion`, 4 migration congelate integrate su `origin/main`). Il vecchio ramo resta solo come archivio; non è la prossima strada operativa. Stato aggiornato in `CLOSEOUT_WI_001C.md`.
+
 Stato al 19 novembre 2026. **Nulla di quanto segue è stato eseguito su GitHub o su Supabase**: nessuna PR aperta, nessun merge,
 nessuna migration applicata, nessun ambiente creato. Il documento dice cosa separare, perché e quale approvazione serve.
 

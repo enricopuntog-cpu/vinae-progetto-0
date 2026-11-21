@@ -127,7 +127,12 @@ try {
     // dry-run: sessione di SOLA LETTURA (default_transaction_read_only + solo SELECT lato client); l'import usa il ruolo caricatore
     db = await connectCloud(process.env.CATALOG_DATABASE_URL, { role: 'catalog_loader', caPem, readOnly: args['dry-run'] });
     const q = (t, p) => db.query(t, p);
-    cloudInfo.session = await assertCloudSession(q);
+    cloudInfo.session = await assertCloudSession(q, {
+      kind: cloudTarget.kind,
+      clientTlsVerified: db.clientTlsVerified === true,
+      // pooler: la URL ha utente `<ruolo>.<ref>`; Supavisor presenta al database il solo `<ruolo>`
+      expectedLogin: cloudTarget.kind === 'pooler' ? cloudTarget.user.slice(0, -(cloudTarget.ref.length + 1)) : null,
+    });
     cloudInfo.loader_privileges = await assertLoaderPrivileges(q);
     await applySessionLimits(db, {
       statementTimeoutMs: cloudLimits.batchTimeoutSec * 1000,
@@ -147,7 +152,7 @@ try {
       if (walMonitor.status().samples < 1) throw new Error('Monitor WAL non operativo: importazione rifiutata (fail-closed).');
       // la connessione principale è riservata e NON si ricollega: se cade durante il finish l'esito è «sconosciuto» (finalizeWal)
     }
-    logger.log(`destinazione cloud identificata: ${cloudTarget.kind} ${cloudTarget.ref} (${cloudTarget.database}), TLS verificato, privilegi conformi`);
+    logger.log(`destinazione cloud identificata: ${cloudTarget.kind} ${cloudTarget.ref} (${cloudTarget.database}), TLS verificato lato client, ${cloudTarget.kind === 'pooler' ? `tratto pooler→PostgreSQL ${cloudInfo.session.transport.pooler_to_postgres}` : 'sessione cifrata (pg_stat_ssl)'}, privilegi conformi`);
   } else if (url) {
     const { connectLocal } = await import('./lib/db-bun.mjs');
     db = await connectLocal(url, { role: 'catalog_loader' });
