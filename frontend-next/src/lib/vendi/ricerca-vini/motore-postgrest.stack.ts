@@ -1,6 +1,6 @@
 /**
  * WI-006B — prova a due utenti sullo STACK SUPABASE LOCALE EFFIMERO, con PostgREST, Auth e database
- * veri, del motore di ricerca `vini_cerca` (RPC SECURITY INVOKER) dietro `creaMotoreRicerca`, la
+ * veri, del motore di ricerca `vini_cerca` (RPC SECURITY DEFINER con visibilità equivalente alle policy) dietro `creaMotoreRicerca`, la
  * STESSA sorgente usata da foto e ricerca manuale. NON è un test unitario (`.stack.ts` è escluso da
  * `bun test`): la lancia `supabase/tests/wi006b_ricerca_motore_postgrest.sh`, che ha già verificato
  * loopback, nonce dello stack, assenza di utenti reali e ha creato/toglierà le fixture.

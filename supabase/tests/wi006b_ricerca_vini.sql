@@ -145,7 +145,7 @@ begin
 
   analyze public.wines;
 
-  -- 01: privilegi. Eseguibili da anon e authenticated, non da PUBLIC; invoker; stabile.
+  -- 01: privilegi. Eseguibili da anon e authenticated, non da PUBLIC; SECURITY DEFINER; stabile.
   perform pg_temp.registra(1, 'vini_cerca: EXECUTE ad anon e authenticated, non a PUBLIC; SECURITY DEFINER con search_path vuoto, STABLE; vini_normalizza non esposta ad anon (authenticated sì: serve agli indici)',
     has_function_privilege('anon', 'public.vini_cerca(text,text,integer,text,integer,text)', 'EXECUTE')
     and has_function_privilege('authenticated', 'public.vini_cerca(text,text,integer,text,integer,text)', 'EXECUTE')
@@ -316,6 +316,36 @@ begin
     perform pg_temp.registra(23, format('equivalenza con la RLS: %s confronti (vino × identità), nessuna differenza', v_n),
       v_n >= 100 and v_male = '', v_male);
   end;
+
+  -- 26: ogni testo pubblico ha un tetto, anche `p_formato` (prima senza). Un formato di 200.000
+  -- caratteri non dà errore, non cambia i risultati e non finisce intero nel confronto.
+  v_p := pg_temp.cerca(c_a, 'authenticated', 'Cantina Zeffiro', 'Cuvée Aurora', null, repeat('x', 200000));
+  v_q := pg_temp.cerca(c_a, 'authenticated', 'Cantina Zeffiro', 'Cuvée Aurora');
+  perform pg_temp.registra(26, 'input: p_formato (200.000 caratteri), produttore e nome enormi: nessun errore, risultati invariati',
+    not (v_p ? 'errore') and pg_temp.nomi(v_p) = pg_temp.nomi(v_q)
+    and not (pg_temp.cerca(c_a, 'authenticated', repeat('a', 200000), repeat('b', 200000)) ? 'errore'),
+    left(v_p::text, 200));
+
+  -- 27: righe ESAMINATE ≠ risultati. 2.100 vini con la stessa parola (oltre il tetto di 2.000 candidati
+  -- per livello): al massimo 15 righe, nessun errore, ordine riproducibile; il database non rilegge tutto.
+  insert into public.wines (slug, produttore, nome, annata, regione, denominazione, tipo, formato, provenienza)
+  select 'wi006b-cap-' || n, 'Produttore Cap ' || n, 'Zzcomune ' || n, 2000 + n % 20, 'Veneto', 'DOC', 'Rosso', '0,75 L', 'staff'
+  from generate_series(1, 2100) n;
+  analyze public.wines;
+  v_p := pg_temp.cerca(c_a, 'authenticated', '', 'Zzcomune', null, null, 15);
+  v_q := pg_temp.cerca(c_a, 'authenticated', '', 'Zzcomune', null, null, 15);
+  perform pg_temp.registra(27, 'tetto ai candidati: termine su 2.100 vini → 15 righe, ordine stabile, nessun errore',
+    jsonb_array_length(v_p) = 15 and v_p = v_q and not (v_p ? 'errore'), left(v_p::text, 200));
+
+  -- 28: TRIPWIRE sulla visibilità. L'equivalenza (caso 23) prova la RPC contro le policy VIVE; questo
+  -- caso fa fallire in modo esplicito ogni modifica alle policy SELECT di `wines`, perché `vini_cerca`
+  -- ne replica a mano la regola. Se cambia una policy: aggiornare la visibilità in `vini_cerca` (nuova
+  -- migration), rieseguire il caso 23, poi aggiornare questa impronta.
+  perform pg_temp.registra(28, 'policy SELECT di public.wines invariate rispetto a quelle replicate in vini_cerca (impronta)',
+    (select md5(string_agg(policyname || '|' || cmd || '|' || roles::text || '|' || coalesce(qual, '') || '|' || permissive, E'\n' order by policyname))
+       from pg_policies where schemaname = 'public' and tablename = 'wines' and cmd in ('SELECT', 'ALL'))
+      = '4a2c48d200707950dee3751c30423f7a',
+    'se rosso: una policy SELECT di wines è cambiata; riallineare vini_cerca');
 end $$;
 
 select id, descrizione, passed, detail
