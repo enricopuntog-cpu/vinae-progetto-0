@@ -16,7 +16,7 @@ regola `lwin-conservative-v1` ancora `draft`.
 
 ## Prove
 
-- Griglia `supabase/tests/wi007_catalogo_canonico.sql`: 29/29 (privilegi, interruttore spento, livelli, Combined e catena di fusione,
+- Griglia `supabase/tests/wi007_catalogo_canonico.sql`: 30/30 (incluso `promotion_simulation` eseguita come `catalog_curator`) (privilegi, interruttore spento, livelli, Combined e catena di fusione,
   accenti, input ostili, tetto 20, colonne, trigger, simulazione senza scritture, regola in bozza). Mutazione dell'RPC
   (interruttore ignorato, filtro «promosso» tolto): casi 6 e 14 rossi. Agganciata a `12g_ci_run.sh`; `12zv` aggiornata con la nuova porta anonima.
 - Regressione: `12zy` 246/246 e `12zs` 153/153 sullo stesso database. (`12zv` non rieseguita per intero in locale: la copia scratch non ha i dati
@@ -44,3 +44,12 @@ regola `lwin-conservative-v1` ancora `draft`.
 - Sommelier: non c'è estrazione di nomi di vino dal testo libero (inaffidabile senza AI, e non si aggiungono chiamate a pagamento). Il collegamento
   a `ai-sommelier` richiede una scelta esplicita del vino nell'interfaccia (`contesto: { tipo: "ricerca" }` con `produttore`/`nome`), ricerca lato
   server con il token dell'utente (non `service_role`), poi `costruisciContestoRicerca` + `serializzaContestoRicerca`.
+
+## Audit di sicurezza indipendente (22 novembre 2026)
+
+Nessun P0. P1 corretto: `promotion_simulation` come invoker falliva per il solo ruolo autorizzato (`catalog_curator` senza privilegi su
+`import_findings`, `public_projection_settings`, `promotion_logic_fingerprint`); ora è SECURITY DEFINER, sola lettura, grant solo al curatore, con caso in griglia.
+Corretti anche: backfill di `search_key` per righe esistenti; la porta pubblica richiede una fonte `authorized` (revocare la fonte ritira i vini);
+commento sull'immutabilità. Accettati e dichiarati: `vino_id` pubblico per scelta; nessun rate limit applicativo sulla porta anonima (stesso profilo di
+`vini_cerca`, freno `statement_timeout` 3 s, enumerazione del catalogo LWIN possibile: coperta dall'attribuzione CC BY, da valutare se serve un limite);
+l'interazione fra trigger `wines_search_key` e `promote_wine_candidates` reale (regola approvata, trigger accesi) NON è provata e va provata nel gate di promozione.

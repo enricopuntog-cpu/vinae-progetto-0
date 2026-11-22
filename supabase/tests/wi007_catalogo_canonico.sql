@@ -218,6 +218,9 @@ begin
     into t;
   perform pg_temp.registra(4, 'promotion_simulation rifiutata ad anon e authenticated', t = '42501,42501', t);
 
+  select (select esito from pg_temp.chiama('select catalog.promotion_simulation()', 'catalog_curator')) into t;
+  perform pg_temp.registra(30, 'promotion_simulation eseguibile dal catalog_curator (il solo ruolo autorizzato)', t = 'NESSUN_ERRORE', t);
+
   perform pg_temp.registra(5, 'public_projection_settings: nessun privilegio ai ruoli API e interruttore SPENTO di default',
     not exists (select 1 from information_schema.role_table_grants
                  where table_schema = 'catalog' and table_name = 'public_projection_settings'
@@ -291,7 +294,7 @@ begin
 
   -- 15. Elenco chiuso di colonne: nessun prezzo, nessun dato personale, nessun id interno
   select pg_get_function_result('public.vini_canonici_cerca(text,text,integer,text)'::regprocedure) into t;
-  perform pg_temp.registra(15, 'colonne restituite: elenco chiuso (identità, territorio, tipo, provenienza), niente prezzi o dati personali',
+  perform pg_temp.registra(15, 'colonne restituite: elenco chiuso (identità, territorio, tipo, provenienza), niente prezzi o dati personali (vino_id è l''identificativo canonico, volutamente pubblico)',
     t = 'TABLE(fonte text, vino_id uuid, lwin7 text, produttore text, nome text, paese text, territorio text, territorio_tipo text, '
         'denominazione text, tipo text, colore text, punteggio integer, livello text, fonte_nome text, fonte_licenza text, attribuzione text)'
     and t !~* 'prezz|price|email|owner|user', t);

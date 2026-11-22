@@ -17,6 +17,10 @@
 
 -- ---------------------------------------------------------------------------------------------
 -- 1. Simulazione della promozione
+--
+-- SECURITY DEFINER perché il curatore non ha SELECT su import_findings e su public_projection_settings né
+-- EXECUTE su promotion_logic_fingerprint (provato: come invoker falliva con 42501). Resta sola lettura
+-- (nessun DML), search_path vuoto, EXECUTE solo a catalog_curator.
 -- ---------------------------------------------------------------------------------------------
 
 create or replace function catalog.promotion_simulation(
@@ -26,6 +30,7 @@ create or replace function catalog.promotion_simulation(
 ) returns jsonb
 language plpgsql
 stable
+security definer
 set search_path = ''
 as $$
 declare
@@ -222,7 +227,13 @@ comment on table catalog.public_projection_settings is
 
 alter table catalog.wines add column search_key text not null default '';
 
--- Calcolata all'inserimento: nome del vino e produttore sono immutabili (`wines_guard`, `producers_guard`).
+-- Righe già presenti (nessuna in Production prima dell'import): chiave calcolata subito, mai '' per un vino reale.
+update catalog.wines w set search_key = public.vini_normalizza(
+  coalesce((select p.name from catalog.producers p where p.id = w.producer_id), '') || ' ' || w.name)
+ where w.search_key = '';
+
+-- Calcolata all'inserimento: nome e produttore sono immutabili (`wines_guard`, `producers_guard`); la colonna
+-- non è nei grant di UPDATE di alcun ruolo, quindi resta quella calcolata alla nascita.
 create or replace function catalog.wines_search_key()
 returns trigger
 language plpgsql
@@ -376,7 +387,7 @@ begin
           join catalog.producers p on p.id = w.producer_id and p.status = 'active'
           left join catalog.territories cp on cp.id = p.country_territory_id
           left join catalog.territories t on t.id = w.territory_id
-          left join catalog.sources s on s.id = w.source_id
+          join catalog.sources s on s.id = w.source_id and s.authorization_status = 'authorized'
           where w.status = 'active' and w.origin = 'promotion' and (%2$s)
             and not (w.id = any (%4$L::uuid[]))
           limit %6$s
