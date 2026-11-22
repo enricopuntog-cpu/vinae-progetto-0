@@ -40,6 +40,14 @@ export function ElencoCandidati({
   prefissoTest,
   testoNessuno = "Nessuno di questi: continuo con i dati letti",
 }: Props) {
+  // Licenza della fonte (es. CC BY 4.0): l'attribuzione resta visibile finché c'è un vino che ne proviene.
+  const attribuzioni = [
+    ...new Set(
+      candidati.flatMap((c) =>
+        c.canonico ? [c.canonico.attribuzione ?? [c.canonico.fonteNome, c.canonico.licenza].filter(Boolean).join(" — ")] : [],
+      ),
+    ),
+  ].filter((t) => t.length > 0);
   return (
     <fieldset className="mt-2 space-y-2" data-testid={`${prefissoTest}-candidati`}>
       <legend className="text-[11px] text-muted-foreground">
@@ -64,6 +72,7 @@ export function ElencoCandidati({
             <b>{c.produttore}</b> — {c.nome}
             {c.annata ? ` ${c.annata}` : ""}
             {c.formato ? ` · ${c.formato}` : ""}
+            {c.canonico ? <span className="text-muted-foreground"> · LWIN {c.canonico.lwin7}</span> : null}
             <br />
             <span className="text-muted-foreground">
               {ETICHETTA_ESITO[c.esito]}
@@ -74,6 +83,11 @@ export function ElencoCandidati({
           </span>
         </label>
       ))}
+      {attribuzioni.length > 0 && (
+        <p className="text-[11px] text-muted-foreground" data-testid={`${prefissoTest}-attribuzione`}>
+          {attribuzioni.join(" · ")}
+        </p>
+      )}
       <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-border p-2 text-xs has-[:checked]:border-bordeaux">
         <input
           type="radio"

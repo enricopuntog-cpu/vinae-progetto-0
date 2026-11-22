@@ -25,6 +25,7 @@ import {
   type ClienteRicerca,
   creaSorgenteRicerca,
 } from "./sorgenti";
+import { sorgenteCanonica, sorgenteConCanonico } from "./canonico";
 
 export const FUNZIONE_RICERCA_VINI = "vini_cerca";
 export const CODICE_FONTE_MOTORE = "motore_vinea";
@@ -118,7 +119,13 @@ export function sorgenteConRipiego(
   };
 }
 
-/** La sorgente di prodotto: motore server con ripiego WI-006A. Sostituisce `creaSorgenteRicerca`. */
+/**
+ * La sorgente di prodotto: motore server con ripiego WI-006A, più (WI-007) il catalogo canonico come
+ * aggiunta facoltativa: spento di default sul server, e un suo errore non rompe la ricerca.
+ */
 export function creaMotoreRicerca(client: (ClienteRicerca & ClienteRpc) | null): SorgenteCandidati {
-  return sorgenteConRipiego(sorgenteDaRpc(client), creaSorgenteRicerca(client));
+  return sorgenteConCanonico(
+    sorgenteConRipiego(sorgenteDaRpc(client), creaSorgenteRicerca(client)),
+    sorgenteCanonica(client),
+  );
 }

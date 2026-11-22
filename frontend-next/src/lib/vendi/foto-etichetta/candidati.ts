@@ -39,6 +39,19 @@ export type CandidatoVino = {
   };
   /** Annunci pubblici attivi che descrivono questo vino (0 = solo catalogo). */
   annunci?: number;
+  /**
+   * WI-007 — solo per i vini del catalogo canonico (proiezione pubblica approvata):
+   * identificativo LWIN-7 e provenienza con l'attribuzione richiesta dalla licenza
+   * della fonte. Assente per ogni altra sorgente.
+   */
+  canonico?: {
+    lwin7: string;
+    paese: string | null;
+    territorio: string | null;
+    fonteNome: string | null;
+    licenza: string | null;
+    attribuzione: string | null;
+  };
 };
 
 export type DomandaCandidati = {
@@ -210,7 +223,13 @@ export function valutaCandidati(
     if (!presente) unici.set(k, { candidato: c, occorrenze: 1 });
     else {
       presente.occorrenze++;
-      if (confronta(c.id, presente.candidato.id) < 0) presente.candidato = c;
+      // A parità di vino vince la scheda canonica (porta con sé LWIN e provenienza), poi l'id più piccolo.
+      const nuovoCanonico = c.canonico !== undefined;
+      const vecchioCanonico = presente.candidato.canonico !== undefined;
+      if (
+        (nuovoCanonico && !vecchioCanonico) ||
+        (nuovoCanonico === vecchioCanonico && confronta(c.id, presente.candidato.id) < 0)
+      ) presente.candidato = c;
     }
   }
 
