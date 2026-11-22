@@ -348,6 +348,17 @@ wi006a_pg="$(E2E_DB_URL="$E2E_DB_URL" E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_A
 printf '%s\n' "$wi006a_pg"
 summary "- $(printf '%s\n' "$wi006a_pg" | grep 'due utenti:' | tail -n 1)"
 
+# WI-006B: motore di ricerca `vini_cerca` (SECURITY DEFINER con visibilita esplicita). La griglia prova
+# privilegi, livelli, refusi, ranking prima del limite e l'EQUIVALENZA con la RLS (anon, A, B); la prova
+# a due utenti usa PostgREST e Auth veri e controlla i piani (indici usati) e i tempi su 20000 vini.
+# Fixture `@wi006b.test` (ROLLBACK) e `@wi006b-e2e.test` / `wi006b-e2e-%` (trap, residui = 0).
+run_grid "wi006b motore di ricerca dei vini" wi006b_ricerca_vini.sql 3
+wi006b_pg="$(E2E_DB_URL="$E2E_DB_URL" E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_ANON_KEY="$E2E_ANON_KEY" \
+  E2E_SERVICE_KEY="$E2E_SERVICE_KEY" bash "$TESTS/wi006b_ricerca_motore_postgrest.sh")" \
+  || { printf '%s\n' "$wi006b_pg" | tail -n 60; die "wi006b PostgREST motore di ricerca a due utenti: fallita."; }
+printf '%s\n' "$wi006b_pg"
+summary "- $(printf '%s\n' "$wi006b_pg" | grep 'due utenti:' | tail -n 1)"
+
 # Stessa famiglia su sessioni PostgreSQL realmente separate: due esecutori sullo stesso
 # prelievo (uno solo riceve il Transfer), annullamento del titolare contro presa in carico e
 # contro un esito incerto (mai liberati i fondi), stessa chiave in parallelo, doppio esito

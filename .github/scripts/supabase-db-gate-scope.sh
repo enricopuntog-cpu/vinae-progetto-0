@@ -28,8 +28,9 @@ is_relevant_path() {
       | supabase/functions/_shared/sommelier-contesto.ts | supabase/functions/_shared/ai-* \
       | frontend-next/src/lib/wine-intelligence/sommelier-postgrest.stack.ts \
       | frontend-next/src/lib/cantina/note-vino-postgrest.stack.ts \
-      | supabase/tests/wi006a_* \
+      | supabase/tests/wi006a_* | supabase/tests/wi006b_* \
       | frontend-next/src/lib/vendi/ricerca-vini/ricerca-postgrest.stack.ts \
+      | frontend-next/src/lib/vendi/ricerca-vini/motore-postgrest.stack.ts \
       | .github/workflows/supabase-db-regression.yml \
       | .github/scripts/supabase-db-gate-scope.sh)
       return 0 ;;
