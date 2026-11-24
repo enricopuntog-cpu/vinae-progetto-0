@@ -31,7 +31,8 @@ Aprire soltanto ciò che serve al task:
   rilascio in due tempi (runner / migration): [`../docs/wine-intelligence/RELEASE_STRATEGY_WI_001C.md`](../docs/wine-intelligence/RELEASE_STRATEGY_WI_001C.md).
 - Proiezione pubblica, simulazione della promozione e ricerca canonica WI-007 (spente, non applicate a Production):
   [`../docs/wine-intelligence/WI_007_CATALOGO_CANONICO_RICERCA.md`](../docs/wine-intelligence/WI_007_CATALOGO_CANONICO_RICERCA.md)
-  (prove, revisione indipendente, protezione della porta, condizioni di attivazione).
+  (prove, revisione indipendente, identità canoniche non attribuite per chiave descrittiva e prova PostgREST/browser FIX-03,
+  limite del ranking oltre 2.000 candidati, protezione della porta, condizioni di attivazione).
 - Monitoraggio pre-lancio OBS-01: [`../docs/VPM_022C_OBS_01.md`](../docs/VPM_022C_OBS_01.md)
   contiene strumenti nativi, log minimizzati, heartbeat, responsabilità e residui
   pre-Stripe; non equivale a un servizio di allarme su ogni evento.
