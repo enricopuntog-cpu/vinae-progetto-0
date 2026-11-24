@@ -359,6 +359,15 @@ wi006b_pg="$(E2E_DB_URL="$E2E_DB_URL" E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_A
 printf '%s\n' "$wi006b_pg"
 summary "- $(printf '%s\n' "$wi006b_pg" | grep 'due utenti:' | tail -n 1)"
 
+# WI-007 (wi007b): promozione REALE con tutti i trigger attivi (regola approvata e interruttori accesi solo dentro la
+# transazione, fixture sintetiche), poi ricerca canonica sul risultato; ROLLBACK. Gira PRIMA della wi007, la cui guardia
+# (catalogo vuoto, regola in bozza) verifica l'assenza di residui.
+run_grid "wi007b promozione con trigger attivi e ricerca canonica" wi007b_promozione_trigger_attivi.sql 3
+# WI-007: proiezione pubblica del catalogo canonico (`vini_canonici_cerca`, spenta di default) e
+# simulazione della promozione. Transazione chiusa da ROLLBACK; il catalogo deve essere vuoto (guardia
+# nella griglia). Nessun import LWIN, nessuna regola approvata.
+run_grid "wi007 catalogo canonico: proiezione pubblica e simulazione" wi007_catalogo_canonico.sql 3
+
 # Stessa famiglia su sessioni PostgreSQL realmente separate: due esecutori sullo stesso
 # prelievo (uno solo riceve il Transfer), annullamento del titolare contro presa in carico e
 # contro un esito incerto (mai liberati i fondi), stessa chiave in parallelo, doppio esito

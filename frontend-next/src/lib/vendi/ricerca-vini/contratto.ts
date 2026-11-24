@@ -26,7 +26,7 @@ export type RisultatoRicerca = {
     regione: string | null;
     denominazione: string | null;
     tipo: string | null;
-    /** Sempre `null` finché non esiste una proiezione pubblica approvata del catalogo canonico. */
+    /** LWIN-7 solo per i vini del catalogo canonico (proiezione pubblica approvata); altrimenti `null`. */
     codiceLwin: string | null;
   };
   annata: number | null;
@@ -45,6 +45,8 @@ export type RisultatoRicerca = {
     livelloServer: "identificativo" | "esatto" | "prefisso" | "testo" | "simile" | null;
   };
   nonDisponibile: readonly DatoNonDisponibile[];
+  /** Attribuzione richiesta dalla licenza della fonte, solo per il catalogo canonico. */
+  attribuzione?: { fonte: string | null; licenza: string | null; testo: string | null };
 };
 
 export function aRisultatoRicerca(c: CandidatoValutato): RisultatoRicerca {
@@ -56,7 +58,7 @@ export function aRisultatoRicerca(c: CandidatoValutato): RisultatoRicerca {
       regione: c.regione,
       denominazione: c.denominazione,
       tipo: c.tipo,
-      codiceLwin: null,
+      codiceLwin: c.canonico?.lwin7 ?? null,
     },
     annata: c.annata,
     formato: c.formato,
@@ -66,6 +68,13 @@ export function aRisultatoRicerca(c: CandidatoValutato): RisultatoRicerca {
       punteggio: c.punteggio,
       livelloServer: c.corrispondenzaServer?.livello ?? null,
     },
-    nonDisponibile: ["codice_lwin", "alias", "territorio_canonico"],
+    nonDisponibile: [
+      ...(c.canonico ? [] : (["codice_lwin"] as const)),
+      "alias",
+      ...(c.canonico?.territorio ? [] : (["territorio_canonico"] as const)),
+    ],
+    ...(c.canonico
+      ? { attribuzione: { fonte: c.canonico.fonteNome, licenza: c.canonico.licenza, testo: c.canonico.attribuzione } }
+      : {}),
   };
 }

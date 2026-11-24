@@ -39,6 +39,19 @@ export type CandidatoVino = {
   };
   /** Annunci pubblici attivi che descrivono questo vino (0 = solo catalogo). */
   annunci?: number;
+  /**
+   * WI-007 — solo per i vini del catalogo canonico (proiezione pubblica approvata):
+   * identificativo LWIN-7 e provenienza con l'attribuzione richiesta dalla licenza
+   * della fonte. Assente per ogni altra sorgente.
+   */
+  canonico?: {
+    lwin7: string;
+    paese: string | null;
+    territorio: string | null;
+    fonteNome: string | null;
+    licenza: string | null;
+    attribuzione: string | null;
+  };
 };
 
 export type DomandaCandidati = {
@@ -48,9 +61,12 @@ export type DomandaCandidati = {
   formato: string | null;
 };
 
+/** FIX-03B — facoltativo: chi lo supporta annulla la richiesta in corso quando il segnale scatta (tetto di attesa). */
+export type OpzioniRicerca = { segnale?: AbortSignal };
+
 export interface SorgenteCandidati {
   readonly codice: string;
-  cerca(domanda: DomandaCandidati): Promise<Result<CandidatoVino[]>>;
+  cerca(domanda: DomandaCandidati, opzioni?: OpzioniRicerca): Promise<Result<CandidatoVino[]>>;
 }
 
 // -- Normalizzazione ---------------------------------------------------------
@@ -164,6 +180,11 @@ export type CandidatoValutato = CandidatoVino & {
   esito: EsitoCorrispondenza;
   /** Quanti annunci/righe della fonte descrivono questo stesso vino. */
   occorrenze: number;
+  /**
+   * FIX-03A — quante ALTRE schede hanno lo stesso produttore e nome (almeno una canonica) senza che l'identità sia
+   * provata. Assente se zero. L'interfaccia lo dichiara; la scelta resta all'utente.
+   */
+  omonimi?: number;
 };
 
 export type SintesiRicerca = "nessuna" | "unica" | "ambigua";
@@ -203,19 +224,25 @@ export function valutaCandidati(
   if (tProd.length === 0 && tNome.length === 0) return [];
 
   // Uno stesso vino può comparire in più righe (più annunci): si conta, non si moltiplica.
-  const unici = new Map<string, { candidato: CandidatoVino; occorrenze: number }>();
+  // FIX-03A — la chiave descrittiva (produttore + nome + annata + formato) identifica le righe Vinea della STESSA
+  // fonte, non prova che una scheda canonica sia lo stesso vino. Quindi: una scheda canonica si raggruppa solo con
+  // un'altra scheda canonica dello stesso LWIN-7 (identità autorevole) e NON si fonde mai con un vino Vinea; due LWIN
+  // diversi con la stessa chiave restano due candidati; il vino Vinea conserva tutti i suoi campi e non riceve alcun
+  // LWIN. Dentro un gruppo vince l'id più piccolo solo fra righe equivalenti, quindi l'esito non dipende dall'ordine
+  // di arrivo. Se più schede hanno lo stesso nome, `omonimi` lo dichiara e sceglie l'utente.
+  const unici = new Map<string, { scelto: CandidatoVino; occorrenze: number }>();
   for (const c of candidati) {
-    const k = chiaveVino(c);
+    const k = c.canonico ? `lwin|${c.canonico.lwin7}` : chiaveVino(c);
     const presente = unici.get(k);
-    if (!presente) unici.set(k, { candidato: c, occorrenze: 1 });
+    if (!presente) unici.set(k, { scelto: c, occorrenze: 1 });
     else {
       presente.occorrenze++;
-      if (confronta(c.id, presente.candidato.id) < 0) presente.candidato = c;
+      if (confronta(c.id, presente.scelto.id) < 0) presente.scelto = c;
     }
   }
 
   const valutati: CandidatoValutato[] = [];
-  for (const { candidato: c, occorrenze } of unici.values()) {
+  for (const { scelto: c, occorrenze } of unici.values()) {
     const sProd = similitudine(tProd, tokenNormalizzati(c.produttore, true));
     const sNome = similitudine(tNome, tokenNormalizzati(c.nome));
     const entrambi = tProd.length > 0 && tNome.length > 0;
@@ -238,6 +265,21 @@ export function valutaCandidati(
     else esito = "possibile";
 
     valutati.push({ ...c, punteggio: Math.round(punteggio * 1e6) / 1e6, esito, occorrenze });
+  }
+
+  // Omonimia dichiarata: stesso produttore e nome di un'altra scheda, con almeno una canonica e annata/formato non
+  // contraddittori (la scheda canonica li ha `null`). Due vini Vinea di annate diverse non sono omonimi.
+  const chiaveNome = (c: CandidatoVino) =>
+    `${tokenNormalizzati(c.produttore, true).join(" ")}|${tokenNormalizzati(c.nome).join(" ")}`;
+  const compatibili = (a: CandidatoVino, b: CandidatoVino) =>
+    !(a.annata !== null && b.annata !== null && a.annata !== b.annata) &&
+    !(a.formato !== null && b.formato !== null && a.formato !== b.formato);
+  const chiaviNome = new Map(valutati.map((v) => [v, chiaveNome(v)]));
+  for (const v of valutati) {
+    const omonimi = valutati.filter(
+      (w) => w !== v && (v.canonico || w.canonico) && chiaviNome.get(w) === chiaviNome.get(v) && compatibili(v, w),
+    ).length;
+    if (omonimi > 0) v.omonimi = omonimi;
   }
 
   valutati.sort(
