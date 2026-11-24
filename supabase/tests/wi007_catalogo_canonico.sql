@@ -196,9 +196,11 @@ declare
   v jsonb; v2 jsonb; t text; c record; ids text[];
 begin
   -- 1. Privilegi sulla porta pubblica
-  perform pg_temp.registra(1, 'vini_canonici_cerca: EXECUTE ad anon e authenticated, non a PUBLIC',
-    has_function_privilege('anon', 'public.vini_canonici_cerca(text,text,integer,text)', 'execute')
+  -- WI-007-FIX-01: la porta non è più anonima (le letture non passano dal limite R-RL-01; nessun consumatore anonimo).
+  perform pg_temp.registra(1, 'vini_canonici_cerca: EXECUTE ad authenticated e service_role, NON ad anon né a PUBLIC',
+    not has_function_privilege('anon', 'public.vini_canonici_cerca(text,text,integer,text)', 'execute')
     and has_function_privilege('authenticated', 'public.vini_canonici_cerca(text,text,integer,text)', 'execute')
+    and has_function_privilege('service_role', 'public.vini_canonici_cerca(text,text,integer,text)', 'execute')
     and not exists (select 1 from pg_proc p, aclexplode(p.proacl) a
                      where p.oid = 'public.vini_canonici_cerca(text,text,integer,text)'::regprocedure and a.grantee = 0));
 
@@ -228,52 +230,53 @@ begin
     and (select enabled from catalog.public_projection_settings) = false);
 
   -- 6. Interruttore spento: nessun dato, nemmeno per un nome esatto o un codice
-  v := pg_temp.cerca('anon', 'Giacomo Conterno', 'Barolo Monfortino');
+  v := pg_temp.cerca('authenticated', 'Giacomo Conterno', 'Barolo Monfortino');
   v2 := pg_temp.cerca('authenticated', '', '', 15, '1010001');
-  perform pg_temp.registra(6, 'interruttore spento: nessun risultato (nome esatto e codice), nessun errore',
-    v = '[]'::jsonb and v2 = '[]'::jsonb, v::text || v2::text);
+  perform pg_temp.registra(6, 'interruttore spento: nessun risultato (nome esatto e codice), nessun errore; anon rifiutato (42501) anche a interruttore spento',
+    v = '[]'::jsonb and v2 = '[]'::jsonb
+    and pg_temp.cerca('anon', 'Giacomo Conterno', 'Barolo Monfortino') = '{"errore": "42501"}'::jsonb, v::text || v2::text);
 
   update catalog.public_projection_settings set enabled = true;
 
   -- 7. Esatto
-  v := pg_temp.cerca('anon', 'Giacomo Conterno', 'Barolo Monfortino');
+  v := pg_temp.cerca('authenticated', 'Giacomo Conterno', 'Barolo Monfortino');
   perform pg_temp.registra(7, 'esatto: produttore + vino → 1 riga, livello esatto, punteggio 100',
     jsonb_array_length(v) = 1 and v -> 0 ->> 'livello' = 'esatto' and (v -> 0 ->> 'punteggio')::int = 100, left(v::text, 300));
 
   -- 8. Accenti, maiuscole e punteggiatura
-  v := pg_temp.cerca('anon', 'CHATEAU D YQUEM', 'sauternes');
-  v2 := pg_temp.cerca('anon', 'Gaja', 'sori tildin');
+  v := pg_temp.cerca('authenticated', 'CHATEAU D YQUEM', 'sauternes');
+  v2 := pg_temp.cerca('authenticated', 'Gaja', 'sori tildin');
   perform pg_temp.registra(8, 'accenti/maiuscole/apostrofi piegati: «Château d''Yquem» e «Sorì Tildìn» trovati senza accenti',
     pg_temp.nomi(v) = array['Sauternes'] and pg_temp.nomi(v2) = array['Sorì Tildìn'], pg_temp.nomi(v)::text || pg_temp.nomi(v2)::text);
 
   -- 9. Prefisso / testo
-  v := pg_temp.cerca('anon', '', 'monfortino');
+  v := pg_temp.cerca('authenticated', '', 'monfortino');
   perform pg_temp.registra(9, 'testo: solo una parola del nome → trovato', pg_temp.nomi(v) = array['Barolo Monfortino'], pg_temp.nomi(v)::text);
 
   -- 10. Refuso (trigramma)
-  v := pg_temp.cerca('anon', 'Giacomo Conterni', 'Barolo Monfortino');
+  v := pg_temp.cerca('authenticated', 'Giacomo Conterni', 'Barolo Monfortino');
   perform pg_temp.registra(10, 'simile: refuso nel produttore → trovato con livello simile',
     jsonb_array_length(v) >= 1 and v -> 0 ->> 'nome' = 'Barolo Monfortino' and v -> 0 ->> 'livello' = 'simile', left(v::text, 300));
 
   -- 11. Codice LWIN-7 e Combined
-  v := pg_temp.cerca('anon', '', '', 15, '1010001');
-  v2 := pg_temp.cerca('anon', '', '', 15, '1010099');
+  v := pg_temp.cerca('authenticated', '', '', 15, '1010001');
+  v2 := pg_temp.cerca('authenticated', '', '', 15, '1010099');
   perform pg_temp.registra(11, 'identificativo: LWIN-7 e LWIN Combined risolto sul vino di destinazione',
     jsonb_array_length(v) = 1 and v -> 0 ->> 'livello' = 'identificativo' and v -> 0 ->> 'lwin7' = '1010001'
     and jsonb_array_length(v2) = 1 and v2 -> 0 ->> 'lwin7' = '1010001', left(v::text || v2::text, 300));
 
-  v := pg_temp.cerca('anon', '', '', 15, '1010097');
-  v2 := pg_temp.cerca('anon', '', 'Monfortino Vecchio');
+  v := pg_temp.cerca('authenticated', '', '', 15, '1010097');
+  v2 := pg_temp.cerca('authenticated', '', 'Monfortino Vecchio');
   perform pg_temp.registra(29, 'fusione: il Combined di un vino fuso arriva al vino attivo; il vino fuso non è mai pubblico',
     jsonb_array_length(v) = 1 and v -> 0 ->> 'lwin7' = '1010001' and not ('Barolo Monfortino Vecchio' = any (pg_temp.nomi(v2))),
     left(v::text || v2::text, 300));
 
   -- 12. Non pubblicati: ritirato, produttore ritirato, origine manuale
   perform pg_temp.registra(12, 'esclusi: vino ritirato e vino di produttore ritirato non appaiono',
-    pg_temp.cerca('anon', '', 'Retired Cuvee') = '[]'::jsonb and pg_temp.cerca('anon', '', 'Prodotto Ritirato') = '[]'::jsonb);
+    pg_temp.cerca('authenticated', '', 'Retired Cuvee') = '[]'::jsonb and pg_temp.cerca('authenticated', '', 'Prodotto Ritirato') = '[]'::jsonb);
 
   -- 13. Provenienza e attribuzione restituite
-  v := pg_temp.cerca('anon', 'Gaja', 'Sori Tildin');
+  v := pg_temp.cerca('authenticated', 'Gaja', 'Sori Tildin');
   perform pg_temp.registra(13, 'provenienza: fonte, licenza e attribuzione della fonte; paese e territorio',
     v -> 0 ->> 'fonte' = 'catalogo_canonico'
     and v -> 0 ->> 'attribuzione' is not distinct from (select attribution_text from catalog.sources where code = 'LIVEX-LWIN7')
@@ -289,7 +292,7 @@ begin
     insert into catalog.wines (producer_id, name, name_key, origin, provenance_note) values (v_p, 'Manuale Cuvée', 'manuale cuvee', 'manual', 'fixture wi007') returning id into v_w;
     select search_key into v_k from catalog.wines where id = v_w;
     perform pg_temp.registra(14, 'trigger: search_key = vini_normalizza(produttore || '' '' || nome); i vini manuali non sono pubblici',
-      v_k = 'manuale azienda manuale cuvee' and pg_temp.cerca('anon', '', 'Manuale Cuvee') = '[]'::jsonb, v_k);
+      v_k = 'manuale azienda manuale cuvee' and pg_temp.cerca('authenticated', '', 'Manuale Cuvee') = '[]'::jsonb, v_k);
   end;
 
   -- 15. Elenco chiuso di colonne: nessun prezzo, nessun dato personale, nessun id interno
@@ -300,24 +303,24 @@ begin
     and t !~* 'prezz|price|email|owner|user', t);
 
   -- 16. Tetto a 20 righe
-  v := pg_temp.cerca('anon', '', 'Zzcomune', 50);
-  v2 := pg_temp.cerca('anon', '', 'Zzcomune', 50);
+  v := pg_temp.cerca('authenticated', '', 'Zzcomune', 50);
+  v2 := pg_temp.cerca('authenticated', '', 'Zzcomune', 50);
   perform pg_temp.registra(16, 'tetto: 25 vini corrispondenti, limite 50 → 20 righe, ordine stabile',
     jsonb_array_length(v) = 20 and v = v2, jsonb_array_length(v)::text);
 
   -- 17. Input ostili e enormi
-  v := pg_temp.cerca('anon', repeat('x', 5000), repeat('y ', 5000));
-  v2 := pg_temp.cerca('anon', 'o''brien''; drop table catalog.wines; --', '100%_\');
+  v := pg_temp.cerca('authenticated', repeat('x', 5000), repeat('y ', 5000));
+  v2 := pg_temp.cerca('authenticated', 'o''brien''; drop table catalog.wines; --', '100%_\');
   perform pg_temp.registra(17, 'input enormi e con apici/%/_/\: nessun errore',
     not (v ? 'errore') and not (v2 ? 'errore') and (select count(*) from catalog.wines) >= 30, left(v::text || v2::text, 200));
 
   -- 18. Codice ostile: non è 7 cifre → nessuna ricerca per codice e nessun errore
-  v := pg_temp.cerca('anon', '', '', 15, '1010001'' or ''1''=''1');
+  v := pg_temp.cerca('authenticated', '', '', 15, '1010001'' or ''1''=''1');
   perform pg_temp.registra(18, 'codice con apici: ridotto alle sole cifre, nessun risultato spurio', v = '[]'::jsonb, v::text);
 
   -- 19. Domande vuote
   perform pg_temp.registra(19, 'domande vuote o senza parole utili: nessuna riga',
-    pg_temp.cerca('anon', '', '') = '[]'::jsonb and pg_temp.cerca('anon', 'il', 'di') = '[]'::jsonb);
+    pg_temp.cerca('authenticated', '', '') = '[]'::jsonb and pg_temp.cerca('authenticated', 'il', 'di') = '[]'::jsonb);
 
   -- 20. Sola lettura: nessun conteggio è cambiato dopo tutte le ricerche (salvo le righe manuali del caso 14)
   select * into c from conteggi_prima;

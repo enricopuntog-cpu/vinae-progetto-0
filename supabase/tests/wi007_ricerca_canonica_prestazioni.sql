@@ -45,13 +45,13 @@ analyze catalog.wines;
 analyze catalog.producers;
 
 create temp table misure (caso text, ms numeric, righe integer, livello text) on commit drop;
-grant all on misure to anon;
+grant all on misure to authenticated;
 
 create function pg_temp.misura(p_caso text, p_prod text, p_nome text, p_cod text default null) returns void
 language plpgsql as $f$
 declare t0 timestamptz; n integer; liv text;
 begin
-  set local role anon;
+  set local role authenticated;
   t0 := clock_timestamp();
   select count(*), min(livello) into n, liv from public.vini_canonici_cerca(p_prod, p_nome, 15, p_cod);
   reset role;

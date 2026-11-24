@@ -95,10 +95,12 @@ begin
   perform pg_temp.rec('A02', 'RLS attiva su ogni tabella canonica e su ogni tabella dello schema',
     not exists (select 1 from pg_class c where c.relnamespace = 'catalog'::regnamespace and c.relkind = 'r' and not c.relrowsecurity));
   -- FIX-01 D-6: le uniche funzioni SECURITY DEFINER sono le porte di scrittura (elenco CHIUSO), tutte con search_path vuoto
-  perform pg_temp.rec('A03', 'FIX-02: la superficie dello schema, derivata dal catalogo di sistema (surface_audit), è conforme e le uniche SECURITY DEFINER sono le 15 porte di scrittura del curatore',
+  -- WI-007-FIX-01: a queste si aggiunge UN SOLO rapporto definer di sola lettura (promotion_simulation, classe curator_report), nominato.
+  perform pg_temp.rec('A03', 'FIX-02 + WI-007-FIX-01: la superficie dello schema, derivata dal catalogo di sistema (surface_audit), è conforme e le uniche SECURITY DEFINER sono le 15 porte di scrittura del curatore più l''unico rapporto di sola lettura promotion_simulation',
     not exists (select 1 from catalog.surface_audit() where not ok)
-    and (select count(*) from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.prosecdef) = 15
-    and (select count(*) from catalog.surface_audit() where kind = 'curator_door') = 15,
+    and (select count(*) from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.prosecdef) = 16
+    and (select count(*) from catalog.surface_audit() where kind = 'curator_door') = 15
+    and (select array_agg(fn) from catalog.surface_audit() where kind = 'curator_report') = array['catalog.promotion_simulation(text,text,integer)'],
     (select string_agg(fn || ': ' || why, ' | ') from catalog.surface_audit() where not ok));
   perform pg_temp.rec('A04', 'nessuna funzione del catalogo con EXECUTE a PUBLIC (le funzioni WI-001C non nascono eseguibili da PUBLIC)',
     not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace
