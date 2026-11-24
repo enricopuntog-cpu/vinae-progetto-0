@@ -71,11 +71,12 @@ create function pg_temp.lwins(p jsonb) returns text[] language sql as $f$
   select coalesce(array_agg(e ->> 'lwin7' order by ord), '{}') from jsonb_array_elements(p) with ordinality as t(e, ord)
 $f$;
 
--- Snapshot sintetico: 8 record
+-- Snapshot sintetico: 8 record (7 + il produttore da fondere)
 --   3000001/3000002  stesso produttore (variante con accenti), vini diversi: idonei
 --   3000003          Monfortino: idoneo; 3000006 è un Combined che punta a 3000003
 --   3000004/3000005  stessa identità naturale, LWIN diversi: possibile duplicato, BLOCCATI (mai fusi)
 --   3000008          senza paese: bloccato
+--   3000010          «Azienda Conterno»: produttore distinto che il curatore fonderà in «Giacomo Conterno» (sezione G)
 insert into fx_batches values ('b1', jsonb_build_array(
   pg_temp.fx('3000001', 'Live', 'wine', null, 'Château Léoville', 'Grand Vin', 'France', 'Bordeaux', 'Red'),
   pg_temp.fx('3000002', 'Live', 'wine', null, 'Chateau Leoville', 'Second Vin', 'France', 'Bordeaux', 'Red'),
@@ -83,13 +84,14 @@ insert into fx_batches values ('b1', jsonb_build_array(
   pg_temp.fx('3000004', 'Live', 'wine', null, 'Cantina Dup', 'Vino Dup', 'Italy', 'Tuscany', 'Red'),
   pg_temp.fx('3000005', 'Live', 'wine', null, 'Cantina Dup', 'Vino Dup', 'Italy', 'Tuscany', 'Red'),
   pg_temp.fx('3000006', 'Combined', 'wine', '3000003', 'Giacomo Conterno', 'Barolo Monfortino Vecchio', 'Italy', 'Piedmont', 'Red'),
-  pg_temp.fx('3000008', 'Live', 'wine', null, 'Senza Paese', 'Vino Orfano', null, null, 'Red')));
+  pg_temp.fx('3000008', 'Live', 'wine', null, 'Senza Paese', 'Vino Orfano', null, null, 'Red'),
+  pg_temp.fx('3000010', 'Live', 'wine', null, 'Azienda Conterno', 'Barbera Conterno', 'Italy', 'Piedmont', 'Red')));
 
 -- Import sintetico reale (flusso WI-001B) con il ruolo caricatore
 set local role catalog_loader;
 insert into ctx select 'run', (catalog.begin_import_run('LIVEX-LWIN7', repeat('d', 64), 'sintetico-wi007b.xlsx', null, 'wi-007b-test') ->> 'run_id');
 insert into ctx select 'stage', catalog.stage_source_records((select v::uuid from ctx where k = 'run'), batch)::text from fx_batches where name = 'b1';
-insert into ctx select 'fin', catalog.finish_import_run((select v::uuid from ctx where k = 'run'), 7)::text;
+insert into ctx select 'fin', catalog.finish_import_run((select v::uuid from ctx where k = 'run'), 8)::text;
 reset role;
 
 -- ===================================================================================================
@@ -99,14 +101,18 @@ do $$
 declare v_sim jsonb;
 begin
   perform pg_temp.rec('B01', 'i trigger sono ACCESI: wines_search_key abilitato in modalità origin, session_replication_role = origin',
-    (select tgenabled from pg_trigger where tgrelid = 'catalog.wines'::regclass and tgname = 'wines_search_key') = 'O'
+    (select tgenabled from pg_trigger where tgrelid = 'catalog.wines'::regclass and tgname = 'wines_a_search_key') = 'O'
     and current_setting('session_replication_role') = 'origin');
+  -- WI-007-FIX-02: i trigger BEFORE INSERT partono in ordine alfabetico; la chiave si calcola PRIMA della guardia di inserimento
+  perform pg_temp.rec('B01b', 'wines_a_search_key scatta prima di wines_insert_guard (la guardia convalida la riga definitiva)',
+    (select min(tgname) from pg_trigger where tgrelid = 'catalog.wines'::regclass and not tgisinternal and (tgtype & 6) = 6) = 'wines_a_search_key'
+    and 'wines_a_search_key' < 'wines_insert_guard' collate "C");
 
   set local role catalog_curator;
   v_sim := catalog.promotion_simulation('LIVEX-LWIN7', 'lwin-conservative-v1', 50);
   reset role;
-  perform pg_temp.rec('B02', 'simulazione prima della promozione: 3 candidati (3000001/2/3), duplicati e senza paese esclusi, nessuna scrittura',
-    (select array_agg(c ->> 'lwin' order by c ->> 'lwin') from jsonb_array_elements(v_sim -> 'candidates') c) = array['3000001', '3000002', '3000003']
+  perform pg_temp.rec('B02', 'simulazione prima della promozione: 4 candidati (3000001/2/3/10), duplicati e senza paese esclusi, nessuna scrittura',
+    (select array_agg(c ->> 'lwin' order by c ->> 'lwin') from jsonb_array_elements(v_sim -> 'candidates') c) = array['3000001', '3000002', '3000003', '3000010']
     and (v_sim ->> 'database_writes')::int = 0 and (v_sim ->> 'possible_duplicate_records')::int = 2
     and (select count(*) from catalog.wines) = 0, left(v_sim::text, 400));
 
@@ -135,12 +141,12 @@ begin
   v_res := catalog.promote_wine_candidates(p_dry_run => false, p_actor => 'qa-wi007b', p_limit => 10);
   v_res2 := catalog.promote_wine_candidates(p_dry_run => false, p_actor => 'qa-wi007b', p_limit => 10);
   reset role;
-  perform pg_temp.rec('C01', 'promozione reale con trigger accesi: 2 produttori, 3 vini, 1 alias Combined',
-    (v_res ->> 'producers_created')::int = 2 and (v_res ->> 'wines_created')::int = 3 and (v_res ->> 'combined_aliases_created')::int = 1
-    and (select count(*) from catalog.wines) = 3 and (select count(*) from catalog.producers) = 2, v_res::text);
+  perform pg_temp.rec('C01', 'promozione reale con trigger accesi: 3 produttori, 4 vini, 1 alias Combined',
+    (v_res ->> 'producers_created')::int = 3 and (v_res ->> 'wines_created')::int = 4 and (v_res ->> 'combined_aliases_created')::int = 1
+    and (select count(*) from catalog.wines) = 4 and (select count(*) from catalog.producers) = 3, v_res::text);
   perform pg_temp.rec('C02', 'idempotenza: la seconda promozione non crea nulla',
     (v_res2 ->> 'producers_created')::int = 0 and (v_res2 ->> 'wines_created')::int = 0 and (v_res2 ->> 'combined_aliases_created')::int = 0
-    and (select count(*) from catalog.wines) = 3, v_res2::text);
+    and (select count(*) from catalog.wines) = 4, v_res2::text);
   perform pg_temp.rec('C03', 'esclusi NON promossi e mai fusi: i due possibili duplicati e il vino senza paese restano fuori',
     not exists (select 1 from catalog.wines where lwin7 in ('3000004', '3000005', '3000008', '3000006'))
     and (select count(*) from catalog.producers where name_key in ('cantina dup', 'senza paese')) = 0);
@@ -160,7 +166,7 @@ begin
   perform pg_temp.rec('D02', 'nessun vino promosso con search_key vuota; tutti attivi, origine promotion, con produttore attivo',
     not exists (select 1 from catalog.wines where search_key = '')
     and (select count(*) from catalog.wines w join catalog.producers p on p.id = w.producer_id
-          where w.status = 'active' and w.origin = 'promotion' and p.status = 'active') = 3);
+          where w.status = 'active' and w.origin = 'promotion' and p.status = 'active') = 4);
   perform pg_temp.rec('D03', 'identità certamente equivalente = un solo produttore (Château Léoville / Chateau Leoville), nessun fuzzy',
     (select count(distinct producer_id) from catalog.wines where lwin7 in ('3000001', '3000002')) = 1);
 
@@ -222,12 +228,72 @@ begin
   -- idempotenza della ricerca dopo la seconda promozione: stesse identità, nessuna riga doppia
   v := pg_temp.cerca('', 'Leoville'); v2 := pg_temp.cerca('', 'Leoville');
   v3 := pg_temp.cerca('', 'Conterno');
-  perform pg_temp.rec('E08', 'ricerca ripetibile e senza duplicati; un solo vino per Conterno',
-    v = v2 and pg_temp.lwins(v3) = array['3000003']);
+  perform pg_temp.rec('E08', 'ricerca ripetibile e senza duplicati; «Conterno» trova i due vini dei due produttori DISTINTI (nessuna fusione di identità incerte)',
+    v = v2 and (select array_agg(l order by l) from unnest(pg_temp.lwins(v3)) l) = array['3000003', '3000010']);
 
   perform pg_temp.rec('E09', 'la ricerca non scrive nulla nel catalogo (conteggi invariati)',
-    (select count(*) from catalog.wines) = 3 and (select count(*) from catalog.producers) = 2
-    and (select count(*) from catalog.source_records) = 7);
+    (select count(*) from catalog.wines) = 4 and (select count(*) from catalog.producers) = 3
+    and (select count(*) from catalog.source_records) = 8);
+end $$;
+
+-- ===================================================================================================
+-- E2. Soglia trigramma ripristinata; fonte non autorizzata
+-- ===================================================================================================
+do $$
+declare v_prima text; v_dopo text; v jsonb;
+begin
+  -- il livello «simile» alza la soglia con set_config locale: deve ripristinare il valore che trova
+  perform set_config('pg_trgm.similarity_threshold', '0.55', true);
+  v_prima := current_setting('pg_trgm.similarity_threshold');
+  v := pg_temp.cerca('Giacomo Conterni', 'Barolo Monfortino');
+  v_dopo := current_setting('pg_trgm.similarity_threshold');
+  perform pg_temp.rec('E10', 'il livello simile ripristina pg_trgm.similarity_threshold (nessuna soglia residua nella sessione)',
+    v_prima = '0.55' and v_dopo = v_prima and pg_temp.lwins(v) = array['3000003'], v_prima || ' -> ' || v_dopo);
+  perform set_config('pg_trgm.similarity_threshold', '0.3', true);
+
+  -- una fonte non più autorizzata ritira dalla ricerca i vini che ha promosso (revocare la fonte = ritirare)
+  update catalog.sources set authorization_status = 'revoked' where code = 'LIVEX-LWIN7';
+  perform pg_temp.rec('E11', 'fonte REVOCATA: nessun vino canonico è più pubblico (nome, testo, simile e codice)',
+    pg_temp.cerca('Giacomo Conterno', 'Barolo Monfortino') = '[]'::jsonb and pg_temp.cerca('', 'Leoville') = '[]'::jsonb
+    and pg_temp.cerca('Giacomo Conterni', 'Barolo Monfortino') = '[]'::jsonb and pg_temp.cerca('', '', '3000001') = '[]'::jsonb);
+  update catalog.sources set authorization_status = 'restricted' where code = 'LIVEX-LWIN7';
+  perform pg_temp.rec('E12', 'fonte RESTRICTED: nessun vino pubblico (solo authorized è sufficiente)',
+    pg_temp.cerca('Giacomo Conterno', 'Barolo Monfortino') = '[]'::jsonb);
+  update catalog.sources set authorization_status = 'authorized' where code = 'LIVEX-LWIN7';
+  perform pg_temp.rec('E13', 'fonte di nuovo authorized: i vini tornano visibili',
+    pg_temp.lwins(pg_temp.cerca('Giacomo Conterno', 'Barolo Monfortino')) = array['3000003']);
+end $$;
+
+-- ===================================================================================================
+-- G. Produttore fuso: i vini del produttore assorbito restano pubblici, con il produttore EFFETTIVO
+-- ===================================================================================================
+do $$
+declare pa uuid; pb uuid; c bigint; v jsonb;
+begin
+  select producer_id into pa from catalog.wines where lwin7 = '3000003';  -- Giacomo Conterno (conservato)
+  select producer_id into pb from catalog.wines where lwin7 = '3000010';  -- Azienda Conterno (assorbito)
+  perform pg_temp.rec('G00', 'prima della fusione: due produttori distinti, ciascuno con il proprio nome nei risultati',
+    pa <> pb and pg_temp.cerca('', 'Barbera Conterno') -> 0 ->> 'produttore' = 'Azienda Conterno');
+
+  set local role catalog_curator;
+  c := catalog.open_duplicate_candidate('producer', pa, pb, 'wi007b: stesso produttore', 'qa');
+  perform catalog.review_duplicate_candidate(c, 'same', 'rev', 'wi007b');
+  perform catalog.merge_canonical_entity(c, case when pa < pb then 'a' else 'b' end, 'rev', 'Azienda Conterno in Giacomo Conterno');
+  reset role;
+
+  perform pg_temp.rec('G01', 'fusione reale: Azienda Conterno fuso in Giacomo Conterno; il vino conserva il produttore ORIGINALE ed è ancora attivo',
+    (select status from catalog.producers where id = pb) = 'merged' and (select merged_into from catalog.producers where id = pb) = pa
+    and (select producer_id from catalog.wines where lwin7 = '3000010') = pb and (select status from catalog.wines where lwin7 = '3000010') = 'active');
+
+  v := pg_temp.cerca('', 'Barbera Conterno');
+  perform pg_temp.rec('G02', 'produttore fuso: il vino NON sparisce dalla ricerca e mostra il produttore effettivo (Giacomo Conterno)',
+    pg_temp.lwins(v) = array['3000010'] and v -> 0 ->> 'produttore' = 'Giacomo Conterno', left(v::text, 300));
+  perform pg_temp.rec('G03', 'produttore fuso: trovato anche per codice LWIN-7, senza duplicati; Conterno trova i suoi due vini',
+    pg_temp.lwins(pg_temp.cerca('', '', '3000010')) = array['3000010']
+    and (select array_agg(l order by l) from unnest(pg_temp.lwins(pg_temp.cerca('', 'Conterno'))) l) = array['3000003', '3000010']
+    and (select count(*) from catalog.wines) = 4);
+
+  -- Un produttore con fusioni attive verso di sé non si ritira (merge_state_check): «fuso in un ritirato» non è uno stato raggiungibile.
 end $$;
 
 -- ===================================================================================================

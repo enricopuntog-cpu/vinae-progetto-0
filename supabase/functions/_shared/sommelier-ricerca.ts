@@ -98,7 +98,8 @@ export function costruisciContestoRicerca(candidati: readonly CandidatoRicercaIn
       identificato: esito === "esatta",
       // LWIN-7 non fornisce annata, formato, vitigni né prezzi: restano lacune dichiarate.
       lacune: [...nonDisp, ...(lwin ? ["annata", "formato", "vitigni", "prezzo"] : ["prezzo"])],
-      attribuzione: testoOnull(c.attribuzione?.testo, 160),
+      // Il testo di attribuzione CC BY non va troncato (oggi 143 caratteri): tetto con margine.
+      attribuzione: testoOnull(c.attribuzione?.testo, 300),
     });
   }
   const inclusi = validi.slice(0, LIMITI_RICERCA.candidatiMax);
@@ -121,6 +122,8 @@ export function costruisciContestoRicerca(candidati: readonly CandidatoRicercaIn
   };
 }
 
+const AVVISO_RIDOTTO = "Elenco ridotto per il limite di lunghezza.";
+
 /** JSON su una riga entro il tetto; se non ci sta si tolgono candidati dal fondo e lo si dichiara. */
 export function serializzaContestoRicerca(contesto: ContestoRicerca): {
   testo: string;
@@ -135,7 +138,9 @@ export function serializzaContestoRicerca(contesto: ContestoRicerca): {
       ...corrente,
       inclusi: candidati.length,
       troncato: true,
-      avvertenze: [...corrente.avvertenze, "Elenco ridotto per il limite di lunghezza."],
+      avvertenze: corrente.avvertenze.includes(AVVISO_RIDOTTO)
+        ? corrente.avvertenze
+        : [...corrente.avvertenze, AVVISO_RIDOTTO],
       candidati,
     };
     testo = JSON.stringify(corrente);

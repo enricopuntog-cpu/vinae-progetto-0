@@ -101,22 +101,50 @@ export function sorgenteCanonica(client: ClienteRpcCanonico | null): SorgenteCan
 }
 
 /**
+ * Tetto di attesa della sorgente facoltativa: oltre questo tempo il canonico conta come «vuoto» e la ricerca
+ * principale (già pronta) non aspetta il livello «simile» lento della RPC (fino a 8 s di `statement_timeout`).
+ */
+export const TETTO_CANONICO_MS = 1500;
+
+/** Esito della sorgente entro il tetto; scadenza, errore o eccezione = nessun candidato (mai un errore). */
+function entroTetto(attesa: Promise<Result<CandidatoVino[]>>, ms: number): Promise<Result<CandidatoVino[]>> {
+  const vuoto: Result<CandidatoVino[]> = { ok: true, data: [] };
+  return new Promise((risolvi) => {
+    const timer = setTimeout(() => risolvi(vuoto), ms);
+    attesa.then(
+      (esito) => {
+        clearTimeout(timer);
+        risolvi(esito);
+      },
+      () => {
+        clearTimeout(timer);
+        risolvi(vuoto);
+      },
+    );
+  });
+}
+
+/**
  * La sorgente principale (motore WI-006B) più il catalogo canonico come aggiunta.
  * • Il risultato della principale decide l'esito: se fallisce, fallisce (ripiego e messaggio restano quelli di prima).
  * • Il canonico, se fallisce o è vuoto, non toglie nulla: i candidati della principale passano invariati.
  * • Le due ricerche partono insieme; i candidati canonici seguono quelli della principale e
- *   `valutaCandidati` ordina per somiglianza, deduplicando a parità di vino (vince la scheda canonica).
+ *   `valutaCandidati` ordina per somiglianza e, a parità di vino, UNISCE: restano i campi Vinea e si aggiunge la scheda
+ *   canonica (LWIN, provenienza, attribuzione).
+ * • Il canonico ha un tetto di attesa (`TETTO_CANONICO_MS`): se non risponde in tempo, la principale passa invariata.
  */
 export function sorgenteConCanonico(
   principale: SorgenteCandidati,
   canonica: SorgenteCandidati,
+  opzioni: { tettoMs?: number } = {},
 ): SorgenteCandidati {
+  const tetto = opzioni.tettoMs ?? TETTO_CANONICO_MS;
   return {
     codice: principale.codice,
     async cerca(domanda) {
       const [p, c] = await Promise.all([
         principale.cerca(domanda),
-        canonica.cerca(domanda).catch((): Result<CandidatoVino[]> => ({ ok: true, data: [] })),
+        entroTetto(Promise.resolve().then(() => canonica.cerca(domanda)), tetto),
       ]);
       if (!p.ok) return p;
       return { ok: true, data: c.ok ? [...p.data, ...c.data] : p.data };

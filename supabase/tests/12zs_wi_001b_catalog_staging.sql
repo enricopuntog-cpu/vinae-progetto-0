@@ -112,8 +112,9 @@ begin
     not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.prosecdef
                   and p.proname <> all (array['add_entity_alias', 'add_manual_producer', 'add_manual_wine', 'add_wine_format', 'add_wine_vintage', 'detect_duplicate_candidates',
                                               'merge_canonical_entity', 'open_duplicate_candidate', 'promote_wine_candidates', 'propose_attribute_claim', 'propose_wine_link',
-                                              'retire_canonical_entity', 'review_attribute_claim', 'review_duplicate_candidate', 'review_wine_link', 'revert_canonical_merge',
-                                              'promotion_simulation'])));
+                                              'retire_canonical_entity', 'review_attribute_claim', 'review_duplicate_candidate', 'review_wine_link', 'revert_canonical_merge'])
+                  -- il rapporto di sola lettura è ammesso per FIRMA completa, non per solo nome (nessun overload passa)
+                  and p.oid::regprocedure::text <> 'catalog.promotion_simulation(text,text,integer)'));
 
   perform pg_temp.rec('A04', 'nessuna funzione con EXECUTE a PUBLIC (acl presente e senza grantee 0)',
     not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace

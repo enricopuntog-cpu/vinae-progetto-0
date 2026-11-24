@@ -216,25 +216,32 @@ export function valutaCandidati(
   if (tProd.length === 0 && tNome.length === 0) return [];
 
   // Uno stesso vino può comparire in più righe (più annunci): si conta, non si moltiplica.
-  const unici = new Map<string, { candidato: CandidatoVino; occorrenze: number }>();
+  // A parità di vino i campi Vinea (id, tipologia, regione in registro, annunci) NON si perdono: la scheda del catalogo
+  // canonico (LWIN, provenienza, attribuzione) si AGGIUNGE soltanto. Dentro ciascun gruppo vince l'id più piccolo, quindi
+  // l'esito non dipende dall'ordine di arrivo. Un vino solo canonico resta com'è.
+  const unici = new Map<
+    string,
+    { vinea: CandidatoVino | null; canonica: CandidatoVino | null; occorrenze: number }
+  >();
+  const piuPiccolo = (a: CandidatoVino | null, b: CandidatoVino) =>
+    a === null || confronta(b.id, a.id) < 0 ? b : a;
   for (const c of candidati) {
     const k = chiaveVino(c);
-    const presente = unici.get(k);
-    if (!presente) unici.set(k, { candidato: c, occorrenze: 1 });
-    else {
-      presente.occorrenze++;
-      // A parità di vino vince la scheda canonica (porta con sé LWIN e provenienza), poi l'id più piccolo.
-      const nuovoCanonico = c.canonico !== undefined;
-      const vecchioCanonico = presente.candidato.canonico !== undefined;
-      if (
-        (nuovoCanonico && !vecchioCanonico) ||
-        (nuovoCanonico === vecchioCanonico && confronta(c.id, presente.candidato.id) < 0)
-      ) presente.candidato = c;
-    }
+    const presente = unici.get(k) ?? { vinea: null, canonica: null, occorrenze: 0 };
+    presente.occorrenze++;
+    if (c.canonico !== undefined) presente.canonica = piuPiccolo(presente.canonica, c);
+    else presente.vinea = piuPiccolo(presente.vinea, c);
+    unici.set(k, presente);
   }
 
   const valutati: CandidatoValutato[] = [];
-  for (const { candidato: c, occorrenze } of unici.values()) {
+  for (const { vinea, canonica, occorrenze } of unici.values()) {
+    const c: CandidatoVino =
+      vinea !== null
+        ? canonica !== null && canonica.canonico !== undefined
+          ? { ...vinea, canonico: canonica.canonico }
+          : vinea
+        : (canonica as CandidatoVino);
     const sProd = similitudine(tProd, tokenNormalizzati(c.produttore, true));
     const sNome = similitudine(tNome, tokenNormalizzati(c.nome));
     const entrambi = tProd.length > 0 && tNome.length > 0;

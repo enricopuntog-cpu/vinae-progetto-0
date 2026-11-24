@@ -161,7 +161,7 @@ describe("sorgenteConCanonico", () => {
     expect((await s.cerca(DOMANDA)).ok).toBe(false);
   });
 
-  test("stesso vino in catalogo e canonico: una riga sola, vince la scheda canonica con il LWIN", async () => {
+  test("stesso vino in catalogo e canonico: una riga sola, la scheda canonica si AGGIUNGE (LWIN e attribuzione)", async () => {
     const s = sorgenteConCanonico(principaleCon([DAL_CATALOGO]), sorgenteCanonica(clienteCon({ data: [RIGA], error: null })));
     const esito = await s.cerca(DOMANDA);
     if (!esito.ok) throw new Error("atteso ok");
@@ -172,6 +172,55 @@ describe("sorgenteConCanonico", () => {
     expect(r.identita.codiceLwin).toBe("1010001");
     expect(r.nonDisponibile).toEqual(["alias"]);
     expect(r.attribuzione?.licenza).toBe("CC BY 4.0");
+  });
+
+  test("unione: i campi Vinea (id, tipologia, regione in registro, annunci) non si perdono, in qualunque ordine", () => {
+    const vinea: CandidatoVino = { ...DAL_CATALOGO, tipo: "Rosso", annunci: 3 };
+    const canonico = candidatoDaRigaCanonica(RIGA)!;
+    for (const ordine of [[vinea, canonico], [canonico, vinea]]) {
+      const valutati = valutaCandidati(DOMANDA, ordine);
+      expect(valutati).toHaveLength(1);
+      const c = valutati[0]!;
+      expect(c.id).toBe("monfortino-slug");
+      expect(c.fonte).toBe("catalogo_vinea");
+      expect(c.tipo).toBe("Rosso");
+      expect(c.regione).toBe("Piemonte");
+      expect(c.annunci).toBe(3);
+      expect(c.canonico?.lwin7).toBe("1010001");
+      expect(c.occorrenze).toBe(2);
+      expect(aRisultatoRicerca(c).identita.codiceLwin).toBe("1010001");
+    }
+  });
+
+  test("più schede Vinea e più canoniche dello stesso vino: vince l'id più piccolo, senza dipendere dall'ordine", () => {
+    const a: CandidatoVino = { ...DAL_CATALOGO, id: "b-vinea" };
+    const b: CandidatoVino = { ...DAL_CATALOGO, id: "a-vinea" };
+    const c1 = candidatoDaRigaCanonica({ ...RIGA, vino_id: "z-canonico", lwin7: "1010002" })!;
+    const c2 = candidatoDaRigaCanonica({ ...RIGA, vino_id: "y-canonico", lwin7: "1010003" })!;
+    const x = valutaCandidati(DOMANDA, [a, c1, b, c2])[0]!;
+    const y = valutaCandidati(DOMANDA, [c2, b, c1, a])[0]!;
+    expect(x.id).toBe("a-vinea");
+    expect(y.id).toBe("a-vinea");
+    expect(x.canonico?.lwin7).toBe("1010003");
+    expect(y.canonico?.lwin7).toBe("1010003");
+  });
+
+  test("tetto di attesa: un canonico lento non trattiene la ricerca principale", async () => {
+    const lento: SorgenteCandidati = { codice: "lento", cerca: () => new Promise(() => {}) };
+    const s = sorgenteConCanonico(principaleCon([DAL_CATALOGO]), lento, { tettoMs: 20 });
+    const inizio = Date.now();
+    expect(await s.cerca(DOMANDA)).toEqual({ ok: true, data: [DAL_CATALOGO] });
+    expect(Date.now() - inizio).toBeLessThan(1000);
+  });
+
+  test("tetto di attesa: un canonico che risponde in tempo viene usato", async () => {
+    const s = sorgenteConCanonico(
+      principaleCon([DAL_CATALOGO]),
+      sorgenteCanonica(clienteCon({ data: [RIGA], error: null })),
+      { tettoMs: 1000 },
+    );
+    const esito = await s.cerca(DOMANDA);
+    expect(esito.ok && esito.data.length).toBe(2);
   });
 
   test("solo canonico: il LWIN arriva al contratto; senza canonico resta non disponibile", async () => {
