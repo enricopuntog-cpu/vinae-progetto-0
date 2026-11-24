@@ -15,6 +15,7 @@ import type { Result } from "@/services/types";
 import type {
   CandidatoVino,
   DomandaCandidati,
+  OpzioniRicerca,
   SorgenteCandidati,
 } from "@/lib/vendi/foto-etichetta/candidati";
 import { codiceErrore } from "@/lib/errore-per-log";
@@ -76,15 +77,21 @@ export function candidatoDaRigaCanonica(riga: unknown): CandidatoVino | null {
 export function sorgenteCanonica(client: ClienteRpcCanonico | null): SorgenteCandidati {
   return {
     codice: CODICE_FONTE_CANONICA,
-    async cerca(domanda: DomandaCandidati): Promise<Result<CandidatoVino[]>> {
+    async cerca(domanda: DomandaCandidati, opzioni?: OpzioniRicerca): Promise<Result<CandidatoVino[]>> {
       if (!client) return { ok: false, error: MESSAGGIO_RICERCA_NON_DISPONIBILE };
       if (livelliDiRicerca(domanda).length === 0) return { ok: true, data: [] };
       try {
-        const { data, error } = await client.rpc(FUNZIONE_RICERCA_CANONICA, {
+        const richiesta = client.rpc(FUNZIONE_RICERCA_CANONICA, {
           p_produttore: domanda.produttore,
           p_nome: domanda.nome,
           p_limite: LIMITE_RISULTATI_CANONICI,
         });
+        // Annullamento con lo strumento di supabase-js (`abortSignal`); un client senza il metodo (fake) prosegue come prima.
+        const segnale = opzioni?.segnale;
+        const annullabile = richiesta as unknown as { abortSignal?: (s: AbortSignal) => typeof richiesta };
+        const { data, error } = await (segnale && typeof annullabile.abortSignal === "function"
+          ? annullabile.abortSignal(segnale)
+          : richiesta);
         if (error || !Array.isArray(data)) return { ok: false, error: MESSAGGIO_RICERCA_NON_DISPONIBILE };
         const candidati: CandidatoVino[] = [];
         for (const riga of data) {
@@ -106,11 +113,24 @@ export function sorgenteCanonica(client: ClienteRpcCanonico | null): SorgenteCan
  */
 export const TETTO_CANONICO_MS = 1500;
 
-/** Esito della sorgente entro il tetto; scadenza, errore o eccezione = nessun candidato (mai un errore). */
-function entroTetto(attesa: Promise<Result<CandidatoVino[]>>, ms: number): Promise<Result<CandidatoVino[]>> {
+/**
+ * Esito della sorgente entro il tetto; scadenza, errore o eccezione = nessun candidato (mai un errore).
+ * Alla scadenza la richiesta in corso viene ANNULLATA (FIX-03B): il client non la aspetta più e, per i client che
+ * propagano la chiusura, il server può smettere di lavorare. Resta un'ottimizzazione: la protezione del database
+ * è il `statement_timeout` di piattaforma, non questo annullamento.
+ */
+function entroTetto(
+  avvia: (segnale: AbortSignal) => Promise<Result<CandidatoVino[]>>,
+  ms: number,
+): Promise<Result<CandidatoVino[]>> {
   const vuoto: Result<CandidatoVino[]> = { ok: true, data: [] };
+  const controllo = new AbortController();
   return new Promise((risolvi) => {
-    const timer = setTimeout(() => risolvi(vuoto), ms);
+    const timer = setTimeout(() => {
+      controllo.abort();
+      risolvi(vuoto);
+    }, ms);
+    const attesa = Promise.resolve().then(() => avvia(controllo.signal));
     attesa.then(
       (esito) => {
         clearTimeout(timer);
@@ -144,7 +164,7 @@ export function sorgenteConCanonico(
     async cerca(domanda) {
       const [p, c] = await Promise.all([
         principale.cerca(domanda),
-        entroTetto(Promise.resolve().then(() => canonica.cerca(domanda)), tetto),
+        entroTetto((segnale) => canonica.cerca(domanda, { segnale }), tetto),
       ]);
       if (!p.ok) return p;
       return { ok: true, data: c.ok ? [...p.data, ...c.data] : p.data };

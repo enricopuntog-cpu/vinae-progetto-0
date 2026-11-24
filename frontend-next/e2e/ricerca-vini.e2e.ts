@@ -1,8 +1,8 @@
 import { passwordFixture } from "./support/api";
-import { contestoAutenticato, opzioniDelProgetto } from "./support/browser";
 import { ripristinaFixture } from "./support/db";
-import { attendiCaricamento, problemiAccessibilita, senzaScorrimentoOrizzontale } from "./support/pagina";
+import { problemiAccessibilita, senzaScorrimentoOrizzontale } from "./support/pagina";
 import { expect, test } from "./support/test";
+import { apriIdentificazione, cerca } from "./support/wizard-ricerca";
 import {
   PRODUTTORE_E2E,
   etichettaCorsa,
@@ -10,7 +10,7 @@ import {
   preparaBottigliaInCantina,
   pubblicaAnnuncioVino,
 } from "./support/vino";
-import type { Browser, Page, TestInfo } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 /**
  * WI-006A · ricerca dei vini nel passo Identificazione di `/vendi`, su dati reali dello stack isolato.
@@ -40,29 +40,6 @@ test.describe.serial("Ricerca dei vini nel wizard: dati accessibili, scelta espl
   });
 
   const contaVini = () => leggiDalDatabase(`select count(*) from public.wines where nome like '%${corsa}';`).trim();
-
-  /** Dal wizard fino al passo Identificazione (nuova bottiglia), senza scrivere nulla. */
-  async function apriIdentificazione(browser: Browser, ruolo: "venditore" | "altro", info: TestInfo, diagnostica: { osserva: (p: Page, n: string) => void }) {
-    const contesto = await contestoAutenticato(browser, ruolo, opzioniDelProgetto(info));
-    const page = await contesto.newPage();
-    diagnostica.osserva(page, ruolo);
-    const richieste: { metodo: string; url: string }[] = [];
-    page.on("request", (r) => richieste.push({ metodo: r.method(), url: r.url() }));
-    await page.goto("/vendi");
-    await attendiCaricamento(page);
-    await page.getByRole("button", { name: /Aggiungi alla cantina privata/ }).click();
-    const continua = page.getByRole("button", { name: /Continua/ });
-    await continua.click();
-    await continua.click();
-    await expect(page.getByRole("heading", { name: "Identificazione", exact: true })).toBeVisible();
-    return { contesto, page, richieste };
-  }
-
-  async function cerca(page: Page, produttore: string, nome: string) {
-    await page.getByLabel("Produttore", { exact: true }).fill(produttore);
-    await page.getByLabel("Nome / Etichetta", { exact: true }).fill(nome);
-    await page.getByTestId("ricerca-manuale-cerca-btn").click();
-  }
 
   /**
    * La ricerca ha risposto (elenco o «nessun vino») senza errore e il vino cercato NON è tra i candidati.

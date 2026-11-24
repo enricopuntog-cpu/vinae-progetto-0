@@ -19,6 +19,12 @@ export const ETICHETTA_ESITO: Record<EsitoCorrispondenza, string> = {
   possibile: "Possibile corrispondenza",
 };
 
+/** « · Regione, Denominazione» (per una scheda canonica anche territorio o paese); vuoto se non c'è nulla. */
+const testoLuogo = (c: CandidatoValutato): string => {
+  const luogo = [c.regione ?? c.canonico?.territorio ?? c.canonico?.paese, c.denominazione].filter(Boolean);
+  return luogo.length > 0 ? ` · ${luogo.join(", ")}` : "";
+};
+
 type Props = {
   candidati: readonly CandidatoValutato[];
   sintesi: SintesiRicerca | null;
@@ -76,10 +82,13 @@ export function ElencoCandidati({
             <br />
             <span className="text-muted-foreground">
               {ETICHETTA_ESITO[c.esito]}
-              {[c.regione, c.denominazione].filter(Boolean).length > 0
-                ? ` · ${[c.regione, c.denominazione].filter(Boolean).join(", ")}`
-                : ""}
+              {testoLuogo(c)}
             </span>
+            {c.omonimi ? (
+              <span className="block text-muted-foreground" data-testid={`${prefissoTest}-omonimo-${c.id}`}>
+                Altre schede hanno lo stesso nome: controlla codice LWIN, territorio e denominazione prima di sceglierla.
+              </span>
+            ) : null}
           </span>
         </label>
       ))}

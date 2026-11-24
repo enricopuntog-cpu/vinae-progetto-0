@@ -61,9 +61,12 @@ export type DomandaCandidati = {
   formato: string | null;
 };
 
+/** FIX-03B — facoltativo: chi lo supporta annulla la richiesta in corso quando il segnale scatta (tetto di attesa). */
+export type OpzioniRicerca = { segnale?: AbortSignal };
+
 export interface SorgenteCandidati {
   readonly codice: string;
-  cerca(domanda: DomandaCandidati): Promise<Result<CandidatoVino[]>>;
+  cerca(domanda: DomandaCandidati, opzioni?: OpzioniRicerca): Promise<Result<CandidatoVino[]>>;
 }
 
 // -- Normalizzazione ---------------------------------------------------------
@@ -177,6 +180,11 @@ export type CandidatoValutato = CandidatoVino & {
   esito: EsitoCorrispondenza;
   /** Quanti annunci/righe della fonte descrivono questo stesso vino. */
   occorrenze: number;
+  /**
+   * FIX-03A — quante ALTRE schede hanno lo stesso produttore e nome (almeno una canonica) senza che l'identità sia
+   * provata. Assente se zero. L'interfaccia lo dichiara; la scelta resta all'utente.
+   */
+  omonimi?: number;
 };
 
 export type SintesiRicerca = "nessuna" | "unica" | "ambigua";
@@ -216,32 +224,25 @@ export function valutaCandidati(
   if (tProd.length === 0 && tNome.length === 0) return [];
 
   // Uno stesso vino può comparire in più righe (più annunci): si conta, non si moltiplica.
-  // A parità di vino i campi Vinea (id, tipologia, regione in registro, annunci) NON si perdono: la scheda del catalogo
-  // canonico (LWIN, provenienza, attribuzione) si AGGIUNGE soltanto. Dentro ciascun gruppo vince l'id più piccolo, quindi
-  // l'esito non dipende dall'ordine di arrivo. Un vino solo canonico resta com'è.
-  const unici = new Map<
-    string,
-    { vinea: CandidatoVino | null; canonica: CandidatoVino | null; occorrenze: number }
-  >();
-  const piuPiccolo = (a: CandidatoVino | null, b: CandidatoVino) =>
-    a === null || confronta(b.id, a.id) < 0 ? b : a;
+  // FIX-03A — la chiave descrittiva (produttore + nome + annata + formato) identifica le righe Vinea della STESSA
+  // fonte, non prova che una scheda canonica sia lo stesso vino. Quindi: una scheda canonica si raggruppa solo con
+  // un'altra scheda canonica dello stesso LWIN-7 (identità autorevole) e NON si fonde mai con un vino Vinea; due LWIN
+  // diversi con la stessa chiave restano due candidati; il vino Vinea conserva tutti i suoi campi e non riceve alcun
+  // LWIN. Dentro un gruppo vince l'id più piccolo solo fra righe equivalenti, quindi l'esito non dipende dall'ordine
+  // di arrivo. Se più schede hanno lo stesso nome, `omonimi` lo dichiara e sceglie l'utente.
+  const unici = new Map<string, { scelto: CandidatoVino; occorrenze: number }>();
   for (const c of candidati) {
-    const k = chiaveVino(c);
-    const presente = unici.get(k) ?? { vinea: null, canonica: null, occorrenze: 0 };
-    presente.occorrenze++;
-    if (c.canonico !== undefined) presente.canonica = piuPiccolo(presente.canonica, c);
-    else presente.vinea = piuPiccolo(presente.vinea, c);
-    unici.set(k, presente);
+    const k = c.canonico ? `lwin|${c.canonico.lwin7}` : chiaveVino(c);
+    const presente = unici.get(k);
+    if (!presente) unici.set(k, { scelto: c, occorrenze: 1 });
+    else {
+      presente.occorrenze++;
+      if (confronta(c.id, presente.scelto.id) < 0) presente.scelto = c;
+    }
   }
 
   const valutati: CandidatoValutato[] = [];
-  for (const { vinea, canonica, occorrenze } of unici.values()) {
-    const c: CandidatoVino =
-      vinea !== null
-        ? canonica !== null && canonica.canonico !== undefined
-          ? { ...vinea, canonico: canonica.canonico }
-          : vinea
-        : (canonica as CandidatoVino);
+  for (const { scelto: c, occorrenze } of unici.values()) {
     const sProd = similitudine(tProd, tokenNormalizzati(c.produttore, true));
     const sNome = similitudine(tNome, tokenNormalizzati(c.nome));
     const entrambi = tProd.length > 0 && tNome.length > 0;
@@ -264,6 +265,21 @@ export function valutaCandidati(
     else esito = "possibile";
 
     valutati.push({ ...c, punteggio: Math.round(punteggio * 1e6) / 1e6, esito, occorrenze });
+  }
+
+  // Omonimia dichiarata: stesso produttore e nome di un'altra scheda, con almeno una canonica e annata/formato non
+  // contraddittori (la scheda canonica li ha `null`). Due vini Vinea di annate diverse non sono omonimi.
+  const chiaveNome = (c: CandidatoVino) =>
+    `${tokenNormalizzati(c.produttore, true).join(" ")}|${tokenNormalizzati(c.nome).join(" ")}`;
+  const compatibili = (a: CandidatoVino, b: CandidatoVino) =>
+    !(a.annata !== null && b.annata !== null && a.annata !== b.annata) &&
+    !(a.formato !== null && b.formato !== null && a.formato !== b.formato);
+  const chiaviNome = new Map(valutati.map((v) => [v, chiaveNome(v)]));
+  for (const v of valutati) {
+    const omonimi = valutati.filter(
+      (w) => w !== v && (v.canonico || w.canonico) && chiaviNome.get(w) === chiaviNome.get(v) && compatibili(v, w),
+    ).length;
+    if (omonimi > 0) v.omonimi = omonimi;
   }
 
   valutati.sort(
