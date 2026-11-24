@@ -12,7 +12,7 @@ non sono applicate a Production (ultima migration Production `20261122100000`, v
 | Interruttore della proiezione pubblica | `catalog.public_projection_settings` | `enabled=false` di default, RLS attiva, nessun privilegio ai ruoli API. |
 | Chiave di ricerca | `catalog.wines.search_key` + trigger `wines_a_search_key` + indici | Stessa normalizzazione di `vini_normalizza`. Il trigger scatta PRIMA di `wines_insert_guard` (ordine alfabetico), così la guardia convalida la riga definitiva. |
 | Porta di ricerca | `public.vini_canonici_cerca(produttore, nome, limite, codice)` | SECURITY DEFINER, **solo `authenticated` e `service_role`** (non `anon`, non PUBLIC). Solo vini `promotion` attivi, fonte `authorized`, produttore **effettivo** attivo (i vini di un produttore fuso restano visibili con il produttore di destinazione); colonne a elenco chiuso con fonte, licenza e attribuzione. Non espone `catalog.*`. |
-| Client | `ricerca-vini/canonico.ts`, `rpc.ts`, `contratto.ts`, `elenco-candidati.tsx` | Aggiunta facoltativa al motore WI-006B (spento, errore o lentezza oltre `TETTO_CANONICO_MS` = 1,5 s = ricerca invariata). A parità di vino i campi Vinea si conservano e si AGGIUNGE la scheda canonica (LWIN, attribuzione CC BY). |
+| Client | `ricerca-vini/canonico.ts`, `rpc.ts`, `contratto.ts`, `elenco-candidati.tsx` | Aggiunta facoltativa al motore WI-006B (spento, errore o lentezza oltre `TETTO_CANONICO_MS` = 1,5 s = ricerca invariata). A parità di vino i campi Vinea si conservano e si AGGIUNGE la scheda canonica (LWIN, attribuzione CC BY). «Parità» = stessa chiave produttore + nome + annata + formato: la scheda canonica ha annata e formato `null`, quindi si unisce ai soli vini Vinea senza annata né formato (un vino Vinea con annata resta un candidato distinto e non riceve il LWIN). |
 | Sommelier | `supabase/functions/_shared/sommelier-ricerca.ts` | Modulo puro: 5 candidati, 3.500 caratteri, lacune dichiarate, nessun prezzo. **Non collegato** a `ai-sommelier`. |
 
 ## Migration (additive; ognuna pubblicata resta congelata)
@@ -63,7 +63,7 @@ Due revisori in sola lettura (modello Opus, subagenti `vinea-code-reviewer` e `v
 ## Protezione della porta di ricerca (8E)
 
 - Mitigazioni EFFETTIVE: interruttore spento = ritorno immediato; EXECUTE solo a sessioni identificate; input troncati (120/120/40), al massimo 6 parole, nessun jolly (`vini_normalizza`),
-  20 righe, 2.000 candidati per livello; `statement_timeout` di piattaforma anon 3 s / authenticated 8 s (letto in Production); tetto di 1,5 s lato client.
+  20 righe, 2.000 candidati per livello; `statement_timeout` di piattaforma anon 3 s / authenticated 8 s (letto in Production). Il tetto di 1,5 s lato client protegge la latenza per l'UTENTE, non il database: la richiesta scaduta prosegue sul server fino al timeout.
 - Fatto strutturale: l'hook R-RL-01 (`private.vinea_check_request`) conta solo le scritture ed esce per le transazioni di sola lettura, quindi una RPC `stable` **non ha limite per identità**
   (vale anche per `vini_cerca`). Renderla `volatile` per farla contare significherebbe una scrittura per ogni lettura, con soggetto derivato da `X-Forwarded-For` non attestato (GAP-024): peggio.
   `max_connections` è 60.
@@ -75,7 +75,7 @@ Due revisori in sola lettura (modello Opus, subagenti `vinea-code-reviewer` e `v
 2. `catalog.promotion_simulation()` → leggere il rapporto; approvare `lwin-conservative-v1` e accendere `promotion_settings` (procedura WI-001C). Valutare se `trigger` e `vini_normalizza` vanno nell'impronta.
 3. Promozione reale in lotti.
 4. Prima di accendere `public_projection_settings.enabled`: (a) decidere un limite per identità sulle letture o misurare il carico concorrente sul compute reale (nessuna misura sotto carico in Production
-   è stata fatta); (b) prova PostgREST come `authenticated` e come `anon` (atteso rifiuto). Poi `update catalog.public_projection_settings set enabled = true` (migration o SQL autorizzato).
+   è stata fatta) e rimisurare la ricerca con il join sul produttore effettivo (le misure del 22 novembre sono precedenti a FIX-02); (b) prova PostgREST come `authenticated` e come `anon` (atteso rifiuto). Poi `update catalog.public_projection_settings set enabled = true` (migration o SQL autorizzato).
 
 ## Limiti dichiarati
 
