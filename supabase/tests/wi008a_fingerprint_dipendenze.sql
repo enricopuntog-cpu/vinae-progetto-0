@@ -181,7 +181,7 @@ select id, descrizione, passed, detail from esiti_wi008a order by id;
 do $$
 begin
   if exists (select 1 from esiti_wi008a where not passed) then
-    raise exception 'wi008a: % casi rossi', (select count(*) from esiti_wi008a where not passed);
+    raise exception 'wi008a: casi rossi: %', (select string_agg(id || ' ' || left(detail, 200), ' | ') from esiti_wi008a where not passed);
   end if;
 end $$;
 

@@ -49,6 +49,13 @@ import {
   type RigaVino,
   serializzaContesto,
 } from "../_shared/sommelier-contesto.ts";
+import {
+  candidatiDaRigheCanoniche,
+  costruisciContestoRicerca,
+  LIMITI_RICERCA,
+  PROMPT_ISTRUZIONI_RICERCA,
+  serializzaContestoRicerca,
+} from "../_shared/sommelier-ricerca.ts";
 
 // Identico a `SOMMELIER_SYSTEM` (`backend/ai_routes.py:18-23`). Le due
 // istruzioni finali — non inventare produttori o annate, nessun consiglio
@@ -94,12 +101,15 @@ const sse = (payload: Record<string, unknown>): string =>
 // WI-004 — contesto verificato lato server
 // ---------------------------------------------------------------------------
 //
-// Il corpo può portare `contesto`, e di tre cose sole:
+// Il corpo può portare `contesto`, e di quattro cose sole:
 //   * assente → Sommelier generale, esattamente come prima (stesso prompt di
 //     sistema, stesso prompt utente, nessuna lettura di dominio);
 //   * `{ tipo: "vino", annuncio_id }` → la scheda del vino realmente consultato,
 //     riletta qui dalla vista pubblica a colonne chiuse e dalla tabella dei vini;
-//   * `{ tipo: "cantina", consenso: true }` → le bottiglie dell'utente del token.
+//   * `{ tipo: "cantina", consenso: true }` → le bottiglie dell'utente del token;
+//   * `{ tipo: "ricerca", produttore, nome, codice }` (WI-008) → i candidati del catalogo canonico per QUELLA ricerca esplicita,
+//     letti dal server con `vini_canonici_cerca` (massimo 5, 3.500 caratteri). Il testo libero non viene analizzato per trovare vini.
+//     Catalogo spento, vuoto o in errore → Sommelier generale, esattamente come prima (nessun 503, nessun contesto).
 //
 // Il browser non è un'autorità su nessuno dei due: non manda inventari, non
 // sceglie il proprietario (qualunque `owner_id`, `user_id` o simile nel corpo è
@@ -120,7 +130,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type RichiestaContesto =
   | { tipo: "vino"; annuncioId: string }
-  | { tipo: "cantina" };
+  | { tipo: "cantina" }
+  | { tipo: "ricerca"; produttore: string; nome: string; codice: string | null };
 
 type EsitoContesto =
   | { ok: true; richiesta: RichiestaContesto | null }
@@ -147,6 +158,19 @@ const leggiRichiestaContesto = (grezzo: unknown): EsitoContesto => {
         corpo: { error: "Serve il tuo consenso esplicito per usare la tua Cantina.", code: "consenso_richiesto" },
       };
   }
+  if (c.tipo === "ricerca") {
+    const campo = (v: unknown): string | null =>
+      v === undefined || v === null ? "" : typeof v === "string" && v.length <= 120 ? v.trim() : null;
+    const produttore = campo(c.produttore);
+    const nome = campo(c.nome);
+    const codice = c.codice === undefined || c.codice === null ? "" : typeof c.codice === "string" ? c.codice.trim() : null;
+    if (produttore === null || nome === null || codice === null || (codice !== "" && !/^[0-9]{7}$/.test(codice))) {
+      return { ok: false, status: 400, corpo: { error: "Contesto non valido." } };
+    }
+    // Serve almeno un nome o un identificativo: una ricerca vuota non interroga il catalogo.
+    if (nome === "" && codice === "") return { ok: false, status: 400, corpo: { error: "Contesto non valido." } };
+    return { ok: true, richiesta: { tipo: "ricerca", produttore, nome, codice: codice || null } };
+  }
   return { ok: false, status: 400, corpo: { error: "Contesto non valido." } };
 };
 
@@ -162,7 +186,9 @@ const COLONNE_BOTTIGLIA = "stato, formato, ceduta_at, override_finestra_inizio, 
   `override_apice_inizio, override_apice_fine, override_preferenza, wines!inner(${COLONNE_VINO})`;
 
 type Letto =
-  | { ok: true; blocco: string }
+  | { ok: true; blocco: string; istruzioni?: string }
+  // `vuoto`: nessun contesto utilizzabile (catalogo spento/vuoto/in errore): si prosegue come il Sommelier generale.
+  | { ok: true; vuoto: true }
   | { ok: false; status: number; corpo: Record<string, unknown> };
 
 const INDISPONIBILE = { error: "Il Sommelier non è al momento disponibile." };
@@ -173,6 +199,28 @@ const primo = <T>(valore: T | T[] | null | undefined): T | null =>
 // deno-lint-ignore no-explicit-any
 const leggiContesto = async (supabase: any, userId: string, richiesta: RichiestaContesto, messaggio: string): Promise<Letto> => {
   const annoCorrente = new Date().getUTCFullYear();
+
+  if (richiesta.tipo === "ricerca") {
+    // Porta server-side concessa a service_role: limitata (identità di servizio), spenta con l'interruttore del catalogo.
+    // Gli errori non sono mai mostrati: il Sommelier torna quello di prima.
+    const { data, error } = await supabase.rpc("vini_canonici_cerca", {
+      p_produttore: richiesta.produttore,
+      p_nome: richiesta.nome,
+      p_limite: LIMITI_RICERCA.candidatiMax,
+      p_codice: richiesta.codice,
+    });
+    if (error) {
+      console.error("[ai-sommelier] ricerca canonica non disponibile", { code: error.code });
+      return { ok: true, vuoto: true };
+    }
+    const contestoRicerca = costruisciContestoRicerca(candidatiDaRigheCanoniche(data));
+    if (contestoRicerca.inclusi === 0) return { ok: true, vuoto: true };
+    return {
+      ok: true,
+      blocco: serializzaContestoRicerca(contestoRicerca).testo,
+      istruzioni: PROMPT_ISTRUZIONI_RICERCA,
+    };
+  }
 
   if (richiesta.tipo === "vino") {
     // Vista pubblica a colonne chiuse: un annuncio non pubblico non esiste per questa lettura.
@@ -272,16 +320,18 @@ Deno.serve(async (request) => {
       return json(INDISPONIBILE, 503, cors);
     }
     if (!letto.ok) return json(letto.corpo, letto.status, cors);
-    system = SYSTEM + PROMPT_ISTRUZIONI_CONTESTO;
-    // Lo storico è testo di conversazioni precedenti: con dati in gioco potrebbe
-    // ripetere un valore ostile del database, quindi ogni riga torna ripulita.
-    prompt = costruisciPromptConContesto(
-      letto.blocco,
-      costruisciPrompt(
-        contesto.map((riga) => ({ ruolo: riga.ruolo, contenuto: pulisciRigaStorico(riga.contenuto) })),
-        messaggio,
-      ),
-    );
+    if (!("vuoto" in letto)) {
+      system = SYSTEM + PROMPT_ISTRUZIONI_CONTESTO + (letto.istruzioni ?? "");
+      // Lo storico è testo di conversazioni precedenti: con dati in gioco potrebbe
+      // ripetere un valore ostile del database, quindi ogni riga torna ripulita.
+      prompt = costruisciPromptConContesto(
+        letto.blocco,
+        costruisciPrompt(
+          contesto.map((riga) => ({ ruolo: riga.ruolo, contenuto: pulisciRigaStorico(riga.contenuto) })),
+          messaggio,
+        ),
+      );
+    }
   }
 
   let sorgente: ReadableStream<string>;

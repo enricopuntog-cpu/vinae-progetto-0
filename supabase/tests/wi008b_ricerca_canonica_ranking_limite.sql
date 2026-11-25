@@ -243,7 +243,7 @@ begin
     not exists (select 1 from pg_proc p, aclexplode(p.proacl) a where p.oid = v_oid and a.grantee = 0)
     and has_function_privilege('authenticated', v_oid, 'EXECUTE') and has_function_privilege('service_role', v_oid, 'EXECUTE'));
   perform pg_temp.registra('P03', 'la funzione è VOLATILE, SECURITY DEFINER e con search_path vuoto',
-    (select p.provolatile = 'v' and p.prosecdef and p.proconfig @> array['search_path='] from pg_proc p where p.oid = v_oid));
+    (select p.provolatile = 'v' and p.prosecdef and exists (select 1 from unnest(p.proconfig) c where c ~ '^search_path=("")?$') from pg_proc p where p.oid = v_oid));
   perform pg_temp.registra('P04', 'nessun tetto di scansione precede l''ordinamento (la costante c_esame e `limit 2000` non esistono più)',
     (select p.prosrc not like '%c_esame%' and p.prosrc not like '%limit %6$s%' from pg_proc p where p.oid = v_oid));
   perform pg_temp.registra('P05', 'il ruolo authenticated non legge catalog.* (nessuna esposizione diretta)',
@@ -256,7 +256,7 @@ select id, descrizione, passed, detail from esiti_wi008b order by id;
 do $$
 begin
   if exists (select 1 from esiti_wi008b where not passed) then
-    raise exception 'wi008b: % casi rossi', (select count(*) from esiti_wi008b where not passed);
+    raise exception 'wi008b: casi rossi: %', (select string_agg(id || ' ' || left(detail, 200), ' | ') from esiti_wi008b where not passed);
   end if;
 end $$;
 
