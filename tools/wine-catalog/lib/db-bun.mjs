@@ -166,6 +166,13 @@ export async function connectCloud(url, { role = 'catalog_loader', caPem = null,
   // non esiste un percorso senza verifica (test/tls-bun.test.mjs). Attestazione usata da assertCloudSession per il pooler.
   Object.defineProperty(db, 'clientTlsVerified', { value: true, writable: false, enumerable: true });
   try {
+    // WI-008 / J2: la riga di pg_stat_ssl del PROPRIO backend è visibile solo finché il ruolo corrente è il login: si legge PRIMA del
+    // SET ROLE, sulla stessa connessione riservata (stesso backend). assertCloudSession la accetta solo se pid e login coincidono ancora.
+    const pre = (await db.raw(
+      `select pg_backend_pid() as pid, session_user::text as su,
+              coalesce((select ssl from pg_stat_ssl where pid = pg_backend_pid()), false) as ssl`,
+    )).rows[0];
+    db.preRoleSsl = { backend_pid: Number(pre.pid), session_user: String(pre.su), ssl: pre.ssl === true };
     await db.raw(`set role "${role}"`);
     if (readOnly) {
       // sola lettura per DEFAULT di sessione (ogni transazione implicita) + filtro SELECT-only lato client; il DB rifiuta le scritture (25006)

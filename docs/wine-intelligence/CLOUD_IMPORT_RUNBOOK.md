@@ -1,4 +1,4 @@
-# Runbook — importazione cloud del catalogo LWIN (WI-001C, PREDISPOSTA, mai eseguita)
+# Runbook — importazione cloud del catalogo LWIN (WI-001C; ESEGUITA in Production il 25 novembre 2026, vedi «Esecuzione reale»)
 
 Stato: tutto il necessario è nel repository ma **nulla è attivo**. Nessun import cloud è mai stato eseguito; il
 file reale `LWINdatabase.xlsx` (212.894 righe, SHA-256 `7669ceab4e815716aa6c90643c117f3da7c7daeaa202ecd3f7cfbc4db7fd488e`)
@@ -129,3 +129,14 @@ Quando si applica: il report cloud ha `finish_outcome.outcome = finish_unknown` 
   - `finish_unknown`: l'esito del finish non è dimostrato — connessione principale caduta, errore senza SQLSTATE affidabile (driver, decodifica, rete), SQLSTATE di classe `08`/`57P0x`/`58`/`XX`, `40003`, `25P03`, severità FATAL/PANIC, oppure scadenza lato client (`finish_unknown_<motivo>` in `failure_reasons`). **Esito del commit sconosciuto**: il caricatore NON chiama `fail_import_run`, sonda `pg_stat_activity` (al massimo 4 volte) e annulla UNA volta un backend ancora attivo. Da una sessione NUOVA leggere `catalog.import_runs` del run: `succeeded` → trattare come commit confermato (verificare con la procedura post-finish); `running`/`failed` → promozione non confermata, si può usare `--takeover`/ripetere. Mai ripetere prima di aver letto lo stato.
 - Un secondo lancio con lo stesso file dopo un import già completato è idempotente (`skipped`): non rielabora e non avvia il monitor; non cancella l'anomalia registrata dal primo report.
 - Non cancellare righe a mano. Per annullare un import già promosso serve una decisione e una migration: i record rimossi dalla fonte sono marcati, non eliminati.
+
+## Esecuzione reale (25 novembre 2026)
+
+Importazione eseguita in Production (`pijnmcllmfgjmgsvtcej`) dal founder con il runner di questo runbook. Fatti riletti il 25 novembre dal database (sola lettura):
+
+- 212.894 record sorgente (Live 206.167, Combined 6.221, Deleted 506), 2.048 territori, 6.221 collegamenti Combined, 130 rilievi aperti, staging vuoto, nessun import `running`.
+- Run principale `1335acaa-72db-45fa-bba0-2dfdca7e545a` `succeeded`; run successivo `5ebe93d4-1e57-40ca-ba76-3cb760e758b3` `skipped` (idempotenza: snapshot già corrente). Snapshot `70a650be-c866-4b8e-9f76-cc2a868a4fba`, SHA-256 del file `7669ceab4e815716aa6c90643c117f3da7c7daeaa202ecd3f7cfbc4db7fd488e`.
+- Catalogo canonico ancora vuoto (`catalog.wines`, `catalog.wine_links` = 0); regola `lwin-conservative-v1` `draft`; proiezione pubblica spenta.
+- Dopo l'import `catalog_import_login` è stato riportato a `NOLOGIN` (ruolo, password e membership conservati; nessuna sessione aperta).
+
+Due difetti del runner emersi nell'esecuzione reale e corretti in WI-008 (`WI_008_INTEGRAZIONE_CATALOGO.md` §5): la verifica post-finish superava i 120 s (ora una scansione sola per V05/V07/V08 e scadenze separate per controllo e complessiva) e il tratto pooler→PostgreSQL risultava `not_proven` perché `pg_stat_ssl` nasconde la riga dopo `SET ROLE` (ora letta prima del cambio di ruolo, valida solo con stesso backend e login). Per un nuovo import il login va riabilitato (`ALTER ROLE catalog_import_login LOGIN`) e di nuovo disabilitato al termine.

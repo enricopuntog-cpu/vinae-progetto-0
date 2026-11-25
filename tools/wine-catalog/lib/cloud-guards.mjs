@@ -22,7 +22,23 @@ const MIN_SERVER_VERSION_NUM = 150000;
  *    `encrypted` SOLO se `pg_stat_ssl.ssl` è true; altrimenti `not_proven` (mai dichiarato cifrato senza prova).
  * Un `kind` sconosciuto è rifiutato (fail-closed).
  */
-export async function assertCloudSession(query, { kind = 'direct', clientTlsVerified = false, expectedLogin = null } = {}) {
+/**
+ * WI-008 / J2. Dopo `SET ROLE catalog_loader` la vista `pg_stat_ssl` NASCONDE la riga del proprio backend (la visibilità segue il ruolo
+ * corrente, che non è né il login né un suo membro): il controllo sul ruolo caricatore dava sempre `ssl = false` (→ `not_proven`).
+ * `connectCloud` legge perciò la riga PRIMA del `SET ROLE`, sulla stessa connessione riservata, e ne conserva `{ backend_pid, session_user,
+ * ssl }`. L'evidenza vale SOLO se è ancora lo stesso backend e lo stesso login della sessione controllata ora: altrimenti è ignorata
+ * (mai dichiarato cifrato senza prova).
+ */
+export function preRoleSslProves(preRoleSsl, row) {
+  return preRoleSsl != null
+    && preRoleSsl.ssl === true
+    && Number.isInteger(preRoleSsl.backend_pid)
+    && row != null && row.pid != null && Number(row.pid) === preRoleSsl.backend_pid
+    && typeof preRoleSsl.session_user === 'string' && preRoleSsl.session_user !== ''
+    && preRoleSsl.session_user === row.session_user;
+}
+
+export async function assertCloudSession(query, { kind = 'direct', clientTlsVerified = false, expectedLogin = null, preRoleSsl = null } = {}) {
   if (kind !== 'direct' && kind !== 'pooler') throw new Error('Controllo di sessione cloud fallito (tipo di connessione sconosciuto): importazione rifiutata.');
   const r = await query(
     `select current_setting('server_version_num')::int as version_num,
@@ -35,6 +51,7 @@ export async function assertCloudSession(query, { kind = 'direct', clientTlsVeri
             coalesce((select pg_has_role(session_user, r.oid, 'member') from pg_roles r where r.rolname = 'catalog_curator'), false) as session_curator,
             pg_is_in_recovery() as in_recovery,
             coalesce((select ssl from pg_stat_ssl where pid = pg_backend_pid()), false) as ssl,
+            pg_backend_pid() as pid,
             to_regprocedure('catalog.finish_import_run(uuid,bigint,jsonb)') is not null as has_finish,
             to_regprocedure('catalog.begin_import_run(text,text,text,integer,text,boolean,interval,boolean)') is not null as has_begin,
             to_regprocedure('catalog.stage_source_records(uuid,jsonb)') is not null as has_stage,
@@ -43,8 +60,9 @@ export async function assertCloudSession(query, { kind = 'direct', clientTlsVeri
   const row = r.rows[0];
   if (!row) throw new Error('Controllo di sessione: nessuna risposta dal database.');
   const fail = (why) => { throw new Error(`Controllo di sessione cloud fallito (${why}): importazione rifiutata.`); };
+  const preRoleProof = preRoleSslProves(preRoleSsl, row);
   if (kind === 'direct') {
-    if (row.ssl !== true) fail('la connessione non è cifrata');
+    if (row.ssl !== true && !preRoleProof) fail('la connessione non è cifrata');
   } else {
     if (clientTlsVerified !== true) fail('TLS verificato client → pooler non attestato');
     if (typeof expectedLogin !== 'string' || expectedLogin === '' || row.session_user !== expectedLogin) fail('il login effettivo non corrisponde a quello della URL');
@@ -62,10 +80,11 @@ export async function assertCloudSession(query, { kind = 'direct', clientTlsVeri
   const audit = parseAudit((await query(LOGIN_AUDIT_SQL, [row.session_user])).rows[0]?.audit);
   const violations = evaluateLoginAudit(audit, { loader: 'catalog_loader' });
   if (violations.length > 0) fail(`login non dedicato: ${violations.join('; ')}`);
-  const backendSsl = row.ssl === true;
+  const backendSsl = row.ssl === true || preRoleProof;
+  const poolerLeg = row.ssl === true ? 'encrypted_pg_stat_ssl' : preRoleProof ? 'encrypted_pg_stat_ssl_pre_set_role' : 'not_proven';
   const transport = kind === 'direct'
     ? { kind, client_to_server: 'tls_verify_full_pg_stat_ssl' }
-    : { kind, client_to_pooler: 'tls_verify_full_driver', pooler_to_postgres: backendSsl ? 'encrypted_pg_stat_ssl' : 'not_proven' };
+    : { kind, client_to_pooler: 'tls_verify_full_driver', pooler_to_postgres: poolerLeg };
   return { server_version: row.version, database: row.db, session_user: row.session_user, ...(kind === 'direct' ? { ssl: true } : { backend_ssl: backendSsl }), transport, login_audit: 'conforme' };
 }
 
@@ -272,8 +291,15 @@ export function finishDeadlineMs(finishTimeoutMin) {
   if (!Number.isFinite(min) || min <= 0) throw new Error('Scadenza del finish: finishTimeoutMin non valido.');
   return Math.round(min * 60_000) + FINISH_DEADLINE_MARGIN_MS;
 }
-/** Scadenza complessiva della verifica post-commit (somma di query indipendenti: nessuna attesa illimitata). */
-export const VERIFY_DEADLINE_MS = 120_000;
+/**
+ * Scadenze della verifica post-commit (WI-008 / J1). Nell'import reale del 25 novembre 2026 la verifica (4 scansioni di 212.894 record,
+ * di cui il digest dello stato) superò i 120 s complessivi su compute piccolo, pur essendo corretta: una sola scadenza breve per la SOMMA
+ * di query indipendenti scambiava un esito non verificato per un guasto. Ora: una scadenza per OGNI controllo (la query lenta è
+ * individuabile) e una complessiva più ampia come rete di sicurezza. Nessuna delle due rende positivo un esito non verificato: scaduta,
+ * la verifica è `failed`/`verification_deadline` (exit ≠ 0). I conteggi V05/V07/V08 usano una sola scansione.
+ */
+export const VERIFY_CHECK_DEADLINE_MS = 240_000;
+export const VERIFY_DEADLINE_MS = 600_000;
 /** Scadenza complessiva della conclusione del finish (stop del monitor, riconciliazione, misura del WAL). */
 export const CONCLUDE_DEADLINE_MS = 90_000;
 
@@ -708,10 +734,13 @@ export function finalizeWal({ finish, monitor = null, finalWal = null, budgetByt
  * stato svuotato, i conteggi coincidono con i record attivi, l'impronta dello stato è quella dichiarata e ogni record
  * con paese ha un territorio. Non lancia: restituisce l'elenco dei controlli, `ok` solo se tutti superati.
  */
-export async function verifyFinish(query, { runId, sourceCode, expectedSha256 }) {
+export async function verifyFinish(query, { runId, sourceCode, expectedSha256 }, { checkDeadlineMs = VERIFY_CHECK_DEADLINE_MS, timers = defaultTimers } = {}) {
   const checks = [];
   const add = (id, ok, detail = '') => checks.push({ id, ok: ok === true, detail: String(detail).slice(0, 300) });
-  const run = (await query(
+  // una scadenza PER controllo: interrompe l'attesa (non la query: la sessione non va riusata, come per il finish) e solleva WI_DEADLINE,
+  // che runVerification normalizza in `verification_deadline` (mai un esito positivo)
+  const ask = (label, text, params) => withDeadline(query(text, params), checkDeadlineMs, `verifica ${label}`, timers);
+  const run = (await ask('V01',
     `select r.status, r.finished_at is not null as finished, r.counts, s.id as source_id, sn.file_sha256,
             extract(epoch from (r.finished_at - r.started_at))::int as seconds
        from catalog.import_runs r
@@ -724,22 +753,24 @@ export async function verifyFinish(query, { runId, sourceCode, expectedSha256 })
   if (!run) return { ok: false, checks };
   const counts = typeof run.counts === 'string' ? JSON.parse(run.counts) : run.counts ?? {};
   add('V02_snapshot_sha256', !expectedSha256 || run.file_sha256 === expectedSha256, run.file_sha256);
-  const q = async (text, params) => (await query(text, params)).rows[0];
-  const running = await q(`select count(*)::int as n from catalog.import_runs where source_id = $1::uuid and status = 'running'`, [run.source_id]);
+  const q = async (label, text, params) => (await ask(label, text, params)).rows[0];
+  const running = await q('V03', `select count(*)::int as n from catalog.import_runs where source_id = $1::uuid and status = 'running'`, [run.source_id]);
   add('V03_no_running_attempt', running.n === 0, `running=${running.n}`);
-  const stage = await q('select count(*)::int as n from catalog.import_stage where run_id = $1::uuid', [runId]);
+  const stage = await q('V04', 'select count(*)::int as n from catalog.import_stage where run_id = $1::uuid', [runId]);
   add('V04_stage_emptied', stage.n === 0, `stage=${stage.n}`);
-  const active = await q('select count(*)::int as n from catalog.source_records where source_id = $1::uuid and removed_from_source_at is null', [run.source_id]);
-  add('V05_active_equals_seen', Number(counts.records_seen) === active.n, `seen=${counts.records_seen} active=${active.n}`);
-  const digest = await q('select catalog.state_digest($1::uuid) as d', [run.source_id]);
+  // V05, V07 e V08 in UNA scansione di catalog.source_records (prima erano tre): stessi predicati, stessi identificatori di controllo.
+  // `removed_in_run` appartiene a un tentativo di questa fonte: restringere a source_id non cambia il risultato.
+  const scan = await q('V05/V07/V08',
+    `select count(*) filter (where removed_from_source_at is null)::int as active,
+            count(*) filter (where removed_from_source_at is null and country is not null and territory_id is null)::int as unlinked,
+            count(*) filter (where removed_in_run = $2::uuid)::int as removed
+       from catalog.source_records where source_id = $1::uuid`,
+    [run.source_id, runId]);
+  add('V05_active_equals_seen', Number(counts.records_seen) === scan.active, `seen=${counts.records_seen} active=${scan.active}`);
+  const digest = await q('V06', 'select catalog.state_digest($1::uuid) as d', [run.source_id]);
   add('V06_state_digest', counts.state_digest && counts.state_digest === digest.d, 'impronta dello stato');
-  const unlinked = await q(
-    'select count(*)::int as n from catalog.source_records where source_id = $1::uuid and removed_from_source_at is null and country is not null and territory_id is null',
-    [run.source_id],
-  );
-  add('V07_territories_linked', unlinked.n === 0, `senza territorio=${unlinked.n}`);
-  const removed = await q('select count(*)::int as n from catalog.source_records where removed_in_run = $1::uuid', [runId]);
-  add('V08_removals_marked_only', Number(counts.removed_from_source ?? 0) === removed.n, `dichiarati=${counts.removed_from_source ?? 0} marcati=${removed.n}`);
+  add('V07_territories_linked', scan.unlinked === 0, `senza territorio=${scan.unlinked}`);
+  add('V08_removals_marked_only', Number(counts.removed_from_source ?? 0) === scan.removed, `dichiarati=${counts.removed_from_source ?? 0} marcati=${scan.removed}`);
   add('V09_duration_recorded', Number.isFinite(run.seconds), `finish incluso: ${run.seconds}s`);
   return { ok: checks.every((c) => c.ok), checks, duration_seconds: run.seconds, counts_summary: { records_seen: counts.records_seen, new: counts.new, updated: counts.updated, unchanged: counts.unchanged, removed_from_source: counts.removed_from_source } };
 }
