@@ -10,7 +10,7 @@ import {
   parseCloudUrl, redactUrl, assertCloudAuthorized, resolveCloudLimits, PRODUCTION_REF, CLOUD_ENABLE_ENV,
 } from '../lib/cloud-target.mjs';
 import { redact, limitLine, sanitizeError, createLogger } from '../lib/safe-log.mjs';
-import { assertCloudSession, assertLoaderPrivileges, createWalGuard, applySessionLimits, verifyFinish } from '../lib/cloud-guards.mjs';
+import { assertCloudSession, assertLoaderPrivileges, createWalGuard, applySessionLimits, verifyFinish, runVerification, VERIFY_CHECK_DEADLINE_MS, VERIFY_DEADLINE_MS } from '../lib/cloud-guards.mjs';
 import { assertLocalDatabaseUrl } from '../lib/paths.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -170,6 +170,42 @@ test('pooler: informazione SSL non disponibile (null/assente) → non dichiarata
   }
 });
 
+// WI-008 / J2: dopo SET ROLE catalog_loader pg_stat_ssl nasconde la riga del backend (ssl = false per costruzione): la prova si legge PRIMA del
+// SET ROLE sulla stessa connessione e vale solo se backend e login coincidono ancora.
+const VISIBLE_AFTER_ROLE = { ...goodSession, ssl: false, pid: 4242 };
+const PRE_ROLE = { backend_pid: 4242, session_user: 'postgres', ssl: true };
+
+test('J2 pooler: riga pg_stat_ssl letta prima del SET ROLE sullo stesso backend e login → tratto pooler→PostgreSQL provato', async () => {
+  const r = await assertCloudSession(sessionQuery(VISIBLE_AFTER_ROLE), { ...POOLER_OPTS, preRoleSsl: PRE_ROLE });
+  assert.deepEqual([r.backend_ssl, r.transport.pooler_to_postgres], [true, 'encrypted_pg_stat_ssl_pre_set_role']);
+});
+
+test('J2 pooler: la prova pre-SET ROLE NON vale se backend, login o esito non coincidono (resta not_proven, mai «cifrato»)', async () => {
+  const bad = [
+    { ...PRE_ROLE, backend_pid: 9999 }, { ...PRE_ROLE, session_user: 'altro' }, { ...PRE_ROLE, ssl: false }, { ...PRE_ROLE, ssl: 'true' },
+    { ...PRE_ROLE, backend_pid: '4242' }, { ...PRE_ROLE, session_user: '' }, { backend_pid: 4242, session_user: 'postgres' }, null,
+  ];
+  for (const preRoleSsl of bad) {
+    const r = await assertCloudSession(sessionQuery(VISIBLE_AFTER_ROLE), { ...POOLER_OPTS, preRoleSsl });
+    assert.deepEqual([r.backend_ssl, r.transport.pooler_to_postgres], [false, 'not_proven'], JSON.stringify(preRoleSsl));
+  }
+  // riga senza pid (database che non lo restituisce): nessuna prova
+  const r = await assertCloudSession(sessionQuery({ ...goodSession, ssl: false }), { ...POOLER_OPTS, preRoleSsl: PRE_ROLE });
+  assert.equal(r.transport.pooler_to_postgres, 'not_proven');
+});
+
+test('J2 pooler: se pg_stat_ssl è già visibile ed è true, resta l\'evidenza diretta (non quella pre-SET ROLE)', async () => {
+  const r = await assertCloudSession(sessionQuery({ ...goodSession, pid: 4242 }), { ...POOLER_OPTS, preRoleSsl: PRE_ROLE });
+  assert.equal(r.transport.pooler_to_postgres, 'encrypted_pg_stat_ssl');
+});
+
+test('J2 connessione diretta: ssl non visibile dopo SET ROLE ma provato prima → accettata; senza prova → rifiutata', async () => {
+  const ok = await assertCloudSession(sessionQuery(VISIBLE_AFTER_ROLE), { kind: 'direct', preRoleSsl: PRE_ROLE });
+  assert.equal(ok.ssl, true);
+  await assert.rejects(() => assertCloudSession(sessionQuery(VISIBLE_AFTER_ROLE), { kind: 'direct' }), /non è cifrata/);
+  await assert.rejects(() => assertCloudSession(sessionQuery(VISIBLE_AFTER_ROLE), { kind: 'direct', preRoleSsl: { ...PRE_ROLE, backend_pid: 1 } }), /non è cifrata/);
+});
+
 test('pooler: senza attestazione del TLS verificato lato client → rifiutato (fail-closed), qualunque sia pg_stat_ssl', async () => {
   for (const ssl of [true, false]) {
     for (const clientTlsVerified of [false, undefined, 'true', 1]) {
@@ -258,6 +294,7 @@ test('limiti di sessione: timeout impostati con set_config (valori passati come 
 
 // --- Verifica dopo finish_import_run -------------------------------------------------------------------------------
 
+const calls = { scan: 0 };
 function fakeVerifyDb(over = {}) {
   const st = {
     run: { status: 'succeeded', finished: true, counts: { records_seen: 10, state_digest: 'D', removed_from_source: 2, new: 10, updated: 0, unchanged: 0 }, source_id: 'S', file_sha256: 'abc', seconds: 42 },
@@ -267,10 +304,8 @@ function fakeVerifyDb(over = {}) {
     if (text.includes('from catalog.import_runs r')) return { rows: st.run ? [st.run] : [] };
     if (text.includes("status = 'running'")) return { rows: [{ n: st.running }] };
     if (text.includes('catalog.import_stage')) return { rows: [{ n: st.stage }] };
-    if (text.includes('removed_in_run')) return { rows: [{ n: st.removed }] };
-    if (text.includes('territory_id is null')) return { rows: [{ n: st.unlinked }] };
+    if (text.includes('count(*) filter')) { calls.scan += 1; return { rows: [{ active: st.active, unlinked: st.unlinked, removed: st.removed }] }; }
     if (text.includes('state_digest')) return { rows: [{ d: st.digest }] };
-    if (text.includes('removed_from_source_at is null')) return { rows: [{ n: st.active }] };
     throw new Error(`query inattesa: ${text.slice(0, 60)}`);
   };
 }
@@ -280,6 +315,22 @@ test('verifica del finish: tutti i controlli superati su uno stato coerente', as
   assert.equal(v.ok, true);
   assert.equal(v.checks.length, 9);
   assert.equal(v.duration_seconds, 42);
+});
+
+test('J1 verifica del finish: V05, V07 e V08 usano UNA sola scansione di source_records (prima tre)', async () => {
+  calls.scan = 0;
+  const v = await verifyFinish(fakeVerifyDb(), { runId: 'r', sourceCode: 'LIVEX-LWIN7', expectedSha256: 'abc' });
+  assert.equal(calls.scan, 1);
+  assert.deepEqual(v.checks.map((c) => c.id), ['V01_run_succeeded', 'V02_snapshot_sha256', 'V03_no_running_attempt', 'V04_stage_emptied', 'V05_active_equals_seen', 'V06_state_digest', 'V07_territories_linked', 'V08_removals_marked_only', 'V09_duration_recorded']);
+});
+
+test('J1 scadenze separate: una per controllo (più breve) e una complessiva (più ampia); una query che non risponde NON rende positiva la verifica', async () => {
+  assert.ok(VERIFY_CHECK_DEADLINE_MS < VERIFY_DEADLINE_MS && VERIFY_CHECK_DEADLINE_MS > 120_000);
+  const lenta = async (text) => (text.includes('state_digest') ? new Promise(() => {}) : fakeVerifyDb()(text));
+  const timers = { setTimeout: (fn) => { const t = globalThis.setTimeout(fn, 5); return t; }, clearTimeout: (t) => globalThis.clearTimeout(t) };
+  await assert.rejects(() => verifyFinish(lenta, { runId: 'r', sourceCode: 'LIVEX-LWIN7', expectedSha256: 'abc' }, { checkDeadlineMs: 5, timers }), (e) => e.code === 'WI_DEADLINE');
+  const norm = await runVerification(lenta, { runId: 'r', sourceCode: 'LIVEX-LWIN7', expectedSha256: 'abc' }, { verify: (q, a) => verifyFinish(q, a, { checkDeadlineMs: 5, timers }), timers });
+  assert.deepEqual([norm.status, norm.ok, norm.reason], ['failed', false, 'verification_deadline']);
 });
 
 test('verifica del finish: ogni anomalia è rilevata (stato, sha, running, staging, conteggi, digest, territori, rimozioni)', async () => {

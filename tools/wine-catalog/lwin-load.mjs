@@ -130,6 +130,7 @@ try {
     cloudInfo.session = await assertCloudSession(q, {
       kind: cloudTarget.kind,
       clientTlsVerified: db.clientTlsVerified === true,
+      preRoleSsl: db.preRoleSsl ?? null,
       // pooler: la URL ha utente `<ruolo>.<ref>`; Supavisor presenta al database il solo `<ruolo>`
       expectedLogin: cloudTarget.kind === 'pooler' ? cloudTarget.user.slice(0, -(cloudTarget.ref.length + 1)) : null,
     });
