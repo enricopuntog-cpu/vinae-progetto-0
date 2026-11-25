@@ -367,6 +367,12 @@ run_grid "wi007b promozione con trigger attivi e ricerca canonica" wi007b_promoz
 # simulazione della promozione. Transazione chiusa da ROLLBACK; il catalogo deve essere vuoto (guardia
 # nella griglia). Nessun import LWIN, nessuna regola approvata.
 run_grid "wi007 catalogo canonico: proiezione pubblica e simulazione" wi007_catalogo_canonico.sql 3
+# WI-008 (wi008a): l'impronta della logica di promozione copre le dipendenze di WI-007, le guardie e i trigger. La regola
+# viene approvata solo dentro la transazione (ROLLBACK); stessa guardia del catalogo vuoto e della regola in bozza.
+run_grid "wi008a impronta della promozione: dipendenze, guardie e trigger" wi008a_fingerprint_dipendenze.sql 3
+# WI-008 (wi008b): ranking esatto della ricerca canonica oltre 2.000 corrispondenze e limite per identità (40/min).
+# Proiezione accesa solo dentro la transazione (ROLLBACK); stessa guardia del catalogo vuoto.
+run_grid "wi008b ricerca canonica: ranking oltre 2.000 candidati e limite per identità" wi008b_ricerca_canonica_ranking_limite.sql 3
 
 # Stessa famiglia su sessioni PostgreSQL realmente separate: due esecutori sullo stesso
 # prelievo (uno solo riceve il Transfer), annullamento del titolare contro presa in carico e
