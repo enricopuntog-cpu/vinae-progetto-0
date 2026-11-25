@@ -110,7 +110,8 @@ writeFileSync(
 const sorgente = leggiRepo("supabase/functions/ai-sommelier/index.ts")
   .replace('"../_shared/ai-provider.ts"', JSON.stringify(fn("_shared/ai-provider.ts")))
   .replace('"../_shared/ai-gate.ts"', JSON.stringify(slash(join(dir, "ai-gate.ts"))))
-  .replace('"../_shared/sommelier-contesto.ts"', JSON.stringify(fn("_shared/sommelier-contesto.ts")));
+  .replace('"../_shared/sommelier-contesto.ts"', JSON.stringify(fn("_shared/sommelier-contesto.ts")))
+  .replace('"../_shared/sommelier-ricerca.ts"', JSON.stringify(fn("_shared/sommelier-ricerca.ts")));
 assert.ok(!sorgente.includes('"../_shared/'), "import relativi non riscritti");
 writeFileSync(join(dir, "index.ts"), sorgente);
 (globalThis as unknown as { Deno: unknown }).Deno = {
