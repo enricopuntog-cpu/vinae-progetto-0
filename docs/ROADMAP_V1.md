@@ -740,6 +740,27 @@ dichiarati: scelta del Paese dell'utente, indirizzi di consegna, fiscalità,
 fatturazione, valute e corrieri esteri, traduzione inglese. Dettagli in
 `CONTESTO_IA/03_ARCHITETTURA_REGOLE_DEBITI.md`.
 
+## Filone Wine Intelligence e Company Brain (mandato del founder, 26 novembre 2026)
+
+Filone ammesso per nome, parallelo alle fasi di migrazione; non sposta il cutover. Stato al 26 novembre 2026, dopo
+`ca719f1` (Production ledger 136). **Distribuito non significa attivato.**
+
+| Voce | Progettato | Implementato | Testato | Mergiato | Distribuito | Attivato | Bloccato da |
+|---|---|---|---|---|---|---|---|
+| WI-009 impronta e privilegi (F-07, F-11) | sì | sì | sì | #321 | sì | — | rivalidazione indipendente |
+| WI-010 budget AI | sì | sì | sì | #321 | sì | no (tetti non scelti) | decisione del founder |
+| WI-011 identità senza LWIN, proposte, LWIN successivo | sì | sì | sì | #323 | sì | **no** (proposte, acquisizione, proiezione spente) | founder; audit del delta |
+| WI-012 gestione catalogo dal sito | sì | sì | sì (SQL ed E2E) | #323 | sì | sì, solo admin | — |
+| Aggiornamento periodico LWIN (procedura, delta) | sì | sì (runner esistente + delta) | delta **non** eseguito su una versione nuova | #323 | script nel repo | no | nuovo file autorizzato |
+| WI-013 contratto del Company Brain | sì | sì | sì | #323 | sì | no (0 agenti) | credenziale per agente |
+| WI-013 Sentinel e cruscotto | sì | sì | sì | #323 | sì | solo esecuzione manuale, **non 24/7** | scelta dello scheduler |
+| WI-014 valutazione economica | sì (fondamenta) | modulo puro, non collegato | sì (unit) | PR di chiusura | — | no | transazioni reali, porta di lettura, decisione |
+| Authenticity | solo nota | no | no | — | — | no | consenso e diritti sulle immagini, procedura di verifica |
+| Promozione canonica | sì | sì (WI-008/009) | banco sintetico | sì | sì | **no** (regola `draft`) | audit, F-06, F-08, founder |
+
+Riferimenti: `docs/wine-intelligence/WI_011_LIVING_CATALOG.md`, `docs/COMPANY_BRAIN.md`,
+`docs/wine-intelligence/PROMOZIONE_CANONICA_RUNBOOK.md`.
+
 ## Fase 13 — cutover finale
 
 **Stato: non iniziato.** Era la Fase 11 fino all'11 agosto 2026 e la Fase 12

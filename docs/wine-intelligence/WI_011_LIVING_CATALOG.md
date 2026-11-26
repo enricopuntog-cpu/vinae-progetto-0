@@ -136,8 +136,37 @@ Nessuna nuova importazione in Production è stata eseguita con WI-011.
 dell'elenco admin su un catalogo popolato (in Production è vuoto); l'indice di corrispondenza sui 212.894 record si
 misura solo dopo la distribuzione.
 
-## 8. Fuori perimetro di questo incarico
+## 8. Price Intelligence (WI-014, sole fondamenta) e Authenticity
 
-- **Price Intelligence (blocco I)** e **Authenticity (blocco J):** non costruite. Per i prezzi servono transazioni
-  concluse (oggi non ce ne sono in Production) separate dai prezzi richiesti; per l'autenticità serve prima una
-  decisione su consenso e diritti delle immagini e sulla procedura di verifica. Nessuna tabella vuota è stata creata.
+**Prezzi.** `frontend-next/src/lib/prezzi/valutazione.ts`: modulo puro, **non collegato a nessuna pagina**. Distingue
+prezzo `richiesto` e `realizzato`; stima solo da almeno 5 transazioni concluse con stesso vino, annata, formato e
+valuta negli ultimi 24 mesi (mediana, quartili, numero, periodo, fonti, incertezza); altrimenti «dati insufficienti».
+Niente conversioni o correzioni inventate; l'osservazione non ha campi per acquirente o venditore. Il riferimento di
+Cantina D3-A (mediana dei prezzi **richiesti**, almeno 3 annunci) resta invariato e distinto. **Manca** la porta che
+estrae le transazioni concluse dagli ordini: richiede una migration, una decisione sul trattamento dei dati degli
+ordini e, per avere risultati, transazioni reali. Nessuna API o dataset acquistato.
+
+**Authenticity: non costruita.** I livelli da tenere separati (identificazione del vino, qualità della foto, anomalie
+visive, provenienza, verifica documentale, valutazione di un esperto, certificazione) richiedono prima: consenso e
+diritti sulle immagini per questa finalità, una procedura di verifica con responsabilità umana e una decisione legale
+sul linguaggio ammesso. L'AI potrà solo segnalare anomalie; nessuna bottiglia dichiarata autentica in automatico.
+Nessuna tabella vuota è stata creata.
+
+## 9. Rilascio e delta per l'audit indipendente
+
+Rilasciato il 26 novembre 2026 con la PR #323 (`ca719f1`), migration `20261128100000`–`20261128130000`. Letture di
+Production dopo il merge: ledger 136; impronta `64e038526a78f44070a54498fd0ff607`, digest invariato; regola `draft`;
+promozione, proiezione, proposte, acquisizione e chiusura automatica spente; 0 agenti; Sentinel non pianificato;
+0 violazioni di superficie; hash di `public.wines`, `bottle_units` e `listings` identici a prima; indice dei record di
+fonte usato (7,5 ms contro 14.153 ms della scansione), +9 MB. Una esecuzione di Sentinel a scopo di verifica: 11
+controlli, 0 non eseguiti, 0 problemi.
+
+Da rivalidare, oltre a F-01–F-08 di WI-009:
+
+1. `catalog.wines_guard` (unico passaggio ammesso sul LWIN) e i vincoli `wines_manual_origin`,
+   `wines_native_publication`;
+2. `public.vini_canonici_cerca`: visibilità dei nativi, identificativo per UUID, LWIN nascosto a fonte revocata;
+3. `catalog.contribution_identity` / `contribution_register` / `harvest_listings`: privacy, consenso, deduplicazione;
+4. le 11 porte `catalogo_admin_*` e le 6 `azienda_admin_*` (`SECURITY DEFINER`, ruolo verificato in ciascuna);
+5. schema `brain`: privilegi, `brain_worker`, lease; limite dell'identità dell'agente;
+6. `ai-sommelier`: interruttore alimentato solo dagli errori letti dal fornitore (corretto in #321) e codice UUID.
