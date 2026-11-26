@@ -36,7 +36,7 @@ import type { Page } from "@playwright/test";
 /** Codice LWIN mostrato su una scheda canonica («LWIN 9100001»); il testo di omonimia nomina «LWIN» ma non un codice. */
 const CON_LWIN = /LWIN \d{7}/;
 
-test.describe.serial("Ricerca canonica nel wizard: catalogo acceso solo in prova, identità non attribuite, nessuna scrittura @smoke", () => {
+test.describe.serial("Ricerca canonica nel wizard: catalogo acceso solo in prova, identità non attribuite, nessuna scrittura @smoke @cross", () => {
   const corsa = etichettaCorsa();
   const nomeGemello = `Gemello ${corsa}`;
   const nomeSingolo = `Singolo ${corsa}`;
