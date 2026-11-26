@@ -37,6 +37,8 @@ Aprire soltanto ciò che serve al task:
   [`../docs/wine-intelligence/WI_008_INTEGRAZIONE_CATALOGO.md`](../docs/wine-intelligence/WI_008_INTEGRAZIONE_CATALOGO.md).
   Popolamento del catalogo canonico (procedura, misure, arresti, prontezza della proiezione):
   [`../docs/wine-intelligence/PROMOZIONE_CANONICA_RUNBOOK.md`](../docs/wine-intelligence/PROMOZIONE_CANONICA_RUNBOOK.md).
+  Correzioni dell'audit della promozione, ricerca, schede vino e budget AI (WI-009/WI-010, delta da rivalidare):
+  [`../docs/wine-intelligence/WI_009_PROCEDURA_FAIL_CLOSED.md`](../docs/wine-intelligence/WI_009_PROCEDURA_FAIL_CLOSED.md).
 - Monitoraggio pre-lancio OBS-01: [`../docs/VPM_022C_OBS_01.md`](../docs/VPM_022C_OBS_01.md)
   contiene strumenti nativi, log minimizzati, heartbeat, responsabilità e residui
   pre-Stripe; non equivale a un servizio di allarme su ogni evento.
