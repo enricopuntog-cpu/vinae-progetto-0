@@ -33,6 +33,8 @@ Aprire soltanto ciò che serve al task:
   [`../docs/wine-intelligence/WI_007_CATALOGO_CANONICO_RICERCA.md`](../docs/wine-intelligence/WI_007_CATALOGO_CANONICO_RICERCA.md)
   (prove, revisione indipendente, identità canoniche non attribuite per chiave descrittiva e prova PostgREST/browser FIX-03,
   limite del ranking oltre 2.000 candidati, protezione della porta, condizioni di attivazione).
+  Integrazione, prestazioni della promozione, scelta personale in Cantina e scheda autonoma (WI-008):
+  [`../docs/wine-intelligence/WI_008_INTEGRAZIONE_CATALOGO.md`](../docs/wine-intelligence/WI_008_INTEGRAZIONE_CATALOGO.md).
 - Monitoraggio pre-lancio OBS-01: [`../docs/VPM_022C_OBS_01.md`](../docs/VPM_022C_OBS_01.md)
   contiene strumenti nativi, log minimizzati, heartbeat, responsabilità e residui
   pre-Stripe; non equivale a un servizio di allarme su ogni evento.
