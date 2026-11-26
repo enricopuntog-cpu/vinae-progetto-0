@@ -25,7 +25,7 @@ is_relevant_path() {
       | supabase/tests/12u_* | supabase/tests/12v_* | supabase/tests/12w_* \
       | supabase/tests/12x_* | supabase/tests/12y_* | supabase/tests/12z* \
       | supabase/tests/wi004_* | supabase/tests/wi005b_* | supabase/functions/ai-sommelier/* \
-      | supabase/tests/wi008* | supabase/tests/wi010_* \
+      | supabase/tests/wi008* | supabase/tests/wi010_* | supabase/tests/wi01[1-9]_* \
       | supabase/functions/_shared/sommelier-contesto.ts | supabase/functions/_shared/ai-* \
       | frontend-next/src/lib/wine-intelligence/sommelier-postgrest.stack.ts \
       | frontend-next/src/lib/cantina/note-vino-postgrest.stack.ts \
