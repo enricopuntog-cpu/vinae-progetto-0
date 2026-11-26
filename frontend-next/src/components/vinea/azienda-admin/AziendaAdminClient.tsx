@@ -128,6 +128,10 @@ function Anomalie({ servizi }: { servizi: Servizi }) {
         {aperte ? "Mostra chiuse e ignorate" : "Mostra aperte"}
       </Button>
       <Campo etichetta="Motivo (richiesto per risolvere o ignorare)" valore={nota} onCambio={setNota} massimo={500} />
+      <p className="text-xs text-muted-foreground">
+        «Ignora» è sempre temporaneo (di base il massimo: P0 24 ore, P1 7 giorni, P2/P3 90 giorni) e l&apos;anomalia torna
+        visibile alla scadenza o se si aggrava.
+      </p>
       <Esito errore={errore} />
       <Letto esito={esito} ricarica={ricarica}>
         {(righe) => (
@@ -147,6 +151,7 @@ function Anomalie({ servizi }: { servizi: Servizi }) {
                   Responsabile: {a.responsabile ?? "non assegnato"}
                   {a.richiede_approvazione ? " · richiede approvazione" : ""}
                   {a.nota ? ` · ${a.nota}` : ""}
+                  {a.ignorata_fino_al ? ` · ignorata fino al ${data(a.ignorata_fino_al)}` : ""}
                 </p>
                 <div className="mt-1 flex flex-wrap gap-2">
                   {aperte ? (
@@ -182,7 +187,7 @@ function Task({ servizi }: { servizi: Servizi }) {
   const [nota, setNota] = useState("");
   const [errore, setErrore] = useState<string | null>(null);
   const { esito, ricarica } = useLettura(() => servizi.task(1), "task");
-  const decidi = async (id: string, decisione: "approva" | "respingi" | "annulla") => {
+  const decidi = async (id: string, decisione: "approva" | "respingi" | "annulla" | "conferma_eseguito") => {
     setErrore(null);
     const r = await servizi.decidiTask(id, decisione, nota);
     if (r.ok) {
@@ -194,7 +199,8 @@ function Task({ servizi }: { servizi: Servizi }) {
     <section className="space-y-2 text-sm">
       <h2 className="font-semibold">Task e approvazioni</h2>
       <p className="text-xs text-muted-foreground">
-        La decisione registra il tuo giudizio: non esegue modifiche su account, pagamenti, ordini o catalogo.
+        La decisione registra il tuo giudizio: non esegue modifiche su account, pagamenti, ordini o catalogo. Approvare
+        non significa eseguito: l&apos;esecuzione si fa dagli strumenti del suo dominio e poi si conferma qui.
       </p>
       <Campo etichetta="Motivo della decisione" valore={nota} onCambio={setNota} massimo={500} />
       <Esito errore={errore} />
@@ -220,6 +226,11 @@ function Task({ servizi }: { servizi: Servizi }) {
                         Respingi
                       </Button>
                     </>
+                  ) : null}
+                  {t.stato === "approvato" ? (
+                    <Button type="button" size="sm" disabled={!nota.trim()} onClick={() => void decidi(t.id, "conferma_eseguito")}>
+                      Conferma eseguito
+                    </Button>
                   ) : null}
                   {t.stato !== "assegnato" ? (
                     <Button type="button" size="sm" variant="ghost" disabled={!nota.trim()} onClick={() => void decidi(t.id, "annulla")}>

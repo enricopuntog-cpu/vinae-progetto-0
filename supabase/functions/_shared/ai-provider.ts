@@ -17,11 +17,20 @@
 // risposto.
 
 export class AiProviderError extends Error {
-  constructor(message = "Il provider AI non è al momento disponibile") {
+  /**
+   * WI-015 (E-01): vero solo se l'errore dice qualcosa sulla salute del fornitore (rete, timeout, 408, 429, 5xx).
+   * Un 4xx dovuto alla richiesta o a una configurazione mancante NON alimenta l'interruttore GLOBALE: altrimenti
+   * richieste confezionate da un solo utente spegnerebbero l'AI a tutti.
+   */
+  readonly guastoFornitore: boolean;
+  constructor(message = "Il provider AI non è al momento disponibile", guastoFornitore = true) {
     super(message);
     this.name = "AiProviderError";
+    this.guastoFornitore = guastoFornitore;
   }
 }
+
+export const statoEGuasto = (status: number): boolean => status === 408 || status === 429 || status >= 500;
 
 /** Il fornitore ha risposto, ma con qualcosa che non è utilizzabile. */
 export class AiFormatError extends Error {
@@ -67,8 +76,8 @@ export const requestIdOpaco = (compito: string): string =>
  */
 export const creaDisabledProvider = (): AiProvider => ({
   id: "disabled",
-  completeText: () => Promise.reject(new AiProviderError("Il servizio AI non è configurato")),
-  streamText: () => Promise.reject(new AiProviderError("Il servizio AI non è configurato")),
+  completeText: () => Promise.reject(new AiProviderError("Il servizio AI non è configurato", false)),
+  streamText: () => Promise.reject(new AiProviderError("Il servizio AI non è configurato", false)),
 });
 
 /**
@@ -145,7 +154,7 @@ const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
       if (!response.ok) {
         // Il corpo dell'errore del fornitore non viene letto né propagato.
         console.error("[ai] provider non disponibile", { status: response.status });
-        throw new AiProviderError();
+        throw new AiProviderError(undefined, statoEGuasto(response.status));
       }
       return response;
     } catch (errore) {

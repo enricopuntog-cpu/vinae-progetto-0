@@ -77,13 +77,15 @@ select pg_temp.rec(1, 'schema brain senza privilegi per anon, authenticated e se
   (select bool_and(not has_schema_privilege(r, 'brain', 'USAGE,CREATE')) from unnest(array['anon', 'authenticated', 'service_role']) r)
   and not exists (select 1 from information_schema.role_table_grants where table_schema = 'brain'
                    and grantee in ('anon', 'authenticated', 'service_role', 'brain_worker', 'PUBLIC')));
-select pg_temp.rec(2, 'brain_worker è NOLOGIN, senza membri, ed esegue solo le tre porte dell''agente (più la rete sul payload)',
+-- WI-015: postgres (e supabase_admin) hanno la sola membership amministrativa concessa da PostgreSQL 16 a chi crea il
+-- ruolo (SET e INHERIT falsi): nessun membro OPERATIVO. Il rinnovo del lease e la quarta porta dell'agente.
+select pg_temp.rec(2, 'brain_worker è NOLOGIN, senza membri operativi, ed esegue solo le porte dell''agente (più la rete sul payload)',
   (select not rolcanlogin from pg_roles where rolname = 'brain_worker')
   and not exists (select 1 from pg_auth_members m join pg_roles g on g.oid = m.roleid
                    join pg_roles u on u.oid = m.member where g.rolname = 'brain_worker' and u.rolname not in ('postgres', 'supabase_admin'))
   and (select string_agg(p.proname, ',' order by p.proname) from pg_proc p
         where p.pronamespace = 'brain'::regnamespace and has_function_privilege('brain_worker', p.oid, 'EXECUTE'))
-      = 'add_evidence,claim_task,finish_task,payload_ammesso');
+      = 'add_evidence,claim_task,finish_task,payload_ammesso,renew_lease');
 select pg_temp.rec(3, 'ogni funzione di brain ha search_path vuoto',
   not exists (select 1 from pg_proc p where p.pronamespace = 'brain'::regnamespace
      and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c in ('search_path=""', 'search_path='))));
@@ -110,38 +112,42 @@ insert into fx values ('t1', brain.enqueue_task('catalogo.verifica', 'Verifica A
 insert into fx values ('t1bis', brain.enqueue_task('catalogo.verifica', 'Verifica A', 2, '{"rif":1}', 'd-1', true)::text);
 insert into fx values ('t2', brain.enqueue_task('pagamenti.verifica', 'Altro dominio', 0, '{}', 'd-2', true)::text);
 select pg_temp.rec(7, 'task deduplicato', pg_temp.f('t1') = pg_temp.f('t1bis') and (select count(*) from brain.tasks) = 2);
+-- WI-015: la coda si prova col nucleo (che nessun ruolo esegue); l'identita reale con login propri e in
+-- `wi015_identita_concorrenza.sh`.
 select pg_temp.rec(8, 'agente spento o sconosciuto non prende nulla',
-  pg_temp.prova('select task_id::text from brain.claim_task(''collaudo'')') = '42501'
-  and pg_temp.prova('select task_id::text from brain.claim_task(''ignoto'')') = '42501');
-update brain.agents set enabled = true where agent_key = 'collaudo';
-create temp table presa on commit drop as select * from brain.claim_task('collaudo', 60);
+  pg_temp.prova('select task_id::text from brain.claim_task_core(''collaudo'', 300)') = '42501'
+  and pg_temp.prova('select task_id::text from brain.claim_task_core(''ignoto'', 300)') = '42501');
+create role wi013_agente login;
+grant brain_worker to wi013_agente;
+update brain.agents set db_role = 'wi013_agente', enabled = true where agent_key = 'collaudo';
+create temp table presa on commit drop as select * from brain.claim_task_core('collaudo', 60);
 select pg_temp.rec(9, 'prende solo i propri tipi, anche se un altro task è più urgente',
   (select count(*) = 1 and bool_and(task_id::text = pg_temp.f('t1') and attempt = 1) from presa)
   and (select status from brain.tasks where id = pg_temp.f('t2')::uuid) = 'in_attesa');
-select pg_temp.rec(10, 'lo stesso task non si prende due volte', (select count(*) from brain.claim_task('collaudo')) = 0);
+select pg_temp.rec(10, 'lo stesso task non si prende due volte', (select count(*) from brain.claim_task_core('collaudo', 300)) = 0);
 select pg_temp.rec(11, 'lease sbagliato: né evidenza né esito',
-  pg_temp.prova(format('select brain.add_evidence(%L, %L, ''lettura'', ''{}'')::text', pg_temp.f('t1'), gen_random_uuid())) = '42501'
-  and pg_temp.prova(format('select brain.finish_task(%L, %L, true)', pg_temp.f('t1'), gen_random_uuid())) = '42501');
+  pg_temp.prova(format('select brain.add_evidence_core(''collaudo'', %L, %L, ''lettura'', ''{}'')::text', pg_temp.f('t1'), gen_random_uuid())) = '42501'
+  and pg_temp.prova(format('select brain.finish_task_core(''collaudo'', %L, %L, true, null)', pg_temp.f('t1'), gen_random_uuid())) = '42501');
 
 -- lease scaduto -> torna in coda; al terzo tentativo scaduto -> fallito
 update brain.tasks set lease_expires_at = clock_timestamp() - interval '1 second' where id = pg_temp.f('t1')::uuid;
 select pg_temp.rec(12, 'lease scaduto: l''esito tardivo è rifiutato',
-  pg_temp.prova(format('select brain.finish_task(%L, %L, true)', pg_temp.f('t1'), (select lease_token from presa))) = '42501');
+  pg_temp.prova(format('select brain.finish_task_core(''collaudo'', %L, %L, true, null)', pg_temp.f('t1'), (select lease_token from presa))) = '42501');
 select brain.reap_expired_leases() into temp table r1;
 select pg_temp.rec(13, 'e il task torna in coda', (select status from brain.tasks where id = pg_temp.f('t1')::uuid) = 'in_attesa');
-create temp table presa2 on commit drop as select * from brain.claim_task('collaudo', 60);
+create temp table presa2 on commit drop as select * from brain.claim_task_core('collaudo', 60);
 update brain.tasks set lease_expires_at = clock_timestamp() - interval '1 second' where id = pg_temp.f('t1')::uuid;
-create temp table presa3 on commit drop as select * from brain.claim_task('collaudo', 60);
+create temp table presa3 on commit drop as select * from brain.claim_task_core('collaudo', 60);
 update brain.tasks set lease_expires_at = clock_timestamp() - interval '1 second' where id = pg_temp.f('t1')::uuid;
 select brain.reap_expired_leases() into temp table r2;
 select pg_temp.rec(14, 'tentativi limitati: dopo il terzo è fallito e non si riprende',
   (select attempt from presa3) = 3 and (select status from brain.tasks where id = pg_temp.f('t1')::uuid) = 'fallito'
-  and (select count(*) from brain.claim_task('collaudo')) = 0);
+  and (select count(*) from brain.claim_task_core('collaudo', 300)) = 0);
 
 insert into fx values ('t3', brain.enqueue_task('catalogo.verifica', 'Con approvazione', 1, '{}', 'd-3', true)::text);
-create temp table presa4 on commit drop as select * from brain.claim_task('collaudo', 60);
-insert into fx values ('ev', pg_temp.prova(format('select brain.add_evidence(%L, %L, ''lettura'', ''{"righe":4}'')::text', pg_temp.f('t3'), (select lease_token from presa4))));
-insert into fx values ('fin', pg_temp.prova(format('select brain.finish_task(%L, %L, true, ''{"proposta":"controllare"}'')', pg_temp.f('t3'), (select lease_token from presa4))));
+create temp table presa4 on commit drop as select * from brain.claim_task_core('collaudo', 60);
+insert into fx values ('ev', pg_temp.prova(format('select brain.add_evidence_core(''collaudo'', %L, %L, ''lettura'', ''{"righe":4}'')::text', pg_temp.f('t3'), (select lease_token from presa4))));
+insert into fx values ('fin', pg_temp.prova(format('select brain.finish_task_core(''collaudo'', %L, %L, true, ''{"proposta":"controllare"}'')', pg_temp.f('t3'), (select lease_token from presa4))));
 select pg_temp.rec(15, 'con approvazione richiesta il task non si chiude da sé; evidenza ed evento correlati',
   pg_temp.f('fin') = 'OK:in_approvazione' and pg_temp.f('ev') like 'OK:%'
   and (select count(*) from brain.task_evidence where task_id = pg_temp.f('t3')::uuid) = 1
@@ -162,7 +168,7 @@ select pg_temp.rec(17, 'decisione: motivo obbligatorio, una volta sola',
 insert into fx values ('dec', pg_temp.come('authenticated', pg_temp.f('admin')::uuid,
   format('select public.azienda_admin_task_decidi(%L, ''approva'', ''verificato'')', pg_temp.f('t3'))));
 select pg_temp.rec(18, 'approvato una volta, la seconda decisione è rifiutata',
-  pg_temp.f('dec') = 'OK:completato'
+  pg_temp.f('dec') = 'OK:approvato'
   and pg_temp.come('authenticated', pg_temp.f('admin')::uuid, format('select public.azienda_admin_task_decidi(%L, ''respingi'', ''no'')', pg_temp.f('t3'))) = 'P0002',
   pg_temp.f('dec'));
 
@@ -193,7 +199,7 @@ select pg_temp.rec(23, 'e se ricompare si riapre',
 insert into fx values ('ign', pg_temp.come('authenticated', pg_temp.f('admin')::uuid, format(
   'select public.azienda_admin_anomalia_aggiorna(%s, ''ignora'', ''finestra di prova'')', (select id from brain.anomalies where fingerprint = 'promozione_accesa'))));
 select brain.sentinel_run('collaudo') into temp table s5;
-select pg_temp.rec(24, 'una anomalia ignorata resta ignorata',
+select pg_temp.rec(24, 'una anomalia ignorata resta ignorata entro il termine (WI-015: mai senza scadenza)',
   pg_temp.f('ign') = 'OK:ignorata' and (select status from brain.anomalies where fingerprint = 'promozione_accesa') = 'ignorata', pg_temp.f('ign'));
 update catalog.promotion_settings set enabled = false;
 

@@ -42,6 +42,9 @@ begin
   if exists (select 1 from catalog.promotion_exceptions) then
     raise exception 'STOP: ci sono eccezioni di promozione da esaminare';
   end if;
+  if exists (select 1 from catalog.lwin_native_conflicts(1)) then
+    raise exception 'STOP: vini nativi in conflitto con la fonte: il curatore associa il LWIN, dichiara l''omonimia o ritira il nativo';
+  end if;
 end $preflight$;
 select jsonb_build_object('preflight', 'ok', 'impostazioni', (select to_jsonb(s) from catalog.promotion_settings s),
                           'vini', (select count(*) from catalog.wines)) as preflight;

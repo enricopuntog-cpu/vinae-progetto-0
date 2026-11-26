@@ -45,6 +45,8 @@ export type Anomalia = {
   azione_proposta: string;
   richiede_approvazione: boolean;
   nota: string | null;
+  /** WI-015: l'«ignora» è sempre temporaneo; torna visibile alla scadenza o se la gravità sale. */
+  ignorata_fino_al: string | null;
 };
 
 export type TaskAzienda = {
@@ -73,12 +75,12 @@ export function serviziAziendaAdmin(client: SupabaseClient) {
   return {
     riepilogo: () => chiama<RiepilogoAzienda>("azienda_admin_riepilogo"),
     anomalie: (aperte: boolean, pagina: number) => chiama<Anomalia[]>("azienda_admin_anomalie", { p_aperte: aperte, p_pagina: pagina }),
-    aggiornaAnomalia: (id: number, azione: "prendi_in_carico" | "ignora" | "riapri" | "risolvi", nota: string) =>
-      chiama<string>("azienda_admin_anomalia_aggiorna", { p_id: id, p_azione: azione, p_nota: nota || null }),
+    aggiornaAnomalia: (id: number, azione: "prendi_in_carico" | "ignora" | "riapri" | "risolvi", nota: string, ore?: number) =>
+      chiama<string>("azienda_admin_anomalia_aggiorna", { p_id: id, p_azione: azione, p_nota: nota || null, p_ore: ore ?? null }),
     eseguiSentinel: () =>
       chiama<{ esito: string; controlli?: number; non_eseguiti?: number; problemi?: number }>("azienda_admin_sentinel_esegui"),
     task: (pagina: number) => chiama<TaskAzienda[]>("azienda_admin_task", { p_pagina: pagina }),
-    decidiTask: (id: string, decisione: "approva" | "respingi" | "annulla", nota: string) =>
+    decidiTask: (id: string, decisione: "approva" | "respingi" | "annulla" | "conferma_eseguito", nota: string) =>
       chiama<string>("azienda_admin_task_decidi", { p_id: id, p_decisione: decisione, p_nota: nota }),
   };
 }

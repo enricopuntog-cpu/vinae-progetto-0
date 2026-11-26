@@ -170,3 +170,19 @@ Da rivalidare, oltre a F-01–F-08 di WI-009:
 4. le 11 porte `catalogo_admin_*` e le 6 `azienda_admin_*` (`SECURITY DEFINER`, ruolo verificato in ciascuna);
 5. schema `brain`: privilegi, `brain_worker`, lease; limite dell'identità dell'agente;
 6. `ai-sommelier`: interruttore alimentato solo dagli errori letti dal fornitore (corretto in #321) e codice UUID.
+
+## 10. WI-015 — correzioni dell'audit indipendente (migration `20261129100000`)
+
+- **A-01 (vini nativi e promozione).** `catalog.add_manual_wine` prende il lock del motore in modo condiviso e senza
+  attesa: con un lotto aperto il nativo non nasce (`55P03`) e, mentre nasce, il lotto non parte. `02` e `03` (sotto
+  lock) si fermano se `catalog.lwin_native_conflicts(1)` ha righe; `00` riporta `nativi` e `conflitti_nativi`. Nessuna
+  fusione automatica: il curatore associa il LWIN, ritira il nativo oppure dichiara l'omonimia
+  (`catalogo_admin_distingui_lwin`, motivo obbligatorio, riga in `catalog.native_lwin_distinct` ed evento). La funzione
+  non è nell'impronta, che **resta `64e038526a78f44070a54498fd0ff607`**.
+- **B-01.** Ritiro, decisione, invio e cancellazione dell'account usano lo stesso ordine di lock (prima la proposta);
+  un trigger sulle partecipazioni mantiene contatore e stato. Una proposta decisa non torna ritirata.
+- **B-02.** Un invio non valido risponde `non_valida` (un errore annullerebbe anche il consumo) e conta nella quota.
+- **B-03.** Il LWIN assegnato a un nativo si trova per codice e si mostra solo se la fonte è autorizzata e il record è
+  ancora Live.
+- **B-04.** Predisposta e spenta: `intake_settings.user_link_retention_days` (NULL = nessuna azione) e
+  `catalog.minimize_decided_submissions` (solo proprietario, nessuno scheduler). Il periodo lo sceglie il founder.

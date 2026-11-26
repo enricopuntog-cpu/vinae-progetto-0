@@ -125,9 +125,11 @@ select pg_temp.rec(6, 'proprietà: B non propone il vino della Cantina di A, e n
     $q$select public.catalogo_proponi('cantina', '{"produttore":"Cantina Wi011 Aurelia","nome":"Rosso del Faro"}'::jsonb, true, 'wi011-ignoto')$q$) = 'P0001'
   and pg_temp.come('authenticated', pg_temp.f('b')::uuid,
     $q$select public.catalogo_proponi('cantina', '{"produttore":"Cantina Wi011 Aurelia","nome":"Rosso del Faro"}'::jsonb, true, 'wi011-inesistente')$q$) = 'P0001');
+-- WI-015 (B-02): un invio non valido risponde `non_valida` e consuma la quota; qui si alza il limite per provare i dati.
+update catalog.intake_settings set user_daily_limit = 100;
 select pg_temp.rec(7, 'privacy: campi non previsti, indirizzi di posta, collegamenti e marcatori sono rifiutati',
   (select bool_and(pg_temp.come('authenticated', pg_temp.f('a')::uuid,
-            format('select public.catalogo_proponi(%L, %L::jsonb, true)', 'manuale', d)) = '22023')
+            format('select public.catalogo_proponi(%L, %L::jsonb, true)', 'manuale', d)) = 'OK:non_valida')
      from unnest(array[
        '{"produttore":"P","nome":"N","note_personali":"x"}', '{"produttore":"P","nome":"N","prezzo":10}',
        '{"produttore":"P","nome":"N","immagini":["a"]}', '{"produttore":"mario@example.test","nome":"N"}',

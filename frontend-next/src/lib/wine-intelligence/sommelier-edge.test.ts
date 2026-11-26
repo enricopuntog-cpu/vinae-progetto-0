@@ -119,6 +119,8 @@ let chiamateProvider: ChiamataProvider[];
 let fetchEstranei: string[];
 let testoRisposta: string;
 let providerRispondeKo: boolean;
+/** WI-015 (E-01): stato HTTP con cui il fornitore finto risponde quando rifiuta. */
+let statoFornitore = 500;
 /** WI-010: il fornitore apre lo stream, manda un pezzo e poi si rompe. */
 let providerSiInterrompe = false;
 
@@ -134,7 +136,7 @@ const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Pr
     system: body.messages.find((m) => m.role === "system")?.content ?? "",
     prompt: body.messages.find((m) => m.role === "user")?.content ?? "",
   });
-  if (providerRispondeKo) return new Response("boom", { status: 500 });
+  if (providerRispondeKo) return new Response("boom", { status: statoFornitore });
   if (providerSiInterrompe) {
     let letture = 0;
     const rotto = new ReadableStream<Uint8Array>({
@@ -273,6 +275,7 @@ beforeEach(() => {
   fetchEstranei = [];
   testoRisposta = "Risposta di prova.";
   providerRispondeKo = false;
+  statoFornitore = 500;
   erroriDb = new Set();
   rateLimitKo = false;
   esitoBudget = "consentito";
@@ -832,6 +835,23 @@ describe("WI-010 — budget globale e interruttore (chiusi per difetto)", () => 
     expect(risposta.status).toBe(503);
     expect(esiti()).toEqual([{ p_scope: "ai:chat", p_riuscita: false }]);
   });
+
+  it.each([408, 429, 500, 502, 503])("risposta %i del fornitore: è un guasto e alimenta l'interruttore", async (stato) => {
+    providerRispondeKo = true;
+    statoFornitore = stato;
+    expect((await chiedi()).status).toBe(503);
+    expect(esiti()).toEqual([{ p_scope: "ai:chat", p_riuscita: false }]);
+  });
+
+  it.each([400, 401, 403, 404, 422])(
+    "E-01: un %i dovuto alla richiesta non apre l'interruttore globale, nemmeno ripetuto",
+    async (stato) => {
+      providerRispondeKo = true;
+      statoFornitore = stato;
+      for (let n = 0; n < 5; n++) expect((await chiedi()).status).toBe(503);
+      expect(esiti()).toEqual([]);
+    },
+  );
 
   it("guasto del fornitore a metà stream: registrato per l'interruttore", async () => {
     providerSiInterrompe = true;
