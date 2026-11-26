@@ -61,8 +61,17 @@ export type DomandaCandidati = {
   formato: string | null;
 };
 
-/** FIX-03B — facoltativo: chi lo supporta annulla la richiesta in corso quando il segnale scatta (tetto di attesa). */
-export type OpzioniRicerca = { segnale?: AbortSignal };
+/** WI-009 — la fonte facoltativa del catalogo non ha risposto in tempo oppure non ha risposto affatto. */
+export type CatalogoIncompleto = "lento" | "non_disponibile";
+
+export type OpzioniRicerca = {
+  /** FIX-03B — facoltativo: chi lo supporta annulla la richiesta in corso quando il segnale scatta (tetto di attesa). */
+  segnale?: AbortSignal;
+  /** WI-009 — avvisa che i risultati sono completi solo per la fonte principale: chi chiama lo dichiara all utente. */
+  onCatalogoIncompleto?: (motivo: CatalogoIncompleto) => void;
+  /** WI-009 — tetto di attesa del catalogo per QUESTA ricerca (secondo tentativo chiesto dall utente). */
+  attesaCatalogoMs?: number;
+};
 
 export interface SorgenteCandidati {
   readonly codice: string;

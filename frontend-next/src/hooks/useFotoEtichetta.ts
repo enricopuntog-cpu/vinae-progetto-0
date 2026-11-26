@@ -70,6 +70,8 @@ export function useFotoEtichetta({
     sintesi,
     messaggio: messaggioRicerca,
     selezionato,
+    catalogoIncompleto,
+    riprovaCatalogo,
     azzera: azzeraRicerca,
     seleziona: selezionaCandidato,
   } = ricerca;
@@ -228,6 +230,8 @@ export function useFotoEtichetta({
     campi,
     annateAlternative,
     faseRicerca,
+    catalogoIncompleto,
+    riprovaCatalogo,
     candidati,
     sintesi,
     messaggioRicerca,

@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { useRicercaCandidati } from "@/hooks/useRicercaCandidati";
 import type { CandidatoValutato, SorgenteCandidati } from "@/lib/vendi/foto-etichetta/candidati";
 import type { CampiConfermati } from "@/hooks/useFotoEtichetta";
-import { ElencoCandidati } from "./elenco-candidati";
+import { AvvisoCatalogo, ElencoCandidati } from "./elenco-candidati";
 
 export type ValoriRicerca = {
   produttore: string;
@@ -106,6 +106,16 @@ export function RicercaManuale({ sorgente, valori, applica }: Props) {
         <p role="alert" className="mt-2 text-xs text-destructive" data-testid="ricerca-manuale-errore">
           {ricerca.messaggio} Puoi continuare a compilare a mano.
         </p>
+      )}
+      {!superata && ricerca.fase === "fatta" && (
+        <AvvisoCatalogo
+          motivo={ricerca.catalogoIncompleto}
+          onRiprova={() => {
+            setApplicato(false);
+            void ricerca.riprovaCatalogo();
+          }}
+          prefissoTest="ricerca-manuale"
+        />
       )}
       {!superata && ricerca.fase === "fatta" && ricerca.candidati.length === 0 && (
         <p className="mt-2 text-xs" data-testid="ricerca-manuale-nessuno-trovato">

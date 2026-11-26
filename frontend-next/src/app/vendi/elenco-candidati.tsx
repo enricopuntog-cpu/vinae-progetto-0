@@ -7,6 +7,7 @@
 
 import type {
   CandidatoValutato,
+  CatalogoIncompleto,
   EsitoCorrispondenza,
   SintesiRicerca,
 } from "@/lib/vendi/foto-etichetta/candidati";
@@ -21,6 +22,40 @@ export const ETICHETTA_ESITO: Record<EsitoCorrispondenza, string> = {
   formato_diverso: "Stesso vino, formato diverso",
   possibile: "Possibile corrispondenza",
 };
+
+export const TESTO_CATALOGO_INCOMPLETO: Record<CatalogoIncompleto, string> = {
+  lento: "Il catalogo esteso dei vini sta impiegando troppo: per ora vedi solo i risultati di Vinea.",
+  non_disponibile: "Il catalogo esteso dei vini non è disponibile in questo momento: vedi solo i risultati di Vinea.",
+};
+
+/**
+ * WI-009 — ciò che il catalogo non ha potuto dire va dichiarato. Il secondo tentativo parte solo su richiesta:
+ * l elenco non si riordina da solo mentre l utente sta scegliendo.
+ */
+export function AvvisoCatalogo({
+  motivo,
+  onRiprova,
+  prefissoTest,
+}: {
+  motivo: CatalogoIncompleto | null;
+  onRiprova: () => void;
+  prefissoTest: string;
+}) {
+  if (!motivo) return null;
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground" data-testid={`${prefissoTest}-catalogo-incompleto`}>
+      <p role="status">{TESTO_CATALOGO_INCOMPLETO[motivo]}</p>
+      <button
+        type="button"
+        className="font-medium text-foreground underline underline-offset-2"
+        onClick={onRiprova}
+        data-testid={`${prefissoTest}-catalogo-riprova`}
+      >
+        Cerca ancora nel catalogo
+      </button>
+    </div>
+  );
+}
 
 /** « · Regione, Denominazione» (per una scheda canonica anche territorio o paese); vuoto se non c'è nulla. */
 const testoLuogo = (c: CandidatoValutato): string => {

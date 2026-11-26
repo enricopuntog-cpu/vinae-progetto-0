@@ -373,3 +373,55 @@ describe("sorgenteConCanonico", () => {
     expect(r.attribuzione).toBeUndefined();
   });
 });
+
+// WI-009 — il catalogo che manca va DICHIARATO: i risultati Vinea restano, ma l utente sa che l elenco è incompleto.
+describe("sorgenteConCanonico — catalogo incompleto dichiarato", () => {
+  const lento: SorgenteCandidati = { codice: "lento", cerca: () => new Promise(() => {}) };
+  const motivi = () => {
+    const visti: string[] = [];
+    return { visti, onCatalogoIncompleto: (m: string) => visti.push(m) };
+  };
+
+  test("oltre il tetto: «lento», e i candidati della principale restano", async () => {
+    const { visti, onCatalogoIncompleto } = motivi();
+    const s = sorgenteConCanonico(principaleCon([DAL_CATALOGO]), lento, { tettoMs: 10 });
+    expect(await s.cerca(DOMANDA, { onCatalogoIncompleto })).toEqual({ ok: true, data: [DAL_CATALOGO] });
+    expect(visti).toEqual(["lento"]);
+  });
+
+  test.each([
+    ["errore della RPC (anche limite per utente)", sorgenteCanonica(clienteCon({ data: null, error: { message: "x" } }))],
+    ["eccezione", { codice: "x", cerca: async () => { throw new Error("boom"); } } as SorgenteCandidati],
+  ])("%s: «non_disponibile»", async (_t, canonica) => {
+    const { visti, onCatalogoIncompleto } = motivi();
+    const s = sorgenteConCanonico(principaleCon([DAL_CATALOGO]), canonica);
+    expect(await s.cerca(DOMANDA, { onCatalogoIncompleto })).toEqual({ ok: true, data: [DAL_CATALOGO] });
+    expect(visti).toEqual(["non_disponibile"]);
+  });
+
+  test("catalogo spento o senza risultati: nessun avviso, è una risposta completa", async () => {
+    const { visti, onCatalogoIncompleto } = motivi();
+    const s = sorgenteConCanonico(principaleCon([DAL_CATALOGO]), sorgenteCanonica(clienteCon({ data: [], error: null })));
+    await s.cerca(DOMANDA, { onCatalogoIncompleto });
+    expect(visti).toEqual([]);
+  });
+
+  test("principale in errore: vale l errore, nessun avviso sul catalogo", async () => {
+    const { visti, onCatalogoIncompleto } = motivi();
+    const s = sorgenteConCanonico(principaleCon("errore"), lento, { tettoMs: 10 });
+    expect((await s.cerca(DOMANDA, { onCatalogoIncompleto })).ok).toBe(false);
+    expect(visti).toEqual([]);
+  });
+
+  test("un tetto più lungo richiesto dal chiamante vale per quella ricerca soltanto", async () => {
+    const aTempo: SorgenteCandidati = {
+      codice: "a_tempo",
+      cerca: () => new Promise((r) => setTimeout(() => r({ ok: true, data: [candidatoDaRigaCanonica(RIGA)!] }), 40)),
+    };
+    const s = sorgenteConCanonico(principaleCon([DAL_CATALOGO]), aTempo, { tettoMs: 5 });
+    const paziente = await s.cerca(DOMANDA, { attesaCatalogoMs: 1000 });
+    expect(paziente.ok && paziente.data.length).toBe(2);
+    const breve = await s.cerca(DOMANDA);
+    expect(breve.ok && breve.data.length).toBe(1);
+  });
+});
