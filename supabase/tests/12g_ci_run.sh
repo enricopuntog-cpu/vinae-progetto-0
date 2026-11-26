@@ -373,6 +373,9 @@ run_grid "wi008a impronta della promozione: dipendenze, guardie e trigger" wi008
 # WI-008 (wi008b): ranking esatto della ricerca canonica oltre 2.000 corrispondenze e limite per identità (40/min).
 # Proiezione accesa solo dentro la transazione (ROLLBACK); stessa guardia del catalogo vuoto.
 run_grid "wi008b ricerca canonica: ranking oltre 2.000 candidati e limite per identità" wi008b_ricerca_canonica_ranking_limite.sql 3
+# WI-008 (wi008c): simulazione, anteprima e lotto valutano il rapporto dei candidati una sola volta, con risultati
+# identici ai corpi precedenti (oracoli nella griglia); ROLLBACK.
+run_grid "wi008c promozione: una valutazione per chiamata, equivalenza con la logica precedente" wi008c_promozione_una_valutazione.sql 3
 
 # Stessa famiglia su sessioni PostgreSQL realmente separate: due esecutori sullo stesso
 # prelievo (uno solo riceve il Transfer), annullamento del titolare contro presa in carico e
