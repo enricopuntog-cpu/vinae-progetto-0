@@ -10,6 +10,7 @@ import type {
   EsitoCorrispondenza,
   SintesiRicerca,
 } from "@/lib/vendi/foto-etichetta/candidati";
+import Link from "next/link";
 import { ChiediAlSommelier } from "@/components/vinea/ChiediAlSommelier";
 import { contestoRicercaDaCandidato } from "@/lib/phase10/sommelier-contesto-ui";
 
@@ -95,13 +96,25 @@ export function ElencoCandidati({
                 ) : null}
               </span>
             </label>
-            {domanda ? (
-              <ChiediAlSommelier
-                contesto={domanda}
-                etichetta="Chiedi al Sommelier"
-                testId={`${prefissoTest}-sommelier-${c.id}`}
-                className="mt-1"
-              />
+            {domanda?.tipo === "ricerca" ? (
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                {/* In una scheda nuova: i dati già scritti nel wizard restano dove sono. */}
+                <Link
+                  href={`/vino-catalogo/${domanda.codice}`}
+                  target="_blank"
+                  rel="noopener"
+                  prefetch={false}
+                  className="text-xs underline"
+                  data-testid={`${prefissoTest}-scheda-${c.id}`}
+                >
+                  Apri la scheda
+                </Link>
+                <ChiediAlSommelier
+                  contesto={domanda}
+                  etichetta="Chiedi al Sommelier"
+                  testId={`${prefissoTest}-sommelier-${c.id}`}
+                />
+              </div>
             ) : null}
           </div>
         );

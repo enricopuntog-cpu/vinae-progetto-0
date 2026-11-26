@@ -38,7 +38,8 @@ export function campiWizardDaConferma(
       nome,
       annata,
       denominazione: confermati.denominazione.trim() || candidato?.denominazione || "",
-      regione: candidato?.regione ?? "",
+      // WI-008: un vino del catalogo canonico completa solo una regione ancora vuota, non sostituisce quella scelta.
+      regione: candidato?.canonico && correnti.regione.trim() ? "" : (candidato?.regione ?? ""),
       tipologia: candidato?.tipo ?? "",
       noteDegustazione: "",
       condizioniSuggerite: "",

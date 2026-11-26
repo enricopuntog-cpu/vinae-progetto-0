@@ -65,6 +65,13 @@ describe("ElencoCandidati — Chiedi al Sommelier", () => {
     ]);
   });
 
+  it("ogni candidato canonico rimanda alla propria scheda, in una pagina nuova per non perdere il wizard", () => {
+    monta([BASE, canonico("b", "1010003")]);
+    const scheda = screen.getByTestId("t-scheda-b");
+    expect([scheda.getAttribute("href"), scheda.getAttribute("target")]).toEqual(["/vino-catalogo/1010003", "_blank"]);
+    expect(screen.queryByTestId("t-scheda-a")).toBeNull();
+  });
+
   it("chiedere al Sommelier non sceglie il vino e non applica nulla al wizard", () => {
     const scelte: (string | null)[] = [];
     monta([canonico("b", "1010003")], scelte);

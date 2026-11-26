@@ -6,6 +6,7 @@
 // componente non mostra nulla. Non tocca note, finestre di consumo, consigli o dati della bottiglia.
 
 import { useId, useMemo, useState } from "react";
+import Link from "next/link";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { ElencoCandidati } from "@/app/vendi/elenco-candidati";
@@ -77,6 +78,11 @@ export function SelezioneCatalogoVino({ client, wineSlug, produttore, nome, disp
             </span>
           </p>
           <div className="mt-1.5 flex flex-wrap gap-2">
+            {disponibile ? (
+              <Link href={`/vino-catalogo/${scelta}`} prefetch={false} className="self-center underline" data-testid={`${prefisso}-scheda`}>
+                Apri la scheda
+              </Link>
+            ) : null}
             {domanda && disponibile ? (
               <ChiediAlSommelier contesto={domanda} etichetta="Chiedi al Sommelier" testId={`${prefisso}-sommelier`} />
             ) : null}
