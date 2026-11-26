@@ -163,6 +163,9 @@ function WizardVendi() {
     applicaEtichetta,
     applicaRicercaManuale,
     assistenzaAiEtichetta,
+    proposteAttive,
+    consensoCatalogo,
+    setConsensoCatalogo,
     chiediSuggerimento,
     applicaSuggerimento,
   } = useSellWizard({
@@ -892,6 +895,22 @@ function WizardVendi() {
                 </>
               )}
             </div>
+
+            {proposteAttive && !isVendita && !daCantina ? (
+              <label className="flex items-start gap-2 rounded-xl border border-border p-3 text-xs">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={consensoCatalogo}
+                  onChange={(e) => setConsensoCatalogo(e.target.checked)}
+                  data-testid="wizard-proposta-consenso"
+                />
+                <span>
+                  Proponi anche questo vino al catalogo condiviso di Vinea: solo produttore, nome, annata, regione, tipo e
+                  formato. Foto, note, prezzo di acquisto e quantità non vengono inviati; un curatore rivede la proposta.
+                </span>
+              </label>
+            ) : null}
 
             {/*
               Il riepilogo della logistica è per il venditore, e include la

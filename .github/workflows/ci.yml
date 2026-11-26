@@ -115,7 +115,7 @@ jobs:
       # che si svuota in silenzio.
       - name: Test
         env:
-          MIN_TESTS: "4046"
+          MIN_TESTS: "4058"
         run: |
           set -o pipefail
           bun run test 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
@@ -231,6 +231,7 @@ jobs:
           node --check tools/wine-catalog/lwin-import.mjs
           node --check tools/wine-catalog/lwin-load.mjs
           node --test tools/wine-catalog/test/*.test.mjs
+          node --test tools/company-brain/test/*.test.mjs
       # WI-001C-FIX-01 / I-1: TLS reale di Bun.SQL contro un server PostgreSQL FINTO su loopback (certificati generati al volo con openssl,
       # nessuna rete esterna, nessun segreto): CA giusta/errata, hostname errato, TLS disabilitato, riconnessione silenziosa, sola lettura.
       - name: Setup Bun (wine catalog TLS tests)

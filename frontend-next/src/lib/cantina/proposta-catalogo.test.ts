@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { formatoInMl, inviaPropostaCatalogo, preparaProposta, proposteDisponibili } from "./proposta-catalogo";
+import { formatoInMl, inviaPropostaCatalogo, inviaPropostaNuovoVino,
+  preparaPropostaNuovoVino,
+  preparaProposta, proposteDisponibili } from "./proposta-catalogo";
 
 const VINO = { produttore: "Cantina Aurelia", nome: "Rosso del Faro", annata: 2019, regione: "Liguria", denominazione: "IGT", tipo: "Rosso", formato: "0,75 L" };
 const campi = { produttore: VINO.produttore, nome: VINO.nome, annata: "2019", regione: "Liguria", denominazione: "IGT" };
@@ -48,6 +50,35 @@ describe("WI-011 — proposta esplicita al catalogo", () => {
     const esito = await inviaPropostaCatalogo(rotto, "slug-x", preparata.data);
     expect(esito.ok).toBe(false);
     expect(JSON.stringify(esito)).not.toContain("SEGRETO");
+  });
+
+  it("WI-015: inserimento manuale ed etichetta confermata hanno origine propria e soli dati enologici", () => {
+    const campi = { produttore: " Cantina  Mare ", nome: "Vermentino", annata: "2021", regione: "Liguria", tipo: "Bianco", formato: "0,75 L" };
+    expect(preparaPropostaNuovoVino(campi, false)).toEqual({
+      ok: true,
+      data: { origine: "manuale", dati: { produttore: "Cantina Mare", nome: "Vermentino", annata: 2021, regione: "Liguria", tipo: "Bianco", formato_ml: 750 } },
+    });
+    const daEtichetta = preparaPropostaNuovoVino({ ...campi, annata: "", formato: "magnum strano" }, true);
+    expect(daEtichetta).toEqual({ ok: true, data: { origine: "ocr", dati: { produttore: "Cantina Mare", nome: "Vermentino", regione: "Liguria", tipo: "Bianco" } } });
+    expect(preparaPropostaNuovoVino({ ...campi, nome: " " }, false).ok).toBe(false);
+  });
+
+  it("WI-015: ripete solo gli errori di rete, al massimo tre volte; una risposta del database non si ripete", async () => {
+    const proposta = { origine: "manuale" as const, dati: { produttore: "P", nome: "N" } };
+    const attese: number[] = [];
+    const pausa = async (ms: number) => void attese.push(ms);
+    let n = 0;
+    const rete = { rpc: async () => { n++; if (n < 3) throw new TypeError("fetch failed"); return { data: "ricevuta", error: null }; } } as unknown as SupabaseClient;
+    expect(await inviaPropostaNuovoVino(rete, proposta, { pausa })).toEqual({ ok: true, data: undefined });
+    expect([n, attese]).toEqual([3, [1000, 3000]]);
+    let m = 0;
+    const rifiuto = { rpc: async () => { m++; return { data: null, error: { code: "P0001", message: "SEGRETO" } }; } } as unknown as SupabaseClient;
+    const esito = await inviaPropostaNuovoVino(rifiuto, proposta, { pausa });
+    expect([m, esito.ok, JSON.stringify(esito).includes("SEGRETO")]).toEqual([1, false, false]);
+    let k = 0;
+    const sempreGiu = { rpc: async () => { k++; throw new TypeError("fetch failed"); } } as unknown as SupabaseClient;
+    expect((await inviaPropostaNuovoVino(sempreGiu, proposta, { pausa })).ok).toBe(false);
+    expect(k).toBe(3);
   });
 
   it("WI-015: «non_valida» è un esito della porta (che consuma la quota), non un successo né un errore interno", async () => {

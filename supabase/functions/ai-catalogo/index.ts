@@ -18,6 +18,8 @@
 import {
   AiFormatError,
   AiProviderError,
+  stimaTokenInput,
+  type AiUso,
   creaAiProvider,
   estraiJson,
   requestIdOpaco,
@@ -25,7 +27,9 @@ import {
 import {
   apriPorta,
   chiusa,
-  consumaBudget,
+  prenotaBudget,
+  rifiutata,
+  registraConsuntivo,
   json,
   leggiCorpo,
   registraEsitoFornitore,
@@ -111,19 +115,38 @@ Deno.serve(async (request) => {
   if (ocrText) parti.push(`OCR etichetta:\n${ocrText}`);
   if (hint) parti.push(`Indicazione utente: ${hint}`);
 
-  const senzaBudget = await consumaBudget(supabase, "ai:catalogo", cors);
-  if (senzaBudget) return senzaBudget;
+  const provider = creaAiProvider("catalogo");
+  const prompt = parti.join("\n\n");
+  const prenotazione = await prenotaBudget(supabase, "ai:catalogo", cors, {
+    provider: provider.id,
+    modello: provider.modello,
+    tokenInput: stimaTokenInput(SYSTEM, prompt),
+    tokenOutputMax: provider.maxOutputTokens,
+  });
+  if (rifiutata(prenotazione)) return prenotazione.risposta;
+  let uso: AiUso | null = null;
 
   try {
-    const grezzo = await creaAiProvider("catalogo").completeText({
+    const grezzo = await provider.completeText({
       system: SYSTEM,
-      prompt: parti.join("\n\n"),
+      prompt,
       requestId: requestIdOpaco("catalogo"),
+      onUso: (u) => {
+        uso = u;
+      },
     });
     // Il fornitore ha risposto: anche un formato inutilizzabile non è un suo guasto.
     await registraEsitoFornitore(supabase, "ai:catalogo", true);
+    await registraConsuntivo(supabase, prenotazione.richiestaId, "ok", uso);
     return json(suggerimentoDa(estraiJson(grezzo)), 200, cors);
   } catch (errore) {
+    // se il consuntivo «ok» è già passato, questa seconda chiusura non ha effetto
+    await registraConsuntivo(
+      supabase,
+      prenotazione.richiestaId,
+      errore instanceof AiFormatError ? "formato_non_valido" : errore instanceof AiProviderError && !errore.guastoFornitore ? "errore_richiesta" : "guasto_fornitore",
+      uso,
+    );
     if (errore instanceof AiFormatError) {
       return json({ error: "Il servizio AI ha restituito un formato non valido." }, 502, cors);
     }

@@ -37,8 +37,8 @@ codice non si mostra più ma la scheda nativa resta.
 |---|---|---|
 | Bottiglia in Cantina | «Proponi al catalogo Vinea», consenso esplicito per quella richiesta | `user_proposals_enabled` |
 | Correzione | stesso modulo con un campo modificato (origine `correzione`) | idem |
-| Inserimento manuale / OCR | porta `catalogo_proponi` accetta `manuale` e `ocr`; **l'interfaccia del wizard non le invia ancora** | idem |
-| Annuncio Marketplace | acquisizione **asincrona** dagli annunci già pubblici, avviata dall'admin; nessun trigger sul flusso di pubblicazione | `listing_harvest_enabled` |
+| Inserimento manuale / OCR (WI-015) | nell'ultimo passo del wizard, per un vino nuovo in Cantina: casella di consenso (mai preselezionata); origine `ocr` solo per dati **confermati** dall'etichetta; la bozza e l'OCR non confermato non inviano nulla; invio dopo la creazione, che non dipende dall'esito; ripetuto solo per errori di rete (massimo 3), poi si può rimandare dalla Cantina | idem |
+| Annuncio Marketplace | acquisizione **asincrona** dagli annunci già pubblici, dall'admin o dal lavoro `proposte_dagli_annunci` dello scheduler comune (spento); nessun trigger sul flusso di pubblicazione. La partecipazione è il checkpoint; un annuncio che fallisce si ritenta al massimo `harvest_max_attempts` volte (`catalog.intake_failures`) | `listing_harvest_enabled` |
 | Curatore / produttore | pannello admin. Un accesso diretto per produttori e partner **non esiste** | — |
 
 - Elenco **chiuso** di campi (produttore, nome, paese, regione, denominazione, tipologia, annata, non millesimato,
@@ -186,3 +186,18 @@ Da rivalidare, oltre a F-01–F-08 di WI-009:
   ancora Live.
 - **B-04.** Predisposta e spenta: `intake_settings.user_link_retention_days` (NULL = nessuna azione) e
   `catalog.minimize_decided_submissions` (solo proprietario, nessuno scheduler). Il periodo lo sceglie il founder.
+
+## 11. WI-015B — acquisizione, lavoro del curatore e aggiornamenti dal pannello (migration `20261129110000`)
+
+- **Dalla proposta al curatore:** il lavoro `lavoro_catalogo` crea un task per ogni proposta aperta (una volta) e chiude
+  quelli superati; il Catalog Manager allega l'evidenza e propone; il Data Quality segnala i problemi (vedi
+  `docs/COMPANY_BRAIN.md` §3). Nessuna decisione automatica.
+- **Aggiornamento LWIN dal pannello** (`/admin/catalogo` → Fonti e import, porta `catalogo_admin_aggiornamento`):
+  ultima importazione e hash; schede il cui record è Combined, Deleted o tolto dal file (con la destinazione);
+  attributi diversi nella nuova versione (proposte: si accettano con le rivendicazioni, senza sovrascrivere i
+  contributi Vinea); conflitti con i nativi e omonimie dichiarate. Nulla viene cancellato o aggiornato in automatico.
+  Scaricare il file, il dry-run, l'import e la promozione incrementale restano del runner amministrativo con le sue
+  guardie (§6); nessuna credenziale passa dal browser. La procedura non è stata provata su una versione LWIN nuova:
+  il file lo fornisce il founder.
+- **Prezzi (WI-014):** predisposto il contratto di acquisizione `lib/prezzi/acquisizione.ts`, spento e non collegato a
+  nessun dominio: campi chiusi (una riga con dati in più è scartata), fonte autorizzata e con finalità dichiarata.

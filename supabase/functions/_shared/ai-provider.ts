@@ -50,10 +50,17 @@ export type AiCall = {
    * riprodurre. Qui è opaco per costruzione — vedi `requestIdOpaco`.
    */
   requestId: string;
+  /** WI-015: consumo di token dichiarato dal fornitore, quando c'è. Mai stimato qui. */
+  onUso?: (uso: AiUso) => void;
 };
+
+export type AiUso = { input: number; output: number };
 
 export interface AiProvider {
   readonly id: string;
+  /** WI-015: modello e tetto di uscita, per prenotare il costo massimo prima della chiamata. */
+  readonly modello: string;
+  readonly maxOutputTokens: number;
   completeText(call: AiCall): Promise<string>;
   streamText(call: AiCall): Promise<ReadableStream<string>>;
 }
@@ -76,6 +83,8 @@ export const requestIdOpaco = (compito: string): string =>
  */
 export const creaDisabledProvider = (): AiProvider => ({
   id: "disabled",
+  modello: "nessuno",
+  maxOutputTokens: 0,
   completeText: () => Promise.reject(new AiProviderError("Il servizio AI non è configurato", false)),
   streamText: () => Promise.reject(new AiProviderError("Il servizio AI non è configurato", false)),
 });
@@ -113,8 +122,30 @@ const corpoOpenAi = (call: AiCall, options: OpenAiOptions, stream: boolean) => (
   ],
   max_completion_tokens: options.maxOutputTokens,
   user: call.requestId,
-  ...(stream ? { stream: true } : {}),
+  ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),
 });
+
+/** Il consumo come lo dichiara il fornitore (`usage`), oppure nulla: un numero mancante non si inventa. */
+export const leggiUsoOpenAi = (corpo: unknown): AiUso | null => {
+  const uso = (corpo as { usage?: { prompt_tokens?: unknown; completion_tokens?: unknown } | null })?.usage;
+  const input = uso?.prompt_tokens;
+  const output = uso?.completion_tokens;
+  return Number.isInteger(input) && Number.isInteger(output) && (input as number) >= 0 && (output as number) >= 0
+    ? { input: input as number, output: output as number }
+    : null;
+};
+
+/** Stima PRUDENTE dei token d'ingresso (circa 3 caratteri per token): serve solo a prenotare il costo massimo. */
+export const stimaTokenInput = (...testi: string[]): number => Math.ceil(testi.reduce((n, t) => n + t.length, 0) / 3) + 16;
+
+const usoDaRiga = (riga: string): AiUso | null => {
+  if (!riga.startsWith("data:") || !riga.includes('"usage"')) return null;
+  try {
+    return leggiUsoOpenAi(JSON.parse(riga.slice(5).trim()));
+  } catch {
+    return null;
+  }
+};
 
 /**
  * Ogni riga `data:` di uno stream OpenAI porta un oggetto con `choices[0].delta.content`.
@@ -170,6 +201,8 @@ const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
 
   return {
     id: "openai",
+    modello: options.model,
+    maxOutputTokens: options.maxOutputTokens,
     completeText: async (call) => {
       const response = await chiama(call, false);
       let parsed: { choices?: { message?: { content?: string | null } }[] };
@@ -178,6 +211,8 @@ const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
       } catch {
         throw new AiFormatError();
       }
+      const uso = leggiUsoOpenAi(parsed);
+      if (uso) call.onUso?.(uso);
       return parsed.choices?.[0]?.message?.content ?? "";
     },
     streamText: async (call) => {
@@ -193,11 +228,15 @@ const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
               const righe = resto.split("\n");
               resto = righe.pop() ?? "";
               for (const riga of righe) {
+                const uso = usoDaRiga(riga);
+                if (uso) call.onUso?.(uso);
                 const delta = estraiDeltaOpenAi(riga);
                 if (delta) controller.enqueue(delta);
               }
             },
             flush: (controller) => {
+              const uso = usoDaRiga(resto);
+              if (uso) call.onUso?.(uso);
               const delta = estraiDeltaOpenAi(resto);
               if (delta) controller.enqueue(delta);
             },

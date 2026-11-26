@@ -19,7 +19,7 @@ export type VinoPerProposta = {
 
 export type CampiProposta = { produttore: string; nome: string; annata: string; regione: string; denominazione: string };
 
-export type Proposta = { origine: "cantina" | "correzione"; dati: Record<string, string | number> };
+export type Proposta = { origine: "cantina" | "correzione" | "manuale" | "ocr"; dati: Record<string, string | number> };
 
 const ERRORE_GENERICO = "Non è stato possibile inviare la proposta. Riprova più tardi.";
 
@@ -97,4 +97,60 @@ export async function inviaPropostaCatalogo(client: SupabaseClient, wineSlug: st
     console.error("[catalogo-proposte] invio non riuscito:", codiceErrore(errore));
     return { ok: false, error: ERRORE_GENERICO };
   }
+}
+
+/** I soli campi enologici di un vino appena inserito dal wizard (WI-015). */
+export type CampiNuovoVino = {
+  produttore: string;
+  nome: string;
+  annata: string;
+  regione: string;
+  tipo: string;
+  formato: string;
+};
+
+/** `ocr` solo quando l'utente ha CONFERMATO i dati letti dall'etichetta; altrimenti `manuale`. */
+export function preparaPropostaNuovoVino(campi: CampiNuovoVino, daEtichettaConfermata: boolean): Result<Proposta> {
+  const produttore = compatta(campi.produttore);
+  const nome = compatta(campi.nome);
+  if (!produttore || !nome) return { ok: false, error: "Produttore e nome del vino sono necessari." };
+  const dati: Record<string, string | number> = { produttore, nome };
+  const annata = Number(campi.annata.trim());
+  if (/^[0-9]{4}$/.test(campi.annata.trim()) && annata >= 1800 && annata <= new Date().getFullYear() + 1) dati.annata = annata;
+  if (compatta(campi.regione)) dati.regione = compatta(campi.regione);
+  if (compatta(campi.tipo)) dati.tipo = compatta(campi.tipo);
+  const ml = formatoInMl(campi.formato);
+  if (ml !== null) dati.formato_ml = ml;
+  return { ok: true, data: { origine: daEtichettaConfermata ? "ocr" : "manuale", dati } };
+}
+
+const attesaReale = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * Invio DOPO che la bottiglia è stata creata: non la condiziona mai. Si ripete solo un errore di rete (la richiesta non
+ * ha avuto risposta), al massimo tre volte; una risposta del database non si ripete (la quota conta ogni richiesta e il
+ * server deduplica la stessa identità). Se non parte, la si può inviare di nuovo dalla Cantina.
+ */
+export async function inviaPropostaNuovoVino(
+  client: SupabaseClient,
+  proposta: Proposta,
+  { tentativi = 3, pausa = attesaReale }: { tentativi?: number; pausa?: (ms: number) => Promise<void> } = {},
+): Promise<Result<void>> {
+  for (let n = 1; n <= tentativi; n++) {
+    try {
+      const { data, error } = await client.rpc("catalogo_proponi", {
+        p_origine: proposta.origine,
+        p_dati: proposta.dati,
+        p_consenso: true,
+        p_wine_slug: null,
+      });
+      if (!error && data === "ricevuta") return { ok: true, data: undefined };
+      // postgrest-js riporta un guasto di rete come errore senza codice
+      if (!error || error.code) return { ok: false, error: ERRORE_GENERICO };
+    } catch (errore) {
+      console.error("[catalogo-proposte] rete non raggiungibile:", codiceErrore(errore));
+    }
+    if (n < tentativi) await pausa(n === 1 ? 1000 : 3000);
+  }
+  return { ok: false, error: ERRORE_GENERICO };
 }

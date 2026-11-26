@@ -8,7 +8,7 @@ import { codiceErrore } from "@/lib/errore-per-log";
 
 const GENERICO = "Operazione non riuscita. Riprova.";
 /** Codici sollevati dalle porte con un messaggio scritto per l'amministratore. */
-const CODICI_PARLANTI = new Set(["22023", "23505", "P0001", "P0002", "55000", "0A000"]);
+const CODICI_PARLANTI = new Set(["22023", "23505", "P0001", "P0002", "55000", "0A000", "55P03"]);
 
 export function messaggioCatalogo(errore: { code?: string; message?: string }): string {
   if (errore.code === "42501") return "Operazione non autorizzata.";
@@ -120,6 +120,23 @@ export type Fonti = {
   conflitti_lwin_nativi: { wine_id: string; produttore: string; nome: string; lwin7: string }[];
 };
 
+export type AggiornamentoLwin = {
+  ultima_importazione: { seq: number; stato: string; conclusa: string | null; file: string; sha256: string; righe: number } | null;
+  versione_completa: { sha256: string | null; completata: string | null; import_in_corso: boolean | null } | null;
+  canonici_non_piu_live: {
+    conteggio: number;
+    esempi: { wine_id: string; nome: string; lwin7: string | null; stato_fonte: string; rimosso_dalla_fonte: boolean; destinazione_lwin: string | null }[];
+  };
+  attributi_cambiati: {
+    conteggio: number;
+    oltre: boolean;
+    esempi: { wine_id: string; nome: string; lwin7: string | null; differenze: Record<string, { catalogo: string | null; fonte: string | null }> }[];
+  };
+  conflitti_nativi: { wine_id: string; produttore: string; nome: string; lwin7: string }[];
+  omonimie_dichiarate: number;
+  regola: { stato: string; impronta_invariata: boolean } | null;
+};
+
 export type Evento = { id: number; azione: string; entita: string; riferimento: string | null; esecutore: string; quando: string };
 
 export type Territorio = { id: number; nome: string; tipo: string };
@@ -160,6 +177,10 @@ export function serviziCatalogoAdmin(client: SupabaseClient) {
     code: (pagina: number) => chiama<Code>("catalogo_admin_code", { p_pagina: pagina, p_per_pagina: PER_PAGINA }),
     storico: (pagina: number) => chiama<Evento[]>("catalogo_admin_storico", { p_pagina: pagina, p_per_pagina: 30 }),
     fonti: () => chiama<Fonti>("catalogo_admin_fonti"),
+    // WI-015: che cosa è cambiato con l'ultima versione LWIN (sola lettura) e omonimia accertata dal curatore.
+    aggiornamento: () => chiama<AggiornamentoLwin>("catalogo_admin_aggiornamento"),
+    distingui: (wineId: string, lwin7: string, nota: string) =>
+      chiama<boolean>("catalogo_admin_distingui_lwin", { p_wine_id: wineId, p_lwin7: lwin7, p_nota: nota }),
     territori: (testo: string) => chiama<Territorio[]>("catalogo_admin_territori", { p_testo: testo }),
     cercaFonte: (testo: string) => chiama<RecordFonte[]>("catalogo_admin_cerca_fonte", { p_testo: testo }),
     decidiProposta: (id: number, decisione: Decisione, dati: Record<string, unknown>, nota: string) =>

@@ -41,7 +41,9 @@ Aprire soltanto ciò che serve al task:
   [`../docs/wine-intelligence/WI_009_PROCEDURA_FAIL_CLOSED.md`](../docs/wine-intelligence/WI_009_PROCEDURA_FAIL_CLOSED.md).
   **Living Catalog** (identità senza LWIN, proposte dal sito, pannello admin, aggiornamento periodico LWIN, WI-011/012):
   [`../docs/wine-intelligence/WI_011_LIVING_CATALOG.md`](../docs/wine-intelligence/WI_011_LIVING_CATALOG.md).
-- **Company Brain e Sentinel** (WI-013: eventi, task, approvazioni, registro anomalie, cruscotto; non attivo 24/7):
+- **Company Brain e Sentinel** (WI-013 e WI-015: identità per credenziale, worker deterministici, scheduler unico non
+  installato, ingestione dei segnali, costi AI, cruscotto; **nulla attivato**, non attivo 24/7; procedura di attivazione
+  al §8):
   [`../docs/COMPANY_BRAIN.md`](../docs/COMPANY_BRAIN.md).
 - Monitoraggio pre-lancio OBS-01: [`../docs/VPM_022C_OBS_01.md`](../docs/VPM_022C_OBS_01.md)
   contiene strumenti nativi, log minimizzati, heartbeat, responsabilità e residui

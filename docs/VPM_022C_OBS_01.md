@@ -68,7 +68,8 @@ con scheduler acceso. Non è stato avviato manualmente né modificato.
    Non legge log/payload del payout e non chiama Supabase o Stripe.
 6. Un'issue GitHub del bot con titolo `[OBS-01] Technical heartbeat`, marker
    riconoscibile e soli codici chiusi, menzione dell'owner. Si aggiorna solo se
-   cambiano le cause, si chiude al recupero. Usa il `github.token` effimero già
+   cambiano le cause. **Al recupero NON si chiude da sola** (WI-015, issue #322): riceve una nota una volta sola e la
+   chiude una persona dopo aver verificato causa e risoluzione. Usa il `github.token` effimero già
    fornito da Actions, con contents/actions read e issues write; nessun nuovo
    secret. Test eseguiti nel gate esistente `Continuity scripts`.
 

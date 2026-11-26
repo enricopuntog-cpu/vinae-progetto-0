@@ -53,6 +53,20 @@ describe("WI-012 — pannello del catalogo: solo le porte di amministrazione", (
     expect(messaggioCatalogo({ code: "XX000", message: "SEGRETO" })).toBe("Operazione non riuscita. Riprova.");
   });
 
+  it("WI-015: aggiornamento LWIN in sola lettura e omonimia dichiarata con motivo, tramite le porte", async () => {
+    const { client, chiamate } = registra({});
+    const s = serviziCatalogoAdmin(client);
+    await s.aggiornamento();
+    await s.distingui("w", "1234567", "produttori omonimi");
+    expect(chiamate).toEqual([
+      ["catalogo_admin_aggiornamento", undefined],
+      ["catalogo_admin_distingui_lwin", { p_wine_id: "w", p_lwin7: "1234567", p_nota: "produttori omonimi" }],
+    ]);
+    expect(messaggioCatalogo({ code: "55P03", message: "catalog: una promozione è in corso: riprova al termine del lotto" })).toBe(
+      "Una promozione è in corso: riprova al termine del lotto",
+    );
+  });
+
   it("un'eccezione di rete diventa un errore leggibile", async () => {
     const client = { rpc: async () => Promise.reject(new Error("SEGRETO")) } as unknown as SupabaseClient;
     const esito = await chiamaCatalogoAdmin(client, "catalogo_admin_riepilogo");

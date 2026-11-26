@@ -84,6 +84,10 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `AI_MODEL_DEFAULT` | Edge Function | Modello usato quando quello del compito non è impostato. Default `gpt-4.1-mini`. |
 | `AI_MODEL_CHAT` | Edge Function | Modello della chat Sommelier. La decisione 7.1 vuole un modello **per compito**. |
 | `AI_MODEL_PAIRING` | Edge Function | Modello dell'abbinamento cibo-vino. |
+| `VINEA_WORKER_ENABLED` | worker Company Brain (WI-015) | **Fallisce chiusa**: soltanto `true` esatto avvia `tools/company-brain/worker.mjs`. |
+| `VINEA_AGENT_DATABASE_URL` | worker Company Brain (WI-015) | Connessione con il login **dedicato** dell'agente (mai proprietario o `service_role`; fuori da loopback `sslmode=verify-full`). Segreto: non va nel repository. |
+| `VINEA_INGEST_ENABLED` | variabile GitHub Actions (WI-015) | Soltanto `true` esatto attiva il passo che invia il segnale al Company Brain in `offsite-backup-freshness`. |
+| `VINEA_INGEST_DATABASE_URL` | secret GitHub Actions (WI-015) | Environment `production-backup`. Login membro **solo** di `brain_ingest`; senza, `segnale.mjs` risponde `non_configurato`. |
 | `AI_MODEL_CATALOGO` | Edge Function | Modello del suggerimento di catalogazione. |
 | `AI_MAX_OUTPUT_TOKENS` | Edge Function | Tetto di token in uscita per chiamata, default `800`. |
 | `AI_TIMEOUT_SECONDS` | Edge Function | Timeout applicativo verso il fornitore, default `30`, tetto `120`. |

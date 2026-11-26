@@ -43,20 +43,28 @@ test("latest completed failure alarms despite an earlier successful heartbeat", 
     runs: [good, { ...good, created_at: new Date(now).toISOString(), conclusion: "failure" }] }), ["payout_job_failed"]);
 });
 
-test("alert opens once, does not repeat notifications, and closes on recovery", async () => {
+test("WI-015 / issue #322: il verde non chiude l'allarme: lo annota una volta e la chiusura resta a una persona con le prove", async () => {
   let issues = [];
   const writes = [];
   const api = async (method, path, body) => {
     if (method === "GET") return issues;
     writes.push({ method, path, body });
     if (method === "POST") issues = [{ ...body, number: 1 }];
+    if (method === "PATCH") issues = [{ ...issues[0], ...body }];
   };
   assert.equal(await syncAlert(api, ["next_unavailable"], "enricopuntog-cpu"), "alert");
   await syncAlert(api, ["next_unavailable"], "enricopuntog-cpu");
   assert.equal(writes.length, 1);
   assert.ok(writes[0].body.body.includes("@enricopuntog-cpu"));
-  await syncAlert(api, [], "enricopuntog-cpu");
-  assert.equal(writes[1].body.state, "closed");
+  assert.equal(await syncAlert(api, [], "enricopuntog-cpu"), "recovered_awaiting_evidence");
+  assert.equal(await syncAlert(api, [], "enricopuntog-cpu"), "recovered_awaiting_evidence");
+  assert.equal(writes.length, 2, "la nota di ripristino si scrive una volta sola");
+  assert.equal(writes[1].body.state, undefined);
+  assert.match(writes[1].body.body, /La issue resta aperta/);
+  assert.match(writes[1].body.body, /next_unavailable/, "le cause originali restano leggibili");
+  // se il problema torna, il corpo torna allo stato d'allarme
+  assert.equal(await syncAlert(api, ["next_unavailable"], "enricopuntog-cpu"), "alert");
+  assert.doesNotMatch(writes[2].body.body, /La issue resta aperta/);
 });
 
 test("alert rejects arbitrary text and does not edit unrelated issues", async () => {

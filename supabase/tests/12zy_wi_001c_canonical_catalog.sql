@@ -99,12 +99,13 @@ begin
   perform pg_temp.rec('A03', 'FIX-02 + WI-007-FIX-01 + WI-011: la superficie dello schema, derivata dal catalogo di sistema (surface_audit), è conforme e le uniche SECURITY DEFINER sono le 17 porte di scrittura del curatore più i due rapporti di sola lettura (conflitti LWIN-nativi e promotion_simulation)',
     not exists (select 1 from catalog.surface_audit() where not ok)
     -- WI-015: due definer interne senza EXECUTE (contatore delle partecipazioni e minimizzazione del proprietario)
-    and (select count(*) from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.prosecdef) = 21
+    and (select count(*) from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.prosecdef) = 22
     and (select count(*) from catalog.surface_audit() where kind = 'internal' and fn in
           ('catalog.contribution_submissions_removed()', 'catalog.minimize_decided_submissions(text)') and ok) = 2
     and (select count(*) from catalog.surface_audit() where kind = 'curator_door') = 17
     and (select array_agg(fn order by fn) from catalog.surface_audit() where kind = 'curator_report')
-        = array['catalog.lwin_native_conflicts(integer)', 'catalog.promotion_simulation(text,text,integer)'],
+        -- WI-015B: terzo rapporto, il riepilogo dell'aggiornamento LWIN
+        = array['catalog.lwin_native_conflicts(integer)', 'catalog.promotion_simulation(text,text,integer)', 'catalog.update_summary()'],
     (select string_agg(fn || ': ' || why, ' | ') from catalog.surface_audit() where not ok));
   perform pg_temp.rec('A04', 'nessuna funzione del catalogo con EXECUTE a PUBLIC (le funzioni WI-001C non nascono eseguibili da PUBLIC)',
     not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace

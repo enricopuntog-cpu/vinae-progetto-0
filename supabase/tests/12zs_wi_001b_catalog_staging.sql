@@ -120,7 +120,9 @@ begin
                         'catalog.lwin_native_conflicts(integer)',
                         -- WI-015: trigger del contatore delle partecipazioni (definer perché scatta anche nel cascade della
                         -- cancellazione dell'account) e minimizzazione del solo proprietario; nessuno dei due ha EXECUTE.
-                        'catalog.contribution_submissions_removed()', 'catalog.minimize_decided_submissions(text)'])));
+                        'catalog.contribution_submissions_removed()', 'catalog.minimize_decided_submissions(text)',
+                        -- WI-015B: rapporto di sola lettura dell'aggiornamento LWIN (classe curator_report in surface_audit)
+                        'catalog.update_summary()'])));
 
   perform pg_temp.rec('A04', 'nessuna funzione con EXECUTE a PUBLIC (acl presente e senza grantee 0)',
     not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace
