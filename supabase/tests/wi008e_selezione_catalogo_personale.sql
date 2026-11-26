@@ -172,7 +172,13 @@ begin
       where p.oid in ('public.cellar_catalogo_scegli(text,text)'::regprocedure, 'public.cellar_catalogo_rimuovi(text)'::regprocedure)
         and p.prosecdef and exists (select 1 from unnest(p.proconfig) c where c ~ '^search_path=("")?$')
         and has_function_privilege('authenticated', p.oid, 'EXECUTE') and not has_function_privilege('anon', p.oid, 'EXECUTE')
+        and not has_function_privilege('service_role', p.oid, 'EXECUTE')
         and not exists (select 1 from aclexplode(p.proacl) x where x.grantee = 0)) = 2);
+  -- WI-009 (audit WI-008, F-11): minimo privilegio, nessun percorso di servizio usa queste porte.
+  perform pg_temp.rec('F04', 'catalogo_canonico_disponibile: authenticated sì, anon e service_role no',
+    has_function_privilege('authenticated', 'public.catalogo_canonico_disponibile()', 'EXECUTE')
+    and not has_function_privilege('anon', 'public.catalogo_canonico_disponibile()', 'EXECUTE')
+    and not has_function_privilege('service_role', 'public.catalogo_canonico_disponibile()', 'EXECUTE'));
   perform pg_temp.rec('F03', 'tabella: RLS attiva; ad authenticated solo SELECT, ad anon nulla',
     (select relrowsecurity from pg_class where oid = 'public.wine_catalog_selections'::regclass)
     and has_table_privilege('authenticated', 'public.wine_catalog_selections', 'SELECT')
