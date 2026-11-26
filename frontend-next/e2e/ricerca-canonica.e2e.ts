@@ -15,7 +15,7 @@ import { expect, test } from "./support/test";
 import { PRODUTTORE_E2E, etichettaCorsa, leggiDalDatabase, preparaBottigliaInCantina } from "./support/vino";
 import { apriIdentificazione, cerca } from "./support/wizard-ricerca";
 import { opzioniDelProgetto } from "./support/browser";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 /**
  * WI-007 / FIX-03C · ricerca canonica nel passo Identificazione di `/vendi`, con Auth, PostgREST, database e browser
@@ -35,6 +35,33 @@ import type { Page } from "@playwright/test";
 
 /** Codice LWIN mostrato su una scheda canonica («LWIN 9100001»); il testo di omonimia nomina «LWIN» ma non un codice. */
 const CON_LWIN = /LWIN \d{7}/;
+
+/**
+ * Le schede dei vini usano `content-visibility: auto` (`.cv-card`) con un'altezza stimata: quando una scheda entra in
+ * vista prende quella vera e ciò che sta sotto si sposta. Dopo uno scorrimento automatico WebKit lo applica un istante
+ * più tardi, fra pressione e rilascio: il `click` finisce sul contenitore e il pulsante non lo riceve. Una persona
+ * tocca il layout già fermo: qui si aspetta la stessa cosa, e il clic resta quello vero.
+ */
+async function fermo(bersaglio: Locator): Promise<Locator> {
+  await bersaglio.scrollIntoViewIfNeeded();
+  let precedente = "";
+  await expect
+    .poll(
+      async () => {
+        await bersaglio.scrollIntoViewIfNeeded();
+        const attuale = JSON.stringify(await bersaglio.boundingBox());
+        const uguale = attuale === precedente;
+        precedente = attuale;
+        return uguale;
+      },
+      { intervals: [250], timeout: 10_000 },
+    )
+    .toBe(true);
+  return bersaglio;
+}
+
+/** Prima di lasciare la pagina: una navigazione annulla le letture in corso, e WebKit le registra come errori. */
+const letturaConclusa = (page: Page) => page.waitForLoadState("networkidle");
 
 test.describe.serial("Ricerca canonica nel wizard: catalogo acceso solo in prova, identità non attribuite, nessuna scrittura @smoke @cross", () => {
   const corsa = etichettaCorsa();
@@ -272,19 +299,21 @@ test.describe.serial("Ricerca canonica nel wizard: catalogo acceso solo in prova
     await expect(scheda.locator("img")).toHaveCount(0);
     await expect(page.locator('meta[name="robots"]').first()).toHaveAttribute("content", /noindex/);
 
+    await letturaConclusa(page);
     await page.goto("/cantina");
-    await page.getByTestId(`catalogo-${slug}-cerca`).click();
+    await (await fermo(page.getByTestId(`catalogo-${slug}-cerca`))).click();
     const candidati = page.getByTestId(`catalogo-${slug}-candidati`);
     await expect(candidati).toContainText(`LWIN ${LWIN_SINGOLO}`);
     expect(scelte()).toBe("");
     await expect(page.getByTestId(`catalogo-${slug}-conferma`)).toBeDisabled();
-    await candidati.locator("label", { hasText: LWIN_SINGOLO }).locator("input").check();
-    await page.getByTestId(`catalogo-${slug}-conferma`).click();
+    await (await fermo(candidati.locator("label", { hasText: LWIN_SINGOLO }).locator("input"))).check();
+    await (await fermo(page.getByTestId(`catalogo-${slug}-conferma`))).click();
     await expect(page.getByTestId(`catalogo-${slug}`)).toContainText(`scelta da te: LWIN ${LWIN_SINGOLO}`);
     expect(scelte()).toBe(LWIN_SINGOLO);
+    await letturaConclusa(page);
     await page.reload();
     await expect(page.getByTestId(`catalogo-${slug}`)).toContainText(`LWIN ${LWIN_SINGOLO}`);
-    await page.getByTestId(`catalogo-${slug}-rimuovi`).click();
+    await (await fermo(page.getByTestId(`catalogo-${slug}-rimuovi`))).click();
     await expect(page.getByTestId(`catalogo-${slug}-cerca`)).toBeVisible();
     expect(scelte()).toBe("");
     expect(collegamenti()).toBe(collegamentiPrima);
@@ -292,11 +321,14 @@ test.describe.serial("Ricerca canonica nel wizard: catalogo acceso solo in prova
 
     // Catalogo spento: la scheda non esiste più e in Cantina non compare alcun comando.
     impostaProiezione(false);
+    await letturaConclusa(page);
     await page.goto(`/vino-catalogo/${LWIN_SINGOLO}`);
     await expect(page.getByTestId("scheda-catalogo")).toHaveCount(0);
+    await letturaConclusa(page);
     await page.goto("/cantina");
     await expect(page.getByText(nomeSingolo).first()).toBeVisible();
     await expect(page.getByTestId(`catalogo-${slug}-cerca`)).toHaveCount(0);
+    await letturaConclusa(page);
     await contesto.close();
   });
 });
