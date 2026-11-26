@@ -36,6 +36,8 @@ let rpcLog: { name: string; args: Record<string, unknown> }[];
 let dati: { bottle_units: Riga[]; public_listings: Riga[]; wines: Riga[]; profili: Record<string, string> };
 let erroriDb: Set<string>;
 let rateLimitKo: boolean;
+/** WI-010: esito del budget globale; "errore" = RPC assente o non raggiungibile. */
+let esitoBudget: string;
 let storico: { ruolo: string; contenuto: string }[];
 let righeCanoniche: Riga[];
 let canonicoKo: boolean;
@@ -100,6 +102,10 @@ const fakeSupabase = {
     if (name === "vini_canonici_cerca_servizio") {
       return canonicoKo ? { data: null, error: { code: "PGRST", message: "SEGRETO-DI-DB" } } : { data: righeCanoniche, error: null };
     }
+    if (name === "ai_budget_consuma") {
+      return esitoBudget === "errore" ? { data: null, error: { code: "PGRST202", message: "SEGRETO-DI-DB" } } : { data: esitoBudget, error: null };
+    }
+    if (name === "ai_budget_esito") return { data: null, error: null };
     if (name === "sommelier_contesto_leggi") return { data: storico, error: null };
     if (name === "sommelier_scambio_registra") return { data: 2, error: null };
     throw new Error(`RPC non prevista: ${name}`);
@@ -252,6 +258,7 @@ beforeEach(() => {
   providerRispondeKo = false;
   erroriDb = new Set();
   rateLimitKo = false;
+  esitoBudget = "consentito";
   storico = [];
   righeCanoniche = [];
   canonicoKo = false;
@@ -764,5 +771,58 @@ describe("Sommelier: ricerca canonica (WI-008)", () => {
     await (await chiama({ contesto: RICERCA })).text();
     expect(fetchEstranei).toHaveLength(0);
     expect(chiamateProvider).toHaveLength(1);
+  });
+});
+
+describe("WI-010 — budget globale e interruttore (chiusi per difetto)", () => {
+  const chiedi = () =>
+    handler(new Request("http://edge.local/ai-sommelier", {
+      method: "POST",
+      headers: { origin: "http://localhost:3000", authorization: "Bearer token-a", "content-type": "application/json" },
+      body: JSON.stringify({ session_id: SESSIONE, message: "Che cosa bevo stasera?" }),
+    }));
+  const esiti = () => rpcLog.filter((r) => r.name === "ai_budget_esito").map((r) => r.args);
+
+  it.each(["non_configurato", "giorno_esaurito", "mese_esaurito", "interruttore_aperto", "errore", "valore-inatteso"])(
+    "%s: 503 con motivo «budget», nessuna chiamata al fornitore e nessun dettaglio",
+    async (esito) => {
+      esitoBudget = esito;
+      const risposta = await chiedi();
+      expect(risposta.status).toBe(503);
+      const corpo = await risposta.text();
+      expect(JSON.parse(corpo).motivo).toBe("budget");
+      expect(corpo).not.toContain("SEGRETO");
+      expect(corpo).not.toContain(esito === "errore" ? "PGRST" : esito);
+      expect(chiamateProvider).toEqual([]);
+      expect(esiti()).toEqual([]);
+    },
+  );
+
+  it("consentito: il budget è consumato una volta, per la funzione giusta, dopo il limite per utente", async () => {
+    const risposta = await chiedi();
+    expect(risposta.status).toBe(200);
+    await risposta.text();
+    const nomi = rpcLog.map((r) => r.name);
+    expect(nomi.filter((n) => n === "ai_budget_consuma")).toHaveLength(1);
+    expect(nomi.indexOf("rate_limit_consume")).toBeLessThan(nomi.indexOf("ai_budget_consuma"));
+    expect(rpcLog.find((r) => r.name === "ai_budget_consuma")?.args).toEqual({ p_scope: "ai:chat" });
+    expect(esiti()).toEqual([{ p_scope: "ai:chat", p_riuscita: true }]);
+  });
+
+  it("guasto del fornitore: registrato per l'interruttore", async () => {
+    providerRispondeKo = true;
+    const risposta = await chiedi();
+    expect(risposta.status).toBe(503);
+    expect(esiti()).toEqual([{ p_scope: "ai:chat", p_riuscita: false }]);
+  });
+
+  it("una richiesta non valida non consuma budget", async () => {
+    const risposta = await handler(new Request("http://edge.local/ai-sommelier", {
+      method: "POST",
+      headers: { origin: "http://localhost:3000", authorization: "Bearer token-a", "content-type": "application/json" },
+      body: JSON.stringify({ session_id: SESSIONE, message: "" }),
+    }));
+    expect(risposta.status).toBe(400);
+    expect(rpcLog.some((r) => r.name === "ai_budget_consuma")).toBe(false);
   });
 });

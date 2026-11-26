@@ -39,6 +39,9 @@ sql() { "${PSQL[@]}" -c "$1"; }
 [ "$(sql "select count(*) from auth.users where email like '%@wi004-e2e.test'")" = 0 ] \
   || { echo 'Fixture wi004 gia presente: serve stack nuovo.' >&2; exit 3; }
 
+# WI-010: il budget AI è chiuso per difetto; qui il fornitore è finto, quindi si configura un tetto solo per la prova.
+budget() { sql "update private.ai_budget_settings set richieste_giorno=$1, richieste_mese=$1, guasti_consecutivi=0, aperto_fino_a=null;" >/dev/null; }
+
 PASSWORD="$(node -e 'console.log(require("node:crypto").randomBytes(18).toString("hex") + "Aa1!")')"
 echo "::add-mask::$PASSWORD"
 EMAIL_A="a@wi004-e2e.test"
@@ -47,6 +50,7 @@ EMAIL_B="b@wi004-e2e.test"
 cleanup() {
   local status=$? residue
   trap - EXIT
+  budget null || status=1
   sql "begin;
     delete from public.bottle_units where owner_id in (select id from auth.users where email like '%@wi004-e2e.test');
     delete from public.wines where slug like 'wi004-e2e-%';
@@ -59,6 +63,7 @@ cleanup() {
   exit "$status"
 }
 trap cleanup EXIT
+budget 1000
 
 # Utenti creati dalla vera API Auth (admin), con email confermata: i token saranno quelli veri.
 create_user() {

@@ -28,7 +28,15 @@ import {
   estraiJson,
   requestIdOpaco,
 } from "../_shared/ai-provider.ts";
-import { apriPorta, chiusa, json, leggiCorpo, testo } from "../_shared/ai-gate.ts";
+import {
+  apriPorta,
+  chiusa,
+  consumaBudget,
+  json,
+  leggiCorpo,
+  registraEsitoFornitore,
+  testo,
+} from "../_shared/ai-gate.ts";
 
 // Stesso tetto di `backend/ai_routes.py:148`: il prompt resta limitato anche
 // quando il catalogo cresce.
@@ -123,6 +131,9 @@ Deno.serve(async (request) => {
   const prompt = `Piatto o occasione: ${query}\n\nCatalogo:\n` +
     catalogo.map((riga) => `- ${riga.id}: ${etichettaCatalogo(riga)}`).join("\n");
 
+  const senzaBudget = await consumaBudget(supabase, "ai:pairing", cors);
+  if (senzaBudget) return senzaBudget;
+
   let parsed: Record<string, unknown>;
   try {
     const grezzo = await creaAiProvider("pairing").completeText({
@@ -130,6 +141,8 @@ Deno.serve(async (request) => {
       prompt,
       requestId: requestIdOpaco("pairing"),
     });
+    // Il fornitore ha risposto: un formato inutilizzabile non è un suo guasto.
+    await registraEsitoFornitore(supabase, "ai:pairing", true);
     parsed = estraiJson(grezzo);
   } catch (errore) {
     // 7.5: 503 se il fornitore è giù, 502 se ha risposto qualcosa di
@@ -138,6 +151,7 @@ Deno.serve(async (request) => {
       return json({ error: "Il servizio AI ha restituito un formato non valido." }, 502, cors);
     }
     if (errore instanceof AiProviderError) {
+      await registraEsitoFornitore(supabase, "ai:pairing", false);
       return json({ error: "Il servizio AI non è al momento disponibile." }, 503, cors);
     }
     console.error("[ai-pairing] errore non previsto");
