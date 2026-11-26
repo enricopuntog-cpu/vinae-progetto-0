@@ -170,6 +170,7 @@ function WizardVendi() {
     applicaSuggerimento,
   } = useSellWizard({
     initialMode,
+    autenticato: Boolean(authUser),
     onNavigate: (path) => router.push(path),
     bottleUnitId,
     identitaVino: vinoBottiglia

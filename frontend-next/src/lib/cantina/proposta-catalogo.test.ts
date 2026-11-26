@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatoInMl, inviaPropostaCatalogo, inviaPropostaNuovoVino,
   preparaPropostaNuovoVino,
-  preparaProposta, proposteDisponibili } from "./proposta-catalogo";
+  preparaProposta, proposteDisponibili, proposteDisponibiliPerNuovoVino } from "./proposta-catalogo";
 
 const VINO = { produttore: "Cantina Aurelia", nome: "Rosso del Faro", annata: 2019, regione: "Liguria", denominazione: "IGT", tipo: "Rosso", formato: "0,75 L" };
 const campi = { produttore: VINO.produttore, nome: VINO.nome, annata: "2019", regione: "Liguria", denominazione: "IGT" };
@@ -50,6 +50,16 @@ describe("WI-011 — proposta esplicita al catalogo", () => {
     const esito = await inviaPropostaCatalogo(rotto, "slug-x", preparata.data);
     expect(esito.ok).toBe(false);
     expect(JSON.stringify(esito)).not.toContain("SEGRETO");
+  });
+
+  it("WI-015: nel wizard la disponibilità si chiede solo con una sessione e per un vino nuovo (anon non ha la porta: sarebbe un 401)", async () => {
+    let chiamate = 0;
+    const client = { rpc: async () => (chiamate++, { data: true, error: null }) } as unknown as SupabaseClient;
+    expect(await proposteDisponibiliPerNuovoVino(client, { autenticato: false, daCantina: false })).toBe(false);
+    expect(await proposteDisponibiliPerNuovoVino(client, { autenticato: true, daCantina: true })).toBe(false);
+    expect(chiamate).toBe(0);
+    expect(await proposteDisponibiliPerNuovoVino(client, { autenticato: true, daCantina: false })).toBe(true);
+    expect(chiamate).toBe(1);
   });
 
   it("WI-015: inserimento manuale ed etichetta confermata hanno origine propria e soli dati enologici", () => {

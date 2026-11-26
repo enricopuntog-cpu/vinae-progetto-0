@@ -1,7 +1,7 @@
 "use client";
 
 import { codiceErrore } from "@/lib/errore-per-log";
-import { inviaPropostaNuovoVino, preparaPropostaNuovoVino, proposteDisponibili } from "@/lib/cantina/proposta-catalogo";
+import { inviaPropostaNuovoVino, preparaPropostaNuovoVino, proposteDisponibiliPerNuovoVino } from "@/lib/cantina/proposta-catalogo";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { firmaUploadFoto, riusaFotoDellaBottiglia } from "@/app/vendi/actions";
@@ -62,6 +62,8 @@ export type FotoCaricata = { percorso: string; anteprima: string };
 
 type SellWizardOptions = {
   initialMode: Modalita;
+  /** WI-015: sessione reale presente; senza, nessuna porta del catalogo si interroga. */
+  autenticato?: boolean;
   onNavigate: (path: string) => void;
   /**
    * Unità già in cantina che si sta mettendo in vendita (Fase 6c-2), presa da
@@ -152,6 +154,7 @@ const CATALOGAZIONE_STEPS = [
  */
 export function useSellWizard({
   initialMode,
+  autenticato = false,
   onNavigate,
   bottleUnitId,
   identitaVino,
@@ -408,13 +411,13 @@ export function useSellWizard({
   const daEtichettaConfermata = useRef(false);
   useEffect(() => {
     let vivo = true;
-    void proposteDisponibili(supabase).then((v) => {
+    void proposteDisponibiliPerNuovoVino(supabase, { autenticato, daCantina: Boolean(bottleUnitId) }).then((v) => {
       if (vivo) setProposteAttive(v);
     });
     return () => {
       vivo = false;
     };
-  }, [supabase]);
+  }, [supabase, autenticato, bottleUnitId]);
 
   const applicaEtichetta = useCallback(
     (confermati: CampiConfermati, candidato: CandidatoVino | null) => {

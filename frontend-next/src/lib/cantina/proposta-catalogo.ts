@@ -63,6 +63,18 @@ export function preparaProposta(vino: VinoPerProposta, campi: CampiProposta): Re
   return { ok: true, data: { origine: modificato ? "correzione" : "cantina", dati } };
 }
 
+/**
+ * Nel wizard: si chiede solo con una sessione (la porta non è eseguibile da `anon`, che riceverebbe un 401) e solo per un
+ * vino NUOVO; da una bottiglia già in Cantina la proposta parte dalla Cantina.
+ */
+export async function proposteDisponibiliPerNuovoVino(
+  client: SupabaseClient | null,
+  { autenticato, daCantina }: { autenticato: boolean; daCantina: boolean },
+): Promise<boolean> {
+  if (!autenticato || daCantina) return false;
+  return proposteDisponibili(client);
+}
+
 export async function proposteDisponibili(client: SupabaseClient | null): Promise<boolean> {
   if (!client) return false;
   try {
