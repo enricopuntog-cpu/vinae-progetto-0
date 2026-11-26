@@ -11,6 +11,7 @@
 import {
   type CandidatoValutato,
   type DomandaCandidati,
+  type OpzioniRicerca,
   type SintesiRicerca,
   type SorgenteCandidati,
   sintesiRicerca,
@@ -87,11 +88,12 @@ export type EsitoCorrispondenze =
 export async function cercaCorrispondenze(
   domanda: DomandaCandidati,
   sorgente: SorgenteCandidati,
+  opzioni?: OpzioniRicerca,
 ): Promise<EsitoCorrispondenze> {
   if (!domanda.produttore.trim() && !domanda.nome.trim()) {
     return { ok: true, candidati: [], sintesi: "nessuna" };
   }
-  const esito = await sorgente.cerca(domanda);
+  const esito = await sorgente.cerca(domanda, opzioni);
   if (!esito.ok) return { ok: false, messaggio: esito.error };
   const candidati = valutaCandidati(domanda, esito.data);
   return { ok: true, candidati, sintesi: sintesiRicerca(candidati) };

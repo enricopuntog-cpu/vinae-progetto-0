@@ -14,6 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Result } from "@/services/types";
 import type {
   CandidatoVino,
+  CatalogoIncompleto,
   DomandaCandidati,
   OpzioniRicerca,
   SorgenteCandidati,
@@ -113,8 +114,13 @@ export function sorgenteCanonica(client: ClienteRpcCanonico | null): SorgenteCan
  */
 export const TETTO_CANONICO_MS = 1500;
 
+/** WI-009 — tetto del secondo tentativo, chiesto esplicitamente dall utente: sotto lo `statement_timeout` di 8 s. */
+export const ATTESA_CATALOGO_RIPROVA_MS = 6000;
+
+type EsitoFacoltativo = { candidati: CandidatoVino[]; incompleto: CatalogoIncompleto | null };
+
 /**
- * Esito della sorgente entro il tetto; scadenza, errore o eccezione = nessun candidato (mai un errore).
+ * Esito della sorgente entro il tetto; scadenza, errore o eccezione = nessun candidato (mai un errore), con il motivo.
  * Alla scadenza la richiesta in corso viene ANNULLATA (FIX-03B): il client non la aspetta più e, per i client che
  * propagano la chiusura, il server può smettere di lavorare. Resta un'ottimizzazione: la protezione del database
  * è il `statement_timeout` di piattaforma, non questo annullamento.
@@ -122,23 +128,23 @@ export const TETTO_CANONICO_MS = 1500;
 function entroTetto(
   avvia: (segnale: AbortSignal) => Promise<Result<CandidatoVino[]>>,
   ms: number,
-): Promise<Result<CandidatoVino[]>> {
-  const vuoto: Result<CandidatoVino[]> = { ok: true, data: [] };
+): Promise<EsitoFacoltativo> {
+  const senza = (incompleto: CatalogoIncompleto): EsitoFacoltativo => ({ candidati: [], incompleto });
   const controllo = new AbortController();
   return new Promise((risolvi) => {
     const timer = setTimeout(() => {
       controllo.abort();
-      risolvi(vuoto);
+      risolvi(senza("lento"));
     }, ms);
     const attesa = Promise.resolve().then(() => avvia(controllo.signal));
     attesa.then(
       (esito) => {
         clearTimeout(timer);
-        risolvi(esito);
+        risolvi(esito.ok ? { candidati: esito.data, incompleto: null } : senza("non_disponibile"));
       },
       () => {
         clearTimeout(timer);
-        risolvi(vuoto);
+        risolvi(senza("non_disponibile"));
       },
     );
   });
@@ -147,7 +153,8 @@ function entroTetto(
 /**
  * La sorgente principale (motore WI-006B) più il catalogo canonico come aggiunta.
  * • Il risultato della principale decide l'esito: se fallisce, fallisce (ripiego e messaggio restano quelli di prima).
- * • Il canonico, se fallisce o è vuoto, non toglie nulla: i candidati della principale passano invariati.
+ * • Il canonico, se fallisce o è vuoto, non toglie nulla: i candidati della principale passano invariati. Quando
+ *   scade o fallisce (non quando è vuoto) lo segnala con `onCatalogoIncompleto` (WI-009): mai un silenzio.
  * • Le due ricerche partono insieme; i candidati canonici seguono quelli della principale e
  *   `valutaCandidati` ordina per somiglianza e, a parità di vino, UNISCE: restano i campi Vinea e si aggiunge la scheda
  *   canonica (LWIN, provenienza, attribuzione).
@@ -161,13 +168,14 @@ export function sorgenteConCanonico(
   const tetto = opzioni.tettoMs ?? TETTO_CANONICO_MS;
   return {
     codice: principale.codice,
-    async cerca(domanda) {
+    async cerca(domanda, richiesta) {
       const [p, c] = await Promise.all([
         principale.cerca(domanda),
-        entroTetto((segnale) => canonica.cerca(domanda, { segnale }), tetto),
+        entroTetto((segnale) => canonica.cerca(domanda, { segnale }), richiesta?.attesaCatalogoMs ?? tetto),
       ]);
       if (!p.ok) return p;
-      return { ok: true, data: c.ok ? [...p.data, ...c.data] : p.data };
+      if (c.incompleto) richiesta?.onCatalogoIncompleto?.(c.incompleto);
+      return { ok: true, data: [...p.data, ...c.candidati] };
     },
   };
 }

@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useFotoEtichetta, type CampiConfermati, type OpzioniFotoEtichetta } from "@/hooks/useFotoEtichetta";
 import type { CatalogazioneSuggerimento, Result } from "@/services/types";
-import { ElencoCandidati } from "./elenco-candidati";
+import { AvvisoCatalogo, ElencoCandidati } from "./elenco-candidati";
 import { Field } from "./field";
 
 export type AssistenzaAi = {
@@ -288,6 +288,13 @@ export function FotoEtichettaPanel({ ai = null, conservaFoto = null, ...opzioni 
               <p role="alert" className="mt-2 text-xs text-destructive" data-testid="foto-etichetta-ricerca-errore">
                 {stato.messaggioRicerca} Puoi continuare con i dati letti.
               </p>
+            )}
+            {stato.faseRicerca === "fatta" && (
+              <AvvisoCatalogo
+                motivo={stato.catalogoIncompleto}
+                onRiprova={() => void stato.riprovaCatalogo()}
+                prefissoTest="foto-etichetta"
+              />
             )}
             {stato.faseRicerca === "fatta" && stato.candidati.length === 0 && (
               <p className="mt-2 text-xs" data-testid="foto-etichetta-nessuna-corrispondenza">

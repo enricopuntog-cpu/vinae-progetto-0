@@ -82,7 +82,7 @@ TETTO=$(( $(sql 'select pg_database_size(current_database())') + 4000000000 ))
 NUMERO=0
 lotto() { # limite, numero, timeout
   procedura 03_lotto.sql FINESTRA=banco NUMERO="$2" LIMITE="$1" CANDIDATI_ATTESI="$CANDIDATI" RUN_COMPLETO="$RUN" \
-    TETTO_DB_BYTE="$TETTO" TIMEOUT="$3"
+    TETTO_DB_BYTE="$TETTO" TIMEOUT="$3" MAX_BATCH_AUTORIZZATO="${MAX_BATCH:-1000}"
 }
 lotto_rifiutato() { # descrizione, testo atteso nell'errore, poi gli argomenti di lotto
   local descr="$1" testo="$2" err; shift 2
@@ -101,8 +101,8 @@ atteso "vini dopo l'interruzione" "$(campo "$R" .vini)" 0
 atteso "produttori dopo l'interruzione" "$(sql 'select count(*) from catalog.producers')" 0
 
 echo "== F. Rifiuto di max_batch superato"
-lotto_rifiutato "oltre max_batch (1000)" "fuori intervallo" 1001 1 300s
-sql "update catalog.promotion_settings set max_batch = 10000" > /dev/null  # SOLO nel banco, per misurare lotti grandi
+lotto_rifiutato "oltre il massimo autorizzato (1.000)" "dimensione non autorizzata" 1001 1 300s
+MAX_BATCH=5000 lotto_rifiutato "oltre 1.000 senza due lotti da 1.000 puliti" "due lotti da 1.000" 1001 1 300s
 
 nota ""
 nota "### Lotti (procedura 03_lotto.sql; lettura = promotion_lot misurata a parte, prima del lotto)"
@@ -114,7 +114,9 @@ esegui_lotto() { # limite
   local prima lettura r
   prima="$(sql 'select count(*) from catalog.wines')"
   lettura=$(cronometra "select count(*) from catalog.promotion_lot((select id from catalog.sources where code='LIVEX-LWIN7'), $1, 10000)")
-  r="$(lotto "$1" "$NUMERO" 900s)"
+  r="$(MAX_BATCH=5000 lotto "$1" "$NUMERO" 900s)"
+  [ "$(campo "$r" .esito)" = confermato ] || fallisci "lotto $NUMERO non confermato dopo il COMMIT"
+  [ "$(campo "$r" .promozione.enabled)" = false ] || fallisci "promozione accesa dopo il lotto $NUMERO"
   printf '%s' "$r" | jq -r --arg n "$NUMERO" --arg p "$prima" --arg l "$lettura" \
     '"| \($n) | \(.limite) | \($p) | \($l) | \(.secondi) | \((.secondi - ($l|tonumber)/1000) * 100 | round / 100) | \(.wines_created) | \(.producers_created) | \(.combined_aliases_created) | \(.wal_byte / 1048576 | floor) | \(.database_byte_delta / 1048576 | floor) |"' | tee -a "$RAPPORTO"
 }
@@ -129,14 +131,14 @@ R="$(riconcilia 1)"; atteso "lotto pilota" "$(campo "$R" .esito)" registrato; se
 lotto_rifiutato "stesso numero ripetuto dopo la conferma" "già registrato" 100 1 900s
 for limite in 500 1000 1000 1000; do esegui_lotto "$limite"; done
 duplicati_ms
-for limite in 2500 5000 5000 10000 10000 10000; do esegui_lotto "$limite"; done
+for limite in 2500 5000 5000 5000 5000 5000; do esegui_lotto "$limite"; done
 duplicati_ms
 R="$(riconcilia "$NUMERO")"; senza_incoerenze "$R" "checkpoint intermedio"
-while [ $(( CANDIDATI - $(sql 'select count(*) from catalog.wines') )) -gt 12000 ]; do esegui_lotto 10000; done
+while [ $(( CANDIDATI - $(sql 'select count(*) from catalog.wines') )) -gt 7000 ]; do esegui_lotto 5000; done
 duplicati_ms
 # Lotti da 1.000 a catalogo quasi pieno: il costo di un lotto piccolo dipende da quanto è già popolato?
 esegui_lotto 1000; esegui_lotto 1000
-while [ $(( CANDIDATI - $(sql 'select count(*) from catalog.wines') )) -gt 0 ]; do esegui_lotto 10000; done
+while [ $(( CANDIDATI - $(sql 'select count(*) from catalog.wines') )) -gt 0 ]; do esegui_lotto 5000; done
 duplicati_ms
 nota ""
 cat "$LAVORO/duplicati.txt" | tee -a "$RAPPORTO"
@@ -164,8 +166,11 @@ echo "== H. Chiusura della finestra"
 C="$(procedura 05_chiudi_finestra.sql)"
 atteso "promozione dopo la chiusura" "$(campo "$C" .promozione.enabled)" false
 atteso "proiezione dopo la chiusura" "$(campo "$C" .proiezione)" false
-NUMERO=$(( NUMERO + 1 ))
-lotto_rifiutato "lotto a finestra chiusa" "promozione disattivata" 100 "$NUMERO" 900s
+if DIRETTA="$(sql "select catalog.promote_wine_candidates('LIVEX-LWIN7','lwin-conservative-v1',10,false,'banco-diretta')" 2>&1)"; then
+  fallisci "chiamata diretta fuori dalla procedura: non rifiutata"
+fi
+printf '%s' "$DIRETTA" | grep -q "promozione disattivata" || fallisci "chiamata diretta: errore inatteso: $(printf '%s' "$DIRETTA" | tail -n 3)"
+echo "  ok  chiamata diretta fuori dalla procedura rifiutata"
 STATO="$(procedura 00_stato.sql)"
 atteso "violazioni di superficie" "$(campo "$STATO" .violazioni_superficie)" 0
 atteso "registro coerente con i vini" "$(campo "$STATO" .registro.vini)" "$(campo "$STATO" .canonico.vini)"

@@ -22,9 +22,18 @@ concurrency:
 
 jobs:
   banco:
-    name: Banco promozione catalogo (sintetico)
+    name: ${{ matrix.nome }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nome: Banco promozione catalogo (sintetico)
+            script: banco.sh
+          # WI-009: regressione aggiuntiva nata dall'audit indipendente, su uno stack effimero proprio.
+          - nome: Concorrenza e fail-closed della procedura
+            script: concorrenza.sh
 
     steps:
       - name: Checkout
@@ -57,11 +66,21 @@ jobs:
           echo "::error title=Banco promozione::Stack Supabase locale non avviato."
           exit 1
 
-      - name: Run promotion bench
+      - name: Run ${{ matrix.script }}
+        env:
+          PROVA: ${{ matrix.script }}
         run: |
           db_url="$(supabase status -o env 2>/dev/null | sed -nE 's/^DB_URL="?([^"]*)"?$/\1/p' | head -n 1)"
           if [ -n "$db_url" ]; then echo "::add-mask::$db_url"; fi
-          E2E_DB_URL="$db_url" bash tools/wine-catalog/bench/promozione/banco.sh
+          E2E_DB_URL="$db_url" bash "tools/wine-catalog/bench/promozione/$PROVA"
+
+      # Riusa il catalogo popolato dalla prova di concorrenza (audit WI-008, F-08).
+      - name: Restore drill of the populated catalog schema
+        if: matrix.script == 'concorrenza.sh'
+        run: |
+          db_url="$(supabase status -o env 2>/dev/null | sed -nE 's/^DB_URL="?([^"]*)"?$/\1/p' | head -n 1)"
+          if [ -n "$db_url" ]; then echo "::add-mask::$db_url"; fi
+          E2E_DB_URL="$db_url" bash tools/wine-catalog/bench/promozione/ripristino.sh
 
       - name: Destroy ephemeral Supabase stack
         if: always()
