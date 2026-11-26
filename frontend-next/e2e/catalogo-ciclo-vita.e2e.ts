@@ -143,6 +143,16 @@ test.describe.serial("Catalogo vivo: dalla Cantina alla scheda senza LWIN, con r
     await page.getByRole("button", { name: "Esegui i controlli ora" }).click();
     await expect(page.getByTestId("sentinel-stato")).toContainText("eseguito di recente");
     await expect(page.getByTestId("sorgenti-non-collegate")).toContainText("backup");
+    // WI-015: stati dichiarati dal database, mai presentati come operativi
+    await expect(page.getByTestId("scheduler")).toContainText("Non pianificato (nessun giro automatico)");
+    await expect(page.getByTestId("agenti")).toContainText("Nessun agente registrato.");
+    await expect(page.getByTestId("fonti-monitor")).toContainText("Disattivata");
+    await expect(page.getByTestId("spesa-ai")).toContainText("non fattura");
+    await expect(page.getByTestId("rapporto")).toContainText("Nel periodo:");
+    await page.goto("/admin/catalogo");
+    await attendiCaricamento(page);
+    await page.getByRole("tab", { name: "Fonti e import" }).click();
+    await expect(page.getByTestId("aggiornamento-lwin")).toContainText("Conflitti con vini nativi");
     await admin.close();
   });
 });

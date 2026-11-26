@@ -1,6 +1,7 @@
 "use client";
 
 import { codiceErrore } from "@/lib/errore-per-log";
+import { inviaPropostaNuovoVino, preparaPropostaNuovoVino, proposteDisponibiliPerNuovoVino } from "@/lib/cantina/proposta-catalogo";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { firmaUploadFoto, riusaFotoDellaBottiglia } from "@/app/vendi/actions";
@@ -61,6 +62,8 @@ export type FotoCaricata = { percorso: string; anteprima: string };
 
 type SellWizardOptions = {
   initialMode: Modalita;
+  /** WI-015: sessione reale presente; senza, nessuna porta del catalogo si interroga. */
+  autenticato?: boolean;
   onNavigate: (path: string) => void;
   /**
    * Unità già in cantina che si sta mettendo in vendita (Fase 6c-2), presa da
@@ -151,6 +154,7 @@ const CATALOGAZIONE_STEPS = [
  */
 export function useSellWizard({
   initialMode,
+  autenticato = false,
   onNavigate,
   bottleUnitId,
   identitaVino,
@@ -400,8 +404,24 @@ export function useSellWizard({
   // stessa che serve la ricerca manuale; la sorgente è sostituibile.
   const sorgenteEtichetta = useMemo(() => creaMotoreRicerca(supabase), [supabase]);
 
+  // WI-015 — proposta al catalogo di un vino NUOVO: solo con le proposte accese e con consenso esplicito per questa
+  // aggiunta. La bozza e la lettura OCR non confermata non producono nulla.
+  const [proposteAttive, setProposteAttive] = useState(false);
+  const [consensoCatalogo, setConsensoCatalogo] = useState(false);
+  const daEtichettaConfermata = useRef(false);
+  useEffect(() => {
+    let vivo = true;
+    void proposteDisponibiliPerNuovoVino(supabase, { autenticato, daCantina: Boolean(bottleUnitId) }).then((v) => {
+      if (vivo) setProposteAttive(v);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [supabase, autenticato, bottleUnitId]);
+
   const applicaEtichetta = useCallback(
     (confermati: CampiConfermati, candidato: CandidatoVino | null) => {
+      daEtichettaConfermata.current = true;
       setD((s) => ({ ...s, ...campiWizardDaConferma(confermati, candidato, s, regioniCanoniche) }));
       toast.success("Dati dell'etichetta applicati ai campi");
     },
@@ -831,6 +851,18 @@ export function useSellWizard({
       return false;
     }
     chiaveAggiunta.current = nuovaChiaveIdempotenza("cantina");
+    // Dopo la creazione, senza attenderla: l'esito del catalogo non cambia quello della Cantina.
+    if (proposteAttive && consensoCatalogo && supabase) {
+      const preparata = preparaPropostaNuovoVino(
+        { produttore: d.produttore, nome: d.nome, annata: d.annata, regione: d.regione, tipo: d.tipo, formato: d.formato },
+        daEtichettaConfermata.current,
+      );
+      if (preparata.ok) {
+        void inviaPropostaNuovoVino(supabase, preparata.data).then((r) => {
+          if (!r.ok) toast.info("La bottiglia è in Cantina; la proposta al catalogo non è partita: puoi inviarla dalla Cantina.");
+        });
+      }
+    }
     await onCantinaCambiata?.();
     const quante = etichettaBottiglie(esito.data.quantita);
     toast.success(
@@ -840,7 +872,7 @@ export function useSellWizard({
     );
     onNavigate("/cantina");
     return true;
-  }, [cellarService, datiBottiglia, modalita, onCantinaCambiata, onNavigate, d.quantita, d.formato]);
+  }, [cellarService, datiBottiglia, modalita, onCantinaCambiata, onNavigate, d.quantita, d.formato, d.produttore, d.nome, d.annata, d.regione, d.tipo, proposteAttive, consensoCatalogo, supabase]);
 
   const pubblica = useCallback(async () => {
     if (!isVendita) {
@@ -1021,6 +1053,9 @@ export function useSellWizard({
     sorgenteEtichetta,
     applicaEtichetta,
     applicaRicercaManuale,
+    proposteAttive,
+    consensoCatalogo,
+    setConsensoCatalogo,
     assistenzaAiEtichetta,
   };
 }

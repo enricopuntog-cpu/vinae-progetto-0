@@ -34,6 +34,8 @@
 
 import {
   AiProviderError,
+  stimaTokenInput,
+  type AiUso,
   creaAiProvider,
   requestIdOpaco,
 } from "../_shared/ai-provider.ts";
@@ -43,7 +45,9 @@ import {
   json,
   leggiCorpo,
   testo,
-  consumaBudget,
+  prenotaBudget,
+  rifiutata,
+  registraConsuntivo,
   registraEsitoFornitore,
 } from "../_shared/ai-gate.ts";
 import {
@@ -344,17 +348,33 @@ Deno.serve(async (request) => {
     }
   }
 
-  const senzaBudget = await consumaBudget(supabase, "ai:chat", cors);
-  if (senzaBudget) return senzaBudget;
+  const provider = creaAiProvider("chat");
+  const prenotazione = await prenotaBudget(supabase, "ai:chat", cors, {
+    provider: provider.id,
+    modello: provider.modello,
+    tokenInput: stimaTokenInput(system, prompt),
+    tokenOutputMax: provider.maxOutputTokens,
+  });
+  if (rifiutata(prenotazione)) return prenotazione.risposta;
+  const { richiestaId } = prenotazione;
+  let uso: AiUso | null = null;
 
   let sorgente: ReadableStream<string>;
   try {
-    sorgente = await creaAiProvider("chat").streamText({
+    sorgente = await provider.streamText({
       system,
       prompt,
       requestId: requestIdOpaco("sommelier"),
+      onUso: (u) => {
+        uso = u;
+      },
     });
   } catch (errore) {
+    await registraConsuntivo(
+      supabase,
+      richiestaId,
+      errore instanceof AiProviderError && !errore.guastoFornitore ? "errore_richiesta" : "guasto_fornitore",
+    );
     // Prima che lo stream cominci l'errore è ancora uno status HTTP. Dopo, non
     // può esserlo più: diventa un evento dentro lo stream.
     if (!(errore instanceof AiProviderError) || errore.guastoFornitore) {
@@ -399,6 +419,7 @@ Deno.serve(async (request) => {
       }
 
       await registraEsitoFornitore(supabase, "ai:chat", true);
+      await registraConsuntivo(supabase, richiestaId, "ok", uso);
       const risposta = raccolti.join("").trim();
       if (risposta) {
         // Si salva solo qui: a stream concluso e non vuoto. Una risposta
@@ -424,6 +445,7 @@ Deno.serve(async (request) => {
       if (guastoFornitore) await registraEsitoFornitore(supabase, "ai:chat", false);
       // Se è il client ad aver chiuso, si ferma anche la lettura dal fornitore.
       else await lettore.cancel().catch(() => {});
+      await registraConsuntivo(supabase, richiestaId, guastoFornitore ? "guasto_fornitore" : "interrotta_client", uso);
       console.error("[ai-sommelier] stream interrotto", {
         tipo: errore instanceof Error ? errore.name : "sconosciuto",
       });

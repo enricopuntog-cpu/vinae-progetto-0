@@ -19,6 +19,7 @@ const USER_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const USER_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const ANNUNCIO = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const SESSIONE = "s-test-0001";
+const RICHIESTA = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 
 // ---- Database finto ----------------------------------------------------------------
 
@@ -102,10 +103,12 @@ const fakeSupabase = {
     if (name === "vini_canonici_cerca_servizio") {
       return canonicoKo ? { data: null, error: { code: "PGRST", message: "SEGRETO-DI-DB" } } : { data: righeCanoniche, error: null };
     }
-    if (name === "ai_budget_consuma") {
-      return esitoBudget === "errore" ? { data: null, error: { code: "PGRST202", message: "SEGRETO-DI-DB" } } : { data: esitoBudget, error: null };
+    if (name === "ai_budget_prenota") {
+      return esitoBudget === "errore"
+        ? { data: null, error: { code: "PGRST202", message: "SEGRETO-DI-DB" } }
+        : { data: esitoBudget === "consentito" ? { esito: "consentito", richiesta_id: RICHIESTA } : { esito: esitoBudget }, error: null };
     }
-    if (name === "ai_budget_esito") return { data: null, error: null };
+    if (name === "ai_budget_esito" || name === "ai_budget_consuntivo") return { data: null, error: null };
     if (name === "sommelier_contesto_leggi") return { data: storico, error: null };
     if (name === "sommelier_scambio_registra") return { data: 2, error: null };
     throw new Error(`RPC non prevista: ${name}`);
@@ -153,7 +156,10 @@ const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Pr
     return new Response(rotto, { status: 200, headers: { "Content-Type": "text/event-stream" } });
   }
   const pezzi = testoRisposta.match(/[\s\S]{1,200}/g) ?? [];
-  const sse = pezzi.map((p) => `data: ${JSON.stringify({ choices: [{ delta: { content: p } }] })}\n\n`).join("") + "data: [DONE]\n\n";
+  const sse =
+    pezzi.map((p) => `data: ${JSON.stringify({ choices: [{ delta: { content: p } }] })}\n\n`).join("") +
+    // come il fornitore con include_usage: l'ultimo pezzo porta il consumo
+    `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 321, completion_tokens: 45 } })}\n\ndata: [DONE]\n\n`;
   return new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
 };
 
@@ -823,10 +829,40 @@ describe("WI-010 — budget globale e interruttore (chiusi per difetto)", () => 
     expect(risposta.status).toBe(200);
     await risposta.text();
     const nomi = rpcLog.map((r) => r.name);
-    expect(nomi.filter((n) => n === "ai_budget_consuma")).toHaveLength(1);
-    expect(nomi.indexOf("rate_limit_consume")).toBeLessThan(nomi.indexOf("ai_budget_consuma"));
-    expect(rpcLog.find((r) => r.name === "ai_budget_consuma")?.args).toEqual({ p_scope: "ai:chat" });
+    expect(nomi.filter((n) => n === "ai_budget_prenota")).toHaveLength(1);
+    expect(nomi.indexOf("rate_limit_consume")).toBeLessThan(nomi.indexOf("ai_budget_prenota"));
+    const prenota = rpcLog.find((r) => r.name === "ai_budget_prenota")?.args as Record<string, unknown>;
+    expect([prenota.p_scope, prenota.p_provider, prenota.p_modello, prenota.p_token_output_max]).toEqual(["ai:chat", "openai", "gpt-4.1-mini", 800]);
+    expect(Number(prenota.p_token_input)).toBeGreaterThan(10);
     expect(esiti()).toEqual([{ p_scope: "ai:chat", p_riuscita: true }]);
+  });
+
+  const consuntivi = () => rpcLog.filter((r) => r.name === "ai_budget_consuntivo").map((r) => r.args);
+
+  it("WI-015: a risposta conclusa il consuntivo porta i token veri del fornitore, una volta sola", async () => {
+    const risposta = await chiedi();
+    await risposta.text();
+    expect(consuntivi()).toEqual([{ p_richiesta: RICHIESTA, p_esito: "ok", p_token_input: 321, p_token_output: 45 }]);
+  });
+
+  it("WI-015: guasto e richiesta rifiutata chiudono la prenotazione senza token inventati", async () => {
+    providerRispondeKo = true;
+    statoFornitore = 503;
+    await chiedi();
+    statoFornitore = 400;
+    await chiedi();
+    expect(consuntivi()).toEqual([
+      { p_richiesta: RICHIESTA, p_esito: "guasto_fornitore", p_token_input: null, p_token_output: null },
+      { p_richiesta: RICHIESTA, p_esito: "errore_richiesta", p_token_input: null, p_token_output: null },
+    ]);
+  });
+
+  it("WI-015: il client che abbandona chiude la prenotazione come interrotta, non come guasto", async () => {
+    testoRisposta = "parola ".repeat(600);
+    const risposta = await chiedi();
+    await risposta.body!.cancel();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(consuntivi().map((c) => c.p_esito)).toEqual(["interrotta_client"]);
   });
 
   it("guasto del fornitore: registrato per l'interruttore", async () => {
@@ -884,6 +920,6 @@ describe("WI-010 — budget globale e interruttore (chiusi per difetto)", () => 
       body: JSON.stringify({ session_id: SESSIONE, message: "" }),
     }));
     expect(risposta.status).toBe(400);
-    expect(rpcLog.some((r) => r.name === "ai_budget_consuma")).toBe(false);
+    expect(rpcLog.some((r) => r.name === "ai_budget_prenota")).toBe(false);
   });
 });

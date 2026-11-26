@@ -758,6 +758,13 @@ Filone ammesso per nome, parallelo alle fasi di migrazione; non sposta il cutove
 | Authenticity | solo nota | no | no | — | — | no | consenso e diritti sulle immagini, procedura di verifica |
 | Promozione canonica | sì | sì (WI-008/009) | banco sintetico | sì | sì | **no** (regola `draft`) | audit, F-06, F-08, founder |
 
+**WI-015 (26 novembre 2026, mandato «Autonomous Operations & Living Catalog Completion»):** correzioni dell'audit
+indipendente (C-01, A-01, B-01–B-04, C-02/C-03, D-01–D-03, E-01), acquisizione dal wizard e periodica, Catalog
+Manager, Data Quality e Technical Monitor, scheduler unico (script `pg_cron`, non installato), ingestione dei segnali,
+costi AI, cruscotto e rapporto, aggiornamento LWIN dal pannello, contratto prezzi spento. Implementato, provato e
+distribuito con le PR WI-015; **nulla attivato**. Restano: audit indipendente del delta, F-06/F-08, approvazione della
+regola, scelta dell'osservatore esterno, tetti AI, periodo di conservazione B-04.
+
 Riferimenti: `docs/wine-intelligence/WI_011_LIVING_CATALOG.md`, `docs/COMPANY_BRAIN.md`,
 `docs/wine-intelligence/PROMOZIONE_CANONICA_RUNBOOK.md`.
 

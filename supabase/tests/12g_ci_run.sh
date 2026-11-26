@@ -397,6 +397,13 @@ wi015_conc="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/wi015_identita_concorrenza.s
   || { printf '%s\n' "$wi015_conc"; die "wi015 identita e concorrenza: fallita."; }
 printf '%s\n' "$wi015_conc"
 summary "- $(printf '%s\n' "$wi015_conc" | grep 'wi015 identita e concorrenza:' | tail -n 1)"
+# WI-015B: operazioni autonome (acquisizione, worker, segnali, scheduler, costi AI) e prova end-to-end con processi
+# veri e pg_cron vero (installato e rimosso dalla prova stessa).
+run_grid "wi015b operazioni autonome" wi015b_operazioni.sql 3
+wi015_ops="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/wi015_operazioni.sh")" \
+  || { printf '%s\n' "$wi015_ops" | tail -n 40; die "wi015 operazioni end-to-end: fallita."; }
+printf '%s\n' "$wi015_ops"
+summary "- $(printf '%s\n' "$wi015_ops" | grep 'wi015 operazioni end-to-end:' | tail -n 1)"
 # WI-008 (wi008d): ricerca canonica con PostgREST e Auth veri (429 al minuto, raffica parallela, serializzazione per
 # identita, isolamento, porta di sola lettura del Sommelier, fonte revocata, ripristino dopo la finestra: attende il
 # minuto successivo). Fixture committate sul catalogo VUOTO e rimosse in trap, interruttore di nuovo spento.

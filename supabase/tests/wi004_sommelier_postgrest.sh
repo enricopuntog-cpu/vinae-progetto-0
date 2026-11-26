@@ -38,6 +38,8 @@ sql() { "${PSQL[@]}" -c "$1"; }
   || { echo 'Utenti non sintetici: rifiutato.' >&2; exit 3; }
 [ "$(sql "select count(*) from auth.users where email like '%@wi004-e2e.test'")" = 0 ] \
   || { echo 'Fixture wi004 gia presente: serve stack nuovo.' >&2; exit 3; }
+[ "$(sql 'select count(*) from private.ai_chiamate')" = 0 ] \
+  || { echo 'Chiamate AI preesistenti: serve stack nuovo.' >&2; exit 3; }
 
 # WI-010: il budget AI è chiuso per difetto; qui il fornitore è finto, quindi si configura un tetto solo per la prova.
 budget() { sql "update private.ai_budget_settings set richieste_giorno=$1, richieste_mese=$1, guasti_consecutivi=0, aperto_fino_a=null;" >/dev/null; }
@@ -51,6 +53,8 @@ cleanup() {
   local status=$? residue
   trap - EXIT
   budget null || status=1
+  # WI-015: le prenotazioni di spesa della prova (fornitore finto) si rimuovono come le altre fixture
+  sql "delete from private.ai_chiamate" >/dev/null || status=1
   sql "begin;
     delete from public.bottle_units where owner_id in (select id from auth.users where email like '%@wi004-e2e.test');
     delete from public.wines where slug like 'wi004-e2e-%';

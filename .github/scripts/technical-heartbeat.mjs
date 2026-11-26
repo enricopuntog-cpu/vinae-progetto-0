@@ -2,6 +2,8 @@ import { pathToFileURL } from "node:url";
 
 const TITLE = "[OBS-01] Technical heartbeat";
 const MARKER = "<!-- vinea-obs-01 -->";
+const RECOVERY_MARKER = "<!-- vinea-obs-01-recovered -->";
+const RECOVERY_NOTE = `${RECOVERY_MARKER}\nUn controllo successivo è tornato regolare. La issue resta aperta: si chiude a mano, con le evidenze della causa e della risoluzione (runbook).`;
 const HOURS = 60 * 60 * 1000;
 
 export async function checkLiveness(fetchImpl = fetch) {
@@ -61,8 +63,14 @@ export async function syncAlert(api, findings, owner) {
   const issues = (await api("GET", "/issues?state=open&creator=github-actions%5Bbot%5D&per_page=100"))
     .filter((issue) => !issue.pull_request && issue.title === TITLE && issue.body?.includes(MARKER));
   if (!codes.length) {
-    for (const issue of issues) await api("PATCH", `/issues/${issue.number}`, { state: "closed", state_reason: "completed" });
-    return "healthy";
+    // Un controllo tornato verde non prova che la causa sia risolta: l'issue resta aperta con una nota, scritta una
+    // sola volta, e la chiude una persona dopo aver verificato le evidenze (issue #322).
+    for (const issue of issues) {
+      if (!issue.body.includes(RECOVERY_MARKER)) {
+        await api("PATCH", `/issues/${issue.number}`, { body: `${issue.body}\n\n${RECOVERY_NOTE}` });
+      }
+    }
+    return issues.length ? "recovered_awaiting_evidence" : "healthy";
   }
   const mention = /^[A-Za-z0-9-]{1,39}$/.test(owner) ? `@${owner}` : "Repository owner";
   const body = `${MARKER}\n${mention}: controllo tecnico da verificare.\n\n${codes.map((code) => `- ${code}`).join("\n")}\n\nRunbook: docs/VPM_022C_OBS_01.md. Nessun payload utente in questa issue.`;

@@ -56,7 +56,7 @@ const env = (name: string): string => {
 //
 // WI-010: la clausola della v0 «nessun tetto secondario nostro oltre al rate
 // limit» è superata dal budget globale richiesto dal founder il 26 novembre 2026
-// (vedi `consumaBudget`). I valori del tetto non stanno qui e non hanno un
+// (vedi `prenotaBudget`). I valori del tetto non stanno qui e non hanno un
 // default: finché non sono configurati nel database nessuna chiamata parte.
 
 export const FINESTRA_SECONDI = 3600;
@@ -200,15 +200,62 @@ export const apriPorta = async (
 // interruttore aperto, RPC assente o risposta inattesa = nessuna chiamata. Il motivo preciso resta nel log del
 // server: all utente basta sapere che le funzioni AI non sono disponibili per il budget.
 
-export const consumaBudget = async (supabase: SupabaseClient, scope: AiScope, cors: HeadersInit): Promise<Response | null> => {
-  const { data, error } = await supabase.rpc("ai_budget_consuma", { p_scope: scope });
-  if (!error && data === "consentito") return null;
-  console.error("[ai] budget non concesso", { scope, esito: error ? error.code : String(data) });
-  return json(
-    { error: "Le funzioni AI non sono disponibili in questo momento.", motivo: "budget" },
-    503,
-    { ...cors, "Retry-After": String(FINESTRA_SECONDI) },
-  );
+//
+// WI-015: la prenotazione conta anche la SPESA massima (modello e token), sotto lo stesso lock, quando il proprietario
+// ha impostato un tetto monetario e una tariffa; il consuntivo la chiude con i token dichiarati dal fornitore. Le stime
+// non sono fatture.
+
+export type Prenotazione = { richiestaId: string } | { risposta: Response };
+
+export const rifiutata = (p: Prenotazione): p is { risposta: Response } => "risposta" in p;
+
+export const prenotaBudget = async (
+  supabase: SupabaseClient,
+  scope: AiScope,
+  cors: HeadersInit,
+  chiamata: { provider: string; modello: string; tokenInput: number; tokenOutputMax: number },
+): Promise<Prenotazione> => {
+  const { data, error } = await supabase.rpc("ai_budget_prenota", {
+    p_scope: scope,
+    p_provider: chiamata.provider,
+    p_modello: chiamata.modello,
+    p_token_input: chiamata.tokenInput,
+    p_token_output_max: chiamata.tokenOutputMax,
+  });
+  const esito = (data ?? null) as { esito?: unknown; richiesta_id?: unknown } | null;
+  if (!error && esito?.esito === "consentito" && typeof esito.richiesta_id === "string") {
+    return { richiestaId: esito.richiesta_id };
+  }
+  console.error("[ai] budget non concesso", { scope, esito: error ? error.code : String(esito?.esito) });
+  return {
+    risposta: json(
+      { error: "Le funzioni AI non sono disponibili in questo momento.", motivo: "budget" },
+      503,
+      { ...cors, "Retry-After": String(FINESTRA_SECONDI) },
+    ),
+  };
+};
+
+export type EsitoChiamata = "ok" | "guasto_fornitore" | "errore_richiesta" | "interrotta_client" | "formato_non_valido";
+
+/** Chiude la prenotazione una volta sola. Senza i token del fornitore resta contato il massimo prenotato. */
+export const registraConsuntivo = async (
+  supabase: SupabaseClient,
+  richiestaId: string,
+  esito: EsitoChiamata,
+  uso: { input: number; output: number } | null = null,
+): Promise<void> => {
+  try {
+    const { error } = await supabase.rpc("ai_budget_consuntivo", {
+      p_richiesta: richiestaId,
+      p_esito: esito,
+      p_token_input: uso?.input ?? null,
+      p_token_output: uso?.output ?? null,
+    });
+    if (error) console.error("[ai] consuntivo non registrato", { code: error.code });
+  } catch {
+    console.error("[ai] consuntivo non registrato");
+  }
 };
 
 /** Alimenta l interruttore. Un errore qui non cambia la risposta all utente: resta nel log. */

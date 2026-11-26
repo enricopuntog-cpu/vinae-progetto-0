@@ -24,6 +24,8 @@
 import {
   AiFormatError,
   AiProviderError,
+  stimaTokenInput,
+  type AiUso,
   creaAiProvider,
   estraiJson,
   requestIdOpaco,
@@ -31,7 +33,9 @@ import {
 import {
   apriPorta,
   chiusa,
-  consumaBudget,
+  prenotaBudget,
+  rifiutata,
+  registraConsuntivo,
   json,
   leggiCorpo,
   registraEsitoFornitore,
@@ -131,20 +135,38 @@ Deno.serve(async (request) => {
   const prompt = `Piatto o occasione: ${query}\n\nCatalogo:\n` +
     catalogo.map((riga) => `- ${riga.id}: ${etichettaCatalogo(riga)}`).join("\n");
 
-  const senzaBudget = await consumaBudget(supabase, "ai:pairing", cors);
-  if (senzaBudget) return senzaBudget;
+  const provider = creaAiProvider("pairing");
+  const prenotazione = await prenotaBudget(supabase, "ai:pairing", cors, {
+    provider: provider.id,
+    modello: provider.modello,
+    tokenInput: stimaTokenInput(SYSTEM, prompt),
+    tokenOutputMax: provider.maxOutputTokens,
+  });
+  if (rifiutata(prenotazione)) return prenotazione.risposta;
+  let uso: AiUso | null = null;
 
   let parsed: Record<string, unknown>;
   try {
-    const grezzo = await creaAiProvider("pairing").completeText({
+    const grezzo = await provider.completeText({
       system: SYSTEM,
       prompt,
       requestId: requestIdOpaco("pairing"),
+      onUso: (u) => {
+        uso = u;
+      },
     });
     // Il fornitore ha risposto: un formato inutilizzabile non è un suo guasto.
     await registraEsitoFornitore(supabase, "ai:pairing", true);
+    await registraConsuntivo(supabase, prenotazione.richiestaId, "ok", uso);
     parsed = estraiJson(grezzo);
   } catch (errore) {
+    // se il consuntivo «ok» è già passato, questa seconda chiusura non ha effetto
+    await registraConsuntivo(
+      supabase,
+      prenotazione.richiestaId,
+      errore instanceof AiFormatError ? "formato_non_valido" : errore instanceof AiProviderError && !errore.guastoFornitore ? "errore_richiesta" : "guasto_fornitore",
+      uso,
+    );
     // 7.5: 503 se il fornitore è giù, 502 se ha risposto qualcosa di
     // inutilizzabile. Il messaggio del fornitore non esce mai di qui.
     if (errore instanceof AiFormatError) {

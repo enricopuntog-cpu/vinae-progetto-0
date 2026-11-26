@@ -13,6 +13,7 @@ import { ErrorState } from "@/components/vinea/States";
 import { PER_PAGINA, serviziCatalogoAdmin, type Riepilogo, type ServiziCatalogoAdmin, type Territorio } from "@/lib/catalogo-admin/catalogo-admin";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { Campo, Esito, Letto, Scelta, data, testoValore, useLettura } from "./comune";
+import { AggiornamentoLwinPanel } from "./AggiornamentoLwinPanel";
 import { ProposteAdminPanel } from "./ProposteAdminPanel";
 import { SchedaAdminPanel } from "./SchedaAdminPanel";
 
@@ -458,6 +459,7 @@ function FontiEImportazioni({ servizi, apri }: { servizi: ServiziCatalogoAdmin; 
         </Button>
         <Esito errore={errore} messaggio={messaggio} />
       </section>
+      <AggiornamentoLwinPanel servizi={servizi} apri={apri} />
       <Letto esito={esito} ricarica={ricarica}>
         {(f) => (
           <>
@@ -478,22 +480,6 @@ function FontiEImportazioni({ servizi, apri }: { servizi: ServiziCatalogoAdmin; 
                 {f.importazioni.map((i) => (
                   <li key={i.seq}>
                     {data(i.iniziata)} · {i.stato} · {i.file} · {i.righe.toLocaleString("it-IT")} righe · {i.impronta_file.slice(0, 12)}…
-                  </li>
-                ))}
-              </ul>
-            </section>
-            <section>
-              <h2 className="font-semibold">Conflitti con vini nativi ({f.conflitti_lwin_nativi.length})</h2>
-              <p className="text-xs text-muted-foreground">
-                Record LWIN con lo stesso nome di un vino nativo: associare il codice o registrare il duplicato prima di promuovere.
-              </p>
-              <ul className="list-disc pl-5 text-xs">
-                {f.conflitti_lwin_nativi.map((c) => (
-                  <li key={`${c.wine_id}-${c.lwin7}`}>
-                    {c.produttore} — {c.nome} ↔ LWIN {c.lwin7}{" "}
-                    <button type="button" className="underline" onClick={() => apri(c.wine_id)}>
-                      apri
-                    </button>
                   </li>
                 ))}
               </ul>

@@ -10,6 +10,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/vinea/States";
 import { Campo, Esito, Letto, data, testoValore, useLettura } from "@/components/vinea/catalogo-admin/comune";
+import { OperazioniPanel, Rapporto, SpesaAi } from "@/components/vinea/azienda-admin/OperazioniPanel";
 import { etichettaSentinel, serviziAziendaAdmin, type RiepilogoAzienda } from "@/lib/azienda-admin/azienda-admin";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
@@ -28,6 +29,7 @@ export function AziendaAdminClient() {
       <h1 className="font-serif text-2xl">Cruscotto Vinea</h1>
       <Riepilogo key={`r${giro}`} servizi={servizi} dopoSentinel={() => setGiro((g) => g + 1)} />
       <Anomalie key={`a${giro}`} servizi={servizi} />
+      <Rapporto key={`p${giro}`} servizi={servizi} />
       <Task key={`t${giro}`} servizi={servizi} />
     </div>
   );
@@ -73,7 +75,11 @@ function Riepilogo({ servizi, dopoSentinel }: { servizi: Servizi; dopoSentinel: 
                 ["Proposte al catalogo", r.catalogo.proposte.aperte],
                 ["Vini canonici attivi", r.catalogo.vini.attivi],
                 ["Identità native", r.catalogo.vini.nativi],
-                ["Agenti accesi", r.agenti.accesi],
+                ["Agenti operativi", r.agenti.operativi],
+                ["Task approvati da eseguire", r.task.approvati],
+                ["Task bloccati", r.task.bloccati],
+                ["Evidenze", r.evidenze],
+                ["Proposte senza task", r.coda_catalogo.proposte_senza_task],
               ] as [string, number][]
             ).map(([k, v]) => (
               <div key={k} className="rounded-xl border border-border bg-card p-3">
@@ -87,15 +93,17 @@ function Riepilogo({ servizi, dopoSentinel }: { servizi: Servizi; dopoSentinel: 
             {r.ai.configurato
               ? `${r.ai.oggi.consentite}/${r.ai.richieste_giorno} richieste oggi, ${r.ai.mese.consentite}/${r.ai.richieste_mese} nel mese`
               : "budget non configurato, quindi nessuna chiamata al fornitore"}
-            {` · rifiuti di oggi: ${r.ai.oggi.rifiutate_budget} · guasti del fornitore: ${r.ai.oggi.guasti_fornitore}. Il budget conta richieste, non spesa.`}
+            {` · rifiuti di oggi: ${r.ai.oggi.rifiutate_budget} · guasti del fornitore: ${r.ai.oggi.guasti_fornitore}.`}
           </p>
+          <SpesaAi spesa={r.ai.spesa} tariffe={r.ai.tariffe_registrate} />
+          <OperazioniPanel scheduler={r.scheduler} agenti={r.agenti.elenco} fonti={r.fonti} />
           <p className="text-xs">
             <Link href="/admin/catalogo" className="underline">
               Apri la gestione del catalogo
             </Link>
           </p>
           <div className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground" data-testid="sorgenti-non-collegate">
-            <p className="font-semibold">Non ancora collegate a questo cruscotto</p>
+            <p className="font-semibold">Non ancora collegate o mai verificate</p>
             <ul className="list-disc pl-5">
               {r.sorgenti_non_collegate.map((s) => (
                 <li key={s}>{s}</li>

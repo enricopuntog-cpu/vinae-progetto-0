@@ -85,7 +85,7 @@ select pg_temp.rec(2, 'brain_worker è NOLOGIN, senza membri operativi, ed esegu
                    join pg_roles u on u.oid = m.member where g.rolname = 'brain_worker' and u.rolname not in ('postgres', 'supabase_admin'))
   and (select string_agg(p.proname, ',' order by p.proname) from pg_proc p
         where p.pronamespace = 'brain'::regnamespace and has_function_privilege('brain_worker', p.oid, 'EXECUTE'))
-      = 'add_evidence,claim_task,finish_task,payload_ammesso,renew_lease');
+      = 'add_evidence,agent_context,claim_task,close_if_allowed,finish_task,payload_ammesso,renew_lease');
 select pg_temp.rec(3, 'ogni funzione di brain ha search_path vuoto',
   not exists (select 1 from pg_proc p where p.pronamespace = 'brain'::regnamespace
      and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c in ('search_path=""', 'search_path='))));
@@ -210,7 +210,7 @@ select pg_temp.rec(25, 'controllo non eseguito: dichiarato (solo SQLSTATE), gli 
   (pg_temp.f('s6')::jsonb ->> 'esito') = 'parziale' and (pg_temp.f('s6')::jsonb ->> 'non_eseguiti') = '1'
   and (select category = 'sentinel' and evidence ->> 'sqlstate' = '42P01' from brain.anomalies
         where fingerprint = 'controllo_non_eseguito:proposte_catalogo_vecchie')
-  and (select checks_run = 11 from brain.sentinel_runs order by id desc limit 1), pg_temp.f('s6'));
+  and (select checks_run = 13 from brain.sentinel_runs order by id desc limit 1), pg_temp.f('s6'));
 alter table catalog.contributions_nascoste_wi013 rename to contributions;
 select brain.sentinel_run('collaudo') into temp table s7;
 select pg_temp.rec(26, 'tornato eseguibile, l''anomalia del controllo si chiude',
@@ -230,7 +230,8 @@ select pg_temp.rec(29, 'Sentinel non ha modificato interruttori, regola o proiez
 insert into fx values ('dash', pg_temp.come('authenticated', pg_temp.f('admin')::uuid, 'select public.azienda_admin_riepilogo()::text'));
 select pg_temp.rec(30, 'cruscotto: dati reali e sorgenti non collegate dichiarate',
   pg_temp.f('dash') like 'OK:%'
-  and jsonb_array_length(substr(pg_temp.f('dash'), 4)::jsonb -> 'sorgenti_non_collegate') = 4
+  -- WI-015B: le fonti sono righe del registro, tutte spente alla nascita, piu le fatture AI (mai collegate)
+  and jsonb_array_length(substr(pg_temp.f('dash'), 4)::jsonb -> 'sorgenti_non_collegate') = 8
   and (substr(pg_temp.f('dash'), 4)::jsonb -> 'ai' ->> 'configurato') = 'false'
   and (substr(pg_temp.f('dash'), 4)::jsonb -> 'agenti' ->> 'accesi') = '1', left(pg_temp.f('dash'), 200));
 select pg_temp.rec(31, 'esecuzione manuale dal cruscotto e liste leggibili dall''admin',
