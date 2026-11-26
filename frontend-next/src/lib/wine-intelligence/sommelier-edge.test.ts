@@ -97,7 +97,7 @@ const fakeSupabase = {
   rpc: async (name: string, args: Record<string, unknown>) => {
     rpcLog.push({ name, args });
     if (name === "rate_limit_consume") return rateLimitKo ? { data: null, error: { code: "P0001", message: "x" } } : { data: null, error: null };
-    if (name === "vini_canonici_cerca") {
+    if (name === "vini_canonici_cerca_servizio") {
       return canonicoKo ? { data: null, error: { code: "PGRST", message: "SEGRETO-DI-DB" } } : { data: righeCanoniche, error: null };
     }
     if (name === "sommelier_contesto_leggi") return { data: storico, error: null };
@@ -605,7 +605,7 @@ const rigaCanonica = (lwin7: string, extra: Riga = {}): Riga => ({
   ...extra,
 });
 const RICERCA = { tipo: "ricerca", produttore: "Giacomo Conterno", nome: "Monfortino" };
-const rpcCanonico = () => rpcLog.filter((r) => r.name === "vini_canonici_cerca");
+const rpcCanonico = () => rpcLog.filter((r) => r.name === "vini_canonici_cerca_servizio");
 type CtxRicerca = {
   candidati: { lwin: string; identificato: boolean; esito: string }[];
   avvertenze: string[];

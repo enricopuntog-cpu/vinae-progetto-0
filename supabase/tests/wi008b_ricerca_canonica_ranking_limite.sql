@@ -225,8 +225,9 @@ begin
     pg_temp.conteggio('user:' || v_c::text) = v_prima + 1);
   -- chiamata di servizio senza uid
   v := pg_temp.cerca('service_role', null, '', 'zzcomune', 15);
-  perform pg_temp.registra('L06', 'una chiamata di servizio (senza uid) è servita con un bucket proprio',
-    jsonb_array_length(v) = 15 and pg_temp.conteggio('service') = 1, v::text);
+  perform pg_temp.registra('L06', 'una chiamata di servizio (senza uid) è servita senza contatori condivisi (il limite per utente è del gate AI)',
+    jsonb_array_length(v) = 15 and pg_temp.conteggio('service') = 0
+    and not exists (select 1 from private.rate_limit_buckets where scope = 'ricerca-canonica' and subject not like 'user:%'), v::text);
 end $$;
 
 -- ---------------------------------------------------------------------------------------------
@@ -249,6 +250,37 @@ begin
   perform pg_temp.registra('P05', 'il ruolo authenticated non legge catalog.* (nessuna esposizione diretta)',
     not has_schema_privilege('authenticated', 'catalog', 'USAGE')
     and not has_table_privilege('authenticated', 'catalog.wines', 'SELECT'));
+end $$;
+
+-- ---------------------------------------------------------------------------------------------
+-- W. Porta di sola lettura del Sommelier
+-- ---------------------------------------------------------------------------------------------
+do $$
+declare
+  v_oid oid := 'public.vini_canonici_cerca_servizio(text,text,integer,text)'::regprocedure;
+  v_porta jsonb;
+  v_diretta jsonb := pg_temp.cerca('service_role', null, '', 'zzcomune', 15);
+  v_negata text := 'NESSUN_ERRORE';
+begin
+  set local role service_role;
+  select coalesce(jsonb_agg(to_jsonb(r)), '[]'::jsonb) into v_porta
+    from public.vini_canonici_cerca_servizio('', 'zzcomune', 15, null) r;
+  reset role;
+  perform pg_temp.registra('W01', 'la porta di servizio restituisce le stesse righe, nello stesso ordine',
+    v_porta = v_diretta and jsonb_array_length(v_porta) = 15, left(v_porta::text, 200));
+  begin
+    set local role authenticated;
+    perform * from public.vini_canonici_cerca_servizio('', 'zzcomune', 15, null);
+  exception when insufficient_privilege then v_negata := '42501';
+  end;
+  reset role;
+  perform pg_temp.registra('W02', 'authenticated, anon e PUBLIC non possono usare la porta di servizio (nessun aggiramento del limite)',
+    v_negata = '42501' and not has_function_privilege('anon', v_oid, 'EXECUTE')
+    and not has_function_privilege('authenticated', v_oid, 'EXECUTE') and has_function_privilege('service_role', v_oid, 'EXECUTE')
+    and not exists (select 1 from pg_proc p, aclexplode(p.proacl) a where p.oid = v_oid and a.grantee = 0), v_negata);
+  perform pg_temp.registra('W03', 'la porta di servizio è STABLE (sola lettura in PostgREST), invoker, search_path vuoto',
+    (select p.provolatile = 's' and not p.prosecdef and exists (select 1 from unnest(p.proconfig) c where c ~ '^search_path=("")?$')
+       from pg_proc p where p.oid = v_oid));
 end $$;
 
 select id, descrizione, passed, detail from esiti_wi008b order by id;

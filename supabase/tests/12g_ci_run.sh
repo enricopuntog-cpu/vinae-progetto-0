@@ -376,6 +376,14 @@ run_grid "wi008b ricerca canonica: ranking oltre 2.000 candidati e limite per id
 # WI-008 (wi008c): simulazione, anteprima e lotto valutano il rapporto dei candidati una sola volta, con risultati
 # identici ai corpi precedenti (oracoli nella griglia); ROLLBACK.
 run_grid "wi008c promozione: una valutazione per chiamata, equivalenza con la logica precedente" wi008c_promozione_una_valutazione.sql 3
+# WI-008 (wi008d): ricerca canonica con PostgREST e Auth veri (429 al minuto, raffica parallela, serializzazione per
+# identita, isolamento, porta di sola lettura del Sommelier, fonte revocata, ripristino dopo la finestra: attende il
+# minuto successivo). Fixture committate sul catalogo VUOTO e rimosse in trap, interruttore di nuovo spento.
+wi008d_pg="$(E2E_DB_URL="$E2E_DB_URL" E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_ANON_KEY="$E2E_ANON_KEY" \
+  E2E_SERVICE_KEY="$E2E_SERVICE_KEY" bash "$TESTS/wi008d_ricerca_canonica_postgrest.sh")" \
+  || { printf '%s\n' "$wi008d_pg" | tail -n 60; die "wi008d PostgREST ricerca canonica: fallita."; }
+printf '%s\n' "$wi008d_pg"
+summary "- $(printf '%s\n' "$wi008d_pg" | grep 'ricerca canonica:' | tail -n 1)"
 
 # Stessa famiglia su sessioni PostgreSQL realmente separate: due esecutori sullo stesso
 # prelievo (uno solo riceve il Transfer), annullamento del titolare contro presa in carico e

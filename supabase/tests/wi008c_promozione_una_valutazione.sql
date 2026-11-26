@@ -285,8 +285,11 @@ do $$
 declare v_p uuid; v_res jsonb;
 begin
   -- il produttore esiste già (stessa chiave naturale delle fixture 'Ritirata') e viene ritirato
-  insert into catalog.producers (name, name_key, natural_key, origin)
-  values ('Ritirata', 'ritirata', 'ritirata' || chr(31) || 'italy', 'manual') returning id into v_p;
+  insert into catalog.producers (name, name_key, natural_key, origin, source_id, source_record_id)
+  select 'Ritirata', 'ritirata', 'ritirata' || chr(31) || 'italy', 'promotion', r.source_id, r.id
+    from catalog.source_records r
+   where r.source_id = (select v::uuid from ctx where k = 'source') and r.external_id = '4000101'
+  returning id into v_p;
   set local role catalog_curator;
   perform catalog.retire_canonical_entity('producer', v_p, 'wi008c: ritirato', 'qa');
   reset role;

@@ -108,7 +108,7 @@ const sse = (payload: Record<string, unknown>): string =>
 //     riletta qui dalla vista pubblica a colonne chiuse e dalla tabella dei vini;
 //   * `{ tipo: "cantina", consenso: true }` → le bottiglie dell'utente del token;
 //   * `{ tipo: "ricerca", produttore, nome, codice }` (WI-008) → i candidati del catalogo canonico per QUELLA ricerca esplicita,
-//     letti dal server con `vini_canonici_cerca` (massimo 5, 3.500 caratteri). Il testo libero non viene analizzato per trovare vini.
+//     letti dal server con `vini_canonici_cerca_servizio` (massimo 5, 3.500 caratteri). Il testo libero non viene analizzato per trovare vini.
 //     Catalogo spento, vuoto o in errore → Sommelier generale, esattamente come prima (nessun 503, nessun contesto).
 //
 // Il browser non è un'autorità su nessuno dei due: non manda inventari, non
@@ -201,9 +201,10 @@ const leggiContesto = async (supabase: any, userId: string, richiesta: Richiesta
   const annoCorrente = new Date().getUTCFullYear();
 
   if (richiesta.tipo === "ricerca") {
-    // Porta server-side concessa a service_role: limitata (identità di servizio), spenta con l'interruttore del catalogo.
+    // Porta di sola lettura riservata a service_role, spenta con l'interruttore del catalogo. Il limite per utente è quello
+    // del gate AI, già consumato; qui nessun contatore condiviso fra utenti.
     // Gli errori non sono mai mostrati: il Sommelier torna quello di prima.
-    const { data, error } = await supabase.rpc("vini_canonici_cerca", {
+    const { data, error } = await supabase.rpc("vini_canonici_cerca_servizio", {
       p_produttore: richiesta.produttore,
       p_nome: richiesta.nome,
       p_limite: LIMITI_RICERCA.candidatiMax,
