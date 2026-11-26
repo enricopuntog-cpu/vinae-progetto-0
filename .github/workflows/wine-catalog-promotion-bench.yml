@@ -1,0 +1,68 @@
+name: Wine catalog promotion bench
+
+# Banco della promozione canonica: esegue la procedura operativa (tools/wine-catalog/promozione/) su un catalogo
+# SINTETICO con le proporzioni di Production, in uno stack Supabase locale ed effimero costruito dalle migration del
+# commit. Nessun secret, nessuna destinazione remota (il banco accetta solo loopback). Non è un check richiesto:
+# gira a mano o sui rami che toccano la procedura o il banco.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - tools/wine-catalog/promozione/**
+      - tools/wine-catalog/bench/promozione/**
+      - .github/workflows/wine-catalog-promotion-bench.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wine-catalog-promotion-bench-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  banco:
+    name: Banco promozione catalogo (sintetico)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13 # v3
+        with:
+          version: 2.117.0
+
+      # Come nel gate DB: l'output di `supabase start` contiene le chiavi dello stack e non viene stampato.
+      - name: Start ephemeral Supabase stack
+        run: |
+          log="$RUNNER_TEMP/supabase-start.log"
+          for registry in "${SUPABASE_INTERNAL_IMAGE_REGISTRY:-ghcr.io}" public.ecr.aws; do
+            if SUPABASE_INTERNAL_IMAGE_REGISTRY="$registry" supabase start \
+              --exclude realtime,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor \
+              > "$log" 2>&1; then
+              rm -f "$log"
+              echo "Stack locale avviato con le migrazioni del commit (immagini da $registry)."
+              exit 0
+            fi
+            grep -viE 'key|secret|jwt|token|password|postgres(ql)?://' "$log" | tail -n 20
+            echo "::warning title=Banco promozione::Avvio non riuscito con le immagini da $registry."
+            supabase stop --no-backup > /dev/null 2>&1 || true
+          done
+          rm -f "$log"
+          echo "::error title=Banco promozione::Stack Supabase locale non avviato."
+          exit 1
+
+      - name: Run promotion bench
+        run: |
+          db_url="$(supabase status -o env 2>/dev/null | sed -nE 's/^DB_URL="?([^"]*)"?$/\1/p' | head -n 1)"
+          if [ -n "$db_url" ]; then echo "::add-mask::$db_url"; fi
+          E2E_DB_URL="$db_url" bash tools/wine-catalog/bench/promozione/banco.sh
+
+      - name: Destroy ephemeral Supabase stack
+        if: always()
+        run: supabase stop --no-backup

@@ -35,6 +35,8 @@ Aprire soltanto ciò che serve al task:
   limite del ranking oltre 2.000 candidati, protezione della porta, condizioni di attivazione).
   Integrazione, prestazioni della promozione, scelta personale in Cantina e scheda autonoma (WI-008):
   [`../docs/wine-intelligence/WI_008_INTEGRAZIONE_CATALOGO.md`](../docs/wine-intelligence/WI_008_INTEGRAZIONE_CATALOGO.md).
+  Popolamento del catalogo canonico (procedura, misure, arresti, prontezza della proiezione):
+  [`../docs/wine-intelligence/PROMOZIONE_CANONICA_RUNBOOK.md`](../docs/wine-intelligence/PROMOZIONE_CANONICA_RUNBOOK.md).
 - Monitoraggio pre-lancio OBS-01: [`../docs/VPM_022C_OBS_01.md`](../docs/VPM_022C_OBS_01.md)
   contiene strumenti nativi, log minimizzati, heartbeat, responsabilità e residui
   pre-Stripe; non equivale a un servizio di allarme su ogni evento.

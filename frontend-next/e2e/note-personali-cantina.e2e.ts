@@ -1,6 +1,7 @@
 import { passwordFixture } from "./support/api";
 import { contestoAutenticato, opzioniDelProgetto } from "./support/browser";
 import { eseguiSql, ripristinaFixture } from "./support/db";
+import { fermo } from "./support/layout";
 import { attendiCaricamento, problemiAccessibilita, senzaScorrimentoOrizzontale } from "./support/pagina";
 import { expect, test } from "./support/test";
 import { etichettaCorsa, leggiDalDatabase, preparaBottigliaInCantina, uuid, type BottigliaPreparata } from "./support/vino";
@@ -106,7 +107,7 @@ test.describe.serial("Note personali sul vino: salvate, private e senza toccare 
 
     // 7. La scheda intelligente distingue dati condivisi e dichiarazioni personali.
     const scheda = schedaDelVino(page);
-    await scheda.getByTestId("wine-intelligence").locator("summary").click();
+    await (await fermo(scheda.getByTestId("wine-intelligence").locator("summary"))).click();
     const personale = scheda.getByTestId("wi-personale");
     await expect(personale).toContainText("Le tue dichiarazioni");
     await expect(personale).toContainText("Barolo DOCG");
@@ -156,7 +157,7 @@ test.describe.serial("Note personali sul vino: salvate, private e senza toccare 
     await page.goto("/cantina");
     await attendiCaricamento(page);
 
-    await schedaDelVino(page).getByTestId("cantina-completa-info").click();
+    await (await fermo(schedaDelVino(page).getByTestId("cantina-completa-info"))).click();
     const dialogo = page.getByRole("dialog", { name: "Completa le informazioni" });
     // Persistenza: i campi arrivano dal database, non da memoria del browser.
     await expect(dialogo.getByTestId("nota-denominazione")).toHaveValue("Barolo DOCG");
@@ -171,7 +172,7 @@ test.describe.serial("Note personali sul vino: salvate, private e senza toccare 
 
     // Cancellazione, con seconda conferma.
     await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 15_000 });
-    await schedaDelVino(page).getByTestId("cantina-completa-info").click();
+    await (await fermo(schedaDelVino(page).getByTestId("cantina-completa-info"))).click();
     await dialogo.getByTestId("nota-elimina").click();
     await dialogo.getByTestId("nota-elimina-conferma").click();
     await expect(dialogo).toBeHidden();
@@ -188,7 +189,7 @@ test.describe.serial("Note personali sul vino: salvate, private e senza toccare 
     diagnostica.osserva(pagina, "venditore");
     await pagina.goto("/cantina");
     await attendiCaricamento(pagina);
-    await schedaDelVino(pagina).getByTestId("cantina-completa-info").click();
+    await (await fermo(schedaDelVino(pagina).getByTestId("cantina-completa-info"))).click();
     const d1 = pagina.getByRole("dialog", { name: "Completa le informazioni" });
     await d1.getByTestId("nota-osservazioni").fill("RISERVATA-DEL-VENDITORE");
     await d1.getByTestId("nota-rivedi").click();
@@ -208,7 +209,7 @@ test.describe.serial("Note personali sul vino: salvate, private e senza toccare 
     await expect(schedaDelVino(page).getByTestId("cantina-completa-info")).toContainText("Completa le informazioni");
 
     // Annota in proprio: separato da quello del venditore.
-    await schedaDelVino(page).getByTestId("cantina-completa-info").click();
+    await (await fermo(schedaDelVino(page).getByTestId("cantina-completa-info"))).click();
     const d2 = page.getByRole("dialog", { name: "Completa le informazioni" });
     await d2.getByTestId("nota-osservazioni").fill("Nota dell'altro");
     await d2.getByTestId("nota-rivedi").click();
@@ -224,7 +225,7 @@ test.describe.serial("Note personali sul vino: salvate, private e senza toccare 
     diagnostica.osserva(p3, "venditore");
     await p3.goto("/cantina");
     await attendiCaricamento(p3);
-    await schedaDelVino(p3).getByTestId("wine-intelligence").locator("summary").click();
+    await (await fermo(schedaDelVino(p3).getByTestId("wine-intelligence").locator("summary"))).click();
     await expect(schedaDelVino(p3).getByTestId("wi-personale")).toContainText("RISERVATA-DEL-VENDITORE");
     await expect(p3.locator("body")).not.toContainText("Nota dell'altro");
     await rientro.close();

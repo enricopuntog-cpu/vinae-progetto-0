@@ -1,8 +1,8 @@
 # WI-008 — chiusura import, simulazione reale, impronta, ranking, limite e Sommelier
 
 Date: 25 e 26 novembre 2026. Production Supabase `pijnmcllmfgjmgsvtcej`.
-Lo stato di **distribuzione** (ledger, funzioni, Netlify) non si deduce da questo file: va riletto dopo il merge (CHANGES.log).
-Le sezioni 2–8 sono il registro della prima sessione; dove la seconda le supera vale la sezione 9.
+La **distribuzione** è stata verificata il 26/11 dopo il merge di #317 (sezione 10). Le sezioni 2–8 sono il registro della prima
+sessione; dove la seconda le supera vale la sezione 9, e dove il rilascio le supera vale la 10.
 
 ## 1. Stato per blocco (26 novembre 2026, ramo `feature/wi-008-integrazione-catalogo`)
 
@@ -117,3 +117,88 @@ Scheda `/vino-catalogo/[lwin7]`: solo autenticati, `noindex` (il `robots` vieta 
 
 ### 9.7 Gate che restano al founder
 Approvazione di `lwin-conservative-v1`, accensione di `promotion_settings` e dimensione dei lotti, promozione; misura a catalogo popolato e accensione della proiezione. Separata: chi conferma un collegamento canonico proposto da un utente.
+
+## 10. Rilascio, verifiche e simulazione ufficiale (26 novembre 2026)
+
+### 10.1 Stato distinto
+| Livello | Stato |
+|---|---|
+| Implementato e testato | blocchi A–H di #315, #316, #317 |
+| Mergiato | #317 squash `db0a4555083f9eb1965596573d491cbd03891980`, 07:15:28 UTC; albero identico allo SHA verificato `1939bf5` |
+| CI su `main` | 16 check `success` (CI `45773976171`, DB `45773976009`, E2E `45773976410`, Security `45773976421`, integrazione Supabase) |
+| Distribuito | ledger Production 129, ultima `20261126100000`; Netlify `6b07dc9214191d36507b1a22` `ready` sul commit `db0a455`, 07:16:55 UTC |
+| Attivato | **niente**: regola `draft`, promozione OFF, proiezione OFF, pagamenti 503, AI 503, login di import `NOLOGIN` |
+
+Merge con `gh pr merge --squash --admin --match-head-commit`: unico blocco la review Code Owner, nessuna review o
+commento di codice aperto, 6 check richiesti verdi sulla testa.
+
+### 10.2 Verifiche sugli oggetti, non solo sul ledger
+- I corpi di 16 funzioni definite dalle sei migration coincidono (md5) con i file di `origin/main`.
+- `catalog.surface_audit()`: 74 funzioni esaminate, **0 violazioni**, 15 porte curatore, un solo rapporto curatore.
+  Impronta (28 funzioni) calcolabile; 18 trigger canonici attivi.
+- `wine_catalog_selections`: RLS, sola policy di lettura del proprietario; `authenticated` solo `SELECT`; `anon` niente.
+- Le porte della Cantina e `catalogo_canonico_disponibile` negano `anon`; `service_role` le può eseguire per il
+  privilegio predefinito di Supabase, come le porte `cellar_nota_vino_*` preesistenti (le due che scrivono dipendono
+  da `auth.uid()`). La porta di servizio della ricerca è eseguibile solo da `service_role`.
+- Via API pubblica, da anonimo: 401/42501 su 5 RPC e su lettura e inserimento della tabella; schema `catalog` non
+  esposto (406). Da autenticato (identità fittizia, transazione di sola lettura): catalogo non disponibile, 0 righe.
+- Scheda `/vino-catalogo/…` in Production: anonimo → 200 con la sola richiesta di accesso, `noindex`, nessun dato di
+  catalogo; codice non valido → 404; `robots.txt` vieta tutto, nessuna sitemap. Il 404 per l'utente autenticato a
+  proiezione spenta è provato sul database (0 righe) e dall'E2E in CI, non con un accesso reale in Production.
+- Edge Function: l'integrazione ha ridistribuito tutte e sei (hash nuovi). `ai-sommelier` v267: 6/6 file identici a
+  `main`, con la porta di servizio. `payments-checkout` (3/3) e `payouts-release` (2/2) identici byte per byte; i
+  sorgenti delle altre tre non sono cambiati in git (non riscaricati). `supabase-js` fissato a `2.110.9`.
+- Dati preesistenti: hash del contenuto di `wines` (12), `bottle_units` (11), `listings` (11), `orders` (0) e
+  `profiles` (15) **identici** prima e dopo; `source_records` 212.894, canonico 0, `wine_links` 0, rilievi 130.
+
+### 10.3 Preview
+`kolzludrwkukxmogsuxy` (senza dati, creata alle 05:47:44 UTC) rimossa dall'integrazione al merge: `list_branches`
+mostra solo `main`, il suo database non è raggiungibile, non è stata ricreata; #318, che non tocca `supabase/`, è
+stata ignorata dall'integrazione. Costo **stimato** da tariffa e durata (0,01344 $/ora, circa 1,5 ore): 0,020 $, o
+0,027 $ se fatturato a ore iniziate, entro il tetto di 0,50 $. La fattura non è stata letta.
+
+### 10.4 Simulazione ufficiale in Production (sola lettura)
+`catalog.promotion_simulation('LIVEX-LWIN7','lwin-conservative-v1',5)`, una esecuzione alle 07:21 UTC, sessione del
+proprietario, `begin read only`, `statement_timeout` 115 s locale alla transazione, nessuna query attiva prima:
+**52,71 s**, `database_writes` 0, `dry_run` vero. Una seconda query aggregata su `promotion_report` (65,8 s, nessuna
+tabella temporanea) ha dato i valori che la simulazione non restituisce.
+
+| Grandezza | Riferimento | Ottenuto |
+|---|---|---|
+| Candidati | 159.614 | 159.614 |
+| Produttori distinti | 27.410 | 27.410 |
+| Paesi | 59 | 59 |
+| Live vino esclusi per campi essenziali | 26.099 | 26.099 |
+| Esclusi solo per possibile duplicato | 48 | 48 |
+| Rilievi aperti | 130 | 130 |
+| Omonimi | 7.208 in 2.617 gruppi | 7.208 in 2.617 gruppi |
+
+Nessuna differenza. Motivi sovrapposti: nome mancante 26.036, paese 38, produttore 26, possibile duplicato 148.
+LWIN non validi 0, produttori ritirati 0, conflitti fra fonti 0. In più: 11.960 coppie di vini omonimi, 748 coppie di
+produttori con lo stesso nome, 4.206 alias Combined attesi. Impronta `b87e7b516952bcd5cbda30f4779cc7c2`, digest
+`b352be426a3a32762fb7fa5140b7ee88`, run `1335acaa-72db-45fa-bba0-2dfdca7e545a`, file
+`7669ceab4e815716aa6c90643c117f3da7c7daeaa202ecd3f7cfbc4db7fd488e`.
+
+### 10.5 Prontezza alla promozione
+Procedura, misure, limiti e verifiche residue: [`PROMOZIONE_CANONICA_RUNBOOK.md`](PROMOZIONE_CANONICA_RUNBOOK.md)
+(sostituisce la stima di 9.1).
+
+### 10.6 Mobile e WebKit
+`ricerca-canonica.e2e.ts` era solo `@smoke`: nemmeno la suite completa lo eseguiva a 375 px e su WebKit. Aggiunto
+`@cross`. Sono emersi due difetti **delle prove**, non dei comandi:
+
+1. `.cv-card` (`content-visibility: auto`, altezza stimata, presente dalla Fase 2): dopo uno scorrimento automatico
+   WebKit applica l'altezza vera (circa 43 px in più) fra `pointerdown` e `pointerup`. Sonde su rami temporanei, poi
+   eliminati: pressione sul pulsante e rilascio sul testo sopra; in `note-personali-cantina` (WI-005B, intermittente)
+   pressione su «Modifica le mie informazioni» e rilascio su «Mostra nel mio profilo». Nessun `click` arriva al
+   comando. Corretto con `fermo` (`e2e/support/layout.ts`): si aspetta il bersaglio fermo, il clic resta vero.
+2. `reload` e `goto` con letture in corso: WebKit le registra come errori del browser (`conversations_page`,
+   `notifications_page`). In `ricerca-canonica` si aspetta la fine delle letture prima di navigare.
+
+Prove: 90/90 con 3 ripetizioni per file e progetto e `retries=0` (run 45785999304); suite completa sullo SHA `fe8fc71`
+316 passati, 4 saltati, 0 falliti (run 45785986962), residui 0. Dopo il solo punto 1+2 su `ricerca-canonica` erano
+54/54 (run 45781004092); prima falliva su WebKit in tutte le corse.
+
+**Osservazione di prodotto, non modificata**: su WebKit un tocco dato nell'istante in cui una scheda viene calcolata
+può andare a vuoto. Nell'uso normale la scheda si calcola quando si avvicina alla vista, prima del tocco. Non è stato
+provato su un iPhone o su Safari veri.
