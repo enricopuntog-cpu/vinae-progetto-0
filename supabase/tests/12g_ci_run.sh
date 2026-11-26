@@ -391,6 +391,12 @@ printf '%s\n' "$wi011_conc"
 summary "- $(printf '%s\n' "$wi011_conc" | grep 'wi011 concorrenza:' | tail -n 1)"
 # WI-013: contratto del Company Brain (eventi, task, lease, approvazioni) e registro Sentinel. ROLLBACK.
 run_grid "wi013 company brain e sentinel" wi013_company_brain.sql 3
+# WI-015: finding dell'audit indipendente WI-009→014 (identita degli agenti, omonimie coi nativi, proposte, Sentinel).
+run_grid "wi015a finding dell'audit" wi015a_finding_audit.sql 3
+wi015_conc="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/wi015_identita_concorrenza.sh")" \
+  || { printf '%s\n' "$wi015_conc"; die "wi015 identita e concorrenza: fallita."; }
+printf '%s\n' "$wi015_conc"
+summary "- $(printf '%s\n' "$wi015_conc" | grep 'wi015 identita e concorrenza:' | tail -n 1)"
 # WI-008 (wi008d): ricerca canonica con PostgREST e Auth veri (429 al minuto, raffica parallela, serializzazione per
 # identita, isolamento, porta di sola lettura del Sommelier, fonte revocata, ripristino dopo la finestra: attende il
 # minuto successivo). Fixture committate sul catalogo VUOTO e rimosse in trap, interruttore di nuovo spento.

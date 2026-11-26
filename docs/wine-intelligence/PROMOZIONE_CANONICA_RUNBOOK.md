@@ -91,6 +91,9 @@ costa circa 18,5 s contro 67,3 s.
    passato al lotto (`TETTO_DB_BYTE`) è la dimensione attuale più 600 MB, circa quattro volte la crescita attesa.
 6. Backup secondo §4.2.
 7. Nessun deploy di migration nella finestra; **un solo esecutore**, una persona che la segue dall'inizio alla fine.
+8. WI-015 (A-01): `00_stato.sql` riporta `conflitti_nativi = 0`. `02` e `03` (sotto il lock) si fermano altrimenti: il
+   curatore associa il LWIN al nativo, lo ritira, oppure dichiara l'omonimia da `/admin/catalogo`. Con un lotto aperto
+   non si possono creare vini nativi (`55P03`, si riprova a lotto chiuso).
 
 ### 4.1 Impronta: va riletta dopo la distribuzione di F-07
 
@@ -106,6 +109,24 @@ corrente è **`64e038526a78f44070a54498fd0ff607`**; il digest della vista resta 
 Anche `b87e7b51…` e `3b526fac…` **non vanno approvati**. La modifica di `wines_guard` ammette un solo passaggio (LWIN
 assente → LWIN ufficiale su un vino nativo con record di fonte valido) e fa parte del delta da rivalidare. Il valore
 si rilegge comunque con `00_stato.sql` prima di qualunque decisione.
+
+### 4.2 Backup e ripristino: quale evidenza basta
+
+Non c'è PITR: il ripristino torna all'ultimo backup e perde ciò che è stato scritto dopo. Servono **tutte**:
+
+1. un run di `Continuity - encrypted offsite backup` lanciato a mano **subito prima** della finestra, riuscito
+   (esporta ruoli, schema, dati e Storage, carica su B2, riscarica e verifica hash e Object Lock);
+2. nel suo log, la data dump completata. Lo schema `catalog` è incluso: gli avvisi di `pg_dump` sui vincoli
+   circolari nominano `entity_merges` e `duplicate_candidates`, che esistono solo lì (run 45806510709 del 26/11);
+3. `.github/scripts/offsite-restore-verify.sh` sull'archivio di quel run, in una macchina isolata con la chiave
+   `age` offline (**solo il founder**: decifratura e hash, nessun database);
+4. la prova `ripristino.sh` verde sullo SHA che si esegue (CI, stack effimero): un dump dei soli dati di `catalog`
+   popolato si ricarica sopra le migration del commit (`session_replication_role = replica` e `truncate` delle
+   righe seminate, in una transazione) con contenuto identico, regola e impronta conservate e promozione che riprende.
+
+**Rischio residuo, non coperto:** il backup B2 reale con il database di oggi (misura del 26/11/2026: 731 MB; il ledger
+si rilegge nella finestra) non è mai stato ripristinato; l'ultimo restore reale è del 22/09/2026 (60 migration). Un restore completo in un progetto
+isolato è una decisione di costo del founder.
 
 ### 4.3 Procedura unica del founder (F-06 e F-08)
 
@@ -130,24 +151,6 @@ Una volta sola: installare il client `psql`; scaricare il certificato CA del pro
 
 Restore sintetico (`ripristino.sh`, CI) e restore dell'archivio Production sono prove diverse: la seconda, in un
 progetto isolato, resta una decisione di costo.
-
-### 4.2 Backup e ripristino: quale evidenza basta
-
-Non c'è PITR: il ripristino torna all'ultimo backup e perde ciò che è stato scritto dopo. Servono **tutte**:
-
-1. un run di `Continuity - encrypted offsite backup` lanciato a mano **subito prima** della finestra, riuscito
-   (esporta ruoli, schema, dati e Storage, carica su B2, riscarica e verifica hash e Object Lock);
-2. nel suo log, la data dump completata. Lo schema `catalog` è incluso: gli avvisi di `pg_dump` sui vincoli
-   circolari nominano `entity_merges` e `duplicate_candidates`, che esistono solo lì (run 45806510709 del 26/11);
-3. `.github/scripts/offsite-restore-verify.sh` sull'archivio di quel run, in una macchina isolata con la chiave
-   `age` offline (**solo il founder**: decifratura e hash, nessun database);
-4. la prova `ripristino.sh` verde sullo SHA che si esegue (CI, stack effimero): un dump dei soli dati di `catalog`
-   popolato si ricarica sopra le migration del commit (`session_replication_role = replica` e `truncate` delle
-   righe seminate, in una transazione) con contenuto identico, regola e impronta conservate e promozione che riprende.
-
-**Rischio residuo, non coperto:** il backup B2 reale con il database di oggi (757 MB, 129 migration, catalogo) non è
-mai stato ripristinato; l'ultimo restore reale è del 22/09/2026 (60 migration). Un restore completo in un progetto
-isolato è una decisione di costo del founder.
 
 ## 5. Esecuzione
 

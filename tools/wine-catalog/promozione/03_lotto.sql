@@ -60,7 +60,12 @@ begin
     raise exception 'STOP: fonte LIVEX-LWIN7 assente';
   end if;
   if not pg_try_advisory_xact_lock(v_chiave) then
-    raise exception 'STOP: un''altra promozione (o una riconciliazione) tiene il lock: nessuna azione, riconciliare prima di riprovare';
+    raise exception 'STOP: un''altra promozione, una riconciliazione o la creazione di un vino nativo tiene il lock: nessuna azione, riconciliare prima di riprovare';
+  end if;
+  -- WI-015 (A-01): sotto lo stesso lock nessun vino nativo puo nascere (`add_manual_wine` lo chiede in modo
+  -- condiviso), quindi l'assenza di conflitti letta qui resta vera fino al COMMIT. Nessuna fusione automatica.
+  if exists (select 1 from catalog.lwin_native_conflicts(1)) then
+    raise exception 'STOP: vini nativi in conflitto con la fonte: serve la decisione del curatore prima del lotto';
   end if;
 
   if c_massimo not between 1 and 5000 then

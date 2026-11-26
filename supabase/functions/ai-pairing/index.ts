@@ -151,7 +151,7 @@ Deno.serve(async (request) => {
       return json({ error: "Il servizio AI ha restituito un formato non valido." }, 502, cors);
     }
     if (errore instanceof AiProviderError) {
-      await registraEsitoFornitore(supabase, "ai:pairing", false);
+      if (errore.guastoFornitore) await registraEsitoFornitore(supabase, "ai:pairing", false);
       return json({ error: "Il servizio AI non è al momento disponibile." }, 503, cors);
     }
     console.error("[ai-pairing] errore non previsto");

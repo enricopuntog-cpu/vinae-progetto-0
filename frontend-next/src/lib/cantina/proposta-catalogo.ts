@@ -83,9 +83,13 @@ export async function inviaPropostaCatalogo(client: SupabaseClient, wineSlug: st
       p_wine_slug: wineSlug,
     });
     if (error || data !== "ricevuta") {
+      // `non_valida` (WI-015): i dati non descrivono un vino. La porta non solleva, così la quota giornaliera conta.
       return {
         ok: false,
-        error: error?.code === "22023" ? "Controlla i dati inseriti: qualcosa non è un'informazione sul vino." : ERRORE_GENERICO,
+        error:
+          data === "non_valida" || error?.code === "22023"
+            ? "Controlla i dati inseriti: qualcosa non è un'informazione sul vino."
+            : ERRORE_GENERICO,
       };
     }
     return { ok: true, data: undefined };

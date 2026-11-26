@@ -49,4 +49,14 @@ describe("WI-011 — proposta esplicita al catalogo", () => {
     expect(esito.ok).toBe(false);
     expect(JSON.stringify(esito)).not.toContain("SEGRETO");
   });
+
+  it("WI-015: «non_valida» è un esito della porta (che consuma la quota), non un successo né un errore interno", async () => {
+    const client = { rpc: async () => ({ data: "non_valida", error: null }) } as unknown as SupabaseClient;
+    const preparata = preparaProposta(VINO, campi);
+    if (!preparata.ok) throw new Error("x");
+    expect(await inviaPropostaCatalogo(client, "slug-x", preparata.data)).toEqual({
+      ok: false,
+      error: "Controlla i dati inseriti: qualcosa non è un'informazione sul vino.",
+    });
+  });
 });

@@ -283,6 +283,23 @@ verifica "T14 vini uguali al registro" "$(vini)" "$(sql "select coalesce(sum((de
 verifica "T14 proiezione spenta" "$(sql 'select enabled from catalog.public_projection_settings')" f
 verifica "T14 nessuna sessione di prova rimasta" "$(sql "select count(*) from pg_stat_activity where application_name like 'conc-%' and pid <> pg_backend_pid() and application_name <> 'conc-esegui'")" 0
 
+echo "== T15. A-01 (audit WI-009→014): un vino nativo con il nome di un candidato ferma preflight e lotto"
+NATIVO="$(sql "select (r.payload->>'producer_name') || '|' || (r.payload->>'wine') from catalog.source_records r where r.status='Live' and r.scope='wine' and r.payload->>'wine' like 'Vino %' and not exists (select 1 from catalog.wines w where w.lwin7=r.external_id) order by r.external_id desc limit 1")"
+PRODUTTORE_NATIVO="$(sql "select catalog.add_manual_producer('${NATIVO%%|*}', null, 'banco A-01', 'concorrenza')")"
+sql "select catalog.add_manual_wine('$PRODUTTORE_NATIVO', '${NATIVO##*|}', null, null, null, null, null, null, 'banco A-01', 'concorrenza')" > /dev/null
+procedura 00_stato.sql
+verifica "T15 00 conta il conflitto" "$(campo "$(ultima_json "$OUT")" '.canonico.conflitti_nativi > 0')" true
+procedura 02_apri_finestra.sql
+contiene "T15 il preflight rifiuta" "$ERR" "vini nativi in conflitto"
+V0=$(vini); esegui "$(file_lotto 30)"
+contiene "T15 il lotto rifiuta sotto il proprio lock" "$ERR" "vini nativi in conflitto"
+nessun_effetto "T15" 30 "$V0"
+sql "insert into catalog.native_lwin_distinct (wine_id, lwin7, note, declared_by) select wine_id, lwin7, 'banco: omonimia dichiarata', 'concorrenza' from catalog.lwin_native_conflicts(1000)" > /dev/null
+esegui "$(file_lotto 30)"
+verifica "T15 dichiarata l'omonimia il lotto passa: exit" "$RC" 0
+verifica "T15 vini aggiunti" "$(( $(vini) - V0 ))" 100
+verifica "T15 incoerenze" "$(incoerenze "$(riconcilia 30)")" 0
+
 echo
 echo "CONCORRENZA PROMOZIONE: $VERDI asserzioni verdi, $ROSSI rosse"
 [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo "Concorrenza e fail-closed della procedura: $VERDI verdi, $ROSSI rosse." >> "$GITHUB_STEP_SUMMARY"

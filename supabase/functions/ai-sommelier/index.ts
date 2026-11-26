@@ -357,7 +357,9 @@ Deno.serve(async (request) => {
   } catch (errore) {
     // Prima che lo stream cominci l'errore è ancora uno status HTTP. Dopo, non
     // può esserlo più: diventa un evento dentro lo stream.
-    await registraEsitoFornitore(supabase, "ai:chat", false);
+    if (!(errore instanceof AiProviderError) || errore.guastoFornitore) {
+      await registraEsitoFornitore(supabase, "ai:chat", false);
+    }
     if (errore instanceof AiProviderError) {
       return json({ error: "Il Sommelier non è al momento disponibile." }, 503, cors);
     }

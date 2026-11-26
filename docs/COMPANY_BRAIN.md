@@ -10,29 +10,50 @@ catalogo conserva il proprio storico (`catalog.canonical_events`): il brain non 
 |---|---|
 | `events` | bus in sola aggiunta: tipo `dominio.azione`, fonte, `correlation_id`, `dedup_key`, versione di schema, riferimento al soggetto, payload ≤ 4 KB |
 | `agents` | registro degli agenti: **spenti** alla nascita, vedono solo i `task_types` elencati |
-| `tasks` | coda con priorità P0–P3, deduplicazione, lease con scadenza, tentativi limitati, `requires_approval`, versione |
-| `task_evidence` | evidenze in sola aggiunta, scrivibili solo con il lease valido |
+| `tasks` | coda con priorità P0–P3, deduplicazione, lease con scadenza, tentativi limitati, approvazione obbligatoria |
+| `task_evidence` | evidenze in sola aggiunta (anche contro `TRUNCATE`), scrivibili solo con il proprio lease |
 
-Ciclo di un agente: `claim_task` → `add_evidence` → `finish_task(successo, proposta)`. Con approvazione richiesta il
-task va in `in_approvazione`: lo chiude solo un admin con un motivo. Lease scaduto = ritorno in coda, poi `fallito`.
-La decisione **registra un giudizio**; nessuna azione sui domini parte da qui.
+Ciclo di un agente: `claim_task` → `add_evidence` → `finish_task(successo, proposta)` (e `renew_lease`, mai oltre 2 ore
+dalla presa). Ogni successo va in `in_approvazione` (WI-015: `requires_approval` è sempre vero). L'admin **approva**
+(`approvato`: giudizio registrato, nulla viene eseguito) e, dopo aver agito con gli strumenti del dominio, **conferma
+l'esecuzione** (`completato`). Lease scaduto = ritorno in coda, poi `fallito`.
 
-**Accesso:** nessun privilegio ad `anon`, `authenticated`, `service_role`. Il ruolo `brain_worker` è `NOLOGIN`, senza
-membri, ed esegue solo le tre porte dell'agente. Registrare, accendere un agente e creare task spetta al proprietario.
+**Identità (WI-015, finding C-01).** La credenziale è l'identità: ogni agente ha un proprio login PostgreSQL
+(`agents.db_role`) e le porte leggono `session_user` (in una `SECURITY DEFINER` `current_user` è il proprietario;
+`session_user` resta il login reale, che `SET ROLE` non cambia, e `SET SESSION AUTHORIZATION` richiede un superuser).
+Non esiste più un parametro di identità. Il login deve essere membro **solo** di `brain_worker`, senza
+`SUPERUSER`/`BYPASSRLS`/`CREATEROLE`/`CREATEDB`/`REPLICATION`, e non può essere `postgres`, `authenticator`, `anon`,
+`authenticated`, `service_role` o un ruolo `supabase_*`/`catalog_*`; il vincolo è ricontrollato a ogni chiamata. Un
+agente si accende solo con `db_role`. Evidenze, consegna e rinnovo richiedono che il lease sia **dello stesso agente**:
+conoscere `task_id` e `lease_token` non basta. Limiti: un lease attivo per agente, prese orarie
+(`max_claims_per_hour`), scadenza facoltativa (`expires_at`), 50 evidenze per task, evidenza ripetuta = stessa riga.
+Ogni presa, consegna e disabilitazione è un evento.
+
+- **Disabilitare o revocare:** `select brain.disable_agent('<agente>', '<motivo>', '<chi>')` (solo proprietario):
+  effetto immediato anche sulle sessioni aperte, i lease tornano in coda. Poi `alter role <login> nologin`.
+- **Ruotare la credenziale:** `\password <login>` da `psql`, mai in un file o nella memoria condivisa.
+
+**Accesso:** nessun privilegio ad `anon`, `authenticated`, `service_role`. `brain_worker` è `NOLOGIN` e non ha **membri
+operativi**: la membership di `postgres` (ADMIN vero, `SET` e `INHERIT` falsi, concessa da `supabase_admin`) è
+l'assegnazione automatica di PostgreSQL 16+ a chi crea un ruolo e non dà poteri in più (C-04: corretta la dicitura
+«nessun membro»; non va rimossa). Registrare, accendere un agente e creare task spetta al proprietario.
 
 **Dati:** `payload_ammesso` rifiuta chiavi di segreti o dati personali, indirizzi di posta e payload oltre 4 KB. È una
 rete, non una licenza: i produttori mandano riferimenti e conteggi.
 
-**Limite da risolvere prima del primo agente reale:** con un unico ruolo `brain_worker` l'identità dell'agente è un
-parametro. Prima di accendere un secondo agente serve una credenziale distinta per agente (o una Edge Function per
-agente che fissi la chiave lato server), e ogni agente deve leggere i dati del proprio dominio da porte dedicate.
+Un agente eseguito come Edge Function non può usare questo schema (PostgREST non espone `brain` e `session_user`
+sarebbe `authenticator`): servirebbe una porta di servizio con identità firmata, da progettare a parte.
 
 ## 2. Sentinel
 
 `brain.anomalies`: impronta (deduplicazione), codice, fonte, categoria, severità P0–P3, evidenze (soli conteggi),
 correlazione, stato (`aperta`, `presa_in_carico`, `risolta`, `ignorata`), prima e ultima rilevazione, ricorrenze,
-responsabile, azione proposta, approvazione richiesta. Una anomalia risolta che ricompare si riapre; una ignorata resta
-ignorata. L'apertura emette un evento; P0 e P1 creano anche un task da approvare.
+responsabile, azione proposta, approvazione richiesta. Una anomalia risolta che ricompare si riapre. **«Ignorata» è
+sempre temporanea** (WI-015, D-01): al massimo 24 ore per P0, 7 giorni per P1, 90 per P2/P3 (`sentinel_settings`,
+modificabili dal proprietario); torna aperta alla prima ricorrenza dopo la scadenza **o subito se la gravità sale**; se
+il problema sparisce si chiude, così la ricomparsa è di nuovo visibile. Apertura, riapertura e aggravamento sono eventi;
+per P0/P1 esiste **un solo task aperto** per anomalia (l'aggravamento ne alza la priorità). Due segnalazioni simultanee
+della stessa impronta si serializzano.
 
 Controlli deterministici (nessuna AI):
 
@@ -47,10 +68,13 @@ Controlli deterministici (nessuna AI):
 | `importazione_ferma` | P2 | import `running` senza segnali da 2 ore |
 | `interruttore_ai_aperto` | P2 | interruttore sui guasti AI aperto |
 | `conflitti_lwin_nativi` | P2 | nativi che la fonte LWIN ora conosce |
-| `budget_ai_quasi_esaurito` | P3 | oltre l'80% del tetto giornaliero |
+| `budget_ai_quasi_esaurito` | P3 | oltre l'80% del tetto giornaliero o mensile |
 | `proposte_catalogo_vecchie` | P3 | proposte aperte da 14 giorni |
 
 Un controllo che non si esegue diventa l'anomalia `controllo_non_eseguito` (solo `SQLSTATE`) e non ferma gli altri.
+Un annullamento (`statement_timeout`, anche dal pulsante del cruscotto via PostgREST) è catturato (D-02): i controlli
+successivi sono dichiarati non eseguiti e l'esecuzione resta registrata come parziale. `login_importazione_attivo` è
+**atteso** durante un'importazione autorizzata.
 Sentinel **non modifica** account, pagamenti, rimborsi, catalogo, ordini o dati personali e non invia notifiche.
 
 **Heartbeat e mancata esecuzione:** `brain.sentinel_status()` riporta ultima esecuzione e stato `mai_eseguito`,

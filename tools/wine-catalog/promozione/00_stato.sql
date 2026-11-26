@@ -20,7 +20,10 @@ select jsonb_build_object(
      'vini', (select count(*) from catalog.wines),
      'alias_combined', (select count(*) from catalog.entity_aliases where kind = 'combined_lwin'),
      'eccezioni', (select count(*) from catalog.promotion_exceptions),
-     'coppie_duplicati_aperte', (select count(*) from catalog.duplicate_candidates where review_status = 'open')),
+     'coppie_duplicati_aperte', (select count(*) from catalog.duplicate_candidates where review_status = 'open'),
+     -- WI-015 (A-01): vini nativi e record della fonte che coincidono per nome. Con conflitti > 0 la promozione si ferma.
+     'nativi', (select count(*) from catalog.wines where origin = 'manual'),
+     'conflitti_nativi', (select count(*) from catalog.lwin_native_conflicts(1000))),
   'registro', (select jsonb_build_object('lotti', count(*),
      'produttori', coalesce(sum((detail ->> 'producers_created')::bigint), 0),
      'vini', coalesce(sum((detail ->> 'wines_created')::bigint), 0),

@@ -117,7 +117,10 @@ begin
                   -- il rapporto di sola lettura è ammesso per FIRMA completa, non per solo nome (nessun overload passa)
                   and p.oid::regprocedure::text <> all (array['catalog.promotion_simulation(text,text,integer)',
                         'catalog.assign_official_lwin(uuid,text,text,text)', 'catalog.set_native_publication(uuid,boolean,text,text)',
-                        'catalog.lwin_native_conflicts(integer)'])));
+                        'catalog.lwin_native_conflicts(integer)',
+                        -- WI-015: trigger del contatore delle partecipazioni (definer perché scatta anche nel cascade della
+                        -- cancellazione dell'account) e minimizzazione del solo proprietario; nessuno dei due ha EXECUTE.
+                        'catalog.contribution_submissions_removed()', 'catalog.minimize_decided_submissions(text)'])));
 
   perform pg_temp.rec('A04', 'nessuna funzione con EXECUTE a PUBLIC (acl presente e senza grantee 0)',
     not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace
