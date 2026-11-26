@@ -389,6 +389,8 @@ wi011_conc="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/wi011_concorrenza.sh")" \
   || { printf '%s\n' "$wi011_conc"; die "wi011 concorrenza: fallita."; }
 printf '%s\n' "$wi011_conc"
 summary "- $(printf '%s\n' "$wi011_conc" | grep 'wi011 concorrenza:' | tail -n 1)"
+# WI-013: contratto del Company Brain (eventi, task, lease, approvazioni) e registro Sentinel. ROLLBACK.
+run_grid "wi013 company brain e sentinel" wi013_company_brain.sql 3
 # WI-008 (wi008d): ricerca canonica con PostgREST e Auth veri (429 al minuto, raffica parallela, serializzazione per
 # identita, isolamento, porta di sola lettura del Sommelier, fonte revocata, ripristino dopo la finestra: attende il
 # minuto successivo). Fixture committate sul catalogo VUOTO e rimosse in trap, interruttore di nuovo spento.
