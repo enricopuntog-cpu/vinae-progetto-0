@@ -4,6 +4,7 @@ import {
   concediConsenso,
   consensoAttivo,
   contestoVinoDaAnnuncio,
+  contestoRicercaDaCandidato,
   richiediSommelier,
   richiestaContestoServer,
   type ContestoUi,
@@ -99,5 +100,37 @@ describe("apertura del Sommelier da una pagina", () => {
     stop();
     richiediSommelier({ tipo: "cantina", vuota: false });
     expect(visti).toHaveLength(0);
+  });
+});
+
+describe("contesto di ricerca canonica (WI-008)", () => {
+  const candidato = { produttore: "  Gaja ", nome: "Sorì   Tildìn", canonico: { lwin7: "1010003" } };
+
+  it("nasce solo da un candidato con LWIN-7 valido", () => {
+    expect(contestoRicercaDaCandidato({ produttore: "Gaja", nome: "x" })).toBeNull();
+    expect(contestoRicercaDaCandidato({ produttore: "Gaja", nome: "x", canonico: { lwin7: "12" } })).toBeNull();
+    expect(contestoRicercaDaCandidato(candidato)).toEqual({
+      tipo: "ricerca",
+      produttore: "Gaja",
+      nome: "Sorì Tildìn",
+      codice: "1010003",
+      etichetta: "Gaja Sorì Tildìn",
+    });
+  });
+
+  it("i testi lunghi sono tagliati ai limiti del server (120) e dell'etichetta (80)", () => {
+    const c = contestoRicercaDaCandidato({ produttore: "p".repeat(300), nome: "n".repeat(300), canonico: { lwin7: "1010003" } });
+    expect(c?.tipo).toBe("ricerca");
+    if (c?.tipo !== "ricerca") return;
+    expect([c.produttore.length, c.nome.length, c.etichetta.length]).toEqual([120, 120, 80]);
+  });
+
+  it("al server va la richiesta (codice, produttore, nome): niente etichetta, nessun consenso richiesto", () => {
+    expect(richiestaContestoServer(contestoRicercaDaCandidato(candidato), false)).toEqual({
+      tipo: "ricerca",
+      produttore: "Gaja",
+      nome: "Sorì Tildìn",
+      codice: "1010003",
+    });
   });
 });

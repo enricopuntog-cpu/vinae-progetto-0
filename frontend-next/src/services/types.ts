@@ -2507,6 +2507,8 @@ export type SommelierEsito = {
  */
 export type RichiestaContestoSommelier =
   | { tipo: "vino"; annuncioId: string }
+  /** WI-008: un vino del catalogo canonico scelto esplicitamente. Il server verifica il codice e rilegge i dati. */
+  | { tipo: "ricerca"; produttore: string; nome: string; codice: string }
   | { tipo: "cantina"; consenso: true };
 
 export interface AiService {

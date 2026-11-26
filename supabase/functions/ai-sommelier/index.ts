@@ -207,7 +207,7 @@ const leggiContesto = async (supabase: any, userId: string, richiesta: Richiesta
     const { data, error } = await supabase.rpc("vini_canonici_cerca_servizio", {
       p_produttore: richiesta.produttore,
       p_nome: richiesta.nome,
-      p_limite: LIMITI_RICERCA.candidatiMax,
+      p_limite: LIMITI_RICERCA.candidatiLetti,
       p_codice: richiesta.codice,
     });
     if (error) {

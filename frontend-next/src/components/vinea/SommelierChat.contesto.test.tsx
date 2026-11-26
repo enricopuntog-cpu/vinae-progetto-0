@@ -107,6 +107,34 @@ describe("Sommelier del vino", () => {
   });
 });
 
+describe("Sommelier su un vino del catalogo (WI-008)", () => {
+  const scelta = { tipo: "ricerca", produttore: "Gaja", nome: "Sorì Tildìn", codice: "1010003", etichetta: "Gaja Sorì Tildìn" } as const;
+
+  it("il pannello dichiara il vino scelto e il suo codice, senza chiedere consensi; la richiesta porta la sola scelta", async () => {
+    await apri();
+    await chiediDallaPagina(scelta);
+    await waitFor(() => screen.getByTestId("sommelier-panel"));
+    const banner = screen.getByTestId("sommelier-contesto");
+    expect(banner.getAttribute("data-tipo")).toBe("ricerca");
+    expect(banner.textContent).toContain("Gaja Sorì Tildìn");
+    expect(banner.textContent).toContain("LWIN 1010003");
+    expect(banner.textContent).toContain("risposta generale");
+    expect(banner.textContent).not.toContain("Cantina");
+    expect(screen.queryByTestId("sommelier-consenso-concedi")).toBeNull();
+    await scrivi("Che cosa sai di questo vino?");
+    expect(richieste[0].contesto).toEqual({ tipo: "ricerca", produttore: "Gaja", nome: "Sorì Tildìn", codice: "1010003" });
+  });
+
+  it("«Torna al Sommelier generale» toglie anche questo contesto", async () => {
+    await apri();
+    await chiediDallaPagina(scelta);
+    await waitFor(() => screen.getByTestId("sommelier-contesto-rimuovi"));
+    await click("sommelier-contesto-rimuovi");
+    await scrivi("domanda");
+    expect(richieste[0].contesto).toBeUndefined();
+  });
+});
+
 describe("Sommelier della Cantina: consenso", () => {
   it("aprire dalla Cantina NON concede il consenso: spento, nessuna lettura chiesta", async () => {
     await apri();

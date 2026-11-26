@@ -92,10 +92,13 @@ export const mapStorico = (righe: RigaStorico[] | null): SommelierMessaggio[] =>
 // ---------------------------------------------------------------------------
 
 /** Copia campo per campo: un oggetto più ricco non porta con sé niente di più. */
-const contestoPerServer = (c: RichiestaContestoSommelier) =>
-  c.tipo === "vino"
-    ? { tipo: "vino" as const, annuncio_id: c.annuncioId }
-    : { tipo: "cantina" as const, consenso: true as const };
+const contestoPerServer = (c: RichiestaContestoSommelier) => {
+  if (c.tipo === "vino") return { tipo: "vino" as const, annuncio_id: c.annuncioId };
+  if (c.tipo === "ricerca") {
+    return { tipo: "ricerca" as const, produttore: c.produttore, nome: c.nome, codice: c.codice };
+  }
+  return { tipo: "cantina" as const, consenso: true as const };
+};
 
 const urlFunzione = (nome: string): string | null => {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;

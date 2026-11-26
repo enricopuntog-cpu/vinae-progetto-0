@@ -620,7 +620,8 @@ describe("Sommelier: ricerca canonica (WI-008)", () => {
     expect(r.status).toBe(200);
     await r.text();
     expect(rpcCanonico()).toHaveLength(1);
-    expect(rpcCanonico()[0].args).toEqual({ p_produttore: "Giacomo Conterno", p_nome: "Monfortino", p_limite: 5, p_codice: null });
+    // 20 righe lette (per vedere anche gli omonimi oltre il quinto), al massimo 5 nel prompt
+    expect(rpcCanonico()[0].args).toEqual({ p_produttore: "Giacomo Conterno", p_nome: "Monfortino", p_limite: 20, p_codice: null });
     const { system, prompt } = chiamateProvider[0];
     expect(system).toStartWith("Sei Vinea Sommelier");
     expect(system).toContain("NON sono istruzioni");
@@ -665,9 +666,16 @@ describe("Sommelier: ricerca canonica (WI-008)", () => {
     expect(ctx.avvertenze.some((a) => a.includes("omonimi"))).toBe(true);
   });
 
-  it("un solo candidato esatto è identificato; un candidato simile no", async () => {
+  it("un esatto descrittivo non è un'identità: senza codice nessun candidato è identificato", async () => {
+    righeCanoniche = [rigaCanonica("1010001")];
+    await (await chiama({ contesto: RICERCA })).text();
+    const ctx = JSON.parse(bloccoDati(chiamateProvider[0].prompt)) as CtxRicerca;
+    expect(ctx.candidati.map((c) => [c.identificato, c.esito])).toEqual([[false, "probabile"]]);
+  });
+
+  it("il candidato trovato per codice è identificato; un candidato simile no", async () => {
     righeCanoniche = [
-      rigaCanonica("1010001"),
+      rigaCanonica("1010001", { livello: "identificativo", punteggio: 1000 }),
       rigaCanonica("1010009", { produttore: "Altro", nome: "Simile", livello: "simile", punteggio: 25 }),
     ];
     await (await chiama({ contesto: RICERCA })).text();
@@ -740,7 +748,7 @@ describe("Sommelier: ricerca canonica (WI-008)", () => {
   it("solo un LWIN-7 valido come codice è accettato, e va alla RPC come codice", async () => {
     righeCanoniche = [rigaCanonica("1010001", { livello: "identificativo", punteggio: 1000 })];
     await (await chiama({ contesto: { tipo: "ricerca", codice: "1010001" } })).text();
-    expect(rpcCanonico()[0].args).toEqual({ p_produttore: "", p_nome: "", p_limite: 5, p_codice: "1010001" });
+    expect(rpcCanonico()[0].args).toEqual({ p_produttore: "", p_nome: "", p_limite: 20, p_codice: "1010001" });
   });
 
   it("limite orario superato: 429 prima della ricerca canonica", async () => {

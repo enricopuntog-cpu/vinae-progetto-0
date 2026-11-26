@@ -62,6 +62,12 @@ describe("sommelierChat con contesto", () => {
     expect(JSON.stringify(corpo())).not.toMatch(/owner|user_id|userId/i);
   });
 
+  it("ricerca canonica: manda tipo, produttore, nome e codice; niente di più, anche da un oggetto più ricco", async () => {
+    const contesto = { tipo: "ricerca" as const, produttore: "Gaja", nome: "Sorì Tildìn", codice: "1010003", etichetta: "x", prezzo: 9 };
+    await createSupabaseAiService(client("tok")).sommelierChat({ sessionId: "s-1234", messaggio: "ciao", contesto }, () => {});
+    expect(corpo().contesto).toEqual({ tipo: "ricerca", produttore: "Gaja", nome: "Sorì Tildìn", codice: "1010003" });
+  });
+
   it("l'identità viaggia solo nel bearer del token della sessione", async () => {
     await createSupabaseAiService(client("tok-di-A")).sommelierChat(
       { sessionId: "s-1234", messaggio: "ciao", contesto: { tipo: "cantina", consenso: true } },

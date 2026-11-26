@@ -6,8 +6,8 @@
 // l'intero catalogo; ciò che non si sa resta dichiarato come lacuna.
 //
 // WI-008: collegato a `ai-sommelier` con il contesto `{ tipo: "ricerca", produttore, nome, codice }` (richiesta ESPLICITA e
-// strutturata: nessuna estrazione di nomi dal testo libero). La function legge i candidati con `public.vini_canonici_cerca`
-// (porta server-side, service_role, limitata e spenta con l'interruttore del catalogo) e li passa da qui. Nessun prezzo, nessuna
+// strutturata: nessuna estrazione di nomi dal testo libero). La function legge i candidati con `public.vini_canonici_cerca_servizio`
+// (porta di sola lettura del solo service_role, spenta con l'interruttore del catalogo) e li passa da qui. Nessun prezzo, nessuna
 // valutazione, nessun dato della Cantina privata. Con catalogo spento, vuoto o in errore il Sommelier resta quello di prima.
 
 // Deno richiede l estensione .ts; il typecheck del frontend, che importa il modulo nei test, no.
@@ -15,6 +15,8 @@
 import { pulisci, stimaToken } from "./sommelier-contesto.ts";
 
 export const LIMITI_RICERCA = {
+  /** Righe lette dalla ricerca: più di quelle inviate, per riconoscere gli omonimi oltre il quinto posto. */
+  candidatiLetti: 20,
   /** Candidati inviati al provider. */
   candidatiMax: 5,
   /** Tetto del blocco serializzato (~1.000 token). */
@@ -35,7 +37,8 @@ export type CandidatoRicercaIn = {
   annata?: unknown;
   formato?: unknown;
   provenienza?: { fonte?: unknown; annunciAttivi?: unknown };
-  corrispondenza?: { esito?: unknown; punteggio?: unknown };
+  /** `perCodice`: la riga è stata trovata dal server a partire da un codice LWIN-7 richiesto (identità autorevole). */
+  corrispondenza?: { esito?: unknown; punteggio?: unknown; perCodice?: unknown };
   nonDisponibile?: unknown;
   attribuzione?: { testo?: unknown } | null;
 };
@@ -52,7 +55,10 @@ export type CandidatoSommelier = {
   origine: "fonte_documentata" | "database_vinea";
   lwin: string | null;
   esito: string;
-  /** Solo `esatta` identifica il vino; ogni altro esito è una possibilità da confermare. */
+  /**
+   * Vero SOLO per il vino trovato dal codice LWIN-7 richiesto. Una coincidenza di produttore e nome, anche esatta, non è
+   * un'identità: va confermata dall'utente.
+   */
   identificato: boolean;
   lacune: string[];
   attribuzione: string | null;
@@ -99,14 +105,15 @@ export function costruisciContestoRicerca(candidati: readonly CandidatoRicercaIn
       origine: lwin ? "fonte_documentata" : "database_vinea",
       lwin,
       esito,
-      identificato: esito === "esatta",
+      identificato: c.corrispondenza?.perCodice === true && lwin !== null,
       // LWIN-7 non fornisce annata, formato, vitigni né prezzi: restano lacune dichiarate.
       lacune: [...nonDisp, ...(lwin ? ["annata", "formato", "vitigni", "prezzo"] : ["prezzo"])],
       // Il testo di attribuzione CC BY non va troncato (oggi 143 caratteri): tetto con margine.
       attribuzione: testoOnull(c.attribuzione?.testo, 300),
     });
   }
-  // Omonimi: vini DISTINTI (LWIN diversi) con lo stesso produttore e nome. Nessuno è «il» vino: non si sceglie al posto dell'utente.
+  // Omonimi: vini DISTINTI (LWIN diversi) con lo stesso produttore e nome. Si contano su TUTTE le righe lette, non solo su
+  // quelle che entrano nel blocco. Senza un codice richiesto nessuno è «il» vino: non si sceglie al posto dell'utente.
   const chiave = (c: CandidatoSommelier) => `${c.produttore.toLowerCase()}|${c.nome.toLowerCase()}`;
   const conteggi = new Map<string, number>();
   for (const c of validi) conteggi.set(chiave(c), (conteggi.get(chiave(c)) ?? 0) + 1);
@@ -114,8 +121,7 @@ export function costruisciContestoRicerca(candidati: readonly CandidatoRicercaIn
   for (const c of validi) {
     if ((conteggi.get(chiave(c)) ?? 0) > 1) {
       omonimi = true;
-      c.identificato = false;
-      if (c.esito === "esatta") c.esito = "probabile";
+      if (!c.identificato && c.esito === "esatta") c.esito = "probabile";
     }
   }
   const inclusi = validi.slice(0, LIMITI_RICERCA.candidatiMax);
@@ -125,7 +131,7 @@ export function costruisciContestoRicerca(candidati: readonly CandidatoRicercaIn
       ? ["Più candidati hanno lo stesso produttore e nome: sono vini distinti (omonimi). Non scegliere al posto dell'utente."]
       : []),
     ...(inclusi.some((c) => !c.identificato)
-      ? ["Solo l'esito esatta identifica il vino: gli altri vanno confermati dall'utente."]
+      ? ["Identifica il vino solo il candidato con identificato true (codice LWIN richiesto): gli altri vanno confermati dall'utente."]
       : []),
     ...(validi.length > inclusi.length
       ? [`Mostrati ${inclusi.length} candidati su ${validi.length}: elenco parziale.`]
@@ -179,7 +185,7 @@ export const PROMPT_ISTRUZIONI_RICERCA =
 
 const LIVELLO_ESITO: Record<string, string> = {
   identificativo: "esatta",
-  esatto: "esatta",
+  esatto: "probabile",
   prefisso: "probabile",
   testo: "probabile",
   simile: "possibile",
@@ -189,8 +195,8 @@ const oggetto = (v: unknown): v is Record<string, unknown> => typeof v === "obje
 
 /**
  * Righe di `public.vini_canonici_cerca` → forma comune dei candidati. Whitelist di campi: qualunque altra colonna (prezzi o altro)
- * non entra mai. Il livello «identificativo» (LWIN-7 cercato) e «esatto» (produttore + nome) diventano `esatta`, salvo omonimi
- * (declassati in `costruisciContestoRicerca`); prefisso e testo `probabile`; simile `possibile`.
+ * non entra mai. Solo il livello «identificativo» (LWIN-7 richiesto e risolto dal server) diventa `esatta` e identifica;
+ * «esatto» (stesso produttore e nome), prefisso e testo sono `probabile`; simile `possibile`.
  */
 export function candidatiDaRigheCanoniche(righe: unknown): CandidatoRicercaIn[] {
   if (!Array.isArray(righe)) return [];
@@ -208,6 +214,7 @@ export function candidatiDaRigheCanoniche(righe: unknown): CandidatoRicercaIn[] 
     corrispondenza: {
       esito: typeof r.livello === "string" ? (LIVELLO_ESITO[r.livello] ?? "possibile") : "possibile",
       punteggio: r.punteggio,
+      perCodice: r.livello === "identificativo",
     },
     nonDisponibile: [],
     attribuzione: { testo: r.attribuzione },

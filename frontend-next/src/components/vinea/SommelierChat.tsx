@@ -65,6 +65,11 @@ const SUGGERIMENTI_VINO = [
   "Con quali piatti lo abbino?",
   "Cosa non sai di questo vino?",
 ];
+const SUGGERIMENTI_CATALOGO = [
+  "Che cosa sai di questo vino?",
+  "Con quali piatti lo abbineresti, in generale?",
+  "Cosa non sai di questo vino?",
+];
 const SUGGERIMENTI_CANTINA = [
   "Quali vini della mia Cantina potrei aprire questa sera?",
   "Ho qualche bottiglia adatta a una cena di pesce?",
@@ -307,7 +312,9 @@ export default function SommelierChat({
   const suggerimenti =
     contesto?.tipo === "vino"
       ? SUGGERIMENTI_VINO
-      : contesto?.tipo === "cantina" && consensoCantina && !contesto.vuota
+      : contesto?.tipo === "ricerca"
+        ? SUGGERIMENTI_CATALOGO
+        : contesto?.tipo === "cantina" && consensoCantina && !contesto.vuota
         ? SUGGERIMENTI_CANTINA
         : SUGGERIMENTI;
   const conversazioneAperta = battute.length > 0;
@@ -553,6 +560,14 @@ function ContestoAttivo({
           <span className="font-semibold">Stai chiedendo di: {contesto.etichetta || "questo vino"}.</span>{" "}
           Il Sommelier usa la scheda Vinea di questo vino, senza prezzo né dati del venditore, e distingue ciò che è
           registrato da ciò che è dichiarato o stimato.
+        </p>
+      ) : contesto.tipo === "ricerca" ? (
+        <p>
+          <span className="font-semibold">
+            Hai scelto: {contesto.etichetta} · LWIN {contesto.codice}.
+          </span>{" "}
+          Il Sommelier può usare la scheda del catalogo di questo codice: nessun prezzo, annata o valutazione. Se la
+          scheda non è disponibile, quella che ricevi è una risposta generale.
         </p>
       ) : contesto.vuota ? (
         <p data-testid="sommelier-cantina-vuota">
