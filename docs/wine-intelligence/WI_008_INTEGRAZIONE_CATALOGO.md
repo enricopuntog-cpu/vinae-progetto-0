@@ -182,3 +182,23 @@ produttori con lo stesso nome, 4.206 alias Combined attesi. Impronta `b87e7b5169
 ### 10.5 Prontezza alla promozione
 Procedura, misure, limiti e verifiche residue: [`PROMOZIONE_CANONICA_RUNBOOK.md`](PROMOZIONE_CANONICA_RUNBOOK.md)
 (sostituisce la stima di 9.1).
+
+### 10.6 Mobile e WebKit
+`ricerca-canonica.e2e.ts` era solo `@smoke`: nemmeno la suite completa lo eseguiva a 375 px e su WebKit. Aggiunto
+`@cross`. Sono emersi due difetti **delle prove**, non dei comandi:
+
+1. `.cv-card` (`content-visibility: auto`, altezza stimata, presente dalla Fase 2): dopo uno scorrimento automatico
+   WebKit applica l'altezza vera (circa 43 px in più) fra `pointerdown` e `pointerup`. Sonde su rami temporanei, poi
+   eliminati: pressione sul pulsante e rilascio sul testo sopra; in `note-personali-cantina` (WI-005B, intermittente)
+   pressione su «Modifica le mie informazioni» e rilascio su «Mostra nel mio profilo». Nessun `click` arriva al
+   comando. Corretto con `fermo` (`e2e/support/layout.ts`): si aspetta il bersaglio fermo, il clic resta vero.
+2. `reload` e `goto` con letture in corso: WebKit le registra come errori del browser (`conversations_page`,
+   `notifications_page`). In `ricerca-canonica` si aspetta la fine delle letture prima di navigare.
+
+Prove: 90/90 con 3 ripetizioni per file e progetto e `retries=0` (run 45785999304); suite completa sullo SHA `fe8fc71`
+316 passati, 4 saltati, 0 falliti (run 45785986962), residui 0. Dopo il solo punto 1+2 su `ricerca-canonica` erano
+54/54 (run 45781004092); prima falliva su WebKit in tutte le corse.
+
+**Osservazione di prodotto, non modificata**: su WebKit un tocco dato nell'istante in cui una scheda viene calcolata
+può andare a vuoto. Nell'uso normale la scheda si calcola quando si avvicina alla vista, prima del tocco. Non è stato
+provato su un iPhone o su Safari veri.

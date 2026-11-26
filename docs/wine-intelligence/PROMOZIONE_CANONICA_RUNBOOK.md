@@ -152,7 +152,8 @@ Il popolamento non accende nulla. Restano da fare sul catalogo popolato:
    condiviso nell'applicazione**: il tetto complessivo è il limite di spesa sul conto del provider, non verificato.
 5. **Sommelier con dati veri**: provato solo con database e provider finti; nessuna chiamata a pagamento.
 6. **OCR con catalogo popolato**: usa la stessa sorgente di ricerca (test unitari); nessuna prova su foto vere.
-7. **Mobile e WebKit**: vedi `WI_008_INTEGRAZIONE_CATALOGO.md` §10.
+7. **Mobile e WebKit**: wizard, scheda e scelta in Cantina provati con catalogo di prova su Chromium desktop, 375 px e
+   WebKit (`WI_008_INTEGRAZIONE_CATALOGO.md` §10.6). Da ripetere a mano su un iPhone vero col catalogo popolato.
 8. **Marketplace**: nessun annuncio è collegato al catalogo; la scheda lo dichiara. La scelta in Cantina è personale
    (proprietario e vino): non identifica la bottiglia, non collega annunci e non certifica nulla. Proposta e
    approvazione di un collegamento canonico sono un'evoluzione successiva.
