@@ -1,0 +1,143 @@
+# WI-011 / WI-012 — Living Wine Catalog
+
+Il catalogo non è più solo il LWIN importato: riceve proposte dalle attività del sito, gestisce vini che LWIN non ha,
+conserva provenienza e storico e si amministra dal sito. **Non è un secondo catalogo**: si estende `catalog.*`.
+Il Company Brain (WI-013) è in [`../COMPANY_BRAIN.md`](../COMPANY_BRAIN.md).
+
+Tutto nasce **spento**: proiezione pubblica, proposte degli utenti, acquisizione dagli annunci, chiusura automatica.
+La regola di promozione resta `draft`; nessun vino è stato promosso.
+
+## 1. Identità
+
+| Cosa | Dove | Note |
+|---|---|---|
+| Identità stabile | `catalog.wines.id` (UUID) | vale anche senza LWIN; non viene mai sostituita |
+| Vino base | `catalog.wines` | `origin = promotion` (dalla fonte) o `manual` (nativo Vinea) |
+| Annata | `catalog.wine_vintages` | nasce solo se dichiarata (anno, oppure «non millesimato» esplicito); mai fittizia |
+| Formato | `catalog.wine_formats` | solo se dichiarato e con un'annata |
+| Bottiglia fisica, proprietario, annuncio | `public.bottle_units`, `public.listings` | invariati, mai copiati nel catalogo |
+| Attributi | `catalog.attribute_claims` | proposti → accettati/rifiutati; fonte `VINEA-CURATORE` per il curatore |
+| Collegamento app ↔ catalogo | `catalog.wine_links` | proposto, poi approvato: due decisioni |
+
+**Codice della scheda** (client, ricerca, Cantina, Sommelier): il LWIN-7 se c'è, altrimenti l'UUID. La route resta
+`/vino-catalogo/{codice}`; i link per LWIN-7 continuano a funzionare. Nessun codice LWIN è inventato.
+
+**Visibilità di un nativo:** servono insieme la proiezione pubblica accesa **e** la pubblicazione del curatore
+(`native_published_at`). La ricerca non richiede annunci in vendita.
+
+**LWIN arrivato dopo:** `catalog.assign_official_lwin` scrive il codice sulla **stessa** riga, solo se il record di
+fonte è `Live`, autorizzato e porta quel codice e nessun altro vino lo ha. `wines_guard` ammette solo il passaggio
+assente → ufficiale, una volta, anche per il proprietario del database. UUID, annate, collegamenti, scelte in Cantina e
+storico restano. La promozione considera quel record già canonico (nessun doppione). Se la fonte viene revocata, il
+codice non si mostra più ma la scheda nativa resta.
+
+## 2. Acquisizione dal sito
+
+| Origine | Come entra | Interruttore (`catalog.intake_settings`) |
+|---|---|---|
+| Bottiglia in Cantina | «Proponi al catalogo Vinea», consenso esplicito per quella richiesta | `user_proposals_enabled` |
+| Correzione | stesso modulo con un campo modificato (origine `correzione`) | idem |
+| Inserimento manuale / OCR | porta `catalogo_proponi` accetta `manuale` e `ocr`; **l'interfaccia del wizard non le invia ancora** | idem |
+| Annuncio Marketplace | acquisizione **asincrona** dagli annunci già pubblici, avviata dall'admin; nessun trigger sul flusso di pubblicazione | `listing_harvest_enabled` |
+| Curatore / produttore | pannello admin. Un accesso diretto per produttori e partner **non esiste** | — |
+
+- Elenco **chiuso** di campi (produttore, nome, paese, regione, denominazione, tipologia, annata, non millesimato,
+  formato, LWIN dichiarato). Note, prezzi, foto, indirizzi, descrizioni non hanno un posto; testi con indirizzi di posta,
+  collegamenti o marcatori sono rifiutati.
+- Dato **dichiarato**, mai «verificato»: `dichiarato_utente`, `ocr_confermato_utente`, `annuncio_pubblico`.
+- Idempotenza: una proposta per identità dichiarata (`identity_hash`), un invio per utente e origine, un evento di
+  sistema per `source_ref`; blocco consultivo sulla stessa identità (provato con sei sessioni simultanee).
+- Consenso revocabile finché nessuno ha deciso (`catalogo_proposta_ritira`); cancellato l'account, cadono i suoi invii.
+  L'admin vede i dati del vino, non chi li ha mandati. Limite per utente: `user_daily_limit` (10 al giorno).
+- Corrispondenze: `autorevole` **solo** con un collegamento già approvato; LWIN dichiarato o nome identico =
+  `probabile`; più identità = `ambiguo`; altrimenti `sconosciuto` (con eventuali nomi simili come suggerimento).
+  Si segnala anche il record LWIN non ancora canonico con la stessa chiave. **Nessuna fusione e nessun collegamento dal
+  solo nome o dalla somiglianza.**
+
+## 3. Revisione a livelli
+
+Sempre automatico (non modifica il catalogo): normalizzazione, controllo dei formati, deduplicazione degli eventi,
+rilevazione dei campi mancanti, ricerca delle identità.
+
+Una sola regola automatica che chiude una proposta, **spenta** (`auto_close_known_enabled`): corrispondenza autorevole,
+stessa annata, nessun formato o dato nuovo, non una correzione. Registra l'evento `regola:auto_close_known` e non crea
+nulla.
+
+Sempre umano: nuove identità, ambiguità, collegamenti, attributi, duplicati, pubblicazione. Creare un vino nativo con
+la stessa chiave di un vino canonico o di un record LWIN richiede una conferma esplicita e motivata. Nessun potere
+all'AI.
+
+## 4. Gestione dal sito (`/admin/catalogo`)
+
+Stesso accesso del sito e ruolo reale `admin`, verificato da ogni porta (`private.catalog_admin_richiedi`). Nessun
+privilegio nuovo sulle tabelle. Liste paginate sul server (≤ 50 righe; il conteggio si ferma a 1.000). Funzioni:
+panoramica, ricerca, scheda con storico, inserimento manuale, proposte con confronto, annate e formati, attributi
+(valore attuale contro proposto), collegamenti, possibili duplicati, pubblicazione, associazione LWIN, ricerca nella
+fonte, fonti e importazioni, conflitti.
+
+**Non sono sul web, di proposito:** fusioni e annullamento, ritiro definitivo, regola e interruttori di promozione,
+proiezione pubblica, interruttori di acquisizione, budget AI.
+
+## 5. Attivazione (decisioni del founder, SQL dal proprietario)
+
+Ogni riga è indipendente e reversibile con lo stesso comando e `false`.
+
+```sql
+-- proposte dagli utenti (compare il comando in Cantina)
+update catalog.intake_settings set user_proposals_enabled = true, updated_at = now();
+-- acquisizione dagli annunci pubblici (il pulsante del pannello inizia a leggere)
+update catalog.intake_settings set listing_harvest_enabled = true, updated_at = now();
+```
+
+La proiezione pubblica (`catalog.public_projection_settings`) resta la decisione separata del runbook di promozione:
+accenderla rende ricercabili i nativi **pubblicati** e i vini promossi. Prima di accenderla vale quanto scritto in
+`PROMOZIONE_CANONICA_RUNBOOK.md` §6.
+
+## 6. Aggiornamento periodico LWIN
+
+**Distribuzione ufficiale** (pagine Liv-ex rilette il 26 novembre 2026): il database si scarica gratuitamente da
+`liv-ex.com/lwin` con licenza CC BY 4.0. Non sono pubblicate una cadenza né un numero di versione; è citata una
+sincronizzazione automatica senza API né condizioni pubbliche. Quindi: **il file lo scarica il founder**, nessuno
+scraping o download automatico, versione identificata da `sha256`. Una sincronizzazione automatica richiederebbe un
+accordo con Liv-ex.
+
+Si usa **solo il runner esistente** (`tools/wine-catalog/lwin-load.mjs`); nessun nuovo importatore.
+
+1. Registrare il file: nome, data, `sha256` (`certutil -hashfile <file> SHA256`), origine.
+2. Manifest: `IMPORT_MANIFEST.json` descrive il file originale; per un file nuovo si passa `--expected-sha256` e
+   `--expected-rows` e si aggiorna il manifest in una PR (il file non si committa mai).
+3. **Dry-run** (`--dry-run`): nessuna scrittura; delta di nuovi, aggiornati, invariati, accorpati (nuovi/aggiornati),
+   spariti dal file, conflitti. Delta inatteso = stop.
+4. Import secondo `CLOUD_IMPORT_RUNBOOK.md` (decisione e finestra del founder, gate disco). Storico, `Combined` e
+   `Deleted` sono conservati (`source_record_events`); lo stesso file non si rielabora; un record sparito è solo
+   segnalato. L'import non tocca `catalog.wines` nativi, attributi, proposte o collegamenti.
+5. `tools/wine-catalog/aggiornamento/delta_canonico.sql` (sola lettura): canonici il cui record non è più `Live`,
+   nativi che la nuova versione conosce, contributi Vinea, impronta e digest.
+6. Conflitti con i nativi: **prima** di promuovere, associare il LWIN (stesso UUID) o aprire un possibile duplicato.
+7. Promozione delle sole differenze: il motore promuove i soli record `Live` non ancora canonici, con la procedura a
+   lotti WI-009. Se impronta o digest differiscono da quelli approvati, o la regola deve cambiare: nuova versione della
+   regola, nuova simulazione, nuova approvazione.
+
+Limite noto: un vino promosso il cui record diventa `Deleted` o `Combined` resta canonico finché il curatore non
+interviene (punto 5). Non c'è rimozione automatica, di proposito.
+
+Nessuna nuova importazione in Production è stata eseguita con WI-011.
+
+## 7. Prove
+
+| Prova | Dove |
+|---|---|
+| Ciclo di vita, privacy, proprietà, separazione utenti, porte non autorizzate, duplicati, conflitti, fonte revocata, retry, interruttori spenti | `supabase/tests/wi011_ciclo_vita_catalogo.sql` |
+| Sei eventi simultanei, evento ripetuto in parallelo, due decisioni concorrenti | `supabase/tests/wi011_concorrenza.sh` |
+| Superficie definer del catalogo (19 funzioni, 17 porte con attore ed evento) | `12zs`, `12zy` |
+| Consumer con identità senza LWIN, consenso in Cantina, porte del pannello | test `frontend-next` |
+
+**Non provato:** il percorso nel browser (pannello admin e proposta) con login reale; prestazioni della ricerca e
+dell'elenco admin su un catalogo popolato (in Production è vuoto); l'indice di corrispondenza sui 212.894 record si
+misura solo dopo la distribuzione.
+
+## 8. Fuori perimetro di questo incarico
+
+- **Price Intelligence (blocco I)** e **Authenticity (blocco J):** non costruite. Per i prezzi servono transazioni
+  concluse (oggi non ce ne sono in Production) separate dai prezzi richiesti; per l'autenticità serve prima una
+  decisione su consenso e diritti delle immagini e sulla procedura di verifica. Nessuna tabella vuota è stata creata.

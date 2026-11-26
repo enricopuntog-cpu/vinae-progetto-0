@@ -1,6 +1,6 @@
 # Router del contesto durevole Vinea
 
-Ultimo aggiornamento del router: **20 ottobre 2026**.
+Ultimo aggiornamento del router: **26 novembre 2026**.
 
 Questa cartella conserva memoria strutturale e storia datata. Non è il bootstrap
 obbligatorio e non sostituisce le fonti vive.
@@ -39,6 +39,10 @@ Aprire soltanto ciò che serve al task:
   [`../docs/wine-intelligence/PROMOZIONE_CANONICA_RUNBOOK.md`](../docs/wine-intelligence/PROMOZIONE_CANONICA_RUNBOOK.md).
   Correzioni dell'audit della promozione, ricerca, schede vino e budget AI (WI-009/WI-010, delta da rivalidare):
   [`../docs/wine-intelligence/WI_009_PROCEDURA_FAIL_CLOSED.md`](../docs/wine-intelligence/WI_009_PROCEDURA_FAIL_CLOSED.md).
+  **Living Catalog** (identità senza LWIN, proposte dal sito, pannello admin, aggiornamento periodico LWIN, WI-011/012):
+  [`../docs/wine-intelligence/WI_011_LIVING_CATALOG.md`](../docs/wine-intelligence/WI_011_LIVING_CATALOG.md).
+- **Company Brain e Sentinel** (WI-013: eventi, task, approvazioni, registro anomalie, cruscotto; non attivo 24/7):
+  [`../docs/COMPANY_BRAIN.md`](../docs/COMPANY_BRAIN.md).
 - Monitoraggio pre-lancio OBS-01: [`../docs/VPM_022C_OBS_01.md`](../docs/VPM_022C_OBS_01.md)
   contiene strumenti nativi, log minimizzati, heartbeat, responsabilità e residui
   pre-Stripe; non equivale a un servizio di allarme su ogni evento.
