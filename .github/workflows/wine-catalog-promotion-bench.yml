@@ -74,6 +74,14 @@ jobs:
           if [ -n "$db_url" ]; then echo "::add-mask::$db_url"; fi
           E2E_DB_URL="$db_url" bash "tools/wine-catalog/bench/promozione/$PROVA"
 
+      # Riusa il catalogo popolato dalla prova di concorrenza (audit WI-008, F-08).
+      - name: Restore drill of the populated catalog schema
+        if: matrix.script == 'concorrenza.sh'
+        run: |
+          db_url="$(supabase status -o env 2>/dev/null | sed -nE 's/^DB_URL="?([^"]*)"?$/\1/p' | head -n 1)"
+          if [ -n "$db_url" ]; then echo "::add-mask::$db_url"; fi
+          E2E_DB_URL="$db_url" bash tools/wine-catalog/bench/promozione/ripristino.sh
+
       - name: Destroy ephemeral Supabase stack
         if: always()
         run: supabase stop --no-backup
