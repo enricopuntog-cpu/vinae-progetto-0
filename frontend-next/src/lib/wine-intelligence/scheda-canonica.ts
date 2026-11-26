@@ -6,9 +6,14 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { codiceErrore } from "@/lib/errore-per-log";
+import { eCodiceScheda, LWIN7, UUID_SCHEDA } from "./codice-scheda";
 
 export type SchedaCanonica = {
-  lwin7: string;
+  /** Codice con cui la scheda si richiama: LWIN-7 se esiste, altrimenti l'UUID del vino canonico. */
+  codice: string;
+  vinoId: string | null;
+  /** `null` per un'identità nativa Vinea (WI-011): il codice non viene inventato. */
+  lwin7: string | null;
   produttore: string;
   nome: string;
   paese: string | null;
@@ -29,11 +34,10 @@ export type EsitoScheda =
   | { stato: "accesso" }
   | { stato: "non_disponibile" };
 
-const LWIN7 = /^[0-9]{7}$/;
 const testo = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 
 export async function leggiSchedaCanonica(client: SupabaseClient | null, codice: string): Promise<EsitoScheda> {
-  if (!LWIN7.test(codice)) return { stato: "assente" };
+  if (!eCodiceScheda(codice)) return { stato: "assente" };
   if (!client) return { stato: "non_disponibile" };
   try {
     const { data: sessione } = await client.auth.getUser();
@@ -49,12 +53,16 @@ export async function leggiSchedaCanonica(client: SupabaseClient | null, codice:
     const lwin7 = testo(r?.lwin7);
     const produttore = testo(r?.produttore);
     const nome = testo(r?.nome);
-    if (!r || r.livello !== "identificativo" || !lwin7 || !LWIN7.test(lwin7) || !produttore || !nome) {
+    const vinoId = testo(r?.vino_id);
+    const codiceScheda = lwin7 ?? (vinoId && UUID_SCHEDA.test(vinoId) ? vinoId : null);
+    if (!r || r.livello !== "identificativo" || (lwin7 && !LWIN7.test(lwin7)) || !codiceScheda || !produttore || !nome) {
       return { stato: "assente" };
     }
     return {
       stato: "trovata",
       scheda: {
+        codice: codiceScheda,
+        vinoId,
         lwin7,
         produttore,
         nome,

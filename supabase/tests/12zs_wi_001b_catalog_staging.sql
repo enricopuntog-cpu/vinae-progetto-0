@@ -108,13 +108,16 @@ begin
   -- WI-001C-FIX-01: le sole porte SECURITY DEFINER sono quelle di scrittura del catalogo canonico (elenco chiuso, provato in 12zy A03);
   -- nessuna funzione del protocollo di staging WI-001B è definer.
   -- WI-007-FIX-01: l'elenco chiuso comprende anche il rapporto definer di sola lettura promotion_simulation (classe curator_report in 12zy A03).
-  perform pg_temp.rec('A03', 'nessuna funzione SECURITY DEFINER dello staging WI-001B (le uniche definer sono le 16 porte canoniche WI-001C e il rapporto promotion_simulation, elenco chiuso)',
+  -- WI-011: aggiunte per FIRMA completa le due porte di scrittura (LWIN ufficiale, pubblicazione nativa) e il rapporto dei conflitti.
+  perform pg_temp.rec('A03', 'nessuna funzione SECURITY DEFINER dello staging WI-001B (le uniche definer sono le porte canoniche WI-001C/WI-011 e i rapporti di sola lettura, elenco chiuso)',
     not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.prosecdef
                   and p.proname <> all (array['add_entity_alias', 'add_manual_producer', 'add_manual_wine', 'add_wine_format', 'add_wine_vintage', 'detect_duplicate_candidates',
                                               'merge_canonical_entity', 'open_duplicate_candidate', 'promote_wine_candidates', 'propose_attribute_claim', 'propose_wine_link',
                                               'retire_canonical_entity', 'review_attribute_claim', 'review_duplicate_candidate', 'review_wine_link', 'revert_canonical_merge'])
                   -- il rapporto di sola lettura è ammesso per FIRMA completa, non per solo nome (nessun overload passa)
-                  and p.oid::regprocedure::text <> 'catalog.promotion_simulation(text,text,integer)'));
+                  and p.oid::regprocedure::text <> all (array['catalog.promotion_simulation(text,text,integer)',
+                        'catalog.assign_official_lwin(uuid,text,text,text)', 'catalog.set_native_publication(uuid,boolean,text,text)',
+                        'catalog.lwin_native_conflicts(integer)'])));
 
   perform pg_temp.rec('A04', 'nessuna funzione con EXECUTE a PUBLIC (acl presente e senza grantee 0)',
     not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace

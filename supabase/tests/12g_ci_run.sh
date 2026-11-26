@@ -381,6 +381,16 @@ run_grid "wi008c promozione: una valutazione per chiamata, equivalenza con la lo
 run_grid "wi008e selezione personale della scheda del catalogo" wi008e_selezione_catalogo_personale.sql 3
 # WI-010 (wi010): budget globale AI chiuso per difetto, tetti, interruttore sui guasti, consuntivo senza dati utente.
 run_grid "wi010 budget globale delle funzioni AI" wi010_budget_ai.sql 3
+# WI-011/WI-012 (wi011): ciclo di vita del catalogo (identita senza LWIN, proposte, porte admin, LWIN assegnato dopo,
+# acquisizione dagli annunci). Transazione chiusa da ROLLBACK, catalogo vuoto; interruttori accesi solo al suo interno.
+run_grid "wi011 ciclo di vita del catalogo e porte di amministrazione" wi011_ciclo_vita_catalogo.sql 3
+# WI-011: sessioni separate sulla stessa identita e sulla stessa decisione. Fixture committate e rimosse in trap.
+wi011_conc="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/wi011_concorrenza.sh")" \
+  || { printf '%s\n' "$wi011_conc"; die "wi011 concorrenza: fallita."; }
+printf '%s\n' "$wi011_conc"
+summary "- $(printf '%s\n' "$wi011_conc" | grep 'wi011 concorrenza:' | tail -n 1)"
+# WI-013: contratto del Company Brain (eventi, task, lease, approvazioni) e registro Sentinel. ROLLBACK.
+run_grid "wi013 company brain e sentinel" wi013_company_brain.sql 3
 # WI-008 (wi008d): ricerca canonica con PostgREST e Auth veri (429 al minuto, raffica parallela, serializzazione per
 # identita, isolamento, porta di sola lettura del Sommelier, fonte revocata, ripristino dopo la finestra: attende il
 # minuto successivo). Fixture committate sul catalogo VUOTO e rimosse in trap, interruttore di nuovo spento.

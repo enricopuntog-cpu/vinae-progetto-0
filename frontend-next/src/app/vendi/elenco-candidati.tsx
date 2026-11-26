@@ -118,7 +118,11 @@ export function ElencoCandidati({
                 <b>{c.produttore}</b> — {c.nome}
                 {c.annata ? ` ${c.annata}` : ""}
                 {c.formato ? ` · ${c.formato}` : ""}
-                {c.canonico ? <span className="text-muted-foreground"> · LWIN {c.canonico.lwin7}</span> : null}
+                {c.canonico ? (
+                  <span className="text-muted-foreground">
+                    {c.canonico.lwin7 ? ` · LWIN ${c.canonico.lwin7}` : " · Scheda Vinea senza codice LWIN"}
+                  </span>
+                ) : null}
                 <br />
                 <span className="text-muted-foreground">
                   {ETICHETTA_ESITO[c.esito]}

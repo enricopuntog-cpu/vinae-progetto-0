@@ -33,7 +33,7 @@ const canonico = (id: string, lwin7: string): CandidatoValutato => ({
   annata: null,
   formato: null,
   fonte: "catalogo_canonico",
-  canonico: { lwin7, paese: "Italy", territorio: null, fonteNome: "Liv-ex LWIN", licenza: "CC BY 4.0", attribuzione: "Dati LWIN, CC BY 4.0" },
+  canonico: { lwin7, codice: lwin7, paese: "Italy", territorio: null, fonteNome: "Liv-ex LWIN", licenza: "CC BY 4.0", attribuzione: "Dati LWIN, CC BY 4.0" },
 });
 
 const monta = (candidati: CandidatoValutato[], scelte: (string | null)[] = []) =>

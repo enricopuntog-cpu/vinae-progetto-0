@@ -425,3 +425,38 @@ describe("sorgenteConCanonico — catalogo incompleto dichiarato", () => {
     expect(breve.ok && breve.data.length).toBe(1);
   });
 });
+
+describe("WI-011 — identità native Vinea, senza LWIN", () => {
+  const UUID = "11000000-0000-4000-8000-000000000001";
+  const nativa = (o: Record<string, unknown> = {}) => ({
+    ...RIGA,
+    vino_id: UUID,
+    lwin7: null,
+    fonte_nome: "Catalogo Vinea",
+    fonte_licenza: null,
+    attribuzione: "Scheda del catalogo Vinea, verificata da un curatore.",
+    ...o,
+  });
+
+  test("senza LWIN il candidato resta visibile e il codice della scheda è l'UUID: nessun codice inventato", () => {
+    const c = candidatoDaRigaCanonica(nativa());
+    expect(c?.canonico?.lwin7).toBeNull();
+    expect(c?.canonico?.codice).toBe(UUID);
+  });
+
+  test("con LWIN il codice della scheda resta il LWIN-7", () => {
+    expect(candidatoDaRigaCanonica(RIGA)?.canonico?.codice).toBe("1010001");
+  });
+
+  test("senza LWIN serve un identificativo stabile ben formato", () => {
+    expect(candidatoDaRigaCanonica(nativa({ vino_id: "non-un-uuid" }))).toBeNull();
+  });
+
+  test("due identità native omonime restano due candidati; la stessa ripetuta ne è uno", () => {
+    const a = candidatoDaRigaCanonica(nativa())!;
+    const b = candidatoDaRigaCanonica(nativa({ vino_id: "11000000-0000-4000-8000-000000000002" }))!;
+    const domanda = { produttore: a.produttore, nome: a.nome, annata: null, formato: null };
+    expect(valutaCandidati(domanda, [a, b]).map((c) => c.canonico?.codice).sort()).toEqual([a.id, b.id].sort());
+    expect(valutaCandidati(domanda, [a, { ...a }])).toHaveLength(1);
+  });
+});

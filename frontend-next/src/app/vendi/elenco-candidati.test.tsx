@@ -49,7 +49,7 @@ describe("ElencoCandidati — catalogo canonico", () => {
       ...BASE,
       id,
       fonte: "catalogo_canonico",
-      canonico: { lwin7, paese: null, territorio: null, fonteNome: "Liv-ex LWIN", licenza: "CC BY 4.0", attribuzione: "Dati LWIN, CC BY 4.0" },
+      canonico: { lwin7, codice: lwin7, paese: null, territorio: null, fonteNome: "Liv-ex LWIN", licenza: "CC BY 4.0", attribuzione: "Dati LWIN, CC BY 4.0" },
     });
     monta([canonico("b", "1010003"), canonico("c", "1010004")]);
     expect(screen.getByText(/LWIN 1010003/)).toBeTruthy();
@@ -57,7 +57,7 @@ describe("ElencoCandidati — catalogo canonico", () => {
   });
 
   it("attribuzione assente nella fonte: ripiego su nome e licenza, mai vuota", () => {
-    monta([{ ...BASE, canonico: { lwin7: "1010003", paese: null, territorio: null, fonteNome: "Liv-ex LWIN", licenza: "CC BY 4.0", attribuzione: null } }]);
+    monta([{ ...BASE, canonico: { lwin7: "1010003", codice: "1010003", paese: null, territorio: null, fonteNome: "Liv-ex LWIN", licenza: "CC BY 4.0", attribuzione: null } }]);
     expect(screen.getByTestId("t-attribuzione").textContent).toBe("Liv-ex LWIN — CC BY 4.0");
   });
 });

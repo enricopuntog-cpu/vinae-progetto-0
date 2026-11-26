@@ -8,7 +8,7 @@ process.env.NEXT_PUBLIC_AI_UI_ENABLED = "true";
 apriDom();
 const { cleanup, render, screen } = await import("@testing-library/react");
 const { SchedaVinoCatalogo } = await import("@/components/vinea/SchedaVinoCatalogo");
-const { metadata } = await import("@/app/vino-catalogo/[lwin7]/page");
+const { metadata } = await import("@/app/vino-catalogo/[codice]/page");
 
 afterEach(cleanup);
 afterAll(chiudiDom);
@@ -107,6 +107,33 @@ describe("SchedaVinoCatalogo", () => {
   it("un codice Combined dichiara di essere stato risolto sulla scheda di destinazione", async () => {
     await monta("1010099");
     expect(screen.getByTestId("scheda-catalogo-risolto").textContent).toContain("1010099");
+  });
+});
+
+describe("WI-011 — scheda di un vino senza LWIN", () => {
+  const UUID = "11000000-0000-4000-8000-000000000001";
+  const NATIVA = { ...RIGA, vino_id: UUID, lwin7: null, fonte_nome: "Catalogo Vinea", fonte_licenza: null,
+    attribuzione: "Scheda del catalogo Vinea, verificata da un curatore." };
+
+  it("si apre per UUID e non dichiara alcun codice LWIN", async () => {
+    const { client, chiamate } = finto({ data: [NATIVA] });
+    const esito = await leggiSchedaCanonica(client, UUID);
+    expect(chiamate).toEqual([{ nome: "vini_canonici_cerca", args: { p_produttore: "", p_nome: "", p_limite: 1, p_codice: UUID } }]);
+    if (esito.stato !== "trovata") throw new Error(esito.stato);
+    expect(esito.scheda.lwin7).toBeNull();
+    expect(esito.scheda.codice).toBe(UUID);
+    const { container } = render(<SchedaVinoCatalogo scheda={esito.scheda} codiceRichiesto={UUID} />);
+    expect(container.textContent).toContain("senza codice LWIN");
+    expect(container.textContent).not.toContain("LWIN null");
+    expect(screen.queryByTestId("scheda-catalogo-risolto")).toBeNull();
+  });
+
+  it("un UUID confluito in un altro vino lo dichiara", async () => {
+    const altro = "11000000-0000-4000-8000-0000000000ff";
+    const esito = await leggiSchedaCanonica(finto({ data: [NATIVA] }).client, altro);
+    if (esito.stato !== "trovata") throw new Error(esito.stato);
+    render(<SchedaVinoCatalogo scheda={esito.scheda} codiceRichiesto={altro} />);
+    expect(screen.getByTestId("scheda-catalogo-risolto").textContent).toContain(altro);
   });
 });
 

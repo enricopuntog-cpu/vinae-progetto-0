@@ -96,11 +96,12 @@ begin
     not exists (select 1 from pg_class c where c.relnamespace = 'catalog'::regnamespace and c.relkind = 'r' and not c.relrowsecurity));
   -- FIX-01 D-6: le uniche funzioni SECURITY DEFINER sono le porte di scrittura (elenco CHIUSO), tutte con search_path vuoto
   -- WI-007-FIX-01: a queste si aggiunge UN SOLO rapporto definer di sola lettura (promotion_simulation, classe curator_report), nominato.
-  perform pg_temp.rec('A03', 'FIX-02 + WI-007-FIX-01: la superficie dello schema, derivata dal catalogo di sistema (surface_audit), è conforme e le uniche SECURITY DEFINER sono le 15 porte di scrittura del curatore più l''unico rapporto di sola lettura promotion_simulation',
+  perform pg_temp.rec('A03', 'FIX-02 + WI-007-FIX-01 + WI-011: la superficie dello schema, derivata dal catalogo di sistema (surface_audit), è conforme e le uniche SECURITY DEFINER sono le 17 porte di scrittura del curatore più i due rapporti di sola lettura (conflitti LWIN-nativi e promotion_simulation)',
     not exists (select 1 from catalog.surface_audit() where not ok)
-    and (select count(*) from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.prosecdef) = 16
-    and (select count(*) from catalog.surface_audit() where kind = 'curator_door') = 15
-    and (select array_agg(fn) from catalog.surface_audit() where kind = 'curator_report') = array['catalog.promotion_simulation(text,text,integer)'],
+    and (select count(*) from pg_proc p where p.pronamespace = 'catalog'::regnamespace and p.prosecdef) = 19
+    and (select count(*) from catalog.surface_audit() where kind = 'curator_door') = 17
+    and (select array_agg(fn order by fn) from catalog.surface_audit() where kind = 'curator_report')
+        = array['catalog.lwin_native_conflicts(integer)', 'catalog.promotion_simulation(text,text,integer)'],
     (select string_agg(fn || ': ' || why, ' | ') from catalog.surface_audit() where not ok));
   perform pg_temp.rec('A04', 'nessuna funzione del catalogo con EXECUTE a PUBLIC (le funzioni WI-001C non nascono eseguibili da PUBLIC)',
     not exists (select 1 from pg_proc p where p.pronamespace = 'catalog'::regnamespace
@@ -1100,6 +1101,22 @@ begin
   begin perform catalog.add_manual_producer('Troppo Lungo', null, 'n', repeat('x', 201)); v_ok := false; exception when invalid_parameter_value then v_ok := true; end;
   perform pg_temp.rec('Q07', 'esecutore oltre 200 caratteri rifiutato', v_ok);
   reset role;
+  -- WI-011: le due porte nuove si esercitano davvero, come curatore, perché Q08 le ricava dal catalogo di sistema.
+  update catalog.sources set authorization_status = 'authorized' where code = 'LIVEX-LWIN7';
+  set local session_replication_role = replica;
+  insert into catalog.source_records (source_id, external_id, status, scope, payload, raw, content_hash, first_seen_run, changed_in_run)
+    select s.id, '9990011', 'Live', 'wine', '{"producer_name":"Q Nativo","wine":"Prova"}'::jsonb, '{}'::jsonb, repeat('e', 64),
+           gen_random_uuid(), gen_random_uuid() from catalog.sources s where s.code = 'LIVEX-LWIN7';
+  set local session_replication_role = origin;
+  set local role catalog_curator;
+  declare v_p uuid; v_w uuid;
+  begin
+    v_p := catalog.add_manual_producer('Produttore Q Nativo WI011', null, 'prova Q08', 'qa');
+    v_w := catalog.add_manual_wine(v_p, 'Vino Q Nativo WI011', null, null, null, null, null, null, 'prova Q08', 'qa');
+    perform catalog.set_native_publication(v_w, true, null, 'qa');
+    perform catalog.assign_official_lwin(v_w, '9990011', 'prova Q08', 'qa');
+  end;
+  reset role;
   perform pg_temp.rec('Q08', 'FIX-02: OGNI porta del curatore ricavata dal catalogo ha lasciato almeno un evento proprio (stessa azione), con attore e login; nessun elenco fisso, nessun conteggio complessivo di tipi di evento',
     not exists (select 1 from catalog.surface_audit() a
                  where a.kind = 'curator_door'
@@ -1171,7 +1188,7 @@ begin
     exists (select 1 from catalog.surface_audit() a where a.fn like '%zz_bad_door%' and a.kind = 'internal' and a.ok));
   drop function catalog.zz_bad_door();
   perform pg_temp.rec('R08', 'B2: la superficie torna conforme e le porte del curatore sono 15',
-    not exists (select 1 from catalog.surface_audit() where not ok) and (select count(*) from catalog.surface_audit() where kind = 'curator_door') = 15);
+    not exists (select 1 from catalog.surface_audit() where not ok) and (select count(*) from catalog.surface_audit() where kind = 'curator_door') = 17);
 
   -- B3: produttori già fusi --------------------------------------------------------------------------------------------------------
   set local role catalog_curator;

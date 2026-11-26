@@ -39,17 +39,21 @@ export function SchedaVinoCatalogo({ scheda, codiceRichiesto }: { scheda: Scheda
   const domanda = contestoRicercaDaCandidato({
     produttore: scheda.produttore,
     nome: scheda.nome,
-    canonico: { lwin7: scheda.lwin7 },
+    canonico: { codice: scheda.codice },
   });
+  // Il codice richiesto è confluito altrove solo se non è né il codice né l'identità di questa scheda (WI-011).
+  const richiesto = codiceRichiesto.toLowerCase();
+  const confluito = richiesto !== scheda.codice.toLowerCase() && richiesto !== scheda.vinoId?.toLowerCase();
   return (
     <article className="mx-auto max-w-2xl space-y-4 p-4" data-testid="scheda-catalogo">
       <header>
         <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Scheda del catalogo</p>
         <h1 className="font-serif text-2xl leading-tight">{scheda.nome}</h1>
         <p className="text-sm">
-          {scheda.produttore} <span className="text-muted-foreground">· LWIN {scheda.lwin7}</span>
+          {scheda.produttore}{" "}
+          <span className="text-muted-foreground">{scheda.lwin7 ? `· LWIN ${scheda.lwin7}` : "· senza codice LWIN"}</span>
         </p>
-        {codiceRichiesto !== scheda.lwin7 ? (
+        {confluito ? (
           <p className="text-xs text-muted-foreground" data-testid="scheda-catalogo-risolto">
             Il codice richiesto ({codiceRichiesto}) è confluito in questa scheda.
           </p>

@@ -43,9 +43,12 @@ export type CandidatoVino = {
    * WI-007 — solo per i vini del catalogo canonico (proiezione pubblica approvata):
    * identificativo LWIN-7 e provenienza con l'attribuzione richiesta dalla licenza
    * della fonte. Assente per ogni altra sorgente.
+   * WI-011 — `codice` è il LWIN-7 quando esiste, altrimenti l'UUID del vino
+   * canonico (identità nativa Vinea): `lwin7` resta `null`, mai inventato.
    */
   canonico?: {
-    lwin7: string;
+    lwin7: string | null;
+    codice: string;
     paese: string | null;
     territorio: string | null;
     fonteNome: string | null;
@@ -241,7 +244,7 @@ export function valutaCandidati(
   // di arrivo. Se più schede hanno lo stesso nome, `omonimi` lo dichiara e sceglie l'utente.
   const unici = new Map<string, { scelto: CandidatoVino; occorrenze: number }>();
   for (const c of candidati) {
-    const k = c.canonico ? `lwin|${c.canonico.lwin7}` : chiaveVino(c);
+    const k = c.canonico ? `scheda|${c.canonico.codice}` : chiaveVino(c);
     const presente = unici.get(k);
     if (!presente) unici.set(k, { scelto: c, occorrenze: 1 });
     else {

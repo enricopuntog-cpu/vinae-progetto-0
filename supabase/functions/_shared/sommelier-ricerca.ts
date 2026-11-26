@@ -33,6 +33,8 @@ export type CandidatoRicercaIn = {
     denominazione?: unknown;
     tipo?: unknown;
     codiceLwin?: unknown;
+    /** WI-011: scheda nativa del catalogo Vinea (senza LWIN). La imposta solo il server, dalle righe canoniche. */
+    schedaVinea?: unknown;
   };
   annata?: unknown;
   formato?: unknown;
@@ -51,12 +53,12 @@ export type CandidatoSommelier = {
   regione: string | null;
   paese: string | null;
   denominazione: string | null;
-  /** Con LWIN = scheda del catalogo canonico (fonte documentata); altrimenti dato registrato su Vinea. */
-  origine: "fonte_documentata" | "database_vinea";
+  /** Con LWIN = scheda con fonte documentata; scheda nativa = catalogo Vinea verificato da un curatore; altrimenti dato registrato su Vinea. */
+  origine: "fonte_documentata" | "catalogo_vinea_curato" | "database_vinea";
   lwin: string | null;
   esito: string;
   /**
-   * Vero SOLO per il vino trovato dal codice LWIN-7 richiesto. Una coincidenza di produttore e nome, anche esatta, non è
+   * Vero SOLO per il vino trovato dal codice richiesto (LWIN-7, o UUID di una scheda del catalogo). Una coincidenza di produttore e nome, anche esatta, non è
    * un'identità: va confermata dall'utente.
    */
   identificato: boolean;
@@ -94,6 +96,8 @@ export function costruisciContestoRicerca(candidati: readonly CandidatoRicercaIn
     const nonDisp = Array.isArray(c.nonDisponibile)
       ? c.nonDisponibile.filter((x): x is string => typeof x === "string" && LACUNE.has(x))
       : [];
+    const nativa = lwin === null && c.identita.schedaVinea === true;
+    const scheda = lwin !== null || nativa;
     validi.push({
       produttore,
       nome,
@@ -102,12 +106,12 @@ export function costruisciContestoRicerca(candidati: readonly CandidatoRicercaIn
       regione: testoOnull(c.identita.regione),
       paese: testoOnull(c.identita.paese),
       denominazione: testoOnull(c.identita.denominazione),
-      origine: lwin ? "fonte_documentata" : "database_vinea",
+      origine: lwin ? "fonte_documentata" : nativa ? "catalogo_vinea_curato" : "database_vinea",
       lwin,
       esito,
-      identificato: c.corrispondenza?.perCodice === true && lwin !== null,
+      identificato: c.corrispondenza?.perCodice === true && scheda,
       // LWIN-7 non fornisce annata, formato, vitigni né prezzi: restano lacune dichiarate.
-      lacune: [...nonDisp, ...(lwin ? ["annata", "formato", "vitigni", "prezzo"] : ["prezzo"])],
+      lacune: [...nonDisp, ...(scheda ? ["annata", "formato", "vitigni", "prezzo"] : ["prezzo"])],
       // Il testo di attribuzione CC BY non va troncato (oggi 143 caratteri): tetto con margine.
       attribuzione: testoOnull(c.attribuzione?.testo, 300),
     });
@@ -131,7 +135,7 @@ export function costruisciContestoRicerca(candidati: readonly CandidatoRicercaIn
       ? ["Più candidati hanno lo stesso produttore e nome: sono vini distinti (omonimi). Non scegliere al posto dell'utente."]
       : []),
     ...(inclusi.some((c) => !c.identificato)
-      ? ["Identifica il vino solo il candidato con identificato true (codice LWIN richiesto): gli altri vanno confermati dall'utente."]
+      ? ["Identifica il vino solo il candidato con identificato true (codice della scheda richiesto): gli altri vanno confermati dall'utente."]
       : []),
     ...(validi.length > inclusi.length
       ? [`Mostrati ${inclusi.length} candidati su ${validi.length}: elenco parziale.`]
@@ -180,7 +184,7 @@ export function serializzaContestoRicerca(contesto: ContestoRicerca): {
 export const PROMPT_ISTRUZIONI_RICERCA =
   " I dati sono candidati trovati nel catalogo Vinea per la ricerca dell'utente: un elenco parziale, non l'intero catalogo, e non sono la bottiglia dell'utente. " +
   "Solo un candidato con identificato true identifica il vino; con più candidati, omonimi o esiti diversi da «esatta» elencali e chiedi all'utente quale intende, senza sceglierne uno. " +
-  "Con origine fonte_documentata cita l'attribuzione riportata quando usi quei dati. " +
+  "Con origine fonte_documentata cita l'attribuzione riportata quando usi quei dati; catalogo_vinea_curato è una scheda verificata da un curatore Vinea, senza codice LWIN. " +
   "Il catalogo non fornisce annata, formato, vitigni, prezzo né valutazioni: se sono fra le lacune dillo e non inventarli.";
 
 const LIVELLO_ESITO: Record<string, string> = {
@@ -209,6 +213,7 @@ export function candidatiDaRigheCanoniche(righe: unknown): CandidatoRicercaIn[] 
       denominazione: r.denominazione,
       tipo: r.tipo,
       codiceLwin: r.lwin7,
+      schedaVinea: r.lwin7 === null,
     },
     provenienza: { fonte: "catalogo_canonico" },
     corrispondenza: {

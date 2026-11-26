@@ -13,10 +13,11 @@
 // - il server lo ripretende a ogni richiesta (`consenso: true` esatto).
 
 import type { RichiestaContestoSommelier } from "@/services/types";
+import { eCodiceScheda } from "@/lib/wine-intelligence/codice-scheda";
 
 export type ContestoUi =
   | { tipo: "vino"; annuncioId: string; etichetta: string }
-  /** WI-008: un vino del catalogo canonico, scelto con il suo codice LWIN-7. */
+  /** WI-008/WI-011: un vino del catalogo canonico, scelto con il codice della sua scheda (LWIN-7 o UUID). */
   | { tipo: "ricerca"; produttore: string; nome: string; codice: string; etichetta: string }
   /** `vuota`: la pagina sa già che non c'è nulla da condividere. */
   | { tipo: "cantina"; vuota: boolean };
@@ -27,7 +28,6 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ETICHETTA_MAX = 80;
 /** Limite del server per produttore e nome del contesto di ricerca. */
 const CAMPO_RICERCA_MAX = 120;
-const LWIN7 = /^[0-9]{7}$/;
 
 const compatta = (testo: string, max: number): string => testo.replace(/\s+/g, " ").trim().slice(0, max).trimEnd();
 
@@ -68,16 +68,17 @@ export const contestoVinoDaAnnuncio = (listingId: string | undefined, etichetta:
 };
 
 /**
- * WI-008: solo un candidato con codice LWIN-7 del catalogo canonico può essere «questo vino»: nome e produttore da soli
- * non identificano (omonimi). Il codice è la scelta esplicita dell'utente; il server lo risolve e rilegge i dati.
+ * WI-008: solo un candidato con il codice di una scheda del catalogo canonico può essere «questo vino»: nome e
+ * produttore da soli non identificano (omonimi). Il codice è la scelta esplicita dell'utente; il server lo risolve e
+ * rilegge i dati. WI-011: per una scheda senza LWIN il codice è l'UUID.
  */
 export const contestoRicercaDaCandidato = (candidato: {
   produttore: string;
   nome: string;
-  canonico?: { lwin7: string };
+  canonico?: { codice: string };
 }): ContestoUi | null => {
-  const codice = candidato.canonico?.lwin7;
-  if (!codice || !LWIN7.test(codice)) return null;
+  const codice = candidato.canonico?.codice;
+  if (!eCodiceScheda(codice)) return null;
   return {
     tipo: "ricerca",
     produttore: compatta(candidato.produttore, CAMPO_RICERCA_MAX),

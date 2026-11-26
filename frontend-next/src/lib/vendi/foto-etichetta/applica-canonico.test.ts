@@ -13,7 +13,7 @@ const CANONICO: CandidatoVino = {
   regione: "Toscana",
   denominazione: "Barbaresco",
   tipo: null,
-  canonico: { lwin7: "1010003", paese: "Italy", territorio: "Toscana", fonteNome: null, licenza: null, attribuzione: null },
+  canonico: { lwin7: "1010003", codice: "1010003", paese: "Italy", territorio: "Toscana", fonteNome: null, licenza: null, attribuzione: null },
 };
 const CONFERMATI = { produttore: "gaja", nome: "sori tildin", annata: "", denominazione: "", formato: "" };
 const CORRENTI = { produttore: "gaja", nome: "sori tildin", annata: "2016", regione: "Piemonte", tipo: "Rosso", storia: "mia nota", conservazione: "cantina", formato: "1,5 L" };
