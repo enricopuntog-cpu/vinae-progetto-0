@@ -376,6 +376,9 @@ run_grid "wi008b ricerca canonica: ranking oltre 2.000 candidati e limite per id
 # WI-008 (wi008c): simulazione, anteprima e lotto valutano il rapporto dei candidati una sola volta, con risultati
 # identici ai corpi precedenti (oracoli nella griglia); ROLLBACK.
 run_grid "wi008c promozione: una valutazione per chiamata, equivalenza con la logica precedente" wi008c_promozione_una_valutazione.sql 3
+# WI-008 (wi008e): scelta PERSONALE di una scheda del catalogo per un vino della propria Cantina (privata, reversibile,
+# verificata dal database; wine_links intatta). ROLLBACK, catalogo vuoto prima e dopo.
+run_grid "wi008e selezione personale della scheda del catalogo" wi008e_selezione_catalogo_personale.sql 3
 # WI-008 (wi008d): ricerca canonica con PostgREST e Auth veri (429 al minuto, raffica parallela, serializzazione per
 # identita, isolamento, porta di sola lettura del Sommelier, fonte revocata, ripristino dopo la finestra: attende il
 # minuto successivo). Fixture committate sul catalogo VUOTO e rimosse in trap, interruttore di nuovo spento.
