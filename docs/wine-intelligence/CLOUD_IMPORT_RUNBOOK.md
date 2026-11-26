@@ -92,6 +92,8 @@ Prerequisiti: prova completa (212.894, V01–V09, seconda esecuzione `skipped`) 
 Automatica nel caricatore (`verifyFinish`, nel report `cloud.verification`; exit code 1 se un controllo fallisce):
 V01 tentativo `succeeded`; V02 SHA-256 dello snapshot; V03 nessun altro tentativo `running`; V04 staging svuotato; V05 record attivi = record visti; V06 `state_digest` ricalcolato = dichiarato; V07 ogni record con paese ha un territorio; V08 rimozioni solo marcate e pari al dichiarato; V09 durata registrata.
 
+Limiti della sola verifica post-commit (WI-008): sul server `statement_timeout` 210 s per query (durante la verifica sostituisce i 120 s dei lotti, che l'annullavano per primi); sul client 240 s per controllo e 600 s complessivi. A verifica conclusa tornano i limiti dei lotti. Se scatta una scadenza client, la query è ancora in volo e la sessione non viene riusata (`session_limits = skipped_session_not_intact`). Nessuna scadenza rende positiva una verifica non conclusa.
+
 Manuale, a cura di chi ha il ruolo proprietario (il caricatore non vede `pg_stat_activity` altrui):
 1. Durante il finish: `select pid, state, wait_event_type, wait_event, now()-query_start from pg_stat_activity where query like '%finish_import_run%';` — un finish è lineare: se supera ~10 minuti senza consumo di WAL, sospetto Nested Loop (la funzione ha `enable_nestloop = off`).
 2. Annotare `import_runs.finished_at - started_at`, `counts`, dimensione WAL (report `cloud.wal`) e dimensione di `catalog.source_records`.

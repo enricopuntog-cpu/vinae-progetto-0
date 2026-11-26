@@ -4,20 +4,30 @@
 import { writeFileSync } from 'node:fs';
 import {
   withDeadline, safeStopMonitor, runVerification, buildFinishOutcome, buildReconcile, sanitizeRunIdentity, applySessionLimits,
+  VERIFY_STATEMENT_TIMEOUT_MS,
 } from './cloud-guards.mjs';
 
 const SESSION_STEP_DEADLINE_MS = 15_000;
 const WAL_REPORT_DEADLINE_MS = 10_000;
 
 /**
- * Dopo un commit CONFERMATO: (1) se la sessione è ancora quella verificata, ripristina i limiti dei lotti (il finish ha un timeout lungo);
- * (2) esegue la verifica obbligatoria. Se la sessione non è integra la verifica NON parte (`verification_not_run`) e i limiti non si toccano:
- * una sessione incerta non si riusa. Non lancia.
+ * Dopo un commit CONFERMATO: (1) se la sessione è ancora quella verificata, imposta il limite lato server della verifica;
+ * (2) esegue la verifica obbligatoria; (3) ripristina i limiti dei lotti (il finish aveva un timeout lungo). Se la sessione non è integra
+ * la verifica NON parte (`verification_not_run`) e i limiti non si toccano; se la scadenza client della verifica scatta, la query è
+ * ancora in volo e sulla stessa sessione non si esegue altro. Non lancia.
  */
 export async function postCommitChecks({ db, batchLimits, verifyArgs, timers, verify }) {
   let notRunReason = null;
   let sessionLimits = 'skipped_session_not_intact';
-  let lastError = null;
+  const markBroken = (why) => { if (db.state) { db.state.broken = true; db.state.why ??= why; } };
+  const setLimits = async (limits, label) => {
+    try {
+      await withDeadline(applySessionLimits(db, limits), SESSION_STEP_DEADLINE_MS, label, timers);
+      return null;
+    } catch (e) {
+      return e;
+    }
+  };
   try {
     if (db.state?.broken === true) throw new Error('sessione interrotta');
     if (typeof db.assertIntact === 'function') await withDeadline(db.assertIntact(), SESSION_STEP_DEADLINE_MS, 'controllo della sessione', timers);
@@ -25,20 +35,25 @@ export async function postCommitChecks({ db, batchLimits, verifyArgs, timers, ve
     notRunReason = 'session_not_intact';
   }
   if (!notRunReason) {
-    try {
-      await withDeadline(applySessionLimits(db, batchLimits), SESSION_STEP_DEADLINE_MS, 'ripristino dei limiti di sessione', timers);
-      sessionLimits = 'restored';
-    } catch (e) {
-      lastError = e;
-      sessionLimits = 'restore_failed';
-    }
-    if (sessionLimits === 'restore_failed' && lastError?.code === 'WI_DEADLINE') {
+    // un errore immediato qui non ferma la verifica: resta la scadenza client di ogni controllo
+    const error = await setLimits({ ...batchLimits, statementTimeoutMs: VERIFY_STATEMENT_TIMEOUT_MS }, 'limiti della verifica');
+    if (error?.code === 'WI_DEADLINE') {
       // la query dei limiti è ancora in volo sul socket: la sessione è incerta e non si riusa (la verifica non parte)
-      if (db.state) { db.state.broken = true; db.state.why ??= 'limits_deadline'; }
+      sessionLimits = 'restore_failed';
+      markBroken('limits_deadline');
       notRunReason = 'session_not_intact';
     }
   }
   const verification = await runVerification((t, p) => db.query(t, p), verifyArgs, { notRunReason, timers, verify });
+  if (!notRunReason) {
+    if (verification.reason === 'verification_deadline') {
+      markBroken('verification_deadline');
+    } else {
+      const error = await setLimits(batchLimits, 'ripristino dei limiti di sessione');
+      sessionLimits = error ? 'restore_failed' : 'restored';
+      if (error?.code === 'WI_DEADLINE') markBroken('limits_deadline');
+    }
+  }
   return { session_limits: sessionLimits, verification };
 }
 
