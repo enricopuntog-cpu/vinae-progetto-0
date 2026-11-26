@@ -385,12 +385,10 @@ run_grid "wi010 budget globale delle funzioni AI" wi010_budget_ai.sql 3
 # acquisizione dagli annunci). Transazione chiusa da ROLLBACK, catalogo vuoto; interruttori accesi solo al suo interno.
 run_grid "wi011 ciclo di vita del catalogo e porte di amministrazione" wi011_ciclo_vita_catalogo.sql 3
 # WI-011: sessioni separate sulla stessa identita e sulla stessa decisione. Fixture committate e rimosse in trap.
-wi011_conc="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/wi011_concorrenza.sh")" \n  || { printf '%s
-' "$wi011_conc"; die "wi011 concorrenza: fallita."; }
-printf '%s
-' "$wi011_conc"
-summary "- $(printf '%s
-' "$wi011_conc" | grep 'wi011 concorrenza:' | tail -n 1)"
+wi011_conc="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/wi011_concorrenza.sh")" \
+  || { printf '%s\n' "$wi011_conc"; die "wi011 concorrenza: fallita."; }
+printf '%s\n' "$wi011_conc"
+summary "- $(printf '%s\n' "$wi011_conc" | grep 'wi011 concorrenza:' | tail -n 1)"
 # WI-008 (wi008d): ricerca canonica con PostgREST e Auth veri (429 al minuto, raffica parallela, serializzazione per
 # identita, isolamento, porta di sola lettura del Sommelier, fonte revocata, ripristino dopo la finestra: attende il
 # minuto successivo). Fixture committate sul catalogo VUOTO e rimosse in trap, interruttore di nuovo spento.

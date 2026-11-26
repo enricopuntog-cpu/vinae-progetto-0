@@ -974,6 +974,11 @@ export const ModerationPanelClient = () => {
             </Link>
           </Button>
           <Button asChild variant="outline">
+            <Link href="/admin/catalogo">
+              <Wine /> Catalogo vini
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
             <Link href="/admin/accessori">
               <GlassWater /> Accessori
             </Link>

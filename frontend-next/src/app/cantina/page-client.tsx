@@ -32,6 +32,7 @@ import { ConsigliCantina } from "@/components/vinea/ConsigliCantina";
 import { NotaPersonaleDialog } from "@/components/vinea/NotaPersonaleDialog";
 import { SelezioneCatalogoVino } from "@/components/vinea/SelezioneCatalogoVino";
 import { useSelezioniCatalogo } from "@/hooks/useSelezioniCatalogo";
+import { PropostaCatalogoVino } from "@/components/vinea/PropostaCatalogoVino";
 import { ancoraGruppo } from "@/lib/cantina/consigli";
 import { chiaveVino } from "@/lib/price-intelligence/insights";
 import { AperturaBottiglia } from "@/components/vinea/AperturaBottiglia";
@@ -1267,7 +1268,22 @@ function BottiglieView({
                 nome={w.nome}
                 disponibile={catalogo.stato.disponibile}
                 scelta={catalogo.stato.scelte[w.wineSlug] ?? null}
-                onCambio={(lwin7) => catalogo.cambia(w.wineSlug as string, lwin7)}
+                onCambio={(codice) => catalogo.cambia(w.wineSlug as string, codice)}
+              />
+            ) : null}
+            {catalogo.client && w.wineSlug && catalogo.proposteAttive ? (
+              <PropostaCatalogoVino
+                client={catalogo.client}
+                wineSlug={w.wineSlug}
+                vino={{
+                  produttore: w.produttore,
+                  nome: w.nome,
+                  annata: w.annata || null,
+                  regione: w.regione,
+                  denominazione: w.denominazione,
+                  tipo: w.tipo,
+                  formato: w.formato,
+                }}
               />
             ) : null}
             <div className="flex flex-wrap gap-2">
