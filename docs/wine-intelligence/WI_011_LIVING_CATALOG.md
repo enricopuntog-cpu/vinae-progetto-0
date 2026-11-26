@@ -146,6 +146,8 @@ Cantina D3-A (mediana dei prezzi **richiesti**, almeno 3 annunci) resta invariat
 estrae le transazioni concluse dagli ordini: richiede una migration, una decisione sul trattamento dei dati degli
 ordini e, per avere risultati, transazioni reali. Nessuna API o dataset acquistato.
 
+Questa sezione descrive il solo modulo WI-014; lo stato complessivo dei dati di prezzo è al §13.
+
 **Authenticity: non costruita.** I livelli da tenere separati (identificazione del vino, qualità della foto, anomalie
 visive, provenienza, verifica documentale, valutazione di un esperto, certificazione) richiedono prima: consenso e
 diritti sulle immagini per questa finalità, una procedura di verifica con responsabilità umana e una decisione legale
@@ -201,3 +203,52 @@ Da rivalidare, oltre a F-01–F-08 di WI-009:
   il file lo fornisce il founder.
 - **Prezzi (WI-014):** predisposto il contratto di acquisizione `lib/prezzi/acquisizione.ts`, spento e non collegato a
   nessun dominio: campi chiusi (una riga con dati in più è scartata), fonte autorizzata e con finalità dichiarata.
+
+## 12. Affidabilità delle proposte inviate dal wizard (limite aperto)
+
+**Oggi non esiste un recupero persistente.** Il consenso vive solo nello stato della pagina; la proposta parte dal
+client **dopo** la creazione della bottiglia (`useSellWizard` → `inviaPropostaNuovoVino`), con al massimo 3 tentativi
+per i soli errori di rete.
+
+| Caso | Che cosa succede |
+|---|---|
+| Pagina chiusa o ricaricata prima della risposta | la bottiglia resta; la proposta **può andare persa**, senza traccia e senza avviso |
+| Errore di rete oltre i tentativi, con la pagina aperta | avviso: si può inviare dalla Cantina (nuovo consenso; origine `cantina` o `correzione`, non più `manuale`/`ocr`) |
+| Rifiuto del database (spento, quota, dati non validi) | nessuna ripetizione, di proposito |
+| Creazione della bottiglia | non dipende mai dal catalogo |
+
+L'acquisizione dagli annunci **non** è un recupero: legge i soli annunci pubblici, senza legame con l'utente e con un
+altro significato del consenso. Una bottiglia rimasta in Cantina non viene mai ripescata, ed è corretto: senza un
+consenso registrato non si può proporre nulla. In Production le proposte sono spente, quindi oggi non si perde nulla.
+
+**Requisito da soddisfare prima di dichiarare affidabile l'acquisizione dal sito** (non implementato):
+
+1. il consenso per quella richiesta diventa persistente **nella stessa transazione** che crea la bottiglia, estendendo i
+   servizi esistenti (`cellar_bottiglia_aggiungi`, `cellar_bottiglie_aggiungi`, stessa chiave di idempotenza) con un
+   parametro facoltativo, assente per difetto;
+2. il catalogo non può far fallire né rallentare la bottiglia: sottoblocco con `lock_timeout` breve; preferire la
+   registrazione diretta con `catalog.contribution_register` (la proposta aperta è già lo stato persistente che
+   `lavoro_catalogo` mette in coda nel brain) e, solo per il ramo fallito, un'**intenzione in sospeso** in una tabella
+   di dominio, ritentata dallo scheduler comune con tentativi limitati come `catalog.intake_failures`;
+3. **nessuna seconda coda.** I dati legati all'utente non vanno in `brain.events`, che è in sola aggiunta e non
+   permette revoca o cancellazione: nel bus passa al più un riferimento senza dati personali;
+4. consenso revocabile e cancellazione dell'account eliminano anche l'intenzione in sospeso, con l'ordine di lock di
+   B-01 (prima la proposta); campi chiusi, origine (`manuale` o `ocr` confermato) e provenienza invariati; la quota si
+   consuma una volta per richiesta;
+5. prove: chiusura simulata dopo il commit, catalogo bloccato durante la creazione, doppio invio, revoca e
+   cancellazione concorrenti al ritentativo, interruttore spento.
+
+Richiede una migration nuova sulle porte della Cantina: è un lavoro separato, non incluso nella chiusura di WI-015.
+
+## 13. Price Intelligence: che cosa esiste e che cosa no (stato al 26/11/2026)
+
+| Pezzo | Stato |
+|---|---|
+| Storico 1A (`public.wine_price_observations` → vista `wine_price_history`), **precedente a WI-015** | attivo: trigger interni su annunci e ordini; la pagina annuncio ne legge lo storico. In Production **9 osservazioni, tutte prezzi richiesti** del marketplace interno; **0 prezzi realizzati** (0 ordini) |
+| Valutazione WI-014 (`lib/prezzi/valutazione.ts`) | modulo puro con test, **nessun consumer** |
+| Contratto di acquisizione WI-015 (`lib/prezzi/acquisizione.ts`) | spento, **nessuna fonte e nessun consumer** |
+
+**Il sistema di valutazione non è operativo.** La stima richiede almeno 5 transazioni concluse comparabili e oggi non ce
+n'è nessuna; i prezzi richiesti non entrano nella stima. Non esistono osservazioni autorizzate allo scopo di valutare:
+servono la decisione su finalità e trattamento dei dati degli ordini, una porta di lettura minimizzata, transazioni
+reali e un consumer.

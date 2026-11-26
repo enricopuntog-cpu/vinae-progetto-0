@@ -742,8 +742,9 @@ fatturazione, valute e corrieri esteri, traduzione inglese. Dettagli in
 
 ## Filone Wine Intelligence e Company Brain (mandato del founder, 26 novembre 2026)
 
-Filone ammesso per nome, parallelo alle fasi di migrazione; non sposta il cutover. Stato al 26 novembre 2026, dopo
-`ca719f1` (Production ledger 136). **Distribuito non significa attivato.**
+Filone ammesso per nome, parallelo alle fasi di migrazione; non sposta il cutover. La tabella fotografa lo stato dopo
+`ca719f1` (ledger 136); lo stato dopo WI-015 (`6602fbb`, **Production ledger 138**) è nel paragrafo che la segue.
+**Distribuito non significa attivato.**
 
 | Voce | Progettato | Implementato | Testato | Mergiato | Distribuito | Attivato | Bloccato da |
 |---|---|---|---|---|---|---|---|
@@ -754,16 +755,19 @@ Filone ammesso per nome, parallelo alle fasi di migrazione; non sposta il cutove
 | Aggiornamento periodico LWIN (procedura, delta) | sì | sì (runner esistente + delta) | delta **non** eseguito su una versione nuova | #323 | script nel repo | no | nuovo file autorizzato |
 | WI-013 contratto del Company Brain | sì | sì | sì | #323 | sì | no (0 agenti) | credenziale per agente |
 | WI-013 Sentinel e cruscotto | sì | sì | sì | #323 | sì | solo esecuzione manuale, **non 24/7** | scelta dello scheduler |
-| WI-014 valutazione economica | sì (fondamenta) | modulo puro, non collegato | sì (unit) | PR di chiusura | — | no | transazioni reali, porta di lettura, decisione |
+| WI-014 valutazione economica | sì (fondamenta) | modulo puro, non collegato | sì (unit) | #324 | — | no | transazioni reali, porta di lettura, decisione |
 | Authenticity | solo nota | no | no | — | — | no | consenso e diritti sulle immagini, procedura di verifica |
 | Promozione canonica | sì | sì (WI-008/009) | banco sintetico | sì | sì | **no** (regola `draft`) | audit, F-06, F-08, founder |
 
 **WI-015 (26 novembre 2026, mandato «Autonomous Operations & Living Catalog Completion»):** correzioni dell'audit
 indipendente (C-01, A-01, B-01–B-04, C-02/C-03, D-01–D-03, E-01), acquisizione dal wizard e periodica, Catalog
 Manager, Data Quality e Technical Monitor, scheduler unico (script `pg_cron`, non installato), ingestione dei segnali,
-costi AI, cruscotto e rapporto, aggiornamento LWIN dal pannello, contratto prezzi spento. Implementato, provato e
-distribuito con le PR WI-015; **nulla attivato**. Restano: audit indipendente del delta, F-06/F-08, approvazione della
-regola, scelta dell'osservatore esterno, tetti AI, periodo di conservazione B-04.
+costi AI, cruscotto e rapporto, aggiornamento LWIN dal pannello, contratto prezzi spento. **Mergiato, distribuito e
+verificato** con #325 (`ac3012c`) e #326 (`6602fbb`); **nulla attivato**. Restano: audit indipendente del delta
+(`docs/audits/WI-015-DELTA-AUDIT.md`), F-06/F-08, approvazione della regola, **ambiente di esecuzione dei worker (oggi
+mancante)**, osservatore esterno, collegamento delle fonti (0 su 7), tetti e tariffe AI, periodo di conservazione B-04,
+**recupero persistente delle proposte del wizard** (`WI_011` §12). La valutazione dei prezzi non è operativa
+(`WI_011` §13).
 
 Riferimenti: `docs/wine-intelligence/WI_011_LIVING_CATALOG.md`, `docs/COMPANY_BRAIN.md`,
 `docs/wine-intelligence/PROMOZIONE_CANONICA_RUNBOOK.md`.
