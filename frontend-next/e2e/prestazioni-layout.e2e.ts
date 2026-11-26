@@ -68,6 +68,36 @@ test.describe("Stabilità del layout al caricamento @smoke @cross", () => {
     await contesto.close();
   });
 
+  // WI-009: `.cv-card` (content-visibility) stima l'altezza dalla larghezza. Se la stima non coincide con la scheda
+  // vera, tutto ciò che sta sotto si sposta quando la scheda entra in vista e il tocco cade altrove.
+  test("scheda vino: l'altezza stimata coincide con quella vera", async ({ browser, diagnostica }, info) => {
+    const contesto = await contestoAutenticato(browser, "venditore", opzioniDelProgetto(info));
+    const page = await contesto.newPage();
+    diagnostica.osserva(page, "venditore");
+    await page.goto("/cantina");
+    await attendiCaricamento(page);
+    const schede = page.locator(".cv-card");
+    await expect(schede.first()).toBeAttached();
+    const quante = await schede.count();
+    for (let i = 0; i < quante; i++) {
+      const scheda = schede.nth(i);
+      await scheda.scrollIntoViewIfNeeded();
+      await expect
+        .poll(
+          () =>
+            scheda.evaluate((el) => {
+              const { width, height } = el.getBoundingClientRect();
+              // La stima del CSS: 125cqi (larghezza del contenuto della scheda) + 161px.
+              return Math.abs(height - (width * 1.25 + 161));
+            }),
+          { message: `scheda ${i + 1} di ${quante}` },
+        )
+        .toBeLessThanOrEqual(6);
+    }
+    expect(await senzaScorrimentoOrizzontale(page)).toBe(true);
+    await contesto.close();
+  });
+
   test("se il grafico non arriva, la Cantina resta in piedi", async ({ browser, browserName }, info) => {
     test.skip(browserName !== "chromium", "un solo motore basta: il confine non dipende dal browser");
     const contesto = await contestoAutenticato(browser, "venditore", opzioniDelProgetto(info));

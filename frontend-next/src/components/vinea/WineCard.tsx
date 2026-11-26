@@ -130,7 +130,8 @@ export function WineCard({
 
   return (
     <div
-      className="group relative overflow-hidden rounded-2xl border border-border bg-card card-lift perf-card cv-card"
+      // `@container`: la stima di `.cv-card` e la taglia del prezzo si misurano sulla larghezza di QUESTA scheda.
+      className="@container group relative overflow-hidden rounded-2xl border border-border bg-card card-lift perf-card"
       data-testid={`wine-card-${wine.id}`}
     >
       {sale && (
@@ -161,7 +162,7 @@ export function WineCard({
       <DetailLink
         href={detailHref}
         testId={`wine-card-link-${wine.id}`}
-        className="block"
+        className="cv-card block"
       >
         <div className="img-sheen aspect-[4/5] overflow-hidden bg-secondary">
           <WineThumbnail
@@ -172,24 +173,25 @@ export function WineCard({
           />
         </div>
         <div className="p-4">
-          <p className="text-[11px] uppercase tracking-wider text-salvia-scuro">{wine.produttore}</p>
-          <h3 className="mt-1 line-clamp-2 font-serif text-lg font-semibold leading-tight">
+          <p className="truncate text-[11px] uppercase tracking-wider text-salvia-scuro">{wine.produttore}</p>
+          <h3 className="mt-1 line-clamp-2 min-h-[2.5em] font-serif text-lg font-semibold leading-tight">
             {wine.nome} <span className="text-antracite/70">{wine.annata}</span>
           </h3>
-          <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+          <p className="mt-1 flex h-5 items-center gap-1 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
             {wine.venditore.citta ? (
               <>
-                <MapPin className="h-3 w-3" aria-hidden="true" /> {wine.venditore.citta}
+                <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 truncate">{wine.venditore.citta}</span>
               </>
             ) : null}
             {wine.venditore.verificato && (
-              <span className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-salvia/15 px-1.5 py-0.5 text-[10px] text-salvia-scuro">
+              <span className="ml-1 inline-flex shrink-0 items-center gap-0.5 rounded-full bg-salvia/15 px-1.5 py-0.5 text-[10px] text-salvia-scuro">
                 <ShieldCheck className="h-2.5 w-2.5" /> Verificato
               </span>
             )}
           </p>
-          <div className="mt-3 flex items-baseline justify-between">
-            <div>
+          <div className="mt-3 flex items-baseline justify-between gap-1">
+            <div className="min-h-7 shrink-0">
               {priceHidden ? (
                 <p className="flex items-center gap-1 font-serif text-sm text-muted-foreground">
                   <EyeOff className="h-3.5 w-3.5" /> Prezzo riservato
@@ -198,7 +200,7 @@ export function WineCard({
                 <p className="text-xs text-muted-foreground">Nessun prezzo</p>
               ) : (
                 <>
-                  <p className="font-serif text-xl font-semibold text-bordeaux">
+                  <p className="whitespace-nowrap font-serif text-xl font-semibold leading-7 text-bordeaux @max-[11rem]:text-lg @max-[11rem]:leading-7">
                     {formatEUR(wine.prezzo)}
                   </p>
                   {wine.prezzoMercato && wine.prezzoMercato > wine.prezzo && (
@@ -209,7 +211,7 @@ export function WineCard({
                 </>
               )}
             </div>
-            <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium">
+            <span className="min-w-0 truncate rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium">
               {wine.tipo}
             </span>
           </div>

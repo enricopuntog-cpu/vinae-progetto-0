@@ -204,9 +204,13 @@
   content-visibility: auto;
   contain-intrinsic-size: 640px 480px;
 }
+/* Scheda vino a griglia: la stima è l'altezza VERA, calcolata sulla larghezza della scheda (il genitore è un
+   `@container`): foto 4:5 (125cqi) più il blocco di testo ad altezza costante (161px). Una stima fissa spostava
+   di decine di pixel tutto ciò che stava sotto nel momento in cui la scheda entrava in vista, e il tocco cadeva
+   altrove. Se cambia il blocco di testo di WineCard, va rimisurata (`e2e/layout-schede.e2e.ts`). */
 .cv-card {
   content-visibility: auto;
-  contain-intrinsic-size: 320px 400px;
+  contain-intrinsic-block-size: auto calc(125cqi + 161px);
 }
 
 /* Card GPU containment: isolate paint/layout for perf on long grids */
