@@ -30,6 +30,8 @@ import { WineIntelligenceCard } from "@/components/vinea/WineIntelligenceCard";
 import { ChiediAlSommelier } from "@/components/vinea/ChiediAlSommelier";
 import { ConsigliCantina } from "@/components/vinea/ConsigliCantina";
 import { NotaPersonaleDialog } from "@/components/vinea/NotaPersonaleDialog";
+import { SelezioneCatalogoVino } from "@/components/vinea/SelezioneCatalogoVino";
+import { useSelezioniCatalogo } from "@/hooks/useSelezioniCatalogo";
 import { ancoraGruppo } from "@/lib/cantina/consigli";
 import { chiaveVino } from "@/lib/price-intelligence/insights";
 import { AperturaBottiglia } from "@/components/vinea/AperturaBottiglia";
@@ -1199,7 +1201,9 @@ function BottiglieView({
   /** WI-005B: apre «Completa le informazioni» per il gruppo (chiave). */
   onModificaInfo: (chiave: string) => void;
 }) {
-  const { bottiglieCantina, notePersonaliVino } = useVinea();
+  const { bottiglieCantina, notePersonaliVino, authUser } = useVinea();
+  // WI-008: scheda del catalogo scelta dall'utente. Con il catalogo spento e nessuna scelta non compare nulla.
+  const catalogo = useSelezioniCatalogo(authUser?.userId ?? null);
   if (list.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center text-sm text-muted-foreground">
@@ -1255,6 +1259,17 @@ function BottiglieView({
               compatta
               schedaHref={w.detailHref}
             />
+            {catalogo.client && w.wineSlug ? (
+              <SelezioneCatalogoVino
+                client={catalogo.client}
+                wineSlug={w.wineSlug}
+                produttore={w.produttore}
+                nome={w.nome}
+                disponibile={catalogo.stato.disponibile}
+                scelta={catalogo.stato.scelte[w.wineSlug] ?? null}
+                onCambio={(lwin7) => catalogo.cambia(w.wineSlug as string, lwin7)}
+              />
+            ) : null}
             <div className="flex flex-wrap gap-2">
               {/* Nel mock questo era un interruttore su un insieme in memoria.
                   Mettere in vendita significa creare un annuncio: è il lavoro

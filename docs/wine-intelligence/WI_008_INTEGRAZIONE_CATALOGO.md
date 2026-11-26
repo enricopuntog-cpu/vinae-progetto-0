@@ -1,22 +1,22 @@
 # WI-008 — chiusura import, simulazione reale, impronta, ranking, limite e Sommelier
 
-Data: 25 novembre 2026. Baseline: `main` `1fa9ead` (WI-007, #313), Supabase Production `pijnmcllmfgjmgsvtcej`.
-Stato in una riga: **simulazione e chiusura import eseguite in Production (sola lettura + un `ALTER ROLE`); correzioni del runner mergiabili; migration, ricerca e Sommelier implementati e provati in CI isolata ma NON in PR né distribuiti** (vedi «Perché il ramo non è una PR»).
+Date: 25 e 26 novembre 2026. Production Supabase `pijnmcllmfgjmgsvtcej`.
+Lo stato di **distribuzione** (ledger, funzioni, Netlify) non si deduce da questo file: va riletto dopo il merge (CHANGES.log).
+Le sezioni 2–8 sono il registro della prima sessione; dove la seconda le supera vale la sezione 9.
 
-## 1. Stato per blocco
+## 1. Stato per blocco (26 novembre 2026, ramo `feature/wi-008-integrazione-catalogo`)
 
-| Blocco | Stato | Evidenza |
+| Blocco | Stato | Prova |
 |---|---|---|
-| A. Chiusura import | FATTO in Production | baseline riletta (212.894 record, 0 vini canonici, regola `draft`, proiezione OFF, nessun import `running`, nessuna sessione); `catalog_import_login` → `NOLOGIN` (password e membership intatte, 0 sessioni) |
-| B. Simulazione reale | FATTO (sola lettura) | §2 |
-| C. Fingerprint | IMPLEMENTATO e provato in CI, NON distribuito | migration `20261125100000`, griglia `wi008a` 27/27 |
-| D. Ranking oltre 2.000 | IMPLEMENTATO e provato in CI, NON distribuito | migration `20261125110000` + `20261125120000`, griglia `wi008b` 22/22 |
-| E. Anti-abuso | IMPLEMENTATO e provato in CI, NON distribuito | stessa migration, `wi008b` L01–L06, P01–P05 |
-| F. Sommelier | IMPLEMENTATO e provato (finti), NON distribuito | `ai-sommelier` + `sommelier-ricerca.ts`, 12 test nuovi, `wi004` 13/13 |
-| G. Cantina ↔ canonico | NON fatto (decisione) | §6 |
-| H. Wizard `/vendi` | già coperto da WI-006B/WI-007 | §6 |
-| I. Schede canoniche | NON fatto | §6 |
-| J. Runner | FATTO, mergiabile | §5, Node 177 pass/0 fail, Bun TLS 10/10 |
+| Chiusura import | eseguita in Production il 25/11 | `catalog_import_login` `NOLOGIN` |
+| Prestazioni di simulazione e promozione | implementate, gate DB | `wi008c` 43/43, 12zy 246/246 |
+| Impronta della promozione | implementata, gate DB | `wi008a` 27/27, `wi008c` S3 |
+| Ricerca e anti-abuso | implementate, gate DB e PostgREST | `wi008b` 25/25, `wi008d` 22/22 |
+| Sommelier end-to-end | implementato, unit e DOM con finti | nessuna chiamata AI |
+| Cantina: scelta personale | implementata | `wi008e`, unit/DOM, E2E |
+| Wizard `/vendi` | regione utente preservata, E2E esistente | unit |
+| Scheda canonica autonoma | implementata | unit/DOM, E2E |
+| Runner | mergiato (#315, #316) | Node 180 pass/0 fail/10 saltati |
 
 ## 2. Simulazione della promozione in Production (sola lettura)
 
@@ -81,3 +81,39 @@ Una PR che tocca `supabase/` fa creare all'integrazione una Preview a pagamento 
 ## 8. Componenti riutilizzati
 
 `catalog.promotion_simulation/preview/candidates/batch/blocked`, `wine_candidate_report`, `promotion_logic_fingerprint`/`promotion_view_digest`, `private.rate_limit_consume` e il gancio `vinea_check_request`, `public.vini_canonici_cerca` (stessa firma e privilegi), `_shared/sommelier-contesto.ts` e `sommelier-ricerca.ts`, il caricatore Edge con database e provider finti, il gate `12g_ci_run.sh`, il runner `tools/wine-catalog`. Nessuna dipendenza, servizio, flag o tabella nuova.
+
+## 9. Seconda sessione (26 novembre 2026)
+
+### 9.1 Costo della simulazione e della promozione
+Misure in sola lettura in Production: `catalog.source_records` pesa **639 MB** (213 mila righe, `shared_buffers` 224 MB); la sola scansione sequenziale costa 10,9–16,9 s, la vista senza chiave naturale 24 s, con la chiave naturale circa 36 s. Il costo è nella lettura della tabella, quindi conta **quante volte** si valuta il rapporto.
+
+| Operazione | Valutazioni prima | Dopo (`20261125130000`) |
+|---|---|---|
+| `promotion_simulation` | circa 10 (timeout) | 1 |
+| `promotion_preview` / prova a secco | 3 | 1 |
+| lotto reale | 3, più il join di ritorno su `source_records` | 1 |
+
+Come: la vista espone in coda `source_record_id`; `promotion_report` è l'unica definizione di candidato; `promotion_lot` dà lotto e bloccati insieme; `promotion_analysis` calcola le sezioni da un solo CTE materializzato; il lotto reale legge `promotion_lot` una volta. Nessuna tabella o copia persistente; lock, ordine, idempotenza, esclusioni, alias, audit e privilegi invariati; `promotion_simulation` resta `STABLE`. `wi008c` confronta candidati, lotti, bloccati e conteggi con i corpi precedenti (oracoli nella griglia) a catalogo vuoto, con produttore ritirato, a metà e a promozione esaurita, e conta le scansioni (1 per chiamata; l'oracolo precedente più di 1). L'impronta copre ora 28 funzioni.
+
+**Piano di fattibilità (stima, non misura).** `max_batch` è 1.000 (ammesso fino a 10.000): 159.614 candidati sono 160 lotti a 1.000 oppure 16 a 10.000, ciascuno con una valutazione del rapporto più gli inserimenti. Non misurati e non misurabili senza promuovere: tempo di inserimento con le guardie, `detect_duplicate_candidates_internal` a catalogo popolato, WAL. Prima di un lotto grande va fatto un primo lotto piccolo cronometrato, entro lo `statement_timeout` di 120 s. Il tempo della simulazione ufficiale ottimizzata in Production va letto dopo la distribuzione.
+
+### 9.2 Ricerca: percorso di servizio (`20261125140000`)
+Il contatore `service` era una riga bloccata fino al commit: serializzava tutte le ricerche del Sommelier. In più l'hook `private.vinea_check_request` conta ogni RPC `VOLATILE` in POST (senza utente: per IP, 60/min per percorso). Ora il Sommelier usa `vini_canonici_cerca_servizio` (`STABLE`, solo `service_role`, stessa funzione sotto): transazione di sola lettura, nessun contatore. Il limite per utente è quello del gate AI (`ai:chat` 40/ora, consumato prima; una ricerca per richiesta).
+**Concorrenza.** Via PostgREST le richieste della stessa identità sono serializzate dal lock dell'hook sulla riga (utente, percorso); un secondo meccanismo nella funzione non scatterebbe mai ed è stato scartato. `wi008d` prova: 40 servite e 41ª 429, raffica di 60 (20 in parallelo) con al massimo 40 servite e contatore uguale alle servite, attesa della stessa identità, isolamento di un'altra, fonte revocata, ripristino nella finestra successiva. **Debito di piattaforma**: le richieste in attesa occupano una connessione fino allo `statement_timeout` (authenticated 8 s) e una richiesta annullata non consuma quota; vale per ogni RPC di scrittura. **Da verificare** (non misurato in Production): con quale IP le Edge Function si presentano all'hook per le altre RPC di servizio.
+Restano non provati piano e tempi della ricerca a catalogo popolato: dopo la promozione ripetere `wi007_ricerca_canonica_prestazioni.sql` sulla funzione nuova, prima di accendere la proiezione.
+
+### 9.3 Sommelier
+Identifica **solo** il livello «identificativo» (LWIN-7 richiesto e risolto dal database). Un esatto per produttore e nome è «probabile», da confermare. Si leggono 20 righe (omonimi oltre il quinto posto), 5 entrano nel blocco (≤3.500 caratteri). «Chiedi al Sommelier» compare sui candidati canonici, sulla scelta in Cantina e sulla scheda; il pannello dice che, se la scheda non è disponibile, la risposta è generale. Nessuna chiamata AI nelle prove.
+
+### 9.4 Cantina (`20261126100000`)
+Tre livelli distinti: **scelta personale** (nuova: `public.wine_catalog_selections`, privata, reversibile), **proposta** (non introdotta: chi conferma è una decisione aperta), **collegamento canonico** (`catalog.wine_links`, invariata, del curatore; richiede un'annata canonica che solo il curatore crea). `cellar_catalogo_scegli` verifica il possesso e risolve il codice con `vini_canonici_cerca`, quindi a proiezione spenta non si può scegliere. `catalogo_canonico_disponibile()` dice solo se il catalogo è consultabile. La scelta vale per proprietario e vino (tutte le sue bottiglie; la vista 3D porta alla stessa scheda del gruppo) e non alimenta note, finestre, consigli o `WineIntelligenceCard`. Nessun backfill.
+
+### 9.5 Wizard e scheda autonoma
+Wizard: la regione di un candidato canonico riempie solo un campo vuoto; annata, formato, tipologia e note restano; il LWIN non entra nell'annuncio; nulla viene creato automaticamente. Pagamenti e logistica non toccati.
+Scheda `/vino-catalogo/[lwin7]`: solo autenticati, `noindex` (il `robots` vieta già tutto), nessuna sitemap; a proiezione spenta 404. Non riusa `WineIntelligenceCard`, che completa con valori generici «stimati»: qui sarebbero dati inventati. Nessun annuncio accostato per nome.
+
+### 9.6 Runner
+`postCommitChecks` ripristinava i 120 s dei lotti prima della verifica: ora 210 s lato server durante la verifica, 240 s per controllo e 600 s complessivi lato client; alla scadenza client la sessione non si riusa. La prova TLS pre-`SET ROLE` resta legata a stesso backend e login (#316).
+
+### 9.7 Gate che restano al founder
+Approvazione di `lwin-conservative-v1`, accensione di `promotion_settings` e dimensione dei lotti, promozione; misura a catalogo popolato e accensione della proiezione. Separata: chi conferma un collegamento canonico proposto da un utente.

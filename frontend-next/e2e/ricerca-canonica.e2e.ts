@@ -14,6 +14,7 @@ import { ripristinaFixture } from "./support/db";
 import { expect, test } from "./support/test";
 import { PRODUTTORE_E2E, etichettaCorsa, leggiDalDatabase, preparaBottigliaInCantina } from "./support/vino";
 import { apriIdentificazione, cerca } from "./support/wizard-ricerca";
+import { opzioniDelProgetto } from "./support/browser";
 import type { Page } from "@playwright/test";
 
 /**
@@ -40,6 +41,7 @@ test.describe.serial("Ricerca canonica nel wizard: catalogo acceso solo in prova
   const nomeGemello = `Gemello ${corsa}`;
   const nomeSingolo = `Singolo ${corsa}`;
   const argomenti = (nome: string) => ({ p_produttore: PRODUTTORE_CANONICO, p_nome: nome });
+  let vinoVineaId = "";
 
   const scritture = () =>
     leggiDalDatabase(
@@ -54,7 +56,7 @@ test.describe.serial("Ricerca canonica nel wizard: catalogo acceso solo in prova
     expect(rimuoviCanonico()).toBe(CATALOGO_PULITO);
     creaCanonico(corsa);
     // Il vino Vinea con lo STESSO produttore e nome di una scheda canonica: non deve ricevere il suo LWIN.
-    await preparaBottigliaInCantina("venditore", { nome: nomeSingolo, annata: 2016 });
+    vinoVineaId = (await preparaBottigliaInCantina("venditore", { nome: nomeSingolo, annata: 2016 })).wineId;
   });
 
   test.afterAll(() => {
@@ -241,6 +243,60 @@ test.describe.serial("Ricerca canonica nel wizard: catalogo acceso solo in prova
     // FIX-03B: scaduto il tetto, il client annulla la richiesta canonica invece di lasciarla pendente.
     await expect.poll(() => annullate.length, { timeout: 3000 }).toBeGreaterThan(0);
     await page.unroute("**/rest/v1/rpc/vini_canonici_cerca").catch(() => undefined);
+    await contesto.close();
+  });
+
+  test("WI-008: scheda autonoma solo per utenti identificati; in Cantina la scelta è personale, esplicita e reversibile", async ({ browser, diagnostica }, info) => {
+    impostaProiezione(true);
+    diagnostica.ammetti("/vino-catalogo/");
+    const slug = leggiDalDatabase(`select slug from public.wines where id = '${vinoVineaId}';`);
+    const collegamenti = () => leggiDalDatabase("select count(*) from catalog.wine_links;");
+    const scelte = () =>
+      leggiDalDatabase(`select coalesce(string_agg(lwin7, ','), '') from public.wine_catalog_selections where wine_id = '${vinoVineaId}';`);
+    const collegamentiPrima = collegamenti();
+    const prima = scritture();
+
+    const anonimo = await browser.newContext(opzioniDelProgetto(info));
+    const pagina = await anonimo.newPage();
+    await pagina.goto(`/vino-catalogo/${LWIN_SINGOLO}`);
+    await expect(pagina.getByTestId("scheda-catalogo-accesso")).toBeVisible();
+    await expect(pagina.getByText(nomeSingolo)).toHaveCount(0);
+    await anonimo.close();
+
+    const { contesto, page } = await apriIdentificazione(browser, "venditore", info, diagnostica);
+    await page.goto(`/vino-catalogo/${LWIN_SINGOLO}`);
+    const scheda = page.getByTestId("scheda-catalogo");
+    await expect(scheda).toContainText(`LWIN ${LWIN_SINGOLO}`);
+    await expect(scheda).toContainText(nomeSingolo);
+    await expect(page.getByTestId("scheda-catalogo-mancanti")).toContainText("Prezzo");
+    await expect(scheda.locator("img")).toHaveCount(0);
+    await expect(page.locator('meta[name="robots"]').first()).toHaveAttribute("content", /noindex/);
+
+    await page.goto("/cantina");
+    await page.getByTestId(`catalogo-${slug}-cerca`).click();
+    const candidati = page.getByTestId(`catalogo-${slug}-candidati`);
+    await expect(candidati).toContainText(`LWIN ${LWIN_SINGOLO}`);
+    expect(scelte()).toBe("");
+    await expect(page.getByTestId(`catalogo-${slug}-conferma`)).toBeDisabled();
+    await candidati.locator("label", { hasText: LWIN_SINGOLO }).locator("input").check();
+    await page.getByTestId(`catalogo-${slug}-conferma`).click();
+    await expect(page.getByTestId(`catalogo-${slug}`)).toContainText(`scelta da te: LWIN ${LWIN_SINGOLO}`);
+    expect(scelte()).toBe(LWIN_SINGOLO);
+    await page.reload();
+    await expect(page.getByTestId(`catalogo-${slug}`)).toContainText(`LWIN ${LWIN_SINGOLO}`);
+    await page.getByTestId(`catalogo-${slug}-rimuovi`).click();
+    await expect(page.getByTestId(`catalogo-${slug}-cerca`)).toBeVisible();
+    expect(scelte()).toBe("");
+    expect(collegamenti()).toBe(collegamentiPrima);
+    expect(scritture()).toBe(prima);
+
+    // Catalogo spento: la scheda non esiste più e in Cantina non compare alcun comando.
+    impostaProiezione(false);
+    await page.goto(`/vino-catalogo/${LWIN_SINGOLO}`);
+    await expect(page.getByTestId("scheda-catalogo")).toHaveCount(0);
+    await page.goto("/cantina");
+    await expect(page.getByText(nomeSingolo).first()).toBeVisible();
+    await expect(page.getByTestId(`catalogo-${slug}-cerca`)).toHaveCount(0);
     await contesto.close();
   });
 });

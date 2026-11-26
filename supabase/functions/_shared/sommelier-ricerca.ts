@@ -5,15 +5,18 @@
 // dati breve, ripulito e dichiaratamente limitato. Il Sommelier vede POCHI candidati pertinenti, mai
 // l'intero catalogo; ciò che non si sa resta dichiarato come lacuna.
 //
-// Non è ancora collegato a `ai-sommelier`: il collegamento richiede una scelta esplicita del vino
-// (nessuna estrazione di nomi da testo libero) e va deciso insieme all'interfaccia. Qui sta il contratto
-// e la sua prova. Nessun prezzo, nessuna valutazione, nessun dato della Cantina privata.
+// WI-008: collegato a `ai-sommelier` con il contesto `{ tipo: "ricerca", produttore, nome, codice }` (richiesta ESPLICITA e
+// strutturata: nessuna estrazione di nomi dal testo libero). La function legge i candidati con `public.vini_canonici_cerca_servizio`
+// (porta di sola lettura del solo service_role, spenta con l'interruttore del catalogo) e li passa da qui. Nessun prezzo, nessuna
+// valutazione, nessun dato della Cantina privata. Con catalogo spento, vuoto o in errore il Sommelier resta quello di prima.
 
 // Deno richiede l estensione .ts; il typecheck del frontend, che importa il modulo nei test, no.
 // @ts-ignore TS5097
 import { pulisci, stimaToken } from "./sommelier-contesto.ts";
 
 export const LIMITI_RICERCA = {
+  /** Righe lette dalla ricerca: più di quelle inviate, per riconoscere gli omonimi oltre il quinto posto. */
+  candidatiLetti: 20,
   /** Candidati inviati al provider. */
   candidatiMax: 5,
   /** Tetto del blocco serializzato (~1.000 token). */
@@ -26,6 +29,7 @@ export type CandidatoRicercaIn = {
     produttore?: unknown;
     nome?: unknown;
     regione?: unknown;
+    paese?: unknown;
     denominazione?: unknown;
     tipo?: unknown;
     codiceLwin?: unknown;
@@ -33,7 +37,8 @@ export type CandidatoRicercaIn = {
   annata?: unknown;
   formato?: unknown;
   provenienza?: { fonte?: unknown; annunciAttivi?: unknown };
-  corrispondenza?: { esito?: unknown; punteggio?: unknown };
+  /** `perCodice`: la riga è stata trovata dal server a partire da un codice LWIN-7 richiesto (identità autorevole). */
+  corrispondenza?: { esito?: unknown; punteggio?: unknown; perCodice?: unknown };
   nonDisponibile?: unknown;
   attribuzione?: { testo?: unknown } | null;
 };
@@ -44,12 +49,16 @@ export type CandidatoSommelier = {
   annata: number | null;
   formato: string | null;
   regione: string | null;
+  paese: string | null;
   denominazione: string | null;
   /** Con LWIN = scheda del catalogo canonico (fonte documentata); altrimenti dato registrato su Vinea. */
   origine: "fonte_documentata" | "database_vinea";
   lwin: string | null;
   esito: string;
-  /** Solo `esatta` identifica il vino; ogni altro esito è una possibilità da confermare. */
+  /**
+   * Vero SOLO per il vino trovato dal codice LWIN-7 richiesto. Una coincidenza di produttore e nome, anche esatta, non è
+   * un'identità: va confermata dall'utente.
+   */
   identificato: boolean;
   lacune: string[];
   attribuzione: string | null;
@@ -91,22 +100,38 @@ export function costruisciContestoRicerca(candidati: readonly CandidatoRicercaIn
       annata: annataOnull(c.annata),
       formato: testoOnull(c.formato, 40),
       regione: testoOnull(c.identita.regione),
+      paese: testoOnull(c.identita.paese),
       denominazione: testoOnull(c.identita.denominazione),
       origine: lwin ? "fonte_documentata" : "database_vinea",
       lwin,
       esito,
-      identificato: esito === "esatta",
+      identificato: c.corrispondenza?.perCodice === true && lwin !== null,
       // LWIN-7 non fornisce annata, formato, vitigni né prezzi: restano lacune dichiarate.
       lacune: [...nonDisp, ...(lwin ? ["annata", "formato", "vitigni", "prezzo"] : ["prezzo"])],
       // Il testo di attribuzione CC BY non va troncato (oggi 143 caratteri): tetto con margine.
       attribuzione: testoOnull(c.attribuzione?.testo, 300),
     });
   }
+  // Omonimi: vini DISTINTI (LWIN diversi) con lo stesso produttore e nome. Si contano su TUTTE le righe lette, non solo su
+  // quelle che entrano nel blocco. Senza un codice richiesto nessuno è «il» vino: non si sceglie al posto dell'utente.
+  const chiave = (c: CandidatoSommelier) => `${c.produttore.toLowerCase()}|${c.nome.toLowerCase()}`;
+  const conteggi = new Map<string, number>();
+  for (const c of validi) conteggi.set(chiave(c), (conteggi.get(chiave(c)) ?? 0) + 1);
+  let omonimi = false;
+  for (const c of validi) {
+    if ((conteggi.get(chiave(c)) ?? 0) > 1) {
+      omonimi = true;
+      if (!c.identificato && c.esito === "esatta") c.esito = "probabile";
+    }
+  }
   const inclusi = validi.slice(0, LIMITI_RICERCA.candidatiMax);
   const avvertenze = [
     "Candidati trovati nel catalogo Vinea: non sono la bottiglia dell'utente e non sono una valutazione.",
+    ...(omonimi
+      ? ["Più candidati hanno lo stesso produttore e nome: sono vini distinti (omonimi). Non scegliere al posto dell'utente."]
+      : []),
     ...(inclusi.some((c) => !c.identificato)
-      ? ["Solo l'esito esatta identifica il vino: gli altri vanno confermati dall'utente."]
+      ? ["Identifica il vino solo il candidato con identificato true (codice LWIN richiesto): gli altri vanno confermati dall'utente."]
       : []),
     ...(validi.length > inclusi.length
       ? [`Mostrati ${inclusi.length} candidati su ${validi.length}: elenco parziale.`]
@@ -146,4 +171,52 @@ export function serializzaContestoRicerca(contesto: ContestoRicerca): {
     testo = JSON.stringify(corrente);
   }
   return { testo, caratteri: testo.length, tokenStimati: stimaToken(testo) };
+}
+
+/**
+ * Istruzioni aggiuntive per il contesto di ricerca (vanno DOPO `PROMPT_ISTRUZIONI_CONTESTO`). Prescrittive e brevi: il blocco dati
+ * resta l'unica fonte; non si chiede al modello di cercare, solo di non andare oltre ciò che il catalogo ha.
+ */
+export const PROMPT_ISTRUZIONI_RICERCA =
+  " I dati sono candidati trovati nel catalogo Vinea per la ricerca dell'utente: un elenco parziale, non l'intero catalogo, e non sono la bottiglia dell'utente. " +
+  "Solo un candidato con identificato true identifica il vino; con più candidati, omonimi o esiti diversi da «esatta» elencali e chiedi all'utente quale intende, senza sceglierne uno. " +
+  "Con origine fonte_documentata cita l'attribuzione riportata quando usi quei dati. " +
+  "Il catalogo non fornisce annata, formato, vitigni, prezzo né valutazioni: se sono fra le lacune dillo e non inventarli.";
+
+const LIVELLO_ESITO: Record<string, string> = {
+  identificativo: "esatta",
+  esatto: "probabile",
+  prefisso: "probabile",
+  testo: "probabile",
+  simile: "possibile",
+};
+
+const oggetto = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/**
+ * Righe di `public.vini_canonici_cerca` → forma comune dei candidati. Whitelist di campi: qualunque altra colonna (prezzi o altro)
+ * non entra mai. Solo il livello «identificativo» (LWIN-7 richiesto e risolto dal server) diventa `esatta` e identifica;
+ * «esatto» (stesso produttore e nome), prefisso e testo sono `probabile`; simile `possibile`.
+ */
+export function candidatiDaRigheCanoniche(righe: unknown): CandidatoRicercaIn[] {
+  if (!Array.isArray(righe)) return [];
+  return righe.filter(oggetto).slice(0, 20).map((r) => ({
+    identita: {
+      produttore: r.produttore,
+      nome: r.nome,
+      regione: r.territorio,
+      paese: r.paese,
+      denominazione: r.denominazione,
+      tipo: r.tipo,
+      codiceLwin: r.lwin7,
+    },
+    provenienza: { fonte: "catalogo_canonico" },
+    corrispondenza: {
+      esito: typeof r.livello === "string" ? (LIVELLO_ESITO[r.livello] ?? "possibile") : "possibile",
+      punteggio: r.punteggio,
+      perCodice: r.livello === "identificativo",
+    },
+    nonDisponibile: [],
+    attribuzione: { testo: r.attribuzione },
+  }));
 }

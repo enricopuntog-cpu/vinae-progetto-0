@@ -367,6 +367,26 @@ run_grid "wi007b promozione con trigger attivi e ricerca canonica" wi007b_promoz
 # simulazione della promozione. Transazione chiusa da ROLLBACK; il catalogo deve essere vuoto (guardia
 # nella griglia). Nessun import LWIN, nessuna regola approvata.
 run_grid "wi007 catalogo canonico: proiezione pubblica e simulazione" wi007_catalogo_canonico.sql 3
+# WI-008 (wi008a): l'impronta della logica di promozione copre le dipendenze di WI-007, le guardie e i trigger. La regola
+# viene approvata solo dentro la transazione (ROLLBACK); stessa guardia del catalogo vuoto e della regola in bozza.
+run_grid "wi008a impronta della promozione: dipendenze, guardie e trigger" wi008a_fingerprint_dipendenze.sql 3
+# WI-008 (wi008b): ranking esatto della ricerca canonica oltre 2.000 corrispondenze e limite per identità (40/min).
+# Proiezione accesa solo dentro la transazione (ROLLBACK); stessa guardia del catalogo vuoto.
+run_grid "wi008b ricerca canonica: ranking oltre 2.000 candidati e limite per identità" wi008b_ricerca_canonica_ranking_limite.sql 3
+# WI-008 (wi008c): simulazione, anteprima e lotto valutano il rapporto dei candidati una sola volta, con risultati
+# identici ai corpi precedenti (oracoli nella griglia); ROLLBACK.
+run_grid "wi008c promozione: una valutazione per chiamata, equivalenza con la logica precedente" wi008c_promozione_una_valutazione.sql 3
+# WI-008 (wi008e): scelta PERSONALE di una scheda del catalogo per un vino della propria Cantina (privata, reversibile,
+# verificata dal database; wine_links intatta). ROLLBACK, catalogo vuoto prima e dopo.
+run_grid "wi008e selezione personale della scheda del catalogo" wi008e_selezione_catalogo_personale.sql 3
+# WI-008 (wi008d): ricerca canonica con PostgREST e Auth veri (429 al minuto, raffica parallela, serializzazione per
+# identita, isolamento, porta di sola lettura del Sommelier, fonte revocata, ripristino dopo la finestra: attende il
+# minuto successivo). Fixture committate sul catalogo VUOTO e rimosse in trap, interruttore di nuovo spento.
+wi008d_pg="$(E2E_DB_URL="$E2E_DB_URL" E2E_SUPABASE_URL="$E2E_SUPABASE_URL" E2E_ANON_KEY="$E2E_ANON_KEY" \
+  E2E_SERVICE_KEY="$E2E_SERVICE_KEY" bash "$TESTS/wi008d_ricerca_canonica_postgrest.sh")" \
+  || { printf '%s\n' "$wi008d_pg" | tail -n 60; die "wi008d PostgREST ricerca canonica: fallita."; }
+printf '%s\n' "$wi008d_pg"
+summary "- $(printf '%s\n' "$wi008d_pg" | grep 'ricerca canonica:' | tail -n 1)"
 
 # Stessa famiglia su sessioni PostgreSQL realmente separate: due esecutori sullo stesso
 # prelievo (uno solo riceve il Transfer), annullamento del titolare contro presa in carico e

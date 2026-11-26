@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   LIMITI_RICERCA,
+  candidatiDaRigheCanoniche,
   costruisciContestoRicerca,
   serializzaContestoRicerca,
   type CandidatoRicercaIn,
@@ -40,10 +41,46 @@ describe("costruisciContestoRicerca", () => {
     expect(b?.lwin).toBeNull();
   });
 
-  it("solo l'esito esatta identifica; gli altri chiedono conferma", () => {
+  it("un esito descrittivo esatto NON identifica: serve il codice verificato dal server", () => {
     const c = costruisciContestoRicerca([cand(), cand({ nome: "B", corrispondenza: { esito: "possibile" } })]);
-    expect(c.candidati.map((x) => x.identificato)).toEqual([true, false]);
+    expect(c.candidati.map((x) => x.identificato)).toEqual([false, false]);
     expect(c.avvertenze.join(" ")).toContain("confermati");
+  });
+
+  it("identifica solo il candidato trovato per codice, che resta tale anche se ha omonimi", () => {
+    const c = costruisciContestoRicerca([
+      cand({ lwin: "1010001", corrispondenza: { esito: "esatta", perCodice: true } }),
+      cand({ lwin: "1010002" }),
+    ]);
+    expect(c.candidati.map((x) => [x.lwin, x.identificato, x.esito])).toEqual([
+      ["1010001", true, "esatta"],
+      ["1010002", false, "probabile"],
+    ]);
+    expect(c.avvertenze.join(" ")).toContain("omonimi");
+  });
+
+  it("«per codice» senza un LWIN valido non identifica", () => {
+    const [a] = costruisciContestoRicerca([cand({ corrispondenza: { esito: "esatta", perCodice: true } })]).candidati;
+    expect(a?.identificato).toBe(false);
+  });
+
+  it("un omonimo oltre il quinto posto viene comunque rilevato e dichiarato", () => {
+    const righe = Array.from({ length: 9 }, (_, i) => cand({ nome: i === 7 ? "Vino 0" : `Vino ${i}`, lwin: String(1010100 + i) }));
+    const c = costruisciContestoRicerca(righe);
+    expect(c.inclusi).toBe(5);
+    expect(c.avvertenze.join(" ")).toContain("omonimi");
+  });
+
+  it("dalle righe canoniche: solo il livello «identificativo» identifica; «esatto» resta da confermare", () => {
+    const riga = (lwin7: string, livello: string, nome = lwin7) => ({ produttore: "Gaja", nome, lwin7, livello });
+    const c = costruisciContestoRicerca(
+      candidatiDaRigheCanoniche([riga("1010001", "identificativo"), riga("1010002", "esatto"), riga("1010003", "prefisso")]),
+    );
+    expect(c.candidati.map((x) => [x.identificato, x.esito])).toEqual([
+      [true, "esatta"],
+      [false, "probabile"],
+      [false, "probabile"],
+    ]);
   });
 
   it("senza identità il candidato è scartato; esito e LWIN non validi non passano", () => {

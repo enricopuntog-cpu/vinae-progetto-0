@@ -10,6 +10,9 @@ import type {
   EsitoCorrispondenza,
   SintesiRicerca,
 } from "@/lib/vendi/foto-etichetta/candidati";
+import Link from "next/link";
+import { ChiediAlSommelier } from "@/components/vinea/ChiediAlSommelier";
+import { contestoRicercaDaCandidato } from "@/lib/phase10/sommelier-contesto-ui";
 
 export const ETICHETTA_ESITO: Record<EsitoCorrispondenza, string> = {
   esatta: "Stesso vino e stessa annata",
@@ -61,37 +64,61 @@ export function ElencoCandidati({
           ? "Un vino corrisponde. Sceglilo solo se è davvero il tuo."
           : "Più vini possibili: scegli quello giusto oppure nessuno."}
       </legend>
-      {candidati.map((c) => (
-        <label
-          key={c.id + (c.formato ?? "") + (c.annata ?? "")}
-          className="flex cursor-pointer items-start gap-2 rounded-xl border border-border p-2 text-xs has-[:checked]:border-bordeaux"
-          data-testid={`${prefissoTest}-candidato-${c.id}`}
-        >
-          <input
-            type="radio"
-            name={nomeGruppo}
-            className="mt-0.5"
-            checked={selezionato === c.id}
-            onChange={() => onSeleziona(c.id)}
-          />
-          <span>
-            <b>{c.produttore}</b> — {c.nome}
-            {c.annata ? ` ${c.annata}` : ""}
-            {c.formato ? ` · ${c.formato}` : ""}
-            {c.canonico ? <span className="text-muted-foreground"> · LWIN {c.canonico.lwin7}</span> : null}
-            <br />
-            <span className="text-muted-foreground">
-              {ETICHETTA_ESITO[c.esito]}
-              {testoLuogo(c)}
-            </span>
-            {c.omonimi ? (
-              <span className="block text-muted-foreground" data-testid={`${prefissoTest}-omonimo-${c.id}`}>
-                Altre schede hanno lo stesso nome: controlla codice LWIN, territorio e denominazione prima di sceglierla.
+      {candidati.map((c) => {
+        const domanda = contestoRicercaDaCandidato(c);
+        return (
+          <div key={c.id + (c.formato ?? "") + (c.annata ?? "")}>
+            <label
+              className="flex cursor-pointer items-start gap-2 rounded-xl border border-border p-2 text-xs has-[:checked]:border-bordeaux"
+              data-testid={`${prefissoTest}-candidato-${c.id}`}
+            >
+              <input
+                type="radio"
+                name={nomeGruppo}
+                className="mt-0.5"
+                checked={selezionato === c.id}
+                onChange={() => onSeleziona(c.id)}
+              />
+              <span>
+                <b>{c.produttore}</b> — {c.nome}
+                {c.annata ? ` ${c.annata}` : ""}
+                {c.formato ? ` · ${c.formato}` : ""}
+                {c.canonico ? <span className="text-muted-foreground"> · LWIN {c.canonico.lwin7}</span> : null}
+                <br />
+                <span className="text-muted-foreground">
+                  {ETICHETTA_ESITO[c.esito]}
+                  {testoLuogo(c)}
+                </span>
+                {c.omonimi ? (
+                  <span className="block text-muted-foreground" data-testid={`${prefissoTest}-omonimo-${c.id}`}>
+                    Altre schede hanno lo stesso nome: controlla codice LWIN, territorio e denominazione prima di sceglierla.
+                  </span>
+                ) : null}
               </span>
+            </label>
+            {domanda?.tipo === "ricerca" ? (
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                {/* In una scheda nuova: i dati già scritti nel wizard restano dove sono. */}
+                <Link
+                  href={`/vino-catalogo/${domanda.codice}`}
+                  target="_blank"
+                  rel="noopener"
+                  prefetch={false}
+                  className="text-xs underline"
+                  data-testid={`${prefissoTest}-scheda-${c.id}`}
+                >
+                  Apri la scheda
+                </Link>
+                <ChiediAlSommelier
+                  contesto={domanda}
+                  etichetta="Chiedi al Sommelier"
+                  testId={`${prefissoTest}-sommelier-${c.id}`}
+                />
+              </div>
             ) : null}
-          </span>
-        </label>
-      ))}
+          </div>
+        );
+      })}
       {attribuzioni.length > 0 && (
         <p className="text-[11px] text-muted-foreground" data-testid={`${prefissoTest}-attribuzione`}>
           {attribuzioni.join(" · ")}
