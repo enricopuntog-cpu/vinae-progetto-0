@@ -30,7 +30,7 @@ export function CatalogoAdminClient() {
   const servizi = useMemo(() => (client ? serviziCatalogoAdmin(client) : null), [client]);
   const [scheda, setScheda] = useState<string | null>(null);
 
-  if (!servizi) return <ErrorState description="Il catalogo non è configurato in questo ambiente." />;
+  if (!servizi) return <ErrorState message="Il catalogo non è configurato in questo ambiente." />;
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-4" data-testid="catalogo-admin">

@@ -39,7 +39,7 @@ export function Letto<T>({
   children: (dati: T) => ReactNode;
 }) {
   if (!esito) return <LoadingBlock />;
-  if (!esito.ok) return <ErrorState description={esito.error} onRetry={ricarica} />;
+  if (!esito.ok) return <ErrorState message={esito.error} onRetry={ricarica} />;
   return <>{children(esito.data)}</>;
 }
 
