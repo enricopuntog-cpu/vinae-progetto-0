@@ -142,6 +142,47 @@ select pg_temp.muta('D07', 'rimuovere la guardia dei collegamenti invalida l''ap
   $$drop trigger wine_links_insert_guard on catalog.wine_links$$, true);
 
 -- ---------------------------------------------------------------------------------------------
+-- WI-009 (audit WI-008, F-07): stato di fusione e coppie «possibile duplicato»
+-- ---------------------------------------------------------------------------------------------
+do $$
+begin
+  perform pg_temp.registra('A05', 'le cinque dipendenze aggiunte da WI-009 esistono tutte',
+    (select count(*) from unnest(array[
+      'catalog.merge_state_check(text,uuid,text,uuid,bigint,text,uuid,bigint)', 'catalog.merge_authorized(text,uuid,uuid,bigint)',
+      'catalog.revert_authorized(text,uuid,uuid,bigint)', 'catalog.duplicate_candidates_guard()',
+      'catalog.duplicate_candidates_insert_guard()']) s where to_regprocedure(s) is not null) = 5);
+end $$;
+
+select pg_temp.muta('M01', 'svuotare merge_state_check() (transizioni di fusione libere) invalida l''approvazione',
+  $$create or replace function catalog.merge_state_check(p_kind text, p_id uuid, p_old_status text, p_old_into uuid, p_old_mid bigint,
+      p_new_status text, p_new_into uuid, p_new_mid bigint) returns void language plpgsql set search_path = '' as 'begin return; end'$$, true);
+select pg_temp.muta('M02', 'merge_authorized() che autorizza tutto invalida l''approvazione',
+  $$create or replace function catalog.merge_authorized(p_kind text, p_from uuid, p_into uuid, p_merge_id bigint)
+      returns boolean language sql stable set search_path = '' as 'select true'$$, true);
+select pg_temp.muta('M03', 'revert_authorized() che autorizza tutto invalida l''approvazione',
+  $$create or replace function catalog.revert_authorized(p_kind text, p_from uuid, p_into uuid, p_merge_id bigint)
+      returns boolean language sql stable set search_path = '' as 'select true'$$, true);
+select pg_temp.muta('M0' || n, 'cambiare il corpo di ' || g || '() invalida l''approvazione',
+  format($q$create or replace function catalog.%I() returns trigger language plpgsql set search_path = ''
+            as 'begin return new; end'$q$, g), true)
+  from (values (4, 'duplicate_candidates_guard'), (5, 'duplicate_candidates_insert_guard')) t(n, g);
+select pg_temp.muta('T01', 'disattivare la guardia di aggiornamento delle coppie invalida l''approvazione',
+  $$alter table catalog.duplicate_candidates disable trigger duplicate_candidates_guard$$, true);
+select pg_temp.muta('T02', 'disattivare la guardia di inserimento delle coppie invalida l''approvazione',
+  $$alter table catalog.duplicate_candidates disable trigger duplicate_candidates_insert_guard$$, true);
+select pg_temp.muta('T03', 'rimuovere la guardia di inserimento delle coppie invalida l''approvazione',
+  $$drop trigger duplicate_candidates_insert_guard on catalog.duplicate_candidates$$, true);
+select pg_temp.muta('T04', 'aggiungere un trigger a catalog.duplicate_candidates invalida l''approvazione',
+  $$create trigger wi009_extra before insert on catalog.duplicate_candidates
+      for each row execute function catalog.duplicate_candidates_insert_guard()$$, true);
+-- Perimetro NON indiscriminato: il resto dello schema non entra nell'impronta.
+select pg_temp.muta('N05', 'un indice su catalog.duplicate_candidates non cambia l''impronta',
+  $$create index wi009_tmp_idx on catalog.duplicate_candidates (created_at)$$, false);
+select pg_temp.muta('N06', 'un trigger su una tabella non coperta (canonical_events) non cambia l''impronta',
+  $$create trigger wi009_extra_ev before insert on catalog.canonical_events
+      for each row execute function catalog.duplicate_candidates_insert_guard()$$, false);
+
+-- ---------------------------------------------------------------------------------------------
 -- Effetto sulla promozione: con la dipendenza alterata, la promozione reale è rifiutata
 -- ---------------------------------------------------------------------------------------------
 do $$
