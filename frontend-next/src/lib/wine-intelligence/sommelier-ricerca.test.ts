@@ -118,3 +118,29 @@ describe("costruisciContestoRicerca", () => {
     expect(c.candidati).toEqual([]);
   });
 });
+
+describe("WI-011 — schede native del catalogo Vinea nel Sommelier", () => {
+  const riga = {
+    vino_id: "11000000-0000-4000-8000-000000000001",
+    produttore: "Cantina Aurelia",
+    nome: "Rosso del Faro",
+    lwin7: null,
+    livello: "identificativo",
+    attribuzione: "Scheda del catalogo Vinea, verificata da un curatore.",
+  };
+
+  it("trovata per codice: identifica il vino, con origine distinta dalla fonte LWIN e dal dato registrato", () => {
+    const [c] = costruisciContestoRicerca(candidatiDaRigheCanoniche([riga])).candidati;
+    expect(c?.identificato).toBe(true);
+    expect(c?.lwin).toBeNull();
+    expect(c?.origine).toBe("catalogo_vinea_curato");
+    expect(c?.lacune).toEqual(["annata", "formato", "vitigni", "prezzo"]);
+    expect(c?.attribuzione).toContain("curatore");
+  });
+
+  it("trovata per nome: non identifica", () => {
+    const [c] = costruisciContestoRicerca(candidatiDaRigheCanoniche([{ ...riga, livello: "esatto" }])).candidati;
+    expect(c?.identificato).toBe(false);
+    expect(c?.origine).toBe("catalogo_vinea_curato");
+  });
+});

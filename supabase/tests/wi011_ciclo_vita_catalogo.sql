@@ -310,19 +310,22 @@ select pg_temp.rec(34, 'regola accesa e collegamento approvato: la sola proposta
   pg_temp.f('la') || ' ' || pg_temp.f('pa'));
 update catalog.intake_settings set auto_close_known_enabled = false;
 delete from private.rate_limit_buckets where scope = 'catalogo-proposte';
-select pg_temp.come('authenticated', pg_temp.f('a')::uuid,
-  $q$select public.catalogo_proponi('correzione', '{"produttore":"Cantina Wi011 Aurelia","nome":"Rosso del Faro","annata":2019,"regione":"Toscana","paese":"Italia"}'::jsonb, true, 'wi011-ignoto')$q$);
+insert into fx values ('pc', pg_temp.come('authenticated', pg_temp.f('a')::uuid,
+  $q$select public.catalogo_proponi('correzione', '{"produttore":"Cantina Wi011 Aurelia","nome":"Rosso del Faro","annata":2019,"regione":"Toscana","paese":"Italia"}'::jsonb, true, 'wi011-ignoto')$q$));
 select pg_temp.rec(35, 'a regola spenta anche il collegamento autorevole resta da rivedere',
-  not exists (select 1 from catalog.contributions where first_origin = 'correzione' and status <> 'aperta'));
+  not exists (select 1 from catalog.contributions where first_origin = 'correzione' and status <> 'aperta'), pg_temp.f('pc'));
 
 -- Rivendicazione con la fonte del curatore: nasce proposta e il valore attuale resta distinto.
 insert into fx values ('cl', pg_temp.json(pg_temp.come('authenticated', pg_temp.f('admin')::uuid,
   format('select public.catalogo_admin_azione(''attributo_proponi'', ''{"attributo":"grapes","soggetto":"wine","soggetto_id":"%s","valore":["Rossese"]}'', ''Scheda del produttore'')::text', pg_temp.f('w1')))) ->> 'id');
-select pg_temp.rec(36, 'attributo: proposto, visibile in coda, accettato solo con una seconda decisione',
-  (select status from catalog.attribute_claims where id = pg_temp.f('cl')::bigint) = 'proposed'
-  and pg_temp.come('authenticated', pg_temp.f('admin')::uuid,
-        format('select public.catalogo_admin_azione(''attributo_decidi'', ''{"id":%s,"decisione":"accepted"}'')::text', pg_temp.f('cl'))) like 'OK:%'
-  and (select status from catalog.attribute_claims where id = pg_temp.f('cl')::bigint) = 'accepted');
+-- La decisione è un'istruzione a sé: una sola istruzione leggerebbe lo stato di prima della propria scrittura.
+insert into fx select 'cl_prima', status from catalog.attribute_claims where id = pg_temp.f('cl')::bigint;
+insert into fx values ('cl_ok', pg_temp.come('authenticated', pg_temp.f('admin')::uuid,
+  format('select public.catalogo_admin_azione(''attributo_decidi'', ''{"id":%s,"decisione":"accepted"}'')::text', pg_temp.f('cl'))));
+select pg_temp.rec(36, 'attributo: nasce proposto ed è accettato solo con una seconda decisione',
+  pg_temp.f('cl_prima') = 'proposed' and pg_temp.f('cl_ok') like 'OK:%'
+  and (select status from catalog.attribute_claims where id = pg_temp.f('cl')::bigint) = 'accepted',
+  coalesce(pg_temp.f('cl_prima'), '?') || ' ' || coalesce(pg_temp.f('cl_ok'), '?'));
 
 -- ---------------------------------------------------------------------------------------------
 -- 6. LWIN ufficiale arrivato dopo

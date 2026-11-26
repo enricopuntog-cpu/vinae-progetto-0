@@ -172,7 +172,8 @@ const leggiRichiestaContesto = (grezzo: unknown): EsitoContesto => {
     const produttore = campo(c.produttore);
     const nome = campo(c.nome);
     const codice = c.codice === undefined || c.codice === null ? "" : typeof c.codice === "string" ? c.codice.trim() : null;
-    if (produttore === null || nome === null || codice === null || (codice !== "" && !/^[0-9]{7}$/.test(codice))) {
+    // WI-011: il codice di una scheda è il LWIN-7 oppure l'UUID del vino canonico (schede senza LWIN).
+    if (produttore === null || nome === null || codice === null || (codice !== "" && !/^[0-9]{7}$/.test(codice) && !UUID.test(codice))) {
       return { ok: false, status: 400, corpo: { error: "Contesto non valido." } };
     }
     // Serve almeno un nome o un identificativo: una ricerca vuota non interroga il catalogo.

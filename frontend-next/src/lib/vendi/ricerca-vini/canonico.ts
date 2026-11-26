@@ -20,6 +20,7 @@ import type {
   SorgenteCandidati,
 } from "@/lib/vendi/foto-etichetta/candidati";
 import { codiceErrore } from "@/lib/errore-per-log";
+import { LWIN7, UUID_SCHEDA } from "@/lib/wine-intelligence/codice-scheda";
 import { livelliDiRicerca } from "./filtri";
 import { MESSAGGIO_RICERCA_NON_DISPONIBILE } from "./sorgenti";
 
@@ -33,7 +34,6 @@ const LIVELLI = ["identificativo", "esatto", "prefisso", "testo", "simile"] as c
 
 const testo = (v: unknown): string => (typeof v === "string" ? v : "");
 const testoOnull = (v: unknown): string | null => testo(v).trim() || null;
-const LWIN7 = /^[0-9]{7}$/;
 
 /** Una riga della RPC → candidato; `null` se manca l'identità (riga scartata, mai completata a caso). */
 export function candidatoDaRigaCanonica(riga: unknown): CandidatoVino | null {
@@ -42,8 +42,10 @@ export function candidatoDaRigaCanonica(riga: unknown): CandidatoVino | null {
   const produttore = testo(r.produttore).trim();
   const nome = testo(r.nome).trim();
   const id = testo(r.vino_id);
-  const lwin7 = testo(r.lwin7);
-  if (!id || !produttore || !nome || !LWIN7.test(lwin7)) return null;
+  // WI-011: senza LWIN la scheda è identificata dall'UUID; un codice presente ma malformato resta una riga da scartare.
+  const lwin7 = r.lwin7 === null ? null : testo(r.lwin7);
+  if (!id || !produttore || !nome) return null;
+  if (lwin7 === null ? !UUID_SCHEDA.test(id) : !LWIN7.test(lwin7)) return null;
   const livello = LIVELLI.find((l) => l === r.livello);
   const punteggio = typeof r.punteggio === "number" && Number.isFinite(r.punteggio) ? r.punteggio : null;
   const territorio = testoOnull(r.territorio);
@@ -65,6 +67,7 @@ export function candidatoDaRigaCanonica(riga: unknown): CandidatoVino | null {
     annunci: 0,
     canonico: {
       lwin7,
+      codice: lwin7 ?? id,
       paese: testoOnull(r.paese),
       territorio,
       fonteNome: testoOnull(r.fonte_nome),

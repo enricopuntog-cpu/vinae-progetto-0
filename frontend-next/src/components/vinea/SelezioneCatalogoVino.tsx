@@ -15,6 +15,7 @@ import { useRicercaCandidati } from "@/hooks/useRicercaCandidati";
 import { rimuoviSchedaCatalogo, scegliSchedaCatalogo } from "@/lib/cantina/selezione-catalogo";
 import { contestoRicercaDaCandidato } from "@/lib/phase10/sommelier-contesto-ui";
 import { sorgenteCanonica } from "@/lib/vendi/ricerca-vini/canonico";
+import { LWIN7 } from "@/lib/wine-intelligence/codice-scheda";
 
 type Props = {
   client: SupabaseClient;
@@ -23,7 +24,7 @@ type Props = {
   nome: string;
   disponibile: boolean;
   scelta: string | null;
-  onCambio: (lwin7: string | null) => void;
+  onCambio: (codice: string | null) => void;
 };
 
 export function SelezioneCatalogoVino({ client, wineSlug, produttore, nome, disponibile, scelta, onCambio }: Props) {
@@ -39,7 +40,7 @@ export function SelezioneCatalogoVino({ client, wineSlug, produttore, nome, disp
   if (!scelta && !disponibile) return null;
 
   const conferma = async () => {
-    const codice = selezionato?.canonico?.lwin7;
+    const codice = selezionato?.canonico?.codice;
     if (!codice) return;
     setInCorso(true);
     setErrore(null);
@@ -65,14 +66,16 @@ export function SelezioneCatalogoVino({ client, wineSlug, produttore, nome, disp
     onCambio(null);
   };
 
-  const domanda = scelta ? contestoRicercaDaCandidato({ produttore, nome, canonico: { lwin7: scelta } }) : null;
+  const domanda = scelta ? contestoRicercaDaCandidato({ produttore, nome, canonico: { codice: scelta } }) : null;
 
   return (
     <div className="rounded-xl border border-border bg-card p-2 text-xs" data-testid={prefisso}>
       {scelta ? (
         <>
           <p>
-            <span className="font-semibold">Scheda del catalogo scelta da te: LWIN {scelta}.</span>{" "}
+            <span className="font-semibold">
+              {LWIN7.test(scelta) ? `Scheda del catalogo scelta da te: LWIN ${scelta}.` : "Scheda del catalogo Vinea scelta da te."}
+            </span>{" "}
             <span className="text-muted-foreground">
               È una tua indicazione, visibile solo a te: non è una verifica di Vinea e non modifica i dati del vino.
             </span>

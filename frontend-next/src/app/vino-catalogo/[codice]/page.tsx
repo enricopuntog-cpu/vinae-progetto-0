@@ -16,14 +16,14 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function Page({ params }: { params: Promise<{ lwin7: string }> }) {
-  const { lwin7 } = await params;
-  const esito = await leggiSchedaCanonica(await getSupabaseServerClient(), lwin7);
-  if (esito.stato === "trovata") return <SchedaVinoCatalogo scheda={esito.scheda} codiceRichiesto={lwin7} />;
+export default async function Page({ params }: { params: Promise<{ codice: string }> }) {
+  const { codice } = await params;
+  const esito = await leggiSchedaCanonica(await getSupabaseServerClient(), codice);
+  if (esito.stato === "trovata") return <SchedaVinoCatalogo scheda={esito.scheda} codiceRichiesto={codice} />;
   if (esito.stato === "assente") notFound();
   if (esito.stato === "accesso") {
-    // `lwin7` qui è già sette cifre (altrimenti l'esito è «assente»): il percorso di rientro è relativo e chiuso.
-    const rientro = new URLSearchParams({ [PARAMETRO_NEXT]: `/vino-catalogo/${lwin7}` }).toString();
+    // `codice` qui è già un LWIN-7 o un UUID (altrimenti l'esito è «assente»): il percorso di rientro è relativo e chiuso.
+    const rientro = new URLSearchParams({ [PARAMETRO_NEXT]: `/vino-catalogo/${codice}` }).toString();
     return (
       <div className="mx-auto max-w-2xl p-6 text-sm" data-testid="scheda-catalogo-accesso">
         <p>La scheda del catalogo è riservata agli utenti registrati.</p>
