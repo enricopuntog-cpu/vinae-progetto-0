@@ -22,7 +22,15 @@ import {
   estraiJson,
   requestIdOpaco,
 } from "../_shared/ai-provider.ts";
-import { apriPorta, chiusa, json, leggiCorpo, testo } from "../_shared/ai-gate.ts";
+import {
+  apriPorta,
+  chiusa,
+  consumaBudget,
+  json,
+  leggiCorpo,
+  registraEsitoFornitore,
+  testo,
+} from "../_shared/ai-gate.ts";
 
 // Identico a `LISTING_SYSTEM` (`backend/ai_routes.py:244-248`). L'ultima frase
 // — «Non inventare dati non deducibili» — è l'unico presidio che impedisce a un
@@ -89,7 +97,7 @@ export const suggerimentoDa = (parsed: Record<string, unknown>): Suggerimento =>
 Deno.serve(async (request) => {
   const porta = await apriPorta(request, "ai:catalogo");
   if (chiusa(porta)) return porta.risposta;
-  const { cors } = porta;
+  const { cors, supabase } = porta;
 
   const corpo = await leggiCorpo(request);
   const ocrText = corpo ? testo(corpo.ocr_text, OCR_MAX) : null;
@@ -103,18 +111,24 @@ Deno.serve(async (request) => {
   if (ocrText) parti.push(`OCR etichetta:\n${ocrText}`);
   if (hint) parti.push(`Indicazione utente: ${hint}`);
 
+  const senzaBudget = await consumaBudget(supabase, "ai:catalogo", cors);
+  if (senzaBudget) return senzaBudget;
+
   try {
     const grezzo = await creaAiProvider("catalogo").completeText({
       system: SYSTEM,
       prompt: parti.join("\n\n"),
       requestId: requestIdOpaco("catalogo"),
     });
+    // Il fornitore ha risposto: anche un formato inutilizzabile non è un suo guasto.
+    await registraEsitoFornitore(supabase, "ai:catalogo", true);
     return json(suggerimentoDa(estraiJson(grezzo)), 200, cors);
   } catch (errore) {
     if (errore instanceof AiFormatError) {
       return json({ error: "Il servizio AI ha restituito un formato non valido." }, 502, cors);
     }
     if (errore instanceof AiProviderError) {
+      await registraEsitoFornitore(supabase, "ai:catalogo", false);
       return json({ error: "Il servizio AI non è al momento disponibile." }, 503, cors);
     }
     console.error("[ai-catalogo] errore non previsto");

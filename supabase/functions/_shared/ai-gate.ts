@@ -52,8 +52,12 @@ const env = (name: string): string => {
 //   sessione: chi ne pubblica dieci in un'ora sta facendo un'altra cosa.
 //
 // Restano vincolanti e non sono parametri di questo file: finestra oraria per
-// tutti e tre, nessuna eccezione per `admin`, nessun tetto secondario nostro
-// oltre al rate limit per la v0.
+// tutti e tre e nessuna eccezione per `admin`.
+//
+// WI-010: la clausola della v0 «nessun tetto secondario nostro oltre al rate
+// limit» è superata dal budget globale richiesto dal founder il 26 novembre 2026
+// (vedi `consumaBudget`). I valori del tetto non stanno qui e non hanno un
+// default: finché non sono configurati nel database nessuna chiamata parte.
 
 export const FINESTRA_SECONDI = 3600;
 
@@ -186,6 +190,35 @@ export const apriPorta = async (
   }
 
   return { cors, supabase, userId };
+};
+
+// ---------------------------------------------------------------------------
+// WI-010 — budget globale e interruttore sui guasti del fornitore
+// ---------------------------------------------------------------------------
+// Si consuma SUBITO PRIMA della chiamata al fornitore, quindi dopo il limite per utente (un utente solo non può
+// bruciare il tetto di tutti) e solo per richieste valide. Chiuso per difetto: budget non configurato, esaurito,
+// interruttore aperto, RPC assente o risposta inattesa = nessuna chiamata. Il motivo preciso resta nel log del
+// server: all utente basta sapere che le funzioni AI non sono disponibili per il budget.
+
+export const consumaBudget = async (supabase: SupabaseClient, scope: AiScope, cors: HeadersInit): Promise<Response | null> => {
+  const { data, error } = await supabase.rpc("ai_budget_consuma", { p_scope: scope });
+  if (!error && data === "consentito") return null;
+  console.error("[ai] budget non concesso", { scope, esito: error ? error.code : String(data) });
+  return json(
+    { error: "Le funzioni AI non sono disponibili in questo momento.", motivo: "budget" },
+    503,
+    { ...cors, "Retry-After": String(FINESTRA_SECONDI) },
+  );
+};
+
+/** Alimenta l interruttore. Un errore qui non cambia la risposta all utente: resta nel log. */
+export const registraEsitoFornitore = async (supabase: SupabaseClient, scope: AiScope, riuscita: boolean): Promise<void> => {
+  try {
+    const { error } = await supabase.rpc("ai_budget_esito", { p_scope: scope, p_riuscita: riuscita });
+    if (error) console.error("[ai] esito del fornitore non registrato", { code: error.code });
+  } catch {
+    console.error("[ai] esito del fornitore non registrato");
+  }
 };
 
 /**
