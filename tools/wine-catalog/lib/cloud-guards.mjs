@@ -299,6 +299,12 @@ export function finishDeadlineMs(finishTimeoutMin) {
  * la verifica è `failed`/`verification_deadline` (exit ≠ 0). I conteggi V05/V07/V08 usano una sola scansione.
  */
 export const VERIFY_CHECK_DEADLINE_MS = 240_000;
+/**
+ * `statement_timeout` del SERVER per le sole query della verifica post-commit (WI-008 / J3). Prima la verifica ereditava il limite dei
+ * lotti (di norma 120 s), che il server applicava ben prima della scadenza client del controllo. Come per il finish, il server scade per
+ * primo: resta un limite esplicito su entrambi i lati, e a verifica conclusa tornano i limiti dei lotti.
+ */
+export const VERIFY_STATEMENT_TIMEOUT_MS = VERIFY_CHECK_DEADLINE_MS - 30_000;
 export const VERIFY_DEADLINE_MS = 600_000;
 /** Scadenza complessiva della conclusione del finish (stop del monitor, riconciliazione, misura del WAL). */
 export const CONCLUDE_DEADLINE_MS = 90_000;

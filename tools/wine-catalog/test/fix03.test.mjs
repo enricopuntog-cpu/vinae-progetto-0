@@ -12,6 +12,7 @@ import { loadToDatabase } from '../lib/load.mjs';
 import {
   createWalMonitor, concludeFinish, finalizeWal, buildFinishOutcome, safeStopMonitor, runVerification, withDeadline, finishDeadlineMs,
   sanitizeRunIdentity, buildReconcile, MONITOR_SQL, WAL_OUTCOMES, FINISH_DEADLINE_MARGIN_MS, RECONCILE_RUNBOOK_SECTION, VERIFICATION_NOT_RUN,
+  VERIFY_CHECK_DEADLINE_MS, VERIFY_STATEMENT_TIMEOUT_MS,
 } from '../lib/cloud-guards.mjs';
 import { classifyFinishError, extractSqlState } from '../lib/finish-error.mjs';
 import { postCommitChecks, settleCloudRun, writeReportFile } from '../lib/cloud-outcome.mjs';
@@ -302,7 +303,8 @@ test('R3 — limiti dei lotti ripristinati SOLO se la sessione è integra; sessi
   const verifyOk = async () => ({ ok: true, checks: [{ id: 'V01', ok: true }] });
   const r1 = await postCommitChecks({ db: intact, batchLimits: batch, verifyArgs: {}, verify: verifyOk });
   assert.equal(r1.session_limits, 'restored');
-  assert.deepEqual(limitsCalls, [['1000', '2000', '3000']]);
+  // WI-008 / J3: prima i limiti della verifica, poi (a verifica finita) quelli dei lotti
+  assert.deepEqual(limitsCalls, [[String(VERIFY_STATEMENT_TIMEOUT_MS), '2000', '3000'], ['1000', '2000', '3000']]);
   assert.equal(r1.verification.status, 'completed');
   assert.equal(r1.verification.ok, true);
   // sessione marcata interrotta
@@ -558,6 +560,37 @@ test('revisione — scadenza del ripristino dei limiti: sessione incerta e verif
   timers.fireAll();
   const r = await p;
   assert.deepEqual([r.session_limits, r.verification.status, db.state.broken], ['restore_failed', 'not_run', true]);
+});
+
+// --- WI-008 / J3 — la verifica post-commit ha un limite lato SERVER coerente con la scadenza lato client -------------------------
+
+test('WI-008 / J3 — la verifica gira con uno statement_timeout del server sotto la scadenza client del singolo controllo (non con i 120 s dei lotti)', async () => {
+  assert.ok(VERIFY_STATEMENT_TIMEOUT_MS > 120_000, 'più lungo dello statement_timeout dei lotti, che annullava la verifica per primo');
+  assert.ok(VERIFY_CHECK_DEADLINE_MS - VERIFY_STATEMENT_TIMEOUT_MS >= 30_000, 'il server scade per primo: limite esplicito su entrambi i lati');
+  const events = [];
+  const db = { state: { broken: false }, assertIntact: async () => {}, setLimits: async (t, p) => events.push(`limiti ${p[0]}`), query: async () => ({ rows: [] }) };
+  await postCommitChecks({ db, batchLimits: { statementTimeoutMs: 120_000, lockTimeoutMs: 30_000, idleTxTimeoutMs: 60_000 }, verifyArgs: {}, verify: async () => { events.push('verifica'); return { ok: true, checks: [{ id: 'V01', ok: true }] }; } });
+  assert.deepEqual(events, [`limiti ${VERIFY_STATEMENT_TIMEOUT_MS}`, 'verifica', 'limiti 120000']);
+});
+
+test('WI-008 / J3 — scadenza client della verifica: la query è ancora in volo, la sessione non si riusa e l\'esito non è positivo', async () => {
+  const calls = [];
+  const db = { state: { broken: false }, assertIntact: async () => {}, setLimits: async (t, p) => calls.push(p[0]), query: async () => ({ rows: [] }) };
+  const scaduta = async () => { const e = new Error('scadenza'); e.code = 'WI_DEADLINE'; throw e; };
+  const r = await postCommitChecks({ db, batchLimits: { statementTimeoutMs: 120_000, lockTimeoutMs: 1, idleTxTimeoutMs: 1 }, verifyArgs: {}, verify: scaduta });
+  assert.deepEqual([r.verification.status, r.verification.ok, r.verification.reason], ['failed', false, 'verification_deadline']);
+  assert.deepEqual(calls, [String(VERIFY_STATEMENT_TIMEOUT_MS)], 'nessuna query sulla sessione incerta');
+  assert.deepEqual([r.session_limits, db.state.broken], ['skipped_session_not_intact', true]);
+});
+
+test('WI-008 / J3 — il server annulla un controllo (57014): sessione integra, limiti dei lotti ripristinati, verifica fallita', async () => {
+  const calls = [];
+  const db = { state: { broken: false }, assertIntact: async () => {}, setLimits: async (t, p) => calls.push(p[0]), query: async () => ({ rows: [] }) };
+  const annullata = async () => { const e = new Error('canceling statement due to statement timeout'); e.errno = '57014'; throw e; };
+  const r = await postCommitChecks({ db, batchLimits: { statementTimeoutMs: 120_000, lockTimeoutMs: 1, idleTxTimeoutMs: 1 }, verifyArgs: {}, verify: annullata });
+  assert.equal(r.verification.ok, false);
+  assert.equal(r.verification.status, 'failed');
+  assert.deepEqual([r.session_limits, calls.at(-1)], ['restored', '120000']);
 });
 
 // --- il runner resta indipendente dal catalogo B -----------------------------------------------------------------------------------
