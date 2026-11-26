@@ -100,6 +100,37 @@ ai trigger di `duplicate_candidates`. Non cambia il comportamento della regola: 
 **Una volta distribuita, il valore `b87e7b51…` del §1 non va più approvato**: si legge il nuovo con `00_stato.sql` e
 lo si sottopone al founder. Finché la migration non è distribuita non si apre alcuna finestra.
 
+**Aggiornamento del 26/11/2026 (Production letta dopo il merge, ledger 136):** F-07 è distribuita (`d887194`, impronta
+`3b526fac…`, mai approvata) e WI-011 (`ca719f1`) ha modificato `catalog.wines_guard`, coperta dall'impronta. Il valore
+corrente è **`64e038526a78f44070a54498fd0ff607`**; il digest della vista resta `b352be426a3a32762fb7fa5140b7ee88`.
+Anche `b87e7b51…` e `3b526fac…` **non vanno approvati**. La modifica di `wines_guard` ammette un solo passaggio (LWIN
+assente → LWIN ufficiale su un vino nativo con record di fonte valido) e fa parte del delta da rivalidare. Il valore
+si rilegge comunque con `00_stato.sql` prima di qualunque decisione.
+
+### 4.3 Procedura unica del founder (F-06 e F-08)
+
+Solo il founder può eseguirla: servono la password del proprietario del database, la chiave `age` offline e il
+pannello Supabase. **Nessuna password, chiave o credenziale va in chat o nel repository.** Non si ripristina nulla in
+Production e non si apre alcuna finestra.
+
+Una volta sola: installare il client `psql`; scaricare il certificato CA del progetto dal pannello (Database → SSL).
+
+1. **Backup recente:** GitHub → Actions → `Continuity - encrypted offsite backup` → *Run workflow*; attendere
+   l'esito verde e annotare l'id del run. (L'ultimo riuscito il 26/11 alle 11:00 UTC è `45806510709`: vale come
+   evidenza del meccanismo, non della finestra.)
+2. **Archivio:** scaricare da B2 `.age` e `.sha256` di quel run (continuità §«Ripristino da B2») e, su una macchina
+   isolata con la chiave offline:
+   `.github/scripts/offsite-restore-verify.sh <archivio.age> <chiave-age> <directory-vuota>`.
+   Decifra e controlla gli hash; **non tocca alcun database**.
+3. **Disco:** pannello Supabase → Compute and Disk: annotare dimensione e spazio libero (servono almeno 2 GB oltre al
+   database, 731 MB il 26/11).
+4. **Percorso `psql`:** il comando del §5.1 con `verifica_percorso.sql` (circa 4 minuti, sola lettura).
+5. **Da riportare:** riga SSL di `\conninfo`, utente, pid uguale all'inizio e alla fine, durata; id del run di
+   backup; messaggio finale dello script dell'archivio; numeri del disco.
+
+Restore sintetico (`ripristino.sh`, CI) e restore dell'archivio Production sono prove diverse: la seconda, in un
+progetto isolato, resta una decisione di costo.
+
 ### 4.2 Backup e ripristino: quale evidenza basta
 
 Non c'è PITR: il ripristino torna all'ultimo backup e perde ciò che è stato scritto dopo. Servono **tutte**:
