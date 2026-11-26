@@ -119,6 +119,8 @@ let chiamateProvider: ChiamataProvider[];
 let fetchEstranei: string[];
 let testoRisposta: string;
 let providerRispondeKo: boolean;
+/** WI-010: il fornitore apre lo stream, manda un pezzo e poi si rompe. */
+let providerSiInterrompe = false;
 
 const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
   const url = String(input instanceof Request ? input.url : input);
@@ -133,6 +135,21 @@ const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Pr
     prompt: body.messages.find((m) => m.role === "user")?.content ?? "",
   });
   if (providerRispondeKo) return new Response("boom", { status: 500 });
+  if (providerSiInterrompe) {
+    let letture = 0;
+    const rotto = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (letture++ === 0) {
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { content: "inizio" } }] })}
+
+`));
+        } else {
+          controller.error(new Error("connessione del fornitore persa"));
+        }
+      },
+    });
+    return new Response(rotto, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+  }
   const pezzi = testoRisposta.match(/[\s\S]{1,200}/g) ?? [];
   const sse = pezzi.map((p) => `data: ${JSON.stringify({ choices: [{ delta: { content: p } }] })}\n\n`).join("") + "data: [DONE]\n\n";
   return new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
@@ -814,6 +831,30 @@ describe("WI-010 — budget globale e interruttore (chiusi per difetto)", () => 
     const risposta = await chiedi();
     expect(risposta.status).toBe(503);
     expect(esiti()).toEqual([{ p_scope: "ai:chat", p_riuscita: false }]);
+  });
+
+  it("guasto del fornitore a metà stream: registrato per l'interruttore", async () => {
+    providerSiInterrompe = true;
+    try {
+      const risposta = await chiedi();
+      expect(risposta.status).toBe(200);
+      const ricevuti = await eventi(risposta);
+      expect(ricevuti.at(-1)).toHaveProperty("error");
+      expect(esiti()).toEqual([{ p_scope: "ai:chat", p_riuscita: false }]);
+    } finally {
+      providerSiInterrompe = false;
+    }
+  });
+
+  it("il client che abbandona lo stream non è un guasto del fornitore (un utente solo non apre l'interruttore)", async () => {
+    testoRisposta = "parola ".repeat(600);
+    const risposta = await chiedi();
+    expect(risposta.status).toBe(200);
+    await risposta.body!.cancel();
+    // Il lavoro di inoltro prosegue in background: si lascia concludere prima di guardare.
+    await new Promise((r) => setTimeout(r, 100));
+    expect(esiti().filter((a) => a.p_riuscita === false)).toEqual([]);
+    expect(rpcLog.some((r) => r.name === "sommelier_scambio_registra")).toBe(false);
   });
 
   it("una richiesta non valida non consuma budget", async () => {

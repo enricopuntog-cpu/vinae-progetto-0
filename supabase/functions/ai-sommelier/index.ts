@@ -371,10 +371,16 @@ Deno.serve(async (request) => {
     const writer = writable.getWriter();
     const raccolti: string[] = [];
     let rimanenti = RISPOSTA_MAX_CHARS;
+    const lettore = sorgente.getReader();
+    // WI-010: l'interruttore è globale, quindi conta solo un errore LETTO dal fornitore. Una scrittura verso un
+    // client che se n'è andato finisce nello stesso `catch` e non deve poter spegnere l'AI a tutti.
+    let guastoFornitore = false;
     try {
-      const lettore = sorgente.getReader();
       while (true) {
-        const { done, value } = await lettore.read();
+        const { done, value } = await lettore.read().catch((errore: unknown) => {
+          guastoFornitore = true;
+          throw errore;
+        });
         if (done) break;
         if (rimanenti <= 0) break;
         // Troncamento in uscita, come `remaining_chars`
@@ -412,7 +418,9 @@ Deno.serve(async (request) => {
     } catch (errore) {
       // Evento generico dentro lo stream e nessun salvataggio, come
       // `backend/ai_routes.py:88-90`. Il messaggio del fornitore non esce.
-      await registraEsitoFornitore(supabase, "ai:chat", false);
+      if (guastoFornitore) await registraEsitoFornitore(supabase, "ai:chat", false);
+      // Se è il client ad aver chiuso, si ferma anche la lettura dal fornitore.
+      else await lettore.cancel().catch(() => {});
       console.error("[ai-sommelier] stream interrotto", {
         tipo: errore instanceof Error ? errore.name : "sconosciuto",
       });
