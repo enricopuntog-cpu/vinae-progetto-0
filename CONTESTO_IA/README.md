@@ -42,9 +42,12 @@ Aprire soltanto ciò che serve al task:
   **Living Catalog** (identità senza LWIN, proposte dal sito, pannello admin, aggiornamento periodico LWIN, WI-011/012):
   [`../docs/wine-intelligence/WI_011_LIVING_CATALOG.md`](../docs/wine-intelligence/WI_011_LIVING_CATALOG.md).
 - **Company Brain e Sentinel** (WI-013 e WI-015: identità per credenziale, worker deterministici, scheduler unico non
-  installato, ingestione dei segnali, costi AI, cruscotto; **nulla attivato**, non attivo 24/7; procedura di attivazione
-  al §8):
-  [`../docs/COMPANY_BRAIN.md`](../docs/COMPANY_BRAIN.md).
+  installato, ingestione dei segnali, costi AI, cruscotto; WI-015 mergiata e distribuita il 26/11/2026 (`6602fbb`,
+  ledger 138), **nulla attivato**, non attivo 24/7, ambiente dei worker mancante (§3.1); procedura unica di attivazione
+  e revoca al §8):
+  [`../docs/COMPANY_BRAIN.md`](../docs/COMPANY_BRAIN.md). Delta per l'audit indipendente:
+  [`../docs/audits/WI-015-DELTA-AUDIT.md`](../docs/audits/WI-015-DELTA-AUDIT.md). Limiti aperti delle proposte dal
+  sito e stato di Price Intelligence: `WI_011_LIVING_CATALOG.md` §12 e §13.
 - Monitoraggio pre-lancio OBS-01: [`../docs/VPM_022C_OBS_01.md`](../docs/VPM_022C_OBS_01.md)
   contiene strumenti nativi, log minimizzati, heartbeat, responsabilità e residui
   pre-Stripe; non equivale a un servizio di allarme su ogni evento.
