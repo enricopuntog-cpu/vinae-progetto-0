@@ -371,6 +371,33 @@ describe("Scorte commerciali del Partner", () => {
       nome: "scorte_partner_aggiungi",
       parametri: { p_quantita: 6, p_idempotency_key: "scorte:chiave-1" },
     });
+    // WI-016: senza consenso il parametro non parte e non si inventa un esito.
+    expect(Object.keys(chiamateRpc[0].parametri as object)).not.toContain("p_catalogo_consenso");
+    expect(esito.ok && "catalogo" in esito.data).toBe(false);
+  });
+
+  it("WI-016: il consenso del Partner parte come `partner` e l'esito della porta torna al chiamante", async () => {
+    for (const [restituito, atteso] of [["ricevuta", "ricevuta"], ["in_sospeso", "in_sospeso"], ["valore-ignoto", undefined]] as const) {
+      const { client, chiamateRpc } = clientFinto({}, {
+        scorte_partner_aggiungi: {
+          data: { lottoId: "l", wineId: "w", formato: "0,75 L", quantita: 1, bottleUnitIds: ["a"], catalogo: restituito },
+          error: null,
+        },
+      });
+      const esito = await creaScortePartnerService(client).aggiungi({
+        produttore: "Za",
+        nome: "Barolo",
+        annata: 2019,
+        regione: "Piemonte",
+        tipo: "Rosso",
+        formato: "0,75 L",
+        quantita: 1,
+        idempotencyKey: "scorte:chiave-2",
+        proponiAlCatalogo: true,
+      });
+      expect(chiamateRpc[0]).toMatchObject({ parametri: { p_catalogo_consenso: "partner" } });
+      expect(esito.ok ? esito.data.catalogo : "errore").toBe(atteso as never);
+    }
   });
 });
 

@@ -15,7 +15,7 @@
 import { codiceErrore } from "@/lib/errore-per-log";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { FORMATO_STANDARD, chiaveGruppo } from "@/lib/cantina/gruppo";
-import type { EsitoLotto, Result } from "@/services/types";
+import { ESITI_CONSENSO_CATALOGO, type EsitoConsensoCatalogo, type EsitoLotto, type Result } from "@/services/types";
 
 export type GruppoScorte = {
   chiave: string;
@@ -39,6 +39,8 @@ export type DatiNuoveScorte = {
   formato: string;
   quantita: number;
   idempotencyKey: string;
+  /** WI-016: consenso esplicito di QUESTA richiesta a proporre i soli dati enologici al catalogo. */
+  proponiAlCatalogo?: boolean;
 };
 
 type RigaScorta = {
@@ -141,6 +143,8 @@ export function creaScortePartnerService(client: SupabaseClient | null) {
         p_formato: dati.formato,
         p_quantita: dati.quantita,
         p_idempotency_key: dati.idempotencyKey,
+        // WI-016: il parametro parte solo con il consenso; l'origine la accetta il server solo dalla porta Partner.
+        ...(dati.proponiAlCatalogo ? { p_catalogo_consenso: "partner" } : {}),
       });
       if (error) {
         console.error("[ScortePartner] aggiunta fallita:", codiceErrore(error));
@@ -168,6 +172,9 @@ export function creaScortePartnerService(client: SupabaseClient | null) {
           quantita: esito.quantita,
           bottleUnitIds: esito.bottleUnitIds.map(String),
           replay: esito.replay === true,
+          ...(ESITI_CONSENSO_CATALOGO.includes(esito.catalogo as EsitoConsensoCatalogo)
+            ? { catalogo: esito.catalogo as EsitoConsensoCatalogo }
+            : {}),
         },
       };
     },

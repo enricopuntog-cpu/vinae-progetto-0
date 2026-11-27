@@ -120,18 +120,33 @@ export async function inviaPropostaCatalogo(client: SupabaseClient, wineSlug: st
 /** `ocr` solo quando l'utente ha CONFERMATO i dati letti dall'etichetta; altrimenti `manuale`. */
 export const origineConsenso = (daEtichettaConfermata: boolean): "manuale" | "ocr" => (daEtichettaConfermata ? "ocr" : "manuale");
 
-/** Messaggio per l'utente; `null` quando non serve aggiungere nulla. La bottiglia è comunque in Cantina. */
-export function messaggioEsitoProposta(esito: EsitoConsensoCatalogo | undefined): string | null {
+/**
+ * Messaggio per l'utente; `null` quando non serve aggiungere nulla. La bottiglia è comunque in Cantina.
+ * `richiesta`: il consenso è partito con QUESTA creazione; `ripetuta`: il server ha riconosciuto un nuovo tentativo
+ * (replay), per il quale non restituisce più l'esito. Un consenso senza esito non si presenta come riuscito.
+ */
+export function messaggioEsitoProposta(
+  esito: EsitoConsensoCatalogo | undefined,
+  { richiesta = false, ripetuta = false }: { richiesta?: boolean; ripetuta?: boolean } = {},
+): string | null {
   switch (esito) {
     case undefined:
+      if (!richiesta) return null;
+      return ripetuta
+        ? "La bottiglia era già stata aggiunta: controlla in Cantina, «Le tue proposte al catalogo», se la proposta risulta registrata."
+        : "La bottiglia è in Cantina, ma non abbiamo conferma della proposta al catalogo: controlla «Le tue proposte al catalogo».";
     case "ricevuta":
       return null;
     case "in_sospeso":
       return "La proposta al catalogo è registrata: verrà inviata più tardi. Puoi ritirarla dalla Cantina.";
     case "limite":
       return "La bottiglia è in Cantina. Hai raggiunto il limite giornaliero di proposte al catalogo.";
+    case "non_attiva":
+      return "La bottiglia è in Cantina. Le proposte al catalogo non sono attive in questo momento: la proposta non è stata inviata.";
+    case "non_valida":
+      return "La bottiglia è in Cantina. I dati indicati non bastano per una proposta al catalogo: la proposta non è stata registrata.";
     default:
-      return "La bottiglia è in Cantina; la proposta al catalogo non è stata registrata: puoi inviarla dalla Cantina.";
+      return "La bottiglia è in Cantina; la proposta al catalogo non è stata registrata. Se il comando è disponibile, puoi inviarla dalla Cantina.";
   }
 }
 

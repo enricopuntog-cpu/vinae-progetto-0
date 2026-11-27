@@ -85,6 +85,22 @@ describe("WI-011 — proposta esplicita al catalogo", () => {
     }
   });
 
+  it("WI-016: consenso dato e nessun esito dal server NON è un successo silenzioso", () => {
+    const senzaConferma = messaggioEsitoProposta(undefined, { richiesta: true });
+    expect(senzaConferma).toContain("non abbiamo conferma");
+    // replay: la richiesta originale era già arrivata, il suo esito non torna più
+    const ripetuta = messaggioEsitoProposta(undefined, { richiesta: true, ripetuta: true });
+    expect(ripetuta).toContain("era già stata aggiunta");
+    expect(ripetuta).toContain("Le tue proposte al catalogo");
+    expect(messaggioEsitoProposta(undefined, { richiesta: false })).toBeNull();
+    expect(messaggioEsitoProposta("ricevuta", { richiesta: true })).toBeNull();
+  });
+
+  it("WI-016: con le proposte spente non si promette un comando che non esiste", () => {
+    expect(messaggioEsitoProposta("non_attiva")).not.toContain("dalla Cantina");
+    expect(messaggioEsitoProposta("non_attiva")).toContain("non è stata inviata");
+  });
+
   it("WI-016: le proprie proposte si leggono con elenco chiuso di stati e si ritirano dalla stessa porta (id negativo)", async () => {
     const chiamate: unknown[] = [];
     const client = {

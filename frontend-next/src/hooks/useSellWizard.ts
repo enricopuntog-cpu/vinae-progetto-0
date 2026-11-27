@@ -840,20 +840,24 @@ export function useSellWizard({
     }
     // VP-C: N bottiglie identiche in una sola operazione atomica. Restano N
     // righe, ognuna con la sua posizione, le sue note e la sua degustazione.
+    const consensoDato = proposteAttive && consensoCatalogo;
     const esito = await cellarService.aggiungiBottiglie({
       ...datiBottiglia(),
       formato: d.formato,
       quantita,
       idempotencyKey: chiaveAggiunta.current,
       // WI-016: il consenso entra nella stessa transazione che crea le bottiglie; il server non le condiziona mai.
-      ...(proposteAttive && consensoCatalogo ? { propostaCatalogo: origineConsenso(daEtichettaConfermata.current) } : {}),
+      ...(consensoDato ? { propostaCatalogo: origineConsenso(daEtichettaConfermata.current) } : {}),
     });
     if (!esito.ok) {
       toast.error(esito.error);
       return false;
     }
     chiaveAggiunta.current = nuovaChiaveIdempotenza("cantina");
-    const avvisoCatalogo = messaggioEsitoProposta(esito.data.catalogo);
+    const avvisoCatalogo = messaggioEsitoProposta(esito.data.catalogo, {
+      richiesta: consensoDato,
+      ripetuta: esito.data.replay,
+    });
     if (avvisoCatalogo) toast.info(avvisoCatalogo);
     await onCantinaCambiata?.();
     const quante = etichettaBottiglie(esito.data.quantita);
