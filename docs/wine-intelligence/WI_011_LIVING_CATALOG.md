@@ -204,7 +204,11 @@ Da rivalidare, oltre a F-01–F-08 di WI-009:
 - **Prezzi (WI-014):** predisposto il contratto di acquisizione `lib/prezzi/acquisizione.ts`, spento e non collegato a
   nessun dominio: campi chiusi (una riga con dati in più è scartata), fonte autorizzata e con finalità dichiarata.
 
-## 12. Affidabilità delle proposte inviate dal wizard (limite aperto)
+## 12. Affidabilità delle proposte inviate dal wizard (limite chiuso da WI-016)
+
+> **WI-016 implementa il requisito qui sotto** (migration `20261130100000`): consenso persistente nella transazione che
+> crea la bottiglia, intenzioni in sospeso ritentate dallo scheduler, revoca e cancellazione dell'account. Il testo che
+> segue descrive lo stato **precedente** e resta come storia del requisito. Vedi [`../AI_INFRASTRUCTURE.md`](../AI_INFRASTRUCTURE.md) §2.
 
 **Oggi non esiste un recupero persistente.** Il consenso vive solo nello stato della pagina; la proposta parte dal
 client **dopo** la creazione della bottiglia (`useSellWizard` → `inviaPropostaNuovoVino`), con al massimo 3 tentativi

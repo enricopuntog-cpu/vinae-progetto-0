@@ -88,6 +88,9 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `VINEA_AGENT_DATABASE_URL` | worker Company Brain (WI-015) | Connessione con il login **dedicato** dell'agente (mai proprietario o `service_role`; fuori da loopback `sslmode=verify-full`). Segreto: non va nel repository. |
 | `VINEA_INGEST_ENABLED` | variabile GitHub Actions (WI-015) | Soltanto `true` esatto attiva il passo che invia il segnale al Company Brain in `offsite-backup-freshness`. |
 | `VINEA_INGEST_DATABASE_URL` | secret GitHub Actions (WI-015) | Environment `production-backup`. Login membro **solo** di `brain_ingest`; senza, `segnale.mjs` risponde `non_configurato`. |
+| `VINEA_DB_CA_PEM` | worker, mittente e osservatore Company Brain (WI-016) | Certificato **pubblico** della CA del progetto. Obbligatorio fuori da loopback: verifica di catena e nome del server, con un solo `sslmode=verify-full` nell’URL. Senza, il processo si ferma; non esiste un ripiego non verificato. Una chiave privata è rifiutata. |
+| `VINEA_OBSERVER_DATABASE_URL` | `tools/company-brain/osservatore.mjs` (WI-016) | Login membro **solo** di `brain_monitor_read`. Uscita 0 verde, 1 rosso (fermo, in ritardo o illeggibile), 2 non configurato: l’assenza non è un verde. |
+| `VINEA_WORKER_ENABLED` (variabile di repository) | `.github/workflows/company-brain-worker.yml` (WI-016) | Il workflow parte solo a mano, solo da `main` e solo con `true` esatto; non ha pianificazione. Secret `VINEA_AGENT_DATABASE_URL` e `VINEA_DB_CA_PEM` negli environment `company-brain-<agente>`, da creare ristretti a `main` prima di accendere. |
 | `AI_MODEL_CATALOGO` | Edge Function | Modello del suggerimento di catalogazione. |
 | `AI_MAX_OUTPUT_TOKENS` | Edge Function | Tetto di token in uscita per chiamata, default `800`. |
 | `AI_TIMEOUT_SECONDS` | Edge Function | Timeout applicativo verso il fornitore, default `30`, tetto `120`. |
