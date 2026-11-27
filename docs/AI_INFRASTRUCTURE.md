@@ -181,7 +181,16 @@ AI: prima di `AI_ENABLED=true` valgono i rischi residui di `COMPANY_BRAIN.md` §
 | `tools/company-brain/test/*` | analisi, ciclo, TLS, osservatore | 25/25 |
 | `e2e/catalogo-ciclo-vita.e2e.ts` | proposta con consenso ritirabile dalla Cantina; kill switch e ripristino; mercato | CI |
 
+**Gate sul commit di codice `0152a7a` (27 novembre 2026).** In CI, avviati a mano senza PR: DB regression (run
+46046535832: 143 migration, 2.906 casi, 0 falliti, 177 controlli E2E delle contestazioni, zero residui), E2E browser
+smoke (46046539762: 116/116), Security scan (46046543996: Gitleaks su 980 commit senza rilievi, CodeQL per i tre
+linguaggi). Lo stesso gate database è verde in locale da zero. I job di `ci.yml` (frontend, frontend-next, backend)
+partono solo con una PR o un push su `main`: **non eseguiti in CI**; in locale `frontend-next` 4.133/4.133, lint senza
+errori, typecheck e build; `frontend/` e `backend/` non modificati.
+
 Nessuna chiamata AI a pagamento, nessuna scrittura in Production durante BUILD.
+**Non rilasciato:** nessuna PR (creerebbe una Supabase Preview a pagamento, non autorizzata), quindi Production è
+ferma a 138 migration e non contiene alcun oggetto di WI-016.
 
 **Non provato:** TLS verso il database ospitato e login veri di worker, mittente e osservatore su Supabase;
 prestazioni di consenso, mercato e Sentinel su catalogo e marketplace popolati; il wizard completo nel browser
