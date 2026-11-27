@@ -1,6 +1,6 @@
 # Vinea — Infrastruttura AI condivisa (WI-016)
 
-**Stato: costruita, provata e predisposta; ATTIVAZIONE SPENTA.** Estende senza sostituirli il catalogo canonico
+**Stato: costruita, provata e DISTRIBUITA SPENTA (PR #329, `945ccb4`, 27 novembre 2026); ATTIVAZIONE SPENTA.** Estende senza sostituirli il catalogo canonico
 (`catalog.*`), il Company Brain (`brain.*`, [`COMPANY_BRAIN.md`](COMPANY_BRAIN.md)), il budget AI
 (WI-010/WI-015) e le tre Edge Function AI. Nessun secondo catalogo, motore di ricerca, scheduler, coda, gateway o
 sistema di monitoraggio. Migration additive: `20261130100000` (A), `20261130110000` (B), `20261130120000` (C),
@@ -189,9 +189,8 @@ linguaggi). Lo stesso gate database è verde in locale da zero. I job di `ci.yml
 partono solo con una PR o un push su `main`: **non eseguiti in CI**; in locale `frontend-next` 4.133/4.133, lint senza
 errori, typecheck e build; `frontend/` e `backend/` non modificati.
 
-Nessuna chiamata AI a pagamento, nessuna scrittura in Production durante BUILD.
-**Non rilasciato:** nessuna PR (creerebbe una Supabase Preview a pagamento, non autorizzata), quindi Production è
-ferma a 138 migration e non contiene alcun oggetto di WI-016.
+Nessuna chiamata AI a pagamento, nessuna scrittura in Production durante BUILD. Le righe sopra descrivono il primo
+candidato, prima del completamento del §12; il rilascio è al §13.
 
 **Non provato:** TLS verso il database ospitato e login veri di worker, mittente e osservatore su Supabase;
 prestazioni di consenso, mercato e Sentinel su catalogo e marketplace popolati.
@@ -245,8 +244,8 @@ massimo `AI_TIMEOUT_SECONDS`, totale 120 s): il timeout del provider si fermava 
 
 **Identità.** Autenticato = `auth.uid()` (più sessioni dello stesso account condividono il contatore). Anonimo =
 impronta di `cf-connecting-ip` (IPv6 ridotto alla /64). Senza header attestato **non** si inventa un'identità:
-restano posti e tetto comune. Che il gateway ospitato sovrascriva un valore mandato dal client va misurato sulla
-Preview (§12.9). **Osservabilità:** ogni rifiuto scrive `protezione_letture: rifiuto superficie=… motivo=…` nel
+restano posti e tetto comune. **Misurato sul gateway ospitato** (§13): un `cf-connecting-ip` mandato dal client è
+respinto da Cloudflare con 403 e non arriva al database; `x-forwarded-for` non cambia identità. **Osservabilità:** ogni rifiuto scrive `protezione_letture: rifiuto superficie=… motivo=…` nel
 registro di PostgreSQL (mai indirizzi o testi); soglie e stato in `/admin/azienda` → Controllo. Il proprietario
 cambia le soglie con un `update private.protezione_letture`. Nessuna protezione è assoluta.
 
@@ -355,3 +354,38 @@ Oltre al §11: (1) buffering del Sommelier e rilevatori; (2) F: identità dell'a
 di `vini_cerca` dall'hook, comportamento senza header; (3) G: `brain.research_ingest`, eccezione alla sola
 aggiunta, `retention_operazioni`, `prezzi_vino_osservazioni`; (4) job `brain-signals` ed environment; (5) soglie
 di nascita, da rivedere con il traffico vero.
+
+## 13. Rilascio spento (27 novembre 2026)
+
+**PR #329**, squash `945ccb4` sullo SHA verificato `2e0f35e`. Sei check obbligatori verdi (fra cui il gate database
+`12g`), più E2E Accessori, Gitleaks, CodeQL, Netlify e Supabase Preview; tutte le corse su `main` verdi. Prima della
+PR, sul ramo: gate database completo verde, suite browser **117/117**, `frontend-next` 4.179/4.179 con
+`--isolate`, build. `frontend/` e `backend/` non modificati.
+
+**Preview** (`zxzytrokqzpxdaqceetd`, `with_data: false`): una sola, creata alle 19:49 UTC e rimossa al merge, entro la
+prima ora; tariffa verificata 0,01344 USD/h per ora iniziata, quindi costo atteso **0,013 USD** (la fattura non è
+stata letta) sul tetto autorizzato di 0,50. Non è stata ricreata. Su di essa: ledger 146, tutto spento, advisor di
+sicurezza senza rilievi ERROR sugli oggetti di WI-016; **28 ricerche con `x-forwarded-for` diverso: 15 ammesse e 13
+respinte, una sola origine; 28 richieste con `cf-connecting-ip` scelto dal client: 28 respinte con 403 dal bordo,
+mai arrivate al database;** GET 405; le tre function AI si avviano e restano chiuse.
+
+**Production** (`pijnmcllmfgjmgsvtcej`), riletta dopo il merge:
+
+- ledger **146**, le otto versioni coincidono con i file;
+- 837 funzioni e 256 relazioni di `public`, `private`, `brain`, `catalog` confrontate con il database costruito
+  dai file: privilegi delle funzioni, RLS e privilegi delle relazioni **identici**; corpi identici tranne
+  `listing_crea` e `utente_maggiorenne` (migration di luglio, non toccate da WI-016), che differiscono per soli
+  caratteri di spaziatura;
+- 212.894 record LWIN, 12 vini applicativi, 0 vini canonici, regola `draft`, impronta
+  `64e038526a78f44070a54498fd0ff607` e digest `b352be426a3a32762fb7fa5140b7ee88` invariati;
+- promozione, proiezione, proposte, acquisizione, richieste di verifica e stima prezzi spenti; 0 agenti, 0 job
+  accesi su 8, 0 fonti accese su 8, 0 adattatori, 0 sospensioni, conservazione senza periodi, budget e tariffe AI
+  vuoti, 0 chiamate AI, `pg_cron` assente, 0 login membri dei ruoli del brain, 0 violazioni di superficie;
+- protezione delle letture attiva, hook installato;
+- ricerca anonima 200 e GET 405; le porte Cantina e Partner risolvono i soli parametri del client precedente
+  (rifiuto di privilegio per `anon`, non `PGRST202/203`); le tre function AI rispondono «Funzioni AI non attive»;
+  `/api/health` e home 200; deploy Netlify di `945ccb4` pronto; nei log PostgreSQL dopo il rilascio solo gli errori
+  provocati da queste sonde.
+
+**Non provato in Production:** una creazione di bottiglia o di scorta con una sessione vera (le prove non scrivono
+dati di dominio; il percorso è provato in CI, nel browser e sullo schema identico).
