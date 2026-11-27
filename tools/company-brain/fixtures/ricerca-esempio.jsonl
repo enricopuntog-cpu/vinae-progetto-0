@@ -1,0 +1,2 @@
+{"soggetto":"wine","soggetto_id":"00000000-0000-4000-8000-000000000001","attributo":"grapes","valore":["Nebbiolo"],"riferimento":"https://fonte.example/scheda/1","acquisita":"2026-11-26T10:00:00Z","attendibilita":4}
+{"soggetto":"wine","soggetto_id":"00000000-0000-4000-8000-000000000001","attributo":"grapes","valore":["Barbera"],"riferimento":"https://fonte.example/scheda/2","acquisita":"2026-11-26T11:00:00Z","attendibilita":3}

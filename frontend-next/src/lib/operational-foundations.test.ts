@@ -76,13 +76,34 @@ describe("fondamenta operative fail-closed", () => {
       "offsite-backup-freshness.yml",
       "offsite-backup.yml",
       "payouts-auto-release.yml",
+      "technical-heartbeat.yml",
       "wine-catalog-cloud-import.yml",
     ]);
     for (const f of conSecret) {
       expect(read(`.github/workflows/${f}`)).toMatch(
-        /\n {4}environment: (production-(backup|payouts)|catalog-cloud-import|company-brain-\$\{\{ inputs\.agente \}\})\r?\n/,
+        /\n {4}environment: (production-(backup|payouts)|catalog-cloud-import|company-brain-ingest|company-brain-\$\{\{ inputs\.agente \}\})\r?\n/,
       );
     }
+    // WI-016: ogni step che consegna un segnale o legge il brain passa la CA del progetto: fuori da loopback i
+    // processi la pretendono, quindi senza di essa l'invio acceso sarebbe sempre rifiutato.
+    for (const f of workflow) {
+      const testo = read(`.github/workflows/${f}`);
+      const conCredenziale = testo.match(/VINEA_(INGEST|OBSERVER|AGENT)_DATABASE_URL: \$\{\{ secrets\./g) ?? [];
+      const passi = testo.split(/\r?\n {6}- name: /).filter((p) => /_DATABASE_URL: \$\{\{ secrets\./.test(p));
+      if (conCredenziale.length) {
+        for (const passo of passi) expect(passo).toInclude("VINEA_DB_CA_PEM: ${{ secrets.VINEA_DB_CA_PEM }}");
+      }
+    }
+    // WI-016: l'invio dei segnali è un job a parte, spento, con environment proprio e permessi di sola lettura; il job
+    // che sorveglia il sito e i payout resta senza environment e senza secret.
+    const battito = read(".github/workflows/technical-heartbeat.yml").replace(/\r\n/g, "\n");
+    const [sorveglianza, segnali] = battito.split("\n  brain-signals:\n");
+    expect(sorveglianza).not.toMatch(/secrets\.|environment:/);
+    expect(segnali).toInclude("needs: heartbeat");
+    expect(segnali).toInclude("vars.VINEA_INGEST_ENABLED == 'true'");
+    expect(segnali).toInclude("github.ref == 'refs/heads/main'");
+    expect(segnali).toMatch(/permissions:\n {6}contents: read\n {6}actions: read\n(?! {6}\w)/);
+    expect(segnali).not.toMatch(/: write|service_role|SERVICE_ROLE|SUPABASE_DB_URL|B2_/);
     // WI-016: il worker del Company Brain resta inerte allo stesso modo, senza pianificazione e senza chiavi
     // amministrative: GitHub non è lo scheduler.
     const worker = read(".github/workflows/company-brain-worker.yml");

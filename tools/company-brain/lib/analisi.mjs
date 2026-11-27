@@ -180,6 +180,22 @@ const canonico = (v) =>
       ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonico(v[k])}`).join(",")}}`
       : JSON.stringify(v);
 
+const CONFLITTI = new Set(["conflitto_con_dato_accettato", "conflitto_fra_fonti"]);
+
+/**
+ * Dopo un conflitto, la qualita del catalogo si ricontrolla: il task parte SOLO quando la verifica e stata approvata ed
+ * eseguita da una persona (dipendenza dal genitore). E facoltativo: se l'agente non ha quel tipo fra i derivabili, o un
+ * limite lo rifiuta, la verifica si consegna comunque e il rifiuto resta nelle evidenze. Non decide e non modifica nulla.
+ */
+const ricontrolloDopoConflitto = (rivendicazione) => ({
+  tipo: "qualita.scansione",
+  titolo: `Ricontrollo qualità dopo il conflitto sulla rivendicazione n. ${rivendicazione}`,
+  payload: { origine: "ricerca", rivendicazione_id: rivendicazione },
+  chiave: `dopo-conflitto-${rivendicazione}`,
+  dopo_esecuzione: true,
+  facoltativo: true,
+});
+
 export function analizzaRicerca(contesto, adesso = new Date()) {
   if (contesto.stato && contesto.stato !== "proposed") return { evidenze: [], chiusura: true };
   const provenienza = contesto.provenienza ?? null;
@@ -235,6 +251,7 @@ export function analizzaRicerca(contesto, adesso = new Date()) {
     ],
     // il valore non viene copiato: chi decide lo legge dalla scheda, con la sua fonte
     proposta: { rivendicazione_id: contesto.rivendicazione_id, azione, passo },
+    ...(CONFLITTI.has(azione) ? { derivati: [ricontrolloDopoConflitto(contesto.rivendicazione_id)] } : {}),
   };
 }
 

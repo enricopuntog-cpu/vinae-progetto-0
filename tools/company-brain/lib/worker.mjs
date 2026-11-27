@@ -8,6 +8,8 @@ const codice = (errore) => {
   return /^[0-9A-Z]{5}$/.test(grezzo) ? grezzo : "worker";
 };
 
+const RIFIUTI_DERIVAZIONE = new Set(["42501", "53400", "22023"]);
+
 export async function eseguiUnGiro(db, { leaseSecondi = 300, analisi = ANALISI } = {}) {
   const presa = await db.claim(leaseSecondi);
   if (!presa) return { esito: "niente_da_fare" };
@@ -18,7 +20,15 @@ export async function eseguiUnGiro(db, { leaseSecondi = 300, analisi = ANALISI }
     const risultato = analizza(await db.context(task, lease));
     for (const e of risultato.evidenze) await db.evidence(task, lease, e.tipo, e.dettaglio);
     // WI-016: task derivati (al massimo 5), solo dal proprio lease: il server impone tipi ammessi, cicli e limiti.
-    for (const d of (risultato.derivati ?? []).slice(0, 5)) await db.spawn(task, lease, d);
+    for (const d of (risultato.derivati ?? []).slice(0, 5)) {
+      try {
+        await db.spawn(task, lease, d);
+      } catch (errore) {
+        // Un derivato facoltativo rifiutato dal server (tipo non concesso, limite, ciclo) non annulla la verifica.
+        if (!d.facoltativo || !RIFIUTI_DERIVAZIONE.has(codice(errore))) throw errore;
+        await db.evidence(task, lease, "derivazione_non_riuscita", { tipo: d.tipo, codice: codice(errore) });
+      }
+    }
     if (risultato.chiusura) {
       await db.closeIfAllowed(task, lease);
       return { esito: "chiuso_per_regola", task, tipo };

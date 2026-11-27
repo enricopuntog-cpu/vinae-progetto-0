@@ -234,7 +234,8 @@ insert into fx values ('dash', pg_temp.come('authenticated', pg_temp.f('admin'):
 select pg_temp.rec(30, 'cruscotto: dati reali e sorgenti non collegate dichiarate',
   pg_temp.f('dash') like 'OK:%'
   -- WI-015B: le fonti sono righe del registro, tutte spente alla nascita, piu le fatture AI (mai collegate)
-  and jsonb_array_length(substr(pg_temp.f('dash'), 4)::jsonb -> 'sorgenti_non_collegate') = 8
+  -- WI-016G: si aggiunge l'osservatore esterno
+  and jsonb_array_length(substr(pg_temp.f('dash'), 4)::jsonb -> 'sorgenti_non_collegate') = 9
   and (substr(pg_temp.f('dash'), 4)::jsonb -> 'ai' ->> 'configurato') = 'false'
   and (substr(pg_temp.f('dash'), 4)::jsonb -> 'agenti' ->> 'accesi') = '1', left(pg_temp.f('dash'), 200));
 select pg_temp.rec(31, 'esecuzione manuale dal cruscotto e liste leggibili dall''admin',

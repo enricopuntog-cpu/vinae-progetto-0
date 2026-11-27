@@ -412,6 +412,10 @@ wi016_conc="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/wi016_concorrenza.sh")" \
   || { printf '%s\n' "$wi016_conc" | tail -n 40; die "wi016 concorrenza e processi veri: fallita."; }
 printf '%s\n' "$wi016_conc"
 summary "- $(printf '%s\n' "$wi016_conc" | grep 'wi016 concorrenza e processi veri:' | tail -n 1)"
+# WI-016 F/G: protezione delle letture (identita attestata, isolamento, tetti) e completamento (porte admin, kill
+# switch, prezzi utente spenti, conservazione su sole fixture, superficie dell'acquisizione). ROLLBACK.
+run_grid "wi016f protezione delle letture" wi016f_protezione_letture.sql 3
+run_grid "wi016g controllo e conservazione" wi016g_controllo_conservazione.sql 3
 # WI-008 (wi008d): ricerca canonica con PostgREST e Auth veri (429 al minuto, raffica parallela, serializzazione per
 # identita, isolamento, porta di sola lettura del Sommelier, fonte revocata, ripristino dopo la finestra: attende il
 # minuto successivo). Fixture committate sul catalogo VUOTO e rimosse in trap, interruttore di nuovo spento.

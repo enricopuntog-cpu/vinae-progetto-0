@@ -210,3 +210,52 @@ test("ciclo: i task derivati passano dalla porta del server PRIMA della consegna
   assert.deepEqual([giro.esito, giro.codice], ["errore", "53400"]);
   assert.deepEqual(chiamate, [["spawn", "qualita.scansione", "k1"], ["finish", false]]);
 });
+
+test("ricerca: solo un conflitto deriva la scansione di qualita, facoltativa e dopo l'esecuzione", () => {
+  const conflitto = analizzaRicerca(ricerca({ accettata: { id: 1, valore: ["Barbera"], fonte: "LWIN", affidabilita: 1 } }), adesso);
+  assert.deepEqual(conflitto.derivati, [{
+    tipo: "qualita.scansione",
+    titolo: "Ricontrollo qualità dopo il conflitto sulla rivendicazione n. 9",
+    payload: { origine: "ricerca", rivendicazione_id: 9 },
+    chiave: "dopo-conflitto-9",
+    dopo_esecuzione: true,
+    facoltativo: true,
+  }]);
+  const fraFonti = analizzaRicerca(ricerca({ altre_proposte: [{ id: 2, valore: ["Barbera"], fonte: "Y", affidabilita: 3 }] }), adesso);
+  assert.equal(fraFonti.derivati.length, 1);
+  assert.equal(analizzaRicerca(ricerca({}), adesso).derivati, undefined);
+  assert.equal(analizzaRicerca(ricerca({ provenienza: null }), adesso).derivati, undefined);
+});
+
+test("ciclo: il rifiuto di un derivato FACOLTATIVO resta come evidenza e la verifica si consegna", async () => {
+  for (const codice of ["42501", "53400", "22023"]) {
+    const chiamate = [];
+    const db = {
+      claim: async () => ({ task_id: "t", lease_token: "l", task_type: "x.y" }),
+      context: async () => ({}),
+      evidence: async (_t, _l, tipo, dettaglio) => chiamate.push(["evidenza", tipo, dettaglio]),
+      spawn: async () => {
+        throw Object.assign(new Error("rifiuto"), { errno: codice });
+      },
+      finish: async (_t, _l, successo) => (chiamate.push(["finish", successo]), "in_approvazione"),
+    };
+    const analisi = { "x.y": () => ({ evidenze: [], proposta: {}, derivati: [{ tipo: "qualita.scansione", titolo: "t", chiave: "k", facoltativo: true }] }) };
+    assert.equal((await eseguiUnGiro(db, { analisi })).esito, "in_approvazione");
+    assert.deepEqual(chiamate, [["evidenza", "derivazione_non_riuscita", { tipo: "qualita.scansione", codice }], ["finish", true]]);
+  }
+});
+
+test("ciclo: un guasto che non e un rifiuto di dominio fa fallire il task anche per un derivato facoltativo", async () => {
+  const db = {
+    claim: async () => ({ task_id: "t", lease_token: "l", task_type: "x.y" }),
+    context: async () => ({}),
+    evidence: async () => {},
+    spawn: async () => {
+      throw Object.assign(new Error("connessione"), { errno: "08006" });
+    },
+    finish: async (_t, _l, successo) => (successo ? "in_approvazione" : "in_attesa"),
+  };
+  const analisi = { "x.y": () => ({ evidenze: [], proposta: {}, derivati: [{ tipo: "q", titolo: "t", chiave: "k", facoltativo: true }] }) };
+  const giro = await eseguiUnGiro(db, { analisi });
+  assert.deepEqual([giro.esito, giro.codice], ["errore", "08006"]);
+});
