@@ -13,6 +13,8 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { aiCorsHeadersFor } from "./ai-cors.ts";
+import { AiFormatError, AiProviderError, creaAiProvider, requestIdOpaco, stimaTokenInput, type AiCall, type AiProvider, type AiUso } from "./ai-provider.ts";
+import { impronta, rilevaDatiSensibili, rilevaIstruzioniSospette } from "./ai-sicurezza.ts";
 
 export const json = (body: unknown, status: number, headers: HeadersInit = {}): Response =>
   new Response(JSON.stringify(body), {
@@ -236,7 +238,13 @@ export const prenotaBudget = async (
   };
 };
 
-export type EsitoChiamata = "ok" | "guasto_fornitore" | "errore_richiesta" | "interrotta_client" | "formato_non_valido";
+export type EsitoChiamata =
+  | "ok"
+  | "guasto_fornitore"
+  | "errore_richiesta"
+  | "interrotta_client"
+  | "formato_non_valido"
+  | "errore_applicativo";
 
 /** Chiude la prenotazione una volta sola. Senza i token del fornitore resta contato il massimo prenotato. */
 export const registraConsuntivo = async (
@@ -268,20 +276,227 @@ export const registraEsitoFornitore = async (supabase: SupabaseClient, scope: Ai
   }
 };
 
-/**
- * Corpo della richiesta, con il solo controllo che sia un oggetto JSON. La
- * validazione dei campi appartiene a ogni function, perché è lì che i vincoli
- * del legacy vanno riprodotti uno per uno.
- */
-export const leggiCorpo = async (request: Request): Promise<Record<string, unknown> | null> => {
-  try {
-    const parsed = await request.json();
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
+// ---------------------------------------------------------------------------
+// WI-016 — corpo limitato, ingresso per identità e chiamata governata
+// ---------------------------------------------------------------------------
+
+/** Tetto del corpo: il campo più lungo ammesso (OCR, 2.000 caratteri) sta abbondantemente sotto. */
+export const CORPO_MAX_BYTE = 32 * 1024;
+
+const leggiEntro = async (request: Request, maxByte: number): Promise<string | null> => {
+  if (Number(request.headers.get("content-length") ?? "0") > maxByte) return null;
+  if (!request.body) return "";
+  const lettore = request.body.getReader();
+  const pezzi: Uint8Array[] = [];
+  let totale = 0;
+  while (true) {
+    const { done, value } = await lettore.read();
+    if (done) break;
+    totale += value.byteLength;
+    if (totale > maxByte) {
+      await lettore.cancel().catch(() => {});
+      return null;
+    }
+    pezzi.push(value);
   }
+  const unito = new Uint8Array(totale);
+  let posizione = 0;
+  for (const p of pezzi) {
+    unito.set(p, posizione);
+    posizione += p.byteLength;
+  }
+  return new TextDecoder().decode(unito);
+};
+
+/**
+ * Corpo della richiesta: un oggetto JSON entro il tetto di byte. La validazione dei campi appartiene a ogni function,
+ * perché è lì che i vincoli del legacy vanno riprodotti uno per uno.
+ */
+export const leggiCorpo = async (
+  request: Request,
+  cors: HeadersInit,
+): Promise<{ corpo: Record<string, unknown> | null } | { risposta: Response }> => {
+  let grezzo: string | null;
+  try {
+    grezzo = await leggiEntro(request, CORPO_MAX_BYTE);
+  } catch {
+    return { corpo: null };
+  }
+  if (grezzo === null) return { risposta: json({ error: "Richiesta troppo grande." }, 413, cors) };
+  try {
+    const parsed = JSON.parse(grezzo);
+    return { corpo: parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null };
+  } catch {
+    return { corpo: null };
+  }
+};
+
+const MESSAGGIO_SENSIBILI =
+  "Togli dati personali o segreti (indirizzi di posta, numeri di telefono, carte, IBAN, codici fiscali, password o chiavi) e riprova.";
+
+export type TipoSegnale = "dati_sensibili" | "istruzioni_sospette" | "output_scartato" | "input_eccessivo";
+
+/** Segnale di sicurezza SENZA contenuto. Un errore qui non cambia la risposta all'utente. */
+export const segnalaSicurezza = async (supabase: SupabaseClient, userId: string, scope: AiScope, tipo: TipoSegnale): Promise<void> => {
+  try {
+    const { error } = await supabase.rpc("ai_segnala", { p_user: userId, p_scope: scope, p_tipo: tipo });
+    if (error) console.error("[ai] segnale di sicurezza non registrato", { code: error.code });
+  } catch {
+    console.error("[ai] segnale di sicurezza non registrato");
+  }
+};
+
+export type Ingresso = {
+  maxTentativi: number;
+  modelloRiserva: string | null;
+  maxInputCaratteri: number;
+  /** Idempotente: la prima chiusura vince. Una richiesta non riuscita si può ripetere senza passare per replay. */
+  chiudi: (riuscita: boolean) => Promise<void>;
+};
+
+const RIFIUTI_PORTA: Record<string, { status: number; error: string; retry?: number }> = {
+  sospesa: { status: 503, error: "Questa funzione AI è sospesa." },
+  richiesta_ripetuta: { status: 409, error: "Questa richiesta è già in corso: attendi la risposta." },
+  concorrenza_utente: { status: 429, error: "Hai già richieste AI in corso: attendi che finiscano.", retry: 5 },
+  concorrenza_globale: { status: 429, error: "Le funzioni AI sono molto richieste: riprova fra poco.", retry: 5 },
+  quota_account_nuovo: { status: 429, error: "Limite temporaneo delle funzioni AI per i nuovi account raggiunto.", retry: 3600 },
+  blocco_abusi: { status: 429, error: "Le funzioni AI sono temporaneamente limitate per questo account.", retry: 3600 },
+};
+
+/**
+ * Ingresso per identità (dopo autenticazione e validazione, prima di budget e fornitore): dati sensibili rifiutati
+ * subito, istruzioni sospette segnalate; doppi invii, concorrenza, quote e sospensioni li decide il database.
+ * `liberi` sono i testi scritti dall'utente; `identita` entra solo come impronta.
+ */
+export const apriIngresso = async (
+  supabase: SupabaseClient,
+  scope: AiScope,
+  userId: string,
+  cors: HeadersInit,
+  { liberi, identita }: { liberi: readonly string[]; identita: readonly string[] },
+): Promise<Ingresso | { risposta: Response }> => {
+  if (liberi.some((t) => rilevaDatiSensibili(t) !== null)) {
+    await segnalaSicurezza(supabase, userId, scope, "dati_sensibili");
+    return { risposta: json({ error: MESSAGGIO_SENSIBILI, motivo: "dati_sensibili" }, 400, cors) };
+  }
+  if (liberi.some(rilevaIstruzioniSospette)) await segnalaSicurezza(supabase, userId, scope, "istruzioni_sospette");
+
+  const { data, error } = await supabase.rpc("ai_porta_apri", {
+    p_user: userId,
+    p_scope: scope,
+    p_impronta: await impronta([scope, ...identita]),
+  });
+  const esito = (data ?? null) as {
+    esito?: unknown;
+    porta_id?: unknown;
+    max_tentativi?: unknown;
+    modello_riserva?: unknown;
+    max_input_caratteri?: unknown;
+  } | null;
+  const portaId = esito?.porta_id;
+  if (error || esito?.esito !== "consentito" || typeof portaId !== "string") {
+    const nome = !error && typeof esito?.esito === "string" ? esito.esito : "";
+    const rifiuto = RIFIUTI_PORTA[nome];
+    if (!rifiuto) {
+      console.error("[ai] ingresso non concesso", { scope, esito: error ? error.code : String(esito?.esito) });
+      return { risposta: json({ error: "Funzioni AI non disponibili." }, 503, cors) };
+    }
+    return {
+      risposta: json(
+        { error: rifiuto.error, motivo: nome },
+        rifiuto.status,
+        rifiuto.retry ? { ...cors, "Retry-After": String(rifiuto.retry) } : cors,
+      ),
+    };
+  }
+  let chiusaGia = false;
+  return {
+    maxTentativi: esito.max_tentativi === 2 ? 2 : 1,
+    modelloRiserva: typeof esito.modello_riserva === "string" ? esito.modello_riserva : null,
+    maxInputCaratteri: typeof esito.max_input_caratteri === "number" ? esito.max_input_caratteri : 0,
+    chiudi: async (riuscita: boolean) => {
+      if (chiusaGia) return;
+      chiusaGia = true;
+      try {
+        const { error: errore } = await supabase.rpc("ai_porta_chiudi", { p_porta: portaId, p_riuscita: riuscita });
+        if (errore) console.error("[ai] ingresso non chiuso", { code: errore.code });
+      } catch {
+        console.error("[ai] ingresso non chiuso");
+      }
+    },
+  };
+};
+
+export type Governata<T> =
+  | { ok: true; valore: T; richiestaId: string; uso: () => AiUso | null }
+  | { ok: false; risposta: Response };
+
+type OpzioniGovernata<T> = {
+  supabase: SupabaseClient;
+  userId: string;
+  scope: AiScope;
+  compito: "chat" | "pairing" | "catalogo";
+  cors: HeadersInit;
+  ingresso: Ingresso;
+  system: string;
+  prompt: string;
+  nonDisponibile: string;
+  chiama: (provider: AiProvider, call: AiCall) => Promise<T>;
+};
+
+/**
+ * La sola strada verso il fornitore. Tentativi: quelli autorizzati dal proprietario (di base uno) più al massimo UNA
+ * riserva, entrambi solo dopo un guasto del fornitore; ogni tentativo prenota il proprio budget e un rifiuto ferma
+ * tutto, quindi la riserva non può moltiplicare la spesa oltre i tetti. Un 4xx, un formato non valido o un errore
+ * dell'applicazione non si ritentano. Il successo lo consuntiva il chiamante (la chat solo a stream concluso).
+ */
+export const chiamataGovernata = async <T>(o: OpzioniGovernata<T>): Promise<Governata<T>> => {
+  const nonDisponibile = () => ({ ok: false as const, risposta: json({ error: o.nonDisponibile }, 503, o.cors) });
+  if (o.system.length + o.prompt.length > o.ingresso.maxInputCaratteri) {
+    await segnalaSicurezza(o.supabase, o.userId, o.scope, "input_eccessivo");
+    return { ok: false, risposta: json({ error: "Richiesta troppo lunga per questa funzione." }, 413, o.cors) };
+  }
+  const tentativi: (string | undefined)[] = Array.from({ length: o.ingresso.maxTentativi }, () => undefined);
+  if (o.ingresso.modelloRiserva) tentativi.push(o.ingresso.modelloRiserva);
+
+  for (let n = 0; n < tentativi.length; n++) {
+    const provider = creaAiProvider(o.compito, tentativi[n]);
+    const prenotazione = await prenotaBudget(o.supabase, o.scope, o.cors, {
+      provider: provider.id,
+      modello: provider.modello,
+      tokenInput: stimaTokenInput(o.system, o.prompt),
+      tokenOutputMax: provider.maxOutputTokens,
+    });
+    if (rifiutata(prenotazione)) return n === 0 ? { ok: false, risposta: prenotazione.risposta } : nonDisponibile();
+    const { richiestaId } = prenotazione;
+    let uso: AiUso | null = null;
+    try {
+      const valore = await o.chiama(provider, {
+        system: o.system,
+        prompt: o.prompt,
+        requestId: requestIdOpaco(o.compito),
+        onUso: (u) => {
+          uso = u;
+        },
+      });
+      return { ok: true, valore, richiestaId, uso: () => uso };
+    } catch (errore) {
+      if (errore instanceof AiFormatError) {
+        await registraConsuntivo(o.supabase, richiestaId, "formato_non_valido", uso);
+        return { ok: false, risposta: json({ error: "Il servizio AI ha restituito un formato non valido." }, 502, o.cors) };
+      }
+      if (!(errore instanceof AiProviderError)) {
+        // un errore nostro non dice nulla sulla salute del fornitore e non si ritenta
+        await registraConsuntivo(o.supabase, richiestaId, "errore_applicativo", uso);
+        console.error("[ai] errore dell'applicazione", { scope: o.scope, tipo: errore instanceof Error ? errore.name : "sconosciuto" });
+        return nonDisponibile();
+      }
+      await registraConsuntivo(o.supabase, richiestaId, errore.guastoFornitore ? "guasto_fornitore" : "errore_richiesta", uso);
+      if (!errore.guastoFornitore) return nonDisponibile();
+      await registraEsitoFornitore(o.supabase, o.scope, false);
+    }
+  }
+  return nonDisponibile();
 };
 
 /** Testo obbligatorio con lunghezza massima, nella forma dei `Field` del legacy. */

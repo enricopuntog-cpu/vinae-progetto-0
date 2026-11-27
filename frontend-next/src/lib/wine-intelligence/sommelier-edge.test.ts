@@ -42,6 +42,8 @@ let esitoBudget: string;
 let storico: { ruolo: string; contenuto: string }[];
 let righeCanoniche: Riga[];
 let canonicoKo: boolean;
+let schedaCanonica: unknown;
+let schedaKo: boolean;
 
 const applica = (righe: Riga[], q: Interrogazione): Riga[] =>
   righe.filter((r) =>
@@ -100,6 +102,9 @@ const fakeSupabase = {
   rpc: async (name: string, args: Record<string, unknown>) => {
     rpcLog.push({ name, args });
     if (name === "rate_limit_consume") return rateLimitKo ? { data: null, error: { code: "P0001", message: "x" } } : { data: null, error: null };
+    if (name === "vini_canonici_scheda_servizio") {
+      return schedaKo ? { data: null, error: { code: "XX000", message: "SEGRETO-DI-DB" } } : { data: schedaCanonica, error: null };
+    }
     if (name === "vini_canonici_cerca_servizio") {
       return canonicoKo ? { data: null, error: { code: "PGRST", message: "SEGRETO-DI-DB" } } : { data: righeCanoniche, error: null };
     }
@@ -109,6 +114,13 @@ const fakeSupabase = {
         : { data: esitoBudget === "consentito" ? { esito: "consentito", richiesta_id: RICHIESTA } : { esito: esitoBudget }, error: null };
     }
     if (name === "ai_budget_esito" || name === "ai_budget_consuntivo") return { data: null, error: null };
+    if (name === "ai_porta_apri") {
+      return {
+        data: { esito: "consentito", porta_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", max_tentativi: 1, modello_riserva: null, max_input_caratteri: 20000 },
+        error: null,
+      };
+    }
+    if (name === "ai_porta_chiudi" || name === "ai_segnala") return { data: null, error: null };
     if (name === "sommelier_contesto_leggi") return { data: storico, error: null };
     if (name === "sommelier_scambio_registra") return { data: 2, error: null };
     throw new Error(`RPC non prevista: ${name}`);
@@ -193,12 +205,15 @@ beforeAll(async () => {
     gate,
     leggiRepo("supabase/functions/_shared/ai-gate.ts")
       .replace('"@supabase/supabase-js"', JSON.stringify(slash(stub)))
-      .replace('"./ai-cors.ts"', JSON.stringify(fn("_shared/ai-cors.ts"))),
+      .replace('"./ai-cors.ts"', JSON.stringify(fn("_shared/ai-cors.ts")))
+      .replace('"./ai-provider.ts"', JSON.stringify(fn("_shared/ai-provider.ts")))
+      .replace('"./ai-sicurezza.ts"', JSON.stringify(fn("_shared/ai-sicurezza.ts"))),
   );
   const sorgente = leggiRepo("supabase/functions/ai-sommelier/index.ts")
     .replace('"../_shared/ai-provider.ts"', JSON.stringify(fn("_shared/ai-provider.ts")))
     .replace('"../_shared/ai-gate.ts"', JSON.stringify(slash(gate)))
     .replace('"../_shared/sommelier-contesto.ts"', JSON.stringify(fn("_shared/sommelier-contesto.ts")))
+    .replace('"../_shared/ai-sicurezza.ts"', JSON.stringify(fn("_shared/ai-sicurezza.ts")))
     .replace('"../_shared/sommelier-ricerca.ts"', JSON.stringify(fn("_shared/sommelier-ricerca.ts")));
   expect(sorgente).not.toContain('"../_shared/');
   const copia = join(dir, "index.ts");
@@ -288,6 +303,8 @@ beforeEach(() => {
   storico = [];
   righeCanoniche = [];
   canonicoKo = false;
+  schedaCanonica = null;
+  schedaKo = false;
   ENV.AI_ENABLED = "true";
   ENV.OPENAI_API_KEY = "sk-FINTA-per-i-test";
   globalThis.fetch = fetchFinto as typeof fetch;
@@ -921,5 +938,79 @@ describe("WI-010 — budget globale e interruttore (chiusi per difetto)", () => 
     }));
     expect(risposta.status).toBe(400);
     expect(rpcLog.some((r) => r.name === "ai_budget_prenota")).toBe(false);
+  });
+});
+
+describe("WI-016 — gateway comune sul Sommelier", () => {
+  const chiusure = () => rpcLog.filter((r) => r.name === "ai_porta_chiudi").map((r) => r.args.p_riuscita);
+  const attendi = () => new Promise((r) => setTimeout(r, 50));
+
+  it("a stream concluso la porta si chiude come riuscita, una volta sola", async () => {
+    await (await chiama({})).text();
+    await attendi();
+    expect(chiusure()).toEqual([true]);
+    const nomiRpc = rpcLog.map((r) => r.name);
+    expect(nomiRpc.indexOf("ai_porta_apri")).toBeLessThan(nomiRpc.indexOf("ai_budget_prenota"));
+  });
+
+  it("uscita anticipata (annuncio inesistente) e fornitore giù: la porta si chiude come non riuscita", async () => {
+    const r = await chiama({ contesto: { tipo: "vino", annuncio_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" } });
+    expect(r.status).toBe(404);
+    providerRispondeKo = true;
+    expect((await chiama({})).status).toBe(503);
+    expect(chiusure()).toEqual([false, false]);
+  });
+
+  it("un recapito nel messaggio si rifiuta prima di leggere la Cantina e prima del budget", async () => {
+    const r = await chiama({ message: "Scrivimi a mario.rossi@example.com", contesto: { tipo: "cantina", consenso: true } });
+    expect(r.status).toBe(400);
+    expect(interrogazioni.some((q) => q.tabella === "bottle_units")).toBe(false);
+    expect(rpcLog.some((x) => x.name === "ai_budget_prenota" || x.name === "ai_porta_apri")).toBe(false);
+    expect(chiamateProvider).toHaveLength(0);
+  });
+
+  it("una risposta che contiene un segreto non entra nello storico e viene segnalata", async () => {
+    testoRisposta = "Ecco la chiave " + "sk-" + "a".repeat(32);
+    await (await chiama({})).text();
+    await attendi();
+    expect(rpcLog.some((r) => r.name === "sommelier_scambio_registra")).toBe(false);
+    expect(rpcLog.filter((r) => r.name === "ai_segnala").map((r) => r.args.p_tipo)).toEqual(["output_scartato"]);
+  });
+
+  it("corpo oltre 32 KB: 413 senza leggere il dominio", async () => {
+    const r = await chiama({ zavorra: "z".repeat(40_000) });
+    expect(r.status).toBe(413);
+    expect(rpcLog.some((x) => x.name === "ai_porta_apri")).toBe(false);
+  });
+});
+
+describe("WI-016 — scheda documentata del vino identificato", () => {
+  const RICHIESTA_CODICE = { tipo: "ricerca", produttore: "", nome: "", codice: "1010001" };
+  const rpcScheda = () => rpcLog.filter((r) => r.name === "vini_canonici_scheda_servizio");
+
+  it("codice richiesto e identificato: una sola lettura mirata, dati con la fonte nel blocco", async () => {
+    righeCanoniche = [rigaCanonica("1010001", { livello: "identificativo" })];
+    schedaCanonica = { annate: [{ anno: 2015 }], dati_documentati: [{ attributo: "grapes", valore: ["Nebbiolo"], fonte: "Consorzio" }] };
+    await (await chiama({ message: "Vitigni?", contesto: RICHIESTA_CODICE })).text();
+    expect(rpcScheda()).toEqual([{ name: "vini_canonici_scheda_servizio", args: { p_codice: "1010001" } }]);
+    const { prompt, system } = chiamateProvider[0]!;
+    expect(prompt).toContain("Scheda documentata del candidato identificato");
+    expect(prompt).toContain('"fonte":"Consorzio"');
+    expect(system).toContain("cita la fonte");
+  });
+
+  it("candidato non identificato dal codice: nessuna scheda", async () => {
+    righeCanoniche = [rigaCanonica("1010001", { livello: "esatto" })];
+    await (await chiama({ contesto: RICERCA })).text();
+    expect(rpcScheda()).toHaveLength(0);
+  });
+
+  it("scheda in errore: si risponde con i soli candidati, senza dettagli interni", async () => {
+    righeCanoniche = [rigaCanonica("1010001", { livello: "identificativo" })];
+    schedaKo = true;
+    const r = await chiama({ contesto: RICHIESTA_CODICE });
+    expect(r.status).toBe(200);
+    expect(await r.text()).not.toContain("SEGRETO");
+    expect(chiamateProvider[0]!.prompt).not.toContain("Scheda documentata del candidato");
   });
 });
