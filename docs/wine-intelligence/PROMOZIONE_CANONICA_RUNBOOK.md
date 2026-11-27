@@ -130,6 +130,9 @@ isolato è una decisione di costo del founder.
 
 ### 4.3 Procedura unica del founder (F-06 e F-08)
 
+Versione assistita, con gli strumenti da installare, lo script `tools/wine-catalog/preflight-founder.ps1` e il
+mandato di esecuzione: [`WI-015-ACTIVATION-GATE.md`](../audits/WI-015-ACTIVATION-GATE.md) §4–§5 (27/11/2026).
+
 Solo il founder può eseguirla: servono la password del proprietario del database, la chiave `age` offline e il
 pannello Supabase. **Nessuna password, chiave o credenziale va in chat o nel repository.** Non si ripristina nulla in
 Production e non si apre alcuna finestra.
