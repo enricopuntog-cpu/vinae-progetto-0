@@ -174,7 +174,7 @@ test.describe.serial("Catalogo vivo: dalla Cantina alla scheda senza LWIN, con r
 
     await page.getByRole("tab", { name: "Mercato" }).click();
     const mercato = page.getByTestId("mercato-monitor");
-    await expect(mercato).toContainText("non una classificazione fiscale");
+    await expect(mercato).toContainText("non è una classificazione fiscale");
     await mercato.getByRole("button", { name: "Esegui i controlli ora" }).click();
     await expect(mercato).toContainText("Controlli eseguiti");
     await admin.close();
