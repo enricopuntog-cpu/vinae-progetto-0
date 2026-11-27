@@ -68,7 +68,7 @@ telefono internazionale) → **porta per identità** (`ai_porta_apri`) → lettu
 | Errori | `guasto_fornitore` (alimenta l'interruttore), `errore_richiesta`, `errore_applicativo` (nuovo), `formato_non_valido`, `interrotta_client` |
 | Prompt injection | annunci, etichetta e indicazioni in blocco `DATI_NON_ATTENDIBILI` ripulito; recapiti stampati sull'etichetta rimossi; istruzioni sospette segnalate senza contenuto |
 | Strumenti | nessuna chiamata dichiara strumenti (provato sul corpo inviato); l'uscita non autorizza nulla |
-| Uscita | campi strutturati senza collegamenti, recapiti, segreti; una risposta con un segreto non entra nello storico |
+| Uscita | **stessa regola dell’ingresso** (`rilevaDatiSensibili`). Il Sommelier non trasmette alcun byte finché la risposta INTERA non è verificata (§12.1); nei campi strutturati collegamenti e posta si tolgono e, se resta un dato sensibile, il campo è vuoto; lo storico con dati sensibili non torna al fornitore |
 
 Il gateway non sceglie prezzi, modelli o budget: quelli restano quelli di §8.7 di `COMPANY_BRAIN.md`.
 
@@ -79,7 +79,8 @@ Il gateway non sceglie prezzi, modelli o budget: quelli restano quelli di §8.7 
   (`completato`), non se approvata.
 - Task derivati (`brain.spawn_task`, porta dell'agente): solo i tipi in `agents.spawn_types`, mai un tipo già nella
   catena, profondità ≤ 3, ≤ 5 figli, ≤ 20 task per operazione; coda ≤ 2.000 per tipo (oltre: anomalia `coda_satura`).
-  Adapter nel worker (`derivati`); nessuna analisi attuale ne produce e nessun agente ha tipi derivabili.
+  **Un percorso effettivo** (§12.4): Wine Research, davanti a un conflitto, deriva il ricontrollo `qualita.scansione`.
+  Nessun agente è registrato, quindi in Production nessuno ha tipi derivabili.
 - Dopo un guasto: attesa 2^tentativi minuti (≤ 60). Memoria: risultati di dipendenze e genitore ed esiti delle
   decisioni passate sullo stesso soggetto; nessuna nota libera, nessun dato personale.
 - `brain.cancel_operation` e pannello: albero, stati, eventi, annullamento con motivo.
@@ -127,9 +128,8 @@ peggioramento (conteggio ≥ doppio e +3), escalation di una P1 non presa in car
 di anomalie nate insieme. **Un giro fermo non si segnala da solo:** `tools/company-brain/osservatore.mjs`, da un
 esecutore diverso, con `brain_monitor_read`: 0 verde, 1 rosso, 2 non configurato. Esecutore e canale: non scelti.
 
-Segnali di CI e heartbeat: **non** collegati. Un workflow `workflow_run` è escluso dalla policy dei workflow del
-repository (ammessa solo per la freschezza del backup) e non è stata allargata; aggiungere l'invio a quei workflow
-richiede un environment per l'heartbeat, che oggi è critico per i payout. Decisione del founder.
+Segnali di heartbeat, salute e CI: percorso **predisposto e spento** (§12.5), senza `workflow_run` e senza toccare
+il job che sorveglia sito e payout.
 
 ## 8. Esecuzione cloud
 
@@ -142,6 +142,7 @@ dell'agente (finding C-01). Restano processi con credenziale propria:
   environment per agente; **nessuna pianificazione** (GitHub non è uno scheduler affidabile: ritardi osservati);
 - TLS `verify-full` con la CA del progetto (`VINEA_DB_CA_PEM`), stesse guardie del runner del catalogo; **non
   provato** contro il database ospitato;
+- `esecutore.mjs` esegue lotti a intervallo su un ospite qualunque (§12.6);
 - `pg_cron` resta lo scheduler che genera i task; un esecutore che non gira è visibile in `esecutore_assente`.
 
 La scelta dell'ospite (e della cadenza) è una decisione economica del founder: nessun servizio nuovo è stato
@@ -193,13 +194,11 @@ Nessuna chiamata AI a pagamento, nessuna scrittura in Production durante BUILD.
 ferma a 138 migration e non contiene alcun oggetto di WI-016.
 
 **Non provato:** TLS verso il database ospitato e login veri di worker, mittente e osservatore su Supabase;
-prestazioni di consenso, mercato e Sentinel su catalogo e marketplace popolati; il wizard completo nel browser
-(il parametro è provato in servizio, griglia ed E2E via API).
+prestazioni di consenso, mercato e Sentinel su catalogo e marketplace popolati.
 
-**Limiti aperti:** ricerca pubblica `vini_cerca` senza limite per identità (le letture non passano dall'hook;
-contro lo scraping servono limiti di rete del fornitore, non acquistati); rilevatori di dati sensibili e
-istruzioni a espressioni regolari (riducono, non azzerano); quarantena euristica (falsi positivi rilasciabili);
-nessun TTL per revisioni di mercato, eventi e task; il backend legacy resta fuori dal controllo AI.
+**Limiti aperti:** vedi la mappa del perimetro (§12.2); rilevatori di dati sensibili e istruzioni a espressioni
+regolari (riducono, non azzerano: un segreto offuscato apposta passa); quarantena euristica (falsi positivi
+rilasciabili); nessun periodo di conservazione deciso; il backend legacy resta fuori dal controllo AI.
 
 ## 11. Delta per la revisione indipendente
 
@@ -212,3 +211,147 @@ nessun TTL per revisioni di mercato, eventi e task; il backend legacy resta fuor
 3. Gateway: completezza dei rifiuti, falsi positivi/negativi dei rilevatori, chiusura della porta sullo stream.
 4. Sospensioni: che cosa si ferma e che cosa no; riautenticazione per il ripristino.
 5. Marketplace Monitor: proporzionalità e dati esposti agli admin.
+
+## 12. Completamento e hardening (migration F, G, H)
+
+Migration additive `20261130150000` (F, protezione delle letture), `20261130160000` (G, acquisizione, controllo,
+conservazione) e `20261130170000` (H, soglie della ricerca canonica). Nessuna è nell'impronta della promozione.
+
+### 12.1 Uscita del Sommelier (P1)
+
+Prima i frammenti del fornitore arrivavano al browser mentre venivano letti, e il controllo avveniva a stream
+concluso: proteggeva solo lo storico. Ora la function raccoglie la risposta intera, la verifica **prima di
+qualunque byte di testo verso il client** (anche oltre il tetto di 8.000 caratteri, fino a 64.000; oltre, non si
+trasmette nulla) e poi la consegna. Nell'attesa partono solo commenti SSE senza contenuto, ignorati dal client:
+tengono viva la connessione e rivelano un client andato via. Scelta rispetto a una finestra scorrevole: un segreto
+può essere spezzato su più frammenti e JWT o «password: …» non hanno una lunghezza massima prima di essere
+riconoscibili. Conseguenze: l'utente vede la risposta tutta insieme (resta l'indicatore «sta scrivendo»); un guasto
+o un troncamento a metà **non** consegnano testo parziale. La lettura dal fornitore ha ora una scadenza (silenzio
+massimo `AI_TIMEOUT_SECONDS`, totale 120 s): il timeout del provider si fermava agli header.
+
+### 12.2 Perimetro anti-bot e anti-scraping
+
+| Superficie | Protezione esistente o aggiunta | Limite concreto |
+|---|---|---|
+| `vini_cerca` (anonimi e utenti) | **F**: involucro VOLATILE attorno al motore WI-006B spostato intatto in `private`. Utente: 20/10 s, 90/min, 900/h. Anonimo per origine: 15/10 s, 60/min. Posti: 3 per identità, 6 anonimi e 12 utenti in totale. Tetti comuni: 600 anonimi e 3.000 utenti al minuto. GET rifiutato (405) | chi ruota molti indirizzi è fermato solo dal tetto comune, che a quel punto rallenta anche gli anonimi legittimi |
+| ricerca canonica (autenticata, proiezione spenta) | WI-008 40/min per utente; **F/H**: sulle chiamate API dirette tetto comune, posti e 600/h, solo a proiezione accesa; massimo 20 righe, nessuna paginazione | le chiamate interne (selezione, scheda del Sommelier) restano al solo limite per utente |
+| scritture via PostgREST | hook: 60/min per RPC, 120/min altrove; **F**: l'anonimo è l'indirizzo attestato, non più `x-forwarded-for` | una chiamata fallita non consuma (stessa transazione) |
+| letture anonime `stable` (profili, vetrine, preventivi, accessori) | `statement_timeout` di 3 s per `anon` (letto in Production) | **nessun contatore**: PostgREST le esegue in sola lettura |
+| GET di viste e tabelle pubbliche (`public_listings` ecc.) | RLS, viste a colonne chiuse, `max_rows`, timeout | **nessun contatore nel database**: la raccolta sistematica degli annunci pubblici richiede un limite di rete (WAF) non acquistato |
+| registrazione e accesso | limiti di Supabase Auth per indirizzo e per invio di posta | **CAPTCHA non attivo**: richiede un fornitore (Turnstile o hCaptcha) e una modifica della configurazione Auth, decisione del founder. Configurazione Auth ospitata non riletta in questa sessione |
+| AI | gateway comune (§3) | spento |
+| upload | tetto di dimensione e elenco MIME per bucket (letti in Production), cartella propria per policy, percorso ricontrollato dalle porte | nessuna quota per numero di file; il contenuto reale non è verificato dal server di Storage |
+| proposte, verifiche, segnalazioni | quote per identità, quarantena, kill switch | più account moltiplicano le quote individuali |
+
+**Identità.** Autenticato = `auth.uid()` (più sessioni dello stesso account condividono il contatore). Anonimo =
+impronta di `cf-connecting-ip` (IPv6 ridotto alla /64). Senza header attestato **non** si inventa un'identità:
+restano posti e tetto comune. Che il gateway ospitato sovrascriva un valore mandato dal client va misurato sulla
+Preview (§12.9). **Osservabilità:** ogni rifiuto scrive `protezione_letture: rifiuto superficie=… motivo=…` nel
+registro di PostgreSQL (mai indirizzi o testi); soglie e stato in `/admin/azienda` → Controllo. Il proprietario
+cambia le soglie con un `update private.protezione_letture`. Nessuna protezione è assoluta.
+
+### 12.3 Consenso: nessun fallimento silenzioso
+
+Esiti gestiti dal wizard e dal Partner: `ricevuta` (silenzio), `in_sospeso`, `limite`, `non_attiva` (non promette
+un comando che non esiste), `non_valida`, `non_registrata`. Consenso inviato **senza** esito (replay con la stessa
+chiave, o risposta senza conferma): messaggio esplicito, mai un successo simulato. Il consumer **Partner**
+(`AggiungiScortePartner`) ora esiste: casella solo a proposte accese, mai preselezionata. La porta singola
+`cellar_bottiglia_aggiungi` accetta il consenso ma **non restituisce l'esito e nessuna schermata la chiama**: è
+backend predisposto; un consumer futuro deve usare la porta del lotto. Prova browser del wizard reale (consenso,
+risposta mai arrivata e pagina chiusa, ritentativo dallo scheduler, revoca dopo e prima dell'invio) in
+`e2e/catalogo-ciclo-vita.e2e.ts`.
+
+### 12.4 Agenti
+
+- **Orchestrazione:** davanti a `conflitto_con_dato_accettato` o `conflitto_fra_fonti`, Wine Research deriva un
+  `qualita.scansione` che **dipende** dal genitore: parte solo dopo approvazione **e** conferma di esecuzione di una
+  persona. È facoltativo: se il tipo non è in `spawn_types` o un limite lo rifiuta, la verifica si consegna e resta
+  l'evidenza `derivazione_non_riuscita`. Si abilita con
+  `update brain.agents set spawn_types = array['qualita.scansione'] where agent_key = 'wine_research';`.
+- **Wine Research, acquisizione:** `tools/company-brain/acquisizione.mjs` legge un file `.jsonl` **locale**
+  consegnato dalla fonte (nessuna rete verso le fonti, nessuno scraping) e chiama `brain.research_ingest`. La fonte è
+  quella dell'adattatore, riconosciuto dalla sessione del database; ogni elemento passa da `research_submit` (fonte
+  autorizzata e verificata, diritti, provenienza, rivendicazione **proposta**). Incrementale per impronta del
+  contenuto: un elemento già visto non torna, nemmeno se respinto. ≤ 20 per chiamata, tetto giornaliero. In
+  Production l'unica fonte autorizzata nuova da collegare **non esiste ancora**: la prova usa fixture.
+- **Authenticity:** `lib/autenticita/immagini.ts` (contenuto reale, formato, dimensioni, code aggiunte, qualità,
+  coerenza col testo OCR) è provato **solo su fixture sintetiche**, non è collegato a nessuna pagina e
+  `ACQUISIZIONE_IMMAGINI_REALI` è `false` nel codice. Le soglie di qualità non sono tarate su fotografie vere. Non
+  dichiara mai autenticità o certificazione.
+- **Price Intelligence:** `prezzi_vino_osservazioni` legge solo la vista pubblica `wine_price_history`; scheda
+  annuncio e Cantina mostrano il comando **solo** se la porta risponde accesa
+  (`private.prezzi_settings.valutazione_utenti_enabled`, spenta; finalità da approvare). Prezzi richiesti esclusi,
+  «dati insufficienti» sotto 5 vendite comparabili.
+
+### 12.5 Sentinel: percorsi dei segnali
+
+| Segnale | Percorso | Stato |
+|---|---|---|
+| freschezza backup | `offsite-backup-freshness` → `segnale.mjs` (corretto: ora passa la CA) | spento |
+| heartbeat tecnico, salute dell'applicazione, CI di `main` | job separato `brain-signals` di `technical-heartbeat` → `raccogli-segnali.mjs`, environment `company-brain-ingest`, permessi di sola lettura | spento; environment e credenziali non creati |
+| osservatore | stesso job, passo `osservatore.mjs`; lascia il battito `osservatore_esterno` | spento |
+| stato del database, worker, errori AI | controlli interni di Sentinel (28) | si eseguono quando Sentinel gira |
+| errori applicativi, registri Supabase | fonti registrate `app_errors`, `supabase_logs` | **non collegate**: servono credenziali di lettura dei registri non concesse |
+
+**Chi sorveglia il sorvegliante.** Sentinel ferma → l'osservatore esterno è rosso. Osservatore fermo → la sua fonte
+risulta ferma a Sentinel. Worker fermo → `esecutore_assente` (solo se ci sono task in coda da 6 ore). Database giù
+→ l'osservatore esce 1 e il job GitHub fallisce, canale che non dipende dal database. Resta scoperto il caso in cui
+GitHub non esegua la pianificazione **e** Sentinel sia ferma. GitHub può ritardare di ore.
+
+### 12.6 Esecuzione cloud
+
+| Percorso | Costo | Affidabilità | Nota |
+|---|---|---|---|
+| `pg_cron` (genera i task, Sentinel) | incluso | alta | non installato; non esegue i worker (perderebbe l'identità per agente) |
+| workflow manuale `company-brain-worker` | nessuno | dipende da una persona | **non è autonomia** |
+| GitHub pianificato | nessuno | ritardi di ore osservati | non aggiunto: la regola del repository resta «GitHub non è lo scheduler» |
+| contenitore con `esecutore.mjs` | ospite sempre acceso, da scegliere | alta con riavvio automatico | **consigliato**: indipendente dal fornitore, una credenziale e un agente per contenitore |
+| Edge Function pianificata | incluso nel piano | media (durata limitata) | richiede di portare i worker in Deno e `pg_net`: non costruita |
+
+`esecutore.mjs` esegue un lotto ogni `VINEA_WORKER_INTERVAL_MINUTES`, apre e chiude la connessione a ogni giro, si
+ferma pulito su SIGTERM ed esce con 1 dopo tre giri falliti di fila. **Predisposto, non distribuito:** nessun
+ospite è stato scelto o pagato.
+
+### 12.7 Privacy, controllo e conservazione
+
+- Le porte `azienda_admin_*`, `catalogo_admin_*`, `prezzi_admin_*` verificano l'admin nel database e non sono
+  eseguibili da `anon` (griglia `wi016g`, caso 1).
+- **Kill switch:** la sospensione generale ora ferma anche le richieste di verifica nuove, la registrazione di
+  ricerche, l'acquisizione e la stima utente. **Nuove richieste** si fermano subito; **in corso:** uno stream AI già
+  aperto finisce (al massimo 120 s) ma non può ritentare; le prese degli agenti tornano in coda; le richieste di
+  autenticità aperte restano a una persona. Il ripristino non accende nulla. La protezione delle letture non è
+  una funzione e resta attiva. Il singolo adattatore si ferma da SQL (la porta admin accetta come «fonte» le sole
+  fonti di monitoraggio).
+- **Conservazione** (`brain.retention_settings`): `task`, `eventi`, `segnali`, `revisioni_mercato`, `consumi_ai`;
+  periodi **vuoti**, nulla abilitato, nessun lavoro pianificato. `brain.retention_anteprima()` conta senza
+  cancellare; `brain.retention_applica(area, chi)` è solo del proprietario. `consumi_ai` non scende sotto 62 giorni
+  (il budget somma il mese); il registro **eventi** resta in sola aggiunta e non è applicabile. Segnali ed evidenze
+  ammettono la cancellazione **solo** da questa funzione. Nessuna cancellazione reale è stata eseguita.
+
+### 12.8 Interruttori aggiunti
+
+| Interruttore | Stato di nascita |
+|---|---|
+| `private.protezione_letture.attiva` | **accesa** (è una protezione) |
+| `private.prezzi_settings.valutazione_utenti_enabled` | spento |
+| `catalog.research_adapters` | nessun adattatore; ognuno nasce spento |
+| `brain.retention_settings` | periodi vuoti, nulla abilitato |
+| `brain.monitor_sources.osservatore_esterno` | spento |
+| `brain.agents.spawn_types` | nessun agente registrato |
+| `VINEA_INGEST_ENABLED`, `VINEA_OBSERVER_ENABLED`, `VINEA_RESEARCH_ENABLED`, `VINEA_WORKER_ENABLED` | assenti |
+
+### 12.9 Prove aggiunte e verifica ospitata
+
+`wi016f_protezione_letture.sql` (23), `wi016g_controllo_conservazione.sql` (19), `wi016_concorrenza.sh` (ora 39:
+posti fra sessioni vere, GET in sola lettura, acquisizione con login vero, orchestrazione completa, battito
+dell'osservatore, esecutore periodico), `tools/company-brain/test/processi.test.mjs`, bancali di uscita AI,
+consenso, ricerca, prezzi e immagini in `frontend-next`. Griglie adattate **al nuovo invariante**, non indebolite:
+`wi006b` (porta VOLATILE, motore STABLE), `wi013` (una fonte in più), `12zu` (origine attestata; il «limite noto»
+23 su `x-forwarded-for` è diventato la proprietà opposta).
+
+### 12.10 Delta per la revisione indipendente consolidata
+
+Oltre al §11: (1) buffering del Sommelier e rilevatori; (2) F: identità dell'anonimo, posti e tetti, esenzione
+di `vini_cerca` dall'hook, comportamento senza header; (3) G: `brain.research_ingest`, eccezione alla sola
+aggiunta, `retention_operazioni`, `prezzi_vino_osservazioni`; (4) job `brain-signals` ed environment; (5) soglie
+di nascita, da rivedere con il traffico vero.

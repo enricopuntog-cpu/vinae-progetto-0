@@ -173,7 +173,6 @@ test.describe.serial("Catalogo vivo: dalla Cantina alla scheda senza LWIN, con r
     eseguiSql(BLOCCA_PROPOSTE);
 
     const { contesto, page } = await apriIdentificazione(browser, "venditore", info, diagnostica);
-    diagnostica.ammetti("cellar_bottiglie_aggiungi");
     await page.getByLabel("Produttore", { exact: true }).fill(PRODUTTORE_E2E);
     await page.getByLabel("Nome / Etichetta", { exact: true }).fill(nomeWizard);
     await page.getByLabel("Annata", { exact: true }).fill("2019");
@@ -192,10 +191,10 @@ test.describe.serial("Catalogo vivo: dalla Cantina alla scheda senza LWIN, con r
     // la richiesta arriva DAVVERO al server; la risposta non raggiunge mai la pagina, che viene chiusa
     let consegnata: (corpo: string) => void = () => {};
     const arrivata = new Promise<string>((risolvi) => (consegnata = risolvi));
+    // La richiesta resta SENZA risposta: la pagina viene chiusa mentre aspetta, e il client non esegue nulla dopo.
     await page.route("**/rest/v1/rpc/cellar_bottiglie_aggiungi", async (route) => {
       const risposta = await route.fetch();
       consegnata(await risposta.text());
-      await route.abort("failed").catch(() => undefined);
     });
     await page.getByRole("button", { name: "Aggiungi alla cantina privata", exact: true }).click();
     expect(JSON.parse(await arrivata)).toMatchObject({ quantita: 1, catalogo: "in_sospeso" });
