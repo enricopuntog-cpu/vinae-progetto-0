@@ -16,6 +16,13 @@ const riferimenti = (candidati) =>
 /** Catalog Manager: dal confronto con le identita esistenti alla proposta per il curatore. */
 export function analizzaProposta(contesto) {
   if (contesto.stato === "gia_decisa") return { evidenze: [], chiusura: true };
+  // WI-016: una proposta in quarantena arriva senza testi; il worker non la analizza e non propone nulla sul catalogo.
+  if (contesto.quarantena) {
+    return {
+      evidenze: [{ tipo: "quarantena", dettaglio: { contributo_id: contesto.contributo_id, motivo: contesto.quarantena } }],
+      proposta: { contributo_id: contesto.contributo_id, azione: "quarantena", motivo: contesto.quarantena, avvisi: [] },
+    };
+  }
   const candidati = Array.isArray(contesto.candidati) ? contesto.candidati : [];
   const canonici = candidati.filter((c) => c.wine_id);
   const dallaFonte = candidati.filter((c) => c.source_record_id);
@@ -25,6 +32,8 @@ export function analizzaProposta(contesto) {
   if (contesto.affidabilita === "ocr_confermato_utente") avvisi.push("dati letti da etichetta e confermati dall'utente");
   const mancanti = Array.isArray(contesto.mancanti) ? contesto.mancanti : [];
   if (mancanti.includes("annata")) avvisi.push("annata non dichiarata: non va inventata");
+  const precedenti = Array.isArray(contesto.memoria?.precedenti) ? contesto.memoria.precedenti : [];
+  if (precedenti.some((p) => p.stato === "rifiutata")) avvisi.push("una proposta con lo stesso nome è già stata respinta: leggerne il motivo");
 
   let proposta;
   if (corrispondenza === "autorevole" && canonici.length === 1) {
@@ -68,6 +77,10 @@ const SUGGERIMENTI = {
   produttori_senza_paese: "completare il paese con una rivendicazione documentata",
   proposte_incoerenti: "controllare il contatore delle proposte indicate",
   importazioni_ferme: "riconciliare l'importazione secondo il runbook",
+  proposte_in_quarantena: "rilasciare o respingere dalla quarantena del catalogo",
+  annate_future: "correggere l'annata con la fonte: un'annata futura non esiste",
+  fonti_in_conflitto: "confrontare le fonti sullo stesso attributo e accettarne una sola",
+  dati_con_fonte_revocata: "ritirare o sostituire i dati della fonte non piu autorizzata",
 };
 
 /** Data Quality: dai rilievi del database a un task per il curatore, ordinato per gravita. */
@@ -153,8 +166,112 @@ export function analizzaTecnico(contesto) {
   };
 }
 
+// ---------------------------------------------------------------------------------------------
+// WI-016 — Wine Research: la verifica di un'informazione entrata da una fonte autorizzata
+// ---------------------------------------------------------------------------------------------
+const GIORNI_DATO_DATATO = 730;
+const ATTENDIBILITA_MINIMA = 3;
+
+/** Confronto strutturale: l'ordine delle chiavi non conta, quello degli elenchi si (e un dato diverso). */
+const canonico = (v) =>
+  Array.isArray(v)
+    ? `[${v.map(canonico).join(",")}]`
+    : v && typeof v === "object"
+      ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonico(v[k])}`).join(",")}}`
+      : JSON.stringify(v);
+
+export function analizzaRicerca(contesto, adesso = new Date()) {
+  if (contesto.stato && contesto.stato !== "proposed") return { evidenze: [], chiusura: true };
+  const provenienza = contesto.provenienza ?? null;
+  const accettata = contesto.accettata ?? null;
+  const altre = Array.isArray(contesto.altre_proposte) ? contesto.altre_proposte : [];
+  const valore = canonico(contesto.valore ?? null);
+  const diverse = altre.filter((a) => canonico(a.valore ?? null) !== valore).length;
+  const eta = provenienza ? (adesso.getTime() - Date.parse(provenienza.acquisita)) / 86_400_000 : Number.NaN;
+
+  let azione;
+  let passo;
+  if (contesto.fonte?.autorizzata !== true) {
+    azione = "fonte_non_autorizzata";
+    passo = "la fonte non e piu autorizzata: non accettare l'informazione";
+  } else if (!provenienza) {
+    azione = "provenienza_mancante";
+    passo = "manca la provenienza registrata: richiedere riferimento, data e attendibilita";
+  } else if (accettata && canonico(accettata.valore ?? null) !== valore) {
+    azione = "conflitto_con_dato_accettato";
+    passo = "esiste un dato accettato diverso: confrontare le due fonti prima di decidere";
+  } else if (accettata) {
+    azione = "gia_confermato";
+    passo = "il dato e gia accettato con lo stesso valore: la rivendicazione non aggiunge informazione";
+  } else if (diverse > 0) {
+    azione = "conflitto_fra_fonti";
+    passo = "altre proposte dicono cose diverse: non scegliere senza una fonte primaria";
+  } else if (!Number.isFinite(eta) || eta > GIORNI_DATO_DATATO) {
+    azione = "verifica_aggiornamento";
+    passo = "informazione acquisita da oltre due anni: verificare che la fonte la confermi ancora";
+  } else if (Number(provenienza.attendibilita) < ATTENDIBILITA_MINIMA) {
+    azione = "verifica_attendibilita";
+    passo = "attendibilita dichiarata bassa: serve una seconda fonte";
+  } else {
+    azione = "verifica_e_decidi";
+    passo = "nessun conflitto rilevato: leggere il riferimento e decidere dalla scheda del catalogo";
+  }
+
+  return {
+    evidenze: [
+      {
+        tipo: "confronto_fonti",
+        dettaglio: {
+          rivendicazione_id: contesto.rivendicazione_id,
+          attributo: contesto.attributo,
+          fonte: contesto.fonte?.codice,
+          affidabilita_fonte: contesto.fonte?.affidabilita,
+          attendibilita: provenienza?.attendibilita ?? null,
+          accettata_presente: Boolean(accettata),
+          altre_proposte_diverse: diverse,
+          giorni_dall_acquisizione: Number.isFinite(eta) ? Math.max(0, Math.round(eta)) : null,
+        },
+      },
+    ],
+    // il valore non viene copiato: chi decide lo legge dalla scheda, con la sua fonte
+    proposta: { rivendicazione_id: contesto.rivendicazione_id, azione, passo },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// WI-016 — Authenticity Assistant: trasforma i segnali dichiarati in passi di verifica. Non giudica la bottiglia.
+// ---------------------------------------------------------------------------------------------
+const PASSI_VERIFICA = {
+  etichetta_non_coerente: { ambito: "identificazione", passo: "confrontare l'etichetta con una scheda di fonte autorizzata, senza concludere dalla sola foto" },
+  annata_non_coerente: { ambito: "identificazione", passo: "controllare annata dichiarata, capsula e documenti di acquisto" },
+  produttore_non_coerente: { ambito: "identificazione", passo: "verificare il nome del produttore con una fonte primaria" },
+  qualita_foto_insufficiente: { ambito: "qualita_foto", passo: "richiedere nuove fotografie nitide e complete, con il consenso del proprietario" },
+  provenienza_non_documentata: { ambito: "provenienza", passo: "richiedere documenti di acquisto e di conservazione" },
+  condizioni_da_verificare: { ambito: "condizioni", passo: "far controllare livello, capsula ed etichetta da una persona competente" },
+};
+
+export function analizzaAutenticita(contesto) {
+  if (contesto.stato === "gia_decisa") return { evidenze: [], chiusura: true };
+  const anomalie = (Array.isArray(contesto.anomalie) ? contesto.anomalie : []).slice(0, 6);
+  const passi = anomalie.map((segnale) => ({
+    segnale,
+    ...(PASSI_VERIFICA[segnale] ?? { ambito: "da_classificare", passo: "segnale non riconosciuto: valutarlo a mano" }),
+  }));
+  return {
+    evidenze: [{ tipo: "segnali_dichiarati", dettaglio: { segnali: anomalie, ambiti: [...new Set(passi.map((p) => p.ambito))] } }],
+    proposta: {
+      azione: "richiedi_verifica_umana",
+      // l'unico valore possibile: ne un modello ne una regola possono stabilirlo
+      autenticita: "non_determinabile",
+      passi,
+    },
+  };
+}
+
 export const ANALISI = {
   "catalogo.proposta": analizzaProposta,
   "qualita.scansione": analizzaQualita,
   "tecnico.segnale": analizzaTecnico,
+  "ricerca.verifica": analizzaRicerca,
+  "autenticita.verifica": analizzaAutenticita,
 };

@@ -5,7 +5,7 @@
 //
 //   bun tools/company-brain/segnale.mjs --fonte technical_heartbeat --evento run:123 --stato ok \
 //       --osservato 2026-12-01T10:00:00Z --riferimento https://github.com/o/r/actions/runs/123 --conteggi '{"findings":0}'
-import { controllaConnessione } from "./lib/connessione.mjs";
+import { opzioniConnessione } from "./lib/connessione.mjs";
 
 export function leggiArgomenti(argv) {
   const valori = {};
@@ -28,14 +28,14 @@ if (import.meta.main) {
     console.log(JSON.stringify({ esito: "non_configurato" }));
     process.exit(0);
   }
-  const controllo = controllaConnessione(url);
+  const controllo = opzioniConnessione(url);
   if (!controllo.ok) {
     console.log(JSON.stringify({ esito: "rifiutato", motivo: controllo.motivo }));
     process.exit(2);
   }
   try {
     const s = leggiArgomenti(process.argv.slice(2));
-    const sql = new Bun.SQL(url, { max: 1, connectionTimeout: 15 });
+    const sql = new Bun.SQL({ ...controllo.opzioni, max: 1, connectionTimeout: 15 });
     const [riga] = await sql`select brain.ingest_signal(${s.fonte}::text, ${s.evento}::text, ${s.stato}::text,
       ${s.osservato}::timestamptz, ${s.riferimento}::text, ${JSON.stringify(s.conteggi)}::text::jsonb) as esito`;
     await sql.end();

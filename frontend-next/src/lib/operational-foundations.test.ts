@@ -72,6 +72,7 @@ describe("fondamenta operative fail-closed", () => {
     expect(workflow.length).toBeGreaterThan(0);
     const conSecret = workflow.filter((f) => /\$\{\{\s*secrets\./.test(read(`.github/workflows/${f}`)));
     expect(conSecret.sort()).toEqual([
+      "company-brain-worker.yml",
       "offsite-backup-freshness.yml",
       "offsite-backup.yml",
       "payouts-auto-release.yml",
@@ -79,9 +80,16 @@ describe("fondamenta operative fail-closed", () => {
     ]);
     for (const f of conSecret) {
       expect(read(`.github/workflows/${f}`)).toMatch(
-        /\n {4}environment: (production-(backup|payouts)|catalog-cloud-import)\r?\n/,
+        /\n {4}environment: (production-(backup|payouts)|catalog-cloud-import|company-brain-\$\{\{ inputs\.agente \}\})\r?\n/,
       );
     }
+    // WI-016: il worker del Company Brain resta inerte allo stesso modo, senza pianificazione e senza chiavi
+    // amministrative: GitHub non è lo scheduler.
+    const worker = read(".github/workflows/company-brain-worker.yml");
+    expect(worker).toInclude("workflow_dispatch:");
+    expect(worker).not.toMatch(/\n {2}(push|pull_request|schedule|workflow_run):/);
+    expect(worker).toInclude("if: github.ref == 'refs/heads/main' && vars.VINEA_WORKER_ENABLED == 'true'");
+    expect(worker).not.toMatch(/service_role|SERVICE_ROLE|SUPABASE_DB_URL/);
     // Il workflow del catalogo resta inerte: solo dispatch manuale, solo da main, solo con la variabile esatta.
     const catalogo = read(".github/workflows/wine-catalog-cloud-import.yml");
     expect(catalogo).toInclude("workflow_dispatch:");

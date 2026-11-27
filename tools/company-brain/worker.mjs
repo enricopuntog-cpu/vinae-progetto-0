@@ -2,10 +2,11 @@
 // WI-015 — avvio di un worker del Company Brain (Catalog Manager, Data Quality o Technical Monitor: lo decide la
 // CREDENZIALE, non un parametro). Spento per difetto.
 //
-//   VINEA_WORKER_ENABLED=true VINEA_AGENT_DATABASE_URL=… bun tools/company-brain/worker.mjs [--max 5]
+//   VINEA_WORKER_ENABLED=true VINEA_AGENT_DATABASE_URL=… [VINEA_DB_CA_PEM=…] bun tools/company-brain/worker.mjs [--max 5]
+// WI-016: fuori da loopback la CA del progetto è obbligatoria (verifica di catena e nome del server).
 //
 // Uscita: una riga JSON con gli esiti; nessun dato del dominio e nessuna credenziale.
-import { controllaConnessione } from "./lib/connessione.mjs";
+import { opzioniConnessione } from "./lib/connessione.mjs";
 import { databaseDelWorker, eseguiLotto } from "./lib/worker.mjs";
 
 const esci = (codice, corpo) => {
@@ -15,13 +16,13 @@ const esci = (codice, corpo) => {
 
 if (process.env.VINEA_WORKER_ENABLED !== "true") esci(2, { esito: "disattivato" });
 const url = process.env.VINEA_AGENT_DATABASE_URL ?? "";
-const controllo = controllaConnessione(url);
+const controllo = opzioniConnessione(url);
 if (!controllo.ok) esci(2, { esito: "rifiutato", motivo: controllo.motivo });
 
 const indice = process.argv.indexOf("--max");
 const massimo = indice > 0 ? Number(process.argv[indice + 1]) : 1;
 
-const sql = new Bun.SQL(url, { max: 1, connectionTimeout: 15 });
+const sql = new Bun.SQL({ ...controllo.opzioni, max: 1, connectionTimeout: 15 });
 const scadenza = setTimeout(() => esci(3, { esito: "scaduto" }), 5 * 60 * 1000);
 try {
   const giri = await eseguiLotto(databaseDelWorker(sql), massimo);

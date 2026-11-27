@@ -17,6 +17,8 @@ export async function eseguiUnGiro(db, { leaseSecondi = 300, analisi = ANALISI }
     if (!analizza) throw new Error("tipo_non_gestito");
     const risultato = analizza(await db.context(task, lease));
     for (const e of risultato.evidenze) await db.evidence(task, lease, e.tipo, e.dettaglio);
+    // WI-016: task derivati (al massimo 5), solo dal proprio lease: il server impone tipi ammessi, cicli e limiti.
+    for (const d of (risultato.derivati ?? []).slice(0, 5)) await db.spawn(task, lease, d);
     if (risultato.chiusura) {
       await db.closeIfAllowed(task, lease);
       return { esito: "chiuso_per_regola", task, tipo };
@@ -59,6 +61,10 @@ export function databaseDelWorker(sql) {
     finish: async (task, lease, successo, proposta) =>
       (await sql`select brain.finish_task(${task}::uuid, ${lease}::uuid, ${successo}::boolean,
         ${proposta === null ? null : JSON.stringify(proposta)}::text::jsonb) as s`)[0].s,
+    spawn: async (task, lease, d) => {
+      await sql`select brain.spawn_task(${task}::uuid, ${lease}::uuid, ${d.tipo}::text, ${d.titolo}::text,
+        ${JSON.stringify(d.payload ?? {})}::text::jsonb, ${d.chiave}::text, ${d.dopo_esecuzione ?? true}::boolean)`;
+    },
     closeIfAllowed: async (task, lease) => {
       await sql`select brain.close_if_allowed(${task}::uuid, ${lease}::uuid)`;
     },
