@@ -4,7 +4,9 @@
 (`catalog.*`), il Company Brain (`brain.*`, [`COMPANY_BRAIN.md`](COMPANY_BRAIN.md)), il budget AI
 (WI-010/WI-015) e le tre Edge Function AI. Nessun secondo catalogo, motore di ricerca, scheduler, coda, gateway o
 sistema di monitoraggio. Migration additive: `20261130100000` (A), `20261130110000` (B), `20261130120000` (C),
-`20261130130000` (D). Nessuna è nell'impronta della logica di promozione.
+`20261130130000` (D), `20261130140000` (E, correttiva: in `catalog.research_submit` una fonte rifiutata è un errore
+di dominio `P0001` e non `42501`, che resta riservato a chi non è autorizzato). Nessuna è nell'impronta della logica
+di promozione.
 
 Implementato e provato ≠ configurato ≠ attivato ≠ operativo. Nessun agente è registrato, nessun esecutore è
 scelto, nessun lavoro è acceso, `pg_cron` non è installato, nessuna fonte di monitoraggio è collegata, `AI_ENABLED`
@@ -192,7 +194,7 @@ nessun TTL per revisioni di mercato, eventi e task; il backend legacy resta fuor
 
 ## 11. Delta per la revisione indipendente
 
-1. Le quattro migration: porte `SECURITY DEFINER` nuove in `public` (admin con `catalog_admin_richiedi`, service_role
+1. Le cinque migration: porte `SECURITY DEFINER` nuove in `public` (admin con `catalog_admin_richiedi`, service_role
    per `ai_porta_*`, `ai_segnala`, `vini_canonici_scheda_servizio`; utenti per verifica autenticità), ridefinizioni di
    `current_agent`, `claim_task_core`, `finish_task_core`, `enqueue_task`, `agent_context_core`,
    `ai_budget_prenota`, `sentinel_run`, `scheduler_tick`, `run_job`, `ingest_signal`, `harvest_listings`,

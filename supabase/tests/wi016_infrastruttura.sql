@@ -316,12 +316,12 @@ select pg_temp.salva('wine', (select id::text from catalog.wines limit 1));
 
 -- ricerca: informazione da fonte autorizzata -> rivendicazione proposta -> decisione -> dato documentato
 select pg_temp.rec(23, 'fonte non autorizzata o senza diritti: rifiutata',
-  pg_temp.prova(format($q$select catalog.research_submit('FONTE-INVENTATA', 'wine', %L, 'grapes', '["Nebbiolo"]', 'scheda 1', now(), 3, 'wi016')$q$, pg_temp.f('wine'))) = '42501');
+  pg_temp.prova(format($q$select catalog.research_submit('FONTE-INVENTATA', 'wine', %L, 'grapes', '["Nebbiolo"]', 'scheda 1', now(), 3, 'wi016')$q$, pg_temp.f('wine'))) = 'P0001');
 insert into catalog.sources (code, name, license, authorization_status, trust_tier, verified_at)
 values ('WI016-SENZA-DIRITTI', 'Fonte senza diritti', null, 'authorized', 3, current_date),
        ('WI016-CONSORZIO', 'Consorzio di prova', 'Uso concesso per Vinea', 'authorized', 2, current_date);
 select pg_temp.rec(24, 'senza licenza né attribuzione non si acquisisce; riferimento non https, posta e data futura rifiutati',
-  pg_temp.prova(format($q$select catalog.research_submit('WI016-SENZA-DIRITTI', 'wine', %L, 'grapes', '["Nebbiolo"]', 'scheda 1', now(), 3, 'wi016')$q$, pg_temp.f('wine'))) = '42501'
+  pg_temp.prova(format($q$select catalog.research_submit('WI016-SENZA-DIRITTI', 'wine', %L, 'grapes', '["Nebbiolo"]', 'scheda 1', now(), 3, 'wi016')$q$, pg_temp.f('wine'))) = 'P0001'
   and pg_temp.prova(format($q$select catalog.research_submit('WI016-CONSORZIO', 'wine', %L, 'grapes', '["Nebbiolo"]', 'http://x.test/a', now(), 3, 'wi016')$q$, pg_temp.f('wine'))) = '22023'
   and pg_temp.prova(format($q$select catalog.research_submit('WI016-CONSORZIO', 'wine', %L, 'grapes', '["mario@rossi.test"]', 'scheda 1', now(), 3, 'wi016')$q$, pg_temp.f('wine'))) = '22023'
   and pg_temp.prova(format($q$select catalog.research_submit('WI016-CONSORZIO', 'wine', %L, 'grapes', '["Nebbiolo"]', 'scheda 1', now() + interval '2 days', 3, 'wi016')$q$, pg_temp.f('wine'))) = '22023');
