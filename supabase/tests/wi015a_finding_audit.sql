@@ -290,8 +290,11 @@ insert into fx values ('s1', pg_temp.prova('select brain.sentinel_run(''wi015'')
 select pg_temp.rec(31, 'l''esecuzione si conclude «parziale», il controllo annullato e quelli successivi sono dichiarati non eseguiti',
   pg_temp.f('s1') like 'OK:%'
   and (substr(pg_temp.f('s1'), 4)::jsonb ->> 'esito') = 'parziale'
-  -- WI-015B: dopo il catalogo proposte vengono i conflitti nativi, le fonti ferme e le chiamate AI
-  and (substr(pg_temp.f('s1'), 4)::jsonb ->> 'non_eseguiti')::integer = 4
+  -- non eseguiti = il controllo annullato e TUTTI quelli che lo seguono nell'elenco, qualunque sia la sua lunghezza
+  and (substr(pg_temp.f('s1'), 4)::jsonb ->> 'non_eseguiti')::integer =
+      (select count(*) from brain.sentinel_checks())
+      - (select c.n - 1 from (select code, row_number() over () as n from brain.sentinel_checks()) c
+          where c.code = 'proposte_catalogo_vecchie')
   and (select finished_at is not null from brain.sentinel_runs order by id desc limit 1)
   and (select evidence ->> 'sqlstate' = '57014' from brain.anomalies where fingerprint = 'controllo_non_eseguito:proposte_catalogo_vecchie')
   and exists (select 1 from brain.anomalies where fingerprint = 'controllo_non_eseguito:conflitti_lwin_nativi' and status = 'aperta'),

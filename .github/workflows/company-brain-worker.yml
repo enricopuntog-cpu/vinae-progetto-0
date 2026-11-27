@@ -1,0 +1,64 @@
+name: Company Brain - worker (spento, solo manuale)
+
+# WI-016: percorso minimo per eseguire UN worker deterministico su un esecutore cloud, con il PC del founder spento.
+# PREDISPOSTO E INERTE: parte solo a mano, solo da main e solo se la variabile di repository
+# VINEA_WORKER_ENABLED vale esattamente 'true'. NON ha una pianificazione: GitHub Actions non e uno scheduler
+# affidabile (ritardi di ore osservati, docs/COMPANY_BRAIN.md 3.1). La cadenza e l'esecutore definitivo sono una
+# decisione del founder.
+#
+# Prima di accendere (founder, docs/COMPANY_BRAIN.md 8): un environment per agente (company-brain-<agente>) ristretto
+# al branch main, con i soli secret VINEA_AGENT_DATABASE_URL (login individuale membro solo di brain_worker, mai
+# amministrativo) e VINEA_DB_CA_PEM (certificato pubblico del progetto). Log pubblici: contengono solo esiti e
+# identificativi di task.
+on:
+  workflow_dispatch:
+    inputs:
+      agente:
+        description: "Agente da eseguire (la credenziale dell'environment decide cosa puo fare)"
+        required: true
+        type: choice
+        options:
+          - catalog-manager
+          - data-quality
+          - technical-monitor
+          - wine-research
+          - authenticity-assistant
+      massimo:
+        description: "Numero massimo di task del lotto (1-20)"
+        required: false
+        default: "1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: company-brain-worker-${{ inputs.agente }}
+  cancel-in-progress: false
+
+jobs:
+  lotto:
+    name: Un lotto del worker
+    if: github.ref == 'refs/heads/main' && vars.VINEA_WORKER_ENABLED == 'true'
+    environment: company-brain-${{ inputs.agente }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Run one batch
+        env:
+          VINEA_WORKER_ENABLED: "true"
+          VINEA_AGENT_DATABASE_URL: ${{ secrets.VINEA_AGENT_DATABASE_URL }}
+          VINEA_DB_CA_PEM: ${{ secrets.VINEA_DB_CA_PEM }}
+          MASSIMO: ${{ inputs.massimo }}
+        run: |
+          case "$MASSIMO" in ''|*[!0-9]*) echo "::error::massimo deve essere un numero"; exit 2 ;; esac
+          bun tools/company-brain/worker.mjs --max "$MASSIMO"

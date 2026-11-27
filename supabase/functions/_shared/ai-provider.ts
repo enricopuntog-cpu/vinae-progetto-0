@@ -251,7 +251,7 @@ const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
  * variabile del modello: la 7.1 vuole un modello per compito e non un modello
  * per progetto, quindi il nome è un parametro e non una costante.
  */
-export const creaAiProvider = (compito: "chat" | "pairing" | "catalogo"): AiProvider => {
+export const creaAiProvider = (compito: "chat" | "pairing" | "catalogo", modelloRiserva?: string): AiProvider => {
   const apiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
   if (!apiKey) return creaDisabledProvider();
   const modelloPerCompito = {
@@ -261,7 +261,8 @@ export const creaAiProvider = (compito: "chat" | "pairing" | "catalogo"): AiProv
   }[compito];
   return creaOpenAiProvider({
     apiKey,
-    model: modelloPerCompito ?? Deno.env.get("AI_MODEL_DEFAULT") ?? "gpt-4.1-mini",
+    // WI-016: la riserva arriva solo dalla configurazione del proprietario nel database, mai dal client.
+    model: modelloRiserva ?? modelloPerCompito ?? Deno.env.get("AI_MODEL_DEFAULT") ?? "gpt-4.1-mini",
     maxOutputTokens: Number(Deno.env.get("AI_MAX_OUTPUT_TOKENS") ?? "800"),
   });
 };

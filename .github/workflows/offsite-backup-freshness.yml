@@ -77,6 +77,8 @@ jobs:
         if: ${{ !cancelled() && vars.VINEA_INGEST_ENABLED == 'true' }}
         env:
           VINEA_INGEST_DATABASE_URL: ${{ secrets.VINEA_INGEST_DATABASE_URL }}
+          # WI-016: certificato PUBBLICO della CA del progetto; fuori da loopback il mittente lo pretende.
+          VINEA_DB_CA_PEM: ${{ secrets.VINEA_DB_CA_PEM }}
           ESITO: ${{ steps.controllo.outcome == 'success' && 'ok' || 'guasto' }}
           EVENTO: run:${{ github.run_id }}:${{ github.run_attempt }}
           RIFERIMENTO: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

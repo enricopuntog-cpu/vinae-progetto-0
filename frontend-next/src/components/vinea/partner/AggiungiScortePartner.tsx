@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { messaggioEsitoProposta, proposteDisponibili } from "@/lib/cantina/proposta-catalogo";
 import {
   FORMATI,
   FORMATO_STANDARD,
@@ -46,6 +47,9 @@ export function AggiungiScortePartner() {
   });
   const [regioni, setRegioni] = useState<string[]>([]);
   const [inCorso, setInCorso] = useState(false);
+  // WI-016: con le proposte spente il comando non compare; il consenso non è mai preselezionato.
+  const [proposteAttive, setProposteAttive] = useState(false);
+  const [consensoCatalogo, setConsensoCatalogo] = useState(false);
   const chiave = useRef(nuovaChiaveIdempotenza("scorte"));
   const set = (k: keyof typeof campi) => (v: string) => setCampi((c) => ({ ...c, [k]: v }));
 
@@ -56,6 +60,9 @@ export function AggiungiScortePartner() {
       .then((esito) => {
         if (attivo && esito.ok) setRegioni(esito.data);
       });
+    void proposteDisponibili(getSupabaseClient()).then((disponibili) => {
+      if (attivo) setProposteAttive(disponibili);
+    });
     return () => {
       attivo = false;
     };
@@ -82,6 +89,7 @@ export function AggiungiScortePartner() {
     }
     setInCorso(true);
     try {
+      const consensoDato = proposteAttive && consensoCatalogo;
       const esito = await creaScortePartnerService(getSupabaseClient()).aggiungi({
         produttore: campi.produttore.trim(),
         nome: campi.nome.trim(),
@@ -91,12 +99,20 @@ export function AggiungiScortePartner() {
         formato: campi.formato,
         quantita,
         idempotencyKey: chiave.current,
+        ...(consensoDato ? { proponiAlCatalogo: true } : {}),
       });
       if (!esito.ok) {
         toast.error(esito.error);
         return;
       }
       chiave.current = nuovaChiaveIdempotenza("scorte");
+      const avvisoCatalogo = messaggioEsitoProposta(esito.data.catalogo, {
+        richiesta: consensoDato,
+        ripetuta: esito.data.replay,
+      });
+      if (avvisoCatalogo) toast.info(avvisoCatalogo);
+      // il consenso vale per UNA richiesta
+      setConsensoCatalogo(false);
       toast.success(`${esito.data.quantita} unità aggiunte alle scorte`);
       setCampi((c) => ({ ...c, produttore: "", nome: "", annata: "", quantita: "6" }));
       router.refresh();
@@ -191,6 +207,21 @@ export function AggiungiScortePartner() {
           onChange={(e) => set("quantita")(e.target.value)}
         />
       </div>
+      {proposteAttive ? (
+        <label className="flex items-start gap-2 rounded-xl border border-border p-3 text-xs md:col-span-2">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={consensoCatalogo}
+            onChange={(e) => setConsensoCatalogo(e.target.checked)}
+            data-testid="scorte-proposta-consenso"
+          />
+          <span>
+            Proponi anche questo vino al catalogo condiviso di Vinea: solo produttore, nome, annata, regione, tipo e
+            formato. Quantità e dati commerciali non vengono inviati; un curatore rivede la proposta.
+          </span>
+        </label>
+      ) : null}
       <div className="flex items-end md:col-span-2">
         <Button type="submit" disabled={inCorso} className="bg-bordeaux hover:bg-bordeaux/90">
           Aggiungi alle scorte

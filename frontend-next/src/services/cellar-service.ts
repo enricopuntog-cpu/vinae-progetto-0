@@ -48,6 +48,7 @@ import type {
   OverrideFinestra,
   Result,
 } from "@/services/types";
+import { ESITI_CONSENSO_CATALOGO, type EsitoConsensoCatalogo } from "./types";
 
 const IMMAGINE_ASSENTE = "/images/vinea-bottle-1.jpg";
 export const BUCKET_CANTINA = "cantina";
@@ -766,6 +767,8 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
         // non un default che il wizard abbia dimenticato di compilare.
         p_acquisition_cost_cents: dati.acquisitionCostCents ?? null,
         p_acquired_at: dati.acquiredAt ?? null,
+        // WI-016: il parametro parte solo con il consenso.
+        ...(dati.propostaCatalogo ? { p_catalogo_consenso: dati.propostaCatalogo } : {}),
       });
 
       if (error) return { ok: false, error: messaggioPerUtente("aggiungiBottiglia", error) };
@@ -799,6 +802,7 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
         p_immagini: dati.immagini,
         p_acquisition_cost_cents: dati.acquisitionCostCents ?? null,
         p_acquired_at: dati.acquiredAt ?? null,
+        ...(dati.propostaCatalogo ? { p_catalogo_consenso: dati.propostaCatalogo } : {}),
       });
       if (error) return { ok: false, error: messaggioPerUtente("aggiungiBottiglie", error) };
 
@@ -823,6 +827,9 @@ export function createCellarService(client: SupabaseClient | null): CellarServic
           quantita: esito.quantita,
           bottleUnitIds: esito.bottleUnitIds.map(String),
           replay: esito.replay === true,
+          ...(ESITI_CONSENSO_CATALOGO.includes(esito.catalogo as EsitoConsensoCatalogo)
+            ? { catalogo: esito.catalogo as EsitoConsensoCatalogo }
+            : {}),
         },
       };
     },

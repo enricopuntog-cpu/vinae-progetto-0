@@ -1,8 +1,16 @@
 import { describe, expect, it } from "bun:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { formatoInMl, inviaPropostaCatalogo, inviaPropostaNuovoVino,
-  preparaPropostaNuovoVino,
-  preparaProposta, proposteDisponibili, proposteDisponibiliPerNuovoVino } from "./proposta-catalogo";
+import {
+  formatoInMl,
+  inviaPropostaCatalogo,
+  leggiProposteMie,
+  messaggioEsitoProposta,
+  origineConsenso,
+  preparaProposta,
+  proposteDisponibili,
+  proposteDisponibiliPerNuovoVino,
+  ritiraProposta,
+} from "./proposta-catalogo";
 
 const VINO = { produttore: "Cantina Aurelia", nome: "Rosso del Faro", annata: 2019, regione: "Liguria", denominazione: "IGT", tipo: "Rosso", formato: "0,75 L" };
 const campi = { produttore: VINO.produttore, nome: VINO.nome, annata: "2019", regione: "Liguria", denominazione: "IGT" };
@@ -62,33 +70,72 @@ describe("WI-011 — proposta esplicita al catalogo", () => {
     expect(chiamate).toBe(1);
   });
 
-  it("WI-015: inserimento manuale ed etichetta confermata hanno origine propria e soli dati enologici", () => {
-    const campi = { produttore: " Cantina  Mare ", nome: "Vermentino", annata: "2021", regione: "Liguria", tipo: "Bianco", formato: "0,75 L" };
-    expect(preparaPropostaNuovoVino(campi, false)).toEqual({
-      ok: true,
-      data: { origine: "manuale", dati: { produttore: "Cantina Mare", nome: "Vermentino", annata: 2021, regione: "Liguria", tipo: "Bianco", formato_ml: 750 } },
-    });
-    const daEtichetta = preparaPropostaNuovoVino({ ...campi, annata: "", formato: "magnum strano" }, true);
-    expect(daEtichetta).toEqual({ ok: true, data: { origine: "ocr", dati: { produttore: "Cantina Mare", nome: "Vermentino", regione: "Liguria", tipo: "Bianco" } } });
-    expect(preparaPropostaNuovoVino({ ...campi, nome: " " }, false).ok).toBe(false);
+  it("WI-016: il consenso viaggia con la creazione; l'origine distingue manuale ed etichetta confermata", () => {
+    expect(origineConsenso(false)).toBe("manuale");
+    expect(origineConsenso(true)).toBe("ocr");
   });
 
-  it("WI-015: ripete solo gli errori di rete, al massimo tre volte; una risposta del database non si ripete", async () => {
-    const proposta = { origine: "manuale" as const, dati: { produttore: "P", nome: "N" } };
-    const attese: number[] = [];
-    const pausa = async (ms: number) => void attese.push(ms);
-    let n = 0;
-    const rete = { rpc: async () => { n++; if (n < 3) throw new TypeError("fetch failed"); return { data: "ricevuta", error: null }; } } as unknown as SupabaseClient;
-    expect(await inviaPropostaNuovoVino(rete, proposta, { pausa })).toEqual({ ok: true, data: undefined });
-    expect([n, attese]).toEqual([3, [1000, 3000]]);
-    let m = 0;
-    const rifiuto = { rpc: async () => { m++; return { data: null, error: { code: "P0001", message: "SEGRETO" } }; } } as unknown as SupabaseClient;
-    const esito = await inviaPropostaNuovoVino(rifiuto, proposta, { pausa });
-    expect([m, esito.ok, JSON.stringify(esito).includes("SEGRETO")]).toEqual([1, false, false]);
-    let k = 0;
-    const sempreGiu = { rpc: async () => { k++; throw new TypeError("fetch failed"); } } as unknown as SupabaseClient;
-    expect((await inviaPropostaNuovoVino(sempreGiu, proposta, { pausa })).ok).toBe(false);
-    expect(k).toBe(3);
+  it("WI-016: ogni esito della porta ha un messaggio onesto; ricevuta e assente non aggiungono rumore", () => {
+    expect(messaggioEsitoProposta("ricevuta")).toBeNull();
+    expect(messaggioEsitoProposta(undefined)).toBeNull();
+    expect(messaggioEsitoProposta("in_sospeso")).toContain("più tardi");
+    expect(messaggioEsitoProposta("limite")).toContain("limite giornaliero");
+    for (const esito of ["non_attiva", "non_valida", "non_registrata"] as const) {
+      expect(messaggioEsitoProposta(esito)).toContain("La bottiglia è in Cantina");
+    }
+  });
+
+  it("WI-016: consenso dato e nessun esito dal server NON è un successo silenzioso", () => {
+    const senzaConferma = messaggioEsitoProposta(undefined, { richiesta: true });
+    expect(senzaConferma).toContain("non abbiamo conferma");
+    // replay: la richiesta originale era già arrivata, il suo esito non torna più
+    const ripetuta = messaggioEsitoProposta(undefined, { richiesta: true, ripetuta: true });
+    expect(ripetuta).toContain("era già stata aggiunta");
+    expect(ripetuta).toContain("Le tue proposte al catalogo");
+    expect(messaggioEsitoProposta(undefined, { richiesta: false })).toBeNull();
+    expect(messaggioEsitoProposta("ricevuta", { richiesta: true })).toBeNull();
+  });
+
+  it("WI-016: con le proposte spente non si promette un comando che non esiste", () => {
+    expect(messaggioEsitoProposta("non_attiva")).not.toContain("dalla Cantina");
+    expect(messaggioEsitoProposta("non_attiva")).toContain("non è stata inviata");
+  });
+
+  it("WI-016: le proprie proposte si leggono con elenco chiuso di stati e si ritirano dalla stessa porta (id negativo)", async () => {
+    const chiamate: unknown[] = [];
+    const client = {
+      rpc: async (n: string, a: unknown) => {
+        chiamate.push([n, a]);
+        if (n === "catalogo_proposte_mie") {
+          return {
+            data: [
+              { id: -4, produttore: "P", nome: "Sospesa", annata: null, stato: "in_attesa_di_invio", inviata_il: "2026-11-27T00:00:00Z" },
+              { id: 9, produttore: "P", nome: "Aperta", annata: 2019, stato: "in_revisione", inviata_il: "2026-11-26T00:00:00Z" },
+              { id: 7, produttore: "P", nome: "Chiusa", annata: 2018, stato: "accolta", inviata_il: "2026-11-25T00:00:00Z" },
+              { id: "x", produttore: 1, nome: null },
+            ],
+            error: null,
+          };
+        }
+        return { data: true, error: null };
+      },
+    } as unknown as SupabaseClient;
+    const lette = await leggiProposteMie(client);
+    if (!lette.ok) throw new Error(lette.error);
+    expect(lette.data.map((p) => [p.id, p.stato, p.ritirabile])).toEqual([
+      [-4, "in_attesa_di_invio", true],
+      [9, "in_revisione", true],
+      [7, "accolta", false],
+    ]);
+    expect((await ritiraProposta(client, -4)).ok).toBe(true);
+    expect(chiamate.at(-1)).toEqual(["catalogo_proposta_ritira", { p_id: -4 }]);
+  });
+
+  it("WI-016: revoca non più possibile o errore: messaggio generico, nessun dettaglio interno", async () => {
+    const gia = { rpc: async () => ({ data: false, error: null }) } as unknown as SupabaseClient;
+    expect((await ritiraProposta(gia, 9)).ok).toBe(false);
+    const rotto = { rpc: async () => ({ data: null, error: { code: "XX000", message: "SEGRETO" } }) } as unknown as SupabaseClient;
+    expect(JSON.stringify(await leggiProposteMie(rotto))).not.toContain("SEGRETO");
   });
 
   it("WI-015: «non_valida» è un esito della porta (che consuma la quota), non un successo né un errore interno", async () => {

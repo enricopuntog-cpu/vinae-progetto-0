@@ -1,6 +1,6 @@
 # Router del contesto durevole Vinea
 
-Ultimo aggiornamento del router: **26 novembre 2026**.
+Ultimo aggiornamento del router: **27 novembre 2026**.
 
 Questa cartella conserva memoria strutturale e storia datata. Non è il bootstrap
 obbligatorio e non sostituisce le fonti vive.
@@ -41,6 +41,12 @@ Aprire soltanto ciò che serve al task:
   [`../docs/wine-intelligence/WI_009_PROCEDURA_FAIL_CLOSED.md`](../docs/wine-intelligence/WI_009_PROCEDURA_FAIL_CLOSED.md).
   **Living Catalog** (identità senza LWIN, proposte dal sito, pannello admin, aggiornamento periodico LWIN, WI-011/012):
   [`../docs/wine-intelligence/WI_011_LIVING_CATALOG.md`](../docs/wine-intelligence/WI_011_LIVING_CATALOG.md).
+- **Infrastruttura AI condivisa (WI-016, attivazione spenta)**: consenso persistente al catalogo, gateway AI e protezione
+  dagli abusi, sospensioni, orchestrazione, agenti Wine Research e Authenticity, Marketplace Monitor, Sentinel a 28
+  controlli, Founder Control Center, esecuzione cloud predisposta; interruttori, attivazione/revoca, limiti e delta per
+  la revisione indipendente: [`../docs/AI_INFRASTRUCTURE.md`](../docs/AI_INFRASTRUCTURE.md). Il §12 raccoglie il
+  completamento (uscita AI verificata prima della trasmissione, protezione delle ricerche, acquisizione autorizzata,
+  segnali, conservazione) e la mappa del perimetro anti-scraping con i limiti rimasti.
 - **Company Brain e Sentinel** (WI-013 e WI-015: identità per credenziale, worker deterministici, scheduler unico non
   installato, ingestione dei segnali, costi AI, cruscotto; WI-015 mergiata e distribuita il 26/11/2026 (`6602fbb`,
   ledger 138), **nulla attivato**, non attivo 24/7, ambiente dei worker mancante (§3.1); procedura unica di attivazione

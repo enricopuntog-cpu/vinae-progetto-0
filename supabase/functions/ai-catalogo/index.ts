@@ -15,23 +15,16 @@
 // foto della 7.3a — che è una funzionalità nuova, ammessa per eccezione, e
 // **non appartiene a questo checkpoint**.
 
+import { estraiJson } from "../_shared/ai-provider.ts";
+import { bloccoNonAttendibile, ISTRUZIONE_DATI_NON_ATTENDIBILI, pulisciUscita, togliRecapiti } from "../_shared/ai-sicurezza.ts";
 import {
-  AiFormatError,
-  AiProviderError,
-  stimaTokenInput,
-  type AiUso,
-  creaAiProvider,
-  estraiJson,
-  requestIdOpaco,
-} from "../_shared/ai-provider.ts";
-import {
+  apriIngresso,
   apriPorta,
+  chiamataGovernata,
   chiusa,
-  prenotaBudget,
-  rifiutata,
-  registraConsuntivo,
   json,
   leggiCorpo,
+  registraConsuntivo,
   registraEsitoFornitore,
   testo,
 } from "../_shared/ai-gate.ts";
@@ -42,7 +35,7 @@ import {
 // una formula di cortesia e non va riscritta.
 const SYSTEM = "Sei un catalogatore di vini italiano. Rispondi esclusivamente con JSON con i campi " +
   "nome, produttore, annata, denominazione, regione, tipologia, note_degustazione, " +
-  "condizioni_suggerite e confidence. Non inventare dati non deducibili.";
+  "condizioni_suggerite e confidence. Non inventare dati non deducibili." + ISTRUZIONE_DATI_NON_ATTENDIBILI;
 
 // Estremi di `ListingRequest` (`backend/ai_routes.py:228-229`).
 const OCR_MAX = 2000;
@@ -60,8 +53,8 @@ export type Suggerimento = {
   confidence: number;
 };
 
-const stringa = (valore: unknown, max = 400): string =>
-  typeof valore === "string" ? valore.trim().slice(0, max) : "";
+// WI-016: i campi suggeriti perdono collegamenti, recapiti e segreti prima di tornare al venditore.
+const stringa = (valore: unknown, max = 400): string => pulisciUscita(valore, max);
 
 /**
  * `annata` è l'unico campo numerico e l'unico che può restare vuoto: nel legacy
@@ -101,60 +94,54 @@ export const suggerimentoDa = (parsed: Record<string, unknown>): Suggerimento =>
 Deno.serve(async (request) => {
   const porta = await apriPorta(request, "ai:catalogo");
   if (chiusa(porta)) return porta.risposta;
-  const { cors, supabase } = porta;
+  const { cors, supabase, userId } = porta;
 
-  const corpo = await leggiCorpo(request);
-  const ocrText = corpo ? testo(corpo.ocr_text, OCR_MAX) : null;
-  const hint = corpo ? testo(corpo.hint, HINT_MAX) : null;
+  const letto = await leggiCorpo(request, cors);
+  if ("risposta" in letto) return letto.risposta;
+  const ocrText = letto.corpo ? testo(letto.corpo.ocr_text, OCR_MAX) : null;
+  const hint = letto.corpo ? testo(letto.corpo.hint, HINT_MAX) : null;
   // Stessa condizione di `backend/ai_routes.py:258-259`: almeno uno dei due.
   if (!ocrText && !hint) {
     return json({ error: "Fornire 'ocr_text' o 'hint'." }, 400, cors);
   }
+  // WI-016: dall'etichetta si tolgono i recapiti del produttore; segreti, carte e codici restano un rifiuto.
+  const ocr = ocrText ? togliRecapiti(ocrText) : null;
 
-  const parti: string[] = [];
-  if (ocrText) parti.push(`OCR etichetta:\n${ocrText}`);
-  if (hint) parti.push(`Indicazione utente: ${hint}`);
-
-  const provider = creaAiProvider("catalogo");
-  const prompt = parti.join("\n\n");
-  const prenotazione = await prenotaBudget(supabase, "ai:catalogo", cors, {
-    provider: provider.id,
-    modello: provider.modello,
-    tokenInput: stimaTokenInput(SYSTEM, prompt),
-    tokenOutputMax: provider.maxOutputTokens,
+  const ingresso = await apriIngresso(supabase, "ai:catalogo", userId, cors, {
+    liberi: [ocr ?? "", hint ?? ""],
+    identita: [ocrText ?? "", hint ?? ""],
   });
-  if (rifiutata(prenotazione)) return prenotazione.risposta;
-  let uso: AiUso | null = null;
-
+  if ("risposta" in ingresso) return ingresso.risposta;
+  let riuscita = false;
   try {
-    const grezzo = await provider.completeText({
+    const parti: string[] = [];
+    if (ocr) parti.push(bloccoNonAttendibile("testo letto dall'etichetta", ocr, OCR_MAX));
+    if (hint) parti.push(bloccoNonAttendibile("indicazione dell'utente", hint, HINT_MAX));
+
+    const chiamata = await chiamataGovernata({
+      supabase,
+      userId,
+      scope: "ai:catalogo",
+      compito: "catalogo",
+      cors,
+      ingresso,
       system: SYSTEM,
-      prompt,
-      requestId: requestIdOpaco("catalogo"),
-      onUso: (u) => {
-        uso = u;
-      },
+      prompt: parti.join("\n\n"),
+      nonDisponibile: "Il servizio AI non è al momento disponibile.",
+      chiama: (provider, call) => provider.completeText(call),
     });
+    if (!chiamata.ok) return chiamata.risposta;
     // Il fornitore ha risposto: anche un formato inutilizzabile non è un suo guasto.
     await registraEsitoFornitore(supabase, "ai:catalogo", true);
-    await registraConsuntivo(supabase, prenotazione.richiestaId, "ok", uso);
-    return json(suggerimentoDa(estraiJson(grezzo)), 200, cors);
-  } catch (errore) {
-    // se il consuntivo «ok» è già passato, questa seconda chiusura non ha effetto
-    await registraConsuntivo(
-      supabase,
-      prenotazione.richiestaId,
-      errore instanceof AiFormatError ? "formato_non_valido" : errore instanceof AiProviderError && !errore.guastoFornitore ? "errore_richiesta" : "guasto_fornitore",
-      uso,
-    );
-    if (errore instanceof AiFormatError) {
+    await registraConsuntivo(supabase, chiamata.richiestaId, "ok", chiamata.uso());
+    try {
+      const suggerimento = suggerimentoDa(estraiJson(chiamata.valore));
+      riuscita = true;
+      return json(suggerimento, 200, cors);
+    } catch {
       return json({ error: "Il servizio AI ha restituito un formato non valido." }, 502, cors);
     }
-    if (errore instanceof AiProviderError) {
-      if (errore.guastoFornitore) await registraEsitoFornitore(supabase, "ai:catalogo", false);
-      return json({ error: "Il servizio AI non è al momento disponibile." }, 503, cors);
-    }
-    console.error("[ai-catalogo] errore non previsto");
-    return json({ error: "Suggerimento non disponibile." }, 502, cors);
+  } finally {
+    await ingresso.chiudi(riuscita);
   }
 });

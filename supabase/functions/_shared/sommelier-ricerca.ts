@@ -185,7 +185,8 @@ export const PROMPT_ISTRUZIONI_RICERCA =
   " I dati sono candidati trovati nel catalogo Vinea per la ricerca dell'utente: un elenco parziale, non l'intero catalogo, e non sono la bottiglia dell'utente. " +
   "Solo un candidato con identificato true identifica il vino; con più candidati, omonimi o esiti diversi da «esatta» elencali e chiedi all'utente quale intende, senza sceglierne uno. " +
   "Con origine fonte_documentata cita l'attribuzione riportata quando usi quei dati; catalogo_vinea_curato è una scheda verificata da un curatore Vinea, senza codice LWIN. " +
-  "Il catalogo non fornisce annata, formato, vitigni, prezzo né valutazioni: se sono fra le lacune dillo e non inventarli.";
+  "Il catalogo non fornisce annata, formato, vitigni, prezzo né valutazioni: se sono fra le lacune dillo e non inventarli. " +
+  "Se è presente una scheda documentata, vale solo per il candidato identificato: cita la fonte di ogni suo dato; ciò che aggiungi tu è un suggerimento, non un dato documentato.";
 
 const LIVELLO_ESITO: Record<string, string> = {
   identificativo: "esatta",
@@ -224,4 +225,77 @@ export function candidatiDaRigheCanoniche(righe: unknown): CandidatoRicercaIn[] 
     nonDisponibile: [],
     attribuzione: { testo: r.attribuzione },
   }));
+}
+
+// ---------------------------------------------------------------------------
+// WI-016 — scheda documentata del SOLO vino identificato dal codice richiesto
+// ---------------------------------------------------------------------------
+// Dal database arrivano annate note e rivendicazioni ACCETTATE con la loro fonte (`vini_canonici_scheda_servizio`,
+// stessa visibilità della ricerca). Qui restano pochi campi chiusi, ripuliti e limitati: mai l'intero catalogo.
+
+export const LIMITI_SCHEDA = { annateMax: 12, datiMax: 10, valoreMax: 160, caratteriMax: 2000 } as const;
+
+export type SchedaDocumentata = {
+  annate_note: (number | string)[];
+  dati_documentati: { attributo: string; valore: string; fonte: string; annata?: number }[];
+};
+
+const ATTRIBUTI = new Set([
+  "grapes",
+  "alcohol_pct",
+  "tasting_notes",
+  "drinking_window",
+  "aging_potential_years",
+  "service_temperature_c",
+  "food_pairings",
+  "producer_website",
+  "bottle_volume_note",
+]);
+
+const valoreLeggibile = (v: unknown): string => {
+  const grezzo = Array.isArray(v)
+    ? v.filter((x) => typeof x === "string" || typeof x === "number").join(", ")
+    : typeof v === "string" || typeof v === "number"
+      ? String(v)
+      : v && typeof v === "object"
+        ? JSON.stringify(v)
+        : "";
+  return pulisci(grezzo, LIMITI_SCHEDA.valoreMax);
+};
+
+export function costruisciSchedaDocumentata(grezza: unknown): SchedaDocumentata | null {
+  if (!oggetto(grezza)) return null;
+  const annate = (Array.isArray(grezza.annate) ? grezza.annate : [])
+    .filter(oggetto)
+    .flatMap((a): (number | string)[] => {
+      const anno = annataOnull(a.anno);
+      if (anno !== null) return [anno];
+      return a.non_millesimato === true ? ["non millesimato"] : [];
+    })
+    .slice(0, LIMITI_SCHEDA.annateMax);
+  const dati = (Array.isArray(grezza.dati_documentati) ? grezza.dati_documentati : [])
+    .filter(oggetto)
+    .map((d) => {
+      const attributo = typeof d.attributo === "string" && ATTRIBUTI.has(d.attributo) ? d.attributo : "";
+      const valore = valoreLeggibile(d.valore);
+      const fonte = pulisci(d.fonte, 80);
+      const annata = annataOnull(d.annata);
+      // senza fonte non è un dato documentato: non entra
+      return attributo && valore && fonte ? { attributo, valore, fonte, ...(annata === null ? {} : { annata }) } : null;
+    })
+    .filter((d): d is NonNullable<typeof d> => d !== null)
+    .slice(0, LIMITI_SCHEDA.datiMax);
+  return annate.length === 0 && dati.length === 0 ? null : { annate_note: annate, dati_documentati: dati };
+}
+
+/** JSON su una riga entro il tetto: si tolgono dati dal fondo; stringa vuota se non c'è nulla. */
+export function serializzaSchedaDocumentata(scheda: SchedaDocumentata | null): string {
+  if (!scheda) return "";
+  let corrente = scheda;
+  let testo = JSON.stringify(corrente);
+  while (testo.length > LIMITI_SCHEDA.caratteriMax && corrente.dati_documentati.length > 0) {
+    corrente = { ...corrente, dati_documentati: corrente.dati_documentati.slice(0, -1) };
+    testo = JSON.stringify(corrente);
+  }
+  return testo;
 }

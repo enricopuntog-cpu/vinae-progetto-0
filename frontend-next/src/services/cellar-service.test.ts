@@ -444,3 +444,34 @@ describe("CellarService — valore nella Cantina pubblica", () => {
     expect(codice).toContain("cantina_pubblica_valore_imposta");
   });
 });
+
+describe("WI-016 — consenso al catalogo nella stessa chiamata che crea le bottiglie", () => {
+  const base = {
+    produttore: "Produttore", nome: "Etichetta", annata: 2020, regione: "Toscana", tipo: "Rosso" as const,
+    visibilita: "privata" as const, immagini: [], formato: "0,75 L", quantita: 1, idempotencyKey: "cantina:chiave-wi016",
+  };
+  const risposta = { lottoId: "l", wineId: "w", formato: "0,75 L", quantita: 1, bottleUnitIds: ["b"], replay: false };
+  const finto = (data: unknown) => {
+    const chiamate: { nome: string; parametri: Record<string, unknown> }[] = [];
+    const client = {
+      rpc: async (nome: string, parametri: Record<string, unknown>) => (chiamate.push({ nome, parametri }), { data, error: null }),
+    } as never;
+    return { client, chiamate };
+  };
+
+  it("senza consenso il parametro non parte affatto (compatibile anche con la porta precedente)", async () => {
+    const { client, chiamate } = finto(risposta);
+    const esito = await createCellarService(client).aggiungiBottiglie(base);
+    expect(esito.ok).toBe(true);
+    expect("p_catalogo_consenso" in chiamate[0]!.parametri).toBe(false);
+  });
+
+  it("col consenso parte l'origine e torna l'esito, solo se è fra quelli previsti", async () => {
+    const { client, chiamate } = finto({ ...risposta, catalogo: "in_sospeso" });
+    const esito = await createCellarService(client).aggiungiBottiglie({ ...base, propostaCatalogo: "ocr" });
+    expect(chiamate[0]!.parametri.p_catalogo_consenso).toBe("ocr");
+    expect(esito.ok && esito.data.catalogo).toBe("in_sospeso");
+    const strano = await createCellarService(finto({ ...risposta, catalogo: "SEGRETO" }).client).aggiungiBottiglie({ ...base, propostaCatalogo: "manuale" });
+    expect(strano.ok && strano.data.catalogo).toBeUndefined();
+  });
+});

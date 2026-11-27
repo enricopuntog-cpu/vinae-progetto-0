@@ -13,6 +13,8 @@ export function useSelezioniCatalogo(utenteId: string | null) {
   const [letto, setLetto] = useState<{ utente: string; stato: SelezioniCatalogo } | null>(null);
   // WI-011: proposte al catalogo, spente di default; una lettura sola per elenco.
   const [proposte, setProposte] = useState<string | null>(null);
+  // WI-016: richieste di verifica di una bottiglia, spente di default.
+  const [verifiche, setVerifiche] = useState<string | null>(null);
 
   useEffect(() => {
     if (!client || !utenteId) return;
@@ -23,6 +25,13 @@ export function useSelezioniCatalogo(utenteId: string | null) {
     void proposteDisponibili(client).then((attive) => {
       if (!annullato) setProposte(attive ? utenteId : null);
     });
+    // fail-closed: solo un `true` esatto mostra il comando
+    void Promise.resolve(client.rpc("cellar_verifica_autenticita_disponibile")).then(
+      ({ data, error }) => {
+        if (!annullato) setVerifiche(!error && data === true ? utenteId : null);
+      },
+      () => {},
+    );
     return () => {
       annullato = true;
     };
@@ -39,5 +48,11 @@ export function useSelezioniCatalogo(utenteId: string | null) {
   }, []);
 
   const stato = letto && letto.utente === utenteId ? letto.stato : NESSUNA_SELEZIONE;
-  return { client, stato, cambia, proposteAttive: utenteId !== null && proposte === utenteId };
+  return {
+    client,
+    stato,
+    cambia,
+    proposteAttive: utenteId !== null && proposte === utenteId,
+    verificheAttive: utenteId !== null && verifiche === utenteId,
+  };
 }

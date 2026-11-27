@@ -5,7 +5,8 @@
 //
 //   bun tools/company-brain/segnale.mjs --fonte technical_heartbeat --evento run:123 --stato ok \
 //       --osservato 2026-12-01T10:00:00Z --riferimento https://github.com/o/r/actions/runs/123 --conteggi '{"findings":0}'
-import { controllaConnessione } from "./lib/connessione.mjs";
+import { opzioniConnessione } from "./lib/connessione.mjs";
+import { inviaSegnale } from "./lib/invio.mjs";
 
 export function leggiArgomenti(argv) {
   const valori = {};
@@ -28,18 +29,17 @@ if (import.meta.main) {
     console.log(JSON.stringify({ esito: "non_configurato" }));
     process.exit(0);
   }
-  const controllo = controllaConnessione(url);
+  const controllo = opzioniConnessione(url);
   if (!controllo.ok) {
     console.log(JSON.stringify({ esito: "rifiutato", motivo: controllo.motivo }));
     process.exit(2);
   }
   try {
     const s = leggiArgomenti(process.argv.slice(2));
-    const sql = new Bun.SQL(url, { max: 1, connectionTimeout: 15 });
-    const [riga] = await sql`select brain.ingest_signal(${s.fonte}::text, ${s.evento}::text, ${s.stato}::text,
-      ${s.osservato}::timestamptz, ${s.riferimento}::text, ${JSON.stringify(s.conteggi)}::text::jsonb) as esito`;
+    const sql = new Bun.SQL({ ...controllo.opzioni, max: 1, connectionTimeout: 15 });
+    const esito = await inviaSegnale(sql, s);
     await sql.end();
-    console.log(JSON.stringify({ esito: riga.esito }));
+    console.log(JSON.stringify({ esito }));
   } catch (errore) {
     const codice = String(errore?.errno ?? errore?.code ?? "");
     console.log(JSON.stringify({ esito: "errore", codice: /^[0-9A-Z]{5}$/.test(codice) ? codice : "invio" }));

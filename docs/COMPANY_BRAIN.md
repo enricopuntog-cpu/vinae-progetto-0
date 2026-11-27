@@ -11,6 +11,12 @@ la documentazione restano il riferimento per codice e procedure. Il catalogo con
 > fonte di monitoraggio è accesa o collegata (§6), nessuna tariffa AI e nessun tetto sono inseriti, nessun workflow
 > invia segnali. Ogni accensione è del founder (§8).
 
+> **WI-016 (27/11/2026) estende questo documento** senza sostituirlo: sospensioni (kill switch globale e individuali),
+> orchestrazione (dipendenze, task derivati, limiti per operazione, attesa dopo i guasti, memoria), due worker nuovi
+> (Wine Research, Authenticity Assistant), Sentinel a **28** controlli con escalation e peggioramento, lavori
+> `proposte_in_sospeso` e `monitor_mercato` (8 lavori in tutto, tutti spenti), TLS con CA e osservatore indipendente.
+> Dettagli e attivazione: [`AI_INFRASTRUCTURE.md`](AI_INFRASTRUCTURE.md). Lo stato di rilascio è in `CHANGES.log`.
+
 ## 1. Contratto comune (schema `brain`, non esposto alla Data API)
 
 | Oggetto | Che cosa fa |

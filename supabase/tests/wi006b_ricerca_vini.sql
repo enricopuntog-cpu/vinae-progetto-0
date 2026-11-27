@@ -146,7 +146,7 @@ begin
   analyze public.wines;
 
   -- 01: privilegi. Eseguibili da anon e authenticated, non da PUBLIC; SECURITY DEFINER; stabile.
-  perform pg_temp.registra(1, 'vini_cerca: EXECUTE ad anon e authenticated, non a PUBLIC; SECURITY DEFINER con search_path vuoto, STABLE; vini_normalizza non esposta ad anon (authenticated sì: serve agli indici)',
+  perform pg_temp.registra(1, 'vini_cerca: EXECUTE ad anon e authenticated, non a PUBLIC; SECURITY DEFINER con search_path vuoto (WI-016F: porta VOLATILE protetta, motore STABLE non eseguibile dalle API); vini_normalizza non esposta ad anon (authenticated sì: serve agli indici)',
     has_function_privilege('anon', 'public.vini_cerca(text,text,integer,text,integer,text)', 'EXECUTE')
     and has_function_privilege('authenticated', 'public.vini_cerca(text,text,integer,text,integer,text)', 'EXECUTE')
     and not has_function_privilege('anon', 'public.vini_normalizza(text)', 'EXECUTE')
@@ -155,14 +155,20 @@ begin
                     where p.oid in ('public.vini_cerca(text,text,integer,text,integer,text)'::regprocedure,
                                     'public.vini_normalizza(text)'::regprocedure)
                       and a.grantee = 0)
+    and (select prosecdef and provolatile = 'v' and proconfig @> array['search_path=""'] from pg_proc
+         where oid = 'public.vini_cerca(text,text,integer,text,integer,text)'::regprocedure)
     and (select prosecdef and provolatile = 's' and proconfig @> array['search_path=""'] from pg_proc
-         where oid = 'public.vini_cerca(text,text,integer,text,integer,text)'::regprocedure));
+         where oid = 'private.vini_cerca_motore(text,text,integer,text,integer,text)'::regprocedure)
+    and not has_function_privilege('anon', 'private.vini_cerca_motore(text,text,integer,text,integer,text)'::regprocedure, 'EXECUTE')
+    and not has_function_privilege('authenticated', 'private.vini_cerca_motore(text,text,integer,text,integer,text)'::regprocedure, 'EXECUTE'));
 
   -- 02: nessun accesso a catalog.*: schema chiuso ai ruoli API e nessun riferimento nel corpo.
   perform pg_temp.registra(2, 'catalog.* resta privato: nessun USAGE ad anon/authenticated e nessun riferimento nel corpo di vini_cerca',
     not has_schema_privilege('anon', 'catalog', 'USAGE') and not has_schema_privilege('authenticated', 'catalog', 'USAGE')
-    and (select prosrc not like '%catalog.%' from pg_proc
-         where oid = 'public.vini_cerca(text,text,integer,text,integer,text)'::regprocedure));
+    -- porta e motore: nessuno dei due legge il catalogo canonico
+    and (select count(*) = 2 and bool_and(prosrc not like '%catalog.%') from pg_proc
+         where oid in ('public.vini_cerca(text,text,integer,text,integer,text)'::regprocedure,
+                       'private.vini_cerca_motore(text,text,integer,text,integer,text)'::regprocedure)));
 
   -- 03: normalizzazione.
   perform pg_temp.registra(3, 'vini_normalizza: accenti, maiuscole, apostrofi, punteggiatura e ligature',
@@ -259,8 +265,9 @@ begin
   perform pg_temp.registra(19, 'ordine stabile: due chiamate identiche, stessa sequenza', v_p = v_q and jsonb_array_length(v_p) >= 3);
 
   -- 20: sola lettura. Una funzione STABLE non può scrivere; si verifica anche che il conteggio non cambi.
-  perform pg_temp.registra(20, 'sola lettura: nessuna scrittura (STABLE) e righe invariate dopo le ricerche',
-    (select provolatile = 's' from pg_proc where oid = 'public.vini_cerca(text,text,integer,text,integer,text)'::regprocedure)
+  perform pg_temp.registra(20, 'sola lettura: motore STABLE, porta senza scritture proprie e righe invariate dopo le ricerche',
+    (select provolatile = 's' from pg_proc where oid = 'private.vini_cerca_motore(text,text,integer,text,integer,text)'::regprocedure)
+    and (select prosrc !~* '\m(insert|update|delete)\M' from pg_proc where oid = 'public.vini_cerca(text,text,integer,text,integer,text)'::regprocedure)
     and (select count(*) from public.wines where slug like 'wi006b-%') = 47);
 
   -- 21: il contratto di riga: colonne attese, niente colonne private (creato_da, provenienza).

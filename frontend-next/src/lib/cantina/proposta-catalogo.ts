@@ -4,7 +4,7 @@
 // senza revisione. Fail-closed: con le proposte spente il comando non compare.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Result } from "@/services/types";
+import type { EsitoConsensoCatalogo, Result } from "@/services/types";
 import { codiceErrore } from "@/lib/errore-per-log";
 
 export type VinoPerProposta = {
@@ -22,6 +22,7 @@ export type CampiProposta = { produttore: string; nome: string; annata: string; 
 export type Proposta = { origine: "cantina" | "correzione" | "manuale" | "ocr"; dati: Record<string, string | number> };
 
 const ERRORE_GENERICO = "Non è stato possibile inviare la proposta. Riprova più tardi.";
+const ERRORE_LETTURA = "Non è stato possibile leggere le tue proposte. Riprova più tardi.";
 
 /** «0,75 L» → 750. Un formato non riconosciuto resta assente: non si indovina. */
 export function formatoInMl(testo: string): number | null {
@@ -111,58 +112,95 @@ export async function inviaPropostaCatalogo(client: SupabaseClient, wineSlug: st
   }
 }
 
-/** I soli campi enologici di un vino appena inserito dal wizard (WI-015). */
-export type CampiNuovoVino = {
-  produttore: string;
-  nome: string;
-  annata: string;
-  regione: string;
-  tipo: string;
-  formato: string;
-};
+// ---------------------------------------------------------------------------
+// WI-016 — il consenso del wizard viaggia nella STESSA chiamata che crea la bottiglia (persistente nella stessa
+// transazione): una pagina chiusa non perde più la proposta, quindi il client non la invia e non la ripete.
+// ---------------------------------------------------------------------------
 
 /** `ocr` solo quando l'utente ha CONFERMATO i dati letti dall'etichetta; altrimenti `manuale`. */
-export function preparaPropostaNuovoVino(campi: CampiNuovoVino, daEtichettaConfermata: boolean): Result<Proposta> {
-  const produttore = compatta(campi.produttore);
-  const nome = compatta(campi.nome);
-  if (!produttore || !nome) return { ok: false, error: "Produttore e nome del vino sono necessari." };
-  const dati: Record<string, string | number> = { produttore, nome };
-  const annata = Number(campi.annata.trim());
-  if (/^[0-9]{4}$/.test(campi.annata.trim()) && annata >= 1800 && annata <= new Date().getFullYear() + 1) dati.annata = annata;
-  if (compatta(campi.regione)) dati.regione = compatta(campi.regione);
-  if (compatta(campi.tipo)) dati.tipo = compatta(campi.tipo);
-  const ml = formatoInMl(campi.formato);
-  if (ml !== null) dati.formato_ml = ml;
-  return { ok: true, data: { origine: daEtichettaConfermata ? "ocr" : "manuale", dati } };
-}
-
-const attesaReale = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+export const origineConsenso = (daEtichettaConfermata: boolean): "manuale" | "ocr" => (daEtichettaConfermata ? "ocr" : "manuale");
 
 /**
- * Invio DOPO che la bottiglia è stata creata: non la condiziona mai. Si ripete solo un errore di rete (la richiesta non
- * ha avuto risposta), al massimo tre volte; una risposta del database non si ripete (la quota conta ogni richiesta e il
- * server deduplica la stessa identità). Se non parte, la si può inviare di nuovo dalla Cantina.
+ * Messaggio per l'utente; `null` quando non serve aggiungere nulla. La bottiglia è comunque in Cantina.
+ * `richiesta`: il consenso è partito con QUESTA creazione; `ripetuta`: il server ha riconosciuto un nuovo tentativo
+ * (replay), per il quale non restituisce più l'esito. Un consenso senza esito non si presenta come riuscito.
  */
-export async function inviaPropostaNuovoVino(
-  client: SupabaseClient,
-  proposta: Proposta,
-  { tentativi = 3, pausa = attesaReale }: { tentativi?: number; pausa?: (ms: number) => Promise<void> } = {},
-): Promise<Result<void>> {
-  for (let n = 1; n <= tentativi; n++) {
-    try {
-      const { data, error } = await client.rpc("catalogo_proponi", {
-        p_origine: proposta.origine,
-        p_dati: proposta.dati,
-        p_consenso: true,
-        p_wine_slug: null,
-      });
-      if (!error && data === "ricevuta") return { ok: true, data: undefined };
-      // postgrest-js riporta un guasto di rete come errore senza codice
-      if (!error || error.code) return { ok: false, error: ERRORE_GENERICO };
-    } catch (errore) {
-      console.error("[catalogo-proposte] rete non raggiungibile:", codiceErrore(errore));
-    }
-    if (n < tentativi) await pausa(n === 1 ? 1000 : 3000);
+export function messaggioEsitoProposta(
+  esito: EsitoConsensoCatalogo | undefined,
+  { richiesta = false, ripetuta = false }: { richiesta?: boolean; ripetuta?: boolean } = {},
+): string | null {
+  switch (esito) {
+    case undefined:
+      if (!richiesta) return null;
+      return ripetuta
+        ? "La bottiglia era già stata aggiunta: controlla in Cantina, «Le tue proposte al catalogo», se la proposta risulta registrata."
+        : "La bottiglia è in Cantina, ma non abbiamo conferma della proposta al catalogo: controlla «Le tue proposte al catalogo».";
+    case "ricevuta":
+      return null;
+    case "in_sospeso":
+      return "La proposta al catalogo è registrata: verrà inviata più tardi. Puoi ritirarla dalla Cantina.";
+    case "limite":
+      return "La bottiglia è in Cantina. Hai raggiunto il limite giornaliero di proposte al catalogo.";
+    case "non_attiva":
+      return "La bottiglia è in Cantina. Le proposte al catalogo non sono attive in questo momento: la proposta non è stata inviata.";
+    case "non_valida":
+      return "La bottiglia è in Cantina. I dati indicati non bastano per una proposta al catalogo: la proposta non è stata registrata.";
+    default:
+      return "La bottiglia è in Cantina; la proposta al catalogo non è stata registrata. Se il comando è disponibile, puoi inviarla dalla Cantina.";
   }
-  return { ok: false, error: ERRORE_GENERICO };
+}
+
+export type PropostaMia = {
+  id: number;
+  produttore: string;
+  nome: string;
+  annata: number | null;
+  stato: string;
+  inviataIl: string;
+  /** Si ritira solo ciò che nessuno ha ancora deciso. */
+  ritirabile: boolean;
+};
+
+const RITIRABILI = new Set(["in_revisione", "in_attesa_di_invio", "non_inviata"]);
+
+export async function leggiProposteMie(client: SupabaseClient): Promise<Result<PropostaMia[]>> {
+  try {
+    const { data, error } = await client.rpc("catalogo_proposte_mie");
+    if (error || !Array.isArray(data)) return { ok: false, error: ERRORE_LETTURA };
+    return {
+      ok: true,
+      data: (data as Record<string, unknown>[]).flatMap((r) =>
+        Number.isInteger(r.id) && typeof r.produttore === "string" && typeof r.nome === "string" && typeof r.stato === "string"
+          ? [
+              {
+                id: r.id as number,
+                produttore: r.produttore,
+                nome: r.nome,
+                annata: Number.isInteger(r.annata) ? (r.annata as number) : null,
+                stato: r.stato,
+                inviataIl: typeof r.inviata_il === "string" ? r.inviata_il : "",
+                ritirabile: RITIRABILI.has(r.stato),
+              },
+            ]
+          : [],
+      ),
+    };
+  } catch (errore) {
+    console.error("[catalogo-proposte] elenco non letto:", codiceErrore(errore));
+    return { ok: false, error: ERRORE_LETTURA };
+  }
+}
+
+/** Revoca del consenso. Un id negativo è un'intenzione non ancora inviata: la porta è la stessa. */
+export async function ritiraProposta(client: SupabaseClient, id: number): Promise<Result<void>> {
+  try {
+    const { data, error } = await client.rpc("catalogo_proposta_ritira", { p_id: id });
+    if (error || data !== true) {
+      return { ok: false, error: "Non è più possibile ritirare questa proposta. Ricarica l'elenco." };
+    }
+    return { ok: true, data: undefined };
+  } catch (errore) {
+    console.error("[catalogo-proposte] ritiro non riuscito:", codiceErrore(errore));
+    return { ok: false, error: ERRORE_GENERICO };
+  }
 }

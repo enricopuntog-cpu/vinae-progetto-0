@@ -404,6 +404,18 @@ wi015_ops="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/wi015_operazioni.sh")" \
   || { printf '%s\n' "$wi015_ops" | tail -n 40; die "wi015 operazioni end-to-end: fallita."; }
 printf '%s\n' "$wi015_ops"
 summary "- $(printf '%s\n' "$wi015_ops" | grep 'wi015 operazioni end-to-end:' | tail -n 1)"
+# WI-016 (wi016): infrastruttura AI — consenso persistente, percorso completo fino ai consumer, quarantena, orchestrazione
+# senza cicli, sospensioni, porta AI, ricerca, autenticità, mercato, Sentinel e Control Center. La prova di concorrenza usa
+# sessioni parallele vere, i worker Wine Research e Authenticity con login propri e l'osservatore indipendente.
+run_grid "wi016 infrastruttura AI" wi016_infrastruttura.sql 3
+wi016_conc="$(E2E_DB_URL="$E2E_DB_URL" bash "$TESTS/wi016_concorrenza.sh")" \
+  || { printf '%s\n' "$wi016_conc" | tail -n 40; die "wi016 concorrenza e processi veri: fallita."; }
+printf '%s\n' "$wi016_conc"
+summary "- $(printf '%s\n' "$wi016_conc" | grep 'wi016 concorrenza e processi veri:' | tail -n 1)"
+# WI-016 F/G: protezione delle letture (identita attestata, isolamento, tetti) e completamento (porte admin, kill
+# switch, prezzi utente spenti, conservazione su sole fixture, superficie dell'acquisizione). ROLLBACK.
+run_grid "wi016f protezione delle letture" wi016f_protezione_letture.sql 3
+run_grid "wi016g controllo e conservazione" wi016g_controllo_conservazione.sql 3
 # WI-008 (wi008d): ricerca canonica con PostgREST e Auth veri (429 al minuto, raffica parallela, serializzazione per
 # identita, isolamento, porta di sola lettura del Sommelier, fonte revocata, ripristino dopo la finestra: attende il
 # minuto successivo). Fixture committate sul catalogo VUOTO e rimosse in trap, interruttore di nuovo spento.

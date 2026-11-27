@@ -21,23 +21,16 @@
 //     a colonne chiuse, come vogliono le regole di esposizione — non da una
 //     policy sulla tabella base.
 
+import { estraiJson } from "../_shared/ai-provider.ts";
+import { ISTRUZIONE_DATI_NON_ATTENDIBILI, pulisciUscita, righeNonAttendibili } from "../_shared/ai-sicurezza.ts";
 import {
-  AiFormatError,
-  AiProviderError,
-  stimaTokenInput,
-  type AiUso,
-  creaAiProvider,
-  estraiJson,
-  requestIdOpaco,
-} from "../_shared/ai-provider.ts";
-import {
+  apriIngresso,
   apriPorta,
+  chiamataGovernata,
   chiusa,
-  prenotaBudget,
-  rifiutata,
-  registraConsuntivo,
   json,
   leggiCorpo,
+  registraConsuntivo,
   registraEsitoFornitore,
   testo,
 } from "../_shared/ai-gate.ts";
@@ -50,7 +43,8 @@ const CATALOGO_MAX = 60;
 // verso il modello non cambia: cambia solo da dove arrivano i candidati.
 const SYSTEM = "Sei un sommelier italiano. Rispondi esclusivamente con JSON valido: " +
   '{"intro":"...", "picks":[{"wine_id":"...", "reasoning":"..."}]}. ' +
-  "Scegli esattamente 3 vini presenti nel catalogo, oppure tutti se il catalogo ne contiene meno.";
+  "Scegli esattamente 3 vini presenti nel catalogo, oppure tutti se il catalogo ne contiene meno." +
+  ISTRUZIONE_DATI_NON_ATTENDIBILI;
 
 type RigaCatalogo = {
   id: string;
@@ -97,7 +91,7 @@ export const scelteValide = (
     viste.add(wineId);
     scelte.push({
       wine_id: wineId,
-      reasoning: String(candidata.reasoning ?? "").trim().slice(0, 400),
+      reasoning: pulisciUscita(String(candidata.reasoning ?? ""), 400),
     });
     if (scelte.length === attese) break;
   }
@@ -107,91 +101,70 @@ export const scelteValide = (
 Deno.serve(async (request) => {
   const porta = await apriPorta(request, "ai:pairing");
   if (chiusa(porta)) return porta.risposta;
-  const { cors, supabase } = porta;
+  const { cors, supabase, userId } = porta;
 
-  const corpo = await leggiCorpo(request);
+  const letto = await leggiCorpo(request, cors);
+  if ("risposta" in letto) return letto.risposta;
   // `query` ha gli stessi estremi di `PairingRequest` (`backend/ai_routes.py:147`).
-  const query = corpo ? testo(corpo.query, 400) : null;
+  const query = letto.corpo ? testo(letto.corpo.query, 400) : null;
   if (!query || query.length < 2) {
     return json({ error: "Indicare un piatto o un'occasione." }, 400, cors);
   }
 
-  const { data: righe, error: catalogoError } = await supabase
-    .from("public_listings")
-    .select("id,produttore,nome,annata,denominazione,regione,tipo")
-    .order("pubblicato_at", { ascending: false })
-    .limit(CATALOGO_MAX);
-  if (catalogoError) {
-    console.error("[ai-pairing] lettura catalogo fallita", { code: catalogoError.code });
-    return json({ error: "Abbinamento non disponibile." }, 503, cors);
-  }
-  const catalogo = (righe ?? []) as RigaCatalogo[];
-  if (catalogo.length === 0) {
-    // Non è un guasto: è un catalogo vuoto, e va detto come tale invece di
-    // mandare al modello un prompt senza candidati.
-    return json({ error: "Nessun annuncio pubblicato su cui costruire un abbinamento." }, 409, cors);
-  }
-
-  const prompt = `Piatto o occasione: ${query}\n\nCatalogo:\n` +
-    catalogo.map((riga) => `- ${riga.id}: ${etichettaCatalogo(riga)}`).join("\n");
-
-  const provider = creaAiProvider("pairing");
-  const prenotazione = await prenotaBudget(supabase, "ai:pairing", cors, {
-    provider: provider.id,
-    modello: provider.modello,
-    tokenInput: stimaTokenInput(SYSTEM, prompt),
-    tokenOutputMax: provider.maxOutputTokens,
-  });
-  if (rifiutata(prenotazione)) return prenotazione.risposta;
-  let uso: AiUso | null = null;
-
-  let parsed: Record<string, unknown>;
+  const ingresso = await apriIngresso(supabase, "ai:pairing", userId, cors, { liberi: [query], identita: [query] });
+  if ("risposta" in ingresso) return ingresso.risposta;
+  let riuscita = false;
   try {
-    const grezzo = await provider.completeText({
+    const { data: righe, error: catalogoError } = await supabase
+      .from("public_listings")
+      .select("id,produttore,nome,annata,denominazione,regione,tipo")
+      .order("pubblicato_at", { ascending: false })
+      .limit(CATALOGO_MAX);
+    if (catalogoError) {
+      console.error("[ai-pairing] lettura catalogo fallita", { code: catalogoError.code });
+      return json({ error: "Abbinamento non disponibile." }, 503, cors);
+    }
+    const catalogo = (righe ?? []) as RigaCatalogo[];
+    if (catalogo.length === 0) {
+      // Non è un guasto: è un catalogo vuoto, e va detto come tale invece di
+      // mandare al modello un prompt senza candidati.
+      return json({ error: "Nessun annuncio pubblicato su cui costruire un abbinamento." }, 409, cors);
+    }
+
+    // WI-016: i testi degli annunci sono scritti dai venditori, quindi entrano come dati ripuliti e delimitati.
+    const prompt = `Piatto o occasione: ${query}\n\nCatalogo:\n` +
+      righeNonAttendibili("annunci del catalogo", catalogo.map((riga) => `- ${riga.id}: ${etichettaCatalogo(riga)}`));
+
+    const chiamata = await chiamataGovernata({
+      supabase,
+      userId,
+      scope: "ai:pairing",
+      compito: "pairing",
+      cors,
+      ingresso,
       system: SYSTEM,
       prompt,
-      requestId: requestIdOpaco("pairing"),
-      onUso: (u) => {
-        uso = u;
-      },
+      nonDisponibile: "Il servizio AI non è al momento disponibile.",
+      chiama: (provider, call) => provider.completeText(call),
     });
+    if (!chiamata.ok) return chiamata.risposta;
     // Il fornitore ha risposto: un formato inutilizzabile non è un suo guasto.
     await registraEsitoFornitore(supabase, "ai:pairing", true);
-    await registraConsuntivo(supabase, prenotazione.richiestaId, "ok", uso);
-    parsed = estraiJson(grezzo);
-  } catch (errore) {
-    // se il consuntivo «ok» è già passato, questa seconda chiusura non ha effetto
-    await registraConsuntivo(
-      supabase,
-      prenotazione.richiestaId,
-      errore instanceof AiFormatError ? "formato_non_valido" : errore instanceof AiProviderError && !errore.guastoFornitore ? "errore_richiesta" : "guasto_fornitore",
-      uso,
-    );
-    // 7.5: 503 se il fornitore è giù, 502 se ha risposto qualcosa di
-    // inutilizzabile. Il messaggio del fornitore non esce mai di qui.
-    if (errore instanceof AiFormatError) {
+    await registraConsuntivo(supabase, chiamata.richiestaId, "ok", chiamata.uso());
+
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = estraiJson(chiamata.valore);
+    } catch {
       return json({ error: "Il servizio AI ha restituito un formato non valido." }, 502, cors);
     }
-    if (errore instanceof AiProviderError) {
-      if (errore.guastoFornitore) await registraEsitoFornitore(supabase, "ai:pairing", false);
-      return json({ error: "Il servizio AI non è al momento disponibile." }, 503, cors);
+    const scelte = scelteValide(parsed, new Set(catalogo.map((riga) => riga.id)));
+    if (!scelte) {
+      return json({ error: "Il servizio AI non ha restituito il numero richiesto di vini validi." }, 502, cors);
     }
-    console.error("[ai-pairing] errore non previsto");
-    return json({ error: "Abbinamento non disponibile." }, 503, cors);
+    riuscita = true;
+    return json({ intro: pulisciUscita(String(parsed.intro ?? ""), 300), picks: scelte }, 200, cors);
+  } finally {
+    await ingresso.chiudi(riuscita);
   }
-
-  const scelte = scelteValide(parsed, new Set(catalogo.map((riga) => riga.id)));
-  if (!scelte) {
-    return json(
-      { error: "Il servizio AI non ha restituito il numero richiesto di vini validi." },
-      502,
-      cors,
-    );
-  }
-
-  return json(
-    { intro: String(parsed.intro ?? "").trim().slice(0, 300), picks: scelte },
-    200,
-    cors,
-  );
 });

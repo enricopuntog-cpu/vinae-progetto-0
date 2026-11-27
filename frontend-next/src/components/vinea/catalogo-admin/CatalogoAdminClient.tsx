@@ -14,6 +14,7 @@ import { PER_PAGINA, serviziCatalogoAdmin, type Riepilogo, type ServiziCatalogoA
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { Campo, Esito, Letto, Scelta, data, testoValore, useLettura } from "./comune";
 import { AggiornamentoLwinPanel } from "./AggiornamentoLwinPanel";
+import { QuarantenaPanel, RicercaPanel } from "./QuarantenaRicercaPanel";
 import { ProposteAdminPanel } from "./ProposteAdminPanel";
 import { SchedaAdminPanel } from "./SchedaAdminPanel";
 
@@ -45,6 +46,8 @@ export function CatalogoAdminClient() {
           <TabsTrigger value="stato">Stato</TabsTrigger>
           <TabsTrigger value="catalogo">Catalogo</TabsTrigger>
           <TabsTrigger value="proposte">Proposte</TabsTrigger>
+          <TabsTrigger value="quarantena">Quarantena</TabsTrigger>
+          <TabsTrigger value="ricerca">Ricerca</TabsTrigger>
           <TabsTrigger value="code">Da decidere</TabsTrigger>
           <TabsTrigger value="nuovo">Nuovo vino</TabsTrigger>
           <TabsTrigger value="fonti">Fonti e import</TabsTrigger>
@@ -58,6 +61,12 @@ export function CatalogoAdminClient() {
         </TabsContent>
         <TabsContent value="proposte">
           <ProposteAdminPanel servizi={servizi} />
+        </TabsContent>
+        <TabsContent value="quarantena">
+          {client ? <QuarantenaPanel client={client} /> : null}
+        </TabsContent>
+        <TabsContent value="ricerca">
+          {client ? <RicercaPanel client={client} /> : null}
         </TabsContent>
         <TabsContent value="code">
           <CodeDaDecidere servizi={servizi} apri={setScheda} />

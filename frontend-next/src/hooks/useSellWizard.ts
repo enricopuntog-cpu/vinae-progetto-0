@@ -1,7 +1,7 @@
 "use client";
 
 import { codiceErrore } from "@/lib/errore-per-log";
-import { inviaPropostaNuovoVino, preparaPropostaNuovoVino, proposteDisponibiliPerNuovoVino } from "@/lib/cantina/proposta-catalogo";
+import { messaggioEsitoProposta, origineConsenso, proposteDisponibiliPerNuovoVino } from "@/lib/cantina/proposta-catalogo";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { firmaUploadFoto, riusaFotoDellaBottiglia } from "@/app/vendi/actions";
@@ -840,29 +840,25 @@ export function useSellWizard({
     }
     // VP-C: N bottiglie identiche in una sola operazione atomica. Restano N
     // righe, ognuna con la sua posizione, le sue note e la sua degustazione.
+    const consensoDato = proposteAttive && consensoCatalogo;
     const esito = await cellarService.aggiungiBottiglie({
       ...datiBottiglia(),
       formato: d.formato,
       quantita,
       idempotencyKey: chiaveAggiunta.current,
+      // WI-016: il consenso entra nella stessa transazione che crea le bottiglie; il server non le condiziona mai.
+      ...(consensoDato ? { propostaCatalogo: origineConsenso(daEtichettaConfermata.current) } : {}),
     });
     if (!esito.ok) {
       toast.error(esito.error);
       return false;
     }
     chiaveAggiunta.current = nuovaChiaveIdempotenza("cantina");
-    // Dopo la creazione, senza attenderla: l'esito del catalogo non cambia quello della Cantina.
-    if (proposteAttive && consensoCatalogo && supabase) {
-      const preparata = preparaPropostaNuovoVino(
-        { produttore: d.produttore, nome: d.nome, annata: d.annata, regione: d.regione, tipo: d.tipo, formato: d.formato },
-        daEtichettaConfermata.current,
-      );
-      if (preparata.ok) {
-        void inviaPropostaNuovoVino(supabase, preparata.data).then((r) => {
-          if (!r.ok) toast.info("La bottiglia è in Cantina; la proposta al catalogo non è partita: puoi inviarla dalla Cantina.");
-        });
-      }
-    }
+    const avvisoCatalogo = messaggioEsitoProposta(esito.data.catalogo, {
+      richiesta: consensoDato,
+      ripetuta: esito.data.replay,
+    });
+    if (avvisoCatalogo) toast.info(avvisoCatalogo);
     await onCantinaCambiata?.();
     const quante = etichettaBottiglie(esito.data.quantita);
     toast.success(
@@ -872,7 +868,7 @@ export function useSellWizard({
     );
     onNavigate("/cantina");
     return true;
-  }, [cellarService, datiBottiglia, modalita, onCantinaCambiata, onNavigate, d.quantita, d.formato, d.produttore, d.nome, d.annata, d.regione, d.tipo, proposteAttive, consensoCatalogo, supabase]);
+  }, [cellarService, datiBottiglia, modalita, onCantinaCambiata, onNavigate, d.quantita, d.formato, proposteAttive, consensoCatalogo]);
 
   const pubblica = useCallback(async () => {
     if (!isVendita) {

@@ -31,24 +31,31 @@
 // salva **solo a stream concluso e non vuoto**, come nel legacy
 // (`backend/ai_routes.py:92-101`). Una risposta troncata a metà non entra nello
 // storico, perché diventerebbe il contesto delle battute successive.
+//
+// WI-016 — VERIFICA PRIMA DELLA TRASMISSIONE. Dal fornitore la risposta arriva a
+// pezzi, ma al client non ne esce nessuno finché non è arrivata TUTTA ed è
+// passata dallo stesso rilevatore dei dati sensibili usato in ingresso. Una
+// finestra scorrevole non basta: un segreto può essere spezzato su più pezzi e
+// alcune forme (JWT, «password: …») non hanno una lunghezza massima prima di
+// essere riconoscibili. La risposta è già limitata, quindi si tiene in memoria.
+// Nell'attesa partono solo commenti SSE senza contenuto: tengono viva la
+// connessione e fanno accorgere subito di un client che se n'è andato. Un
+// guasto o un troncamento a metà non consegna testo non verificato.
 
+import { rilevaDatiSensibili } from "../_shared/ai-sicurezza.ts";
+import { timeoutMs } from "../_shared/ai-provider.ts";
 import {
-  AiProviderError,
-  stimaTokenInput,
-  type AiUso,
-  creaAiProvider,
-  requestIdOpaco,
-} from "../_shared/ai-provider.ts";
-import {
+  apriIngresso,
   apriPorta,
+  chiamataGovernata,
   chiusa,
   json,
   leggiCorpo,
   testo,
-  prenotaBudget,
-  rifiutata,
   registraConsuntivo,
   registraEsitoFornitore,
+  segnalaSicurezza,
+  type Ingresso,
 } from "../_shared/ai-gate.ts";
 import {
   costruisciContestoCantina,
@@ -64,9 +71,11 @@ import {
 import {
   candidatiDaRigheCanoniche,
   costruisciContestoRicerca,
+  costruisciSchedaDocumentata,
   LIMITI_RICERCA,
   PROMPT_ISTRUZIONI_RICERCA,
   serializzaContestoRicerca,
+  serializzaSchedaDocumentata,
 } from "../_shared/sommelier-ricerca.ts";
 
 // Identico a `SOMMELIER_SYSTEM` (`backend/ai_routes.py:18-23`). Le due
@@ -87,6 +96,28 @@ const RISPOSTA_MAX_CHARS = 8000;
 const MESSAGGIO_MAX_CHARS = 2000;
 
 const SESSION_ID = /^[A-Za-z0-9_-]{4,64}$/;
+
+// WI-016: quanto al massimo si può verificare per intero. Con il tetto di token
+// in uscita non ci si avvicina; oltre non si trasmette nulla.
+const RISPOSTA_VERIFICABILE_MAX_CHARS = 64_000;
+// Durata massima della lettura dal fornitore: sotto i 150 s della piattaforma.
+const LETTURA_MASSIMA_MS = 120_000;
+const IN_VERIFICA = ": in verifica\n\n";
+const RISPOSTA_BLOCCATA =
+  "La risposta conteneva dati riservati ed è stata bloccata. Riformula la domanda.";
+
+/** Una lettura che non arriva entro `ms` è un guasto: il fornitore muto non tiene aperta la richiesta. */
+const leggiEntroScadenza = async <T>(lettura: Promise<T>, ms: number): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const scadenza = new Promise<never>((_, rifiuta) => {
+    timer = setTimeout(() => rifiuta(new DOMException("fornitore muto", "TimeoutError")), Math.max(ms, 0));
+  });
+  try {
+    return await Promise.race([lettura, scadenza]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
 
 type RigaContesto = { ruolo: "utente" | "sommelier"; contenuto: string };
 
@@ -229,11 +260,17 @@ const leggiContesto = async (supabase: any, userId: string, richiesta: Richiesta
     }
     const contestoRicerca = costruisciContestoRicerca(candidatiDaRigheCanoniche(data));
     if (contestoRicerca.inclusi === 0) return { ok: true, vuoto: true };
-    return {
-      ok: true,
-      blocco: serializzaContestoRicerca(contestoRicerca).testo,
-      istruzioni: PROMPT_ISTRUZIONI_RICERCA,
-    };
+    let blocco = serializzaContestoRicerca(contestoRicerca).testo;
+    // WI-016: annate e dati documentati SOLO per il vino identificato dal codice richiesto (una lettura mirata).
+    if (richiesta.codice && contestoRicerca.candidati.some((c) => c.identificato)) {
+      const scheda = await supabase.rpc("vini_canonici_scheda_servizio", { p_codice: richiesta.codice });
+      if (scheda.error) console.error("[ai-sommelier] scheda documentata non disponibile", { code: scheda.error.code });
+      else {
+        const testo = serializzaSchedaDocumentata(costruisciSchedaDocumentata(scheda.data));
+        if (testo) blocco += `\nScheda documentata del candidato identificato:\n${testo}`;
+      }
+    }
+    return { ok: true, blocco, istruzioni: PROMPT_ISTRUZIONI_RICERCA };
   }
 
   if (richiesta.tipo === "vino") {
@@ -294,7 +331,9 @@ Deno.serve(async (request) => {
   if (chiusa(porta)) return porta.risposta;
   const { cors, supabase, userId } = porta;
 
-  const corpo = await leggiCorpo(request);
+  const lettura = await leggiCorpo(request, cors);
+  if ("risposta" in lettura) return lettura.risposta;
+  const corpo = lettura.corpo;
   const sessionId = corpo ? testo(corpo.session_id, 64) : null;
   const messaggio = corpo ? testo(corpo.message, MESSAGGIO_MAX_CHARS) : null;
   if (!sessionId || !SESSION_ID.test(sessionId) || !messaggio) {
@@ -305,6 +344,34 @@ Deno.serve(async (request) => {
   if (!esitoContesto.ok) return json(esitoContesto.corpo, esitoContesto.status, cors);
   const richiestaContesto = esitoContesto.richiesta;
 
+  // WI-016: ingresso per identità PRIMA di ogni lettura di dominio; si chiude qui, o a stream concluso.
+  const ingresso = await apriIngresso(supabase, "ai:chat", userId, cors, {
+    liberi: [messaggio, ...(richiestaContesto?.tipo === "ricerca" ? [richiestaContesto.produttore, richiestaContesto.nome] : [])],
+    identita: [sessionId, messaggio, JSON.stringify(richiestaContesto)],
+  });
+  if ("risposta" in ingresso) return ingresso.risposta;
+  let inStream = false;
+  try {
+    const risposta = await rispondi({ cors, supabase, userId, sessionId, messaggio, richiestaContesto, ingresso });
+    inStream = risposta.headers.get("content-type") === "text/event-stream";
+    return risposta;
+  } finally {
+    if (!inStream) await ingresso.chiudi(false);
+  }
+});
+
+type Turno = {
+  cors: HeadersInit;
+  // deno-lint-ignore no-explicit-any
+  supabase: any;
+  userId: string;
+  sessionId: string;
+  messaggio: string;
+  richiestaContesto: RichiestaContesto | null;
+  ingresso: Ingresso;
+};
+
+const rispondi = async ({ cors, supabase, userId, sessionId, messaggio, richiestaContesto, ingresso }: Turno): Promise<Response> => {
   // Il contesto passa dalla porta concessa a `service_role`, non dalla vista:
   // con il client di servizio `auth.uid()` è nullo e la vista darebbe zero
   // righe, cioè una conversazione senza memoria che sembra funzionare.
@@ -316,7 +383,10 @@ Deno.serve(async (request) => {
     console.error("[ai-sommelier] lettura contesto fallita", { code: contestoError.code });
     return json({ error: "Il Sommelier non è al momento disponibile." }, 503, cors);
   }
-  const contesto = (contestoGrezzo ?? []) as RigaContesto[];
+  // WI-016: stessa regola dell'ingresso anche per lo storico: una riga salvata con un dato sensibile non riparte.
+  const contesto = ((contestoGrezzo ?? []) as RigaContesto[]).filter(
+    (riga) => rilevaDatiSensibili(riga.contenuto) === null,
+  );
 
   let system = SYSTEM;
   let prompt = costruisciPrompt(contesto, messaggio);
@@ -348,79 +418,76 @@ Deno.serve(async (request) => {
     }
   }
 
-  const provider = creaAiProvider("chat");
-  const prenotazione = await prenotaBudget(supabase, "ai:chat", cors, {
-    provider: provider.id,
-    modello: provider.modello,
-    tokenInput: stimaTokenInput(system, prompt),
-    tokenOutputMax: provider.maxOutputTokens,
+  // Tentativi e riserva valgono solo PRIMA che lo stream cominci: dopo, l'errore è un evento dentro lo stream e
+  // una risposta parziale non si rifà.
+  const chiamata = await chiamataGovernata({
+    supabase,
+    userId,
+    scope: "ai:chat",
+    compito: "chat",
+    cors,
+    ingresso,
+    system,
+    prompt,
+    nonDisponibile: "Il Sommelier non è al momento disponibile.",
+    chiama: (provider, call) => provider.streamText(call),
   });
-  if (rifiutata(prenotazione)) return prenotazione.risposta;
-  const { richiestaId } = prenotazione;
-  let uso: AiUso | null = null;
-
-  let sorgente: ReadableStream<string>;
-  try {
-    sorgente = await provider.streamText({
-      system,
-      prompt,
-      requestId: requestIdOpaco("sommelier"),
-      onUso: (u) => {
-        uso = u;
-      },
-    });
-  } catch (errore) {
-    await registraConsuntivo(
-      supabase,
-      richiestaId,
-      errore instanceof AiProviderError && !errore.guastoFornitore ? "errore_richiesta" : "guasto_fornitore",
-    );
-    // Prima che lo stream cominci l'errore è ancora uno status HTTP. Dopo, non
-    // può esserlo più: diventa un evento dentro lo stream.
-    if (!(errore instanceof AiProviderError) || errore.guastoFornitore) {
-      await registraEsitoFornitore(supabase, "ai:chat", false);
-    }
-    if (errore instanceof AiProviderError) {
-      return json({ error: "Il Sommelier non è al momento disponibile." }, 503, cors);
-    }
-    console.error("[ai-sommelier] apertura stream fallita");
-    return json({ error: "Il Sommelier non è al momento disponibile." }, 503, cors);
-  }
+  if (!chiamata.ok) return chiamata.risposta;
+  const { richiestaId } = chiamata;
+  const sorgente = chiamata.valore;
 
   const encoder = new TextEncoder();
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
 
   const inoltra = async () => {
     const writer = writable.getWriter();
-    const raccolti: string[] = [];
-    let rimanenti = RISPOSTA_MAX_CHARS;
     const lettore = sorgente.getReader();
     // WI-010: l'interruttore è globale, quindi conta solo un errore LETTO dal fornitore. Una scrittura verso un
     // client che se n'è andato finisce nello stesso `catch` e non deve poter spegnere l'AI a tutti.
     let guastoFornitore = false;
+    let consuntivata = false;
+    let completata = false;
+    const scadenza = Date.now() + LETTURA_MASSIMA_MS;
     try {
+      let raccolta = "";
+      let verificabile = true;
       while (true) {
-        const { done, value } = await lettore.read().catch((errore: unknown) => {
-          guastoFornitore = true;
-          throw errore;
-        });
+        const { done, value } = await leggiEntroScadenza(lettore.read(), Math.min(timeoutMs(), scadenza - Date.now()))
+          .catch((errore: unknown) => {
+            guastoFornitore = true;
+            throw errore;
+          });
         if (done) break;
-        if (rimanenti <= 0) break;
-        // Troncamento in uscita, come `remaining_chars`
-        // (`backend/ai_routes.py:72`, `:79-87`): vale sui byte trasmessi e su
-        // quelli salvati, non su uno solo dei due.
-        const sicuro = value.slice(0, rimanenti);
-        if (sicuro) {
-          raccolti.push(sicuro);
-          rimanenti -= sicuro.length;
-          await writer.write(encoder.encode(sse({ delta: sicuro })));
+        raccolta += value;
+        if (raccolta.length > RISPOSTA_VERIFICABILE_MAX_CHARS) {
+          verificabile = false;
+          void lettore.cancel().catch(() => {});
+          break;
         }
-        if (sicuro.length < value.length) break;
+        await writer.write(encoder.encode(IN_VERIFICA));
       }
 
       await registraEsitoFornitore(supabase, "ai:chat", true);
-      await registraConsuntivo(supabase, richiestaId, "ok", uso);
-      const risposta = raccolti.join("").trim();
+      await registraConsuntivo(supabase, richiestaId, verificabile ? "ok" : "formato_non_valido", chiamata.uso());
+      consuntivata = true;
+
+      // La verifica guarda la risposta INTERA, prima del troncamento: un segreto a cavallo del tetto si vede.
+      const bloccata = !verificabile || rilevaDatiSensibili(raccolta) !== null;
+      if (bloccata) {
+        if (verificabile) await segnalaSicurezza(supabase, userId, "ai:chat", "output_scartato");
+        await ingresso.chiudi(false);
+        await writer.write(
+          encoder.encode(sse({ error: verificabile ? RISPOSTA_BLOCCATA : "Il Sommelier non è al momento disponibile." })),
+        );
+        return;
+      }
+
+      // Troncamento in uscita, come `remaining_chars`
+      // (`backend/ai_routes.py:72`, `:79-87`): vale su ciò che si trasmette e
+      // su ciò che si salva.
+      const trasmessa = raccolta.slice(0, RISPOSTA_MAX_CHARS);
+      if (trasmessa) await writer.write(encoder.encode(sse({ delta: trasmessa })));
+      const risposta = trasmessa.trim();
       if (risposta) {
         // Si salva solo qui: a stream concluso e non vuoto. Una risposta
         // interrotta a metà non entra nello storico, perché diventerebbe il
@@ -438,17 +505,24 @@ Deno.serve(async (request) => {
           console.error("[ai-sommelier] scambio non salvato", { code: error.code });
         }
       }
+      completata = true;
+      // la porta si chiude PRIMA di «done»: chi ripete subito la domanda non deve trovarla ancora in corso
+      await ingresso.chiudi(true);
       await writer.write(encoder.encode(sse({ done: true })));
     } catch (errore) {
       // Evento generico dentro lo stream e nessun salvataggio, come
       // `backend/ai_routes.py:88-90`. Il messaggio del fornitore non esce.
       if (guastoFornitore) await registraEsitoFornitore(supabase, "ai:chat", false);
-      // Se è il client ad aver chiuso, si ferma anche la lettura dal fornitore.
-      else await lettore.cancel().catch(() => {});
-      await registraConsuntivo(supabase, richiestaId, guastoFornitore ? "guasto_fornitore" : "interrotta_client", uso);
+      // In ogni caso si ferma la lettura dal fornitore (client andato via o fornitore muto). Senza attendere:
+      // un fornitore muto potrebbe non confermare mai l'annullamento.
+      void lettore.cancel().catch(() => {});
+      if (!consuntivata) {
+        await registraConsuntivo(supabase, richiestaId, guastoFornitore ? "guasto_fornitore" : "interrotta_client", chiamata.uso());
+      }
       console.error("[ai-sommelier] stream interrotto", {
         tipo: errore instanceof Error ? errore.name : "sconosciuto",
       });
+      await ingresso.chiudi(completata);
       try {
         await writer.write(
           encoder.encode(sse({ error: "Il Sommelier non è al momento disponibile." })),
@@ -462,6 +536,7 @@ Deno.serve(async (request) => {
       } catch {
         // Idem.
       }
+      await ingresso.chiudi(completata);
     }
   };
 
@@ -484,4 +559,4 @@ Deno.serve(async (request) => {
       "X-Accel-Buffering": "no",
     },
   });
-});
+};
