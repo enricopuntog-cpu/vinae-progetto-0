@@ -48,12 +48,29 @@ export function bersagliSospendibili(s: StatoControllo): Bersaglio[] {
     voce("globale", "tutto", "Interruttore generale (tutto ciò che agisce)"),
     ...s.funzioni_ai.map((f) => voce("ai", f.funzione, `AI: ${FUNZIONI_AI[f.funzione] ?? f.funzione}`)),
     voce("catalogo", "proposte", "Proposte al catalogo degli utenti"),
-    voce("catalogo", "acquisizione", "Acquisizione dagli annunci"),
+    voce("catalogo", "acquisizione", "Acquisizione (annunci e ricerca da fonti autorizzate)"),
     ...s.esecutori.map((a) => voce("agente", a.chiave, `Agente: ${a.chiave}`)),
     ...s.lavori.map((j) => voce("lavoro", j.chiave, `Lavoro pianificato: ${j.chiave}`)),
     ...s.fonti.map((f) => voce("fonte", f.chiave, `Fonte di monitoraggio: ${f.chiave}`)),
   ];
 }
+
+/** WI-016: protezione delle letture, conservazione e adattatori di ricerca. Sola lettura. */
+export type StatoProtezioni = {
+  letture: {
+    superficie: string;
+    attiva: boolean;
+    anonimo_minuto: number;
+    utente_minuto: number;
+    utente_ora: number;
+    anonimi_globale_minuto: number;
+    utenti_globale_minuto: number;
+  }[];
+  conservazione: { area: string; giorni: number | null; abilitata: boolean; oltre_la_soglia: number | null }[];
+  adattatori_ricerca: { chiave: string; acceso: boolean; fonte: string; fonte_autorizzata: boolean; ultima_corsa: string | null }[];
+  valutazione_prezzi_utenti: boolean;
+  richieste_autenticita_effettive: boolean;
+};
 
 export type RevisioneMercato = {
   id: number;
@@ -192,6 +209,7 @@ export function serviziControllo(client: SupabaseClient) {
   const chiama = <T>(f: string, a?: Record<string, unknown>) => chiamaCatalogoAdmin<T>(client, f, a);
   return {
     stato: () => chiama<StatoControllo>("azienda_admin_controllo"),
+    protezioni: () => chiama<StatoProtezioni>("azienda_admin_protezioni"),
     sospendi: (tipo: TipoSospensione, chiave: string, motivo: string) =>
       chiama<number>("azienda_admin_sospendi", { p_tipo: tipo, p_chiave: chiave, p_motivo: motivo }),
     ripristina: (tipo: TipoSospensione, chiave: string, motivo: string) =>

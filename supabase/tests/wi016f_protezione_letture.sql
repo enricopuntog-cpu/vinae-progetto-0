@@ -110,7 +110,9 @@ select x.id::uuid, '00000000-0000-0000-0000-000000000000', 'authenticated', 'aut
 
 select pg_temp.rec(1, 'valori di nascita: protezione accesa su entrambe le ricerche, utenti più larghi degli anonimi',
   (select count(*) = 2 and bool_and(attiva and utente_minuto >= anonimo_minuto and utenti_globale_minuto >= anonimi_globale_minuto)
-     from private.protezione_letture),
+     from private.protezione_letture)
+  -- WI-016H: la protezione comune non restringe il contratto di WI-008 (40 ricerche canoniche di seguito)
+  and (select utente_raffica >= 40 and utente_minuto >= 40 from private.protezione_letture where superficie = 'ricerca_canonica'),
   (select string_agg(to_jsonb(p)::text, ' | ') from private.protezione_letture p));
 
 -- Soglie piccole e note: la griglia prova il meccanismo, non i valori di nascita.

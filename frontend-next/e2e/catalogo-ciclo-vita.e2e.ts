@@ -5,6 +5,7 @@ import { eseguiSql, ripristinaFixture } from "./support/db";
 import { attendiCaricamento } from "./support/pagina";
 import { expect, test } from "./support/test";
 import { PRODUTTORE_E2E, etichettaCorsa, leggiDalDatabase, preparaBottigliaInCantina, uuid, type BottigliaPreparata } from "./support/vino";
+import { apriIdentificazione } from "./support/wizard-ricerca";
 
 /**
  * WI-011/WI-012/WI-013 · ciclo di vita del catalogo nel browser, con Auth, PostgREST e database veri dello stack E2E
@@ -15,7 +16,15 @@ import { PRODUTTORE_E2E, etichettaCorsa, leggiDalDatabase, preparaBottigliaInCan
  * lo storico, con i trigger spenti): lo spec WI-007 pretende un catalogo vuoto.
  */
 
+const BLOCCA_PROPOSTE = `create or replace function public.wi016_e2e_blocca() returns trigger language plpgsql as
+  $$ begin raise exception 'guasto di prova' using errcode = 'P0001'; end $$;
+  create or replace trigger wi016_e2e_blocca before insert on catalog.contributions
+  for each row execute function public.wi016_e2e_blocca();`;
+const SBLOCCA_PROPOSTE = `drop trigger if exists wi016_e2e_blocca on catalog.contributions;
+  drop function if exists public.wi016_e2e_blocca();`;
+
 const pulisci = (): string => {
+  eseguiSql(SBLOCCA_PROPOSTE);
   eseguiSql(`begin;
   set local session_replication_role = replica;
   update catalog.intake_settings set user_proposals_enabled = false, listing_harvest_enabled = false, auto_close_known_enabled = false;
@@ -151,6 +160,91 @@ test.describe.serial("Catalogo vivo: dalla Cantina alla scheda senza LWIN, con r
     await contesto.close();
   });
 
+  test("WI-016: wizard reale — consenso, pagina chiusa prima della risposta, ritentativo dallo scheduler e revoca", async ({ browser, diagnostica }, info) => {
+    const nomeWizard = `Wizard E2E ${corsa}`;
+    const stato = () =>
+      leggiDalDatabase(
+        `select concat_ws(' ',
+           (select count(*) from public.bottle_units b join public.wines w on w.id = b.wine_id where w.nome = '${nomeWizard}'),
+           (select count(*) from catalog.contribution_intents where data ->> 'nome' = '${nomeWizard}'),
+           (select coalesce(string_agg(status, ','), '-') from catalog.contributions where identity ->> 'nome' = '${nomeWizard}'));`,
+      );
+    // guasto del catalogo SOLO per questa prova: la registrazione diretta fallisce, la bottiglia no
+    eseguiSql(BLOCCA_PROPOSTE);
+
+    const { contesto, page } = await apriIdentificazione(browser, "venditore", info, diagnostica);
+    diagnostica.ammetti("cellar_bottiglie_aggiungi");
+    await page.getByLabel("Produttore", { exact: true }).fill(PRODUTTORE_E2E);
+    await page.getByLabel("Nome / Etichetta", { exact: true }).fill(nomeWizard);
+    await page.getByLabel("Annata", { exact: true }).fill("2019");
+    await page.getByLabel("Regione (obbligatoria)").click();
+    await page.getByRole("option", { name: "Piemonte", exact: true }).click();
+    const continua = page.getByRole("button", { name: /Continua/ });
+    for (const titolo of ["Condizioni", "Provenienza e conservazione"]) {
+      await continua.click();
+      await expect(page.getByRole("heading", { name: titolo, exact: true })).toBeVisible();
+    }
+    await continua.click();
+    const consenso = page.getByTestId("wizard-proposta-consenso");
+    await expect(consenso).not.toBeChecked();
+    await consenso.check();
+
+    // la richiesta arriva DAVVERO al server; la risposta non raggiunge mai la pagina, che viene chiusa
+    let consegnata: (corpo: string) => void = () => {};
+    const arrivata = new Promise<string>((risolvi) => (consegnata = risolvi));
+    await page.route("**/rest/v1/rpc/cellar_bottiglie_aggiungi", async (route) => {
+      const risposta = await route.fetch();
+      consegnata(await risposta.text());
+      await route.abort("failed").catch(() => undefined);
+    });
+    await page.getByRole("button", { name: "Aggiungi alla cantina privata", exact: true }).click();
+    expect(JSON.parse(await arrivata)).toMatchObject({ quantita: 1, catalogo: "in_sospeso" });
+    await page.close();
+    await contesto.close();
+    expect(stato()).toBe("1 1 -");
+
+    // il catalogo torna disponibile: registra il lavoro dello scheduler, senza alcun client aperto
+    eseguiSql(SBLOCCA_PROPOSTE);
+    eseguiSql("select brain.run_job('proposte_in_sospeso', 'e2e-scheduler');");
+    expect(stato()).toBe("1 0 aperta");
+    eseguiSql("select brain.run_job('proposte_in_sospeso', 'e2e-scheduler');");
+    expect(stato()).toBe("1 0 aperta");
+
+    const dopo = await contestoAutenticato(browser, "venditore", opzioniDelProgetto(info));
+    const cantina = await dopo.newPage();
+    diagnostica.osserva(cantina, "venditore");
+    await cantina.goto("/cantina");
+    await attendiCaricamento(cantina);
+    const elenco = cantina.getByTestId("proposte-inviate");
+    await elenco.locator("summary").click();
+    const voce = elenco.locator("li").filter({ hasText: nomeWizard });
+    await expect(voce).toContainText("In revisione");
+    await voce.getByRole("button", { name: "Ritira" }).click();
+    await expect(cantina.getByTestId("proposte-inviate").locator("li").filter({ hasText: nomeWizard })).toHaveCount(0);
+    expect(stato()).toBe("1 0 ritirata");
+
+    // revoca PRIMA del ritentativo: l'intenzione cade e lo scheduler non ha più nulla da registrare
+    const nomeRevocato = `Revocato E2E ${corsa}`;
+    eseguiSql(BLOCCA_PROPOSTE);
+    await preparaBottigliaInCantina("venditore", { nome: nomeRevocato, consensoCatalogo: "manuale" });
+    eseguiSql(SBLOCCA_PROPOSTE);
+    await cantina.reload();
+    await attendiCaricamento(cantina);
+    await cantina.getByTestId("proposte-inviate").locator("summary").click();
+    const inAttesa = cantina.getByTestId("proposte-inviate").locator("li").filter({ hasText: nomeRevocato });
+    await expect(inAttesa).toContainText("in attesa di invio");
+    await inAttesa.getByRole("button", { name: "Ritira" }).click();
+    await expect(cantina.getByTestId("proposte-inviate").locator("li").filter({ hasText: nomeRevocato })).toHaveCount(0);
+    eseguiSql("select brain.run_job('proposte_in_sospeso', 'e2e-scheduler');");
+    expect(
+      leggiDalDatabase(
+        `select concat_ws(' ', (select count(*) from catalog.contribution_intents where data ->> 'nome' = '${nomeRevocato}'),
+           (select count(*) from catalog.contributions where identity ->> 'nome' = '${nomeRevocato}'));`,
+      ),
+    ).toBe("0 0");
+    await dopo.close();
+  });
+
   test("WI-016: dal Control Center si ferma tutto e si ripristina; il mercato apre solo revisioni", async ({ browser, diagnostica }, info) => {
     const admin = await contestoAutenticato(browser, "adminSenzaRilascio", opzioniDelProgetto(info));
     const page = await admin.newPage();
@@ -160,6 +254,8 @@ test.describe.serial("Catalogo vivo: dalla Cantina alla scheda senza LWIN, con r
     await page.getByRole("tab", { name: "Controllo" }).click();
     const centro = page.getByTestId("control-center");
     await expect(centro).toContainText("Nessuna sospensione attiva.");
+    await expect(centro.getByTestId("protezioni")).toContainText("ricerca_vini: protetta");
+    await expect(centro.getByTestId("protezioni")).toContainText("periodo non deciso");
     await expect(centro.getByTestId("ai-configurazione")).toContainText("riserva nessuna");
     await expect(page.getByTestId("kill-switch")).toBeDisabled();
     await centro.getByLabel("Motivo (obbligatorio per sospendere o ripristinare)").fill("Incidente simulato E2E");

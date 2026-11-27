@@ -7,7 +7,13 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Campo, Esito, Letto, data, useLettura } from "@/components/vinea/catalogo-admin/comune";
-import { bersagliSospendibili, type Bersaglio, type ServiziControllo, type StatoControllo } from "@/lib/azienda-admin/controllo";
+import {
+  bersagliSospendibili,
+  type Bersaglio,
+  type ServiziControllo,
+  type StatoControllo,
+  type StatoProtezioni,
+} from "@/lib/azienda-admin/controllo";
 
 const INTERRUTTORI: [string, string][] = [
   ["proposte_utenti", "Proposte degli utenti"],
@@ -23,6 +29,7 @@ const INTERRUTTORI: [string, string][] = [
 export function ControlloPanel({ servizi }: { servizi: ServiziControllo }) {
   const { esito, ricarica } = useLettura(() => servizi.stato(), "controllo");
   const correlati = useLettura(() => servizi.correlati(), "correlati");
+  const protezioni = useLettura(() => servizi.protezioni(), "protezioni");
   const [motivo, setMotivo] = useState("");
   const [errore, setErrore] = useState<string | null>(null);
   const [messaggio, setMessaggio] = useState<string | null>(null);
@@ -159,6 +166,41 @@ export function ControlloPanel({ servizi }: { servizi: ServiziControllo }) {
                   </li>
                 ))}
               </ul>
+            </section>
+
+            <section className="rounded-xl border border-border bg-card p-3" data-testid="protezioni">
+              <h2 className="text-sm font-semibold">Protezioni, conservazione e acquisizione (sola lettura)</h2>
+              <Letto esito={protezioni.esito} ricarica={protezioni.ricarica}>
+                {(p: StatoProtezioni) => (
+                  <ul className="mt-1 list-disc space-y-1 pl-5">
+                    {p.letture.map((l) => (
+                      <li key={l.superficie}>
+                        {l.superficie}: {l.attiva ? "protetta" : "protezione SPENTA"} · al minuto {l.anonimo_minuto} per origine
+                        anonima, {l.utente_minuto} per utente · tetti comuni {l.anonimi_globale_minuto} anonimi,{" "}
+                        {l.utenti_globale_minuto} utenti
+                      </li>
+                    ))}
+                    {p.conservazione.map((c) => (
+                      <li key={c.area}>
+                        Conservazione {c.area}:{" "}
+                        {c.giorni === null
+                          ? "periodo non deciso (nulla si cancella)"
+                          : `${c.giorni} giorni, ${c.abilitata ? "abilitata" : "non abilitata"}, ${c.oltre_la_soglia ?? 0} oltre la soglia`}
+                      </li>
+                    ))}
+                    <li>
+                      Adattatori di ricerca:{" "}
+                      {p.adattatori_ricerca.length === 0
+                        ? "nessuno registrato"
+                        : p.adattatori_ricerca
+                            .map((a) => `${a.chiave} (${a.acceso ? "acceso" : "spento"}${a.fonte_autorizzata ? "" : ", fonte non autorizzata"})`)
+                            .join(", ")}
+                    </li>
+                    <li>Stima prezzi per gli utenti: {p.valutazione_prezzi_utenti ? "accesa" : "spenta"}</li>
+                    <li>Richieste di verifica effettive: {p.richieste_autenticita_effettive ? "accese" : "spente"}</li>
+                  </ul>
+                )}
+              </Letto>
             </section>
 
             <section className="rounded-xl border border-border bg-card p-3" data-testid="segnali-correlati">
