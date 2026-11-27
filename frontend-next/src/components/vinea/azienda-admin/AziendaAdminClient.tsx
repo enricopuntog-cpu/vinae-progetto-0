@@ -8,6 +8,10 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ControlloPanel } from "@/components/vinea/azienda-admin/ControlloPanel";
+import { MercatoPanel, ValutazionePanel, VerifichePanel } from "@/components/vinea/azienda-admin/MercatoVerifichePanel";
+import { serviziControllo, type ServiziControllo } from "@/lib/azienda-admin/controllo";
 import { ErrorState } from "@/components/vinea/States";
 import { Campo, Esito, Letto, data, testoValore, useLettura } from "@/components/vinea/catalogo-admin/comune";
 import { OperazioniPanel, Rapporto, SpesaAi } from "@/components/vinea/azienda-admin/OperazioniPanel";
@@ -19,18 +23,39 @@ type Servizi = ReturnType<typeof serviziAziendaAdmin>;
 export function AziendaAdminClient() {
   const client = useMemo(() => getSupabaseClient(), []);
   const servizi = useMemo(() => (client ? serviziAziendaAdmin(client) : null), [client]);
+  const controllo = useMemo(() => (client ? serviziControllo(client) : null), [client]);
   const [giro, setGiro] = useState(0);
-  if (!servizi) return <ErrorState message="Il cruscotto non è configurato in questo ambiente." />;
+  if (!servizi || !controllo) return <ErrorState message="Il cruscotto non è configurato in questo ambiente." />;
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-4" data-testid="azienda-admin">
       <Link href="/admin" className="inline-flex items-center gap-1 text-sm text-antracite/70 hover:text-bordeaux">
         <ArrowLeft className="h-4 w-4" /> Operazioni Admin
       </Link>
       <h1 className="font-serif text-2xl">Cruscotto Vinea</h1>
-      <Riepilogo key={`r${giro}`} servizi={servizi} dopoSentinel={() => setGiro((g) => g + 1)} />
-      <Anomalie key={`a${giro}`} servizi={servizi} />
-      <Rapporto key={`p${giro}`} servizi={servizi} />
-      <Task key={`t${giro}`} servizi={servizi} />
+      <Tabs defaultValue="panoramica">
+        <TabsList className="flex h-auto flex-wrap justify-start">
+          <TabsTrigger value="panoramica">Panoramica</TabsTrigger>
+          <TabsTrigger value="controllo">Controllo</TabsTrigger>
+          <TabsTrigger value="mercato">Mercato</TabsTrigger>
+          <TabsTrigger value="verifiche">Verifiche e prezzi</TabsTrigger>
+        </TabsList>
+        <TabsContent value="panoramica" className="space-y-4">
+          <Riepilogo key={`r${giro}`} servizi={servizi} dopoSentinel={() => setGiro((g) => g + 1)} />
+          <Anomalie key={`a${giro}`} servizi={servizi} />
+          <Rapporto key={`p${giro}`} servizi={servizi} />
+          <Task key={`t${giro}`} servizi={servizi} controllo={controllo} />
+        </TabsContent>
+        <TabsContent value="controllo">
+          <ControlloPanel servizi={controllo} />
+        </TabsContent>
+        <TabsContent value="mercato">
+          <MercatoPanel servizi={controllo} />
+        </TabsContent>
+        <TabsContent value="verifiche" className="space-y-4">
+          <VerifichePanel servizi={controllo} />
+          <ValutazionePanel servizi={controllo} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -191,7 +216,42 @@ function Anomalie({ servizi }: { servizi: Servizi }) {
   );
 }
 
-function Task({ servizi }: { servizi: Servizi }) {
+/** Tutta l'operazione di un task: albero, stati ed eventi; si può annullare con il motivo. */
+function Operazione({ controllo, taskId, nota, dopo }: { controllo: ServiziControllo; taskId: string; nota: string; dopo: () => void }) {
+  const { esito, ricarica } = useLettura(() => controllo.operazione(taskId), taskId);
+  const [errore, setErrore] = useState<string | null>(null);
+  const annulla = async () => {
+    setErrore(null);
+    const r = await controllo.annullaOperazione(taskId, nota);
+    if (r.ok) dopo();
+    else setErrore(r.error);
+  };
+  return (
+    <div className="mt-2 rounded-lg bg-muted/40 p-2 text-xs" data-testid="operazione">
+      <Letto esito={esito} ricarica={ricarica}>
+        {(o) => (
+          <>
+            <ul>
+              {o.task.map((t) => (
+                <li key={t.id} style={{ paddingLeft: `${t.profondita}rem` }}>
+                  {t.tipo} · {t.stato} · {t.titolo}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1 text-muted-foreground">Eventi: {o.eventi.map((e) => e.tipo).join(", ") || "nessuno"}</p>
+          </>
+        )}
+      </Letto>
+      <Button type="button" size="sm" variant="ghost" disabled={!nota.trim()} onClick={() => void annulla()}>
+        Annulla tutta l&apos;operazione
+      </Button>
+      <Esito errore={errore} />
+    </div>
+  );
+}
+
+function Task({ servizi, controllo }: { servizi: Servizi; controllo: ServiziControllo }) {
+  const [aperta, setAperta] = useState<string | null>(null);
   const [nota, setNota] = useState("");
   const [errore, setErrore] = useState<string | null>(null);
   const { esito, ricarica } = useLettura(() => servizi.task(1), "task");
@@ -245,7 +305,11 @@ function Task({ servizi }: { servizi: Servizi }) {
                       Annulla
                     </Button>
                   ) : null}
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setAperta(aperta === t.id ? null : t.id)}>
+                    {aperta === t.id ? "Chiudi operazione" : "Operazione"}
+                  </Button>
                 </div>
+                {aperta === t.id ? <Operazione controllo={controllo} taskId={t.id} nota={nota} dopo={ricarica} /> : null}
               </li>
             ))}
           </ul>

@@ -12,6 +12,8 @@ const CODICI_PARLANTI = new Set(["22023", "23505", "P0001", "P0002", "55000", "0
 
 export function messaggioCatalogo(errore: { code?: string; message?: string }): string {
   if (errore.code === "42501") return "Operazione non autorizzata.";
+  // WI-016: togliere una sospensione o cambiare una soglia richiede un accesso negli ultimi 15 minuti.
+  if (errore.code === "reauth_required") return "Per sicurezza, esci e accedi di nuovo, poi riprova entro 15 minuti.";
   const testo = errore.message ?? "";
   // Un messaggio di vincolo di PostgreSQL contiene nomi interni: si sostituisce.
   if (/duplicate key/i.test(testo)) return "Esiste già un elemento uguale.";

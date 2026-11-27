@@ -1084,6 +1084,11 @@ export interface DatiVinoUtente {
  * ripiego per un campo vuoto.
  */
 export interface DatiNuovaBottiglia extends DatiVinoUtente {
+  /**
+   * WI-016: consenso di QUESTA richiesta a proporre i soli dati enologici al catalogo condiviso. Assente = nessun
+   * consenso. Si registra nella stessa transazione che crea la bottiglia e non la condiziona mai.
+   */
+  propostaCatalogo?: "manuale" | "ocr";
   visibilita: "privata" | "cantina_pubblica";
   /** Percorsi nel bucket privato `cantina`. */
   immagini: string[];
@@ -1108,7 +1113,13 @@ export type EsitoLotto = {
   quantita: number;
   bottleUnitIds: string[];
   replay: boolean;
+  /** WI-016: esito del consenso al catalogo, presente solo alla creazione con consenso. */
+  catalogo?: EsitoConsensoCatalogo;
 };
+
+/** WI-016: elenco chiuso degli esiti che la porta della Cantina può restituire per il consenso. */
+export const ESITI_CONSENSO_CATALOGO = ["ricevuta", "in_sospeso", "non_attiva", "non_valida", "limite", "non_registrata"] as const;
+export type EsitoConsensoCatalogo = (typeof ESITI_CONSENSO_CATALOGO)[number];
 
 /** VP-C: annuncio che offre più bottiglie identiche, al prezzo PER BOTTIGLIA. */
 export interface DatiVenditaLotto extends DatiModificaAnnuncio {

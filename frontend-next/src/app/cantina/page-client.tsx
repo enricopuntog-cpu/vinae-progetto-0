@@ -33,6 +33,8 @@ import { NotaPersonaleDialog } from "@/components/vinea/NotaPersonaleDialog";
 import { SelezioneCatalogoVino } from "@/components/vinea/SelezioneCatalogoVino";
 import { useSelezioniCatalogo } from "@/hooks/useSelezioniCatalogo";
 import { PropostaCatalogoVino } from "@/components/vinea/PropostaCatalogoVino";
+import { ProposteInviate } from "@/components/vinea/ProposteInviate";
+import { RichiestaVerificaBottiglia } from "@/components/vinea/RichiestaVerificaBottiglia";
 import { ancoraGruppo } from "@/lib/cantina/consigli";
 import { chiaveVino } from "@/lib/price-intelligence/insights";
 import { AperturaBottiglia } from "@/components/vinea/AperturaBottiglia";
@@ -1383,6 +1385,14 @@ function BottiglieView({
               {bottiglia ? (
                 <AperturaBottiglia bottiglia={bottiglia} nomeVino={w.nome} variante="compatto" />
               ) : null}
+              {bottiglia && catalogo.client && catalogo.verificheAttive ? (
+                <RichiestaVerificaBottiglia
+                  client={catalogo.client}
+                  bottleUnitId={bottiglia.bottleId}
+                  produttore={w.produttore}
+                  annata={w.annata || null}
+                />
+              ) : null}
             </div>
             {delGruppo.length > 1 ? (
               <DettaglioGruppo bottiglie={delGruppo} nomeVino={w.nome} />
@@ -1390,6 +1400,11 @@ function BottiglieView({
           </div>
         );
       })}
+      {catalogo.client && authUser ? (
+        <div className="col-span-full">
+          <ProposteInviate client={catalogo.client} utenteId={authUser.userId} />
+        </div>
+      ) : null}
     </div>
   );
 }

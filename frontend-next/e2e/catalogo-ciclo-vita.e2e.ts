@@ -21,7 +21,10 @@ const pulisci = (): string => {
   update catalog.intake_settings set user_proposals_enabled = false, listing_harvest_enabled = false, auto_close_known_enabled = false;
   update catalog.public_projection_settings set enabled = false;
   delete from public.wine_catalog_selections;
+  delete from catalog.contribution_intents;
   delete from catalog.contribution_submissions;
+  delete from brain.suspensions;
+  delete from brain.market_reviews;
   delete from catalog.contributions;
   delete from catalog.wine_links;
   delete from catalog.wine_formats;
@@ -122,6 +125,59 @@ test.describe.serial("Catalogo vivo: dalla Cantina alla scheda senza LWIN, con r
     await expect(scheda).toContainText("verificata da un curatore");
     eseguiSql("update catalog.public_projection_settings set enabled = false;");
     await contesto.close();
+  });
+
+  test("WI-016: il consenso dato creando la bottiglia diventa una proposta visibile e ritirabile in Cantina", async ({ browser, diagnostica }, info) => {
+    const nomeConsenso = `Consenso E2E ${corsa}`;
+    await preparaBottigliaInCantina("venditore", { nome: nomeConsenso, consensoCatalogo: "manuale" });
+    const stato = () =>
+      leggiDalDatabase(
+        `select concat_ws(' ', status, first_origin, submissions_count) from catalog.contributions where identity ->> 'nome' = '${nomeConsenso}';`,
+      );
+    expect(stato()).toBe("aperta manuale 1");
+
+    const contesto = await contestoAutenticato(browser, "venditore", opzioniDelProgetto(info));
+    const page = await contesto.newPage();
+    diagnostica.osserva(page, "venditore");
+    await page.goto("/cantina");
+    await attendiCaricamento(page);
+    const elenco = page.getByTestId("proposte-inviate");
+    await elenco.locator("summary").click();
+    const voce = elenco.locator("li").filter({ hasText: nomeConsenso });
+    await expect(voce).toContainText("In revisione");
+    await voce.getByRole("button", { name: "Ritira" }).click();
+    await expect(page.getByTestId("proposte-inviate").locator("li").filter({ hasText: nomeConsenso })).toHaveCount(0);
+    expect(stato()).toBe("ritirata manuale 0");
+    await contesto.close();
+  });
+
+  test("WI-016: dal Control Center si ferma tutto e si ripristina; il mercato apre solo revisioni", async ({ browser, diagnostica }, info) => {
+    const admin = await contestoAutenticato(browser, "adminSenzaRilascio", opzioniDelProgetto(info));
+    const page = await admin.newPage();
+    diagnostica.osserva(page, "adminSenzaRilascio");
+    await page.goto("/admin/azienda");
+    await attendiCaricamento(page);
+    await page.getByRole("tab", { name: "Controllo" }).click();
+    const centro = page.getByTestId("control-center");
+    await expect(centro).toContainText("Nessuna sospensione attiva.");
+    await expect(centro.getByTestId("ai-configurazione")).toContainText("riserva nessuna");
+    await expect(page.getByTestId("kill-switch")).toBeDisabled();
+    await centro.getByLabel("Motivo (obbligatorio per sospendere o ripristinare)").fill("Incidente simulato E2E");
+    await page.getByTestId("kill-switch").click();
+    await expect(page.getByTestId("sospensioni-attive")).toContainText("globale");
+    expect(leggiDalDatabase("select brain.is_suspended('ai', 'ai:chat')::text;")).toBe("true");
+    await page.getByTestId("control-center").getByLabel("Motivo (obbligatorio per sospendere o ripristinare)").fill("Fine prova E2E");
+    await page.getByTestId("kill-switch").click();
+    // sessione appena creata: la conferma recente dell'identità è soddisfatta
+    await expect(page.getByTestId("control-center")).toContainText("Nessuna sospensione attiva.");
+    expect(leggiDalDatabase("select brain.is_suspended('ai', 'ai:chat')::text;")).toBe("false");
+
+    await page.getByRole("tab", { name: "Mercato" }).click();
+    const mercato = page.getByTestId("mercato-monitor");
+    await expect(mercato).toContainText("non una classificazione fiscale");
+    await mercato.getByRole("button", { name: "Esegui i controlli ora" }).click();
+    await expect(mercato).toContainText("Controlli eseguiti");
+    await admin.close();
   });
 
   test("chi non è admin non vede il pannello; il cruscotto dichiara che Sentinel non è pianificato", async ({ browser, diagnostica }, info) => {

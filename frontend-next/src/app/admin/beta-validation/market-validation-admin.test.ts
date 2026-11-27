@@ -150,7 +150,7 @@ describe("MV3 admin launch readiness", () => {
 
   it("verifica la soglia CI della suite corrente", () => {
     const ci = read(".github/workflows/ci.yml");
-    expect(ci).toInclude('MIN_TESTS: "4059"');
+    expect(ci).toInclude('MIN_TESTS: "4133"');
   });
 
   it("versiona esattamente la coppia fondazione + analytics MV", () => {

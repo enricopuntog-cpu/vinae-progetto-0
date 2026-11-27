@@ -39,7 +39,7 @@ interface EsitoLotto {
 
 export const preparaBottigliaInCantina = async (
   ruolo: Ruolo,
-  dati: { nome: string; annata?: number; quantita?: number; costoAcquistoCents?: number },
+  dati: { nome: string; annata?: number; quantita?: number; costoAcquistoCents?: number; consensoCatalogo?: "manuale" | "ocr" },
 ): Promise<BottigliaPreparata> => {
   const sessione = await accedi(ruolo);
   const esito = await rpc<EsitoLotto>(
@@ -57,6 +57,8 @@ export const preparaBottigliaInCantina = async (
       p_immagini: [],
       p_acquisition_cost_cents: dati.costoAcquistoCents ?? null,
       p_acquired_at: null,
+      // WI-016: consenso al catalogo nella stessa chiamata che crea la bottiglia
+      ...(dati.consensoCatalogo ? { p_catalogo_consenso: dati.consensoCatalogo } : {}),
     },
     sessione,
   );
