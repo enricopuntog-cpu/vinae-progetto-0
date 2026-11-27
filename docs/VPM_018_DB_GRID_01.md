@@ -79,6 +79,12 @@ provata a parte e non in questa PR di soli test.
 **x-forwarded-for (già GAP-024).** Ora è misurato sul gateway locale. Va riletto su Production
 insieme a VER-PROD-01.
 
+> **Aggiornamento WI-016F** (`20261130150000`): l'hook non usa più `x-forwarded-for`. L'anonimo è l'impronta
+> dell'indirizzo attestato `cf-connecting-ip`, con ripiego `ip:unknown`. La riga della tabella sul valore sempre
+> diverso descrive il comportamento **precedente**; il caso 23 della griglia ora verifica il contrario. R-MV-01 resta
+> aperto per la parte sul tetto complessivo delle sessioni. Verifica dell'header sul gateway ospitato: vedi
+> [`AI_INFRASTRUCTURE.md`](AI_INFRASTRUCTURE.md) §12.
+
 **Le chiamate fallite non contano (caso 24 e misura).** L'errore annulla anche i contatori, della
 porta e del tetto globale, perché sono nella stessa transazione. Non scrivono nulla e una
 capability a 122 bit non si indovina, ma nessun limite frena un volume di richieste invalide.

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ArrowLeft,
   MapPin,
@@ -60,6 +60,8 @@ import {
   PriceIntelligenceSummary,
 } from "@/components/vinea/PriceIntelligencePanel";
 import type { VistaPriceIntelligence } from "@/lib/price-intelligence/insights";
+import { StimaPrezzoVino, useStimaDisponibile } from "@/components/vinea/StimaPrezzoVino";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import type { AnnuncioProprietario } from "@/services/listing-service";
 import {
   etichettaConfezioneOriginale,
@@ -109,6 +111,9 @@ export default function AnnuncioDetailPageClient({
   visitatoreCommerciale?: boolean;
 }) {
   const router = useRouter();
+  // WI-016: stima dalle vendite concluse, spenta per difetto.
+  const clienteStima = useMemo(() => getSupabaseClient(), []);
+  const stimaDisponibile = useStimaDisponibile(clienteStima);
   const listingId = wine.listingId ?? wine.id;
   const contestoSommelier = contestoVinoDaAnnuncio(
     wine.listingId,
@@ -367,6 +372,14 @@ export default function AnnuncioDetailPageClient({
           stessa vista, stessi dati D3, nessuna formula toccata: è cambiata
           solo la sua posizione nella pagina. */}
       <PriceIntelligencePanel vista={vistaPrezzi} />
+      {wine.wineSlug ? (
+        <StimaPrezzoVino
+          client={clienteStima}
+          disponibile={stimaDisponibile}
+          wineSlug={wine.wineSlug}
+          formato={wine.formato}
+        />
+      ) : null}
 
       {/* Servizio, storia, degustazione */}
       <Tabs defaultValue="storia" className="mt-4">

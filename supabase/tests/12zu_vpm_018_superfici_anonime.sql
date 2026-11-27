@@ -98,13 +98,22 @@ exception when others then reset role; raise;
 end;
 $f$;
 
+-- WI-016F: l'anonimo e l'impronta dell'indirizzo ATTESTATO (`cf-connecting-ip`), non piu il primo valore di
+-- `x-forwarded-for` che il client scrive come vuole.
+create function pg_temp.soggetto(p_ip text) returns text language sql immutable as $f$
+  select 'ip:' || encode(sha256(convert_to(p_ip, 'UTF8')), 'hex') $f$;
+
 -- 1: elenco chiuso. Una nuova porta anonima di scrittura deve entrare in questa griglia.
 do $$
 declare v_porte text[]; v_senza text[];
 begin
   select array_agg(p.proname::text order by p.proname),
          coalesce(array_agg(p.proname::text order by p.proname)
-           filter (where pg_get_functiondef(p.oid) not ilike '%rate_limit_consume%'), '{}')
+           -- WI-016F: `vini_cerca` e volatile per poter contare; il suo limitatore e `private.lettura_consenti`
+           filter (where pg_get_functiondef(p.oid) not ilike '%rate_limit_consume%'
+                     and not (p.proname = 'vini_cerca' and pg_get_functiondef(p.oid) ilike '%private.lettura_consenti(%'
+                              and (select x.prosrc ilike '%rate_limit_consume%' from pg_proc x
+                                    where x.oid = 'private.lettura_consenti(text)'::regprocedure))), '{}')
     into v_porte, v_senza
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.prokind = 'f' and p.provolatile = 'v'
@@ -113,7 +122,7 @@ begin
   perform pg_temp.registra(1, 'elenco chiuso delle porte anonime di scrittura, tutte con limitatore',
     v_porte = array['beta_validation_event_record','beta_validation_qv2_answer','beta_validation_qv2_finish_post',
                     'beta_validation_qv2_finish_pre','beta_validation_qv2_read','beta_validation_qv2_start',
-                    'beta_validation_session_start'] and v_senza = '{}',
+                    'beta_validation_session_start','vini_cerca'] and v_senza = '{}',
     'porte=' || v_porte::text || ' senza=' || v_senza::text);
 end $$;
 
@@ -289,9 +298,9 @@ begin
   v_inizio := to_timestamp(floor(extract(epoch from clock_timestamp()) / 60) * 60);
   perform set_config('request.method', 'POST', true);
   perform set_config('request.path', '/prova_12zu', true);
-  perform set_config('request.headers', '{"x-forwarded-for":"203.0.113.7, 10.0.0.1"}', true);
+  perform set_config('request.headers', '{"cf-connecting-ip":"203.0.113.7","x-forwarded-for":"198.51.100.1, 10.0.0.1"}', true);
   insert into private.rate_limit_buckets (scope, subject, window_started_at, window_seconds, request_count, expires_at)
-  values ('postgrest:/prova_12zu', 'ip:203.0.113.7', v_inizio, 60, 120, v_inizio + interval '120 seconds');
+  values ('postgrest:/prova_12zu', pg_temp.soggetto('203.0.113.7'), v_inizio, 60, 120, v_inizio + interval '120 seconds');
   begin
     perform private.vinea_check_request();
   exception when others then
@@ -320,18 +329,21 @@ begin
   perform pg_temp.registra(22, 'LIMITE NOTO: ruotando la capability il limite per capability non vincola le sessioni',
     v_ok = 40 and v_dopo - v_prima = 40, 'ok=' || v_ok || ' nuove=' || (v_dopo - v_prima));
 
-  -- 23: il tetto globale si fida del primo valore di x-forwarded-for.
+  -- 23: CORRETTO da WI-016F (era un limite noto): ruotare x-forwarded-for non apre un contatore nuovo.
   perform set_config('request.method', 'POST', true);
   perform set_config('request.path', '/rpc/prova_12zu', true);
-  perform set_config('request.headers', '{"x-forwarded-for":"198.51.100.9"}', true);
+  insert into private.rate_limit_buckets (scope, subject, window_started_at, window_seconds, request_count, expires_at)
+  values ('postgrest:/rpc/prova_12zu', pg_temp.soggetto('203.0.113.9'),
+    to_timestamp(floor(extract(epoch from clock_timestamp()) / 60) * 60), 60, 60, clock_timestamp() + interval '120 seconds');
+  perform set_config('request.headers', '{"cf-connecting-ip":"203.0.113.9","x-forwarded-for":"198.51.100.9"}', true);
   begin
     perform private.vinea_check_request();
   exception when others then
     get stacked diagnostics v_stato = returned_sqlstate;
-    v_bloccato := true;
+    v_bloccato := v_stato = 'PGRST';
   end;
-  perform pg_temp.registra(23, 'LIMITE NOTO: il tetto globale conta per il valore di x-forwarded-for ricevuto',
-    not v_bloccato, coalesce(v_stato, 'non bloccato'));
+  perform pg_temp.registra(23, 'il tetto globale conta per l''origine attestata: un x-forwarded-for diverso non lo aggira',
+    v_bloccato, coalesce(v_stato, 'non bloccato'));
   perform set_config('request.method', '', true);
   perform set_config('request.path', '', true);
   perform set_config('request.headers', '', true);
@@ -394,9 +406,9 @@ begin
   v_inizio := to_timestamp(floor(extract(epoch from clock_timestamp()) / 60) * 60);
   perform set_config('request.method', 'POST', true);
   perform set_config('request.path', '/rpc/prova_12zu_b', true);
-  perform set_config('request.headers', '{"x-forwarded-for":"203.0.113.8"}', true);
+  perform set_config('request.headers', '{"cf-connecting-ip":"203.0.113.8"}', true);
   insert into private.rate_limit_buckets (scope, subject, window_started_at, window_seconds, request_count, expires_at)
-  values ('postgrest:/rpc/prova_12zu_b', 'ip:203.0.113.8', v_inizio, 60, 60, v_inizio + interval '120 seconds');
+  values ('postgrest:/rpc/prova_12zu_b', pg_temp.soggetto('203.0.113.8'), v_inizio, 60, 60, v_inizio + interval '120 seconds');
   begin
     perform private.vinea_check_request();
   exception when others then
@@ -419,7 +431,8 @@ declare v_stato text; v_msg text; v_detail text;
 begin
   perform set_config('request.path', p_path, true);
   perform set_config('request.method', p_method, true);
-  perform set_config('request.headers', jsonb_build_object('x-forwarded-for', p_ip)::text, true);
+  perform set_config('request.headers', jsonb_strip_nulls(jsonb_build_object('cf-connecting-ip', nullif(p_ip, ''),
+    'x-forwarded-for', '198.51.100.' || (floor(random() * 250) + 1)::int))::text, true);
   perform set_config('request.jwt.claim.sub', coalesce(p_uid::text, ''), true);
   perform set_config('request.jwt.claims', jsonb_build_object('sub', p_uid,
     'role', case when p_uid is null then 'anon' else 'authenticated' end)::text, true);
@@ -452,7 +465,7 @@ begin
     v_ok = 60 and pg_temp.limitato(v)
       and pg_temp.limitato(pg_temp.hook_esito('/rpc/prova_12zu_60'))
       and (select sum(request_count) = 60 from private.rate_limit_buckets
-        where scope = 'postgrest:/rpc/prova_12zu_60' and subject = 'ip:203.0.113.90'),
+        where scope = 'postgrest:/rpc/prova_12zu_60' and subject = pg_temp.soggetto('203.0.113.90')),
     'ok=' || v_ok || ' ultima=' || v::text);
 
   -- Confine del prefisso: nessun match per segmenti simili o RPC annidate.
@@ -481,11 +494,12 @@ begin
     (pg_temp.hook_esito('/rpc/prova_12zu_user', c_b) ->> 'ok')::boolean
     and (pg_temp.hook_esito('/rpc/prova_12zu_user_altra', c_a) ->> 'ok')::boolean);
 
-  -- Il modello XFF esistente resta invariato; non attesta il gateway hosted.
-  v := pg_temp.hook_esito('/rpc/prova_12zu_60', null, '203.0.113.90, 10.0.0.2');
+  -- WI-016F: stessa origine attestata, x-forwarded-for diverso. Che l'header sia attestato sul gateway ospitato si
+  -- verifica sulla Preview, non qui.
+  v := pg_temp.hook_esito('/rpc/prova_12zu_60', null, '203.0.113.90');
   v_ip := pg_temp.hook_esito('/rpc/prova_12zu_60', null, '203.0.113.92');
   v_unknown := pg_temp.hook_esito('/rpc/prova_12zu_unknown', null, '');
-  perform pg_temp.registra(32, 'anonimo: prima voce XFF, IP distinto e fallback unknown invariati',
+  perform pg_temp.registra(32, 'anonimo: origine attestata come impronta, origine distinta e ripiego unknown; x-forwarded-for ignorato',
     pg_temp.limitato(v)
     and (v_ip ->> 'ok')::boolean and (v_unknown ->> 'ok')::boolean
     and exists (select 1 from private.rate_limit_buckets

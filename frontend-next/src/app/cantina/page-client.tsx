@@ -32,6 +32,7 @@ import { ConsigliCantina } from "@/components/vinea/ConsigliCantina";
 import { NotaPersonaleDialog } from "@/components/vinea/NotaPersonaleDialog";
 import { SelezioneCatalogoVino } from "@/components/vinea/SelezioneCatalogoVino";
 import { useSelezioniCatalogo } from "@/hooks/useSelezioniCatalogo";
+import { StimaPrezzoVino, useStimaDisponibile } from "@/components/vinea/StimaPrezzoVino";
 import { PropostaCatalogoVino } from "@/components/vinea/PropostaCatalogoVino";
 import { ProposteInviate } from "@/components/vinea/ProposteInviate";
 import { RichiestaVerificaBottiglia } from "@/components/vinea/RichiestaVerificaBottiglia";
@@ -1207,6 +1208,8 @@ function BottiglieView({
   const { bottiglieCantina, notePersonaliVino, authUser } = useVinea();
   // WI-008: scheda del catalogo scelta dall'utente. Con il catalogo spento e nessuna scelta non compare nulla.
   const catalogo = useSelezioniCatalogo(authUser?.userId ?? null);
+  // WI-016: una sola domanda per tutto l'elenco; spenta per difetto.
+  const stimaDisponibile = useStimaDisponibile(authUser?.userId ? catalogo.client : null);
   if (list.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center text-sm text-muted-foreground">
@@ -1286,6 +1289,14 @@ function BottiglieView({
                   tipo: w.tipo,
                   formato: w.formato,
                 }}
+              />
+            ) : null}
+            {w.wineSlug ? (
+              <StimaPrezzoVino
+                client={catalogo.client}
+                disponibile={stimaDisponibile}
+                wineSlug={w.wineSlug}
+                formato={w.formato}
               />
             ) : null}
             <div className="flex flex-wrap gap-2">
