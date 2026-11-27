@@ -34,6 +34,14 @@ export const LIMITE_RISULTATI_SERVER = 15;
 
 export type ClienteRpc = Pick<SupabaseClient, "rpc">;
 
+/** WI-016: il server rifiuta per protezione (raffica, concorrenza, saturazione). Non è un guasto. */
+export const MESSAGGIO_TROPPE_RICERCHE = "Troppe ricerche in poco tempo. Attendi qualche secondo e riprova.";
+const CODICI_PROTEZIONE: ReadonlySet<string> = new Set([
+  "rate_limit_exceeded",
+  "troppe_ricerche_in_corso",
+  "ricerca_satura",
+]);
+
 const LIVELLI = ["identificativo", "esatto", "prefisso", "testo", "simile"] as const;
 type Livello = (typeof LIVELLI)[number];
 
@@ -84,6 +92,7 @@ export function sorgenteDaRpc(client: ClienteRpc | null): SorgenteCandidati {
           p_formato: domanda.formato,
           p_limite: LIMITE_RISULTATI_SERVER,
         });
+        if (error?.code && CODICI_PROTEZIONE.has(error.code)) return { ok: false, error: MESSAGGIO_TROPPE_RICERCHE };
         if (error || !Array.isArray(data)) return { ok: false, error: MESSAGGIO_RICERCA_NON_DISPONIBILE };
         const candidati: CandidatoVino[] = [];
         for (const riga of data) {
@@ -114,7 +123,8 @@ export function sorgenteConRipiego(
       const esito = await primaria.cerca(domanda).catch(
         (): Result<CandidatoVino[]> => ({ ok: false, error: MESSAGGIO_RICERCA_NON_DISPONIBILE }),
       );
-      return esito.ok ? esito : ripiego.cerca(domanda);
+      // WI-016: dopo un limite il ripiego (più letture dirette) aggirerebbe la protezione e aggiungerebbe carico.
+      return esito.ok || esito.error === MESSAGGIO_TROPPE_RICERCHE ? esito : ripiego.cerca(domanda);
     },
   };
 }

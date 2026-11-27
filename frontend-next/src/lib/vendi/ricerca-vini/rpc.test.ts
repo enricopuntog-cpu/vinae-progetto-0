@@ -9,6 +9,8 @@ import { valutaCandidati } from "@/lib/vendi/foto-etichetta/candidati";
 import { aRisultatoRicerca } from "./contratto";
 import {
   LIMITE_RISULTATI_SERVER,
+  MESSAGGIO_TROPPE_RICERCHE,
+  type ClienteRpc,
   candidatoDaRigaRpc,
   creaMotoreRicerca,
   sorgenteConRipiego,
@@ -127,6 +129,48 @@ describe("sorgenteDaRpc", () => {
   it("zero risultati è una risposta valida", async () => {
     const e = await sorgenteDaRpc(clienteRpc(async () => ({ data: [], error: null }))).cerca(dom("Zzqxj", "Qwzxcv"));
     expect(e).toEqual({ ok: true, data: [] });
+  });
+});
+
+describe("WI-016 — il rifiuto per protezione non diventa altro carico", () => {
+  const clienteCheRifiuta = (code: string): ClienteRpc =>
+    ({ rpc: async () => ({ data: null, error: { code, message: "x" } }) }) as unknown as ClienteRpc;
+
+  it.each(["rate_limit_exceeded", "troppe_ricerche_in_corso", "ricerca_satura"])(
+    "%s: messaggio di attesa, distinto dal guasto",
+    async (code) => {
+      const e = await sorgenteDaRpc(clienteCheRifiuta(code)).cerca(dom("Produttore", "Barolo"));
+      expect(e).toEqual({ ok: false, error: MESSAGGIO_TROPPE_RICERCHE });
+    },
+  );
+
+  it("dopo un limite NON parte il ripiego (che leggerebbe le tabelle più volte)", async () => {
+    let ripieghi = 0;
+    const ripiego = {
+      codice: "r",
+      cerca: async () => {
+        ripieghi++;
+        return { ok: true as const, data: [] };
+      },
+    };
+    const e = await sorgenteConRipiego(sorgenteDaRpc(clienteCheRifiuta("rate_limit_exceeded")), ripiego).cerca(
+      dom("Produttore", "Barolo"),
+    );
+    expect(e).toEqual({ ok: false, error: MESSAGGIO_TROPPE_RICERCHE });
+    expect(ripieghi).toBe(0);
+  });
+
+  it("un guasto vero continua a usare il ripiego", async () => {
+    let ripieghi = 0;
+    const ripiego = {
+      codice: "r",
+      cerca: async () => {
+        ripieghi++;
+        return { ok: true as const, data: [] };
+      },
+    };
+    await sorgenteConRipiego(sorgenteDaRpc(clienteCheRifiuta("PGRST202")), ripiego).cerca(dom("Produttore", "Barolo"));
+    expect(ripieghi).toBe(1);
   });
 });
 
