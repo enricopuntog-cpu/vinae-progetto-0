@@ -138,6 +138,11 @@ let providerRispondeKo: boolean;
 let statoFornitore = 500;
 /** WI-010: il fornitore apre lo stream, manda un pezzo e poi si rompe. */
 let providerSiInterrompe = false;
+/** WI-016: pezzi scelti dal test (un segreto spezzato su più delta) invece del taglio fisso a 200 caratteri. */
+let pezziScelti: string[] | null;
+/** WI-016: il fornitore manda un pezzo e poi tace per sempre. */
+let providerSiBlocca: boolean;
+let lettureFornitoreAnnullate: number;
 
 const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
   const url = String(input instanceof Request ? input.url : input);
@@ -152,6 +157,23 @@ const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Pr
     prompt: body.messages.find((m) => m.role === "user")?.content ?? "",
   });
   if (providerRispondeKo) return new Response("boom", { status: statoFornitore });
+  if (providerSiBlocca) {
+    let letture = 0;
+    const muto = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (letture++ === 0) {
+          const primo = JSON.stringify({ choices: [{ delta: { content: "inizio" } }] });
+          controller.enqueue(new TextEncoder().encode(`data: ${primo}\n\n`));
+          return;
+        }
+        return new Promise<void>(() => {});
+      },
+      cancel() {
+        lettureFornitoreAnnullate++;
+      },
+    });
+    return new Response(muto, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+  }
   if (providerSiInterrompe) {
     let letture = 0;
     const rotto = new ReadableStream<Uint8Array>({
@@ -167,7 +189,7 @@ const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Pr
     });
     return new Response(rotto, { status: 200, headers: { "Content-Type": "text/event-stream" } });
   }
-  const pezzi = testoRisposta.match(/[\s\S]{1,200}/g) ?? [];
+  const pezzi = pezziScelti ?? testoRisposta.match(/[\s\S]{1,200}/g) ?? [];
   const sse =
     pezzi.map((p) => `data: ${JSON.stringify({ choices: [{ delta: { content: p } }] })}\n\n`).join("") +
     // come il fornitore con include_usage: l'ultimo pezzo porta il consumo
@@ -295,6 +317,11 @@ beforeEach(() => {
   chiamateProvider = [];
   fetchEstranei = [];
   testoRisposta = "Risposta di prova.";
+  pezziScelti = null;
+  providerSiBlocca = false;
+  providerSiInterrompe = false;
+  lettureFornitoreAnnullate = 0;
+  delete ENV.AI_TIMEOUT_SECONDS;
   providerRispondeKo = false;
   statoFornitore = 500;
   erroriDb = new Set();
@@ -981,6 +1008,136 @@ describe("WI-016 — gateway comune sul Sommelier", () => {
     const r = await chiama({ zavorra: "z".repeat(40_000) });
     expect(r.status).toBe(413);
     expect(rpcLog.some((x) => x.name === "ai_porta_apri")).toBe(false);
+  });
+});
+
+describe("WI-016 — nulla raggiunge il client prima che la risposta intera sia verificata", () => {
+  const consuntivi = () => rpcLog.filter((r) => r.name === "ai_budget_consuntivo").map((r) => r.args.p_esito);
+  const chiusure = () => rpcLog.filter((r) => r.name === "ai_porta_chiudi").map((r) => r.args.p_riuscita);
+  const salvato = () => rpcLog.some((r) => r.name === "sommelier_scambio_registra");
+  const segnali = () => rpcLog.filter((r) => r.name === "ai_segnala").map((r) => r.args.p_tipo);
+  const attendi = () => new Promise((r) => setTimeout(r, 50));
+  const eventiDi = (grezzo: string) =>
+    grezzo
+      .split("\n\n")
+      .filter((b) => b.startsWith("data: "))
+      .map((b) => JSON.parse(b.slice(6)) as Record<string, unknown>);
+
+  // Valori finti composti a runtime: nel sorgente non compare nessuna stringa con la forma di un segreto.
+  const CHIAVE = "sk-" + "Z9".repeat(16);
+  const JWT = `eyJ${"h".repeat(30)}.${"p".repeat(60)}.${"f".repeat(40)}`;
+
+  /** Il corpo grezzo, così un frammento nascosto in qualunque evento o commento si vede. */
+  const corpoGrezzo = async (pezzi: string[]) => {
+    pezziScelti = pezzi;
+    const grezzo = await (await chiama({})).text();
+    await attendi();
+    return grezzo;
+  };
+
+  const verificaBlocco = (grezzo: string, frammenti: string[]) => {
+    for (const frammento of frammenti) expect(grezzo).not.toContain(frammento);
+    const ev = eventiDi(grezzo);
+    expect(ev).toHaveLength(1);
+    expect(String(ev[0].error)).toContain("dati riservati");
+    expect(salvato()).toBe(false);
+    expect(segnali()).toEqual(["output_scartato"]);
+    // il fornitore ha risposto ed è stato pagato: consuntivo normale; la porta si chiude come NON riuscita
+    expect(consuntivi()).toEqual(["ok"]);
+    expect(chiusure()).toEqual([false]);
+  };
+
+  it("un segreto in un solo pezzo non viene mai trasmesso", async () => {
+    verificaBlocco(await corpoGrezzo(["Ecco la chiave ", CHIAVE, " buon calice."]), [CHIAVE, "Ecco la chiave"]);
+  });
+
+  it("un segreto spezzato su più pezzi non viene trasmesso nemmeno in parte", async () => {
+    const pezzi = ["Premessa lunga e innocua. ", ...(CHIAVE.match(/.{1,3}/g) ?? [])];
+    verificaBlocco(await corpoGrezzo(pezzi), ["sk-", "Z9Z9", "Premessa"]);
+  });
+
+  it("un JWT più lungo di qualunque finestra di sicurezza, un carattere alla volta", async () => {
+    verificaBlocco(await corpoGrezzo(["Token: ", ...JWT.split("")]), ["eyJ", "hhhh", "pppp"]);
+  });
+
+  it.each([
+    ["posta", "mario.rossi@example.com"],
+    ["IBAN", ["IT60X054281", "1101000000123456"].join("")],
+    ["carta", ["4111 1111", " 1111 1111"].join("")],
+    ["codice fiscale", ["RSSMRA85T", "10A562S"].join("")],
+    ["telefono", "+39 333 1234567"],
+  ])("un dato personale nell'uscita (%s) è bloccato come in ingresso, anche spezzato", async (_nome, dato) => {
+    const meta = Math.ceil(dato.length / 2);
+    verificaBlocco(await corpoGrezzo(["Contatta: ", dato.slice(0, meta), dato.slice(meta)]), [dato.slice(0, meta)]);
+  });
+
+  it("un segreto a cavallo del tetto di 8000 caratteri: niente del suo inizio esce", async () => {
+    const riempitivo = "vino ".repeat(1598); // 7.990 caratteri: il tetto cade dentro la chiave
+    verificaBlocco(await corpoGrezzo([riempitivo, CHIAVE]), ["sk-"]);
+  });
+
+  it("una risposta troppo lunga per essere verificata per intero è bloccata, non trasmessa a metà", async () => {
+    const grezzo = await corpoGrezzo(Array.from({ length: 80 }, () => "vino ".repeat(200)));
+    expect(grezzo).not.toContain("vino vino");
+    expect(eventiDi(grezzo)).toHaveLength(1);
+    expect(eventiDi(grezzo)[0]).toHaveProperty("error");
+    expect(salvato()).toBe(false);
+    expect(chiusure()).toEqual([false]);
+    expect(consuntivi()).toHaveLength(1);
+  });
+
+  it("guasto del fornitore a metà: nessun frammento non verificato arriva al client", async () => {
+    providerSiInterrompe = true;
+    const grezzo = await (await chiama({})).text();
+    await attendi();
+    expect(grezzo).not.toContain("inizio");
+    expect(grezzo).toContain('"error"');
+    expect(consuntivi()).toEqual(["guasto_fornitore"]);
+    expect(chiusure()).toEqual([false]);
+    expect(salvato()).toBe(false);
+  });
+
+  it("fornitore muto a metà stream: scade, si annulla la lettura, consuntivo e porta si chiudono", async () => {
+    providerSiBlocca = true;
+    ENV.AI_TIMEOUT_SECONDS = "0.1";
+    const grezzo = await (await chiama({})).text();
+    await attendi();
+    expect(grezzo).not.toContain("inizio");
+    expect(grezzo).toContain('"error"');
+    expect(consuntivi()).toEqual(["guasto_fornitore"]);
+    expect(rpcLog.filter((x) => x.name === "ai_budget_esito").map((x) => x.args.p_riuscita)).toEqual([false]);
+    expect(chiusure()).toEqual([false]);
+    expect(lettureFornitoreAnnullate).toBe(1);
+  }, 3000);
+
+  it("il client che se ne va durante l'attesa: nessun salvataggio, consuntivo e porta chiusi una volta", async () => {
+    pezziScelti = Array.from({ length: 50 }, () => "parola ");
+    const r = await chiama({});
+    await r.body!.cancel();
+    await attendi();
+    expect(consuntivi()).toEqual(["interrotta_client"]);
+    expect(chiusure()).toEqual([false]);
+    expect(rpcLog.filter((x) => x.name === "ai_budget_esito")).toEqual([]);
+    expect(salvato()).toBe(false);
+  });
+
+  it("durante l'attesa passano solo commenti SSE senza contenuto, che il client ignora", async () => {
+    const grezzo = await corpoGrezzo(["Un ", "Barolo ", "giovane."]);
+    const blocchi = grezzo.split("\n\n").filter(Boolean);
+    const commenti = blocchi.filter((b) => !b.startsWith("data:"));
+    expect(commenti.length).toBeGreaterThan(0);
+    for (const c of commenti) expect(c).toBe(": in verifica");
+    expect(eventiDi(grezzo)).toEqual([{ delta: "Un Barolo giovane." }, { done: true }]);
+  });
+
+  it("una riga di storico con un dato sensibile non torna al fornitore", async () => {
+    storico = [
+      { ruolo: "utente", contenuto: "Che cosa bevo?" },
+      { ruolo: "sommelier", contenuto: `La chiave era ${CHIAVE}` },
+    ];
+    await (await chiama({ message: "E domani?" })).text();
+    expect(chiamateProvider[0].prompt).toContain("Che cosa bevo?");
+    expect(chiamateProvider[0].prompt).not.toContain(CHIAVE);
   });
 });
 

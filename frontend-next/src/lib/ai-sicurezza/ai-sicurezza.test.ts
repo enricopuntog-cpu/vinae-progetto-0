@@ -74,6 +74,19 @@ describe("controllo dell'uscita del modello", () => {
     expect(pulisciUscita(`chiave ${CHIAVE_FINTA}`, 400)).toBe("");
     expect(pulisciUscita(42 as unknown as string, 400)).toBe("");
   });
+
+  it.each([
+    ["IBAN", ["IT60X054281", "1101000000123456"].join("")],
+    ["carta", ["4111 1111", " 1111 1111"].join("")],
+    ["codice fiscale", ["RSSMRA85T", "10A562S"].join("")],
+    ["telefono", "+39 333 1234567"],
+  ])("la stessa regola dell'ingresso vale in uscita: con un dato personale (%s) il campo è vuoto", (_nome, dato) => {
+    expect(pulisciUscita(`Per informazioni ${dato}`, 400)).toBe("");
+  });
+
+  it("il controllo guarda il campo intero, prima del taglio alla lunghezza massima", () => {
+    expect(pulisciUscita(`${"vino ".repeat(20)}${CHIAVE_FINTA}`, 60)).toBe("");
+  });
 });
 
 describe("impronta della richiesta", () => {

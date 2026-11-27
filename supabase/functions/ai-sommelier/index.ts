@@ -31,8 +31,19 @@
 // salva **solo a stream concluso e non vuoto**, come nel legacy
 // (`backend/ai_routes.py:92-101`). Una risposta troncata a metà non entra nello
 // storico, perché diventerebbe il contesto delle battute successive.
+//
+// WI-016 — VERIFICA PRIMA DELLA TRASMISSIONE. Dal fornitore la risposta arriva a
+// pezzi, ma al client non ne esce nessuno finché non è arrivata TUTTA ed è
+// passata dallo stesso rilevatore dei dati sensibili usato in ingresso. Una
+// finestra scorrevole non basta: un segreto può essere spezzato su più pezzi e
+// alcune forme (JWT, «password: …») non hanno una lunghezza massima prima di
+// essere riconoscibili. La risposta è già limitata, quindi si tiene in memoria.
+// Nell'attesa partono solo commenti SSE senza contenuto: tengono viva la
+// connessione e fanno accorgere subito di un client che se n'è andato. Un
+// guasto o un troncamento a metà non consegna testo non verificato.
 
 import { rilevaDatiSensibili } from "../_shared/ai-sicurezza.ts";
+import { timeoutMs } from "../_shared/ai-provider.ts";
 import {
   apriIngresso,
   apriPorta,
@@ -85,6 +96,28 @@ const RISPOSTA_MAX_CHARS = 8000;
 const MESSAGGIO_MAX_CHARS = 2000;
 
 const SESSION_ID = /^[A-Za-z0-9_-]{4,64}$/;
+
+// WI-016: quanto al massimo si può verificare per intero. Con il tetto di token
+// in uscita non ci si avvicina; oltre non si trasmette nulla.
+const RISPOSTA_VERIFICABILE_MAX_CHARS = 64_000;
+// Durata massima della lettura dal fornitore: sotto i 150 s della piattaforma.
+const LETTURA_MASSIMA_MS = 120_000;
+const IN_VERIFICA = ": in verifica\n\n";
+const RISPOSTA_BLOCCATA =
+  "La risposta conteneva dati riservati ed è stata bloccata. Riformula la domanda.";
+
+/** Una lettura che non arriva entro `ms` è un guasto: il fornitore muto non tiene aperta la richiesta. */
+const leggiEntroScadenza = async <T>(lettura: Promise<T>, ms: number): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const scadenza = new Promise<never>((_, rifiuta) => {
+    timer = setTimeout(() => rifiuta(new DOMException("fornitore muto", "TimeoutError")), Math.max(ms, 0));
+  });
+  try {
+    return await Promise.race([lettura, scadenza]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
 
 type RigaContesto = { ruolo: "utente" | "sommelier"; contenuto: string };
 
@@ -350,7 +383,10 @@ const rispondi = async ({ cors, supabase, userId, sessionId, messaggio, richiest
     console.error("[ai-sommelier] lettura contesto fallita", { code: contestoError.code });
     return json({ error: "Il Sommelier non è al momento disponibile." }, 503, cors);
   }
-  const contesto = (contestoGrezzo ?? []) as RigaContesto[];
+  // WI-016: stessa regola dell'ingresso anche per lo storico: una riga salvata con un dato sensibile non riparte.
+  const contesto = ((contestoGrezzo ?? []) as RigaContesto[]).filter(
+    (riga) => rilevaDatiSensibili(riga.contenuto) === null,
+  );
 
   let system = SYSTEM;
   let prompt = costruisciPrompt(contesto, messaggio);
@@ -405,41 +441,54 @@ const rispondi = async ({ cors, supabase, userId, sessionId, messaggio, richiest
 
   const inoltra = async () => {
     const writer = writable.getWriter();
-    const raccolti: string[] = [];
-    let rimanenti = RISPOSTA_MAX_CHARS;
     const lettore = sorgente.getReader();
     // WI-010: l'interruttore è globale, quindi conta solo un errore LETTO dal fornitore. Una scrittura verso un
     // client che se n'è andato finisce nello stesso `catch` e non deve poter spegnere l'AI a tutti.
     let guastoFornitore = false;
+    let consuntivata = false;
     let completata = false;
+    const scadenza = Date.now() + LETTURA_MASSIMA_MS;
     try {
+      let raccolta = "";
+      let verificabile = true;
       while (true) {
-        const { done, value } = await lettore.read().catch((errore: unknown) => {
-          guastoFornitore = true;
-          throw errore;
-        });
+        const { done, value } = await leggiEntroScadenza(lettore.read(), Math.min(timeoutMs(), scadenza - Date.now()))
+          .catch((errore: unknown) => {
+            guastoFornitore = true;
+            throw errore;
+          });
         if (done) break;
-        if (rimanenti <= 0) break;
-        // Troncamento in uscita, come `remaining_chars`
-        // (`backend/ai_routes.py:72`, `:79-87`): vale sui byte trasmessi e su
-        // quelli salvati, non su uno solo dei due.
-        const sicuro = value.slice(0, rimanenti);
-        if (sicuro) {
-          raccolti.push(sicuro);
-          rimanenti -= sicuro.length;
-          await writer.write(encoder.encode(sse({ delta: sicuro })));
+        raccolta += value;
+        if (raccolta.length > RISPOSTA_VERIFICABILE_MAX_CHARS) {
+          verificabile = false;
+          void lettore.cancel().catch(() => {});
+          break;
         }
-        if (sicuro.length < value.length) break;
+        await writer.write(encoder.encode(IN_VERIFICA));
       }
 
       await registraEsitoFornitore(supabase, "ai:chat", true);
-      await registraConsuntivo(supabase, richiestaId, "ok", chiamata.uso());
-      completata = true;
-      const risposta = raccolti.join("").trim();
-      // WI-016: una risposta che contiene un segreto non entra nello storico (diventerebbe contesto delle successive).
-      if (risposta && rilevaDatiSensibili(risposta) === "segreto") {
-        await segnalaSicurezza(supabase, userId, "ai:chat", "output_scartato");
-      } else if (risposta) {
+      await registraConsuntivo(supabase, richiestaId, verificabile ? "ok" : "formato_non_valido", chiamata.uso());
+      consuntivata = true;
+
+      // La verifica guarda la risposta INTERA, prima del troncamento: un segreto a cavallo del tetto si vede.
+      const bloccata = !verificabile || rilevaDatiSensibili(raccolta) !== null;
+      if (bloccata) {
+        if (verificabile) await segnalaSicurezza(supabase, userId, "ai:chat", "output_scartato");
+        await ingresso.chiudi(false);
+        await writer.write(
+          encoder.encode(sse({ error: verificabile ? RISPOSTA_BLOCCATA : "Il Sommelier non è al momento disponibile." })),
+        );
+        return;
+      }
+
+      // Troncamento in uscita, come `remaining_chars`
+      // (`backend/ai_routes.py:72`, `:79-87`): vale su ciò che si trasmette e
+      // su ciò che si salva.
+      const trasmessa = raccolta.slice(0, RISPOSTA_MAX_CHARS);
+      if (trasmessa) await writer.write(encoder.encode(sse({ delta: trasmessa })));
+      const risposta = trasmessa.trim();
+      if (risposta) {
         // Si salva solo qui: a stream concluso e non vuoto. Una risposta
         // interrotta a metà non entra nello storico, perché diventerebbe il
         // contesto delle battute successive.
@@ -456,6 +505,7 @@ const rispondi = async ({ cors, supabase, userId, sessionId, messaggio, richiest
           console.error("[ai-sommelier] scambio non salvato", { code: error.code });
         }
       }
+      completata = true;
       // la porta si chiude PRIMA di «done»: chi ripete subito la domanda non deve trovarla ancora in corso
       await ingresso.chiudi(true);
       await writer.write(encoder.encode(sse({ done: true })));
@@ -463,9 +513,12 @@ const rispondi = async ({ cors, supabase, userId, sessionId, messaggio, richiest
       // Evento generico dentro lo stream e nessun salvataggio, come
       // `backend/ai_routes.py:88-90`. Il messaggio del fornitore non esce.
       if (guastoFornitore) await registraEsitoFornitore(supabase, "ai:chat", false);
-      // Se è il client ad aver chiuso, si ferma anche la lettura dal fornitore.
-      else await lettore.cancel().catch(() => {});
-      await registraConsuntivo(supabase, richiestaId, guastoFornitore ? "guasto_fornitore" : "interrotta_client", chiamata.uso());
+      // In ogni caso si ferma la lettura dal fornitore (client andato via o fornitore muto). Senza attendere:
+      // un fornitore muto potrebbe non confermare mai l'annullamento.
+      void lettore.cancel().catch(() => {});
+      if (!consuntivata) {
+        await registraConsuntivo(supabase, richiestaId, guastoFornitore ? "guasto_fornitore" : "interrotta_client", chiamata.uso());
+      }
       console.error("[ai-sommelier] stream interrotto", {
         tipo: errore instanceof Error ? errore.name : "sconosciuto",
       });

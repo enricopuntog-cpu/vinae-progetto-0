@@ -104,12 +104,17 @@ export const ISTRUZIONE_DATI_NON_ATTENDIBILI =
 
 const COLLEGAMENTI = /\b(?:https?:\/\/|www\.)\S+/gi;
 
-/** Campo strutturato prodotto dal modello: niente collegamenti, recapiti o segreti. Con un segreto il campo è vuoto. */
+/**
+ * Campo strutturato prodotto dal modello. Collegamenti e indirizzi di posta si tolgono; se dopo resta un dato che in
+ * ingresso sarebbe stato rifiutato (`rilevaDatiSensibili`, stessa regola), il campo è vuoto. Con un segreto nel
+ * valore originale è vuoto comunque. Il controllo precede il taglio alla lunghezza massima.
+ */
 export function pulisciUscita(valore: unknown, max: number): string {
   if (typeof valore !== "string") return "";
   if (SEGRETI.some((r) => r.test(valore))) return "";
   const senza = valore.replace(COLLEGAMENTI, " ").replace(new RegExp(EMAIL.source, "g"), " ");
-  return senza.replace(/\s+/g, " ").trim().slice(0, max);
+  const compatto = senza.replace(/\s+/g, " ").trim();
+  return rilevaDatiSensibili(compatto) === null ? compatto.slice(0, max) : "";
 }
 
 /** Impronta della richiesta per riconoscere i doppi invii: nel database entra solo questa, mai il testo. */
