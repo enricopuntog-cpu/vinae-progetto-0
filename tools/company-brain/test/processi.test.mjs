@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { acquisisci, leggiElementi, percorsoAmmesso } from "../lib/acquisizione.mjs";
+import { acquisisci, leggiElementi, leggiFileLimitato, percorsoAmmesso } from "../lib/acquisizione.mjs";
 import { cicloPeriodico, intervalloMs } from "../lib/ciclo.mjs";
 import { raccogliSegnali, segnaleCi, segnaleSalute } from "../lib/segnali.mjs";
 
@@ -32,6 +32,18 @@ test("acquisizione: tetti sul file e sulla riga; nessun indirizzo di rete come s
   for (const p of ["https://sito.test/dati.jsonl", "HTTP://x", "ftp://x/y.jsonl", "file:///etc/passwd", "//server/condivisione.jsonl", "dati.csv", ""]) {
     assert.equal(percorsoAmmesso(p), false, p);
   }
+});
+
+test("acquisizione: interrompe la lettura non appena la somma dei byte supera il tetto", async () => {
+  const [primo, secondo] = [Buffer.from([0xc3]), Buffer.from([0xa8])];
+  assert.equal(await leggiFileLimitato([primo, secondo]), "è");
+  const megabyte = Buffer.alloc(1024 * 1024);
+  let letti = 0;
+  function* fileGrande() {
+    while (letti++ < 20) yield megabyte;
+  }
+  await assert.rejects(leggiFileLimitato(fileGrande()), /file_troppo_grande/);
+  assert.equal(letti, 10);
 });
 
 test("acquisizione: lotti di 20, somme degli esiti, indici riportati al file; al primo errore si ferma", async () => {
