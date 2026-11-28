@@ -176,6 +176,24 @@ select pg_temp.rec(7, 'l''utente vede l''intenzione (id negativo, «in attesa di
   and pg_temp.utente(format('select public.catalogo_proposta_ritira(%s)::text', pg_temp.f('intent')), 'b') = 'OK:false'
   and (select count(*) from catalog.contribution_intents) = 1, pg_temp.f('m1'));
 
+insert into catalog.contribution_intents (user_id, origin, data, request_ref, created_at, expires_at)
+select pg_temp.f('a')::uuid, 'manuale', '{"produttore":"Prova","nome":"Pagina"}'::jsonb,
+       'wi017-pagina-' || n, now() + n * interval '1 minute', now() + interval '1 day'
+from generate_series(0, 100) n;
+select pg_temp.salva('intenzione_vecchia',
+  (select (-id)::text from catalog.contribution_intents where request_ref = 'wi017-pagina-0'));
+select pg_temp.salva('prima', pg_temp.utente($q$select jsonb_agg(m order by m.inviata_il desc, m.id desc)::text
+  from public.catalogo_proposte_mie() m$q$));
+select pg_temp.salva('seconda', pg_temp.utente(format(
+  $q$select jsonb_agg(m)::text from public.catalogo_proposte_mie(%L::timestamptz, %s::bigint) m$q$,
+  pg_temp.dati('prima') -> 99 ->> 'inviata_il', pg_temp.dati('prima') -> 99 ->> 'id')));
+select pg_temp.rec(64, 'l''intenzione piu vecchia resta raggiungibile e revocabile dopo 100 invii',
+  jsonb_array_length(pg_temp.dati('prima')) = 100
+  and exists (select 1 from jsonb_array_elements(pg_temp.dati('seconda')) e where e ->> 'id' = pg_temp.f('intenzione_vecchia'))
+  and pg_temp.utente(format('select public.catalogo_proposta_ritira(%s)::text', pg_temp.f('intenzione_vecchia'))) = 'OK:true'
+  and not has_function_privilege('anon', 'public.catalogo_proposte_mie(timestamptz,bigint)', 'EXECUTE'));
+delete from catalog.contribution_intents where request_ref like 'wi017-pagina-%';
+
 select pg_temp.salva('p1', catalog.process_contribution_intents(10, 'wi016')::text);
 select pg_temp.rec(8, 'ritentativo fallito: attesa crescente, nessuna quota consumata due volte',
   pg_temp.j('p1') ->> 'fallite' = '1'
@@ -334,6 +352,12 @@ select pg_temp.rec(25, 'la ricerca entra come rivendicazione PROPOSTA con proven
   and catalog.research_submit('WI016-CONSORZIO', 'wine', pg_temp.f('wine')::uuid, 'grapes', '["Nebbiolo"]', 'https://consorzio.test/scheda/1', now(), 4, 'wi016') = pg_temp.f('claim')::bigint
   and pg_temp.admin('select public.catalogo_admin_ricerca_registra(''{"fonte":"WI016-CONSORZIO","segreto":"x"}'')::text') = '22023'
   and pg_temp.utente('select public.catalogo_admin_ricerca_registra(''{}'')::text') = '42501', pg_temp.f('ric'));
+select pg_temp.fai(catalog.research_submit('WI016-CONSORZIO', 'wine', pg_temp.f('wine')::uuid, 'grapes',
+  '["Nebbiolo"]', 'https://consorzio.test/scheda/2', now(), 4, 'wi016'));
+select pg_temp.rec(62, 'riferimenti diversi della stessa fonte restano sulla stessa rivendicazione e sullo stesso task',
+  (select count(*) = 2 from catalog.research_provenance where claim_id = pg_temp.f('claim')::bigint)
+  and jsonb_array_length(catalog.research_context(pg_temp.f('claim')::bigint) -> 'riferimenti') = 2
+  and (select count(*) = 1 from brain.tasks where task_type = 'ricerca.verifica'));
 select pg_temp.salva('dec', pg_temp.admin(format($q$select public.catalogo_admin_azione('attributo_decidi', '{"id":%s,"decisione":"accepted"}')::text$q$, pg_temp.f('claim'))));
 
 update catalog.public_projection_settings set enabled = true;
@@ -529,12 +553,17 @@ select pg_temp.rec(45, 'concorrenza globale della funzione; porte e segnali solo
   and has_function_privilege('service_role', 'public.ai_porta_apri(uuid, text, text)', 'EXECUTE')
   and not has_table_privilege('service_role', 'private.ai_porte', 'SELECT'));
 update private.ai_budget_settings set richieste_giorno = 10, richieste_mese = 10;
+select pg_temp.rec(61, 'una quota di richieste da sola non consente spesa AI',
+  public.ai_budget_prenota('ai:chat', 'openai', 'modello', 10, 10) ->> 'esito' = 'non_configurato');
+update private.ai_budget_settings set spesa_giorno_usd = 1;
+insert into private.ai_tariffe (provider, modello, versione, input_per_milione, output_per_milione, valida_dal, inserita_da)
+values ('openai', 'modello', 'fixture', 1, 4, now() - interval '1 day', 'wi016');
 select pg_temp.salva('b1', public.ai_budget_prenota('ai:chat', 'openai', 'modello', 10, 10)::text);
 select pg_temp.salva('cz', public.ai_budget_consuntivo((pg_temp.j('b1') ->> 'richiesta_id')::uuid, 'errore_applicativo')::text);
 select pg_temp.rec(46, 'consuntivo con errore dell''applicazione distinto dal guasto del fornitore',
   pg_temp.j('b1') ->> 'esito' = 'consentito' and pg_temp.f('cz') = 'true'
   and (select esito = 'errore_applicativo' from private.ai_chiamate), pg_temp.f('b1'));
-update private.ai_budget_settings set richieste_giorno = null, richieste_mese = null;
+update private.ai_budget_settings set richieste_giorno = null, richieste_mese = null, spesa_giorno_usd = null;
 
 -- ---------------------------------------------------------------------------------------------
 -- G. Authenticity Assistant e Price Intelligence
@@ -543,6 +572,14 @@ select pg_temp.salva('bott', (select id::text from public.bottle_units where own
 select pg_temp.rec(47, 'richieste di autenticità spente per difetto',
   pg_temp.utente(format('select public.cellar_verifica_autenticita_richiedi(%L, array[''etichetta_non_coerente''], true)', pg_temp.f('bott'))) = 'P0001');
 update private.autenticita_settings set richieste_enabled = true;
+update brain.orchestration_settings set max_pending_per_type = 1;
+select pg_temp.salva('task_pieno', brain.enqueue_task('autenticita.verifica', 'Fixture coda piena', 2,
+  '{"richiesta_id":"16600000-0000-4000-8000-000000000111"}', 'wi017:fixture', true, null)::text);
+select pg_temp.salva('auth_piena', pg_temp.utente(format('select public.cellar_verifica_autenticita_richiedi(%L, array[''etichetta_non_coerente''], true)', pg_temp.f('bott'))));
+select pg_temp.rec(63, 'coda piena: nessuna richiesta di autenticità orfana e rifiuto esplicito',
+  pg_temp.f('auth_piena') = '53400' and (select count(*) = 0 from private.autenticita_richieste));
+delete from brain.tasks where id = pg_temp.f('task_pieno')::uuid;
+update brain.orchestration_settings set max_pending_per_type = 2000;
 select pg_temp.salva('a1', pg_temp.utente(format('select public.cellar_verifica_autenticita_richiedi(%L, array[''etichetta_non_coerente''], true)', pg_temp.f('bott')), 'b'));
 select pg_temp.salva('a2', pg_temp.utente(format('select public.cellar_verifica_autenticita_richiedi(%L, array[''etichetta_non_coerente''], false)', pg_temp.f('bott'))));
 select pg_temp.salva('a3', pg_temp.utente(format('select public.cellar_verifica_autenticita_richiedi(%L, array[''bottiglia_falsa''], true)', pg_temp.f('bott'))));

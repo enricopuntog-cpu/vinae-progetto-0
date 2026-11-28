@@ -12,6 +12,20 @@ const LOTTO = 20;
 export const percorsoAmmesso = (percorso) =>
   typeof percorso === "string" && percorso.endsWith(".jsonl") && !/^[a-z][a-z0-9+.-]+:\/\//i.test(percorso) && !/^(\\\\|\/\/)/.test(percorso);
 
+// Margine per separatori CRLF e righe vuote, con lo stesso limite per la lettura di prova.
+const MAX_BYTE_FILE = 9 * 1024 * 1024;
+
+export async function leggiFileLimitato(chunks) {
+  const contenuto = [];
+  let byte = 0;
+  for await (const chunk of chunks) {
+    byte += chunk.byteLength;
+    if (byte > MAX_BYTE_FILE) throw new Error("file_troppo_grande");
+    contenuto.push(chunk);
+  }
+  return Buffer.concat(contenuto, byte).toString("utf8");
+}
+
 /** Una riga = un elemento. Lo scarto porta il solo numero di riga e un codice, mai il contenuto. */
 export function leggiElementi(testo) {
   const righe = String(testo).split(/\r?\n/);

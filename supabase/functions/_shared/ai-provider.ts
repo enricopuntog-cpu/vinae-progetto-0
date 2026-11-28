@@ -43,6 +43,7 @@ export class AiFormatError extends Error {
 export type AiCall = {
   system: string;
   prompt: string;
+  segnale: AbortSignal;
   /**
    * Identificativo della richiesta inoltrato al fornitore. Non deve contenere
    * dati personali: nel legacy contiene l'uuid utente
@@ -61,6 +62,7 @@ export interface AiProvider {
   /** WI-015: modello e tetto di uscita, per prenotare il costo massimo prima della chiamata. */
   readonly modello: string;
   readonly maxOutputTokens: number;
+  readonly maxInputTokens: number;
   completeText(call: AiCall): Promise<string>;
   streamText(call: AiCall): Promise<ReadableStream<string>>;
 }
@@ -85,6 +87,7 @@ export const creaDisabledProvider = (): AiProvider => ({
   id: "disabled",
   modello: "nessuno",
   maxOutputTokens: 0,
+  maxInputTokens: 0,
   completeText: () => Promise.reject(new AiProviderError("Il servizio AI non è configurato", false)),
   streamText: () => Promise.reject(new AiProviderError("Il servizio AI non è configurato", false)),
 });
@@ -106,10 +109,72 @@ export const timeoutMs = (): number => {
   return Math.min(grezzo * 1000, AI_TIMEOUT_MS_MAX);
 };
 
+/** Interrompe anche attese locali il cui produttore non rispetta il segnale. */
+export async function attendiAi<T>(attesa: Promise<T>, segnale: AbortSignal): Promise<T> {
+  let annulla: () => void = () => {};
+  const interruzione = new Promise<never>((_, rifiuta) => {
+    annulla = () => rifiuta(segnale.reason);
+    if (segnale.aborted) annulla();
+    else segnale.addEventListener("abort", annulla, { once: true });
+  });
+  try {
+    return await Promise.race([interruzione, attesa]);
+  } finally {
+    segnale.removeEventListener("abort", annulla);
+  }
+}
+
+const RISPOSTA_MAX_BYTE = 512 * 1024;
+
+function corpoLimitato(risposta: Response, segnale: AbortSignal): ReadableStream<Uint8Array> {
+  if (!risposta.body) throw new AiFormatError();
+  const lettore = risposta.body.getReader();
+  let byte = 0;
+  let chiuso = false;
+  let annulla: () => void;
+  const termina = (interrotto: boolean) => {
+    if (chiuso) return;
+    chiuso = true;
+    segnale.removeEventListener("abort", annulla);
+    if (interrotto) void lettore.cancel().catch(() => {});
+    lettore.releaseLock();
+  };
+  return new ReadableStream({
+    start(controllo) {
+      annulla = () => {
+        termina(true);
+        controllo.error(segnale.reason);
+      };
+      if (segnale.aborted) annulla();
+      else segnale.addEventListener("abort", annulla, { once: true });
+    },
+    async pull(controllo) {
+      try {
+        const { done, value } = await lettore.read();
+        if (chiuso) return;
+        if (done) {
+          termina(false);
+          controllo.close();
+          return;
+        }
+        byte += value.byteLength;
+        if (byte > RISPOSTA_MAX_BYTE) throw new AiFormatError();
+        controllo.enqueue(value);
+      } catch (errore) {
+        if (chiuso) return;
+        termina(true);
+        controllo.error(errore);
+      }
+    },
+    cancel() { termina(true); },
+  });
+}
+
 type OpenAiOptions = {
   apiKey: string;
   model: string;
   maxOutputTokens: number;
+  maxInputTokens: number;
 };
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
@@ -121,6 +186,7 @@ const corpoOpenAi = (call: AiCall, options: OpenAiOptions, stream: boolean) => (
     { role: "user", content: call.prompt },
   ],
   max_completion_tokens: options.maxOutputTokens,
+  service_tier: "default",
   user: call.requestId,
   ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),
 });
@@ -135,67 +201,37 @@ export const leggiUsoOpenAi = (corpo: unknown): AiUso | null => {
     : null;
 };
 
-/** Stima PRUDENTE dei token d'ingresso (circa 3 caratteri per token): serve solo a prenotare il costo massimo. */
-export const stimaTokenInput = (...testi: string[]): number => Math.ceil(testi.reduce((n, t) => n + t.length, 0) / 3) + 16;
-
-const usoDaRiga = (riga: string): AiUso | null => {
-  if (!riga.startsWith("data:") || !riga.includes('"usage"')) return null;
-  try {
-    return leggiUsoOpenAi(JSON.parse(riga.slice(5).trim()));
-  } catch {
-    return null;
-  }
-};
-
-/**
- * Ogni riga `data:` di uno stream OpenAI porta un oggetto con `choices[0].delta.content`.
- * Esportata per essere provata senza rete: è la parte che un cambio di
- * fornitore riscrive, quindi è quella che deve avere dei test propri.
- */
-export const estraiDeltaOpenAi = (riga: string): string | null => {
-  if (!riga.startsWith("data:")) return null;
-  const payload = riga.slice(5).trim();
-  if (!payload || payload === "[DONE]") return null;
-  try {
-    const parsed = JSON.parse(payload) as {
-      choices?: { delta?: { content?: string | null } }[];
-    };
-    return parsed.choices?.[0]?.delta?.content ?? null;
-  } catch {
-    // Una riga malformata in mezzo a uno stream non è una ragione per
-    // interrompere: si scarta e si prosegue.
-    return null;
-  }
+type ChunkOpenAi = {
+  model?: unknown;
+  service_tier?: unknown;
+  choices?: { delta?: { content?: string | null } }[];
 };
 
 const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
   const chiama = async (call: AiCall, stream: boolean): Promise<Response> => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs());
     try {
-      const response = await fetch(OPENAI_URL, {
+      const response = await attendiAi(fetch(OPENAI_URL, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${options.apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(corpoOpenAi(call, options, stream)),
-        signal: controller.signal,
-      });
+        signal: call.segnale,
+      }), call.segnale);
       if (!response.ok) {
+        void response.body?.cancel().catch(() => {});
         // Il corpo dell'errore del fornitore non viene letto né propagato.
         console.error("[ai] provider non disponibile", { status: response.status });
         throw new AiProviderError(undefined, statoEGuasto(response.status));
       }
       return response;
     } catch (errore) {
-      if (errore instanceof AiProviderError) throw errore;
+      if (call.segnale.aborted || errore instanceof AiProviderError) throw errore;
       console.error("[ai] chiamata al provider fallita", {
         tipo: errore instanceof Error ? errore.name : "sconosciuto",
       });
       throw new AiProviderError();
-    } finally {
-      clearTimeout(timer);
     }
   };
 
@@ -203,12 +239,20 @@ const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
     id: "openai",
     modello: options.model,
     maxOutputTokens: options.maxOutputTokens,
+    maxInputTokens: options.maxInputTokens,
     completeText: async (call) => {
       const response = await chiama(call, false);
-      let parsed: { choices?: { message?: { content?: string | null } }[] };
+      let parsed: { model?: unknown; service_tier?: unknown; choices?: { message?: { content?: string | null } }[] };
       try {
-        parsed = await response.json();
-      } catch {
+        const testo = await attendiAi(new Response(corpoLimitato(response, call.segnale)).text(), call.segnale);
+        call.segnale.throwIfAborted();
+        parsed = JSON.parse(testo);
+      } catch (errore) {
+        if (call.segnale.aborted || errore instanceof AiFormatError) throw errore;
+        if (errore instanceof SyntaxError) throw new AiFormatError();
+        throw new AiProviderError();
+      }
+      if (parsed?.model !== options.model || (parsed.service_tier && parsed.service_tier !== "default")) {
         throw new AiFormatError();
       }
       const uso = leggiUsoOpenAi(parsed);
@@ -217,31 +261,45 @@ const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
     },
     streamText: async (call) => {
       const response = await chiama(call, true);
-      if (!response.body) throw new AiProviderError();
       let resto = "";
-      return response.body
-        .pipeThrough(new TextDecoderStream())
-        .pipeThrough(
-          new TransformStream<string, string>({
-            transform: (chunk, controller) => {
-              resto += chunk;
-              const righe = resto.split("\n");
-              resto = righe.pop() ?? "";
-              for (const riga of righe) {
-                const uso = usoDaRiga(riga);
-                if (uso) call.onUso?.(uso);
-                const delta = estraiDeltaOpenAi(riga);
-                if (delta) controller.enqueue(delta);
-              }
-            },
-            flush: (controller) => {
-              const uso = usoDaRiga(resto);
-              if (uso) call.onUso?.(uso);
-              const delta = estraiDeltaOpenAi(resto);
-              if (delta) controller.enqueue(delta);
-            },
-          }),
-        );
+      let completato = false;
+      const leggiRiga = (riga: string, controller: TransformStreamDefaultController<string>) => {
+        if (riga.startsWith("data:") && riga.slice(5).trim() === "[DONE]") {
+          completato = true;
+          return;
+        }
+        if (completato || !riga.startsWith("data:")) return;
+        const payload = riga.slice(5).trim();
+        if (!payload) return;
+        let chunk: ChunkOpenAi;
+        try {
+          chunk = JSON.parse(payload) as ChunkOpenAi;
+        } catch {
+          throw new AiFormatError();
+        }
+        if (chunk?.model !== options.model || (chunk.service_tier && chunk.service_tier !== "default")) {
+          throw new AiFormatError();
+        }
+        const uso = leggiUsoOpenAi(chunk);
+        if (uso) call.onUso?.(uso);
+        const delta = chunk.choices?.[0]?.delta?.content;
+        if (typeof delta === "string" && delta) controller.enqueue(delta);
+      };
+      const decoder = new TextDecoder();
+      const opzioni = { signal: call.segnale };
+      return corpoLimitato(response, call.segnale)
+        .pipeThrough(new TransformStream<Uint8Array, string>({
+          transform(chunk, controller) {
+            resto += decoder.decode(chunk, { stream: true });
+            const righe = resto.split("\n");
+            resto = righe.pop() ?? "";
+            for (const riga of righe) leggiRiga(riga, controller);
+          },
+          flush(controller) {
+            leggiRiga(resto + decoder.decode(), controller);
+            if (!completato) throw new AiFormatError();
+          },
+        }), opzioni);
     },
   };
 };
@@ -259,12 +317,22 @@ export const creaAiProvider = (compito: "chat" | "pairing" | "catalogo", modello
     pairing: Deno.env.get("AI_MODEL_PAIRING"),
     catalogo: Deno.env.get("AI_MODEL_CATALOGO"),
   }[compito];
-  return creaOpenAiProvider({
-    apiKey,
-    // WI-016: la riserva arriva solo dalla configurazione del proprietario nel database, mai dal client.
-    model: modelloRiserva ?? modelloPerCompito ?? Deno.env.get("AI_MODEL_DEFAULT") ?? "gpt-4.1-mini",
-    maxOutputTokens: Number(Deno.env.get("AI_MAX_OUTPUT_TOKENS") ?? "800"),
-  });
+  // Solo la versione esplicita ha un contratto verificato. Non stima il prompt:
+  // riserva l'intera finestra, incluso il framing. Un alias può cambiare contratto.
+  // Finestra e output: developers.openai.com/api/docs/models/gpt-4.1-mini e /gpt-5.4-mini.
+  const model = modelloRiserva ?? modelloPerCompito ?? Deno.env.get("AI_MODEL_DEFAULT");
+  const maxOutputTokens = Number(Deno.env.get("AI_MAX_OUTPUT_TOKENS") ?? "800");
+  if (!model || !Number.isInteger(maxOutputTokens) || maxOutputTokens <= 0) return creaDisabledProvider();
+  // max_completion_tokens comprende anche eventuali token di ragionamento.
+  switch (model) {
+    case "gpt-4.1-mini-2025-04-14":
+      if (maxOutputTokens <= 32_768) return creaOpenAiProvider({ apiKey, model, maxOutputTokens, maxInputTokens: 1_047_576 });
+      break;
+    case "gpt-5.4-mini-2026-03-17":
+      if (maxOutputTokens <= 128_000) return creaOpenAiProvider({ apiKey, model, maxOutputTokens, maxInputTokens: 400_000 });
+      break;
+  }
+  return creaDisabledProvider();
 };
 
 /**

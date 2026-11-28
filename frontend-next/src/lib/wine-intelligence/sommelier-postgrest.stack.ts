@@ -69,13 +69,13 @@ const fetchReale = globalThis.fetch;
 globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input);
   if (url.startsWith("https://api.openai.com/")) {
-    const body = JSON.parse(String(init?.body ?? "{}")) as { messages: { role: string; content: string }[] };
+    const body = JSON.parse(String(init?.body ?? "{}")) as { model: string; messages: { role: string; content: string }[] };
     chiamateProvider.push({
       system: body.messages.find((m) => m.role === "system")?.content ?? "",
       prompt: body.messages.find((m) => m.role === "user")?.content ?? "",
     });
     const sse =
-      `data: ${JSON.stringify({ choices: [{ delta: { content: testoRisposta } }] })}\n\n` + "data: [DONE]\n\n";
+      `data: ${JSON.stringify({ model: body.model, choices: [{ delta: { content: testoRisposta } }] })}\n\n` + "data: [DONE]\n\n";
     return new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
   }
   if (!url.startsWith(`${API}/`)) {
@@ -93,6 +93,7 @@ const ENV: Record<string, string | undefined> = {
   AI_ALLOWED_ORIGINS: "http://localhost:3000",
   SUPABASE_URL: API,
   SUPABASE_SERVICE_ROLE_KEY: SERVICE,
+  AI_MODEL_CHAT: "gpt-4.1-mini-2025-04-14",
   OPENAI_API_KEY: "sk-FINTA-per-la-prova",
 };
 type Handler = (request: Request) => Promise<Response>;

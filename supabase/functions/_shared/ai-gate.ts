@@ -13,7 +13,7 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { aiCorsHeadersFor } from "./ai-cors.ts";
-import { AiFormatError, AiProviderError, creaAiProvider, requestIdOpaco, stimaTokenInput, type AiCall, type AiProvider, type AiUso } from "./ai-provider.ts";
+import { AiFormatError, AiProviderError, attendiAi, timeoutMs, creaAiProvider, requestIdOpaco, type AiCall, type AiProvider, type AiUso } from "./ai-provider.ts";
 import { impronta, rilevaDatiSensibili, rilevaIstruzioniSospette } from "./ai-sicurezza.ts";
 
 export const json = (body: unknown, status: number, headers: HeadersInit = {}): Response =>
@@ -207,6 +207,22 @@ export const apriPorta = async (
 // ha impostato un tetto monetario e una tariffa; il consuntivo la chiude con i token dichiarati dal fornitore. Le stime
 // non sono fatture.
 
+// Le RPC amministrative hanno una scadenza propria, anche durante la pulizia
+// dopo l'annullamento del provider. Un ACK perso non abbassa il costo riservato.
+type RichiestaRpc<T> = PromiseLike<T> & { abortSignal?: (segnale: AbortSignal) => PromiseLike<T> };
+
+const attendiRpcAi = async <T>(richiesta: RichiestaRpc<T>, client?: AbortSignal): Promise<T> => {
+  const limite = new AbortController();
+  const timer = setTimeout(() => limite.abort(), 3000);
+  const segnale = client ? AbortSignal.any([client, limite.signal]) : limite.signal;
+  try {
+    segnale.throwIfAborted();
+    return await attendiAi(Promise.resolve(richiesta.abortSignal?.(segnale) ?? richiesta), segnale);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 export type Prenotazione = { richiestaId: string } | { risposta: Response };
 
 export const rifiutata = (p: Prenotazione): p is { risposta: Response } => "risposta" in p;
@@ -216,19 +232,24 @@ export const prenotaBudget = async (
   scope: AiScope,
   cors: HeadersInit,
   chiamata: { provider: string; modello: string; tokenInput: number; tokenOutputMax: number },
+  segnale: AbortSignal,
 ): Promise<Prenotazione> => {
-  const { data, error } = await supabase.rpc("ai_budget_prenota", {
-    p_scope: scope,
-    p_provider: chiamata.provider,
-    p_modello: chiamata.modello,
-    p_token_input: chiamata.tokenInput,
-    p_token_output_max: chiamata.tokenOutputMax,
-  });
-  const esito = (data ?? null) as { esito?: unknown; richiesta_id?: unknown } | null;
-  if (!error && esito?.esito === "consentito" && typeof esito.richiesta_id === "string") {
-    return { richiestaId: esito.richiesta_id };
+  try {
+    const { data, error } = await attendiRpcAi(supabase.rpc("ai_budget_prenota", {
+      p_scope: scope,
+      p_provider: chiamata.provider,
+      p_modello: chiamata.modello,
+      p_token_input: chiamata.tokenInput,
+      p_token_output_max: chiamata.tokenOutputMax,
+    }), segnale);
+    const esito = (data ?? null) as { esito?: unknown; richiesta_id?: unknown } | null;
+    if (!error && esito?.esito === "consentito" && typeof esito.richiesta_id === "string") {
+      return { richiestaId: esito.richiesta_id };
+    }
+    console.error("[ai] budget non concesso", { scope, esito: error ? error.code : String(esito?.esito) });
+  } catch {
+    console.error("[ai] prenotazione senza conferma", { scope });
   }
-  console.error("[ai] budget non concesso", { scope, esito: error ? error.code : String(esito?.esito) });
   return {
     risposta: json(
       { error: "Le funzioni AI non sono disponibili in questo momento.", motivo: "budget" },
@@ -254,12 +275,12 @@ export const registraConsuntivo = async (
   uso: { input: number; output: number } | null = null,
 ): Promise<void> => {
   try {
-    const { error } = await supabase.rpc("ai_budget_consuntivo", {
+    const { error } = await attendiRpcAi(supabase.rpc("ai_budget_consuntivo", {
       p_richiesta: richiestaId,
       p_esito: esito,
       p_token_input: uso?.input ?? null,
       p_token_output: uso?.output ?? null,
-    });
+    }));
     if (error) console.error("[ai] consuntivo non registrato", { code: error.code });
   } catch {
     console.error("[ai] consuntivo non registrato");
@@ -269,7 +290,7 @@ export const registraConsuntivo = async (
 /** Alimenta l interruttore. Un errore qui non cambia la risposta all utente: resta nel log. */
 export const registraEsitoFornitore = async (supabase: SupabaseClient, scope: AiScope, riuscita: boolean): Promise<void> => {
   try {
-    const { error } = await supabase.rpc("ai_budget_esito", { p_scope: scope, p_riuscita: riuscita });
+    const { error } = await attendiRpcAi(supabase.rpc("ai_budget_esito", { p_scope: scope, p_riuscita: riuscita }));
     if (error) console.error("[ai] esito del fornitore non registrato", { code: error.code });
   } catch {
     console.error("[ai] esito del fornitore non registrato");
@@ -418,7 +439,7 @@ export const apriIngresso = async (
       if (chiusaGia) return;
       chiusaGia = true;
       try {
-        const { error: errore } = await supabase.rpc("ai_porta_chiudi", { p_porta: portaId, p_riuscita: riuscita });
+        const { error: errore } = await attendiRpcAi(supabase.rpc("ai_porta_chiudi", { p_porta: portaId, p_riuscita: riuscita }));
         if (errore) console.error("[ai] ingresso non chiuso", { code: errore.code });
       } catch {
         console.error("[ai] ingresso non chiuso");
@@ -428,7 +449,7 @@ export const apriIngresso = async (
 };
 
 export type Governata<T> =
-  | { ok: true; valore: T; richiestaId: string; uso: () => AiUso | null }
+  | { ok: true; valore: T; richiestaId: string; uso: () => AiUso | null; segnale: AbortSignal; termina: () => void }
   | { ok: false; risposta: Response };
 
 type OpzioniGovernata<T> = {
@@ -441,6 +462,7 @@ type OpzioniGovernata<T> = {
   system: string;
   prompt: string;
   nonDisponibile: string;
+  segnaleClient: AbortSignal;
   chiama: (provider: AiProvider, call: AiCall) => Promise<T>;
 };
 
@@ -456,47 +478,86 @@ export const chiamataGovernata = async <T>(o: OpzioniGovernata<T>): Promise<Gove
     await segnalaSicurezza(o.supabase, o.userId, o.scope, "input_eccessivo");
     return { ok: false, risposta: json({ error: "Richiesta troppo lunga per questa funzione." }, 413, o.cors) };
   }
-  const tentativi: (string | undefined)[] = Array.from({ length: o.ingresso.maxTentativi }, () => undefined);
-  if (o.ingresso.modelloRiserva) tentativi.push(o.ingresso.modelloRiserva);
-
-  for (let n = 0; n < tentativi.length; n++) {
-    const provider = creaAiProvider(o.compito, tentativi[n]);
-    const prenotazione = await prenotaBudget(o.supabase, o.scope, o.cors, {
-      provider: provider.id,
-      modello: provider.modello,
-      tokenInput: stimaTokenInput(o.system, o.prompt),
-      tokenOutputMax: provider.maxOutputTokens,
-    });
-    if (rifiutata(prenotazione)) return n === 0 ? { ok: false, risposta: prenotazione.risposta } : nonDisponibile();
-    const { richiestaId } = prenotazione;
-    let uso: AiUso | null = null;
-    try {
-      const valore = await o.chiama(provider, {
-        system: o.system,
-        prompt: o.prompt,
-        requestId: requestIdOpaco(o.compito),
-        onUso: (u) => {
-          uso = u;
-        },
-      });
-      return { ok: true, valore, richiestaId, uso: () => uso };
-    } catch (errore) {
-      if (errore instanceof AiFormatError) {
-        await registraConsuntivo(o.supabase, richiestaId, "formato_non_valido", uso);
-        return { ok: false, risposta: json({ error: "Il servizio AI ha restituito un formato non valido." }, 502, o.cors) };
-      }
-      if (!(errore instanceof AiProviderError)) {
-        // un errore nostro non dice nulla sulla salute del fornitore e non si ritenta
-        await registraConsuntivo(o.supabase, richiestaId, "errore_applicativo", uso);
-        console.error("[ai] errore dell'applicazione", { scope: o.scope, tipo: errore instanceof Error ? errore.name : "sconosciuto" });
-        return nonDisponibile();
-      }
-      await registraConsuntivo(o.supabase, richiestaId, errore.guastoFornitore ? "guasto_fornitore" : "errore_richiesta", uso);
-      if (!errore.guastoFornitore) return nonDisponibile();
-      await registraEsitoFornitore(o.supabase, o.scope, false);
-    }
+  // Ricontrolla i messaggi effettivi dopo la composizione dei contesti e la minimizzazione.
+  // Un record del database può contenere il dato: il rifiuto non penalizza l'utente.
+  if (rilevaDatiSensibili(o.system) || rilevaDatiSensibili(o.prompt)) {
+    return {
+      ok: false,
+      risposta: json({ error: "Il contesto contiene dati che non possono essere inviati al servizio AI." }, 422, o.cors),
+    };
   }
-  return nonDisponibile();
+
+  const scadenza = new AbortController();
+  const timer = setTimeout(() => scadenza.abort(new DOMException("Scadenza AI", "TimeoutError")), timeoutMs());
+  const termina = () => clearTimeout(timer);
+  const segnale = AbortSignal.any([o.segnaleClient, scadenza.signal]);
+  let trasferita = false;
+  try {
+    const tentativi: (string | undefined)[] = Array.from({ length: o.ingresso.maxTentativi }, () => undefined);
+    if (o.ingresso.modelloRiserva) tentativi.push(o.ingresso.modelloRiserva);
+
+    for (let n = 0; n < tentativi.length; n++) {
+      if (segnale.aborted) return nonDisponibile();
+      const provider = creaAiProvider(o.compito, tentativi[n]);
+      if (provider.maxInputTokens <= 0 || provider.maxOutputTokens <= 0) return nonDisponibile();
+      const prenotazione = await prenotaBudget(o.supabase, o.scope, o.cors, {
+        provider: provider.id,
+        modello: provider.modello,
+        tokenInput: provider.maxInputTokens,
+        tokenOutputMax: provider.maxOutputTokens,
+      }, segnale);
+      if (rifiutata(prenotazione)) return n === 0 ? { ok: false, risposta: prenotazione.risposta } : nonDisponibile();
+      const { richiestaId } = prenotazione;
+      let uso: AiUso | null = null;
+      let inoltrata = false;
+      try {
+        segnale.throwIfAborted();
+        inoltrata = true;
+        const valore = await attendiAi(o.chiama(provider, {
+          system: o.system,
+          prompt: o.prompt,
+          segnale,
+          requestId: requestIdOpaco(o.compito),
+          onUso: (u) => {
+            uso = u;
+          },
+        }), segnale);
+        segnale.throwIfAborted();
+        trasferita = true;
+        return { ok: true, valore, richiestaId, uso: () => uso, segnale, termina };
+      } catch (errore) {
+        if (o.segnaleClient.aborted) {
+          await registraConsuntivo(o.supabase, richiestaId, "interrotta_client", uso);
+          return nonDisponibile();
+        }
+        if (!inoltrata) {
+          await registraConsuntivo(o.supabase, richiestaId, "errore_applicativo", uso);
+          return nonDisponibile();
+        }
+        if (segnale.aborted) {
+          await registraConsuntivo(o.supabase, richiestaId, "guasto_fornitore", uso);
+          await registraEsitoFornitore(o.supabase, o.scope, false);
+          return nonDisponibile();
+        }
+        if (errore instanceof AiFormatError) {
+          await registraConsuntivo(o.supabase, richiestaId, "formato_non_valido", uso);
+          return { ok: false, risposta: json({ error: "Il servizio AI ha restituito un formato non valido." }, 502, o.cors) };
+        }
+        if (!(errore instanceof AiProviderError)) {
+          // un errore nostro non dice nulla sulla salute del fornitore e non si ritenta
+          await registraConsuntivo(o.supabase, richiestaId, "errore_applicativo", uso);
+          console.error("[ai] errore dell'applicazione", { scope: o.scope, tipo: errore instanceof Error ? errore.name : "sconosciuto" });
+          return nonDisponibile();
+        }
+        await registraConsuntivo(o.supabase, richiestaId, errore.guastoFornitore ? "guasto_fornitore" : "errore_richiesta", uso);
+        if (!errore.guastoFornitore) return nonDisponibile();
+        await registraEsitoFornitore(o.supabase, o.scope, false);
+      }
+    }
+    return nonDisponibile();
+  } finally {
+    if (!trasferita) termina();
+  }
 };
 
 /** Testo obbligatorio con lunghezza massima, nella forma dei `Field` del legacy. */

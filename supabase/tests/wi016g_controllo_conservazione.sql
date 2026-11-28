@@ -130,6 +130,33 @@ select pg_temp.rec(9, 'accesa su un vino senza storico: nessun prezzo inventato'
 select pg_temp.rec(10, 'la porta legge solo la vista pubblica dei prezzi: mai la tabella base né il riferimento di origine',
   (select prosrc ~ 'public\.wine_price_history' and prosrc !~ 'wine_price_observations' and prosrc !~ 'o\.origine_ref'
      from pg_proc where oid = 'public.prezzi_vino_osservazioni(text,text)'::regprocedure));
+-- Regressione WI-017: 500 richieste recenti e 5 transazioni comparabili più vecchie.
+insert into public.wines (id, slug, produttore, nome, annata, regione, tipo, formato, provenienza)
+values ('16600000-0000-4000-8000-0000000000e1', 'wi017-campione', 'Cantina Prova', 'Rosso Prova', 2019, 'Piemonte', 'Rosso', '0,75 L', 'staff');
+insert into public.wine_price_observations (wine_id, formato, tipo, fonte, prezzo_cents, observed_at, origine_ref)
+select '16600000-0000-4000-8000-0000000000e1', '0,75 L', 'richiesta', 'vinea_interno', 90000 + i,
+       now() - i * interval '1 minute', gen_random_uuid()
+from generate_series(1, 500) i;
+insert into public.wine_price_observations (wine_id, formato, tipo, fonte, prezzo_cents, observed_at, origine_ref)
+select '16600000-0000-4000-8000-0000000000e1', '0,75 L', 'vendita', 'vinea_interno', 12000 + i,
+       now() - i * interval '1 day', gen_random_uuid()
+from generate_series(1, 5) i;
+insert into public.wine_price_observations (wine_id, formato, tipo, fonte, prezzo_cents, observed_at, origine_ref)
+select '16600000-0000-4000-8000-0000000000e1', x.formato, 'vendita', 'vinea_interno', 99999,
+       now() + x.delta, gen_random_uuid()
+from (values ('1,5 L', interval '-1 hour'), ('0,75 L', interval '-731 days'), ('0,75 L', interval '1 hour')) x(formato, delta);
+update private.prezzi_settings set valutazione_admin_enabled = true;
+select pg_temp.salva('campione_utente', pg_temp.utente($q$select public.prezzi_vino_osservazioni('wi017-campione', '0,75 L')::text$q$));
+select pg_temp.salva('campione_admin', pg_temp.admin($q$select public.prezzi_admin_osservazioni('wi017-campione')::text$q$));
+select pg_temp.rec(20, 'i 500 richiesti recenti non nascondono le 5 vendite e i fuori campione non passano',
+  (select count(*) = 2 and bool_and(totale = 500 and vendite = 5 and scartabili = 0)
+  from (select k, count(*) as totale,
+          count(*) filter (where o ->> 'tipo' = 'realizzato') as vendite,
+          count(*) filter (where o ->> 'formatoMl' <> '750' or o ->> 'centesimi' = '99999'
+                            or o ->> 'annata' <> '2019' or o ->> 'valuta' <> 'eur') as scartabili
+          from prove cross join lateral jsonb_array_elements(pg_temp.dati(k) -> 'osservazioni') o
+         where k in ('campione_utente', 'campione_admin') group by k) campioni));
+update private.prezzi_settings set valutazione_admin_enabled = false;
 select pg_temp.fai(brain.suspend('globale', 'tutto', 'prova wi016g', 'wi016g'));
 select pg_temp.rec(11, 'la sospensione generale spegne anche la valutazione utente',
   pg_temp.utente($q$select public.prezzi_vino_osservazioni('inesistente-wi016g', '0,75 L')::text$q$) = 'OK:{"abilitata": false}');
@@ -204,5 +231,17 @@ select pg_temp.rec(19, 'osservatore esterno: fonte registrata e spenta; l''impro
   (select not enabled and severity = 'P1' from brain.monitor_sources where source_key = 'osservatore_esterno')
   and catalog.promotion_logic_fingerprint('lwin-conservative-v1') is not null);
 
+insert into private.ai_porte (scope, soggetto, impronta, aperta_il, scade_il)
+values ('ai:chat', repeat('a', 32), 'wi017-scaduta', now() - interval '49 hours', now() - interval '48 hours'),
+       ('ai:chat', repeat('a', 32), 'wi017-recente', now() - interval '1 hour', now() - interval '55 minutes');
+insert into private.ai_segnalazioni (scope, soggetto, tipo, registrata_il)
+values ('ai:chat', repeat('a', 32), 'dati_sensibili', now() - interval '49 hours'),
+       ('ai:chat', repeat('a', 32), 'dati_sensibili', now() - interval '1 hour');
+select pg_temp.salva('temporanei', brain.run_job('lease_scaduti', 'wi017-fixture')::text);
+select pg_temp.rec(21, 'il lavoro preesistente elimina i temporanei dopo 48 ore senza un ingresso AI',
+  (pg_temp.v('temporanei')::jsonb ->> 'porte_ai_rimosse') = '1'
+  and (pg_temp.v('temporanei')::jsonb ->> 'segnali_ai_rimossi') = '1'
+  and (select count(*) = 1 and bool_and(impronta = 'wi017-recente') from private.ai_porte where soggetto = repeat('a', 32))
+  and (select count(*) = 1 from private.ai_segnalazioni where soggetto = repeat('a', 32)));
 select id::text, descrizione, passed, detail from esiti order by esiti.id;
 rollback;

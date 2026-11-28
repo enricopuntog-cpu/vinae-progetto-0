@@ -131,31 +131,39 @@ type EsitoFacoltativo = { candidati: CandidatoVino[]; incompleto: CatalogoIncomp
 function entroTetto(
   avvia: (segnale: AbortSignal) => Promise<Result<CandidatoVino[]>>,
   ms: number,
+  segnaleEsterno: AbortSignal,
 ): Promise<EsitoFacoltativo> {
   const senza = (incompleto: CatalogoIncompleto): EsitoFacoltativo => ({ candidati: [], incompleto });
   const controllo = new AbortController();
   return new Promise((risolvi) => {
+    const termina = (esito: EsitoFacoltativo) => {
+      clearTimeout(timer);
+      segnaleEsterno.removeEventListener("abort", annulla);
+      risolvi(esito);
+    };
+    const annulla = () => {
+      controllo.abort();
+      termina(senza("non_disponibile"));
+    };
     const timer = setTimeout(() => {
       controllo.abort();
-      risolvi(senza("lento"));
+      termina(senza("lento"));
     }, ms);
-    const attesa = Promise.resolve().then(() => avvia(controllo.signal));
+    segnaleEsterno.addEventListener("abort", annulla, { once: true });
+    const attesa = Promise.resolve().then(() => {
+      controllo.signal.throwIfAborted();
+      return avvia(controllo.signal);
+    });
     attesa.then(
-      (esito) => {
-        clearTimeout(timer);
-        risolvi(esito.ok ? { candidati: esito.data, incompleto: null } : senza("non_disponibile"));
-      },
-      () => {
-        clearTimeout(timer);
-        risolvi(senza("non_disponibile"));
-      },
+      (esito) => termina(esito.ok ? { candidati: esito.data, incompleto: null } : senza("non_disponibile")),
+      () => termina(senza("non_disponibile")),
     );
   });
 }
 
 /**
  * La sorgente principale (motore WI-006B) più il catalogo canonico come aggiunta.
- * • Il risultato della principale decide l'esito: se fallisce, fallisce (ripiego e messaggio restano quelli di prima).
+ * • Il risultato della principale decide l'esito: se fallisce, fallisce.
  * • Il canonico, se fallisce o è vuoto, non toglie nulla: i candidati della principale passano invariati. Quando
  *   scade o fallisce (non quando è vuoto) lo segnala con `onCatalogoIncompleto` (WI-009): mai un silenzio.
  * • Le due ricerche partono insieme; i candidati canonici seguono quelli della principale e
@@ -172,13 +180,33 @@ export function sorgenteConCanonico(
   return {
     codice: principale.codice,
     async cerca(domanda, richiesta) {
-      const [p, c] = await Promise.all([
-        principale.cerca(domanda),
-        entroTetto((segnale) => canonica.cerca(domanda, { segnale }), richiesta?.attesaCatalogoMs ?? tetto),
-      ]);
-      if (!p.ok) return p;
-      if (c.incompleto) richiesta?.onCatalogoIncompleto?.(c.incompleto);
-      return { ok: true, data: [...p.data, ...c.candidati] };
+      const controllo = new AbortController();
+      const segnale = richiesta?.segnale
+        ? AbortSignal.any([richiesta.segnale, controllo.signal])
+        : controllo.signal;
+      const indisponibile = { ok: false as const, error: MESSAGGIO_RICERCA_NON_DISPONIBILE };
+      if (segnale.aborted) return indisponibile;
+
+      try {
+        const primaria = principale.cerca(domanda, { ...richiesta, segnale });
+        const canonico = entroTetto(
+          (segnale) => canonica.cerca(domanda, { segnale }),
+          richiesta?.attesaCatalogoMs ?? tetto,
+          segnale,
+        );
+        const p = await primaria;
+        if (!p.ok) {
+          controllo.abort();
+          return p;
+        }
+        const c = await canonico;
+        if (segnale.aborted) return indisponibile;
+        if (c.incompleto) richiesta?.onCatalogoIncompleto?.(c.incompleto);
+        return { ok: true, data: [...p.data, ...c.candidati] };
+      } catch {
+        controllo.abort();
+        return indisponibile;
+      }
     },
   };
 }

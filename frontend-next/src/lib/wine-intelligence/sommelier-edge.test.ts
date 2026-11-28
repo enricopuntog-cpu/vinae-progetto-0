@@ -142,6 +142,8 @@ let providerSiInterrompe = false;
 let pezziScelti: string[] | null;
 /** WI-016: il fornitore manda un pezzo e poi tace per sempre. */
 let providerSiBlocca: boolean;
+let providerMandaFrammenti: boolean;
+let providerSenzaFine: boolean;
 let lettureFornitoreAnnullate: number;
 
 const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -150,19 +152,36 @@ const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Pr
     fetchEstranei.push(url);
     throw new Error("rete non consentita nei test");
   }
-  const body = JSON.parse(String(init?.body ?? "{}")) as { messages: { role: string; content: string }[] };
+  const body = JSON.parse(String(init?.body ?? "{}")) as { model: string; messages: { role: string; content: string }[] };
   chiamateProvider.push({
     url,
     system: body.messages.find((m) => m.role === "system")?.content ?? "",
     prompt: body.messages.find((m) => m.role === "user")?.content ?? "",
   });
   if (providerRispondeKo) return new Response("boom", { status: statoFornitore });
+  if (providerMandaFrammenti) {
+    let timer: ReturnType<typeof setInterval>;
+    const frammento = {
+      model: body.model, choices: [{ delta: { content: "frammento" } }],
+    };
+    return new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        timer = setInterval(() => {
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(frammento)}\n\n`));
+        }, 8);
+      },
+      cancel() {
+        clearInterval(timer);
+        lettureFornitoreAnnullate++;
+      },
+    }));
+  }
   if (providerSiBlocca) {
     let letture = 0;
     const muto = new ReadableStream<Uint8Array>({
       pull(controller) {
         if (letture++ === 0) {
-          const primo = JSON.stringify({ choices: [{ delta: { content: "inizio" } }] });
+          const primo = JSON.stringify({ model: body.model, choices: [{ delta: { content: "inizio" } }] });
           controller.enqueue(new TextEncoder().encode(`data: ${primo}\n\n`));
           return;
         }
@@ -179,7 +198,7 @@ const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Pr
     const rotto = new ReadableStream<Uint8Array>({
       pull(controller) {
         if (letture++ === 0) {
-          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { content: "inizio" } }] })}
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ model: body.model, choices: [{ delta: { content: "inizio" } }] })}
 
 `));
         } else {
@@ -191,10 +210,10 @@ const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Pr
   }
   const pezzi = pezziScelti ?? testoRisposta.match(/[\s\S]{1,200}/g) ?? [];
   const sse =
-    pezzi.map((p) => `data: ${JSON.stringify({ choices: [{ delta: { content: p } }] })}\n\n`).join("") +
+    pezzi.map((p) => `data: ${JSON.stringify({ model: body.model, choices: [{ delta: { content: p } }] })}\n\n`).join("") +
     // come il fornitore con include_usage: l'ultimo pezzo porta il consumo
-    `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 321, completion_tokens: 45 } })}\n\ndata: [DONE]\n\n`;
-  return new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    `data: ${JSON.stringify({ model: body.model, choices: [], usage: { prompt_tokens: 321, completion_tokens: 45 } })}\n\ndata: [DONE]\n\n`;
+  return new Response(providerSenzaFine ? sse.split("data: [DONE]")[0] : sse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
 };
 
 // ---- Caricamento della function reale ------------------------------------------------
@@ -208,6 +227,7 @@ const ENV: Record<string, string> = {
   SUPABASE_URL: "http://127.0.0.1:54321",
   SUPABASE_SERVICE_ROLE_KEY: "service-role-test",
   OPENAI_API_KEY: "sk-FINTA-per-i-test",
+  AI_MODEL_CHAT: "gpt-4.1-mini-2025-04-14",
 };
 const realFetch = globalThis.fetch;
 const globale = globalThis as unknown as { Deno?: unknown };
@@ -319,6 +339,8 @@ beforeEach(() => {
   testoRisposta = "Risposta di prova.";
   pezziScelti = null;
   providerSiBlocca = false;
+  providerMandaFrammenti = false;
+  providerSenzaFine = false;
   providerSiInterrompe = false;
   lettureFornitoreAnnullate = 0;
   delete ENV.AI_TIMEOUT_SECONDS;
@@ -334,6 +356,8 @@ beforeEach(() => {
   schedaKo = false;
   ENV.AI_ENABLED = "true";
   ENV.OPENAI_API_KEY = "sk-FINTA-per-i-test";
+  ENV.AI_MODEL_CHAT = "gpt-4.1-mini-2025-04-14";
+  delete ENV.AI_MAX_OUTPUT_TOKENS;
   globalThis.fetch = fetchFinto as typeof fetch;
   dati = {
     bottle_units: [
@@ -876,8 +900,8 @@ describe("WI-010 — budget globale e interruttore (chiusi per difetto)", () => 
     expect(nomi.filter((n) => n === "ai_budget_prenota")).toHaveLength(1);
     expect(nomi.indexOf("rate_limit_consume")).toBeLessThan(nomi.indexOf("ai_budget_prenota"));
     const prenota = rpcLog.find((r) => r.name === "ai_budget_prenota")?.args as Record<string, unknown>;
-    expect([prenota.p_scope, prenota.p_provider, prenota.p_modello, prenota.p_token_output_max]).toEqual(["ai:chat", "openai", "gpt-4.1-mini", 800]);
-    expect(Number(prenota.p_token_input)).toBeGreaterThan(10);
+    expect([prenota.p_scope, prenota.p_provider, prenota.p_modello, prenota.p_token_output_max]).toEqual(["ai:chat", "openai", "gpt-4.1-mini-2025-04-14", 800]);
+    expect(prenota.p_token_input).toBe(1_047_576);
     expect(esiti()).toEqual([{ p_scope: "ai:chat", p_riuscita: true }]);
   });
 
@@ -1171,3 +1195,62 @@ describe("WI-016 — scheda documentata del vino identificato", () => {
     expect(chiamateProvider[0]!.prompt).not.toContain("Scheda documentata del candidato");
   });
 });
+
+it("WI-017: il contesto Cantina con dati sensibili non raggiunge il fornitore", async () => {
+  dati.bottle_units = [bottigliaRiga(USER_A, "contaminato", {}, { nome: "Vino prova fixture@example.test" })];
+  const risposta = await chiama({ contesto: { tipo: "cantina", consenso: true } });
+  expect(risposta.status).toBe(422);
+  expect(chiamateProvider).toHaveLength(0);
+  expect(rpcLog.filter((r) => r.name === "ai_budget_prenota")).toHaveLength(0);
+  expect(rpcLog.filter((r) => r.name === "ai_porta_chiudi")).toHaveLength(1);
+  expect(righeLog.join(" ")).not.toContain("fixture@example.test");
+});
+
+it("WI-017: un EOF senza il marcatore finale non produce testo né storico", async () => {
+  providerSenzaFine = true;
+  const risposta = await chiama({});
+  const corpo = await risposta.text();
+  expect(corpo).not.toContain(testoRisposta);
+  expect(rpcLog.some((r) => r.name === "sommelier_scambio_registra")).toBe(false);
+  expect(rpcLog.filter((r) => r.name === "ai_budget_consuntivo").map((r) => r.args.p_esito))
+    .toEqual(["formato_non_valido"]);
+});
+
+it("WI-017: il client fermo non trattiene la porta dopo la scadenza del provider", async () => {
+  providerSiBlocca = true;
+  ENV.AI_TIMEOUT_SECONDS = "0.04";
+  const risposta = await chiama({});
+  try {
+    await new Promise((risolvi) => setTimeout(risolvi, 130));
+    expect(lettureFornitoreAnnullate).toBe(1);
+    expect(rpcLog.filter((r) => r.name === "ai_porta_chiudi")).toHaveLength(1);
+    expect(rpcLog.filter((r) => r.name === "ai_budget_consuntivo")).toHaveLength(1);
+  } finally {
+    await risposta.body?.cancel();
+  }
+});
+
+it.each([
+  ["modello senza tetto verificato", "modello-fixture", "800"],
+  ["alias mobile", "gpt-4.1-mini", "800"],
+  ["uscita troppo alta", "gpt-4.1-mini-2025-04-14", "32769"],
+  ["uscita non intera", "gpt-4.1-mini-2025-04-14", "800.5"],
+])("WI-017: %s si rifiuta prima della prenotazione", async (_caso, modello, output) => {
+  ENV.AI_MODEL_CHAT = modello;
+  ENV.AI_MAX_OUTPUT_TOKENS = output;
+  expect((await chiama({})).status).toBe(503);
+  expect(chiamateProvider).toHaveLength(0);
+  expect(rpcLog.some((r) => r.name === "ai_budget_prenota")).toBe(false);
+});
+
+it("WI-017: frammenti periodici non prorogano la scadenza complessiva", async () => {
+  providerMandaFrammenti = true;
+  ENV.AI_TIMEOUT_SECONDS = "0.06";
+  const risposta = await chiama({});
+  const corpo = await risposta.text();
+  expect(corpo).not.toContain("frammento");
+  expect(corpo).toContain('"error"');
+  expect(lettureFornitoreAnnullate).toBe(1);
+  expect(rpcLog.filter((r) => r.name === "ai_budget_consuntivo").map((r) => r.args.p_esito))
+    .toEqual(["guasto_fornitore"]);
+}, 2000);

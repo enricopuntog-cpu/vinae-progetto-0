@@ -43,7 +43,7 @@
 // guasto o un troncamento a metà non consegna testo non verificato.
 
 import { rilevaDatiSensibili } from "../_shared/ai-sicurezza.ts";
-import { timeoutMs } from "../_shared/ai-provider.ts";
+import { AiFormatError, attendiAi } from "../_shared/ai-provider.ts";
 import {
   apriIngresso,
   apriPorta,
@@ -100,24 +100,9 @@ const SESSION_ID = /^[A-Za-z0-9_-]{4,64}$/;
 // WI-016: quanto al massimo si può verificare per intero. Con il tetto di token
 // in uscita non ci si avvicina; oltre non si trasmette nulla.
 const RISPOSTA_VERIFICABILE_MAX_CHARS = 64_000;
-// Durata massima della lettura dal fornitore: sotto i 150 s della piattaforma.
-const LETTURA_MASSIMA_MS = 120_000;
 const IN_VERIFICA = ": in verifica\n\n";
 const RISPOSTA_BLOCCATA =
   "La risposta conteneva dati riservati ed è stata bloccata. Riformula la domanda.";
-
-/** Una lettura che non arriva entro `ms` è un guasto: il fornitore muto non tiene aperta la richiesta. */
-const leggiEntroScadenza = async <T>(lettura: Promise<T>, ms: number): Promise<T> => {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const scadenza = new Promise<never>((_, rifiuta) => {
-    timer = setTimeout(() => rifiuta(new DOMException("fornitore muto", "TimeoutError")), Math.max(ms, 0));
-  });
-  try {
-    return await Promise.race([lettura, scadenza]);
-  } finally {
-    clearTimeout(timer);
-  }
-};
 
 type RigaContesto = { ruolo: "utente" | "sommelier"; contenuto: string };
 
@@ -352,7 +337,7 @@ Deno.serve(async (request) => {
   if ("risposta" in ingresso) return ingresso.risposta;
   let inStream = false;
   try {
-    const risposta = await rispondi({ cors, supabase, userId, sessionId, messaggio, richiestaContesto, ingresso });
+    const risposta = await rispondi({ cors, supabase, userId, sessionId, messaggio, richiestaContesto, ingresso, segnaleRichiesta: request.signal });
     inStream = risposta.headers.get("content-type") === "text/event-stream";
     return risposta;
   } finally {
@@ -369,9 +354,10 @@ type Turno = {
   messaggio: string;
   richiestaContesto: RichiestaContesto | null;
   ingresso: Ingresso;
+  segnaleRichiesta: AbortSignal;
 };
 
-const rispondi = async ({ cors, supabase, userId, sessionId, messaggio, richiestaContesto, ingresso }: Turno): Promise<Response> => {
+const rispondi = async ({ cors, supabase, userId, sessionId, messaggio, richiestaContesto, ingresso, segnaleRichiesta }: Turno): Promise<Response> => {
   // Il contesto passa dalla porta concessa a `service_role`, non dalla vista:
   // con il client di servizio `auth.uid()` è nullo e la vista darebbe zero
   // righe, cioè una conversazione senza memoria che sembra funzionare.
@@ -420,6 +406,8 @@ const rispondi = async ({ cors, supabase, userId, sessionId, messaggio, richiest
 
   // Tentativi e riserva valgono solo PRIMA che lo stream cominci: dopo, l'errore è un evento dentro lo stream e
   // una risposta parziale non si rifà.
+  const disconnessione = new AbortController();
+  const segnaleClient = AbortSignal.any([segnaleRichiesta, disconnessione.signal]);
   const chiamata = await chiamataGovernata({
     supabase,
     userId,
@@ -430,6 +418,7 @@ const rispondi = async ({ cors, supabase, userId, sessionId, messaggio, richiest
     system,
     prompt,
     nonDisponibile: "Il Sommelier non è al momento disponibile.",
+    segnaleClient,
     chiama: (provider, call) => provider.streamText(call),
   });
   if (!chiamata.ok) return chiamata.risposta;
@@ -437,26 +426,28 @@ const rispondi = async ({ cors, supabase, userId, sessionId, messaggio, richiest
   const sorgente = chiamata.valore;
 
   const encoder = new TextEncoder();
-  const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+  // L'output verificato è limitato. La consegna non può trattenere la porta
+  // mentre il client è in backpressure. Il commento SSE usa al massimo un posto in coda.
+  let uscita!: ReadableStreamDefaultController<Uint8Array>;
+  const readable = new ReadableStream<Uint8Array>({
+    start: (controllo) => { uscita = controllo; },
+    cancel: () => { disconnessione.abort(); },
+  });
+  const invia = (evento: string) => {
+    segnaleClient.throwIfAborted();
+    uscita.enqueue(encoder.encode(evento));
+  };
 
   const inoltra = async () => {
-    const writer = writable.getWriter();
     const lettore = sorgente.getReader();
-    // WI-010: l'interruttore è globale, quindi conta solo un errore LETTO dal fornitore. Una scrittura verso un
-    // client che se n'è andato finisce nello stesso `catch` e non deve poter spegnere l'AI a tutti.
-    let guastoFornitore = false;
+    let duranteLettura = true;
     let consuntivata = false;
     let completata = false;
-    const scadenza = Date.now() + LETTURA_MASSIMA_MS;
     try {
       let raccolta = "";
       let verificabile = true;
       while (true) {
-        const { done, value } = await leggiEntroScadenza(lettore.read(), Math.min(timeoutMs(), scadenza - Date.now()))
-          .catch((errore: unknown) => {
-            guastoFornitore = true;
-            throw errore;
-          });
+        const { done, value } = await attendiAi(lettore.read(), chiamata.segnale);
         if (done) break;
         raccolta += value;
         if (raccolta.length > RISPOSTA_VERIFICABILE_MAX_CHARS) {
@@ -464,9 +455,11 @@ const rispondi = async ({ cors, supabase, userId, sessionId, messaggio, richiest
           void lettore.cancel().catch(() => {});
           break;
         }
-        await writer.write(encoder.encode(IN_VERIFICA));
+        if ((uscita.desiredSize ?? 0) > 0) invia(IN_VERIFICA);
       }
 
+      duranteLettura = false;
+      chiamata.segnale.throwIfAborted();
       await registraEsitoFornitore(supabase, "ai:chat", true);
       await registraConsuntivo(supabase, richiestaId, verificabile ? "ok" : "formato_non_valido", chiamata.uso());
       consuntivata = true;
@@ -476,9 +469,7 @@ const rispondi = async ({ cors, supabase, userId, sessionId, messaggio, richiest
       if (bloccata) {
         if (verificabile) await segnalaSicurezza(supabase, userId, "ai:chat", "output_scartato");
         await ingresso.chiudi(false);
-        await writer.write(
-          encoder.encode(sse({ error: verificabile ? RISPOSTA_BLOCCATA : "Il Sommelier non è al momento disponibile." })),
-        );
+        invia(sse({ error: verificabile ? RISPOSTA_BLOCCATA : "Il Sommelier non è al momento disponibile." }));
         return;
       }
 
@@ -486,7 +477,8 @@ const rispondi = async ({ cors, supabase, userId, sessionId, messaggio, richiest
       // (`backend/ai_routes.py:72`, `:79-87`): vale su ciò che si trasmette e
       // su ciò che si salva.
       const trasmessa = raccolta.slice(0, RISPOSTA_MAX_CHARS);
-      if (trasmessa) await writer.write(encoder.encode(sse({ delta: trasmessa })));
+      chiamata.segnale.throwIfAborted();
+      if (trasmessa) invia(sse({ delta: trasmessa }));
       const risposta = trasmessa.trim();
       if (risposta) {
         // Si salva solo qui: a stream concluso e non vuoto. Una risposta
@@ -508,31 +500,35 @@ const rispondi = async ({ cors, supabase, userId, sessionId, messaggio, richiest
       completata = true;
       // la porta si chiude PRIMA di «done»: chi ripete subito la domanda non deve trovarla ancora in corso
       await ingresso.chiudi(true);
-      await writer.write(encoder.encode(sse({ done: true })));
+      invia(sse({ done: true }));
     } catch (errore) {
       // Evento generico dentro lo stream e nessun salvataggio, come
       // `backend/ai_routes.py:88-90`. Il messaggio del fornitore non esce.
+      const formatoNonValido = errore instanceof AiFormatError;
+      const guastoFornitore = duranteLettura && !segnaleClient.aborted && !formatoNonValido;
       if (guastoFornitore) await registraEsitoFornitore(supabase, "ai:chat", false);
       // In ogni caso si ferma la lettura dal fornitore (client andato via o fornitore muto). Senza attendere:
       // un fornitore muto potrebbe non confermare mai l'annullamento.
       void lettore.cancel().catch(() => {});
       if (!consuntivata) {
-        await registraConsuntivo(supabase, richiestaId, guastoFornitore ? "guasto_fornitore" : "interrotta_client", chiamata.uso());
+        const esito = segnaleClient.aborted ? "interrotta_client"
+          : formatoNonValido ? "formato_non_valido"
+          : guastoFornitore ? "guasto_fornitore" : "errore_applicativo";
+        await registraConsuntivo(supabase, richiestaId, esito, chiamata.uso());
       }
       console.error("[ai-sommelier] stream interrotto", {
         tipo: errore instanceof Error ? errore.name : "sconosciuto",
       });
       await ingresso.chiudi(completata);
       try {
-        await writer.write(
-          encoder.encode(sse({ error: "Il Sommelier non è al momento disponibile." })),
-        );
+        invia(sse({ error: "Il Sommelier non è al momento disponibile." }));
       } catch {
         // Il lato scrivente è già chiuso: non c'è nessuno da avvisare.
       }
     } finally {
+      chiamata.termina();
       try {
-        await writer.close();
+        uscita.close();
       } catch {
         // Idem.
       }

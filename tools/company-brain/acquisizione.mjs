@@ -6,8 +6,8 @@
 //
 // `--prova` legge e valida il file senza connettersi. Uscita: una riga JSON con soli conteggi, numeri di riga e codici.
 // 0 = completato; 1 = interrotto o con righe scartate; 2 = non configurato o rifiutato.
-import { readFile } from "node:fs/promises";
-import { acquisisci, leggiElementi, percorsoAmmesso } from "./lib/acquisizione.mjs";
+import { createReadStream } from "node:fs";
+import { acquisisci, leggiElementi, leggiFileLimitato, percorsoAmmesso } from "./lib/acquisizione.mjs";
 import { opzioniConnessione } from "./lib/connessione.mjs";
 
 const esci = (codice, corpo) => {
@@ -21,9 +21,10 @@ if (!percorsoAmmesso(percorso)) esci(2, { esito: "rifiutato", motivo: "serve --f
 
 let letto;
 try {
-  letto = leggiElementi(await readFile(percorso, "utf8"));
+  letto = leggiElementi(await leggiFileLimitato(createReadStream(percorso)));
 } catch (errore) {
-  esci(2, { esito: "rifiutato", motivo: errore?.message === "troppe_righe" ? "troppe righe" : "file non leggibile" });
+  const motivi = new Map([["troppe_righe", "troppe righe"], ["file_troppo_grande", "file troppo grande"]]);
+  esci(2, { esito: "rifiutato", motivo: motivi.get(errore?.message) ?? "file non leggibile" });
 }
 if (process.argv.includes("--prova")) {
   esci(letto.scartati.length ? 1 : 0, { esito: "prova", validi: letto.elementi.length, scartati: letto.scartati });

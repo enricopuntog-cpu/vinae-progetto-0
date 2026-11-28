@@ -42,7 +42,7 @@ sql() { "${PSQL[@]}" -c "$1"; }
   || { echo 'Chiamate AI preesistenti: serve stack nuovo.' >&2; exit 3; }
 
 # WI-010: il budget AI è chiuso per difetto; qui il fornitore è finto, quindi si configura un tetto solo per la prova.
-budget() { sql "update private.ai_budget_settings set richieste_giorno=$1, richieste_mese=$1, guasti_consecutivi=0, aperto_fino_a=null;" >/dev/null; }
+budget() { sql "update private.ai_budget_settings set richieste_giorno=$1, richieste_mese=$1, spesa_giorno_usd=$1, guasti_consecutivi=0, aperto_fino_a=null;" >/dev/null; }
 
 PASSWORD="$(node -e 'console.log(require("node:crypto").randomBytes(18).toString("hex") + "Aa1!")')"
 echo "::add-mask::$PASSWORD"
@@ -54,7 +54,7 @@ cleanup() {
   trap - EXIT
   budget null || status=1
   # WI-015: le prenotazioni di spesa della prova (fornitore finto) si rimuovono come le altre fixture
-  sql "delete from private.ai_chiamate" >/dev/null || status=1
+  sql "delete from private.ai_chiamate; delete from private.ai_tariffe where inserita_da='wi004-fixture'" >/dev/null || status=1
   sql "begin;
     delete from public.bottle_units where owner_id in (select id from auth.users where email like '%@wi004-e2e.test');
     delete from public.wines where slug like 'wi004-e2e-%';
@@ -68,6 +68,8 @@ cleanup() {
 }
 trap cleanup EXIT
 budget 1000
+sql "insert into private.ai_tariffe (provider, modello, versione, input_per_milione, output_per_milione, valida_dal, inserita_da)
+  values ('openai', 'gpt-4.1-mini-2025-04-14', 'fixture', 1, 4, now(), 'wi004-fixture');" >/dev/null
 
 # Utenti creati dalla vera API Auth (admin), con email confermata: i token saranno quelli veri.
 create_user() {
