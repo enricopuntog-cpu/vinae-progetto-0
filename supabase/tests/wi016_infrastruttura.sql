@@ -529,12 +529,17 @@ select pg_temp.rec(45, 'concorrenza globale della funzione; porte e segnali solo
   and has_function_privilege('service_role', 'public.ai_porta_apri(uuid, text, text)', 'EXECUTE')
   and not has_table_privilege('service_role', 'private.ai_porte', 'SELECT'));
 update private.ai_budget_settings set richieste_giorno = 10, richieste_mese = 10;
+select pg_temp.rec(61, 'una quota di richieste da sola non consente spesa AI',
+  public.ai_budget_prenota('ai:chat', 'openai', 'modello', 10, 10) ->> 'esito' = 'non_configurato');
+update private.ai_budget_settings set spesa_giorno_usd = 1;
+insert into private.ai_tariffe (provider, modello, versione, input_per_milione, output_per_milione, valida_dal, inserita_da)
+values ('openai', 'modello', 'fixture', 1, 4, now() - interval '1 day', 'wi016');
 select pg_temp.salva('b1', public.ai_budget_prenota('ai:chat', 'openai', 'modello', 10, 10)::text);
 select pg_temp.salva('cz', public.ai_budget_consuntivo((pg_temp.j('b1') ->> 'richiesta_id')::uuid, 'errore_applicativo')::text);
 select pg_temp.rec(46, 'consuntivo con errore dell''applicazione distinto dal guasto del fornitore',
   pg_temp.j('b1') ->> 'esito' = 'consentito' and pg_temp.f('cz') = 'true'
   and (select esito = 'errore_applicativo' from private.ai_chiamate), pg_temp.f('b1'));
-update private.ai_budget_settings set richieste_giorno = null, richieste_mese = null;
+update private.ai_budget_settings set richieste_giorno = null, richieste_mese = null, spesa_giorno_usd = null;
 
 -- ---------------------------------------------------------------------------------------------
 -- G. Authenticity Assistant e Price Intelligence

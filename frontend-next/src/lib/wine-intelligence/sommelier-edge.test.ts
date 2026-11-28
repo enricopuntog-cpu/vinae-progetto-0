@@ -209,6 +209,7 @@ const ENV: Record<string, string> = {
   SUPABASE_URL: "http://127.0.0.1:54321",
   SUPABASE_SERVICE_ROLE_KEY: "service-role-test",
   OPENAI_API_KEY: "sk-FINTA-per-i-test",
+  AI_MODEL_CHAT: "gpt-4.1-mini-2025-04-14",
 };
 const realFetch = globalThis.fetch;
 const globale = globalThis as unknown as { Deno?: unknown };
@@ -336,6 +337,8 @@ beforeEach(() => {
   schedaKo = false;
   ENV.AI_ENABLED = "true";
   ENV.OPENAI_API_KEY = "sk-FINTA-per-i-test";
+  ENV.AI_MODEL_CHAT = "gpt-4.1-mini-2025-04-14";
+  delete ENV.AI_MAX_OUTPUT_TOKENS;
   globalThis.fetch = fetchFinto as typeof fetch;
   dati = {
     bottle_units: [
@@ -878,8 +881,8 @@ describe("WI-010 — budget globale e interruttore (chiusi per difetto)", () => 
     expect(nomi.filter((n) => n === "ai_budget_prenota")).toHaveLength(1);
     expect(nomi.indexOf("rate_limit_consume")).toBeLessThan(nomi.indexOf("ai_budget_prenota"));
     const prenota = rpcLog.find((r) => r.name === "ai_budget_prenota")?.args as Record<string, unknown>;
-    expect([prenota.p_scope, prenota.p_provider, prenota.p_modello, prenota.p_token_output_max]).toEqual(["ai:chat", "openai", "gpt-4.1-mini", 800]);
-    expect(Number(prenota.p_token_input)).toBeGreaterThan(10);
+    expect([prenota.p_scope, prenota.p_provider, prenota.p_modello, prenota.p_token_output_max]).toEqual(["ai:chat", "openai", "gpt-4.1-mini-2025-04-14", 800]);
+    expect(prenota.p_token_input).toBe(1_047_576);
     expect(esiti()).toEqual([{ p_scope: "ai:chat", p_riuscita: true }]);
   });
 
@@ -1206,4 +1209,17 @@ it("WI-017: il client fermo non trattiene la porta dopo la scadenza del provider
   } finally {
     await risposta.body?.cancel();
   }
+});
+
+it.each([
+  ["modello senza tetto verificato", "modello-fixture", "800"],
+  ["alias mobile", "gpt-4.1-mini", "800"],
+  ["uscita troppo alta", "gpt-4.1-mini-2025-04-14", "32769"],
+  ["uscita non intera", "gpt-4.1-mini-2025-04-14", "800.5"],
+])("WI-017: %s si rifiuta prima della prenotazione", async (_caso, modello, output) => {
+  ENV.AI_MODEL_CHAT = modello;
+  ENV.AI_MAX_OUTPUT_TOKENS = output;
+  expect((await chiama({})).status).toBe(503);
+  expect(chiamateProvider).toHaveLength(0);
+  expect(rpcLog.some((r) => r.name === "ai_budget_prenota")).toBe(false);
 });

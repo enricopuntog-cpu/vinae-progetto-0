@@ -13,7 +13,7 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { aiCorsHeadersFor } from "./ai-cors.ts";
-import { AiFormatError, AiProviderError, attendiAi, timeoutMs, creaAiProvider, requestIdOpaco, stimaTokenInput, type AiCall, type AiProvider, type AiUso } from "./ai-provider.ts";
+import { AiFormatError, AiProviderError, attendiAi, timeoutMs, creaAiProvider, requestIdOpaco, type AiCall, type AiProvider, type AiUso } from "./ai-provider.ts";
 import { impronta, rilevaDatiSensibili, rilevaIstruzioniSospette } from "./ai-sicurezza.ts";
 
 export const json = (body: unknown, status: number, headers: HeadersInit = {}): Response =>
@@ -478,10 +478,11 @@ export const chiamataGovernata = async <T>(o: OpzioniGovernata<T>): Promise<Gove
     for (let n = 0; n < tentativi.length; n++) {
       if (segnale.aborted) return nonDisponibile();
       const provider = creaAiProvider(o.compito, tentativi[n]);
+      if (provider.maxInputTokens <= 0 || provider.maxOutputTokens <= 0) return nonDisponibile();
       const prenotazione = await prenotaBudget(o.supabase, o.scope, o.cors, {
         provider: provider.id,
         modello: provider.modello,
-        tokenInput: stimaTokenInput(o.system, o.prompt),
+        tokenInput: provider.maxInputTokens,
         tokenOutputMax: provider.maxOutputTokens,
       });
       if (rifiutata(prenotazione)) return n === 0 ? { ok: false, risposta: prenotazione.risposta } : nonDisponibile();

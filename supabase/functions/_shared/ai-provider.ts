@@ -62,6 +62,7 @@ export interface AiProvider {
   /** WI-015: modello e tetto di uscita, per prenotare il costo massimo prima della chiamata. */
   readonly modello: string;
   readonly maxOutputTokens: number;
+  readonly maxInputTokens: number;
   completeText(call: AiCall): Promise<string>;
   streamText(call: AiCall): Promise<ReadableStream<string>>;
 }
@@ -86,6 +87,7 @@ export const creaDisabledProvider = (): AiProvider => ({
   id: "disabled",
   modello: "nessuno",
   maxOutputTokens: 0,
+  maxInputTokens: 0,
   completeText: () => Promise.reject(new AiProviderError("Il servizio AI non è configurato", false)),
   streamText: () => Promise.reject(new AiProviderError("Il servizio AI non è configurato", false)),
 });
@@ -172,6 +174,7 @@ type OpenAiOptions = {
   apiKey: string;
   model: string;
   maxOutputTokens: number;
+  maxInputTokens: number;
 };
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
@@ -196,9 +199,6 @@ export const leggiUsoOpenAi = (corpo: unknown): AiUso | null => {
     ? { input: input as number, output: output as number }
     : null;
 };
-
-/** Stima PRUDENTE dei token d'ingresso (circa 3 caratteri per token): serve solo a prenotare il costo massimo. */
-export const stimaTokenInput = (...testi: string[]): number => Math.ceil(testi.reduce((n, t) => n + t.length, 0) / 3) + 16;
 
 const usoDaRiga = (riga: string): AiUso | null => {
   if (!riga.startsWith("data:") || !riga.includes('"usage"')) return null;
@@ -262,6 +262,7 @@ const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
     id: "openai",
     modello: options.model,
     maxOutputTokens: options.maxOutputTokens,
+    maxInputTokens: options.maxInputTokens,
     completeText: async (call) => {
       const response = await chiama(call, false);
       let parsed: { choices?: { message?: { content?: string | null } }[] };
@@ -325,12 +326,17 @@ export const creaAiProvider = (compito: "chat" | "pairing" | "catalogo", modello
     pairing: Deno.env.get("AI_MODEL_PAIRING"),
     catalogo: Deno.env.get("AI_MODEL_CATALOGO"),
   }[compito];
-  return creaOpenAiProvider({
-    apiKey,
-    // WI-016: la riserva arriva solo dalla configurazione del proprietario nel database, mai dal client.
-    model: modelloRiserva ?? modelloPerCompito ?? Deno.env.get("AI_MODEL_DEFAULT") ?? "gpt-4.1-mini",
-    maxOutputTokens: Number(Deno.env.get("AI_MAX_OUTPUT_TOKENS") ?? "800"),
-  });
+  // Solo la versione esplicita ha un contratto verificato. Non stima il prompt:
+  // riserva l'intera finestra, incluso il framing. Un alias può cambiare contratto.
+  // https://developers.openai.com/api/docs/models/gpt-4.1-mini
+  const model = modelloRiserva ?? modelloPerCompito ?? Deno.env.get("AI_MODEL_DEFAULT");
+  const maxOutputTokens = Number(Deno.env.get("AI_MAX_OUTPUT_TOKENS") ?? "800");
+  if (model !== "gpt-4.1-mini-2025-04-14" ||
+      !Number.isInteger(maxOutputTokens) || maxOutputTokens <= 0 || maxOutputTokens > 32_768) {
+    return creaDisabledProvider();
+  }
+  // max_completion_tokens comprende anche eventuali token di ragionamento.
+  return creaOpenAiProvider({ apiKey, model, maxOutputTokens, maxInputTokens: 1_047_576 });
 };
 
 /**
