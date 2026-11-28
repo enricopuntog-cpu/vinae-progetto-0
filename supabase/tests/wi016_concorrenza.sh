@@ -236,11 +236,11 @@ if [ "$(sql "select count(*) from brain.sentinel_runs")" = "0" ]; then
 else
   verifica "scheduler mai eseguito: rosso" "$(osserva)" "1 rosso"
 fi
-sql "select brain.scheduler_tick('e2e-manuale') ->> 'esito'; select brain.sentinel_run('e2e') ->> 'esito'" >/dev/null
-verifica "dopo un giro e una Sentinel: verde (uscita 0)" "$(osserva)" "0 verde"
-sql "update brain.scheduler_state set last_tick_at = now() - interval '2 hours'" >/dev/null
+sql "select brain.scheduler_tick('pg_cron:wi017-fixture') ->> 'esito'; select brain.sentinel_run('e2e') ->> 'esito'" >/dev/null
+verifica "dopo un giro pianificato e una Sentinel completa: verde (uscita 0)" "$(osserva)" "0 verde"
+sql "update brain.scheduler_state set last_scheduled_tick_at = now() - interval '2 hours'" >/dev/null
 verifica "scheduler fermo: l'osservatore indipendente se ne accorge" "$(osserva)" "1 rosso"
-verifica "il login dell'osservatore non legge nulla oltre i due numeri" \
+verifica "il login dell'osservatore non legge le tabelle del brain" \
   "$(psql "$(url_di vinea_e2e_oss)" -X -q -At -c 'select count(*) from brain.tasks' 2>&1 | grep -c 'permission denied' || true)" "1"
 
 # ------------------------------------------------------------------------------------------ WI-016F: posti di lettura fra sessioni vere
