@@ -81,7 +81,7 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `AI_ENABLED` | Edge Function | Kill switch delle funzioni AI (Fase 10). **Fallisce chiuso**: assente o diverso da `true` significa spento. |
 | `AI_ALLOWED_ORIGINS` | Edge Function | Allowlist CORS delle sole function AI, origini complete separate da virgole. **Non sostituisce `PAYMENT_ALLOWED_ORIGINS`**: le due convivono. |
 | `OPENAI_API_KEY` | Edge Function | Chiave del fornitore di prova. Assente, il provider è quello disabilitato e ogni chiamata dà 503. |
-| `AI_MODEL_DEFAULT` | Edge Function | Modello usato quando quello del compito non è impostato. Richiede uno snapshot supportato, tariffa versionata e tetto monetario. Nessun modello implicito. |
+| `AI_MODEL_DEFAULT` | Edge Function | Modello usato quando quello del compito non è impostato. Richiede uno snapshot supportato, tariffa standard versionata e tetto monetario. Nessun modello implicito. |
 | `AI_MODEL_CHAT` | Edge Function | Modello della chat Sommelier. La decisione 7.1 vuole un modello **per compito**. |
 | `AI_MODEL_PAIRING` | Edge Function | Modello dell'abbinamento cibo-vino. |
 | `VINEA_WORKER_ENABLED` | worker Company Brain (WI-015) | **Fallisce chiusa**: soltanto `true` esatto avvia `tools/company-brain/worker.mjs`. |
@@ -98,7 +98,7 @@ configurazione Stripe di test non sono stati verificati nell'ambiente scelto.
 | `VINEA_WORKER_ENABLED` (variabile di repository) | `.github/workflows/company-brain-worker.yml` (WI-016) | Il workflow parte solo a mano, solo da `main` e solo con `true` esatto; non ha pianificazione. Secret `VINEA_AGENT_DATABASE_URL` e `VINEA_DB_CA_PEM` negli environment `company-brain-<agente>`, da creare ristretti a `main` prima di accendere. |
 | `AI_MODEL_CATALOGO` | Edge Function | Modello del suggerimento di catalogazione. |
 | `AI_MAX_OUTPUT_TOKENS` | Edge Function | Tetto dei token in uscita per chiamata, inclusi quelli di ragionamento, default `800`. |
-| `AI_TIMEOUT_SECONDS` | Edge Function | Timeout applicativo verso il fornitore, default `30`, tetto `120`. |
+| `AI_TIMEOUT_SECONDS` | Edge Function | Scadenza unica per connessione, lettura e tutti i tentativi, default `30`, tetto `120`. |
 | `AUTH_REDIRECT_ORIGIN` | solo server | Origine dei redirect della callback Auth. Override esplicito per gli ambienti che non sono Netlify; su Netlify si lascia vuota. Non è `NEXT_PUBLIC_*`: il dato serve al solo server. |
 | `URL` | solo server | **Riservata Netlify, non si imposta a mano.** Dominio pubblico stabile del sito, dal 14 settembre 2026 `https://vineawineclub.com`; è l'origine dei redirect Auth in produzione ed è già la base canonica di `metadataBase`. Dopo un cambio del dominio principale serve una build nuova: una funzione già distribuita può conservare il valore precedente. |
 | `DEPLOY_PRIME_URL` | solo server | **Riservata Netlify, non si imposta a mano.** Dominio della Deploy Preview o del branch deploy corrente. |
