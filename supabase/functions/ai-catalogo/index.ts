@@ -128,19 +128,23 @@ Deno.serve(async (request) => {
       system: SYSTEM,
       prompt: parti.join("\n\n"),
       nonDisponibile: "Il servizio AI non è al momento disponibile.",
+      segnaleClient: request.signal,
       chiama: (provider, call) => provider.completeText(call),
     });
     if (!chiamata.ok) return chiamata.risposta;
+    chiamata.termina();
     // Il fornitore ha risposto: anche un formato inutilizzabile non è un suo guasto.
     await registraEsitoFornitore(supabase, "ai:catalogo", true);
-    await registraConsuntivo(supabase, chiamata.richiestaId, "ok", chiamata.uso());
+    let suggerimento: ReturnType<typeof suggerimentoDa>;
     try {
-      const suggerimento = suggerimentoDa(estraiJson(chiamata.valore));
-      riuscita = true;
-      return json(suggerimento, 200, cors);
+      suggerimento = suggerimentoDa(estraiJson(chiamata.valore));
     } catch {
+      await registraConsuntivo(supabase, chiamata.richiestaId, "formato_non_valido", chiamata.uso());
       return json({ error: "Il servizio AI ha restituito un formato non valido." }, 502, cors);
     }
+    await registraConsuntivo(supabase, chiamata.richiestaId, "ok", chiamata.uso());
+    riuscita = true;
+    return json(suggerimento, 200, cors);
   } finally {
     await ingresso.chiudi(riuscita);
   }

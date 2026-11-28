@@ -142,6 +142,7 @@ let providerSiInterrompe = false;
 let pezziScelti: string[] | null;
 /** WI-016: il fornitore manda un pezzo e poi tace per sempre. */
 let providerSiBlocca: boolean;
+let providerSenzaFine: boolean;
 let lettureFornitoreAnnullate: number;
 
 const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -194,7 +195,7 @@ const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Pr
     pezzi.map((p) => `data: ${JSON.stringify({ choices: [{ delta: { content: p } }] })}\n\n`).join("") +
     // come il fornitore con include_usage: l'ultimo pezzo porta il consumo
     `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 321, completion_tokens: 45 } })}\n\ndata: [DONE]\n\n`;
-  return new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+  return new Response(providerSenzaFine ? sse.split("data: [DONE]")[0] : sse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
 };
 
 // ---- Caricamento della function reale ------------------------------------------------
@@ -319,6 +320,7 @@ beforeEach(() => {
   testoRisposta = "Risposta di prova.";
   pezziScelti = null;
   providerSiBlocca = false;
+  providerSenzaFine = false;
   providerSiInterrompe = false;
   lettureFornitoreAnnullate = 0;
   delete ENV.AI_TIMEOUT_SECONDS;
@@ -1180,4 +1182,28 @@ it("WI-017: il contesto Cantina con dati sensibili non raggiunge il fornitore", 
   expect(rpcLog.filter((r) => r.name === "ai_budget_prenota")).toHaveLength(0);
   expect(rpcLog.filter((r) => r.name === "ai_porta_chiudi")).toHaveLength(1);
   expect(righeLog.join(" ")).not.toContain("fixture@example.test");
+});
+
+it("WI-017: un EOF senza il marcatore finale non produce testo né storico", async () => {
+  providerSenzaFine = true;
+  const risposta = await chiama({});
+  const corpo = await risposta.text();
+  expect(corpo).not.toContain(testoRisposta);
+  expect(rpcLog.some((r) => r.name === "sommelier_scambio_registra")).toBe(false);
+  expect(rpcLog.filter((r) => r.name === "ai_budget_consuntivo").map((r) => r.args.p_esito))
+    .toEqual(["formato_non_valido"]);
+});
+
+it("WI-017: il client fermo non trattiene la porta dopo la scadenza del provider", async () => {
+  providerSiBlocca = true;
+  ENV.AI_TIMEOUT_SECONDS = "0.04";
+  const risposta = await chiama({});
+  try {
+    await new Promise((risolvi) => setTimeout(risolvi, 130));
+    expect(lettureFornitoreAnnullate).toBe(1);
+    expect(rpcLog.filter((r) => r.name === "ai_porta_chiudi")).toHaveLength(1);
+    expect(rpcLog.filter((r) => r.name === "ai_budget_consuntivo")).toHaveLength(1);
+  } finally {
+    await risposta.body?.cancel();
+  }
 });

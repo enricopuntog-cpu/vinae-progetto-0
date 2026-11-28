@@ -13,7 +13,7 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { aiCorsHeadersFor } from "./ai-cors.ts";
-import { AiFormatError, AiProviderError, creaAiProvider, requestIdOpaco, stimaTokenInput, type AiCall, type AiProvider, type AiUso } from "./ai-provider.ts";
+import { AiFormatError, AiProviderError, attendiAi, timeoutMs, creaAiProvider, requestIdOpaco, stimaTokenInput, type AiCall, type AiProvider, type AiUso } from "./ai-provider.ts";
 import { impronta, rilevaDatiSensibili, rilevaIstruzioniSospette } from "./ai-sicurezza.ts";
 
 export const json = (body: unknown, status: number, headers: HeadersInit = {}): Response =>
@@ -428,7 +428,7 @@ export const apriIngresso = async (
 };
 
 export type Governata<T> =
-  | { ok: true; valore: T; richiestaId: string; uso: () => AiUso | null }
+  | { ok: true; valore: T; richiestaId: string; uso: () => AiUso | null; segnale: AbortSignal; termina: () => void }
   | { ok: false; risposta: Response };
 
 type OpzioniGovernata<T> = {
@@ -441,6 +441,7 @@ type OpzioniGovernata<T> = {
   system: string;
   prompt: string;
   nonDisponibile: string;
+  segnaleClient: AbortSignal;
   chiama: (provider: AiProvider, call: AiCall) => Promise<T>;
 };
 
@@ -465,47 +466,70 @@ export const chiamataGovernata = async <T>(o: OpzioniGovernata<T>): Promise<Gove
     };
   }
 
-  const tentativi: (string | undefined)[] = Array.from({ length: o.ingresso.maxTentativi }, () => undefined);
-  if (o.ingresso.modelloRiserva) tentativi.push(o.ingresso.modelloRiserva);
+  const scadenza = new AbortController();
+  const timer = setTimeout(() => scadenza.abort(new DOMException("Scadenza AI", "TimeoutError")), timeoutMs());
+  const termina = () => clearTimeout(timer);
+  const segnale = AbortSignal.any([o.segnaleClient, scadenza.signal]);
+  let trasferita = false;
+  try {
+    const tentativi: (string | undefined)[] = Array.from({ length: o.ingresso.maxTentativi }, () => undefined);
+    if (o.ingresso.modelloRiserva) tentativi.push(o.ingresso.modelloRiserva);
 
-  for (let n = 0; n < tentativi.length; n++) {
-    const provider = creaAiProvider(o.compito, tentativi[n]);
-    const prenotazione = await prenotaBudget(o.supabase, o.scope, o.cors, {
-      provider: provider.id,
-      modello: provider.modello,
-      tokenInput: stimaTokenInput(o.system, o.prompt),
-      tokenOutputMax: provider.maxOutputTokens,
-    });
-    if (rifiutata(prenotazione)) return n === 0 ? { ok: false, risposta: prenotazione.risposta } : nonDisponibile();
-    const { richiestaId } = prenotazione;
-    let uso: AiUso | null = null;
-    try {
-      const valore = await o.chiama(provider, {
-        system: o.system,
-        prompt: o.prompt,
-        requestId: requestIdOpaco(o.compito),
-        onUso: (u) => {
-          uso = u;
-        },
+    for (let n = 0; n < tentativi.length; n++) {
+      if (segnale.aborted) return nonDisponibile();
+      const provider = creaAiProvider(o.compito, tentativi[n]);
+      const prenotazione = await prenotaBudget(o.supabase, o.scope, o.cors, {
+        provider: provider.id,
+        modello: provider.modello,
+        tokenInput: stimaTokenInput(o.system, o.prompt),
+        tokenOutputMax: provider.maxOutputTokens,
       });
-      return { ok: true, valore, richiestaId, uso: () => uso };
-    } catch (errore) {
-      if (errore instanceof AiFormatError) {
-        await registraConsuntivo(o.supabase, richiestaId, "formato_non_valido", uso);
-        return { ok: false, risposta: json({ error: "Il servizio AI ha restituito un formato non valido." }, 502, o.cors) };
+      if (rifiutata(prenotazione)) return n === 0 ? { ok: false, risposta: prenotazione.risposta } : nonDisponibile();
+      const { richiestaId } = prenotazione;
+      let uso: AiUso | null = null;
+      try {
+        segnale.throwIfAborted();
+        const valore = await attendiAi(o.chiama(provider, {
+          system: o.system,
+          prompt: o.prompt,
+          segnale,
+          requestId: requestIdOpaco(o.compito),
+          onUso: (u) => {
+            uso = u;
+          },
+        }), segnale);
+        segnale.throwIfAborted();
+        trasferita = true;
+        return { ok: true, valore, richiestaId, uso: () => uso, segnale, termina };
+      } catch (errore) {
+        if (o.segnaleClient.aborted) {
+          await registraConsuntivo(o.supabase, richiestaId, "interrotta_client", uso);
+          return nonDisponibile();
+        }
+        if (segnale.aborted) {
+          await registraConsuntivo(o.supabase, richiestaId, "guasto_fornitore", uso);
+          await registraEsitoFornitore(o.supabase, o.scope, false);
+          return nonDisponibile();
+        }
+        if (errore instanceof AiFormatError) {
+          await registraConsuntivo(o.supabase, richiestaId, "formato_non_valido", uso);
+          return { ok: false, risposta: json({ error: "Il servizio AI ha restituito un formato non valido." }, 502, o.cors) };
+        }
+        if (!(errore instanceof AiProviderError)) {
+          // un errore nostro non dice nulla sulla salute del fornitore e non si ritenta
+          await registraConsuntivo(o.supabase, richiestaId, "errore_applicativo", uso);
+          console.error("[ai] errore dell'applicazione", { scope: o.scope, tipo: errore instanceof Error ? errore.name : "sconosciuto" });
+          return nonDisponibile();
+        }
+        await registraConsuntivo(o.supabase, richiestaId, errore.guastoFornitore ? "guasto_fornitore" : "errore_richiesta", uso);
+        if (!errore.guastoFornitore) return nonDisponibile();
+        await registraEsitoFornitore(o.supabase, o.scope, false);
       }
-      if (!(errore instanceof AiProviderError)) {
-        // un errore nostro non dice nulla sulla salute del fornitore e non si ritenta
-        await registraConsuntivo(o.supabase, richiestaId, "errore_applicativo", uso);
-        console.error("[ai] errore dell'applicazione", { scope: o.scope, tipo: errore instanceof Error ? errore.name : "sconosciuto" });
-        return nonDisponibile();
-      }
-      await registraConsuntivo(o.supabase, richiestaId, errore.guastoFornitore ? "guasto_fornitore" : "errore_richiesta", uso);
-      if (!errore.guastoFornitore) return nonDisponibile();
-      await registraEsitoFornitore(o.supabase, o.scope, false);
     }
+    return nonDisponibile();
+  } finally {
+    if (!trasferita) termina();
   }
-  return nonDisponibile();
 };
 
 /** Testo obbligatorio con lunghezza massima, nella forma dei `Field` del legacy. */

@@ -43,6 +43,7 @@ export class AiFormatError extends Error {
 export type AiCall = {
   system: string;
   prompt: string;
+  segnale: AbortSignal;
   /**
    * Identificativo della richiesta inoltrato al fornitore. Non deve contenere
    * dati personali: nel legacy contiene l'uuid utente
@@ -105,6 +106,67 @@ export const timeoutMs = (): number => {
   if (!Number.isFinite(grezzo) || grezzo <= 0) return AI_TIMEOUT_MS_DEFAULT;
   return Math.min(grezzo * 1000, AI_TIMEOUT_MS_MAX);
 };
+
+/** Interrompe anche attese locali il cui produttore non rispetta il segnale. */
+export async function attendiAi<T>(attesa: Promise<T>, segnale: AbortSignal): Promise<T> {
+  let annulla: () => void = () => {};
+  const interruzione = new Promise<never>((_, rifiuta) => {
+    annulla = () => rifiuta(segnale.reason);
+    if (segnale.aborted) annulla();
+    else segnale.addEventListener("abort", annulla, { once: true });
+  });
+  try {
+    return await Promise.race([interruzione, attesa]);
+  } finally {
+    segnale.removeEventListener("abort", annulla);
+  }
+}
+
+const RISPOSTA_MAX_BYTE = 512 * 1024;
+
+function corpoLimitato(risposta: Response, segnale: AbortSignal): ReadableStream<Uint8Array> {
+  if (!risposta.body) throw new AiFormatError();
+  const lettore = risposta.body.getReader();
+  let byte = 0;
+  let chiuso = false;
+  let annulla: () => void;
+  const termina = (interrotto: boolean) => {
+    if (chiuso) return;
+    chiuso = true;
+    segnale.removeEventListener("abort", annulla);
+    if (interrotto) void lettore.cancel().catch(() => {});
+    lettore.releaseLock();
+  };
+  return new ReadableStream({
+    start(controllo) {
+      annulla = () => {
+        termina(true);
+        controllo.error(segnale.reason);
+      };
+      if (segnale.aborted) annulla();
+      else segnale.addEventListener("abort", annulla, { once: true });
+    },
+    async pull(controllo) {
+      try {
+        const { done, value } = await lettore.read();
+        if (chiuso) return;
+        if (done) {
+          termina(false);
+          controllo.close();
+          return;
+        }
+        byte += value.byteLength;
+        if (byte > RISPOSTA_MAX_BYTE) throw new AiFormatError();
+        controllo.enqueue(value);
+      } catch (errore) {
+        if (chiuso) return;
+        termina(true);
+        controllo.error(errore);
+      }
+    },
+    cancel() { termina(true); },
+  });
+}
 
 type OpenAiOptions = {
   apiKey: string;
@@ -170,32 +232,29 @@ export const estraiDeltaOpenAi = (riga: string): string | null => {
 
 const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
   const chiama = async (call: AiCall, stream: boolean): Promise<Response> => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs());
     try {
-      const response = await fetch(OPENAI_URL, {
+      const response = await attendiAi(fetch(OPENAI_URL, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${options.apiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(corpoOpenAi(call, options, stream)),
-        signal: controller.signal,
-      });
+        signal: call.segnale,
+      }), call.segnale);
       if (!response.ok) {
+        void response.body?.cancel().catch(() => {});
         // Il corpo dell'errore del fornitore non viene letto né propagato.
         console.error("[ai] provider non disponibile", { status: response.status });
         throw new AiProviderError(undefined, statoEGuasto(response.status));
       }
       return response;
     } catch (errore) {
-      if (errore instanceof AiProviderError) throw errore;
+      if (call.segnale.aborted || errore instanceof AiProviderError) throw errore;
       console.error("[ai] chiamata al provider fallita", {
         tipo: errore instanceof Error ? errore.name : "sconosciuto",
       });
       throw new AiProviderError();
-    } finally {
-      clearTimeout(timer);
     }
   };
 
@@ -207,9 +266,13 @@ const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
       const response = await chiama(call, false);
       let parsed: { choices?: { message?: { content?: string | null } }[] };
       try {
-        parsed = await response.json();
-      } catch {
-        throw new AiFormatError();
+        const testo = await attendiAi(new Response(corpoLimitato(response, call.segnale)).text(), call.segnale);
+        call.segnale.throwIfAborted();
+        parsed = JSON.parse(testo);
+      } catch (errore) {
+        if (call.segnale.aborted || errore instanceof AiFormatError) throw errore;
+        if (errore instanceof SyntaxError) throw new AiFormatError();
+        throw new AiProviderError();
       }
       const uso = leggiUsoOpenAi(parsed);
       if (uso) call.onUso?.(uso);
@@ -217,31 +280,34 @@ const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
     },
     streamText: async (call) => {
       const response = await chiama(call, true);
-      if (!response.body) throw new AiProviderError();
       let resto = "";
-      return response.body
-        .pipeThrough(new TextDecoderStream())
-        .pipeThrough(
-          new TransformStream<string, string>({
-            transform: (chunk, controller) => {
-              resto += chunk;
-              const righe = resto.split("\n");
-              resto = righe.pop() ?? "";
-              for (const riga of righe) {
-                const uso = usoDaRiga(riga);
-                if (uso) call.onUso?.(uso);
-                const delta = estraiDeltaOpenAi(riga);
-                if (delta) controller.enqueue(delta);
-              }
-            },
-            flush: (controller) => {
-              const uso = usoDaRiga(resto);
-              if (uso) call.onUso?.(uso);
-              const delta = estraiDeltaOpenAi(resto);
-              if (delta) controller.enqueue(delta);
-            },
-          }),
-        );
+      let completato = false;
+      const leggiRiga = (riga: string, controller: TransformStreamDefaultController<string>) => {
+        if (riga.startsWith("data:") && riga.slice(5).trim() === "[DONE]") {
+          completato = true;
+          return;
+        }
+        if (completato || !riga.startsWith("data:")) return;
+        const uso = usoDaRiga(riga);
+        if (uso) call.onUso?.(uso);
+        const delta = estraiDeltaOpenAi(riga);
+        if (delta) controller.enqueue(delta);
+      };
+      const opzioni = { signal: call.segnale };
+      return corpoLimitato(response, call.segnale)
+        .pipeThrough(new TextDecoderStream(), opzioni)
+        .pipeThrough(new TransformStream<string, string>({
+          transform(chunk, controller) {
+            resto += chunk;
+            const righe = resto.split("\n");
+            resto = righe.pop() ?? "";
+            for (const riga of righe) leggiRiga(riga, controller);
+          },
+          flush(controller) {
+            leggiRiga(resto, controller);
+            if (!completato) throw new AiFormatError();
+          },
+        }), opzioni);
     },
   };
 };
