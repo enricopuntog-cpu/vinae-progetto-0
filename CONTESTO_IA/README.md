@@ -47,6 +47,12 @@ Aprire soltanto ciò che serve al task:
   la revisione indipendente: [`../docs/AI_INFRASTRUCTURE.md`](../docs/AI_INFRASTRUCTURE.md). Il §12 raccoglie il
   completamento (uscita AI verificata prima della trasmissione, protezione delle ricerche, acquisizione autorizzata,
   segnali, conservazione) e la mappa del perimetro anti-scraping con i limiti rimasti.
+- **WI-017, interventi mirati dopo l'audit WI-016**. Il ramo `codex/wi-017` corregge il ripiego della ricerca,
+  i confini del gateway AI, il campione prezzi, la revoca e la consegna dei task. Le porte di monitoraggio richiedono
+  l'associazione login/fonte. L'osservatore richiede un tick pianificato e un giro Sentinel completo.
+  L'applicazione periodica della pulizia dei temporanei AI dipende dal lavoro `lease_scaduti`, predisposto e spento.
+  Restano dipendenze operative per i gate di attivazione, l'inventario e la protezione delle altre letture dirette,
+  le quote upload e la configurazione CAPTCHA. Riferimenti nel [report WI-016](../docs/audits/WI-016-CONSOLIDATED-REVIEW.md).
 - **Company Brain e Sentinel** (WI-013 e WI-015: identità per credenziale, worker deterministici, scheduler unico non
   installato, ingestione dei segnali, costi AI, cruscotto; WI-015 mergiata e distribuita il 26/11/2026 (`6602fbb`,
   ledger 138), **nulla attivato**, non attivo 24/7, ambiente dei worker mancante (§3.1); procedura unica di attivazione
