@@ -39,11 +39,19 @@ test("loopback di sviluppo senza TLS; un ruolo amministrativo resta rifiutato an
 const soglie = { giroMinuti: 30, sentinelMinuti: 120 };
 
 test("osservatore: verde solo con entrambi i numeri recenti; assenza, ritardo o forma inattesa sono rossi", () => {
-  assert.deepEqual(valutaHeartbeat({ minuti_dall_ultimo_giro: 3, minuti_dall_ultima_sentinel: 40 }, soglie), { verde: true, motivi: [] });
-  assert.deepEqual(valutaHeartbeat({ minuti_dall_ultimo_giro: 31, minuti_dall_ultima_sentinel: 40 }, soglie).motivi, ["scheduler_in_ritardo"]);
-  assert.deepEqual(valutaHeartbeat({ minuti_dall_ultimo_giro: null, minuti_dall_ultima_sentinel: null }, soglie).motivi,
+  assert.deepEqual(valutaHeartbeat({ minuti_dall_ultimo_giro_pianificato: 3, minuti_dall_ultima_sentinel: 40, sentinel_non_eseguiti: 0 }, soglie), { verde: true, motivi: [] });
+  assert.deepEqual(valutaHeartbeat({ minuti_dall_ultimo_giro_pianificato: 31, minuti_dall_ultima_sentinel: 40, sentinel_non_eseguiti: 0 }, soglie).motivi, ["scheduler_in_ritardo"]);
+  assert.deepEqual(valutaHeartbeat({ minuti_dall_ultimo_giro_pianificato: null, minuti_dall_ultima_sentinel: null }, soglie).motivi,
     ["scheduler_mai_eseguito", "sentinel_mai_eseguita"]);
   assert.equal(valutaHeartbeat({}, soglie).verde, false);
   assert.equal(valutaHeartbeat(null, soglie).verde, false);
-  assert.equal(valutaHeartbeat({ minuti_dall_ultimo_giro: "0", minuti_dall_ultima_sentinel: 0 }, soglie).verde, false);
+  assert.equal(valutaHeartbeat({ minuti_dall_ultimo_giro_pianificato: "0", minuti_dall_ultima_sentinel: 0 }, soglie).verde, false);
+});
+
+test("osservatore: un giro manuale recente e un ultimo Sentinel parziale non danno verde", () => {
+  const parziale = {
+    minuti_dall_ultimo_giro: 0, minuti_dall_ultimo_giro_pianificato: null,
+    minuti_dall_ultima_sentinel: 0, sentinel_non_eseguiti: 1,
+  };
+  assert.deepEqual(valutaHeartbeat(parziale).motivi, ["scheduler_mai_eseguito", "sentinel_parziale"]);
 });

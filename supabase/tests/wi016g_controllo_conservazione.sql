@@ -231,5 +231,17 @@ select pg_temp.rec(19, 'osservatore esterno: fonte registrata e spenta; l''impro
   (select not enabled and severity = 'P1' from brain.monitor_sources where source_key = 'osservatore_esterno')
   and catalog.promotion_logic_fingerprint('lwin-conservative-v1') is not null);
 
+insert into private.ai_porte (scope, soggetto, impronta, aperta_il, scade_il)
+values ('ai:chat', repeat('a', 32), 'wi017-scaduta', now() - interval '49 hours', now() - interval '48 hours'),
+       ('ai:chat', repeat('a', 32), 'wi017-recente', now() - interval '1 hour', now() - interval '55 minutes');
+insert into private.ai_segnalazioni (scope, soggetto, tipo, registrata_il)
+values ('ai:chat', repeat('a', 32), 'dati_sensibili', now() - interval '49 hours'),
+       ('ai:chat', repeat('a', 32), 'dati_sensibili', now() - interval '1 hour');
+select pg_temp.salva('temporanei', brain.run_job('lease_scaduti', 'wi017-fixture')::text);
+select pg_temp.rec(21, 'il lavoro preesistente elimina i temporanei dopo 48 ore senza un ingresso AI',
+  (pg_temp.v('temporanei')::jsonb ->> 'porte_ai_rimosse') = '1'
+  and (pg_temp.v('temporanei')::jsonb ->> 'segnali_ai_rimossi') = '1'
+  and (select count(*) = 1 and bool_and(impronta = 'wi017-recente') from private.ai_porte where soggetto = repeat('a', 32))
+  and (select count(*) = 1 from private.ai_segnalazioni where soggetto = repeat('a', 32)));
 select id::text, descrizione, passed, detail from esiti order by esiti.id;
 rollback;

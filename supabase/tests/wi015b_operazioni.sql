@@ -268,7 +268,7 @@ select pg_temp.rec(23, 'il controllo esterno ha una sola lettura minima con un r
   has_function_privilege('brain_monitor_read', 'brain.heartbeat_minimo()', 'EXECUTE')
   and not has_function_privilege('anon', 'brain.heartbeat_minimo()', 'EXECUTE')
   and (select count(*) from pg_proc p where p.pronamespace = 'brain'::regnamespace and has_function_privilege('brain_monitor_read', p.oid, 'EXECUTE')) = 2
-  and (select array_agg(k order by k) from jsonb_object_keys(brain.heartbeat_minimo()) k) = array['minuti_dall_ultima_sentinel', 'minuti_dall_ultimo_giro']);
+  and (select array_agg(k order by k) from jsonb_object_keys(brain.heartbeat_minimo()) k) = array['minuti_dall_ultima_sentinel', 'minuti_dall_ultimo_giro', 'minuti_dall_ultimo_giro_pianificato', 'sentinel_non_eseguiti']);
 
 -- Sentinel sorveglia anche le fonti collegate
 select pg_temp.fai((brain.sentinel_run('wi015b'))::text);
