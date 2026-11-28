@@ -130,6 +130,33 @@ select pg_temp.rec(9, 'accesa su un vino senza storico: nessun prezzo inventato'
 select pg_temp.rec(10, 'la porta legge solo la vista pubblica dei prezzi: mai la tabella base né il riferimento di origine',
   (select prosrc ~ 'public\.wine_price_history' and prosrc !~ 'wine_price_observations' and prosrc !~ 'o\.origine_ref'
      from pg_proc where oid = 'public.prezzi_vino_osservazioni(text,text)'::regprocedure));
+-- Regressione WI-017: 500 richieste recenti e 5 transazioni comparabili più vecchie.
+insert into public.wines (id, slug, produttore, nome, annata, regione, tipo, formato, provenienza)
+values ('16600000-0000-4000-8000-0000000000e1', 'wi017-campione', 'Cantina Prova', 'Rosso Prova', 2019, 'Piemonte', 'Rosso', '0,75 L', 'staff');
+insert into public.wine_price_observations (wine_id, formato, tipo, fonte, prezzo_cents, observed_at, origine_ref)
+select '16600000-0000-4000-8000-0000000000e1', '0,75 L', 'richiesta', 'vinea_interno', 90000 + i,
+       now() - i * interval '1 minute', gen_random_uuid()
+from generate_series(1, 500) i;
+insert into public.wine_price_observations (wine_id, formato, tipo, fonte, prezzo_cents, observed_at, origine_ref)
+select '16600000-0000-4000-8000-0000000000e1', '0,75 L', 'vendita', 'vinea_interno', 12000 + i,
+       now() - i * interval '1 day', gen_random_uuid()
+from generate_series(1, 5) i;
+insert into public.wine_price_observations (wine_id, formato, tipo, fonte, prezzo_cents, observed_at, origine_ref)
+select '16600000-0000-4000-8000-0000000000e1', x.formato, 'vendita', 'vinea_interno', 99999,
+       now() + x.delta, gen_random_uuid()
+from (values ('1,5 L', interval '-1 hour'), ('0,75 L', interval '-731 days'), ('0,75 L', interval '1 hour')) x(formato, delta);
+update private.prezzi_settings set valutazione_admin_enabled = true;
+select pg_temp.salva('campione_utente', pg_temp.utente($q$select public.prezzi_vino_osservazioni('wi017-campione', '0,75 L')::text$q$));
+select pg_temp.salva('campione_admin', pg_temp.admin($q$select public.prezzi_admin_osservazioni('wi017-campione')::text$q$));
+select pg_temp.rec(20, 'i 500 richiesti recenti non nascondono le 5 vendite e i fuori campione non passano',
+  (select count(*) = 2 and bool_and(totale = 500 and vendite = 5 and scartabili = 0)
+  from (select k, count(*) as totale,
+          count(*) filter (where o ->> 'tipo' = 'realizzato') as vendite,
+          count(*) filter (where o ->> 'formatoMl' <> '750' or o ->> 'centesimi' = '99999'
+                            or o ->> 'annata' <> '2019' or o ->> 'valuta' <> 'eur') as scartabili
+          from prove cross join lateral jsonb_array_elements(pg_temp.dati(k) -> 'osservazioni') o
+         where k in ('campione_utente', 'campione_admin') group by k) campioni));
+update private.prezzi_settings set valutazione_admin_enabled = false;
 select pg_temp.fai(brain.suspend('globale', 'tutto', 'prova wi016g', 'wi016g'));
 select pg_temp.rec(11, 'la sospensione generale spegne anche la valutazione utente',
   pg_temp.utente($q$select public.prezzi_vino_osservazioni('inesistente-wi016g', '0,75 L')::text$q$) = 'OK:{"abilitata": false}');
