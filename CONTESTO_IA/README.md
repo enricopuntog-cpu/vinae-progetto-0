@@ -47,12 +47,18 @@ Aprire soltanto ciò che serve al task:
   la revisione indipendente: [`../docs/AI_INFRASTRUCTURE.md`](../docs/AI_INFRASTRUCTURE.md). Il §12 raccoglie il
   completamento (uscita AI verificata prima della trasmissione, protezione delle ricerche, acquisizione autorizzata,
   segnali, conservazione) e la mappa del perimetro anti-scraping con i limiti rimasti.
-- **WI-017, interventi mirati dopo l'audit WI-016**. Il ramo `codex/wi-017-candidate` corregge il ripiego della ricerca,
-  i confini del gateway AI, il campione prezzi, la revoca e la consegna dei task. Le porte di monitoraggio richiedono
-  l'associazione login/fonte. L'osservatore richiede un tick pianificato e un giro Sentinel completo.
-  L'applicazione periodica della pulizia dei temporanei AI dipende dal lavoro `lease_scaduti`, predisposto e spento.
-  Restano dipendenze operative per i gate di attivazione, l'inventario e la protezione delle altre letture dirette,
-  le quote upload e la configurazione CAPTCHA. Riferimenti nel [report WI-016](../docs/audits/WI-016-CONSOLIDATED-REVIEW.md).
+- **WI-017 e Programmazione AI 4.0**. [PR #331](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/331)
+  per il rilascio del candidato 89de438 (base d8639b7). Ricerca Vendi via RPC protette, gateway AI con scadenza
+  unica e riserva conservativa, comparabili prezzi, revoca paginata, consegna atomica, provenienza e heartbeat.
+  Sei migration additive, ledger atteso 152 da 146. [Gate DB del candidato](https://github.com/enricopuntog-cpu/vinae-progetto-0/actions/runs/46137721733).
+  Unica Preview senza dati Production, con rimozione prevista dopo il rilascio. Tutte le attivazioni restano escluse.
+  Skill: vinea-task, vinea-test, Supabase, supabase-postgres-best-practices e verification-before-completion.
+  Dall'[audit WI-016](../docs/audits/WI-016-CONSOLIDATED-REVIEW.md) restano questi blocchi.
+
+  1. Misurare la contesa dei contatori di ricerca, verificare il client precedente, coprire le API pubbliche dirette a Supabase e integrare CAPTCHA Auth, quote upload e validazione effettiva del contenuto.
+  2. Provare derivazione da radici concorrenti e annullamento simultaneo dei task. Misurare l'efficienza economica della prenotazione AI conservativa. Verificare la pulizia dei temporanei AI a lotti e con lo scheduler. Attestare la disattivazione effettiva del legacy AI e l'assenza di credenziali operative prima di aprire il gateway.
+  3. Verificare runtime cloud, log, Sentinel e allarme esterno per silenzio simultaneo. Wine Research richiede fonti autorizzate, Authenticity Assistant il flusso immagini/OCR, Price Intelligence un campione reale di vendite idonee. Prima del popolamento restano i prerequisiti F-06 e F-08 del gate WI-015, incluso rischio F-08(c) o prova di restore, insieme alla finestra, al lotto, all'impronta e al digest.
+
 - **Company Brain e Sentinel** (WI-013 e WI-015: identità per credenziale, worker deterministici, scheduler unico non
   installato, ingestione dei segnali, costi AI, cruscotto; WI-015 mergiata e distribuita il 26/11/2026 (`6602fbb`,
   ledger 138), **nulla attivato**, non attivo 24/7, ambiente dei worker mancante (§3.1); procedura unica di attivazione
