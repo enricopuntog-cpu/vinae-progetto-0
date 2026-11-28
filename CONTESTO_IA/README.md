@@ -48,11 +48,32 @@ Aprire soltanto ciò che serve al task:
   completamento (uscita AI verificata prima della trasmissione, protezione delle ricerche, acquisizione autorizzata,
   segnali, conservazione) e la mappa del perimetro anti-scraping con i limiti rimasti.
 - **WI-017 e Programmazione AI 4.0**. [PR #331](https://github.com/enricopuntog-cpu/vinae-progetto-0/pull/331)
-  per il rilascio del candidato 89de438 (base d8639b7). Ricerca Vendi via RPC protette, gateway AI con scadenza
-  unica e riserva conservativa, comparabili prezzi, revoca paginata, consegna atomica, provenienza e heartbeat.
-  Sei migration additive, ledger atteso 152 da 146. [Gate DB del candidato](https://github.com/enricopuntog-cpu/vinae-progetto-0/actions/runs/46137721733).
-  Unica Preview senza dati Production, con rimozione prevista dopo il rilascio. Tutte le attivazioni restano escluse.
-  Skill: vinea-task, vinea-test, Supabase, supabase-postgres-best-practices e verification-before-completion.
+  mergiata, distribuita e verificata il 28 novembre 2026. Squash `2c060cf0d53e1dce74366bc6a819a43bd74672af`,
+  testa `fdcff2f` con soli documenti dopo il candidato `89de438`. In PR, sei check obbligatori verdi,
+  Gitleaks e CodeQL verdi, [browser 117/117](https://github.com/enricopuntog-cpu/vinae-progetto-0/actions/runs/46141303098)
+  con residui zero e [gate DB](https://github.com/enricopuntog-cpu/vinae-progetto-0/actions/runs/46141303104)
+  con infrastruttura 64/64, concorrenza 41/41, letture 23/23 e controllo/conservazione 21/21.
+  Run sullo squash: [CI](https://github.com/enricopuntog-cpu/vinae-progetto-0/actions/runs/46141963711),
+  [DB](https://github.com/enricopuntog-cpu/vinae-progetto-0/actions/runs/46141963702),
+  [browser](https://github.com/enricopuntog-cpu/vinae-progetto-0/actions/runs/46141963788) e
+  [sicurezza](https://github.com/enricopuntog-cpu/vinae-progetto-0/actions/runs/46141963705). Primo avvio del gate DB su main interrotto per la porta Docker 54322 occupata. Ripetuto il solo gate DB sullo stesso SHA.
+
+  In Production, 152/152 migration coincidenti per versione e nome con lo squash. I corpi e i grant di
+  11 firme SQL e RLS, ACL e vincoli di `brain.monitor_sender_sources` e `catalog.research_provenance` coincidono
+  con la Preview. Tre bundle Edge AI identici alla Preview, JWT richiesto. Digest degli interruttori
+  `AI_ENABLED` e `PAYMENTS_ENABLED` verificati contro SHA256 di `false` nella dashboard. Le risposte di blocco
+  applicativo 503 sono state provate sulla Preview. Netlify [deploy 6b0ac0a2b233b94bb8a98f29](https://app.netlify.com/projects/timely-lokum-43a12e/deploys/6b0ac0a2b233b94bb8a98f29)
+  ready sullo squash, home e health 200. Ricerca protetta con hook attivo. Budget e tariffe AI assenti, zero
+  chiamate, agenti, job, fonti di monitoraggio e adattatori attivi, nessun pg_cron e Sentinel non pianificato.
+  Promozione, proiezione, proposte, acquisizione, autenticità, stima prezzi e pagamenti spenti. 212.894 record
+  LWIN, 12 vini applicativi, zero canonici, regola draft, impronta e digest invariati.
+
+  Una sola Preview `gbaciuzqylvrijpswrul`, senza copia Production, zero utenti Auth e zero LWIN, rimossa al
+  merge dopo circa 10 minuti. Solo il ramo `main` verificato. Stima prudenziale per la prima ora di compute
+  **0,01344 USD** su 0,50 autorizzati, dato di fatturazione da confermare.
+  Skill usate per il rilascio: vinea-task, vinea-test, Supabase, supabase-postgres-best-practices,
+  verification-before-completion, systematic-debugging per il runner e Computer Use per la dashboard in sola lettura.
+
   Dall'[audit WI-016](../docs/audits/WI-016-CONSOLIDATED-REVIEW.md) restano questi blocchi.
 
   1. Misurare la contesa dei contatori di ricerca, verificare il client precedente, coprire le API pubbliche dirette a Supabase e integrare CAPTCHA Auth, quote upload e validazione effettiva del contenuto.
