@@ -142,6 +142,7 @@ let providerSiInterrompe = false;
 let pezziScelti: string[] | null;
 /** WI-016: il fornitore manda un pezzo e poi tace per sempre. */
 let providerSiBlocca: boolean;
+let providerMandaFrammenti: boolean;
 let providerSenzaFine: boolean;
 let lettureFornitoreAnnullate: number;
 
@@ -158,6 +159,23 @@ const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Pr
     prompt: body.messages.find((m) => m.role === "user")?.content ?? "",
   });
   if (providerRispondeKo) return new Response("boom", { status: statoFornitore });
+  if (providerMandaFrammenti) {
+    let timer: ReturnType<typeof setInterval>;
+    const frammento = {
+      model: body.model, choices: [{ delta: { content: "frammento" } }],
+    };
+    return new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        timer = setInterval(() => {
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(frammento)}\n\n`));
+        }, 8);
+      },
+      cancel() {
+        clearInterval(timer);
+        lettureFornitoreAnnullate++;
+      },
+    }));
+  }
   if (providerSiBlocca) {
     let letture = 0;
     const muto = new ReadableStream<Uint8Array>({
@@ -321,6 +339,7 @@ beforeEach(() => {
   testoRisposta = "Risposta di prova.";
   pezziScelti = null;
   providerSiBlocca = false;
+  providerMandaFrammenti = false;
   providerSenzaFine = false;
   providerSiInterrompe = false;
   lettureFornitoreAnnullate = 0;
@@ -1223,3 +1242,15 @@ it.each([
   expect(chiamateProvider).toHaveLength(0);
   expect(rpcLog.some((r) => r.name === "ai_budget_prenota")).toBe(false);
 });
+
+it("WI-017: frammenti periodici non prorogano la scadenza complessiva", async () => {
+  providerMandaFrammenti = true;
+  ENV.AI_TIMEOUT_SECONDS = "0.06";
+  const risposta = await chiama({});
+  const corpo = await risposta.text();
+  expect(corpo).not.toContain("frammento");
+  expect(corpo).toContain('"error"');
+  expect(lettureFornitoreAnnullate).toBe(1);
+  expect(rpcLog.filter((r) => r.name === "ai_budget_consuntivo").map((r) => r.args.p_esito))
+    .toEqual(["guasto_fornitore"]);
+}, 2000);

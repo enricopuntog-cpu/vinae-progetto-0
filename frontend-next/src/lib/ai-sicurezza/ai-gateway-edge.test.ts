@@ -49,7 +49,7 @@ describe("ingresso per identità", () => {
     expect(di(s, "ai_porta_chiudi")).toEqual([{ p_porta: PORTA_OK.porta_id, p_riuscita: true }]);
     expect(s.chiamate).toHaveLength(1);
     // elenco chiuso: nessun `tools`, `functions`, `tool_choice` o altro che dia al modello un'azione
-    expect(s.chiamate[0].chiavi).toEqual(["max_completion_tokens", "messages", "model", "user"]);
+    expect(s.chiamate[0].chiavi).toEqual(["max_completion_tokens", "messages", "model", "service_tier", "user"]);
     const apri = di(s, "ai_porta_apri")[0];
     expect(String(apri.p_impronta)).toMatch(/^[0-9a-f]{64}$/);
     expect(JSON.stringify(apri)).not.toContain("brasato");

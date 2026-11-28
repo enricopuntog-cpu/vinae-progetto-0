@@ -186,6 +186,7 @@ const corpoOpenAi = (call: AiCall, options: OpenAiOptions, stream: boolean) => (
     { role: "user", content: call.prompt },
   ],
   max_completion_tokens: options.maxOutputTokens,
+  service_tier: "default",
   user: call.requestId,
   ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),
 });
@@ -202,6 +203,7 @@ export const leggiUsoOpenAi = (corpo: unknown): AiUso | null => {
 
 type ChunkOpenAi = {
   model?: unknown;
+  service_tier?: unknown;
   choices?: { delta?: { content?: string | null } }[];
 };
 
@@ -240,7 +242,7 @@ const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
     maxInputTokens: options.maxInputTokens,
     completeText: async (call) => {
       const response = await chiama(call, false);
-      let parsed: { model?: unknown; choices?: { message?: { content?: string | null } }[] };
+      let parsed: { model?: unknown; service_tier?: unknown; choices?: { message?: { content?: string | null } }[] };
       try {
         const testo = await attendiAi(new Response(corpoLimitato(response, call.segnale)).text(), call.segnale);
         call.segnale.throwIfAborted();
@@ -250,7 +252,9 @@ const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
         if (errore instanceof SyntaxError) throw new AiFormatError();
         throw new AiProviderError();
       }
-      if (parsed?.model !== options.model) throw new AiFormatError();
+      if (parsed?.model !== options.model || (parsed.service_tier && parsed.service_tier !== "default")) {
+        throw new AiFormatError();
+      }
       const uso = leggiUsoOpenAi(parsed);
       if (uso) call.onUso?.(uso);
       return parsed.choices?.[0]?.message?.content ?? "";
@@ -273,24 +277,26 @@ const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
         } catch {
           throw new AiFormatError();
         }
-        if (chunk?.model !== options.model) throw new AiFormatError();
+        if (chunk?.model !== options.model || (chunk.service_tier && chunk.service_tier !== "default")) {
+          throw new AiFormatError();
+        }
         const uso = leggiUsoOpenAi(chunk);
         if (uso) call.onUso?.(uso);
         const delta = chunk.choices?.[0]?.delta?.content;
         if (typeof delta === "string" && delta) controller.enqueue(delta);
       };
+      const decoder = new TextDecoder();
       const opzioni = { signal: call.segnale };
       return corpoLimitato(response, call.segnale)
-        .pipeThrough(new TextDecoderStream(), opzioni)
-        .pipeThrough(new TransformStream<string, string>({
+        .pipeThrough(new TransformStream<Uint8Array, string>({
           transform(chunk, controller) {
-            resto += chunk;
+            resto += decoder.decode(chunk, { stream: true });
             const righe = resto.split("\n");
             resto = righe.pop() ?? "";
             for (const riga of righe) leggiRiga(riga, controller);
           },
           flush(controller) {
-            leggiRiga(resto, controller);
+            leggiRiga(resto + decoder.decode(), controller);
             if (!completato) throw new AiFormatError();
           },
         }), opzioni);
