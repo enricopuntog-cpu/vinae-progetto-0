@@ -1,9 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { cercaCorrispondenze } from "@/lib/vendi/foto-etichetta/pipeline";
 import type {
-  CandidatoVino,
   DomandaCandidati,
-  SorgenteCandidati,
 } from "@/lib/vendi/foto-etichetta/candidati";
 import { valutaCandidati } from "@/lib/vendi/foto-etichetta/candidati";
 import { aRisultatoRicerca } from "./contratto";
@@ -13,7 +11,6 @@ import {
   type ClienteRpc,
   candidatoDaRigaRpc,
   creaMotoreRicerca,
-  sorgenteConRipiego,
   sorgenteDaRpc,
 } from "./rpc";
 import { MESSAGGIO_RICERCA_NON_DISPONIBILE } from "./sorgenti";
@@ -144,81 +141,32 @@ describe("WI-016 — il rifiuto per protezione non diventa altro carico", () => 
     },
   );
 
-  it("dopo un limite NON parte il ripiego (che leggerebbe le tabelle più volte)", async () => {
-    let ripieghi = 0;
-    const ripiego = {
-      codice: "r",
-      cerca: async () => {
-        ripieghi++;
-        return { ok: true as const, data: [] };
-      },
-    };
-    const e = await sorgenteConRipiego(sorgenteDaRpc(clienteCheRifiuta("rate_limit_exceeded")), ripiego).cerca(
-      dom("Produttore", "Barolo"),
-    );
-    expect(e).toEqual({ ok: false, error: MESSAGGIO_TROPPE_RICERCHE });
-    expect(ripieghi).toBe(0);
-  });
-
-  it("un guasto vero continua a usare il ripiego", async () => {
-    let ripieghi = 0;
-    const ripiego = {
-      codice: "r",
-      cerca: async () => {
-        ripieghi++;
-        return { ok: true as const, data: [] };
-      },
-    };
-    await sorgenteConRipiego(sorgenteDaRpc(clienteCheRifiuta("PGRST202")), ripiego).cerca(dom("Produttore", "Barolo"));
-    expect(ripieghi).toBe(1);
-  });
 });
 
-describe("sorgenteConRipiego", () => {
-  const fissa = (codice: string, esito: Awaited<ReturnType<SorgenteCandidati["cerca"]>>): SorgenteCandidati & { n: number } => {
-    const s = { codice, n: 0, cerca: async () => { s.n++; return esito; } };
-    return s;
-  };
-  const uno: CandidatoVino = {
-    fonte: "x", id: "a", produttore: "A", nome: "B", annata: null, formato: null, regione: null, denominazione: null, tipo: null,
-  };
-
-  it("usa il ripiego solo se la primaria fallisce", async () => {
-    const primaria = fissa("p", { ok: false, error: "no" });
-    const ripiego = fissa("r", { ok: true, data: [uno] });
-    const e = await sorgenteConRipiego(primaria, ripiego).cerca(dom("A", "B"));
-    expect(e).toEqual({ ok: true, data: [uno] });
-    expect(ripiego.n).toBe(1);
-  });
-
-  it("un elenco vuoto dalla primaria NON attiva il ripiego", async () => {
-    const primaria = fissa("p", { ok: true, data: [] });
-    const ripiego = fissa("r", { ok: true, data: [uno] });
-    const e = await sorgenteConRipiego(primaria, ripiego).cerca(dom("A", "B"));
-    expect(e).toEqual({ ok: true, data: [] });
-    expect(ripiego.n).toBe(0);
-  });
-
-  it("se falliscono entrambe l'errore resta un errore", async () => {
-    const e = await sorgenteConRipiego(fissa("p", { ok: false, error: "1" }), fissa("r", { ok: false, error: "2" })).cerca(dom("A", "B"));
-    expect(e.ok).toBe(false);
-  });
-
-  it("creaMotoreRicerca: con la RPC non migrata ripiega sulle tabelle senza rompere la ricerca", async () => {
-    const tabelle = {
-      from: () => {
-        const q: Record<string, unknown> = {};
-        for (const m of ["select", "or", "order"]) q[m] = () => q;
-        q.limit = async () => ({
-          data: [{ id: "i", slug: "tignanello-2019", produttore: "Antinori", nome: "Tignanello", annata: 2019, regione: "Toscana", denominazione: "IGT", tipo: "Rosso", formato: "0,75 L" }],
-          error: null,
-        });
-        return q;
-      },
-      rpc: async () => ({ data: null, error: { message: "function does not exist" } }),
+describe("WI-017 — il motore usa solo le RPC protette", () => {
+  it.each([
+    [429, "", MESSAGGIO_TROPPE_RICERCHE],
+    [503, "lettura_non_disponibile", MESSAGGIO_RICERCA_NON_DISPONIBILE],
+    [504, "57014", MESSAGGIO_RICERCA_NON_DISPONIBILE],
+    [403, "42501", MESSAGGIO_RICERCA_NON_DISPONIBILE],
+    [404, "PGRST202", MESSAGGIO_RICERCA_NON_DISPONIBILE],
+    [503, "ricerca_satura", MESSAGGIO_TROPPE_RICERCHE],
+  ])("HTTP %i, codice %s: zero letture dirette", async (status, code, messaggio) => {
+    let lettureDirette = 0;
+    const client = {
+      from: () => { lettureDirette++; throw new Error("Lettura diretta inattesa"); },
+      rpc: async () => ({ status, data: null, error: { code, message: "x" } }),
     };
-    const e = await creaMotoreRicerca(tabelle as never).cerca(dom("Antinori", "Tignanello", 2019));
-    expect(e.ok && e.data.length).toBeGreaterThan(0);
+    const esito = await creaMotoreRicerca(client as never).cerca(dom("Antinori", "Tignanello"));
+    expect(lettureDirette).toBe(0);
+    expect(esito).toEqual({ ok: false, error: messaggio });
+  });
+
+  it("uno zero di entrambe le RPC è un risultato valido", async () => {
+    const client = clienteRpc(async () => ({ data: [], error: null }));
+    expect(await creaMotoreRicerca(client).cerca(dom("Antinori", "Tignanello")))
+      .toEqual({ ok: true, data: [] });
+    expect(client!.chiamate.map(({ nome }) => nome)).toEqual(["vini_cerca", "vini_canonici_cerca"]);
   });
 });
 

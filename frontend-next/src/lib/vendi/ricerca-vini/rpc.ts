@@ -15,16 +15,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Result } from "@/services/types";
 import type {
   CandidatoVino,
-  DomandaCandidati,
   SorgenteCandidati,
 } from "@/lib/vendi/foto-etichetta/candidati";
 import { codiceErrore } from "@/lib/errore-per-log";
 import { livelliDiRicerca } from "./filtri";
-import {
-  MESSAGGIO_RICERCA_NON_DISPONIBILE,
-  type ClienteRicerca,
-  creaSorgenteRicerca,
-} from "./sorgenti";
+import { MESSAGGIO_RICERCA_NON_DISPONIBILE } from "./sorgenti";
 import { sorgenteCanonica, sorgenteConCanonico } from "./canonico";
 
 export const FUNZIONE_RICERCA_VINI = "vini_cerca";
@@ -80,19 +75,25 @@ export function candidatoDaRigaRpc(riga: unknown): CandidatoVino | null {
 export function sorgenteDaRpc(client: ClienteRpc | null): SorgenteCandidati {
   return {
     codice: CODICE_FONTE_MOTORE,
-    async cerca(domanda: DomandaCandidati): Promise<Result<CandidatoVino[]>> {
-      if (!client) return { ok: false, error: MESSAGGIO_RICERCA_NON_DISPONIBILE };
+    async cerca(domanda, opzioni): Promise<Result<CandidatoVino[]>> {
+      if (!client || opzioni?.segnale?.aborted) return { ok: false, error: MESSAGGIO_RICERCA_NON_DISPONIBILE };
       // Domanda senza parole utilizzabili: nessuna richiesta (come in WI-006A).
       if (livelliDiRicerca(domanda).length === 0) return { ok: true, data: [] };
       try {
-        const { data, error } = await client.rpc(FUNZIONE_RICERCA_VINI, {
+        const richiesta = client.rpc(FUNZIONE_RICERCA_VINI, {
           p_produttore: domanda.produttore,
           p_nome: domanda.nome,
           p_annata: domanda.annata,
           p_formato: domanda.formato,
           p_limite: LIMITE_RISULTATI_SERVER,
         });
-        if (error?.code && CODICI_PROTEZIONE.has(error.code)) return { ok: false, error: MESSAGGIO_TROPPE_RICERCHE };
+        const segnale = opzioni?.segnale;
+        const { data, error, status } = await (segnale && typeof richiesta.abortSignal === "function"
+          ? richiesta.abortSignal(segnale)
+          : richiesta);
+        if (status === 429 || (error?.code && CODICI_PROTEZIONE.has(error.code))) {
+          return { ok: false, error: MESSAGGIO_TROPPE_RICERCHE };
+        }
         if (error || !Array.isArray(data)) return { ok: false, error: MESSAGGIO_RICERCA_NON_DISPONIBILE };
         const candidati: CandidatoVino[] = [];
         for (const riga of data) {
@@ -101,41 +102,14 @@ export function sorgenteDaRpc(client: ClienteRpc | null): SorgenteCandidati {
         }
         return { ok: true, data: candidati };
       } catch (errore) {
-        console.error("[ricerca-vini] rpc non riuscita:", codiceErrore(errore));
+        if (!opzioni?.segnale?.aborted) console.error("[ricerca-vini] rpc non riuscita:", codiceErrore(errore));
         return { ok: false, error: MESSAGGIO_RICERCA_NON_DISPONIBILE };
       }
     },
   };
 }
 
-/**
- * Prima il motore sul server; solo se la RPC non risponde (ambiente non ancora migrato,
- * rete, permessi) si ripiega sulla ricerca di WI-006A. Un elenco vuoto dalla RPC è una
- * risposta valida e NON attiva il ripiego.
- */
-export function sorgenteConRipiego(
-  primaria: SorgenteCandidati,
-  ripiego: SorgenteCandidati,
-): SorgenteCandidati {
-  return {
-    codice: primaria.codice,
-    async cerca(domanda) {
-      const esito = await primaria.cerca(domanda).catch(
-        (): Result<CandidatoVino[]> => ({ ok: false, error: MESSAGGIO_RICERCA_NON_DISPONIBILE }),
-      );
-      // WI-016: dopo un limite il ripiego (più letture dirette) aggirerebbe la protezione e aggiungerebbe carico.
-      return esito.ok || esito.error === MESSAGGIO_TROPPE_RICERCHE ? esito : ripiego.cerca(domanda);
-    },
-  };
-}
-
-/**
- * La sorgente di prodotto: motore server con ripiego WI-006A, più (WI-007) il catalogo canonico come
- * aggiunta facoltativa: spento di default sul server, e un suo errore non rompe la ricerca.
- */
-export function creaMotoreRicerca(client: (ClienteRicerca & ClienteRpc) | null): SorgenteCandidati {
-  return sorgenteConCanonico(
-    sorgenteConRipiego(sorgenteDaRpc(client), creaSorgenteRicerca(client)),
-    sorgenteCanonica(client),
-  );
+/** Entrambe le sorgenti di prodotto passano dalle RPC protette. */
+export function creaMotoreRicerca(client: ClienteRpc | null): SorgenteCandidati {
+  return sorgenteConCanonico(sorgenteDaRpc(client), sorgenteCanonica(client));
 }

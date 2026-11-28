@@ -285,6 +285,44 @@ describe("sorgenteConCanonico", () => {
     expect(daCanonico.tipo).toBe("");
   });
 
+  test("annulla il canonico appena la ricerca principale viene rifiutata", async () => {
+    let segnale: AbortSignal | undefined;
+    const principale: SorgenteCandidati = {
+      codice: "rifiutata",
+      cerca: async () => ({ ok: false, error: "Rifiutata" }),
+    };
+    const lenta: SorgenteCandidati = {
+      codice: "lenta",
+      cerca: (_domanda, opzioni) => {
+        segnale = opzioni?.segnale;
+        return new Promise(() => {});
+      },
+    };
+    expect(await sorgenteConCanonico(principale, lenta, { tettoMs: 20 }).cerca(DOMANDA))
+      .toEqual({ ok: false, error: "Rifiutata" });
+    expect(segnale?.aborted).toBe(true);
+  });
+
+  test("propaga a entrambe le RPC l'annullamento di una ricerca superata", async () => {
+    const controller = new AbortController();
+    const segnali: AbortSignal[] = [];
+    const inCorso: SorgenteCandidati = {
+      codice: "in_corso",
+      cerca: (_domanda, opzioni) => {
+        const segnale = opzioni!.segnale!;
+        segnali.push(segnale);
+        return new Promise((risolvi) => segnale.addEventListener("abort", () =>
+          risolvi({ ok: false, error: "Annullata" }), { once: true }));
+      },
+    };
+    const esito = sorgenteConCanonico(inCorso, inCorso).cerca(DOMANDA, { segnale: controller.signal });
+    await Promise.resolve();
+    controller.abort();
+    expect((await esito).ok).toBe(false);
+    expect(segnali).toHaveLength(2);
+    expect(segnali.every((segnale) => segnale.aborted)).toBe(true);
+  });
+
   test("tetto di attesa: un canonico lento non trattiene la ricerca principale", async () => {
     const lento: SorgenteCandidati = { codice: "lento", cerca: () => new Promise(() => {}) };
     const s = sorgenteConCanonico(principaleCon([DAL_CATALOGO]), lento, { tettoMs: 20 });
