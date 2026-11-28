@@ -40,6 +40,7 @@ export const nuovoScenario = (): Scenario => ({
     AI_ALLOWED_ORIGINS: "http://localhost:3000",
     SUPABASE_URL: "http://127.0.0.1:54321",
     SUPABASE_SERVICE_ROLE_KEY: "service-role-test",
+    AI_MODEL_DEFAULT: "gpt-4.1-mini-2025-04-14",
     OPENAI_API_KEY: "sk-FINTA-per-i-test",
   },
   porta: { ...PORTA_OK },
@@ -120,7 +121,7 @@ export async function caricaFunzione(nome: "ai-pairing" | "ai-catalogo", attuale
     const risposta = s.fornitore[Math.min(s.chiamate.length - 1, s.fornitore.length - 1)] ?? {};
     if ((risposta.stato ?? 200) !== 200) return new Response("boom", { status: risposta.stato });
     return new Response(
-      JSON.stringify({ choices: [{ message: { content: risposta.contenuto ?? "{}" } }], usage: { prompt_tokens: 10, completion_tokens: 5 } }),
+      JSON.stringify({ model: corpo.model, choices: [{ message: { content: risposta.contenuto ?? "{}" } }], usage: { prompt_tokens: 10, completion_tokens: 5 } }),
       { status: 200 },
     );
   }) as typeof fetch;

@@ -151,7 +151,7 @@ const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Pr
     fetchEstranei.push(url);
     throw new Error("rete non consentita nei test");
   }
-  const body = JSON.parse(String(init?.body ?? "{}")) as { messages: { role: string; content: string }[] };
+  const body = JSON.parse(String(init?.body ?? "{}")) as { model: string; messages: { role: string; content: string }[] };
   chiamateProvider.push({
     url,
     system: body.messages.find((m) => m.role === "system")?.content ?? "",
@@ -163,7 +163,7 @@ const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Pr
     const muto = new ReadableStream<Uint8Array>({
       pull(controller) {
         if (letture++ === 0) {
-          const primo = JSON.stringify({ choices: [{ delta: { content: "inizio" } }] });
+          const primo = JSON.stringify({ model: body.model, choices: [{ delta: { content: "inizio" } }] });
           controller.enqueue(new TextEncoder().encode(`data: ${primo}\n\n`));
           return;
         }
@@ -180,7 +180,7 @@ const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Pr
     const rotto = new ReadableStream<Uint8Array>({
       pull(controller) {
         if (letture++ === 0) {
-          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ choices: [{ delta: { content: "inizio" } }] })}
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ model: body.model, choices: [{ delta: { content: "inizio" } }] })}
 
 `));
         } else {
@@ -192,9 +192,9 @@ const fetchFinto = async (input: string | URL | Request, init?: RequestInit): Pr
   }
   const pezzi = pezziScelti ?? testoRisposta.match(/[\s\S]{1,200}/g) ?? [];
   const sse =
-    pezzi.map((p) => `data: ${JSON.stringify({ choices: [{ delta: { content: p } }] })}\n\n`).join("") +
+    pezzi.map((p) => `data: ${JSON.stringify({ model: body.model, choices: [{ delta: { content: p } }] })}\n\n`).join("") +
     // come il fornitore con include_usage: l'ultimo pezzo porta il consumo
-    `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 321, completion_tokens: 45 } })}\n\ndata: [DONE]\n\n`;
+    `data: ${JSON.stringify({ model: body.model, choices: [], usage: { prompt_tokens: 321, completion_tokens: 45 } })}\n\ndata: [DONE]\n\n`;
   return new Response(providerSenzaFine ? sse.split("data: [DONE]")[0] : sse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
 };
 

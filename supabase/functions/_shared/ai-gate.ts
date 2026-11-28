@@ -207,6 +207,22 @@ export const apriPorta = async (
 // ha impostato un tetto monetario e una tariffa; il consuntivo la chiude con i token dichiarati dal fornitore. Le stime
 // non sono fatture.
 
+// Le RPC amministrative hanno una scadenza propria, anche durante la pulizia
+// dopo l'annullamento del provider. Un ACK perso non abbassa il costo riservato.
+type RichiestaRpc<T> = PromiseLike<T> & { abortSignal?: (segnale: AbortSignal) => PromiseLike<T> };
+
+const attendiRpcAi = async <T>(richiesta: RichiestaRpc<T>, client?: AbortSignal): Promise<T> => {
+  const limite = new AbortController();
+  const timer = setTimeout(() => limite.abort(), 3000);
+  const segnale = client ? AbortSignal.any([client, limite.signal]) : limite.signal;
+  try {
+    segnale.throwIfAborted();
+    return await attendiAi(Promise.resolve(richiesta.abortSignal?.(segnale) ?? richiesta), segnale);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 export type Prenotazione = { richiestaId: string } | { risposta: Response };
 
 export const rifiutata = (p: Prenotazione): p is { risposta: Response } => "risposta" in p;
@@ -216,19 +232,24 @@ export const prenotaBudget = async (
   scope: AiScope,
   cors: HeadersInit,
   chiamata: { provider: string; modello: string; tokenInput: number; tokenOutputMax: number },
+  segnale: AbortSignal,
 ): Promise<Prenotazione> => {
-  const { data, error } = await supabase.rpc("ai_budget_prenota", {
-    p_scope: scope,
-    p_provider: chiamata.provider,
-    p_modello: chiamata.modello,
-    p_token_input: chiamata.tokenInput,
-    p_token_output_max: chiamata.tokenOutputMax,
-  });
-  const esito = (data ?? null) as { esito?: unknown; richiesta_id?: unknown } | null;
-  if (!error && esito?.esito === "consentito" && typeof esito.richiesta_id === "string") {
-    return { richiestaId: esito.richiesta_id };
+  try {
+    const { data, error } = await attendiRpcAi(supabase.rpc("ai_budget_prenota", {
+      p_scope: scope,
+      p_provider: chiamata.provider,
+      p_modello: chiamata.modello,
+      p_token_input: chiamata.tokenInput,
+      p_token_output_max: chiamata.tokenOutputMax,
+    }), segnale);
+    const esito = (data ?? null) as { esito?: unknown; richiesta_id?: unknown } | null;
+    if (!error && esito?.esito === "consentito" && typeof esito.richiesta_id === "string") {
+      return { richiestaId: esito.richiesta_id };
+    }
+    console.error("[ai] budget non concesso", { scope, esito: error ? error.code : String(esito?.esito) });
+  } catch {
+    console.error("[ai] prenotazione senza conferma", { scope });
   }
-  console.error("[ai] budget non concesso", { scope, esito: error ? error.code : String(esito?.esito) });
   return {
     risposta: json(
       { error: "Le funzioni AI non sono disponibili in questo momento.", motivo: "budget" },
@@ -254,12 +275,12 @@ export const registraConsuntivo = async (
   uso: { input: number; output: number } | null = null,
 ): Promise<void> => {
   try {
-    const { error } = await supabase.rpc("ai_budget_consuntivo", {
+    const { error } = await attendiRpcAi(supabase.rpc("ai_budget_consuntivo", {
       p_richiesta: richiestaId,
       p_esito: esito,
       p_token_input: uso?.input ?? null,
       p_token_output: uso?.output ?? null,
-    });
+    }));
     if (error) console.error("[ai] consuntivo non registrato", { code: error.code });
   } catch {
     console.error("[ai] consuntivo non registrato");
@@ -269,7 +290,7 @@ export const registraConsuntivo = async (
 /** Alimenta l interruttore. Un errore qui non cambia la risposta all utente: resta nel log. */
 export const registraEsitoFornitore = async (supabase: SupabaseClient, scope: AiScope, riuscita: boolean): Promise<void> => {
   try {
-    const { error } = await supabase.rpc("ai_budget_esito", { p_scope: scope, p_riuscita: riuscita });
+    const { error } = await attendiRpcAi(supabase.rpc("ai_budget_esito", { p_scope: scope, p_riuscita: riuscita }));
     if (error) console.error("[ai] esito del fornitore non registrato", { code: error.code });
   } catch {
     console.error("[ai] esito del fornitore non registrato");
@@ -418,7 +439,7 @@ export const apriIngresso = async (
       if (chiusaGia) return;
       chiusaGia = true;
       try {
-        const { error: errore } = await supabase.rpc("ai_porta_chiudi", { p_porta: portaId, p_riuscita: riuscita });
+        const { error: errore } = await attendiRpcAi(supabase.rpc("ai_porta_chiudi", { p_porta: portaId, p_riuscita: riuscita }));
         if (errore) console.error("[ai] ingresso non chiuso", { code: errore.code });
       } catch {
         console.error("[ai] ingresso non chiuso");
@@ -484,12 +505,14 @@ export const chiamataGovernata = async <T>(o: OpzioniGovernata<T>): Promise<Gove
         modello: provider.modello,
         tokenInput: provider.maxInputTokens,
         tokenOutputMax: provider.maxOutputTokens,
-      });
+      }, segnale);
       if (rifiutata(prenotazione)) return n === 0 ? { ok: false, risposta: prenotazione.risposta } : nonDisponibile();
       const { richiestaId } = prenotazione;
       let uso: AiUso | null = null;
+      let inoltrata = false;
       try {
         segnale.throwIfAborted();
+        inoltrata = true;
         const valore = await attendiAi(o.chiama(provider, {
           system: o.system,
           prompt: o.prompt,
@@ -505,6 +528,10 @@ export const chiamataGovernata = async <T>(o: OpzioniGovernata<T>): Promise<Gove
       } catch (errore) {
         if (o.segnaleClient.aborted) {
           await registraConsuntivo(o.supabase, richiestaId, "interrotta_client", uso);
+          return nonDisponibile();
+        }
+        if (!inoltrata) {
+          await registraConsuntivo(o.supabase, richiestaId, "errore_applicativo", uso);
           return nonDisponibile();
         }
         if (segnale.aborted) {

@@ -200,34 +200,9 @@ export const leggiUsoOpenAi = (corpo: unknown): AiUso | null => {
     : null;
 };
 
-const usoDaRiga = (riga: string): AiUso | null => {
-  if (!riga.startsWith("data:") || !riga.includes('"usage"')) return null;
-  try {
-    return leggiUsoOpenAi(JSON.parse(riga.slice(5).trim()));
-  } catch {
-    return null;
-  }
-};
-
-/**
- * Ogni riga `data:` di uno stream OpenAI porta un oggetto con `choices[0].delta.content`.
- * Esportata per essere provata senza rete: è la parte che un cambio di
- * fornitore riscrive, quindi è quella che deve avere dei test propri.
- */
-export const estraiDeltaOpenAi = (riga: string): string | null => {
-  if (!riga.startsWith("data:")) return null;
-  const payload = riga.slice(5).trim();
-  if (!payload || payload === "[DONE]") return null;
-  try {
-    const parsed = JSON.parse(payload) as {
-      choices?: { delta?: { content?: string | null } }[];
-    };
-    return parsed.choices?.[0]?.delta?.content ?? null;
-  } catch {
-    // Una riga malformata in mezzo a uno stream non è una ragione per
-    // interrompere: si scarta e si prosegue.
-    return null;
-  }
+type ChunkOpenAi = {
+  model?: unknown;
+  choices?: { delta?: { content?: string | null } }[];
 };
 
 const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
@@ -265,7 +240,7 @@ const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
     maxInputTokens: options.maxInputTokens,
     completeText: async (call) => {
       const response = await chiama(call, false);
-      let parsed: { choices?: { message?: { content?: string | null } }[] };
+      let parsed: { model?: unknown; choices?: { message?: { content?: string | null } }[] };
       try {
         const testo = await attendiAi(new Response(corpoLimitato(response, call.segnale)).text(), call.segnale);
         call.segnale.throwIfAborted();
@@ -275,6 +250,7 @@ const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
         if (errore instanceof SyntaxError) throw new AiFormatError();
         throw new AiProviderError();
       }
+      if (parsed?.model !== options.model) throw new AiFormatError();
       const uso = leggiUsoOpenAi(parsed);
       if (uso) call.onUso?.(uso);
       return parsed.choices?.[0]?.message?.content ?? "";
@@ -289,10 +265,19 @@ const creaOpenAiProvider = (options: OpenAiOptions): AiProvider => {
           return;
         }
         if (completato || !riga.startsWith("data:")) return;
-        const uso = usoDaRiga(riga);
+        const payload = riga.slice(5).trim();
+        if (!payload) return;
+        let chunk: ChunkOpenAi;
+        try {
+          chunk = JSON.parse(payload) as ChunkOpenAi;
+        } catch {
+          throw new AiFormatError();
+        }
+        if (chunk?.model !== options.model) throw new AiFormatError();
+        const uso = leggiUsoOpenAi(chunk);
         if (uso) call.onUso?.(uso);
-        const delta = estraiDeltaOpenAi(riga);
-        if (delta) controller.enqueue(delta);
+        const delta = chunk.choices?.[0]?.delta?.content;
+        if (typeof delta === "string" && delta) controller.enqueue(delta);
       };
       const opzioni = { signal: call.segnale };
       return corpoLimitato(response, call.segnale)
@@ -328,15 +313,20 @@ export const creaAiProvider = (compito: "chat" | "pairing" | "catalogo", modello
   }[compito];
   // Solo la versione esplicita ha un contratto verificato. Non stima il prompt:
   // riserva l'intera finestra, incluso il framing. Un alias può cambiare contratto.
-  // https://developers.openai.com/api/docs/models/gpt-4.1-mini
+  // Finestra e output: developers.openai.com/api/docs/models/gpt-4.1-mini e /gpt-5.4-mini.
   const model = modelloRiserva ?? modelloPerCompito ?? Deno.env.get("AI_MODEL_DEFAULT");
   const maxOutputTokens = Number(Deno.env.get("AI_MAX_OUTPUT_TOKENS") ?? "800");
-  if (model !== "gpt-4.1-mini-2025-04-14" ||
-      !Number.isInteger(maxOutputTokens) || maxOutputTokens <= 0 || maxOutputTokens > 32_768) {
-    return creaDisabledProvider();
-  }
+  if (!model || !Number.isInteger(maxOutputTokens) || maxOutputTokens <= 0) return creaDisabledProvider();
   // max_completion_tokens comprende anche eventuali token di ragionamento.
-  return creaOpenAiProvider({ apiKey, model, maxOutputTokens, maxInputTokens: 1_047_576 });
+  switch (model) {
+    case "gpt-4.1-mini-2025-04-14":
+      if (maxOutputTokens <= 32_768) return creaOpenAiProvider({ apiKey, model, maxOutputTokens, maxInputTokens: 1_047_576 });
+      break;
+    case "gpt-5.4-mini-2026-03-17":
+      if (maxOutputTokens <= 128_000) return creaOpenAiProvider({ apiKey, model, maxOutputTokens, maxInputTokens: 400_000 });
+      break;
+  }
+  return creaDisabledProvider();
 };
 
 /**

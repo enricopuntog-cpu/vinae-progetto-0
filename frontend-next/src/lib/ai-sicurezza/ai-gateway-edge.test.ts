@@ -172,7 +172,7 @@ describe("tentativi, riserva e contabilità", () => {
   });
 
   it("se il budget rifiuta il secondo tentativo non parte nessun'altra chiamata", async () => {
-    s.porta = { ...PORTA_OK, max_tentativi: 2, modello_riserva: "riserva-x" };
+    s.porta = { ...PORTA_OK, max_tentativi: 2, modello_riserva: "gpt-5.4-mini-2026-03-17" };
     s.prenotazioni = ["consentito", "spesa_giorno_esaurita"];
     s.fornitore = [{ stato: 500 }];
     const r = await pairing.chiama({ query: "brasato" });
@@ -181,16 +181,16 @@ describe("tentativi, riserva e contabilità", () => {
   });
 
   it("riserva autorizzata: una sola chiamata in più, col modello del proprietario, prenotata", async () => {
-    s.porta = { ...PORTA_OK, modello_riserva: "riserva-x" };
+    s.porta = { ...PORTA_OK, modello_riserva: "gpt-5.4-mini-2026-03-17" };
     s.fornitore = [{ stato: 500 }, { stato: 500 }, { contenuto: PICKS }];
     const r = await pairing.chiama({ query: "brasato" });
     expect(r.status).toBe(503);
-    expect(s.chiamate.map((c) => c.model)).toEqual(["gpt-4.1-mini", "riserva-x"]);
-    expect(di(s, "ai_budget_prenota").map((a) => a.p_modello)).toEqual(["gpt-4.1-mini", "riserva-x"]);
+    expect(s.chiamate.map((c) => c.model)).toEqual(["gpt-4.1-mini-2025-04-14", "gpt-5.4-mini-2026-03-17"]);
+    expect(di(s, "ai_budget_prenota").map((a) => a.p_modello)).toEqual(["gpt-4.1-mini-2025-04-14", "gpt-5.4-mini-2026-03-17"]);
   });
 
   it.each([400, 401])("errore della richiesta (%d): niente ritentativi, niente riserva, interruttore non toccato", async (stato) => {
-    s.porta = { ...PORTA_OK, max_tentativi: 2, modello_riserva: "riserva-x" };
+    s.porta = { ...PORTA_OK, max_tentativi: 2, modello_riserva: "gpt-5.4-mini-2026-03-17" };
     s.fornitore = [{ stato }];
     const r = await pairing.chiama({ query: "brasato" });
     expect(r.status).toBe(503);
