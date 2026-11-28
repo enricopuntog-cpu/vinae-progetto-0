@@ -131,6 +131,16 @@ describe("WI-011 — proposta esplicita al catalogo", () => {
     expect(chiamate.at(-1)).toEqual(["catalogo_proposta_ritira", { p_id: -4 }]);
   });
 
+  it("WI-017: inoltra entrambi i campi del cursore, incluso un ID di intenzione", async () => {
+    const chiamate: unknown[] = [];
+    const client = { rpc: async (...args: unknown[]) => {
+      chiamate.push(args);
+      return { data: [], error: null };
+    } } as unknown as SupabaseClient;
+    await leggiProposteMie(client, { id: -12, inviataIl: "2026-11-27T00:00:00Z" });
+    expect(chiamate).toEqual([["catalogo_proposte_mie", { p_prima_di: "2026-11-27T00:00:00Z", p_prima_id: -12 }]]);
+  });
+
   it("WI-016: revoca non più possibile o errore: messaggio generico, nessun dettaglio interno", async () => {
     const gia = { rpc: async () => ({ data: false, error: null }) } as unknown as SupabaseClient;
     expect((await ritiraProposta(gia, 9)).ok).toBe(false);

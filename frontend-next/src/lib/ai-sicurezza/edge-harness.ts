@@ -11,7 +11,7 @@ const leggiRepo = (p: string) => readFileSync(join(radice, p), "utf8");
 const slash = (p: string) => p.replace(/\\/g, "/");
 const fn = (p: string) => slash(join(radice, "supabase/functions", p));
 
-export type RispostaFornitore = { stato?: number; contenuto?: string };
+export type RispostaFornitore = { stato?: number; contenuto?: string; modello?: string; attesa?: "header" | "corpo" };
 export type ChiamataFornitore = { model: string; system: string; prompt: string; chiavi: string[] };
 
 export type Scenario = {
@@ -19,6 +19,7 @@ export type Scenario = {
   porta: Record<string, unknown> | "errore";
   /** Esiti delle prenotazioni, uno per chiamata; l'ultimo si ripete. */
   prenotazioni: string[];
+  prenotazioneMuta?: boolean;
   fornitore: RispostaFornitore[];
   annunci: Record<string, unknown>[];
   rpc: { nome: string; args: Record<string, unknown> }[];
@@ -96,6 +97,7 @@ export async function caricaFunzione(nome: "ai-pairing" | "ai-catalogo", attuale
         return s.porta === "errore" ? { data: null, error: { code: "PGRST202", message: "SEGRETO-DI-DB" } } : { data: s.porta, error: null };
       }
       if (rpc === "ai_budget_prenota") {
+        if (s.prenotazioneMuta) return new Promise(() => {});
         const i = s.rpc.filter((r) => r.nome === "ai_budget_prenota").length - 1;
         const esito = s.prenotazioni[Math.min(i, s.prenotazioni.length - 1)];
         return { data: esito === "consentito" ? { esito, richiesta_id: `richiesta-${i + 1}` } : { esito }, error: null };
@@ -119,9 +121,13 @@ export async function caricaFunzione(nome: "ai-pairing" | "ai-catalogo", attuale
       chiavi: Object.keys(corpo).sort(),
     });
     const risposta = s.fornitore[Math.min(s.chiamate.length - 1, s.fornitore.length - 1)] ?? {};
+    if (risposta.attesa === "header") return new Promise<Response>(() => {});
+    if (risposta.attesa === "corpo") {
+      return new Response(new ReadableStream({ pull: () => new Promise<void>(() => {}) }));
+    }
     if ((risposta.stato ?? 200) !== 200) return new Response("boom", { status: risposta.stato });
     return new Response(
-      JSON.stringify({ model: corpo.model, choices: [{ message: { content: risposta.contenuto ?? "{}" } }], usage: { prompt_tokens: 10, completion_tokens: 5 } }),
+      JSON.stringify({ model: risposta.modello ?? corpo.model, choices: [{ message: { content: risposta.contenuto ?? "{}" } }], usage: { prompt_tokens: 10, completion_tokens: 5 } }),
       { status: 200 },
     );
   }) as typeof fetch;

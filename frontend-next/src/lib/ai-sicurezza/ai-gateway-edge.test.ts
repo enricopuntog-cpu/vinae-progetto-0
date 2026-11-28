@@ -206,4 +206,32 @@ describe("tentativi, riserva e contabilità", () => {
     expect(r.status).toBe(502);
     expect(s.chiamate).toHaveLength(1);
   });
+
+  it.each(["header", "corpo"] as const)("WI-017: scadenza su %s senza riavviare il timer al fallback", async (attesa) => {
+    s.ambiente.AI_TIMEOUT_SECONDS = "0.05";
+    s.porta = { ...PORTA_OK, max_tentativi: 2, modello_riserva: "gpt-5.4-mini-2026-03-17" };
+    s.fornitore = [{ attesa }];
+    expect((await catalogo.chiama({ hint: "barolo" })).status).toBe(503);
+    expect(s.chiamate).toHaveLength(1);
+    expect(di(s, "ai_budget_consuntivo").map((a) => a.p_esito)).toEqual(["guasto_fornitore"]);
+    expect(di(s, "ai_porta_chiudi")).toHaveLength(1);
+  });
+
+  it("WI-017: un ACK budget mancante non tocca il fornitore o il suo interruttore", async () => {
+    s.ambiente.AI_TIMEOUT_SECONDS = "0.05";
+    s.prenotazioneMuta = true;
+    expect((await catalogo.chiama({ hint: "barolo" })).status).toBe(503);
+    expect(s.chiamate).toHaveLength(0);
+    expect(di(s, "ai_budget_esito")).toHaveLength(0);
+    expect(di(s, "ai_porta_chiudi")).toHaveLength(1);
+  });
+
+  it("WI-017: un modello inatteso non sblocca la prenotazione con token attribuiti alla tariffa sbagliata", async () => {
+    s.fornitore = [{ contenuto: PICKS, modello: "modello-discordante" }];
+    expect((await pairing.chiama({ query: "brasato" })).status).toBe(502);
+    expect(di(s, "ai_budget_consuntivo")).toEqual([{
+      p_richiesta: "richiesta-1", p_esito: "formato_non_valido", p_token_input: null, p_token_output: null,
+    }]);
+    expect(di(s, "ai_porta_chiudi")).toHaveLength(1);
+  });
 });

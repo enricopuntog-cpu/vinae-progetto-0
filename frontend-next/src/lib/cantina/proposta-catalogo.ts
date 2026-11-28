@@ -163,9 +163,17 @@ export type PropostaMia = {
 
 const RITIRABILI = new Set(["in_revisione", "in_attesa_di_invio", "non_inviata"]);
 
-export async function leggiProposteMie(client: SupabaseClient): Promise<Result<PropostaMia[]>> {
+export const PROPOSTE_PER_PAGINA = 100;
+export type CursoreProposte = Pick<PropostaMia, "inviataIl" | "id">;
+
+export async function leggiProposteMie(
+  client: SupabaseClient,
+  cursore?: CursoreProposte,
+): Promise<Result<PropostaMia[]>> {
   try {
-    const { data, error } = await client.rpc("catalogo_proposte_mie");
+    const { data, error } = await client.rpc("catalogo_proposte_mie", cursore
+      ? { p_prima_di: cursore.inviataIl, p_prima_id: cursore.id }
+      : undefined);
     if (error || !Array.isArray(data)) return { ok: false, error: ERRORE_LETTURA };
     return {
       ok: true,
