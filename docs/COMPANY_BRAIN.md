@@ -261,10 +261,11 @@ esegue la sua revoca (§8.6).
   alter role vinea_ingest_backup set lock_timeout = '5s';
   alter role vinea_ingest_backup set idle_in_transaction_session_timeout = '15s';
   grant brain_ingest to vinea_ingest_backup;
+  insert into brain.monitor_sender_sources (db_role, source_key) values ('vinea_ingest_backup', 'offsite_backup_freshness');
   ```
 
 - *Osservatore dell'heartbeat* (sola lettura): stessa forma, login diverso, `grant brain_monitor_read to …`. Può
-  eseguire `brain.heartbeat_minimo()` (minuti dall'ultimo giro e dall'ultima Sentinel) e
+  eseguire `brain.heartbeat_minimo()` (minuti dal giro pianificato e dall'ultima Sentinel, controlli saltati) e
   `brain.payload_ammesso(jsonb)`. Verificati i privilegi; **una connessione vera con questo login non è stata provata**.
 
 **8.2 Scheduling.** `installa.sql` (pg_cron e un solo job ogni 15 minuti, nessun lavoro acceso), poi
@@ -275,8 +276,8 @@ con il loro gate: `lavoro_catalogo` e `qualita_catalogo` **solo quando i rispett
 su un progetto Supabase ospitato.
 
 **8.3 Heartbeat indipendente.** Un osservatore **fuori** da Supabase e, preferibilmente, da GitHub legge
-`brain.heartbeat_minimo()` con il login del §8.1 e avvisa se `minuti_dall_ultimo_giro` supera 30,
-`minuti_dall_ultima_sentinel` supera 120, un valore è `null` o la lettura fallisce. **Esecutore e canale di avviso non
+`brain.heartbeat_minimo()` con il login del §8.1 e avvisa se `minuti_dall_ultimo_giro_pianificato` supera 30,
+`minuti_dall_ultima_sentinel` supera 120, l'ultimo giro Sentinel ha controlli non eseguiti, un valore è `null` o la lettura fallisce. **Esecutore e canale di avviso non
 sono scelti** (nuovo fornitore o costo = decisione del founder). Senza, lo scheduler può fermarsi in silenzio: non
 dichiarare Sentinel 24/7.
 

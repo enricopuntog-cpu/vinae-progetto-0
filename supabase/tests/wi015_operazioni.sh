@@ -48,6 +48,7 @@ delete from brain.tasks;
 delete from brain.anomalies;
 delete from brain.events where id > ${eventi_brain};
 delete from brain.sentinel_runs where id > ${run_prima};
+delete from brain.monitor_sender_sources where db_role = 'vinea_e2e_ingest';
 delete from brain.monitor_signals;
 delete from brain.agents;
 delete from catalog.canonical_events where id > ${eventi_cat};
@@ -136,12 +137,16 @@ verifica "Data Quality: senza rilievi chiude con la regola verificata dal server
 "${PSQL[@]}" >/dev/null <<SQL
 create role vinea_e2e_ingest login inherit connection limit 2 password '${PW[vinea_e2e_ingest]}';
 grant brain_ingest to vinea_e2e_ingest;
+insert into brain.monitor_sender_sources (db_role, source_key) values ('vinea_e2e_ingest', 'technical_heartbeat');
 update brain.monitor_sources set enabled = true where source_key = 'technical_heartbeat';
 SQL
 manda() { VINEA_INGEST_DATABASE_URL="$(url_di vinea_e2e_ingest)" bun tools/company-brain/segnale.mjs --fonte technical_heartbeat \
   --evento "$1" --stato "$2" --osservato "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --conteggi '{"findings":1}' | tail -n 1 || true; }
 verifica "mittente non configurato: nessun effetto" "$(campo "$(bun tools/company-brain/segnale.mjs --fonte x)" esito)" "non_configurato"
 verifica "segnale di guasto registrato dalla credenziale ristretta" "$(campo "$(manda run:1 guasto)" esito)" "registrato"
+verifica "la credenziale tecnica non puo inviare come osservatore" \
+  "$(VINEA_INGEST_DATABASE_URL="$(url_di vinea_e2e_ingest)" bun tools/company-brain/segnale.mjs --fonte osservatore_esterno \
+    --evento run:1 --stato ok --osservato "$(date -u +%Y-%m-%dT%H:%M:%SZ)" | tail -n 1 | node -e 'console.log(JSON.parse(require("node:fs").readFileSync(0,"utf8")).codice)' || true)" "42501"
 verifica "stesso evento: duplicato" "$(campo "$(manda run:1 guasto)" esito)" "duplicato"
 verifica "la credenziale di ingestione non e un agente" "$(campo "$(worker vinea_e2e_ingest 1)" codice)" "42501"
 verifica "la credenziale di ingestione non legge il brain" \

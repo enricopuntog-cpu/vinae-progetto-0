@@ -50,6 +50,7 @@ delete from brain.suspensions where suspended_by = 'e2e';
 delete from catalog.research_ingested;
 delete from catalog.research_adapters;
 delete from catalog.research_provenance;
+delete from brain.monitor_sender_sources where db_role = 'vinea_e2e_ing';
 delete from brain.monitor_signals where received_from like 'vinea_e2e_%';
 update brain.monitor_sources set enabled = false where source_key = 'osservatore_esterno';
 delete from public.user_roles where user_id in (select id from auth.users where email like '%@wi016-conc.test');
@@ -65,6 +66,11 @@ delete from catalog.contributions;
 delete from private.cellar_lotti where owner_id in (select id from auth.users where email like '%@wi016-conc.test');
 delete from public.bottle_units where owner_id in (select id from auth.users where email like '%@wi016-conc.test');
 delete from public.wines where produttore = 'Wi016 Conc';
+delete from private.ai_chiamate where provider = 'fixture-wi017';
+delete from private.ai_tariffe where provider = 'fixture-wi017';
+update private.ai_budget_settings
+   set richieste_giorno = null, richieste_mese = null, spesa_giorno_usd = null, spesa_mese_usd = null
+ where spesa_giorno_usd = 1 and richieste_giorno = 10000 and richieste_mese = 10000;
 delete from private.ai_porte;
 delete from private.ai_segnalazioni;
 delete from private.rate_limit_buckets;
@@ -340,6 +346,7 @@ verifica "nessuna decisione automatica sulle rivendicazioni" "$(sql "select coun
 "${PSQL[@]}" >/dev/null <<SQL
 create role vinea_e2e_ing login inherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls connection limit 2 password '${PW[vinea_e2e_ing]}';
 grant brain_ingest to vinea_e2e_ing;
+insert into brain.monitor_sender_sources (db_role, source_key) values ('vinea_e2e_ing', 'osservatore_esterno');
 update brain.monitor_sources set enabled = true where source_key = 'osservatore_esterno';
 SQL
 fermo() { sql "select count(*) from brain.monitor_sources m where m.source_key = 'osservatore_esterno' and m.enabled and not exists (select 1 from brain.monitor_signals s where s.source_key = m.source_key and s.received_at > now() - make_interval(mins => 2 * m.expected_interval_minutes))"; }
@@ -348,8 +355,8 @@ sql "select brain.scheduler_tick('e2e-manuale') ->> 'esito'; select brain.sentin
 set +e
 VINEA_OBSERVER_DATABASE_URL="$(url_di vinea_e2e_oss)" VINEA_INGEST_DATABASE_URL="$(url_di vinea_e2e_ing)" bun tools/company-brain/osservatore.mjs >"$OUT/oss2"; codice_oss=$?
 set -e
-verifica "l'osservatore lascia il proprio battito e Sentinel smette di vederlo fermo" \
-  "$codice_oss $(campo "$(tail -n 1 "$OUT/oss2")" battito) $(fermo)" "0 consegnato 0"
+verifica "il giro manuale non da verde, ma il battito negativo arriva" \
+  "$codice_oss $(campo "$(tail -n 1 "$OUT/oss2")" battito) $(fermo)" "1 consegnato 0"
 "${PSQL[@]}" >/dev/null <<SQL
 begin;
 set local session_replication_role = replica;
@@ -366,6 +373,23 @@ kill -TERM "$esecutore"
 set +e; wait "$esecutore"; codice_esec=$?; set -e
 verifica "esecutore periodico: esegue un lotto da solo e si ferma pulito su richiesta" \
   "$(grep -c '"esito":"giro"' "$OUT/esec") $codice_esec $(campo "$(tail -n 1 "$OUT/esec")" esito)" "1 0 arrestato"
+
+# Prenotazione economica: due transazioni indipendenti competono per un solo posto.
+# Le tariffe e i costi sono fittizi e si usa solo la funzione SQL.
+sql "update private.ai_budget_settings set richieste_giorno = 10000, richieste_mese = 10000, spesa_giorno_usd = 1, spesa_mese_usd = null, guasti_consecutivi = 0, aperto_fino_a = null;
+  insert into private.ai_tariffe (provider, modello, versione, input_per_milione, output_per_milione, valida_dal, inserita_da)
+  values ('fixture-wi017', 'snapshot-fixture', 'fixture', 1, 1, now(), 'wi017-ci')" >/dev/null
+richiesta_budget="select public.ai_budget_prenota('ai:chat', 'fixture-wi017', 'snapshot-fixture', 990000, 10000) ->> 'esito'"
+sql "begin; $richiesta_budget; select pg_sleep(0.4); commit;" >"$OUT/budget1" &
+primo_budget=$!
+sql "$richiesta_budget" >"$OUT/budget2" &
+secondo_budget=$!
+wait "$primo_budget" "$secondo_budget"
+verifica "prenotazione concorrente: un solo consentito e un solo tetto esaurito" \
+  "$(cat "$OUT/budget1" "$OUT/budget2" | sed '/^$/d' | sort | paste -sd ' ' -)" "consentito spesa_giorno_esaurita"
+verifica "senza uso il massimo prenotato continua a occupare il tetto" \
+  "$(sql "select public.ai_budget_consuntivo((select id from private.ai_chiamate where provider = 'fixture-wi017'), 'guasto_fornitore')" ; sql "$richiesta_budget" | tail -n 1)" \
+  "$(printf 't\nspesa_giorno_esaurita')"
 
 echo "wi016 concorrenza e processi veri: ${passati}/${totale}"
 [ "$passati" = "$totale" ]
