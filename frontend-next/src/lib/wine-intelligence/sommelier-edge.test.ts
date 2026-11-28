@@ -1171,3 +1171,13 @@ describe("WI-016 — scheda documentata del vino identificato", () => {
     expect(chiamateProvider[0]!.prompt).not.toContain("Scheda documentata del candidato");
   });
 });
+
+it("WI-017: il contesto Cantina con dati sensibili non raggiunge il fornitore", async () => {
+  dati.bottle_units = [bottigliaRiga(USER_A, "contaminato", {}, { nome: "Vino prova fixture@example.test" })];
+  const risposta = await chiama({ contesto: { tipo: "cantina", consenso: true } });
+  expect(risposta.status).toBe(422);
+  expect(chiamateProvider).toHaveLength(0);
+  expect(rpcLog.filter((r) => r.name === "ai_budget_prenota")).toHaveLength(0);
+  expect(rpcLog.filter((r) => r.name === "ai_porta_chiudi")).toHaveLength(1);
+  expect(righeLog.join(" ")).not.toContain("fixture@example.test");
+});

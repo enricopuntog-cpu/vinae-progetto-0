@@ -456,6 +456,15 @@ export const chiamataGovernata = async <T>(o: OpzioniGovernata<T>): Promise<Gove
     await segnalaSicurezza(o.supabase, o.userId, o.scope, "input_eccessivo");
     return { ok: false, risposta: json({ error: "Richiesta troppo lunga per questa funzione." }, 413, o.cors) };
   }
+  // Ricontrolla i messaggi effettivi dopo la composizione dei contesti e la minimizzazione.
+  // Un record del database può contenere il dato: il rifiuto non penalizza l'utente.
+  if (rilevaDatiSensibili(o.system) || rilevaDatiSensibili(o.prompt)) {
+    return {
+      ok: false,
+      risposta: json({ error: "Il contesto contiene dati che non possono essere inviati al servizio AI." }, 422, o.cors),
+    };
+  }
+
   const tentativi: (string | undefined)[] = Array.from({ length: o.ingresso.maxTentativi }, () => undefined);
   if (o.ingresso.modelloRiserva) tentativi.push(o.ingresso.modelloRiserva);
 
